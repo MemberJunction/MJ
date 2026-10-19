@@ -88,7 +88,9 @@ describe('TaskGraphAgentRunner', () => {
         expect(outcome.Success).toBe(true);
         expect(outcome.AgentRunID).toBe('step-run-1');
         expect(runAgent).toHaveBeenCalledTimes(1);
+        expect(runAgent.mock.calls[0][0].inputArtifacts).toEqual([]);
         expect(processAgentArtifacts).toHaveBeenCalledTimes(1);
+        expect(processAgentArtifacts.mock.calls[0][0].artifactDirective?.behavior).toBe('create-new');
         expect(processAgentArtifacts.mock.calls[0][1]).toBe('origin-detail-1');
     });
 
@@ -123,6 +125,7 @@ describe('TaskGraphAgentRunner', () => {
 
         expect(outcome.Success).toBe(true);
         expect(processAgentArtifacts).toHaveBeenCalledTimes(1);
+        expect(processAgentArtifacts.mock.calls[0][0].artifactDirective?.behavior).toBe('create-new');
         expect(processAgentArtifacts.mock.calls[0][1]).toBe('task-detail-2');
     });
 });

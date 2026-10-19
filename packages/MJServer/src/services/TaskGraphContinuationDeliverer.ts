@@ -79,14 +79,41 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
 
             const actingUser = this.resolveActingUser(origin.OwnerUserID);
             const enrichedParams = await this.enrichTasksWithOutputs(params, provider);
+            const renderedOutcome = this.renderMessage(enrichedParams);
+
+            if (origin.IsLatest) {
+                // No intervening messages were sent while the workflow ran: update the originating
+                // message in-place so the single conversation turn holds the progress card, step
+                // artifacts, and final outcome together.
+                origin.OriginDetail.Status = 'Complete';
+                origin.OriginDetail.Message = renderedOutcome;
+                if (!(await origin.OriginDetail.Save())) {
+                    LogError(
+                        `[TaskGraphContinuationDeliverer] Could not update in-place outcome of "${params.WorkflowName}": ` +
+                        `${origin.OriginDetail.LatestResult?.CompleteMessage ?? 'unknown error'}`
+                    );
+                    return;
+                }
+                this.publishCompletion(
+                    origin.OwnerUserID,
+                    params.ConversationDetailID,
+                    params.ConversationDetailID,
+                    origin.ConversationID,
+                    params.SubmittedByAgentRunID ?? 'task-graph',
+                    true,
+                );
+                return;
+            }
+
             const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', actingUser);
             detail.NewRecord();
             detail.ConversationID = origin.ConversationID;
             detail.BranchID = origin.BranchID;
+            detail.ParentID = params.ConversationDetailID;
             detail.Role = 'AI';
             detail.Status = 'Complete';
             detail.HiddenToUser = false;
-            detail.Message = this.renderMessage(enrichedParams);
+            detail.Message = renderedOutcome;
 
             if (!(await detail.Save())) {
                 LogError(
@@ -95,6 +122,8 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 );
                 return;
             }
+
+            await this.markOriginDetailCompleted(origin.OriginDetail, params.WorkflowName);
 
             this.publishCompletion(
                 origin.OwnerUserID,
@@ -152,26 +181,39 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
             const ownerUserId = priorRun.UserID || origin?.OwnerUserID || this.contextUser.ID;
             const actingUser = this.resolveActingUser(ownerUserId);
 
-            // Create a visible AI reply detail in the conversation for the continuation turn so the
-            // synthesized response appears as a new message in the chat transcript.
+            // Adaptive delivery:
+            // - When the originating workflow message is still the latest message in the conversation
+            //   (origin.IsLatest === true), update it in-place so the single turn carries the workflow
+            //   progress card, step artifacts, and synthesized narrative together.
+            // - When intervening messages were sent while the workflow ran (origin.IsLatest === false),
+            //   create a bottom continuation message linked via ParentID = params.ConversationDetailID
+            //   and update the originating message's stale "I'll follow up..." copy.
             let replyDetail: MJConversationDetailEntity | null = null;
             let replySaved = false;
             if (origin?.ConversationID) {
-                replyDetail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', actingUser);
-                replyDetail.NewRecord();
-                replyDetail.ConversationID = origin.ConversationID;
-                replyDetail.BranchID = origin.BranchID;
-                replyDetail.Role = 'AI';
-                replyDetail.Status = 'In-Progress';
-                replyDetail.HiddenToUser = false;
-                replyDetail.AgentID = agent.ID;
-                replyDetail.Message = `⏳ Synthesizing results from **${params.WorkflowName}**...`;
-                replySaved = await replyDetail.Save();
+                if (origin.IsLatest) {
+                    replyDetail = origin.OriginDetail;
+                    replySaved = true;
+                } else {
+                    replyDetail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', actingUser);
+                    replyDetail.NewRecord();
+                    replyDetail.ConversationID = origin.ConversationID;
+                    replyDetail.BranchID = origin.BranchID;
+                    replyDetail.ParentID = params.ConversationDetailID;
+                    replyDetail.Role = 'AI';
+                    replyDetail.Status = 'In-Progress';
+                    replyDetail.HiddenToUser = false;
+                    replyDetail.AgentID = agent.ID;
+                    replyDetail.Message = `⏳ Synthesizing results from **${params.WorkflowName}**...`;
+                    replySaved = await replyDetail.Save();
+                }
             }
 
-            const targetDetailId = (replyDetail && replySaved && replyDetail.ID)
-                ? replyDetail.ID
-                : (params.ConversationDetailID ?? undefined);
+            const targetDetailId = origin?.IsLatest
+                ? (params.ConversationDetailID ?? replyDetail?.ID ?? undefined)
+                : ((replyDetail && replySaved && replyDetail.ID)
+                    ? replyDetail.ID
+                    : (params.ConversationDetailID ?? undefined));
 
             const enrichedParams = await this.enrichTasksWithOutputs(params, provider);
             const renderedContinuationMessage = this.renderMessage(enrichedParams);
@@ -184,8 +226,11 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                     role: ChatMessageRole.user,
                     content:
                         `${renderedContinuationMessage}\n\n` +
-                        `Please synthesize these completed workflow step outputs into a clear, direct, comprehensive final response for the user (including any SQL queries, data tables, or executive summaries produced by the steps).`,
+                        `Please synthesize ALL completed workflow steps above into a clear, direct, comprehensive final response for the user (covering every step's findings, SQL queries, data tables, strategic analysis, and report summaries).`,
                 }],
+                // Prevent the continuation synthesis turn from auto-hydrating an unrelated artifact
+                // from an earlier conversation turn into payload.
+                inputArtifacts: [],
                 contextUser: actingUser,
                 conversationId: origin?.ConversationID ?? undefined,
                 conversationDetailId: targetDetailId,
@@ -210,15 +255,25 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 }
                 await replyDetail.Save();
 
+                if (!origin?.IsLatest && origin?.OriginDetail) {
+                    await this.markOriginDetailCompleted(origin.OriginDetail, params.WorkflowName);
+                }
+
+                const artifactTargetDetailId = targetDetailId ?? replyDetail.ID;
+                const hasNonEmptyPayload =
+                    result?.payload != null &&
+                    (typeof result.payload !== 'object' ||
+                        Array.isArray(result.payload) ||
+                        Object.keys(result.payload as Record<string, unknown>).length > 0);
                 if (
                     succeeded &&
-                    result?.payload != null &&
-                    replyDetail.ID &&
+                    hasNonEmptyPayload &&
+                    artifactTargetDetailId &&
                     result.artifactDirective?.behavior !== 'suppress' &&
                     typeof runner.ProcessAgentArtifacts === 'function'
                 ) {
                     try {
-                        await runner.ProcessAgentArtifacts(result, replyDetail.ID, undefined, actingUser, provider);
+                        await runner.ProcessAgentArtifacts(result, artifactTargetDetailId, undefined, actingUser, provider);
                     } catch (artifactErr) {
                         LogError(
                             `[TaskGraphContinuationDeliverer] Artifact creation for "${params.WorkflowName}" failed (non-fatal)`,
@@ -312,12 +367,21 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
         }
     }
 
-    /** The conversation, fork (null is Main), and owner user of the detail that started the graph; null when it cannot be loaded. */
+    /**
+     * The conversation, fork (null is Main), owner user, loaded entity, and whether the originating
+     * detail is still the latest visible message in the conversation; null when it cannot be loaded.
+     */
     private async resolveOrigin(
         conversationDetailID: string,
         provider: IMetadataProvider,
         fallbackOwnerUserId?: string | null,
-    ): Promise<{ ConversationID: string; BranchID: string | null; OwnerUserID: string } | null> {
+    ): Promise<{
+        ConversationID: string;
+        BranchID: string | null;
+        OwnerUserID: string;
+        OriginDetail: MJConversationDetailEntity;
+        IsLatest: boolean;
+    } | null> {
         const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.contextUser);
         if (!(await detail.Load(conversationDetailID))) {
             return null;
@@ -326,11 +390,80 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
         if (!ownerUserId && detail.ConversationID) {
             ownerUserId = await this.lookupConversationOwnerId(detail.ConversationID, provider);
         }
+        const branchId = detail.BranchID ?? null;
+        const isLatest = detail.ConversationID
+            ? await this.isLatestConversationMessage(detail.ConversationID, branchId, conversationDetailID, provider)
+            : false;
         return {
             ConversationID: detail.ConversationID,
-            BranchID: detail.BranchID ?? null,
+            BranchID: branchId,
             OwnerUserID: ownerUserId || this.contextUser.ID,
+            OriginDetail: detail,
+            IsLatest: isLatest,
         };
+    }
+
+    /**
+     * Returns `true` when `originDetailId` is the newest visible message on its conversation branch,
+     * meaning no intervening messages were posted while the workflow ran in the background.
+     */
+    private async isLatestConversationMessage(
+        conversationId: string,
+        branchId: string | null,
+        originDetailId: string,
+        provider: IMetadataProvider,
+    ): Promise<boolean> {
+        try {
+            const safeConvId = conversationId.replace(/'/g, "''");
+            const branchPredicate = branchId
+                ? `BranchID='${branchId.replace(/'/g, "''")}'`
+                : `BranchID IS NULL`;
+            const rv = RunView.FromMetadataProvider(provider);
+            const res = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: 'MJ: Conversation Details',
+                    ExtraFilter: `ConversationID='${safeConvId}' AND ${branchPredicate} AND (HiddenToUser = 0 OR HiddenToUser IS NULL)`,
+                    Fields: ['ID'],
+                    OrderBy: '__mj_CreatedAt DESC',
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                    BypassCache: true,
+                },
+                this.contextUser,
+            );
+            if (res.Success && res.Results && res.Results.length > 0 && res.Results[0].ID) {
+                return UUIDsEqual(res.Results[0].ID, originDetailId);
+            }
+        } catch {
+            // Fall back to false when RunView is unavailable.
+        }
+        return false;
+    }
+
+    /**
+     * Replaces the originating message's stale "I'll follow up when it finishes" copy with a clean
+     * completion note when the workflow outcome was delivered in a separate bottom continuation message.
+     */
+    private async markOriginDetailCompleted(
+        originDetail: MJConversationDetailEntity,
+        workflowName: string,
+    ): Promise<void> {
+        try {
+            const currentMsg = originDetail.Message || '';
+            const completionNote = `*(✅ **${workflowName}** completed — synthesized results posted below.)*`;
+            if (!currentMsg.includes(completionNote)) {
+                const cleaned = currentMsg
+                    .replace(/\s*I['’]ll follow up when it finishes\.?/gi, '')
+                    .trim();
+                originDetail.Message = cleaned
+                    ? `${cleaned}\n\n${completionNote}`
+                    : completionNote;
+                originDetail.Status = 'Complete';
+                await originDetail.Save();
+            }
+        } catch {
+            // Non-fatal if origin detail note update fails.
+        }
     }
 
     /**
@@ -383,9 +516,10 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
     }
 
     /**
-     * Loads child task `OutputPayload` rows for `params.ParentTaskID` and replaces generic
-     * `"output available (N chars)"` summaries with readable output excerpts so both
-     * `PostMessage` and `Reinvoke` carry concrete step results into the conversation.
+     * Loads child task `OutputPayload` rows for `params.ParentTaskID`, strips upstream payload keys
+     * inherited unchanged via `TaskGraphDispatcher.applyStepOutputMapping`, and replaces generic
+     * `"output available (N chars)"` summaries with readable output excerpts so both `PostMessage`
+     * and `Reinvoke` carry each step's own concrete results into the conversation.
      */
     private async enrichTasksWithOutputs(
         params: TaskContinuationParams,
@@ -419,6 +553,7 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
             if (outputById.size === 0) {
                 return params;
             }
+            const seenUpstreamKeyValues = new Map<string, string>();
             return {
                 ...params,
                 Tasks: params.Tasks.map((task) => {
@@ -426,17 +561,48 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                     if (!rawOutput) {
                         return task;
                     }
+                    const deltaOutput = this.stripInheritedUpstreamKeys(rawOutput, seenUpstreamKeyValues);
                     const isPlaceholderSummary = !task.Summary || task.Summary.startsWith('output available (');
                     if (!isPlaceholderSummary) {
                         return task;
                     }
-                    const excerpt = this.extractOutputExcerpt(rawOutput);
+                    const excerpt = this.extractOutputExcerpt(deltaOutput);
                     return excerpt ? { ...task, Summary: excerpt } : task;
                 }),
             };
         } catch {
             return params;
         }
+    }
+
+    /**
+     * Removes top-level JSON keys from `rawOutput` whose serialized value is identical to an
+     * earlier step's output in the same workflow (`TaskGraphDispatcher.applyStepOutputMapping`
+     * merges `{ ...payload, ...output }`), while recording this step's keys for downstream steps.
+     */
+    private stripInheritedUpstreamKeys(
+        rawOutput: string,
+        seenUpstreamKeyValues: Map<string, string>,
+    ): string {
+        try {
+            const parsed = JSON.parse(rawOutput.trim()) as Record<string, unknown>;
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                const delta: Record<string, unknown> = {};
+                for (const [key, value] of Object.entries(parsed)) {
+                    const serializedVal = JSON.stringify(value);
+                    if (seenUpstreamKeyValues.get(key) !== serializedVal) {
+                        delta[key] = value;
+                    }
+                    seenUpstreamKeyValues.set(key, serializedVal);
+                }
+                if (Object.keys(delta).length > 0) {
+                    return JSON.stringify(delta);
+                }
+            }
+        } catch {
+            // Non-JSON output; return as-is.
+        }
+        return rawOutput;
     }
 
     /**
@@ -452,24 +618,90 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
             const parsed = JSON.parse(trimmed) as Record<string, unknown>;
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
                 const sections: string[] = [];
-                if (typeof parsed.title === 'string' && parsed.title.trim()) {
-                    sections.push(`Title: ${parsed.title.trim()}`);
+                const titleText = parsed.title ?? parsed.queryName ?? parsed.savedQueryName;
+                if (typeof titleText === 'string' && titleText.trim()) {
+                    sections.push(`Title: ${titleText.trim()}`);
                 }
                 if (typeof parsed.message === 'string' && parsed.message.trim()) {
                     sections.push(parsed.message.trim());
                 }
-                if (typeof parsed.summary === 'string' && parsed.summary.trim()) {
-                    sections.push(parsed.summary.trim());
+                const summaryText = parsed.summary ?? parsed.description ?? parsed.interpretation;
+                if (typeof summaryText === 'string' && summaryText.trim()) {
+                    sections.push(summaryText.trim());
                 }
-                if (typeof parsed.request === 'string' && parsed.request.trim()) {
-                    sections.push(`SQL / Request:\n\`\`\`sql\n${parsed.request.trim()}\n\`\`\``);
+                if (typeof parsed.explanation === 'string' && parsed.explanation.trim()) {
+                    sections.push(`Explanation: ${parsed.explanation.trim()}`);
+                }
+                if (typeof parsed.analysis === 'string' && parsed.analysis.trim()) {
+                    sections.push(`Analysis: ${parsed.analysis.trim()}`);
+                }
+                const sqlText = parsed.request ?? parsed.sql;
+                if (typeof sqlText === 'string' && sqlText.trim()) {
+                    sections.push(`SQL / Request:\n\`\`\`sql\n${sqlText.trim()}\n\`\`\``);
                 }
                 if (typeof parsed.plan === 'string' && parsed.plan.trim()) {
                     sections.push(parsed.plan.trim());
                 }
+
+                // Nested synthesis object (e.g., Research Agent / Query Strategist)
+                const synthesis = (typeof parsed.synthesis === 'object' && parsed.synthesis !== null && !Array.isArray(parsed.synthesis))
+                    ? (parsed.synthesis as Record<string, unknown>)
+                    : undefined;
+                if (synthesis) {
+                    if (typeof synthesis.executiveSummary === 'string' && synthesis.executiveSummary.trim()) {
+                        sections.push(`Executive Summary: ${synthesis.executiveSummary.trim()}`);
+                    }
+                    if (Array.isArray(synthesis.keyFindings) && synthesis.keyFindings.length > 0) {
+                        sections.push(`Key Findings: ${JSON.stringify(synthesis.keyFindings.slice(0, 10))}`);
+                    }
+                    if (Array.isArray(synthesis.recommendations) && synthesis.recommendations.length > 0) {
+                        sections.push(`Recommendations: ${JSON.stringify(synthesis.recommendations.slice(0, 10))}`);
+                    }
+                }
+
+                // Nested report object (e.g., Research Report Writer)
+                const report = (typeof parsed.report === 'object' && parsed.report !== null && !Array.isArray(parsed.report))
+                    ? (parsed.report as Record<string, unknown>)
+                    : undefined;
+                if (report) {
+                    if (typeof report.name === 'string' && report.name.trim()) {
+                        sections.push(`Report Title: ${report.name.trim()}`);
+                    }
+                    if (typeof report.description === 'string' && report.description.trim()) {
+                        sections.push(`Report Summary: ${report.description.trim()}`);
+                    }
+                    if (typeof report.html === 'string' && report.html.trim()) {
+                        const plainReportText = report.html
+                            .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+                            .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+                            .replace(/<[^>]+>/g, ' ')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                        if (plainReportText) {
+                            sections.push(`Report Excerpt: ${plainReportText.slice(0, 1000)}`);
+                        }
+                    }
+                }
+
+                // Action output fields (Result / result / output / value)
+                const actionOutput = parsed.Result ?? parsed.result ?? parsed.output ?? parsed.value;
+                if (actionOutput !== undefined && actionOutput !== null) {
+                    const formattedActionOutput = typeof actionOutput === 'string'
+                        ? actionOutput.trim()
+                        : JSON.stringify(actionOutput);
+                    if (formattedActionOutput) {
+                        sections.push(`Result: ${formattedActionOutput}`);
+                    }
+                }
+
                 if (Array.isArray(parsed.rows) && parsed.rows.length > 0) {
                     sections.push(`Sample Rows (${parsed.rows.length} total): ${JSON.stringify(parsed.rows.slice(0, 10))}`);
                 }
+
+                if (parsed.decisions !== undefined && parsed.decisions !== null && sections.length === 0) {
+                    sections.push(`Decisions: ${JSON.stringify(parsed.decisions)}`);
+                }
+
                 if (sections.length > 0) {
                     const combined = sections.join('\n\n');
                     return combined.length > maxChars ? `${combined.slice(0, maxChars)}…` : combined;

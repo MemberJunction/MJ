@@ -284,4 +284,78 @@ describe('MessageItemComponent — First-Class Inline Workflow Execution Card', 
     expect(item.FormatWorkflowStepDuration(item.WorkflowSteps[0])).toBe('0:42');
     expect(item.GetWorkflowStepSummary(item.WorkflowSteps[0])).toBe('**Cohort A**: 128 users');
   });
+
+  it('resolves OriginatingWorkflowTask relationally via message.ParentID for bottom continuation replies and strips inherited upstream keys from step summaries', async () => {
+    const db = database();
+    db.tasks.push(
+      {
+        ID: 'origin-wf-root',
+        ConversationDetailID: 'origin-msg-1',
+        UserID: 'user-1',
+        Name: 'Order-by-Year DAG Demo',
+        Status: 'Complete',
+        ParentID: null,
+      },
+      {
+        ID: 'origin-step-1',
+        ConversationDetailID: 'origin-msg-1',
+        UserID: 'user-1',
+        Name: 'Step 1',
+        Status: 'Complete',
+        ParentID: 'origin-wf-root',
+      }
+    );
+
+    const continuationItem = Object.create(MessageItemComponent.prototype) as MessageItemComponent;
+    Object.assign(continuationItem, {
+      Provider: db.provider,
+      CurrentUser: USER,
+      message: { ID: 'bottom-continuation-msg-9', ParentID: 'origin-msg-1', Role: 'AI', Status: 'Complete' },
+      DetailTasks: [],
+      OriginatingWorkflowTask: null,
+      ExpandedWorkflowStepIds: new Set<string>(),
+      cdRef: { detectChanges: () => undefined },
+    });
+
+    await (continuationItem as unknown as { loadTasks(): Promise<void> }).loadTasks();
+
+    expect(continuationItem.OriginatingWorkflowTask).not.toBeNull();
+    expect(continuationItem.OriginatingWorkflowTask?.ID).toBe('origin-wf-root');
+    expect(continuationItem.OriginatingWorkflowTask?.Name).toBe('Order-by-Year DAG Demo');
+    expect(continuationItem.DetailTasks).toHaveLength(0);
+
+    // Also verify GetWorkflowStepSummary strips upstream keys from step 2
+    const originItem = Object.create(MessageItemComponent.prototype) as MessageItemComponent;
+    const step1 = {
+      ID: 's1',
+      Name: 'Step 1: Query',
+      Description: 'Run query\n\n--- Output ---\noutput available (120 chars)',
+      OutputPayload: JSON.stringify({ queryName: 'Annual Orders', sql: 'SELECT 1' }),
+      Status: 'Complete',
+      ParentID: 'p1',
+      __mj_CreatedAt: new Date('2026-10-18T12:00:00Z'),
+    } as unknown as MJTaskEntity;
+    const step2 = {
+      ID: 's2',
+      Name: 'Step 2: Report',
+      Description: 'Write report\n\n--- Output ---\noutput available (450 chars)',
+      OutputPayload: JSON.stringify({
+        queryName: 'Annual Orders',
+        sql: 'SELECT 1',
+        report: { name: 'Executive Annual Order Report', description: 'Synthesized YoY growth report' },
+      }),
+      Status: 'Complete',
+      ParentID: 'p1',
+      __mj_CreatedAt: new Date('2026-10-18T12:00:10Z'),
+    } as unknown as MJTaskEntity;
+    originItem.DetailTasks = [
+      { ID: 'p1', Name: 'Parent', ParentID: null, Status: 'Complete' } as unknown as MJTaskEntity,
+      step1,
+      step2,
+    ];
+
+    expect(originItem.GetWorkflowStepSummary(step1)).toBe('Annual Orders');
+    expect(originItem.GetWorkflowStepSummary(step2)).toBe('Synthesized YoY growth report');
+  });
 });
+

@@ -42,6 +42,11 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 conversationMessages: [{ role: ChatMessageRole.user, content: this.buildPrompt(params) }],
                 contextUser: actingUser,
                 conversationId: parentRun?.ConversationID ?? undefined,
+                // A task-graph step receives its explicit InputPayload and DependencyOutputs.
+                // Passing an empty inputArtifacts array prevents AgentRunner.hydrateConversationArtifacts
+                // from loading unrelated artifacts from earlier turns in the conversation and tempting
+                // the step agent to emit `version-source` against a prior turn's artifact.
+                inputArtifacts: [],
                 // Inherited from the graph, so a graph this run goes on to emit is one hop deeper
                 // rather than starting the chain over. Without it MAX_REINVOKE_DEPTH never fires.
                 continuationDepth: params.ContinuationDepth ?? 0,
@@ -61,8 +66,20 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 typeof runner.ProcessAgentArtifacts === 'function'
             ) {
                 try {
+                    // Each step in a task graph is an independent workflow node and multiple steps
+                    // in the same graph share the originating ConversationDetailID. Enforcing
+                    // `behavior: 'create-new'` (while preserving any directive name/description)
+                    // prevents a step from accidentally versioning an earlier turn's artifact or
+                    // overwriting a sibling DAG step's artifact via FindPreviousArtifactForMessage.
+                    const stepArtifactResult = {
+                        ...result,
+                        artifactDirective: {
+                            ...result.artifactDirective,
+                            behavior: 'create-new' as const,
+                        },
+                    };
                     await runner.ProcessAgentArtifacts(
-                        result,
+                        stepArtifactResult,
                         conversationDetailId,
                         undefined,
                         actingUser,

@@ -858,6 +858,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private _taskPollCounter: number = 0;
   public WorkflowElapsedFormatted: string = '0:00';
   public ExpandedWorkflowStepIds = new Set<string>();
+  /**
+   * When this message is a bottom continuation reply (`this.message.ParentID` points to the
+   * originating workflow message), holds the root `MJ: Tasks` row for that workflow so the UI
+   * can render a relational Workflow Context Header without string-parsing.
+   */
+  public OriginatingWorkflowTask: MJTaskEntity | null = null;
 
   // Memoization for mention parsing to prevent repeated parsing on change detection
   private _cachedDisplayMessage: string = '';
@@ -1275,7 +1281,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return '0:00';
     }
 
-    let seconds = Math.floor(diffMs / 1000);
+    let seconds = Math.max(1, Math.floor(diffMs / 1000));
     let minutes = Math.floor(seconds / 60);
     seconds = seconds % 60;
     let hours = Math.floor(minutes / 60);
@@ -2624,11 +2630,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     this._tasksLoadInFlight = true;
     try {
+      const safeMsgId = this.message.ID.replace(/'/g, "''");
+      const safeParentId = this.message.ParentID ? this.message.ParentID.replace(/'/g, "''") : null;
+      const extraFilter = safeParentId
+        ? `ConversationDetailID='${safeMsgId}' OR (ConversationDetailID='${safeParentId}' AND ParentID IS NULL)`
+        : `ConversationDetailID='${safeMsgId}'`;
+
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTaskEntity>(
         {
           EntityName: 'MJ: Tasks',
-          ExtraFilter: `ConversationDetailID='${this.message.ID}'`,
+          ExtraFilter: extraFilter,
           OrderBy: '__mj_CreatedAt ASC',
           ResultType: 'entity_object',
           BypassCache: true
@@ -2637,7 +2649,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       );
 
       if (result.Success) {
-        this.DetailTasks = result.Results || [];
+        const allTasks = result.Results || [];
+        if (safeParentId) {
+          this.DetailTasks = allTasks.filter((t) => UUIDsEqual(t.ConversationDetailID, this.message.ID));
+          this.OriginatingWorkflowTask =
+            allTasks.find(
+              (t) => !t.ParentID && UUIDsEqual(t.ConversationDetailID, this.message.ParentID)
+            ) || null;
+        } else {
+          this.DetailTasks = allTasks;
+          this.OriginatingWorkflowTask = null;
+        }
         this.tasksLoaded = true;
         this.WorkflowElapsedFormatted = this.computeWorkflowElapsedFormatted();
         if (this.HasActiveWorkflowTasks && this._elapsedTimeInterval === null) {
@@ -2653,6 +2675,25 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         this._tasksReloadQueued = false;
         void this.loadTasks();
       }
+    }
+  }
+
+  /**
+   * Smoothly scrolls the chat viewport to the originating workflow message (`this.message.ParentID`)
+   * and briefly highlights it when the user clicks the Workflow Context Header chip.
+   */
+  public ScrollToOriginatingWorkflow(event: MouseEvent): void {
+    event.stopPropagation();
+    if (!this.message?.ParentID || typeof document === 'undefined') {
+      return;
+    }
+    const targetId = this.message.ParentID;
+    const candidates = Array.from(document.querySelectorAll<HTMLElement>('[data-message-id]'));
+    const targetEl = candidates.find((el) => UUIDsEqual(el.getAttribute('data-message-id'), targetId));
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      targetEl.classList.add('workflow-origin-highlight');
+      setTimeout(() => targetEl.classList.remove('workflow-origin-highlight'), 2200);
     }
   }
 
@@ -2825,12 +2866,83 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const outputMarker = desc.indexOf('--- Output ---');
     if (outputMarker !== -1) {
       const rawOutput = desc.slice(outputMarker + '--- Output ---'.length).trim();
-      if (rawOutput.length > 0) {
+      if (rawOutput.length > 0 && !rawOutput.startsWith('output available (')) {
         return rawOutput.length > 360 ? rawOutput.slice(0, 360) + '…' : rawOutput;
+      }
+    }
+    if (step.OutputPayload) {
+      const deltaText = this.extractStepDeltaPreview(step);
+      if (deltaText) {
+        return deltaText.length > 360 ? deltaText.slice(0, 360) + '…' : deltaText;
       }
     }
     const cleanDesc = desc.trim();
     return cleanDesc.length > 0 ? cleanDesc : null;
+  }
+
+  /**
+   * Strips upstream keys inherited unchanged from earlier workflow steps and extracts a concise
+   * human-readable summary from `step.OutputPayload`.
+   */
+  private extractStepDeltaPreview(step: MJTaskEntity): string | null {
+    const raw = step.OutputPayload?.trim();
+    if (!raw) {
+      return null;
+    }
+    try {
+      const steps = this.WorkflowSteps;
+      const seenUpstream = new Map<string, string>();
+      for (const prior of steps) {
+        if (UUIDsEqual(prior.ID, step.ID)) {
+          break;
+        }
+        if (prior.OutputPayload) {
+          try {
+            const priorObj = JSON.parse(prior.OutputPayload) as Record<string, unknown>;
+            if (priorObj && typeof priorObj === 'object' && !Array.isArray(priorObj)) {
+              for (const [k, v] of Object.entries(priorObj)) {
+                seenUpstream.set(k, JSON.stringify(v));
+              }
+            }
+          } catch {
+            // Ignore non-JSON upstream payload
+          }
+        }
+      }
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const delta: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(parsed)) {
+          if (seenUpstream.get(k) !== JSON.stringify(v)) {
+            delta[k] = v;
+          }
+        }
+        const source = Object.keys(delta).length > 0 ? delta : parsed;
+        const synthesis = (typeof source.synthesis === 'object' && source.synthesis !== null && !Array.isArray(source.synthesis))
+          ? (source.synthesis as Record<string, unknown>)
+          : undefined;
+        const report = (typeof source.report === 'object' && source.report !== null && !Array.isArray(source.report))
+          ? (source.report as Record<string, unknown>)
+          : undefined;
+        const candidate =
+          source.summary ??
+          source.message ??
+          source.explanation ??
+          source.analysis ??
+          synthesis?.executiveSummary ??
+          report?.description ??
+          report?.name ??
+          source.title ??
+          source.queryName;
+        if (typeof candidate === 'string' && candidate.trim()) {
+          return candidate.trim();
+        }
+        return JSON.stringify(source);
+      }
+    } catch {
+      return raw;
+    }
+    return raw;
   }
 
   public OpenWorkflowStepAgentRun(step: MJTaskEntity, event: MouseEvent): void {

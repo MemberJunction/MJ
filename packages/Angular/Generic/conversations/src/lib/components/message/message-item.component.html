@@ -135,6 +135,24 @@
 
     <div class="message-body">
       @if (!isEditing) {
+        @if (OriginatingWorkflowTask) {
+          <button
+            type="button"
+            class="workflow-continuation-banner"
+            (click)="ScrollToOriginatingWorkflow($event)"
+            title="Scroll to originating workflow card and step artifacts">
+            <span class="continuation-banner-left">
+              <i class="fa-solid fa-diagram-project continuation-banner-icon" aria-hidden="true"></i>
+              <span class="continuation-banner-label">Completed workflow</span>
+              <span class="continuation-banner-sep">·</span>
+              <span class="continuation-banner-name">{{ OriginatingWorkflowTask.Name }}</span>
+            </span>
+            <span class="continuation-banner-jump">
+              <span>View workflow</span>
+              <i class="fa-solid fa-arrow-up-long" aria-hidden="true"></i>
+            </span>
+          </button>
+        }
         <div class="message-text">
           <mj-markdown [data]="displayMessage" [enableCollapsibleHeadings]="true"></mj-markdown>
           @if (isMessageEdited) {

@@ -2521,6 +2521,7 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
 
       const pipelineAgents: Array<{ id: string; name: string }> = [];
       const seenPipelineAgents = new Set<string>();
+      const seenUpstreamKeyValues = new Map<string, string>();
 
       const enrichedSteps: EnrichedWorkflowStep[] = sortedRawSteps.map((stepTask, idx) => {
         const agentName = this.resolveAgentName(stepTask);
@@ -2539,7 +2540,12 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
           }
         }
 
-        const { instructions, output, isError } = this.splitTaskDescription(stepTask.Description || '');
+        const { instructions, output: rawDescOutput, isError } = this.splitTaskDescription(stepTask.Description || '');
+        const deltaPayloadOutput = this.resolveDeltaStepOutput(stepTask.OutputPayload, seenUpstreamKeyValues);
+        const output =
+          (!rawDescOutput || rawDescOutput.startsWith('output available (')) && deltaPayloadOutput
+            ? deltaPayloadOutput
+            : rawDescOutput;
         const stepStartMs = this.toEpochMs(stepTask.StartedAt ?? stepTask.__mj_CreatedAt) || workflowStartMs;
         const stepEndMs =
           this.toEpochMs(stepTask.CompletedAt) ||
@@ -2944,6 +2950,38 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
       output: null,
       isError: false
     };
+  }
+
+  /**
+   * Strips upstream keys inherited unchanged from earlier workflow steps and returns a formatted
+   * human-readable or JSON excerpt for the step inspector drawer.
+   */
+  private resolveDeltaStepOutput(
+    rawPayload: string | null | undefined,
+    seenUpstreamKeyValues: Map<string, string>,
+  ): string | null {
+    const trimmed = rawPayload?.trim();
+    if (!trimmed) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const delta: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(parsed)) {
+          const serializedVal = JSON.stringify(v);
+          if (seenUpstreamKeyValues.get(k) !== serializedVal) {
+            delta[k] = v;
+          }
+          seenUpstreamKeyValues.set(k, serializedVal);
+        }
+        const source = Object.keys(delta).length > 0 ? delta : parsed;
+        return JSON.stringify(source, null, 2);
+      }
+    } catch {
+      // Non-JSON payload; return as-is.
+    }
+    return trimmed;
   }
 
   private toEpochMs(date: Date | string | null | undefined): number {

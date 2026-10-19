@@ -363,4 +363,167 @@ describe('Reinvoke — on the fork of the message that started the graph', () =>
         expect(sentContent).toContain('Title: Entity Counts by Schema');
         expect(sentContent).toContain('SELECT SchemaName, COUNT(*) AS EntityCount FROM __mj.vwEntities GROUP BY SchemaName');
     });
+
+    it('updates the originating message in-place when no intervening messages were sent (IsLatest = true)', async () => {
+        const { RunView } = await import('@memberjunction/core');
+        vi.mocked(RunView.FromMetadataProvider).mockReturnValue({
+            RunView: vi.fn().mockImplementation(async (rvParams: { EntityName: string }) => {
+                if (rvParams.EntityName === 'MJ: Conversation Details') {
+                    return {
+                        Success: true,
+                        Results: [{ ID: 'detail-1' }],
+                    };
+                }
+                return { Success: false, Results: [] };
+            }),
+        } as never);
+
+        const originDetail = {
+            ...detailRow(),
+            ID: 'detail-1',
+            Message: "Started **Weekly digest** — 2 task(s) running. I'll follow up when it finishes.",
+        };
+        const createdDetails: Array<ReturnType<typeof detailRow>> = [];
+        const provider = {
+            GetEntityObject: vi.fn().mockImplementation(async (name: string) => {
+                if (name === 'MJ: AI Agent Runs') return { AgentID: 'agent-1', Load: vi.fn().mockResolvedValue(true) };
+                if (name === 'MJ: AI Agents') return { ID: 'agent-1', Load: vi.fn().mockResolvedValue(true) };
+                if (createdDetails.length === 0) {
+                    createdDetails.push(originDetail);
+                    return originDetail;
+                }
+                const next = detailRow();
+                createdDetails.push(next);
+                return next;
+            }),
+        };
+        const pubSub = { publish: vi.fn().mockResolvedValue(undefined) } as unknown as PubSubEngine;
+        const deliverer = new TaskGraphContinuationDeliverer(
+            { CreateProvider: vi.fn().mockResolvedValue(provider) } as never,
+            { ID: 'user-1' } as UserInfo,
+            pubSub,
+        );
+
+        await deliverer.Reinvoke(params());
+
+        // Only the originating detail was loaded and updated in-place — no second detail row created!
+        expect(createdDetails.length).toBe(1);
+        expect(originDetail.NewRecord).not.toHaveBeenCalled();
+        expect(originDetail.Message).toBe('Synthesized workflow outcome');
+        expect(originDetail.Status).toBe('Complete');
+        expect(runAgent.mock.calls[0][0].conversationDetailId).toBe('detail-1');
+        expect(runAgent.mock.calls[0][0].inputArtifacts).toEqual([]);
+        expect(pubSub.publish).toHaveBeenCalledTimes(1);
+    });
+
+    it('creates a bottom continuation reply with ParentID = originDetailId and updates the origin message note when intervening messages exist (IsLatest = false)', async () => {
+        const { RunView } = await import('@memberjunction/core');
+        vi.mocked(RunView.FromMetadataProvider).mockReturnValue({
+            RunView: vi.fn().mockImplementation(async (rvParams: { EntityName: string }) => {
+                if (rvParams.EntityName === 'MJ: Conversation Details') {
+                    return {
+                        Success: true,
+                        Results: [{ ID: 'intervening-user-msg-2' }],
+                    };
+                }
+                return { Success: false, Results: [] };
+            }),
+        } as never);
+
+        const originDetail = {
+            ...detailRow(),
+            ID: 'detail-1',
+            ParentID: null as string | null,
+            Message: "Started **Weekly digest** — 2 task(s) running. I'll follow up when it finishes.",
+        };
+        const replyDetail = {
+            ...detailRow(),
+            ID: 'bottom-reply-3',
+            ParentID: null as string | null,
+        };
+        let detailCallCount = 0;
+        const provider = {
+            GetEntityObject: vi.fn().mockImplementation(async (name: string) => {
+                if (name === 'MJ: AI Agent Runs') return { AgentID: 'agent-1', Load: vi.fn().mockResolvedValue(true) };
+                if (name === 'MJ: AI Agents') return { ID: 'agent-1', Load: vi.fn().mockResolvedValue(true) };
+                detailCallCount++;
+                return detailCallCount === 1 ? originDetail : replyDetail;
+            }),
+        };
+        const pubSub = { publish: vi.fn().mockResolvedValue(undefined) } as unknown as PubSubEngine;
+        const deliverer = new TaskGraphContinuationDeliverer(
+            { CreateProvider: vi.fn().mockResolvedValue(provider) } as never,
+            { ID: 'user-1' } as UserInfo,
+            pubSub,
+        );
+
+        await deliverer.Reinvoke(params());
+
+        expect(replyDetail.NewRecord).toHaveBeenCalledTimes(1);
+        expect(replyDetail.ParentID).toBe('detail-1');
+        expect(replyDetail.Message).toBe('Synthesized workflow outcome');
+        expect(originDetail.Message).toContain('*(✅ **Weekly digest** completed — synthesized results posted below.)*');
+        expect(originDetail.Message).not.toContain("I'll follow up when it finishes");
+        expect(pubSub.publish).toHaveBeenCalledTimes(2);
+    });
+
+    it('strips inherited upstream payload keys across DAG steps and extracts nested synthesis and report fields', async () => {
+        const { RunView } = await import('@memberjunction/core');
+        const step1Payload = {
+            queryName: 'Annual Order Counts',
+            sql: 'SELECT YEAR(OrderDate) AS OrderYear, COUNT(*) AS OrderCount FROM Orders GROUP BY YEAR(OrderDate)',
+            explanation: 'Counts orders grouped by year.',
+        };
+        const step2Payload = {
+            ...step1Payload,
+            synthesis: {
+                executiveSummary: 'Order volume grew 22% YoY between 2022 and 2025.',
+                keyFindings: ['2024 peak growth', 'Steady enterprise retention'],
+            },
+        };
+        const step3Payload = {
+            ...step2Payload,
+            report: {
+                name: 'Annual Order Trend Executive Report',
+                description: 'Board-ready HTML report covering annual order volume and YoY trajectory.',
+                html: '<h1>Annual Order Trend</h1><p>Executive overview of multi-year order growth.</p>',
+            },
+        };
+
+        vi.mocked(RunView.FromMetadataProvider).mockReturnValue({
+            RunView: vi.fn().mockImplementation(async (rvParams: { EntityName: string }) => {
+                if (rvParams.EntityName === 'MJ: Tasks') {
+                    return {
+                        Success: true,
+                        Results: [
+                            { ID: 't1', Name: 'Step 1: Query', OutputPayload: JSON.stringify(step1Payload) },
+                            { ID: 't2', Name: 'Step 2: Strategy', OutputPayload: JSON.stringify(step2Payload) },
+                            { ID: 't3', Name: 'Step 3: Report', OutputPayload: JSON.stringify(step3Payload) },
+                        ],
+                    };
+                }
+                return { Success: false, Results: [] };
+            }),
+        } as never);
+
+        await forkHarness(null).Reinvoke(
+            params({
+                Tasks: [
+                    { TaskID: 't1', Name: 'Step 1: Query', Status: 'Complete', Summary: 'output available (180 chars)' },
+                    { TaskID: 't2', Name: 'Step 2: Strategy', Status: 'Complete', Summary: 'output available (320 chars)' },
+                    { TaskID: 't3', Name: 'Step 3: Report', Status: 'Complete', Summary: 'output available (540 chars)' },
+                ],
+            }),
+        );
+
+        const sentContent = runAgent.mock.calls[0][0].conversationMessages[0].content as string;
+        expect(sentContent).toContain('Title: Annual Order Counts');
+        expect(sentContent).toContain('Executive Summary: Order volume grew 22% YoY between 2022 and 2025.');
+        expect(sentContent).toContain('Report Title: Annual Order Trend Executive Report');
+        expect(sentContent).toContain('Report Summary: Board-ready HTML report covering annual order volume and YoY trajectory.');
+        // Step 1's SQL should only appear once (under Step 1), not duplicated under Step 2 and Step 3!
+        const sqlOccurrences = sentContent.split('SELECT YEAR(OrderDate) AS OrderYear').length - 1;
+        expect(sqlOccurrences).toBe(1);
+    });
 });
+

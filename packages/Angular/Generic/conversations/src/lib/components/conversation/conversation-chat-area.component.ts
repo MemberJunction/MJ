@@ -5978,9 +5978,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     loadToken?: number
   ): Promise<void> {
     const completionId = message.ID ? NormalizeUUID(message.ID) : '';
+    const existingAgentRun = this.AgentRunsByDetailId.get(message.ID);
+    const isNewContinuationRun = Boolean(
+      _agentRunId && existingAgentRun?.ID && !UUIDsEqual(existingAgentRun.ID, _agentRunId)
+    );
     if (completionId) {
       this.handledCompletionIds ??= new Set();
-      if (this.handledCompletionIds.has(completionId)) {
+      if (isNewContinuationRun) {
+        this.handledCompletionIds.delete(completionId);
+      } else if (this.handledCompletionIds.has(completionId)) {
         return;
       }
       this.handledCompletionIds.add(completionId);
@@ -6001,12 +6007,32 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         return;
       }
 
+      // If this is a bottom continuation reply linked via ParentID to an earlier workflow message,
+      // also reload that originating message so its completion note and step artifacts stay fresh.
+      if (message.ParentID) {
+        const originMsg = (this.messages ?? []).find((m) => UUIDsEqual(m.ID, message.ParentID));
+        if (originMsg?.ID) {
+          await originMsg.Load(originMsg.ID);
+          if (!isCurrent()) {
+            return;
+          }
+          this.windowStore.ApplyLocalDetail(originMsg);
+        }
+      }
+
       // Reload agent run to get final status, timestamps, and cost
-      const agentRun = this.AgentRunsByDetailId.get(message.ID);
-      if (agentRun?.ID) {
-        await agentRun.Load(agentRun.ID);
+      if (isNewContinuationRun) {
+        await this.addAgentRunToMap(message.ConversationID, message.ID, _agentRunId, true);
         if (!isCurrent()) {
           return;
+        }
+      } else {
+        const agentRun = this.AgentRunsByDetailId.get(message.ID);
+        if (agentRun?.ID) {
+          await agentRun.Load(agentRun.ID);
+          if (!isCurrent()) {
+            return;
+          }
         }
       }
 
