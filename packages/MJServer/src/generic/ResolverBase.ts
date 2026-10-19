@@ -1828,12 +1828,40 @@ export class ResolverBase {
   }
   
   /**
+   * Checks whether `oldValues` (`input.OldValues___`) contains every writable in-table field of
+   * `entityInfo` (plus primary keys).
+   *
+   * With the delta-only `Save()` wire protocol, `GraphQLDataProvider.Save()` sends only primary keys
+   * and dirty writable fields in `vars.input` and `OldValues___` on normal updates. Hydrating an
+   * entity directly from a partial-delta `OldValues___` via `entityObject.LoadFromData(oldValues)`
+   * (without first loading the authoritative row via `InnerLoad`) would leave every untouched column
+   * `NotLoaded = true` (or `null`), causing `spUpdate` or custom `Validate()` hooks to see incomplete
+   * state. Returning `false` for partial deltas ensures {@link MustLoadTruthFromDatabase} routes
+   * delta updates through `InnerLoad(cKey)` + {@link TestAndSetClientOldValuesToDBValues}, even on
+   * entities with `TrackRecordChanges === false`.
+   */
+  protected hasCompleteOldValues(
+    entityInfo: EntityInfo,
+    oldValues?: Array<{ Key: string; Value: unknown }> | null
+  ): boolean {
+    if (!oldValues || oldValues.length === 0) {
+      return false;
+    }
+    const providedKeys = new Set(oldValues.map((kv) => kv.Key));
+    return entityInfo.Fields.every(
+      (f) => (!f.IsPrimaryKey && (f.ReadOnly || f.IsVirtual)) || providedKeys.has(f.Name) || providedKeys.has(f.CodeName)
+    );
+  }
+
+  /**
    * Whether `UpdateRecord` must hydrate the entity from the DATABASE rather than from the
    * client's `OldValues___`.
    *
-   * The `OldValues___` path exists as an optimization: when nothing needs the true prior state,
-   * the client already holds it and a round trip is wasted. Each condition below is a reason
-   * that assumption fails.
+   * The `OldValues___` path exists as an optimization when a client supplies the complete pre-save
+   * record (e.g. `IgnoreDirtyState: true`) and nothing else requires the database's authoritative prior
+   * state. Under the delta-only `Save()` wire protocol, normal updates send only primary keys and dirty
+   * writable fields in `OldValues___`, so {@link hasCompleteOldValues} returns `false` and forces the
+   * database load (`InnerLoad`) so untouched columns retain their stored values.
    *
    * `EnableFieldLevelSecurity` is the security-critical one, and it is NOT redundant with
    * `hasDeniedReadFields`. That flag reports READ denials, and the canonical FLS configuration is
@@ -1887,7 +1915,7 @@ export class ResolverBase {
     return (
       entityInfo.TrackRecordChanges ||
       ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW.has(entityInfo.Name.trim().toLowerCase()) ||
-      !input.OldValues___ ||
+      !this.hasCompleteOldValues(entityInfo, input.OldValues___) ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
       entityInfo.EnableFieldLevelSecurity ||
@@ -2061,11 +2089,17 @@ export class ResolverBase {
   }
 
   /**
-   * This routine compares the OldValues property in the input object to the values in the DB that we just loaded. If there are differences, we need to check to see if the client
-   * is trying to update any of those fields (e.g. overlap). If there is overlap, we throw an error. If there is no overlap, we can proceed with the update even if the DB Values
-   * and the ClientOldValues are not 100% the same, so long as there is no overlap in the specific FIELDS that are different.
+   * Compares the client-supplied `OldValues___` array in `input` against the authoritative database
+   * values just loaded onto `entityObject` via `InnerLoad`, checks for overlapping concurrent field
+   * modifications, and then applies `clientNewValues` onto `entityObject` via `SetMany`.
    *
-   * ASSUMES: input object has an OldValues___ property that is an array of Key/Value pairs that represent the old values of the record that the client is trying to update.
+   * Supports both full-record and delta-only `OldValues___` payloads: only keys present in
+   * `input.OldValues___` (e.g. primary keys + dirty writable fields) are compared against `dbValues`,
+   * and `entityObject.SetMany(clientNewValues)` mutates only the fields sent in `clientNewValues`
+   * while preserving all untouched DB-loaded fields on `entityObject`.
+   *
+   * ASSUMES: `input` has an `OldValues___` property that is an array of Key/Value pairs representing
+   * the pre-mutation values of the fields the client is updating.
    */
   protected async TestAndSetClientOldValuesToDBValues(input: any, clientNewValues: any, entityObject: BaseEntity, contextUser: UserInfo) {
     // we have OldValues, so we need to compare them to the values we just loaded from the DB
@@ -2073,7 +2107,7 @@ export class ResolverBase {
     // for each item in the oldValues array, add it to the clientOldValues object
     input.OldValues___.forEach((item) => {
       // we need to do a quick transform on the values to make sure they match the TS Type for the given field because item.Value will always be a string
-      const field = entityObject.EntityInfo.Fields.find((f) => f.CodeName === item.Key);
+      const field = entityObject.EntityInfo.Fields.find((f) => f.CodeName === item.Key || f.Name === item.Key);
       const val = this.ClientOldValueToFieldValue(field, item.Value);
       clientOldValues[item.Key] = val;
     });
@@ -2085,19 +2119,20 @@ export class ResolverBase {
     // now we need to compare clientOldValues and dbValues and have a new array that has entries for any differences and have FieldName, clientOldValue and dbValue as properties
     const dbDifferences = [];
     Object.keys(clientOldValues).forEach((key) => {
-      const f = entityObject.EntityInfo.Fields.find((f) => f.CodeName === key);
+      const f = entityObject.EntityInfo.Fields.find((f) => f.CodeName === key || f.Name === key);
+      const dbVal = f && f.Name in dbValues ? dbValues[f.Name] : dbValues[key];
       let different = false;
       switch (typeof clientOldValues[key]) {
         case 'number':
-          different = clientOldValues[key] !== dbValues[key];
+          different = clientOldValues[key] !== dbVal;
           break;
         case 'boolean':
-          different = clientOldValues[key] !== dbValues[key];
+          different = clientOldValues[key] !== dbVal;
           break;
         case 'object':
           if (clientOldValues[key] instanceof Date) {
             const clientDate = clientOldValues[key] as Date;
-            const dbDate = dbValues[key];
+            const dbDate = dbVal;
             if (dbDate == null || !(dbDate instanceof Date)) {
               different = true;
             } else if (clientDate.getTime() !== dbDate.getTime()) {
@@ -2115,11 +2150,11 @@ export class ResolverBase {
               }
             }
           } else if (clientOldValues[key] === null) {
-            different = dbValues[key] !== null;
+            different = dbVal !== null;
           }
           break;
         default:
-          different = clientOldValues[key] !== dbValues[key];
+          different = clientOldValues[key] !== dbVal;
           break;
       }
       if (different && f && !f.ReadOnly) {
@@ -2127,7 +2162,7 @@ export class ResolverBase {
         dbDifferences.push({
           FieldName: key,
           ClientOldValue: clientOldValues[key],
-          DBValue: dbValues[key],
+          DBValue: dbVal,
         });
       }
     });
@@ -2137,8 +2172,8 @@ export class ResolverBase {
       // first step is to get clientNewValues into an object that is like clientOldValues, get the diff and then compare that diff to the differences array that shows diff between DB and ClientOld
       const clientDifferences = [];
       Object.keys(clientOldValues).forEach((key) => {
-        const f = entityObject.EntityInfo.Fields.find((f) => f.CodeName === key);
-        if (clientOldValues[key] !== clientNewValues[key] && f && f.AllowUpdateAPI && !f.IsPrimaryKey) {
+        const f = entityObject.EntityInfo.Fields.find((f) => f.CodeName === key || f.Name === key);
+        if (key in clientNewValues && clientOldValues[key] !== clientNewValues[key] && f && f.AllowUpdateAPI && !f.IsPrimaryKey) {
           // only include updateable fields
           clientDifferences.push({
             FieldName: key,

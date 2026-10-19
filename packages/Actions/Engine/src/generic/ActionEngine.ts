@@ -443,9 +443,9 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
 
          return {
             Name: param.Name,
-            Value: value,
-            Type: param.Type
-         }
+            Type: param.Type,
+            Value: value
+         };
       });
 
       return params;
@@ -575,8 +575,11 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
                : await this.RunClassBasedAction(params)
          );
 
-         const resultCodeEntity: MJActionResultCodeEntity | undefined = this.ActionResultCodes.find(r => UUIDsEqual(r.ActionID, params.Action.ID) &&
-                                                               r.ResultCode.trim().toLowerCase() === simpleResult.ResultCode.trim().toLowerCase());
+         const resultCodeEntity: MJActionResultCodeEntity | undefined =
+            typeof this.base?.GetResultCode === 'function' && this.ActionResultCodes === this.base.ActionResultCodes
+               ? this.base.GetResultCode(params.Action.ID, simpleResult.ResultCode)
+               : this.ActionResultCodes.find(r => UUIDsEqual(r.ActionID, params.Action.ID) &&
+                                                  r.ResultCode.trim().toLowerCase() === simpleResult.ResultCode.trim().toLowerCase());
          const result: ActionResult = {
             RunParams: params,
             Success: simpleResult.Success,
@@ -825,6 +828,9 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * the `Params` column, so redaction here is what makes the column safe by construction.
     */
    protected SnapshotInputParams(params: RunActionParams): string {
+      if (!params.Params || params.Params.length === 0) {
+         return '[]';
+      }
       return RedactParamsToJSON(params.Params, this.ParamDefinitionsFor(params), params.Provenance?.EntityActionParams);
    }
 
@@ -834,7 +840,11 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * which is typed as the plain entity and carries no params collection.
     */
    protected ParamDefinitionsFor(params: RunActionParams): MJActionParamEntity[] {
-      return params.Action ? this.ActionParams.filter(p => UUIDsEqual(p.ActionID, params.Action.ID)) : [];
+      if (!params.Action) return [];
+      if (typeof this.base?.GetParamsByActionID === 'function' && this.ActionParams === this.base.ActionParams) {
+         return this.base.GetParamsByActionID(params.Action.ID);
+      }
+      return this.ActionParams.filter(p => UUIDsEqual(p.ActionID, params.Action.ID));
    }
 
    /**

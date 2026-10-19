@@ -19,7 +19,7 @@ import { MJLexer } from './mj-lexer.js';
 import { ReplaceVariableInTag, VARIABLE_READING_TAGS } from './templateTagVariables.js';
 import { MJPlaceholderSubstitution } from './mj-placeholder.js';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
-import { SQLServerDialect } from '@memberjunction/sql-dialect';
+import { PostgreSQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
 import { GetASTDialectAdapter, type ASTDialectAdapter, type RowCapInfo } from './ASTDialectAdapter.js';
 import { IsKeyword, LexSQL, SignificantTokens } from './sqlLexer.js';
 import {
@@ -64,6 +64,21 @@ export interface MJAstifyResult {
 
 /** Lexing rules for FOR XML, which only SQL Server has. */
 const SQL_SERVER_LEXING: SQLParserDialect = new SQLServerDialect();
+
+/** Lexing rules for PostgreSQL fallback token scans. */
+const POSTGRES_LEXING: SQLParserDialect = new PostgreSQLDialect();
+
+/**
+ * Standard SQL niladic user functions written without parentheses in T-SQL and PostgreSQL
+ * (`SELECT CURRENT_USER`, `SELECT SESSION_USER`, `SELECT SYSTEM_USER`). node-sql-parser's
+ * T-SQL and PostgreSQL grammars require `()` on these three keywords even though the
+ * databases themselves reject `()`.
+ */
+const NILADIC_USER_FUNCTIONS: ReadonlySet<string> = new Set([
+    'CURRENT_USER',
+    'SESSION_USER',
+    'SYSTEM_USER',
+]);
 
 /** The FOR XML modes node-sql-parser knows. */
 const FOR_XML_DIRECTIVES = ['PATH', 'RAW', 'AUTO', 'EXPLICIT'];
@@ -1637,11 +1652,106 @@ export class SQLParser {
      * of reading a meaningless tree.
      */
     private static astifyChecked(sql: string, dialect: string): NodeSqlParser.AST | NodeSqlParser.AST[] {
-        const ast = new Parser().astify(sql, { database: dialect });
-        if (SQLParser.isMisreadAsAssignments(ast)) {
-            throw new Error('SQLParser: the statement was read as variable assignments, not as SQL');
+        try {
+            const ast = new Parser().astify(sql, { database: dialect });
+            if (SQLParser.isMisreadAsAssignments(ast)) {
+                throw new Error('SQLParser: the statement was read as variable assignments, not as SQL');
+            }
+            return ast;
+        } catch (err) {
+            const niladic = SQLParser.parenthesizeNiladicUserFunctions(sql, dialect);
+            if (niladic.rewrittenNames.size === 0) throw err;
+            const ast = new Parser().astify(niladic.rewritten, { database: dialect });
+            if (SQLParser.isMisreadAsAssignments(ast)) {
+                throw new Error('SQLParser: the statement was read as variable assignments, not as SQL');
+            }
+            SQLParser.stripNiladicUserFunctionArgs(ast, niladic.rewrittenNames);
+            return ast;
         }
-        return ast;
+    }
+
+    /**
+     * Rewrites bare `CURRENT_USER`, `SESSION_USER`, and `SYSTEM_USER` keywords (outside strings,
+     * comments, and quoted identifiers) to `CURRENT_USER()` / `SESSION_USER()` / `SYSTEM_USER()`
+     * so node-sql-parser's T-SQL and PostgreSQL grammars accept them. Qualified column references
+     * (`t.current_user`), aliases (`AS current_user`), and calls that already carry `()` are left
+     * untouched.
+     */
+    private static parenthesizeNiladicUserFunctions(
+        sql: string,
+        parserDialect: string,
+    ): { rewritten: string; rewrittenNames: Set<string> } {
+        const rewrittenNames = new Set<string>();
+        const lexDialect = /postgres/i.test(parserDialect) ? POSTGRES_LEXING : SQL_SERVER_LEXING;
+        const tokens = SignificantTokens(LexSQL(sql, lexDialect));
+        let out = '';
+        let cursor = 0;
+        for (let i = 0; i < tokens.length; i++) {
+            const t = tokens[i];
+            const upper = t.Kind === 'word' ? t.Text.toUpperCase() : '';
+            if (
+                upper &&
+                NILADIC_USER_FUNCTIONS.has(upper) &&
+                tokens[i - 1]?.Kind !== 'dot' &&
+                tokens[i + 1]?.Kind !== 'dot' &&
+                tokens[i + 1]?.Kind !== 'open' &&
+                !IsKeyword(tokens[i - 1], 'AS')
+            ) {
+                out += sql.substring(cursor, t.End) + '()';
+                cursor = t.End;
+                rewrittenNames.add(upper);
+            }
+        }
+        if (rewrittenNames.size === 0) return { rewritten: sql, rewrittenNames };
+        return { rewritten: out + sql.substring(cursor), rewrittenNames };
+    }
+
+    /**
+     * Removes empty `args` from `CURRENT_USER` / `SESSION_USER` / `SYSTEM_USER` function AST nodes
+     * produced by {@link parenthesizeNiladicUserFunctions}, matching the AST shape node-sql-parser
+     * produces for `CURRENT_TIMESTAMP` so `SqlifyAST` emits the standard niladic form without `()`.
+     */
+    private static stripNiladicUserFunctionArgs(node: unknown, rewrittenNames: ReadonlySet<string>): void {
+        if (!node || typeof node !== 'object') return;
+        if (Array.isArray(node)) {
+            for (const item of node) SQLParser.stripNiladicUserFunctionArgs(item, rewrittenNames);
+            return;
+        }
+        const obj = node as Record<string, unknown>;
+        if (obj.type === 'function') {
+            const fnName = SQLParser.extractFunctionNodeName(obj);
+            const args = obj.args as { value?: unknown } | null | undefined;
+            if (
+                fnName &&
+                rewrittenNames.has(fnName.toUpperCase()) &&
+                args &&
+                Array.isArray(args.value) &&
+                args.value.length === 0
+            ) {
+                delete obj.args;
+            }
+        }
+        for (const value of Object.values(obj)) {
+            SQLParser.stripNiladicUserFunctionArgs(value, rewrittenNames);
+        }
+    }
+
+    /** Extracts the simple function name from a node-sql-parser `function` AST node. */
+    private static extractFunctionNodeName(fnNode: Record<string, unknown>): string | null {
+        const rawName = fnNode.name;
+        if (typeof rawName === 'string') return rawName;
+        if (rawName && typeof rawName === 'object') {
+            const inner = (rawName as Record<string, unknown>).name;
+            if (typeof inner === 'string') return inner;
+            if (Array.isArray(inner) && inner.length === 1) {
+                const first = inner[0];
+                if (typeof first === 'string') return first;
+                if (first && typeof first === 'object' && typeof (first as Record<string, unknown>).value === 'string') {
+                    return (first as Record<string, unknown>).value as string;
+                }
+            }
+        }
+        return null;
     }
 
     /** Whether any top-level node is a bare assignment wrapper rather than a statement. */
