@@ -4,7 +4,7 @@
 
 **Goal:** A recorded user turn on a final-only driver relays its real speech start (from the provider VAD) or `null`, never a placeholder `0`.
 
-**Architecture:** Layer 1 removes the `?? 0` fallback in `RealtimeSessionRuntime.relayTranscript`. Layer 2 adds a `OnUserSpeechStart` / `emitUserSpeechStart` handler slot to `BaseRealtimeClient`, raised on every OpenAI-protocol `input_audio_buffer.speech_started` frame, and the runtime subscribes it to `markTurnAudioStart('normal')`.
+**Architecture:** Layer 1 removes the `?? 0` fallback in `RealtimeSessionRuntime.relayTranscript`. Layer 2 adds a `OnUserSpeechStart` / `emitUserSpeechStart` handler slot to `BaseRealtimeClient`, raised on every OpenAI-protocol `input_audio_buffer.speech_started` frame, and the runtime subscribes it to `markUserSpeechStart`, which stamps the user's onset in its own slot (`userSpeechStartMs`), apart from the shared `currentTurnStartMs` slot (see the Ruling below; the brief's `markTurnAudioStart('normal')` subscription was replaced).
 
 **Tech Stack:** TypeScript, vitest.
 
@@ -13,15 +13,15 @@
 ## Global Constraints
 
 - No change to `RealtimeClientSessionResolver`, `base-agent.ts`, ElevenLabs, the recording-start seed `0`, or `markTurnAudioStart`'s guards.
-- No per-role start slot for barge-in.
+- ~~No per-role start slot for barge-in.~~ Superseded by the Ruling below: the user onset has its own slot, because the shared slot let a user onset become the assistant turn's start. A barge-in user turn therefore gets a real start instead of `null`.
 - `grep -n "?? 0" packages/RealtimeRuntime/src/session/RealtimeSessionRuntime.ts` shows no hit on the `utteranceStartMs` line.
 
 ## Review Focus
 
 - HuggingFace and xAI go through `OpenAIProtocolWebSocketRealtimeClient.onSpeechStartedFrame`, which overrides the protocol base WITHOUT calling super; xAI overrides it again without super. Raising the event inside the base `onSpeechStartedFrame` only (as the brief words it) would miss HuggingFace. Raise it once in the frame dispatcher (`case 'input_audio_buffer.speech_started'`), immediately before `this.onSpeechStartedFrame()`, so no override can drop it. Tests for OpenAI, HuggingFace and xAI pin this.
 - Event with no handler registered must be a no-op (optional-call like `emitInterruption`).
-- Event before recording/session clock is live: `markTurnAudioStart` already returns when `nowTurnOffsetMs()` is `null` — covered by existing code, no new test.
-- Narration must not be stamped by the event: the subscription passes `'normal'` explicitly; the user-speech onset is never narration.
+- Event before recording/session clock is live: `markUserSpeechStart` returns when `nowTurnOffsetMs()` is `null`, so no onset is stamped.
+- Narration must not be stamped by the event: the onset goes to the user-only slot, which narration never reads or writes.
 - First turn of a recording still relays start `0` from the seed (existing recording tests cover it; must stay green).
 
 ---
@@ -50,7 +50,7 @@
 **Interfaces — Consumes:** `client.OnUserSpeechStart` from Task 1 (runtime resolves `@memberjunction/ai-realtime-client` from its `dist`, so rebuild RealtimeClient first: `npm run build` in that package).
 
 - [ ] Step 1: repro already red (3 failures).
-- [ ] Step 2: `utteranceStartMs = ... ? this.currentTurnStartMs : null` (drop `?? 0` and its comment); subscribe `client.OnUserSpeechStart(() => this.markTurnAudioStart('normal'))` in `wireClientHandlers`; rewrite the three doc comments so none says the relay falls back to a seeded/prior start or `?? 0`.
+- [ ] Step 2: `utteranceStartMs = ... ? this.currentTurnStartMs : null` (drop `?? 0` and its comment); subscribe `client.OnUserSpeechStart(...)` in `wireClientHandlers` (shipped as `() => this.markUserSpeechStart()`, see the Ruling; the `markTurnAudioStart('normal')` subscription first written here was replaced); rewrite the three doc comments so none says the relay falls back to a seeded/prior start or `?? 0`.
 - [ ] Step 3: repro file PASS; `pnpm test` in the package PASS; build PASS.
 - [ ] Step 4: commit.
 
@@ -62,6 +62,14 @@ interims or final. The onset now lands in its own slot, `userSpeechStartMs` (fir
 cleared by every final user transcript and on lifecycle resets); a user final with a signalled
 onset relays it and leaves the shared slot alone. Tests: the `user speech start keeps its own slot`
 block in the turn-timing test file. Two Angular test fakes also gained `OnUserSpeechStart`.
+
+Releasing the held onset (after the cross-review and the gauntlet):
+- An assistant finalization marks the held onset superseded (`userSpeechStartSuperseded`) only when
+  the onset began before that assistant turn started. A late user transcript can still claim it, but
+  the next onset replaces it, so an onset no transcript claimed (a failed transcription) does not
+  become the next real turn's start. A barge-in onset, which began during the assistant turn, is
+  not superseded by that turn's final: it stays the first onset if the user pauses and resumes.
+- An empty final user transcript (a VAD false positive) releases the held onset at once.
 
 ### Task 3: Verify
 
