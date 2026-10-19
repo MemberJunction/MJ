@@ -121,7 +121,7 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 | `allowPlanMode` | The composer's Plan Mode toggle button |
 | `allowRealtime` | The composer's real-time voice (co-agent) launcher button |
 | `AllowForking` | Starting forks: Fork from here, and Edit or Regenerate as a fork. When `false`, Edit and Regenerate change the latest turn in place, as without the `Conversations: Fork` authorization. UI only; deny that authorization to a role to block forks on the server too |
-| `AllowStopRun` | Stopping and continuing agent runs: the composer's Stop and Stop all, the Stop pill on an in-progress reply, the Continue button on a stopped reply, and the "Continue, or tell {agent} what to do differently" placeholder. UI only: a run stopped from another client still shows as stopped, and the next message still continues it |
+| `AllowStopRun` | Stopping and continuing agent runs: the composer's Stop and Stop all, the Stop pill on an in-progress reply, the Continue button on a stopped reply, and the "Continue, or tell {agent} what to do differently" placeholder. UI only: a run stopped from another client still shows as stopped, and the next message still continues it. The composer's status line ("Sage is working, 0:41") is not part of this cap; it shows for any reply in flight |
 | `showEmptyFill` | The message list's built-in "No messages yet" filler |
 | `showLoadingState` | The centered loading spinner (loading still short-circuits rendering, so hiding it does not flash the empty state) |
 | `showAgentPicker` | The agent picker |
@@ -539,6 +539,24 @@ When an agent turn completes in `ConversationChatAreaComponent`, the component c
 - **Panel Open + Currently Viewed Artifact Versioned (`action: 'refresh-current'`)**: Increments `artifactViewerRefreshTrigger` and updates `activeVersionNumber` in place so the open viewer immediately reflects the new version (e.g., `v1` → `v2`).
 - **Panel Open + Different Artifact Created or Versioned (`action: 'switch-artifact'`)**: Automatically switches the open Artifact Panel to display the newly created or newly versioned artifact (`activeArtifactId`, `activeVersionNumber`).
 - **Reconnected In-Flight Runs**: When reconnecting to an already-running turn on conversation open (`reconnectToInFlightAgentRuns`), the pre-turn baseline excludes any output artifacts attached to the in-progress message itself so a newly produced artifact still auto-opens when the reconnected turn finishes.
+
+### First-Class Inline Workflow Execution Card & Durable Task-Graph Continuation
+
+When an agent (such as `Sage`) dispatches a multi-step durable task graph associated with a `ConversationDetail` message:
+
+- **Inline Workflow Execution Card (`.msg-workflow-card` in `MessageItemComponent`)**: Renders directly inside `.message-body` (without requiring the user to open the developer gear menu). Deduplicates parent workflow container tasks (`ParentID == null`) from ordered step tasks (`WorkflowSteps`), displays an active shimmer progress bar, completed step ratio (`X/Y steps`), live elapsed duration, per-step specialist agent badges (`@Query Builder`, `@Research Report Writer`), and a one-click slide-over step inspector drawer (`mj-task-detail-panel`).
+- **Real-Time Multi-Tab Broadcast & Continuation (`ConversationChatAreaComponent`)**: `TaskGraphFrameBroadcaster` and `TaskGraphContinuationDeliverer` publish task-node progress and completion frames over `PUSH_STATUS_UPDATES_TOPIC` (`sessionId: '*'`, filtered by `ownerUserId` in `PushStatusResolver`). When a durable workflow finishes with `continuation: 'reinvoke'`, the server creates a new visible AI `ConversationDetail` reply row, runs the synthesizing agent, persists both step-level and continuation artifacts (`ProcessAgentArtifacts`), and notifies `ConversationChatAreaComponent` (`NewMessageCreated: true`) so the active conversation reloads messages, refreshes task statuses, and auto-opens any newly produced artifact.
+
+### AI Agent Workflows & Tasks Command Center (`TasksFullViewComponent`)
+
+`TasksFullViewComponent` (`<mj-tasks-full-view>`) provides the **AI Agent Workflows & Tasks Command Center** for inspecting and navigating agent-invoked workflows and standalone tasks across conversations:
+
+- **5-Card KPI Metric Ribbon**: Interactive filter cards for **Active Now**, **Completed**, **Needs Attention** (Failed/Cancelled), **Total Workflows**, and **Avg Execution Time** (plus completed-step throughput).
+- **Unified Filter & Search Bar**: Instant full-text search across workflow names, descriptions, and conversation names, status pill filters (`All`, `Active`, `Completed`, `Failed`), a dynamic **Specialist Agent** dropdown filter, and a scope toggle (**All Tasks** vs. **My Tasks**).
+- **3 Synchronized View Modes**:
+  1. **Workflow Cards View**: Hierarchy-aware cards showing workflow status, parent conversation deep-link pill, horizontal **Agent Pipeline** chips (`Step 1 -> Step 2`), progress bar, and expandable step rows with step numbers, agent badges, durations, and output previews.
+  2. **Execution Timeline & DAG View**: Custom second/minute-resolution **Execution Waterfall** bar chart for multi-step workflows (rendered automatically whenever tasks span `< 2 days` where day-level Gantt bars would collapse), paired with the full `mj-gantt-task-viewer` for multi-day schedules.
+  3. **Slide-Over Workflow & Step Inspector Drawer**: Selecting any workflow or step opens a contextual right-hand inspector drawer with step-switcher tabs, clickable telemetry pills for the **AI Agent** (`MJ: AI Agents`) and **AI Agent Run** (`MJ: AI Agent Runs`), separated **Task Instructions (Input)** vs. **Agent Output / Deliverable** (parsed cleanly around the `--- Output ---` delimiter), and a primary **Jump to Chat** action.
 
 ### MJ Entity Integration
 
