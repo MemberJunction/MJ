@@ -589,13 +589,12 @@ MemberJunction's full source code is public on GitHub (Business Source License 1
 
 ### Build your application on MJ
 
-You're encouraged to build on MJ, whether your app is **commercial or community-driven**. The platform gives you the data layer, API, security, UI, Actions, and AI; you bring the domain. Several **apps in the MemberJunction org** show this in practice and are worth studying as references (and reusing):
+You're encouraged to build on MJ, whether your app is **commercial or community-driven**. The platform gives you the data layer, API, security, UI, Actions, and AI; you bring the domain. The **BizApps** in the MemberJunction org show this in practice and are worth studying as references (and reusing): accounting, orders, sales, contracts, tasks, forms, committees and more, each an MJ Open App that other apps build on. Start with the foundations:
 
 - **[BizApps Common](https://github.com/MemberJunction/bizapps-common)** — a production-ready, schema-complete, fully-typed set of **foundational business entities** (people, organizations, addresses, relationships) packaged as an MJ Open App, so applications share these core entities instead of reinventing them.
 - **[BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks)** — a complete, reusable **task-management system** as an MJ Open App: multi-person assignment, sub-task hierarchies, dependency tracking, and templating that any MJ app can integrate without building its own.
-- **[Committees](https://github.com/MemberJunction/committees)** — a **governance platform** built on MJ that unifies committee structure, membership, meetings, motions and voting, action tracking, and document linking.
 
-These are real, working examples of the patterns in this guide — clone them, read how they're structured, and build on or alongside them.
+**[MemberJunction BizApps](BIZAPPS_GUIDE.md)** lists every one of them, generated from each app's `mj-app.json`, with a map of how they build on each other. These are real, working examples of the patterns in this guide — clone them, read how they're structured, and build on or alongside them.
 
 ### Help shape the platform
 

@@ -650,6 +650,7 @@ export class LoopAgentType extends BaseAgentType {
                     terminate: true, // Chat always terminates to return to user
                     decisions: response.decisions,
                     payloadChangeRequest: response.payloadChangeRequest,
+                    artifactDirective: response.artifactDirective,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
                     conversationToolCalls: response.conversationToolCalls,
@@ -682,6 +683,7 @@ export class LoopAgentType extends BaseAgentType {
                     confidence: response.confidence,
                     decisions: response.decisions,
                     payloadChangeRequest: response.payloadChangeRequest,
+                    artifactDirective: response.artifactDirective,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
                     conversationToolCalls: response.conversationToolCalls,
@@ -701,6 +703,7 @@ export class LoopAgentType extends BaseAgentType {
             const retVal: Partial<BaseAgentNextStep<P>> = {
                 decisions: response.decisions,
                 payloadChangeRequest: response.payloadChangeRequest,
+                artifactDirective: response.artifactDirective,
                 scratchpad: response.scratchpad,
                 artifactToolCalls: response.artifactToolCalls,
                 conversationToolCalls: response.conversationToolCalls,
@@ -921,6 +924,7 @@ export class LoopAgentType extends BaseAgentType {
             }
             else if (response.payloadChangeRequest?.newElements ||
                     response.payloadChangeRequest?.updateElements ||
+                    response.payloadChangeRequest?.replaceElements ||
                     response.payloadChangeRequest?.removeElements) {
                 // the AI forgot to mark taskComplete as true but provided a payloadChangeRequest
                 // with changes to the elements, so we can consider this a valid response

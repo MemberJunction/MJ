@@ -16,7 +16,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab, ResourceUrlsEquivalent } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration, NormalizeRecordIdForMatch } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -1389,8 +1389,33 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         // to reflect the current active tab, not requesting a new tab to be opened
         this.tabService.SuppressNextResolve();
 
-        this.router.navigateByUrl(resourceUrl);
+        // Leaving a record that was deleted: replace its history entry so
+        // browser Back can't reopen it as a blank form.
+        const leavingRecord = this.parseRecordUrl(currentUrl);
+        const replaceUrl = !!leavingRecord &&
+          this.tabService.ConsumeRecordUrlReplacement(leavingRecord.EntityName, leavingRecord.RecordId);
+        this.router.navigateByUrl(resourceUrl, { replaceUrl });
       }
+    }
+  }
+
+  /**
+   * The record a URL shows, from either record URL shape
+   * (`/app/:app/record/:entity/:id` or legacy `/resource/record/:entity/:id`),
+   * or null when it is not a record URL. Query string and fragment ignored.
+   */
+  private parseRecordUrl(url: string): { EntityName: string; RecordId: string } | null {
+    const urlPath = url.split(/[?#]/)[0];
+    const appRecordMatch = urlPath.match(/^\/app\/[^\/]+\/record\/([^\/]+)\/(.+)$/);
+    const legacyRecordMatch = appRecordMatch ? null : urlPath.match(/^\/resource\/record\/([^\/]+)\/(.+)$/);
+    const match = appRecordMatch ?? legacyRecordMatch;
+    if (!match) {
+      return null;
+    }
+    try {
+      return { EntityName: decodeURIComponent(match[1]), RecordId: NormalizeRecordIdForMatch(decodeURIComponent(match[2])) };
+    } catch {
+      return null;
     }
   }
 

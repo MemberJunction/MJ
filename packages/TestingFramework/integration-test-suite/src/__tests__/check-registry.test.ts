@@ -206,7 +206,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
-        ['performance-benchmark', PerformanceBenchmarkChecks, 12], // PB1-PB12 MJ primitives microbenchmarks + Sage/Query Builder/Research Agent deterministic and live runs (IT128)
+        ['performance-benchmark', PerformanceBenchmarkChecks, 13], // PB1-PB13 MJ primitives microbenchmarks + Sage/Query Builder/Research Agent deterministic and live runs + SaveReturnMode datestamps_only benchmark (IT128)
         ['search-origin-gate', SearchOriginGateChecks, 4], // SOG1-SOG4 the search origin-record gate against the live views (IT116)
         ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT118)
         ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT123)
@@ -309,7 +309,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
         'entity-server-invariants': 9,
-        'entity-writes': 10,
+        'entity-writes': 12,
         'field-rules-bulk-update': 3,
         'fls-enforcement': 24,
         'fls-enforcement-client': 6,
@@ -325,7 +325,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'metadata-sync-push': 10,
         'nested-transactions': 11,
         'open-app-teardown': 2,
-        'performance-benchmark': 12,
+        'performance-benchmark': 13,
         'permission-engine': 15,
         'perplexity-decider': 5,
         'predictive-studio': 5,
@@ -520,6 +520,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'entity-server-invariants.ESI9',
         'entity-writes.EW1',
         'entity-writes.EW10',
+        'entity-writes.EW11',
+        'entity-writes.EW12',
         'entity-writes.EW2',
         'entity-writes.EW3',
         'entity-writes.EW5',

@@ -22,6 +22,7 @@ import {
     RecordChangeSource,
     RecordChangePayload,
     EntityDeleteOptions,
+    EntitySaveOptions,
 } from '@memberjunction/core';
 
 
@@ -949,19 +950,28 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * Wraps a PG binding with the bare `SELECT * FROM schema.fn(...)`
      * result-capture pattern. PG returns the row directly; no
      * @ResultTable equivalent.
+     *
+     * When the caller passes a per-save `options.SaveReturnMode = 'datestamps_only'`
+     * override on an entity whose generated function returns the full view, projects
+     * only the PK + datestamp columns (`EntityInfo.DatestampReturnFields`) over the wire.
      */
     protected override WrapSaveCallForResult(
         binding: SaveCallBinding,
         entity: BaseEntity,
         spName: string,
+        options?: EntitySaveOptions,
     ): SaveSQLFragment {
         if (binding.kind !== 'pg-positional' && binding.kind !== 'pg-json-arg') {
             throw new Error(`PostgreSQLDataProvider.WrapSaveCallForResult: unexpected binding kind '${binding.kind}'`);
         }
+        const effectiveReturnMode = options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode;
+        const selectCols = (effectiveReturnMode === 'datestamps_only' && entity.EntityInfo.SaveReturnMode !== 'datestamps_only')
+            ? entity.EntityInfo.DatestampReturnFields.map((f) => pgDialect.QuoteIdentifier(f.Name)).join(', ')
+            : '*';
         // CRUD functions live in the entity's OWN schema (e.g. hubspot.spCreatecontacts),
         // not the MJ core schema. Codegen emits them via QuoteSchema(entity.SchemaName, fn),
         // so the runtime must resolve the same schema or the function is "does not exist".
-        const sql = `SELECT * FROM ${pgDialect.QuoteSchema(entity.EntityInfo.SchemaName, spName)}(${binding.callArgsSQL})`;
+        const sql = `SELECT ${selectCols} FROM ${pgDialect.QuoteSchema(entity.EntityInfo.SchemaName, spName)}(${binding.callArgsSQL})`;
         return { sql, parameters: [...binding.values] };
     }
 
@@ -976,6 +986,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         binding: SaveCallBinding,
         payload: RecordChangePayload,
         entity: BaseEntity,
+        _options?: EntitySaveOptions,
     ): SaveSQLFragment {
         if (binding.kind !== 'pg-positional' && binding.kind !== 'pg-json-arg') {
             throw new Error(`PostgreSQLDataProvider.WrapSaveCallWithRecordChange: unexpected binding kind '${binding.kind}'`);
