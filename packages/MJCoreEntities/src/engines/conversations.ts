@@ -561,12 +561,72 @@ function idInFilter(ids: string[]): string {
     return `ID IN (${quoteIdList(ids)})`;
 }
 
-/** Keys agent runs by the detail they belong to. */
+interface DetailAgentRunCandidate {
+    ID?: string | null;
+    ParentRunID?: string | null;
+    ContinuationDepth?: number | null;
+    __mj_CreatedAt?: Date | string | null;
+}
+
+/**
+ * Priority tier for choosing which `AIAgentRun` represents a `ConversationDetail` in the UI
+ * (gear icon -> "View Agent Run", token/cost stats, duration):
+ * - Tier 0: Root primary orchestrating run (`ParentRunID == null` and `ContinuationDepth == 0`)
+ * - Tier 1: Root post-workflow continuation synthesis run (`ParentRunID == null` and `ContinuationDepth > 0`)
+ * - Tier 2: Child / sub-agent run (`ParentRunID != null`)
+ */
+function agentRunPriorityTier(run: DetailAgentRunCandidate): number {
+    if (run.ParentRunID) {
+        return 2;
+    }
+    return (run.ContinuationDepth ?? 0) > 0 ? 1 : 0;
+}
+
+/**
+ * Returns true when `candidate` should replace `existing` as the representative agent run
+ * for a single `ConversationDetailID`. Lower tier wins (primary root run beats continuation
+ * synthesis run, which beats child sub-agent run); within the same tier, a newer run wins
+ * (so user retries of a message still replace the earlier run).
+ */
+export function ShouldReplaceDetailAgentRun(
+    existing: DetailAgentRunCandidate | undefined,
+    candidate: DetailAgentRunCandidate
+): boolean {
+    if (!existing) {
+        return true;
+    }
+    if (existing.ID && candidate.ID && UUIDsEqual(existing.ID, candidate.ID)) {
+        return true;
+    }
+    const existingTier = agentRunPriorityTier(existing);
+    const candidateTier = agentRunPriorityTier(candidate);
+    if (candidateTier !== existingTier) {
+        return candidateTier < existingTier;
+    }
+    const existingTime = ToEpochMs(existing.__mj_CreatedAt) ?? 0;
+    const candidateTime = ToEpochMs(candidate.__mj_CreatedAt) ?? 0;
+    return candidateTime >= existingTime;
+}
+
+function selectPreferredDetailAgentRun(runs: AgentRunJSON[]): AgentRunJSON | undefined {
+    let best: AgentRunJSON | undefined;
+    for (const run of runs) {
+        if (ShouldReplaceDetailAgentRun(best, run)) {
+            best = run;
+        }
+    }
+    return best;
+}
+
+/** Keys agent runs by the detail they belong to, preferring the primary root orchestrating run. */
 function groupAgentRunsByDetailId(runs: MJAIAgentRunEntity[]): Map<string, MJAIAgentRunEntity> {
     const byDetailId = new Map<string, MJAIAgentRunEntity>();
     for (const run of runs) {
         if (run.ConversationDetailID) {
-            byDetailId.set(run.ConversationDetailID, run);
+            const existing = byDetailId.get(run.ConversationDetailID);
+            if (ShouldReplaceDetailAgentRun(existing, run)) {
+                byDetailId.set(run.ConversationDetailID, run);
+            }
         }
     }
     return byDetailId;
@@ -2251,14 +2311,16 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
             const parsed = ParseConversationDetailComplete(row);
 
-            // Agent runs
-            if (parsed.agentRuns.length > 0) {
-                const agentRunData = parsed.agentRuns[0];
+            // Agent runs (prefer primary root orchestrating run over continuation synthesis or child runs)
+            const agentRunData = selectPreferredDetailAgentRun(parsed.agentRuns);
+            if (agentRunData) {
                 const agentRun = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
                 agentRun.LoadFromData({
                     ID: agentRunData.ID,
                     AgentID: agentRunData.AgentID,
                     Agent: agentRunData.Agent,
+                    ParentRunID: agentRunData.ParentRunID ?? null,
+                    ContinuationDepth: agentRunData.ContinuationDepth ?? 0,
                     Status: agentRunData.Status,
                     __mj_CreatedAt: agentRunData.__mj_CreatedAt,
                     __mj_UpdatedAt: agentRunData.__mj_UpdatedAt,
@@ -2530,12 +2592,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             // check for `LoadFromData` before calling it, and hydrate a real entity when
             // we only have plain data. Mirrors the pattern in
             // `conversation-chat-area.component.ts#onMessageComplete` (line ~909).
-            if (parsed.agentRuns.length > 0) {
-                const agentRunData = parsed.agentRuns[0];
+            const agentRunData = selectPreferredDetailAgentRun(parsed.agentRuns);
+            if (agentRunData) {
                 const mergeFields = {
                     ID: agentRunData.ID,
                     AgentID: agentRunData.AgentID,
                     Agent: agentRunData.Agent,
+                    ParentRunID: agentRunData.ParentRunID ?? null,
+                    ContinuationDepth: agentRunData.ContinuationDepth ?? 0,
                     Status: agentRunData.Status,
                     __mj_CreatedAt: agentRunData.__mj_CreatedAt,
                     __mj_UpdatedAt: agentRunData.__mj_UpdatedAt,
@@ -2546,15 +2610,17 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 };
 
                 const existingRun = existing.AgentRunsByDetailId.get(row.ID);
-                const existingRunIsEntity = !!existingRun && typeof (existingRun as { LoadFromData?: unknown }).LoadFromData === 'function';
+                if (ShouldReplaceDetailAgentRun(existingRun, agentRunData)) {
+                    const existingRunIsEntity = !!existingRun && typeof (existingRun as { LoadFromData?: unknown }).LoadFromData === 'function';
 
-                if (existingRunIsEntity) {
-                    existingRun!.LoadFromData(mergeFields);
-                } else {
-                    // Either no existing run, or existing value is plain JSON — hydrate fresh.
-                    const newRun = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
-                    newRun.LoadFromData(existingRun ? { ...existingRun, ...mergeFields } : agentRunData);
-                    existing.AgentRunsByDetailId.set(row.ID!, newRun);
+                    if (existingRunIsEntity) {
+                        existingRun!.LoadFromData(mergeFields);
+                    } else {
+                        // Either no existing run, or existing value is plain JSON — hydrate fresh.
+                        const newRun = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
+                        newRun.LoadFromData(existingRun ? { ...existingRun, ...mergeFields } : agentRunData);
+                        existing.AgentRunsByDetailId.set(row.ID!, newRun);
+                    }
                 }
             }
 
