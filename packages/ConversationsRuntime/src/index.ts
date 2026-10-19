@@ -55,6 +55,7 @@ export {
 export {
     ConversationStreaming,
     type CompletionEvent,
+    type TaskGraphStreamEvent,
     type MessageProgressUpdate,
     type MessageProgressMetadata,
     type MessageProgressCallback,
