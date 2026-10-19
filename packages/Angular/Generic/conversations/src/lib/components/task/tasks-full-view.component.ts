@@ -54,6 +54,7 @@ export interface EnrichedWorkflowStep {
   StartOffsetLabel: string;
   DependsOnNames: string[];
   DependsOnTaskIds: string[];
+  DependsOnConditions: string[];
 }
 
 /**
@@ -70,6 +71,7 @@ export interface WorkflowGroupViewModel {
   PercentComplete: number;
   TotalSteps: number;
   CompletedSteps: number;
+  SkippedSteps: number;
   ActiveSteps: number;
   FailedSteps: number;
   Steps: EnrichedWorkflowStep[];
@@ -416,7 +418,11 @@ export interface WorkflowCommandCenterKPIs {
                       </div>
                     </div>
                     <span class="cc-wf-progress-label">
-                      {{ group.CompletedSteps }} of {{ group.TotalSteps }} completed &middot; {{ group.PercentComplete }}%
+                      {{ group.CompletedSteps }} of {{ group.TotalSteps }} completed
+                      @if (group.SkippedSteps > 0) {
+                        &middot; {{ group.SkippedSteps }} skipped
+                      }
+                      &middot; {{ group.PercentComplete }}%
                     </span>
                   </div>
 
@@ -434,6 +440,8 @@ export interface WorkflowCommandCenterKPIs {
                             <i class="fa-solid fa-check"></i>
                           } @else if (step.Task.Status === 'In Progress') {
                             <i class="fa-solid fa-spinner fa-spin"></i>
+                          } @else if (step.Task.Status === 'Skipped') {
+                            <i class="fa-solid fa-forward-step"></i>
                           } @else if (step.Task.Status === 'Failed' || step.Task.Status === 'Cancelled') {
                             <i class="fa-solid fa-xmark"></i>
                           } @else {
@@ -692,6 +700,12 @@ export interface WorkflowCommandCenterKPIs {
                         <span class="cc-drawer-dep-pill">
                           <i class="fa-solid fa-code-commit"></i>
                           {{ depName }}
+                        </span>
+                      }
+                      @for (cond of activeStep.DependsOnConditions; track cond) {
+                        <span class="cc-drawer-dep-pill">
+                          <i class="fa-solid fa-code-branch"></i>
+                          if {{ cond }}
                         </span>
                       }
                     </div>
@@ -1469,6 +1483,12 @@ export interface WorkflowCommandCenterKPIs {
       color: #dc2626;
     }
 
+    .cc-step-index[data-status="skipped"] {
+      background: var(--mj-bg-surface);
+      border: 1px dashed var(--mj-border-strong);
+      color: var(--mj-text-muted);
+    }
+
     .cc-step-main {
       flex: 1;
       min-width: 0;
@@ -1485,6 +1505,10 @@ export interface WorkflowCommandCenterKPIs {
       font-size: 13px;
       font-weight: 600;
       color: var(--mj-text-primary);
+    }
+
+    .cc-step-row[data-status="skipped"] .cc-step-name {
+      color: var(--mj-text-muted);
     }
 
     .cc-step-agent-tag {
@@ -1558,6 +1582,12 @@ export interface WorkflowCommandCenterKPIs {
     .cc-step-status-pill[data-status="failed"] {
       background: rgba(239, 68, 68, 0.14);
       color: #dc2626;
+    }
+
+    .cc-step-status-pill[data-status="skipped"] {
+      background: var(--mj-bg-surface);
+      border: 1px dashed var(--mj-border-strong);
+      color: var(--mj-text-muted);
     }
 
     .cc-step-run-btn {
@@ -1716,6 +1746,12 @@ export interface WorkflowCommandCenterKPIs {
       background: rgba(239, 68, 68, 0.2);
       border: 1px solid rgba(239, 68, 68, 0.5);
       color: #b91c1c;
+    }
+
+    .cc-waterfall-bar[data-status="skipped"] {
+      background: var(--mj-bg-surface);
+      border: 1px dashed var(--mj-border-strong);
+      color: var(--mj-text-muted);
     }
 
     /* Slide-Over Inspector Drawer */
@@ -2564,6 +2600,7 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
         const stepDeps = stepTask.ID ? (depsByTaskId.get(stepTask.ID.toLowerCase()) ?? []) : [];
         const dependsOnNames: string[] = [];
         const dependsOnTaskIds: string[] = [];
+        const dependsOnConditions: string[] = [];
         for (const dep of stepDeps) {
           if (dep.DependsOnTaskID) {
             dependsOnTaskIds.push(dep.DependsOnTaskID);
@@ -2572,9 +2609,18 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
               dependsOnNames.push(prereq.Name);
             }
           }
+          if (dep.Condition && dep.Condition.trim().length > 0) {
+            dependsOnConditions.push(dep.Condition.trim());
+          }
         }
 
-        const rawPreview = output || instructions || '';
+        const isSkipped = stepTask.Status === 'Skipped';
+        const effectiveDurationMs = isSkipped ? 0 : stepDurationMs;
+        const rawPreview = isSkipped && !output
+          ? dependsOnConditions.length > 0
+            ? `Skipped (condition not met: ${dependsOnConditions.join(' AND ')}) — ${instructions || ''}`
+            : `Skipped (conditional prerequisite not met) — ${instructions || ''}`
+          : output || instructions || '';
         const cleanPreview = rawPreview.replace(/[#*`_~]/g, '').replace(/\s+/g, ' ').trim();
 
         return {
@@ -2587,18 +2633,20 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
           Output: output,
           IsErrorOutput: isError,
           OutputPreview: cleanPreview.length > 180 ? `${cleanPreview.substring(0, 180)}...` : cleanPreview,
-          DurationText: this.formatDurationMs(stepDurationMs, Boolean(stepTask.StartedAt)),
-          DurationMs: stepDurationMs,
+          DurationText: isSkipped ? '' : this.formatDurationMs(effectiveDurationMs, Boolean(stepTask.StartedAt)),
+          DurationMs: effectiveDurationMs,
           TimelineOffsetPercent: offsetPct,
           TimelineWidthPercent: widthPct,
           StartOffsetLabel: `+${startOffsetSec}s`,
           DependsOnNames: dependsOnNames,
-          DependsOnTaskIds: dependsOnTaskIds
+          DependsOnTaskIds: dependsOnTaskIds,
+          DependsOnConditions: dependsOnConditions
         };
       });
 
       const totalSteps = enrichedSteps.length;
       const completedSteps = enrichedSteps.filter(s => s.Task.Status === 'Complete').length;
+      const skippedSteps = enrichedSteps.filter(s => s.Task.Status === 'Skipped').length;
       const failedSteps = enrichedSteps.filter(
         s => s.Task.Status === 'Failed' || s.Task.Status === 'Cancelled' || s.Task.Status === 'Blocked'
       ).length;
@@ -2609,7 +2657,7 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
       let category: 'active' | 'completed' | 'failed' = 'active';
       if (failedSteps > 0 || parentTask.Status === 'Failed' || parentTask.Status === 'Cancelled') {
         category = 'failed';
-      } else if (completedSteps === totalSteps || parentTask.Status === 'Complete') {
+      } else if ((completedSteps + skippedSteps) === totalSteps || parentTask.Status === 'Complete') {
         category = 'completed';
       }
 
@@ -2617,7 +2665,7 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
         category === 'completed'
           ? 100
           : totalSteps > 0
-            ? Math.round((completedSteps / totalSteps) * 100)
+            ? Math.round(((completedSteps + skippedSteps) / totalSteps) * 100)
             : parentTask.PercentComplete ?? 0;
 
       const { instructions: parentInstructions } = this.splitTaskDescription(parentTask.Description || '');
@@ -2638,6 +2686,7 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
         PercentComplete: percentComplete,
         TotalSteps: totalSteps,
         CompletedSteps: completedSteps,
+        SkippedSteps: skippedSteps,
         ActiveSteps: activeSteps,
         FailedSteps: failedSteps,
         Steps: enrichedSteps,
@@ -2768,8 +2817,9 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
     return this.WorkflowGroups.filter(g => g.NormalizedCategory === category).length;
   }
 
-  public GetStepCategory(status: MJTaskEntity['Status']): 'active' | 'completed' | 'failed' {
+  public GetStepCategory(status: MJTaskEntity['Status']): 'active' | 'completed' | 'failed' | 'skipped' {
     if (status === 'Complete') return 'completed';
+    if (status === 'Skipped') return 'skipped';
     if (status === 'Failed' || status === 'Cancelled' || status === 'Blocked') return 'failed';
     return 'active';
   }

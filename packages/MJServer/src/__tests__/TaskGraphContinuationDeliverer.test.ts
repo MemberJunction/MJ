@@ -579,6 +579,52 @@ describe('Reinvoke — on the fork of the message that started the graph', () =>
         expect(runAgent.mock.calls[0][0].contextUser.ID).toBe('owner-user-99');
         expect(detailUsers[0]?.ID).toBe('owner-user-99');
     });
+
+    it('enriches Skipped steps with their unmet dependency Condition from MJ: Task Dependencies', async () => {
+        const { RunView } = await import('@memberjunction/core');
+        vi.mocked(RunView.FromMetadataProvider).mockReturnValue({
+            RunView: vi.fn().mockImplementation(async (rvParams: { EntityName: string }) => {
+                if (rvParams.EntityName === 'MJ: Tasks') {
+                    return {
+                        Success: true,
+                        Results: [
+                            { ID: 't1', Name: 'Build Query', Status: 'Complete', OutputPayload: JSON.stringify({ queryName: 'Users by Role' }) },
+                            { ID: 't2', Name: 'Run Query', Status: 'Complete', OutputPayload: JSON.stringify({ summary: 'Built query blueprint without live execution' }) },
+                            { ID: 't3', Name: 'Analyze Results', Status: 'Skipped', OutputPayload: null },
+                        ],
+                    };
+                }
+                if (rvParams.EntityName === 'MJ: Task Dependencies') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                TaskID: 't3',
+                                DependsOnTaskID: 't2',
+                                Condition: 'output.rowCount > 0',
+                            },
+                        ],
+                    };
+                }
+                return { Success: false, Results: [] };
+            }),
+        } as never);
+
+        await forkHarness(null).Reinvoke(
+            params({
+                Tasks: [
+                    { TaskID: 't1', Name: 'Build Query', Status: 'Complete' },
+                    { TaskID: 't2', Name: 'Run Query', Status: 'Complete' },
+                    { TaskID: 't3', Name: 'Analyze Results', Status: 'Skipped' },
+                ],
+                Summary: '2 of 3 steps completed (1 skipped).',
+            }),
+        );
+
+        const sentContent = runAgent.mock.calls[0][0].conversationMessages[0].content as string;
+        expect(sentContent).toContain('- ⏭️ **Analyze Results** — Skipped: branch condition `output.rowCount > 0` on "Run Query" evaluated to false');
+        expect(sentContent).toContain('briefly explaining any conditional steps that were skipped');
+    });
 });
 
 

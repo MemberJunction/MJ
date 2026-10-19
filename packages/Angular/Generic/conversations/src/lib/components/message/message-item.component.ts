@@ -2775,6 +2775,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.WorkflowSteps.filter((s) => s.Status === 'Complete').length;
   }
 
+  /** Number of conditionally skipped workflow steps. */
+  public get WorkflowSkippedStepCount(): number {
+    return this.WorkflowSteps.filter((s) => s.Status === 'Skipped').length;
+  }
+
   /** Overall completion percentage (0-100) across all workflow steps. */
   public get WorkflowProgressPercent(): number {
     const steps = this.WorkflowSteps;
@@ -2783,7 +2788,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
     let sum = 0;
     for (const step of steps) {
-      if (step.Status === 'Complete') {
+      if (step.Status === 'Complete' || step.Status === 'Skipped') {
         sum += 100;
       } else if (step.Status === 'In Progress') {
         sum += Math.max(15, Math.min(95, step.PercentComplete || 50));
@@ -2836,6 +2841,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public FormatWorkflowStepDuration(step: MJTaskEntity): string | null {
+    if (step.Status === 'Skipped') {
+      return 'Skipped';
+    }
+    if (step.Status === 'Cancelled') {
+      return 'Cancelled';
+    }
     const startRaw = step.StartedAt || step.__mj_CreatedAt;
     if (!startRaw) {
       return null;
@@ -2877,6 +2888,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       }
     }
     const cleanDesc = desc.trim();
+    if (step.Status === 'Skipped') {
+      return cleanDesc.length > 0
+        ? `Skipped (conditional prerequisite not met) — ${cleanDesc}`
+        : 'Skipped (conditional prerequisite not met)';
+    }
     return cleanDesc.length > 0 ? cleanDesc : null;
   }
 
