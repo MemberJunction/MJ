@@ -30,7 +30,7 @@ import { MJAIActionEntity, MJActionEntity,
          MJAIAgentClientToolEntity, MJAIAgentCategoryEntity, IsInjectableNoteStatus,
          MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity, MJAISkillPermissionEntity,
          MJAIPersonaEntity, MJAIPersonaVendorEntity, MJAIModelPersonaEntity, MJAIAgentPersonaEntity } from "@memberjunction/core-entities";
-import { AIEngineBase, ResolvedModelPersona, ResolvedAgentPersona, EffectiveAgentPersona, EffectiveAgentPermissions } from "@memberjunction/ai-engine-base";
+import { AIEngineBase, ResolvedModelPersona, ResolvedAgentPersona, EffectiveAgentPersona, EffectiveAgentPermissions, UserRunnableAgentSummary } from "@memberjunction/ai-engine-base";
 import { ReadStoredVector, SimpleVectorService, VectorInputEntry } from "@memberjunction/ai-vectors-memory";
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
@@ -156,6 +156,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         'mj: ai agent actions',
         'mj: ai agent relationships',
         'mj: ai agent types',
+        'mj: ai agent permissions',
     ]);
 
     /**
@@ -173,9 +174,10 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         this._agentBaseCatalogCache.set(agentID, catalog);
     }
 
-    /** Wipes the entire agent base-catalog cache. Called on relevant entity changes and on reload. */
+    /** Wipes the entire agent base-catalog cache and user runnable agent directory cache. Called on relevant entity changes and on reload. */
     public ClearAgentBaseCatalogCache(): void {
         this._agentBaseCatalogCache.clear();
+        this.Base.ClearUserRunnableAgentDirectoryCache();
     }
 
     /**
@@ -417,6 +419,14 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     }
     public GetAgentByID(agentId: string): MJAIAgentEntityExtended {
         return this.Base.GetAgentByID(agentId);
+    }
+    /** Cached per-user directory of directly discoverable, active agents the user is permitted to run — see {@link AIEngineBase.GetUserRunnableAgentDirectory}. */
+    public GetUserRunnableAgentDirectory(user: UserInfo | undefined): UserRunnableAgentSummary[] {
+        return this.Base.GetUserRunnableAgentDirectory(user);
+    }
+    /** Clears the per-user runnable agent directory cache — see {@link AIEngineBase.ClearUserRunnableAgentDirectoryCache}. */
+    public ClearUserRunnableAgentDirectoryCache(userId?: string): void {
+        this.Base.ClearUserRunnableAgentDirectoryCache(userId);
     }
     public GetAgentConfigurationPresets(agentId: string, activeOnly: boolean = true): MJAIAgentConfigurationEntity[] {
         return this.Base.GetAgentConfigurationPresets(agentId, activeOnly);
@@ -1096,6 +1106,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      *
      * Resolved once per process, so a catalog edit can't switch the model under the in-memory indexes
      * (notes, examples, tags, queries) built with it. Changing the model takes effect on restart.
+     *
+     * Call `Config()` first. Before the models load this returns null, the same as when no active
+     * local model exists, and resolves on a later call once they have loaded.
      */
     public get DefaultLocalEmbeddingModel(): MJAIModelEntityExtended | null {
         if (this._defaultLocalEmbeddingModelID === undefined) {

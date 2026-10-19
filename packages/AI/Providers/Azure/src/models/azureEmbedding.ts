@@ -98,6 +98,7 @@ export class AzureEmbedding extends BaseEmbeddings {
         try {
             // Call Azure AI embeddings API
             const response = await this.Client.path("/embeddings").post({
+                abortSignal: params.CancellationToken,
                 body: {
                     input: [params.text], // API requires array
                     model: params.model || "text-embedding-ada-002", // Default model
@@ -138,6 +139,8 @@ export class AzureEmbedding extends BaseEmbeddings {
             
             return result;
         } catch (error) {
+            // An aborted request is reported as cancelled, not as an empty (failed) result.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             const endTime = new Date();
             
             // Log error details for debugging
@@ -182,6 +185,7 @@ export class AzureEmbedding extends BaseEmbeddings {
             
             // Call Azure AI embeddings API
             const response = await this.Client.path("/embeddings").post({
+                abortSignal: params.CancellationToken,
                 body: {
                     input: params.texts,
                     model: params.model || "text-embedding-ada-002", // Default model
@@ -222,6 +226,8 @@ export class AzureEmbedding extends BaseEmbeddings {
             
             return result;
         } catch (error) {
+            // An aborted request is reported as cancelled, not as an empty (failed) result.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             const endTime = new Date();
             
             // Log error details for debugging

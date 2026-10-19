@@ -35,14 +35,22 @@ import {
  *   ConversationID?: string
  * }
  */
+interface GlobalUserCacheLookup {
+    Users: UserInfo[];
+    FindUser(criteria: { ID?: string; Email?: string }): Promise<UserInfo | undefined>;
+}
+
 @RegisterClass(BaseScheduledJob, 'AgentScheduledJobDriver')
 export class AgentScheduledJobDriver extends BaseScheduledJob {
     public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
         // Parse agent-specific configuration
         const config = this.parseConfiguration<AgentJobConfiguration>(context.Schedule);
 
+        // Resolve the schedule owner's UserInfo when OwnerUserID is specified
+        const executionUser = await this.resolveScheduleOwnerUser(context.Schedule, context.ContextUser);
+
         // Load the agent entity
-        const agent = await this.loadAgent(config.AgentID, context.ContextUser);
+        const agent = await this.loadAgent(config.AgentID, executionUser);
 
         // A workflow SUBMITS and detaches — it returns a handle as soon as its steps are scheduled,
         // not a result. A scheduled job that ran one would record success the moment the graph was
@@ -78,7 +86,7 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
             agent: agent,
             conversationMessages: conversationMessages,
             payload: config.StartingPayload,
-            contextUser: context.ContextUser,
+            contextUser: executionUser,
             // Heartbeat the lease on every agent step (prompt / action / sub-agent /
             // decision) so a healthy long-running agent keeps its concurrency slot
             // (GH #2749). Fire-and-forget is safe — context.heartbeat never throws
@@ -193,5 +201,41 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
         }
 
         return agent;
+    }
+
+    /**
+     * Resolves the schedule owner's UserInfo when `schedule.OwnerUserID` is specified,
+     * ensuring scheduled agent runs execute under the schedule owner's security context
+     * rather than the background scheduler daemon user.
+     */
+    protected async resolveScheduleOwnerUser(
+        schedule: { ID?: string; Name?: string; OwnerUserID?: string | null },
+        fallbackContextUser: UserInfo
+    ): Promise<UserInfo> {
+        const ownerUserID = schedule.OwnerUserID?.trim();
+        if (!ownerUserID) {
+            return fallbackContextUser;
+        }
+        if (fallbackContextUser?.ID && fallbackContextUser.ID.trim().toLowerCase() === ownerUserID.toLowerCase()) {
+            return fallbackContextUser;
+        }
+        const userCache = (globalThis as { ___SINGLETON__UserCache?: GlobalUserCacheLookup }).___SINGLETON__UserCache;
+        if (userCache && typeof userCache.FindUser === 'function') {
+            const ownerUser = await userCache.FindUser({ ID: ownerUserID });
+            if (ownerUser) {
+                if (ownerUser.IsActive === false) {
+                    throw new Error(
+                        `Cannot execute scheduled agent job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} is inactive.`
+                    );
+                }
+                return ownerUser;
+            }
+            if (Array.isArray(userCache.Users) && userCache.Users.length > 0) {
+                throw new Error(
+                    `Cannot execute scheduled agent job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} not found in UserCache.`
+                );
+            }
+        }
+        return fallbackContextUser;
     }
 }

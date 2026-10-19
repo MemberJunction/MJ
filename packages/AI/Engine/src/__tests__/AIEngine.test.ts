@@ -289,6 +289,8 @@ const { mockBaseInstance } = vi.hoisted(() => ({ mockBaseInstance: {
     CanUserDeleteAgent: vi.fn(),
     GetUserAgentPermissions: vi.fn(),
     GetAccessibleAgents: vi.fn(),
+    GetUserRunnableAgentDirectory: vi.fn().mockReturnValue([]),
+    ClearUserRunnableAgentDirectoryCache: vi.fn(),
     ClearAgentPermissionsCache: vi.fn(),
     RefreshAgentPermissionsCache: vi.fn(),
     GetCredentialBindingsForTarget: vi.fn().mockReturnValue([]),

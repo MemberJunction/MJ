@@ -6,7 +6,8 @@ import {
   EmbedTextResult, 
   EmbedTextsResult,
   EmbeddingInputType,
-  ErrorAnalyzer 
+  ErrorAnalyzer,
+  ThrowIfAborted
 } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 import { 
@@ -74,7 +75,7 @@ export class BedrockEmbedding extends BaseEmbeddings {
         accept: 'application/json'
       });
       
-      const response = await this._client.send(command);
+      const response = await this._client.send(command, { abortSignal: params.CancellationToken });
       const responseBody = JSON.parse(new TextDecoder().decode(response.body));
       
       // Parse response body based on the model provider
@@ -96,6 +97,8 @@ export class BedrockEmbedding extends BaseEmbeddings {
         vector: embedding
       };
     } catch (error) {
+      // An aborted request is reported as cancelled, not as an empty (failed) result.
+      this.ThrowIfRequestAborted(error, params.CancellationToken);
       // Log error details for debugging
       const errorInfo = ErrorAnalyzer.analyzeError(error, 'Bedrock');
       console.error('Bedrock embedding error:', errorInfo);
@@ -115,6 +118,7 @@ export class BedrockEmbedding extends BaseEmbeddings {
    */
   public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
     try {
+      ThrowIfAborted(params.CancellationToken, 'Bedrock');
       // The modelId should be specified in the model parameter, e.g., "amazon.titan-embed-text-v1"
       const modelId = params.model || 'amazon.titan-embed-text-v1';
       
@@ -136,7 +140,7 @@ export class BedrockEmbedding extends BaseEmbeddings {
           accept: 'application/json'
         });
         
-        const response = await this._client.send(command);
+        const response = await this._client.send(command, { abortSignal: params.CancellationToken });
         const responseBody = JSON.parse(new TextDecoder().decode(response.body));
         
         return {
@@ -152,10 +156,13 @@ export class BedrockEmbedding extends BaseEmbeddings {
         let totalTokens = 0;
         
         for (const text of params.texts) {
+          // Checked before each text, so a cancelled batch sends no further requests.
+          ThrowIfAborted(params.CancellationToken, 'Bedrock');
           const result = await this.EmbedText({
             text: text,
             model: modelId,
-            dimensions: params.dimensions
+            dimensions: params.dimensions,
+            CancellationToken: params.CancellationToken
           });
           
           embeddings.push(result.vector);
@@ -170,6 +177,8 @@ export class BedrockEmbedding extends BaseEmbeddings {
         };
       }
     } catch (error) {
+      // An aborted request is reported as cancelled, not as an empty (failed) result.
+      this.ThrowIfRequestAborted(error, params.CancellationToken);
       // Log error details for debugging
       const errorInfo = ErrorAnalyzer.analyzeError(error, 'Bedrock');
       console.error('Bedrock embedding error:', errorInfo);

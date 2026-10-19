@@ -70,3 +70,51 @@ describe('CohereEmbedding inputType mapping', () => {
         expect(mockEmbed.mock.calls[1][0]).toMatchObject({ inputType: 'classification' });
     });
 });
+
+/** Builds the error `fetch` and the SDKs reject an aborted request with. */
+function abortError(): Error {
+    const error = new Error('This operation was aborted');
+    error.name = 'AbortError';
+    return error;
+}
+
+/** The classification a cancellation error carries, read from the error a call rejected with. */
+async function rejectionTypeOf(operation: Promise<unknown>): Promise<string | undefined> {
+    try {
+        await operation;
+    } catch (error) {
+        const info: { errorType?: string } | undefined = (error as { errorInfo?: { errorType?: string } }).errorInfo;
+        return info?.errorType;
+    }
+    throw new Error('expected the call to reject');
+}
+
+describe('CohereEmbedding cancellation', () => {
+    beforeEach(() => {
+        mockEmbed.mockReset(); // braces: a function returned from beforeEach would run as its teardown
+    });
+
+    it('forwards the CancellationToken to v2.embed as its abortSignal', async () => {
+        mockEmbed.mockResolvedValue(embedResponse([[1, 0]]));
+        const controller = new AbortController();
+        const e = new CohereEmbedding('k');
+        await e.EmbedTexts({ texts: ['a'], model: 'm', CancellationToken: controller.signal });
+        await e.EmbedText({ text: 'a', model: 'm', CancellationToken: controller.signal });
+        await e.EmbedContent({ content: 'a', model: 'm', CancellationToken: controller.signal });
+        for (const call of mockEmbed.mock.calls) {
+            expect(call[1]).toEqual({ abortSignal: controller.signal });
+        }
+        expect(mockEmbed).toHaveBeenCalledTimes(3);
+    });
+
+    it('reports an aborted request as cancelled rather than as an empty result', async () => {
+        const controller = new AbortController();
+        mockEmbed.mockImplementation(async () => {
+            controller.abort('stop');
+            throw abortError();
+        });
+        const e = new CohereEmbedding('k');
+        expect(await rejectionTypeOf(e.EmbedTexts({ texts: ['a', 'b'], model: 'm', CancellationToken: controller.signal }))).toBe('Cancelled');
+        expect(await rejectionTypeOf(e.EmbedContent({ content: 'a', model: 'm', CancellationToken: controller.signal }))).toBe('Cancelled');
+    });
+});

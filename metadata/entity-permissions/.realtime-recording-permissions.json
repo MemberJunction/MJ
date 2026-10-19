@@ -1,0 +1,20 @@
+[
+  {
+    "_comments": [
+      "Recording shards are raw call audio staged for server-side assembly (MJ#5294). Only MJAPI reads or writes them, through its guarded procedures; general UI roles get no access, or any user could read another user's call audio through the generic entity API."
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.Entity=MJ: AI Agent Session Recording Shards&RoleName=UI"
+    },
+    "fields": {
+      "CanRead": false,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "sync": {
+      "lastModified": "2026-10-18T00:27:39.567Z",
+      "checksum": "5d5a75ff1826cde843d30029d92b97a98de3463d95ab65ce7f048abbdab9ed01"
+    }
+  }
+]

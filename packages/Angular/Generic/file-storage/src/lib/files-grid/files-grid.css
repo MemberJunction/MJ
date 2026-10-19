@@ -35,28 +35,3 @@
 .mj-form-field .mj-input {
   width: 100%;
 }
-
-.action-buttons {
-  display: flex;
-  gap: 4px;
-}
-
-.grid-action-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 4px;
-  color: var(--mj-text-secondary);
-  transition: color 0.15s, background-color 0.15s;
-}
-
-.grid-action-btn:hover:not(:disabled) {
-  color: var(--mj-text-primary);
-  background-color: var(--mj-bg-surface-hover);
-}
-
-.grid-action-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}

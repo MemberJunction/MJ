@@ -113,6 +113,7 @@ export * from './custom/workflow/loop.action';
 export * from './custom/workflow/parallel-execute.action';
 export * from './custom/workflow/retry.action';
 export * from './custom/workflow/delay.action';
+export * from './custom/workflow/workflow-run-scope';
 
 // AI Actions
 export * from './custom/ai/execute-ai-prompt.action';
@@ -133,6 +134,11 @@ export * from './custom/ai/load-agent-spec.action';
 export * from './custom/ai/generate-image.action';
 export * from './custom/ai/run-cluster-analysis.action';
 export * from './custom/ai/actionsmith-agent';
+export * from './custom/ai/schedule-next-agent-wake.action';
+export * from './custom/ai/configure-agent-user-policy.action';
+export * from './custom/ai/chief-of-staff-inter-agent-request.action';
+export * from './custom/ai/prepare-chief-of-staff-outbound-call.action';
+export * from './custom/ai/chief-of-staff-calendar-email.action';
 
 // User Management Actions
 export * from './custom/user-management/check-user-permission.action';

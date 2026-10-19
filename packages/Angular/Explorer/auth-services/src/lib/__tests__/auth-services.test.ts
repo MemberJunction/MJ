@@ -27,8 +27,17 @@ vi.mock('@memberjunction/global', () => ({
   GetGlobalObjectStore: () => __mockGlobalObjectStore,
 }));
 
+const __mockMetadataProvider = { CurrentUser: { ID: 'user-1' } };
 vi.mock('@memberjunction/core', () => ({
   AuthProviderConfig: class {},
+  Metadata: { Provider: __mockMetadataProvider },
+}));
+
+const { releaseRecordingShardsAtLogout } = vi.hoisted(() => ({
+  releaseRecordingShardsAtLogout: vi.fn<(provider: unknown) => Promise<{ Delivered: number; TimedOut: boolean }>>(),
+}));
+vi.mock('@memberjunction/realtime-runtime', () => ({
+  ReleaseRecordingShardsAtLogout: releaseRecordingShardsAtLogout,
 }));
 
 vi.mock('rxjs', async () => {
@@ -351,6 +360,23 @@ describe('logout and cache clearing', () => {
     await makeProvider().logout();
     expect(removeItem).toHaveBeenCalledWith('mj-session-id');
     expect(removeItem).not.toHaveBeenCalledWith('mj-theme-overlay');
+  });
+
+  it("sends then deletes the signed-in user's stored call-recording shards before the provider logout", async () => {
+    // Live smoke B1/B2: a user's unsent call audio stayed in the browser after logout and the next
+    // user's session re-sent it.
+    stubLocalStorage({});
+    stubIndexedDB();
+    const callOrder: string[] = [];
+    releaseRecordingShardsAtLogout.mockImplementation(async () => {
+      callOrder.push('releaseRecordingShards');
+      return { Delivered: 0, TimedOut: false };
+    });
+    const provider = makeProvider();
+    provider.logoutSpy.mockImplementation(async () => { callOrder.push('logoutInternal'); });
+    await provider.logout();
+    expect(releaseRecordingShardsAtLogout).toHaveBeenCalledWith(__mockMetadataProvider);
+    expect(callOrder).toEqual(['releaseRecordingShards', 'logoutInternal']);
   });
 
   it('should delete the MJ_Metadata IndexedDB on logout', async () => {

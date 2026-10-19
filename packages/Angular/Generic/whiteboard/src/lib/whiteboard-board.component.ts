@@ -82,6 +82,11 @@ function touchesVerticalEdge(handle: ResizeHandle): boolean {
   return handle.includes('n') || handle.includes('s');
 }
 
+/** Whether two boxes are identical — a resize gesture that ends where it began changed nothing. */
+function sameBounds(a: WhiteboardBounds, b: WhiteboardBounds): boolean {
+  return a.X === b.X && a.Y === b.Y && a.W === b.W && a.H === b.H;
+}
+
 /**
  * The computed height of the markdown body inside the card that holds `handleEl`, in the
  * same box model as its max-height. Zoom is a transform on the viewport, so CSS px are
@@ -97,7 +102,7 @@ function renderedMarkdownBodyHeight(handleEl: EventTarget | null): number | null
 
 type BoardInteraction =
   | { Type: 'move'; ItemID: string; StartX: number; StartY: number; OrigBounds: WhiteboardBounds; DX: number; DY: number; Moved: boolean; Group: boolean }
-  | { Type: 'resize'; ItemID: string; Handle: ResizeHandle; StartX: number; StartY: number; OrigBounds: WhiteboardBounds; CurBounds: WhiteboardBounds; MinH: number }
+  | { Type: 'resize'; ItemID: string; Handle: ResizeHandle; StartX: number; StartY: number; OrigBounds: WhiteboardBounds; CurBounds: WhiteboardBounds; MinH: number; Moved: boolean }
   | { Type: 'pen'; Points: WhiteboardPoint[] }
   | { Type: 'shape'; StartX: number; StartY: number; CurX: number; CurY: number }
   | { Type: 'marquee'; StartX: number; StartY: number; CurX: number; CurY: number; Additive: boolean }
@@ -162,6 +167,22 @@ const STARTER_MARKDOWN = '## New note\n\n- point one';
 
 /** Zoom presets stepped by the zoom cluster (25%–200%, matching the mockup's range). */
 const ZOOM_STEPS = [0.25, 0.5, 0.75, 0.9, 1, 1.25, 1.5, 2] as const;
+/**
+ * Wheel zoom reads the delta MAGNITUDE, capped per event: a mouse notch is ~100px, a trackpad
+ * pinch sample ~1–10px, so a pinch tracks finger travel instead of the hardware's sample rate.
+ */
+const WHEEL_ZOOM_DELTA_CAP_PX = 50;
+/** Tuned so one capped notch is exactly the familiar 10% step; a 5px trackpad sample is then ~1%. */
+const WHEEL_ZOOM_RATE = Math.log(1.1) / WHEEL_ZOOM_DELTA_CAP_PX;
+/** `deltaMode` → px: a line is ~16px (Firefox mouse wheel); a page is at least a full notch. */
+const WHEEL_LINE_PX = 16;
+const WHEEL_PAGE_PX = 800;
+/**
+ * How long the stepped (button) zoom's transform transition runs — wheel and hold-to-zoom never use it.
+ * MUST match the `transition` duration on `.board-viewport--stepping` in whiteboard-board.component.css:
+ * this timer drops the class, so a CSS duration longer than this is cut short (visible snap).
+ */
+export const ZOOM_STEP_TRANSITION_MS = 180;
 const GRID_SIZE = 22;
 /** How long an agent-added item keeps its pop-in/flash class. */
 const POP_IN_MS = 3200;
@@ -270,6 +291,13 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   public PanX = 0;
   public PanY = 0;
   public Zoom = 0.9;
+  /**
+   * True for {@link ZOOM_STEP_TRANSITION_MS} after a stepped zoom (ZoomIn / ZoomOut), so the
+   * template can transition the transform for the BUTTON path only. The wheel and the
+   * hold-to-zoom tick path leave it false: a transition on a continuous gesture lags it.
+   */
+  public ViewportStepping = false;
+  private steppingTimer: ReturnType<typeof setTimeout> | null = null;
   public MinimapOpen = false;
 
   // transient interaction state
@@ -389,6 +417,10 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   }
 
   ngOnDestroy(): void {
+    if (this.steppingTimer) {
+      clearTimeout(this.steppingTimer);
+      this.steppingTimer = null;
+    }
     this.changedSub?.unsubscribe();
     for (const t of this.popInTimers) {
       clearTimeout(t);
@@ -911,7 +943,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     const bounds = this.resizeStartBounds(item, event);
     // a markdown panel can't be dragged below its minimum, unless its content is already shorter
     const minH = item.Kind === 'markdown' ? Math.min(WHITEBOARD_DEFAULTS.MarkdownMinH, bounds.H) : RESIZE_MIN_SIZE;
-    this.Interaction = { Type: 'resize', ItemID: item.ID, Handle: handle, StartX: p.X, StartY: p.Y, OrigBounds: bounds, CurBounds: { ...bounds }, MinH: minH };
+    this.Interaction = { Type: 'resize', ItemID: item.ID, Handle: handle, StartX: p.X, StartY: p.Y, OrigBounds: bounds, CurBounds: { ...bounds }, MinH: minH, Moved: false };
   }
 
   /**
@@ -954,9 +986,18 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
         }
         break;
       }
-      case 'resize':
-        i.CurBounds = this.resizeBounds(i.OrigBounds, i.Handle, p.X - i.StartX, p.Y - i.StartY, i.MinH);
+      case 'resize': {
+        const dx = p.X - i.StartX;
+        const dy = p.Y - i.StartY;
+        // same click threshold as a move: a press often carries a pixel of travel before pointerup
+        if (!i.Moved && Math.hypot(dx, dy) > 3) {
+          i.Moved = true;
+        }
+        if (i.Moved) {
+          i.CurBounds = this.resizeBounds(i.OrigBounds, i.Handle, dx, dy, i.MinH);
+        }
         break;
+      }
       case 'pen': {
         const last = i.Points[i.Points.length - 1];
         if (Math.hypot(p.X - last.X, p.Y - last.Y) > 2.2) {
@@ -1022,12 +1063,19 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
         break;
       }
       case 'resize': {
+        // a click (no travel past the threshold) or a drag back to the start commits nothing,
+        // and so records no undo step
+        if (!i.Moved || sameBounds(i.CurBounds, i.OrigBounds)) {
+          break;
+        }
         const item = this.State.GetItem(i.ItemID);
         // per-kind commit: full-box kinds and markdown take X/Y/W/H; content-driven-height
         // kinds (sticky/text/image) take X/Y/W only — see BuildResizeCommitPatch. A markdown
-        // panel's H is its max-height cap, so only a top/bottom handle moves it.
+        // panel's H is its max-height cap, and the gesture starts from the rendered height, so H
+        // is committed only when a top/bottom handle actually moved it: otherwise a corner
+        // dragged sideways would lower a cap the content doesn't fill (or cap an uncapped panel).
         const patch = item ? BuildResizeCommitPatch(item.Kind, i.CurBounds) : null;
-        if (patch && item?.Kind === 'markdown' && !touchesVerticalEdge(i.Handle)) {
+        if (patch && item?.Kind === 'markdown' && (!touchesVerticalEdge(i.Handle) || i.CurBounds.H === i.OrigBounds.H)) {
           delete patch.H;
         }
         if (patch) {
@@ -1064,13 +1112,27 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   public OnWheel(event: WheelEvent): void {
     event.preventDefault();
-    if (event.ctrlKey || event.metaKey) {
-      const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+    // ctrlKey only: a trackpad pinch arrives as ctrl+wheel. metaKey used to zoom too, which made a
+    // Cmd+two-finger scroll zoom — and macOS momentum kept delivering events after the fingers
+    // lifted, so the zoom carried on by itself. Cmd-scroll now pans like a plain scroll.
+    if (event.ctrlKey) {
+      const px = this.wheelDeltaPx(event);
+      const clamped = Math.sign(px) * Math.min(Math.abs(px), WHEEL_ZOOM_DELTA_CAP_PX);
+      const factor = Math.exp(-clamped * WHEEL_ZOOM_RATE);
       this.zoomAt(this.clampZoom(this.Zoom * factor), event.clientX, event.clientY);
     }
     else {
       this.PanX -= event.deltaX;
       this.PanY -= event.deltaY;
+    }
+  }
+
+  /** `deltaY` in pixels whatever the event's `deltaMode` (0 px, 1 lines, 2 pages). */
+  private wheelDeltaPx(event: WheelEvent): number {
+    switch (event.deltaMode) {
+      case 1: return event.deltaY * WHEEL_LINE_PX;
+      case 2: return event.deltaY * WHEEL_PAGE_PX;
+      default: return event.deltaY;
     }
   }
 
@@ -1536,6 +1598,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   public ZoomIn(): void {
     const next = ZOOM_STEPS.find((z) => z > this.Zoom + 0.001);
+    this.flagSteppedZoom();
     this.zoomCentered(next ?? ZOOM_STEPS[ZOOM_STEPS.length - 1]);
   }
 
@@ -1553,7 +1616,21 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   public ZoomOut(): void {
     const lower = [...ZOOM_STEPS].reverse().find((z) => z < this.Zoom - 0.001);
+    this.flagSteppedZoom();
     this.zoomCentered(lower ?? ZOOM_STEPS[0]);
+  }
+
+  /** Arm the stepped-zoom transition; a second step within the window restarts the clock. */
+  private flagSteppedZoom(): void {
+    this.ViewportStepping = true;
+    if (this.steppingTimer) {
+      clearTimeout(this.steppingTimer);
+    }
+    this.steppingTimer = setTimeout(() => {
+      this.steppingTimer = null;
+      this.ViewportStepping = false;
+      this.cdr.markForCheck();
+    }, ZOOM_STEP_TRANSITION_MS);
   }
 
   /** Fit all content into the viewport (25%–200%, 60px padding). */

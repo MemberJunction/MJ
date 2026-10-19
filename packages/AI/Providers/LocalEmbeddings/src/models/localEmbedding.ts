@@ -1,4 +1,4 @@
-import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, BaseEmbeddings, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
+import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, BaseEmbeddings, ModelUsage, ErrorAnalyzer, ThrowIfAborted } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 import type { PreTrainedModel, PreTrainedTokenizer, PretrainedConfig, Tensor } from "@huggingface/transformers";
 import { availableParallelism } from "node:os";
@@ -307,8 +307,15 @@ export class LocalEmbedding extends BaseEmbeddings {
      * transformers.js `feature-extraction` pipeline. The driver tokenizes itself so it can truncate
      * to `maxInputTokens`: the pipeline only truncates to the tokenizer's own limit, and some
      * tokenizers declare none (EmbeddingGemma 2's reads as 1e30, past its 8,192-token window).
+     * In-process inference cannot be interrupted, so the cancellation signal is checked before the
+     * model loads, after it loads, and before each batch.
      */
-    private async embed(modelId: string, texts: string[], dimensions?: number, maxInputTokens?: number): Promise<{ vectors: number[][]; tokens: number }> {
+    private async embed(
+        modelId: string,
+        texts: string[],
+        { dimensions, maxInputTokens, CancellationToken }: Pick<EmbedTextsParams, 'dimensions' | 'maxInputTokens' | 'CancellationToken'>,
+    ): Promise<{ vectors: number[][]; tokens: number }> {
+        ThrowIfAborted(CancellationToken, 'LocalEmbedding');
         const { tokenizer, model } = await this.getModel(modelId);
         const { mean_pooling } = await loadTransformers();
         const vectors: number[][] = [];
@@ -316,6 +323,7 @@ export class LocalEmbedding extends BaseEmbeddings {
 
         const lengths = texts.map(t => Math.min(tokenizer.encode(t).length, maxInputTokens ?? Infinity));
         for (let start = 0, end = 0; start < texts.length; start = end) {
+            ThrowIfAborted(CancellationToken, 'LocalEmbedding');
             let longest = lengths[start];
             for (end = start + 1; end < texts.length && end - start < BATCH_SIZE; end++) {
                 const next = Math.max(longest, lengths[end]);
@@ -345,9 +353,11 @@ export class LocalEmbedding extends BaseEmbeddings {
     public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
         const modelName = this.requireModel(params.model);
         try {
-            const { vectors, tokens } = await this.embed(modelName, [params.text], params.dimensions, params.maxInputTokens);
+            const { vectors, tokens } = await this.embed(modelName, [params.text], params);
             return { object: 'object', model: modelName, ModelUsage: new ModelUsage(tokens, 0), vector: vectors[0] };
         } catch (error) {
+            // A cancellation is reported as such, not as an empty (failed) result.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             // BaseEmbeddings error convention: a failed single embed returns an empty vector.
             console.error('Local embedding error:', ErrorAnalyzer.analyzeError(error, 'LocalEmbedding'));
             return { object: 'object', model: modelName, ModelUsage: new ModelUsage(0, 0), vector: [] };
@@ -361,9 +371,11 @@ export class LocalEmbedding extends BaseEmbeddings {
     protected override async embedBatch(params: EmbedTextsParams): Promise<EmbedTextsResult> {
         const modelName = this.requireModel(params.model);
         try {
-            const { vectors, tokens } = await this.embed(modelName, params.texts, params.dimensions, params.maxInputTokens);
+            const { vectors, tokens } = await this.embed(modelName, params.texts, params);
             return { object: 'list', model: modelName, ModelUsage: new ModelUsage(tokens, 0), vectors };
         } catch (error) {
+            // A cancellation is reported as such, not as an empty (failed) result.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             // BaseEmbeddings error convention: a failed batch returns no vectors at all.
             console.error('Local embedding error:', ErrorAnalyzer.analyzeError(error, 'LocalEmbedding'));
             return { object: 'list', model: modelName, ModelUsage: new ModelUsage(0, 0), vectors: [] };

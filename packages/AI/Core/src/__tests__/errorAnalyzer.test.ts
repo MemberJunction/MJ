@@ -298,10 +298,18 @@ describe('ErrorAnalyzer', () => {
             expect(ErrorAnalyzer.AnalyzeError(error).errorType).toBe('NetworkError');
         });
 
-        it('does not treat a plain AbortError as a network failure, since a caller cancellation looks the same', () => {
+        it('classifies a plain AbortError as Cancelled — Fatal and never failed over — not as a network failure', () => {
             const error = Object.assign(new Error('This operation was aborted'), { name: 'AbortError', code: 20 });
 
-            expect(ErrorAnalyzer.AnalyzeError(error).errorType).toBe('Unknown');
+            expect(ErrorAnalyzer.AnalyzeError(error)).toMatchObject({ errorType: 'Cancelled', severity: 'Fatal', canFailover: false });
+        });
+
+        it('classifies an SDK abort class (APIUserAbortError, RequestAbortedError) as Cancelled by its class name', () => {
+            class APIUserAbortError extends Error {}
+            class RequestAbortedError extends Error {}
+
+            expect(ErrorAnalyzer.AnalyzeError(new APIUserAbortError('Request was aborted.')).errorType).toBe('Cancelled');
+            expect(ErrorAnalyzer.AnalyzeError(new RequestAbortedError('Request aborted by client')).errorType).toBe('Cancelled');
         });
 
         it('does not treat an unrelated TypeError as a network failure', () => {

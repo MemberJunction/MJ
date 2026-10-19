@@ -180,6 +180,53 @@ describe('LocalEmbedding', () => {
     });
   });
 
+  describe('cancellation', () => {
+    /** The classification a cancellation error carries, read from the error a call rejected with. */
+    async function rejectionTypeOf(operation: Promise<unknown>): Promise<string | undefined> {
+      try {
+        await operation;
+      } catch (error) {
+        return (error as { errorInfo?: { errorType?: string } }).errorInfo?.errorType;
+      }
+      throw new Error('expected the call to reject');
+    }
+
+    // In-process inference cannot be interrupted, so the driver checks the signal before it runs.
+    it('refuses a cancelled EmbedTexts before loading or running the model', async () => {
+      const controller = new AbortController();
+      controller.abort('stop');
+      const type = await rejectionTypeOf(
+        new LocalEmbedding().EmbedTexts({ texts: ['a', 'b'], model: MODEL, CancellationToken: controller.signal }),
+      );
+      expect(type).toBe('Cancelled');
+      expect(fake.modelFromPretrained).not.toHaveBeenCalled();
+    });
+
+    it('refuses a cancelled EmbedText before loading or running the model', async () => {
+      const controller = new AbortController();
+      controller.abort('stop');
+      const type = await rejectionTypeOf(
+        new LocalEmbedding().EmbedText({ text: 'a', model: MODEL, CancellationToken: controller.signal }),
+      );
+      expect(type).toBe('Cancelled');
+      expect(fake.modelFromPretrained).not.toHaveBeenCalled();
+    });
+
+    it('stops before the next batch once the signal fires', async () => {
+      const controller = new AbortController();
+      fake.tokenizer.mockImplementationOnce((texts: string[]): FakeBatch => {
+        controller.abort('stop');
+        return { texts, attention_mask: { sum: () => ({ item: () => texts.length * fake.tokensPerText }) } };
+      });
+      const texts = Array.from({ length: 40 }, (_, i) => String(i));
+      const type = await rejectionTypeOf(
+        new LocalEmbedding().EmbedTexts({ texts, model: MODEL, CancellationToken: controller.signal }),
+      );
+      expect(type).toBe('Cancelled');
+      expect(fake.tokenizer).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('GetEmbeddingModels', () => {
     it('returns an empty array (models come from metadata)', async () => {
       expect(await new LocalEmbedding().GetEmbeddingModels()).toEqual([]);

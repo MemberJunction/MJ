@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT115 - Conversation Message Authorship (client transport)",
+    "Description": "Who a conversation message is from, enforced by the server (MJConversationDetailEntityExtended, which runs inside MJAPI for every GraphQL save) and proven over the GraphQL wire as two seeded users authenticated by their own minted API keys: it-authorship-owner owns a conversation and grants it-authorship-grantee Edit on it. Both hold a role mirroring the UI role's full CRUD on MJ: Conversations, MJ: Conversation Details and MJ: Resource Permissions, so every refusal must come from the authorship rule, and each check asserts the rule's own message. Setup, over the owner's own connection, creates the conversation, posts one message with no UserID (it reads as the owner's) and saves the Edit grant through MJAPI, then waits until MJAPI honours the grant. CA1: the grantee posting a person's message with the owner's UserID is refused and no row exists. CA2: the grantee posting with no UserID is saved and the row carries the grantee's ID. CA3: the grantee editing the owner's message text is refused and the text is unchanged. CA4: the grantee deleting the owner's message is refused and the row still exists. CA5: the grantee edits their own message, and the owner deletes it. CA6: the owner posts with no UserID (it stays empty) and edits their own message, as before. CA7: the grantee sends the generated UpdateMJConversationDetail mutation directly with forged OldValues___, once claiming to be the owner message's author (and setting UserID to themselves) and once claiming it is an agent reply (Role AI); MJAPI decides from the stored row, both are refused as the owner's words, and the row does not move. CA8: a transaction group (item 0 pins the owner's message and defines a variable from its ConversationID; item 1 is the grantee's own new message using that variable on its ConversationID) is refused because a person's conversation message cannot take its values from a transaction variable; nothing is written and the pin does not land. CA9: the grantee posting with Role 'user' (lower case) and the owner's UserID is refused as posting as someone else, and no row exists. CA10: the grantee creates a conversation of their own and tries to move the owner's message into it; the move is refused and the message stays in the shared conversation. Every check is mutation-gated (RUN_MUTATION_TESTS); teardown deletes every message in the fixture conversation and in the grantee's own conversation, the grant, both conversations and the minted keys. Needs MJAPI + MJ_API_KEY and the seeded it-authorship-* users.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "In a shared conversation a person can post only as themselves, only a message's author can change it, and only its author or the conversation's owner can delete it; the owner's own messages behave as before."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "conversation-authorship-client"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "602F4A9F-3C9B-423C-99E7-F717078271BA"
+  }
+}
