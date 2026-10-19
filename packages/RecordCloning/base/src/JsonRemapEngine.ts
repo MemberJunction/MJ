@@ -41,6 +41,9 @@ export function GenerateUUID(): string {
     return Uuidv4();
 }
 
+/** A dashboard part at each nesting depth Golden Layout uses under `layout.root` (rows, columns and stacks). */
+const GOLDEN_LAYOUT_PART_PATHS = [1, 2, 3, 4].map((depth) => `layout.root${'.content[*]'.repeat(depth)}`);
+
 /**
  * Built-in presets for common MemberJunction JSON columns.
  */
@@ -52,6 +55,11 @@ export const JSON_REMAP_PRESETS: Record<string, JsonRemapRule[]> = {
         { Path: 'content[*].componentState.config.queryId', Mode: 'remap', OnMissing: 'reuse' },
         { Path: 'content[*].content[*].componentState.config.viewId', Mode: 'remap', OnMissing: 'reuse' },
         { Path: 'content[*].content[*].componentState.config.queryId', Mode: 'remap', OnMissing: 'reuse' },
+        // The Golden Layout format (`layout.root`, panels nested in rows, columns and stacks): each part's
+        // artifact, view or query, remapped when it was copied in the same clone and kept otherwise.
+        ...GOLDEN_LAYOUT_PART_PATHS.flatMap((part) =>
+            ['artifactId', 'viewId', 'queryId'].map((id): JsonRemapRule => ({ Path: `${part}.componentState.config.${id}`, Mode: 'remap', OnMissing: 'reuse' }))
+        ),
     ],
     'scheduled-job-configuration': [
         { Path: 'ConversationID', Mode: 'null' },
@@ -146,7 +154,9 @@ export function ApplyJsonRemap(
 
     let dropCount = 0;
     const pathsModified = new Set<string>();
-    const keyMap = options.KeyMap || {};
+    // Keys compare ignoring case: SQL Server returns UUIDs upper-case, while JSON written by a client
+    // often holds them lower-case (see guides/UUID_COMPARISON_GUIDE.md). Exact matches still win.
+    const keyMap = WithCaseInsensitiveKeys(options.KeyMap || {});
     const globalCleanEmpty = options.CleanEmptyContainers ?? true;
 
     for (const rule of rules) {
@@ -246,7 +256,9 @@ export function ApplyJsonRemap(
             return { modified: false, dropped: false };
         };
 
-        processSegments(data, 0, '$');
+        // A path starting with '[*]' walks a top-level array (a JSON column holding a list, such as
+        // pinned items). Wrapping it under the empty name lets the walker treat it like any other array.
+        processSegments(Array.isArray(data) && segments[0] === '[*]' ? { '': data } : data, 0, '$');
     }
 
     const outputJson = JSON.stringify(data);
@@ -258,6 +270,16 @@ export function ApplyJsonRemap(
         PathsModified: Array.from(pathsModified),
         Blocked: false,
     };
+}
+
+/** The key map plus a lower-cased copy of every key, so a lookup can fall back to case-insensitive. */
+function WithCaseInsensitiveKeys(keyMap: Record<string, string>): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(keyMap)) {
+        const lower = k.toLowerCase();
+        if (!(lower in out)) out[lower] = v;
+    }
+    return Object.assign(out, keyMap);
 }
 
 function evaluateTerminal(
@@ -289,6 +311,7 @@ function evaluateTerminal(
             // of another entity (integer keys repeat across tables).
             const key = rule.TargetEntityName ? `${rule.TargetEntityName}::${val}` : val;
             if (key in keyMap) return { action: 'update', newValue: keyMap[key] };
+            if (key.toLowerCase() in keyMap) return { action: 'update', newValue: keyMap[key.toLowerCase()] };
         }
         if (rule.OnMissing === 'drop') {
             return { action: 'drop' };

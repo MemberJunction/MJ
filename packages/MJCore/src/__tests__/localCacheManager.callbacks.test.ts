@@ -153,6 +153,17 @@ describe('LocalCacheManager Cache Change Callbacks', () => {
             expect(cb2).toHaveBeenCalledOnce();
         });
 
+        it('should not notify RunView callbacks when a different category is cleared', () => {
+            const cb = vi.fn();
+            cacheManager.RegisterChangeCallback('fp1', cb);
+
+            for (const category of ['Metadata', 'DatasetCache', 'RunQueryCache']) {
+                cacheManager.DispatchCacheChange(createEvent({ CacheKey: category, Category: category, Action: 'category_cleared' }));
+            }
+
+            expect(cb).not.toHaveBeenCalled();
+        });
+
         it('should catch and log errors in individual callbacks without blocking others', () => {
             const errorCb = vi.fn().mockImplementation(() => {
                 throw new Error('Callback exploded');

@@ -38,3 +38,4 @@ export {
     RegisterResourceSharedNotificationHandler,
     CreateResourceSharedHandler, createResourceSharedHandler
 } from './shareNotificationHandler';
+export * from './scoped-notification-config-resolver';

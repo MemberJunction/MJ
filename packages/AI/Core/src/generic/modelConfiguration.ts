@@ -25,8 +25,10 @@
  * **Lockstep contract**: these interfaces mirror
  * `metadata/entities/JSONType-interfaces/IAIConfiguration.ts`, which is pushed into
  * `EntityField.JSONTypeDefinition` and drives the CodeGen-generated `ModelConfigurationObject` /
- * `PromptConfigurationObject` accessors on the five entities. Keep the two in step when adding a section
- * or property — the same pact `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ * `PromptConfigurationObject` / `ConfigurationObject` accessors on the six entities. Keep the two in
+ * step when adding a section or property — the same pact `IAgentSettings` follows with
+ * `@memberjunction/ai-core-plus`. The JSONType source carries its own copy of the track types this
+ * file imports from `realtimeTracks.ts`. `modelConfiguration.test.ts` fails when the two differ.
  *
  * **Boundary rule** (also documented on the metadata interface): anything the engine filters,
  * sorts, or joins on stays a COLUMN (`PowerRank`, `IsActive`, `Priority`, `Status` — SQL cannot
@@ -99,6 +101,12 @@ export type RealtimeTurnCoverage = 'audioActivityOnly' | 'audioActivityAndAllVid
 export type RealtimeReasoningPlane = 'local' | 'remote';
 
 /**
+ * A reasoning effort in MJ's neutral vocabulary. Each provider profile maps the values its model
+ * accepts (Gemini: `low` / `medium` / `high` on Extended Thinking) and warns on the rest.
+ */
+export type RealtimeReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+/**
  * Configuration for remote reasoning delegation.
  */
 export interface RealtimeRemoteReasoning {
@@ -107,7 +115,7 @@ export interface RealtimeRemoteReasoning {
     /** 'gpt-5.6-terra' | 'anthropic/claude-sonnet-4-6' | 'MJ Realtime Co-Agent'. */
     Ref?: string;
     /** Reasoning effort level for supported models. */
-    Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+    Effort?: RealtimeReasoningEffort;
     /** Maximum output tokens for the remote reasoning pass. */
     MaxOutputTokens?: number;
 }
@@ -122,6 +130,14 @@ export interface RealtimeReasoningSettings {
     Remote?: RealtimeRemoteReasoning;
 
     /**
+     * How hard the model itself reasons (Gemini `thinkingConfig.thinkingLevel`), as the catalog
+     * seeds it for Gemini 3.8 Live Extended Thinking. A profile that cannot honour the value logs a
+     * warning and uses its own default; the Gemini driver reads `Remote.Effort` first when both are
+     * set.
+     */
+    Level?: RealtimeReasoningEffort;
+
+    /**
      * Ask the model to emit human-readable summaries of its own reasoning as it works
      * (Gemini `thinkingConfig.includeThoughts`).
      *
@@ -130,6 +146,46 @@ export interface RealtimeReasoningSettings {
      * off; a profile with no mapping ignores it.
      */
     IncludeThoughtSummaries?: boolean;
+}
+
+/**
+ * One price for a quantity a realtime session produces, in one currency. It applies only when all
+ * three fields are set; a partial price, or a unit or currency the reader does not handle, counts
+ * as no price.
+ *
+ * Mirrors the JSONType source member for member, including the `| null`s, so a CodeGen-generated
+ * copy assigns into this type.
+ */
+export interface RealtimeUnitPrice {
+    /** The amount charged per {@link RealtimeUnitPrice.Unit}. Never negative. */
+    Price?: number | null;
+    /**
+     * The billing unit, named as in `MJ: AI Model Price Unit Types`. `'Per Minute'`: one minute.
+     * `'Per 1M Tokens'`: one million tokens.
+     */
+    Unit?: 'Per Minute' | 'Per 1M Tokens' | null;
+    /** ISO 4217 currency code, uppercase (e.g. `USD`), as on `MJ: AI Model Costs`. */
+    Currency?: string | null;
+}
+
+/**
+ * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own; the cost rows stay the authority for token prices. A price belongs to the host that
+ * charges it, so set this on the model-vendor row: a price on the model or the model type would
+ * reach every vendor that serves the model.
+ */
+export interface RealtimePricingSettings {
+    /**
+     * The price of avatar video output, charged on top of the session's token cost. `'Per Minute'`
+     * prices the seconds of avatar video the model generates; `'Per 1M Tokens'` prices the output
+     * tokens the provider counts as video. Set the price and its unit together: the cascade merges
+     * per key, so a layer that sets only one of them keeps the other from the layer below.
+     *
+     * Gemini 3.8 Live on Vertex AI is seeded at Google's $1.00 per 1M avatar video output tokens.
+     * Google bills avatar video only while the avatar speaks, so a token price follows the bill; a
+     * per-minute price would also count the idle avatar between answers.
+     */
+    AvatarVideoOutput?: RealtimeUnitPrice | null;
 }
 
 /** The `Realtime` section — knobs the realtime drivers consume. */
@@ -146,6 +202,16 @@ export interface RealtimeConfigurationSettings {
      * Absent defaults to 'local'.
      */
     Reasoning?: RealtimeReasoningSettings;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
 
     /** Tool-execution semantics this model permits. Absent = the profile's own defaults. */
     Tooling?: RealtimeToolingSettings;
@@ -174,6 +240,12 @@ export interface RealtimeConfigurationSettings {
      * work at the wrong moment; those models report `'interactionStatus'` instead.
      */
     IdleSignal?: RealtimeIdleSignal;
+
+    /**
+     * Prices for output the token cost rows do not cover, such as avatar video. Set it on the
+     * model-vendor row.
+     */
+    Pricing?: RealtimePricingSettings | null;
 }
 
 /**
@@ -275,6 +347,13 @@ export interface LLMConfigurationSettings {
     NativeToolResults?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this model accepts a forced tool choice — a named tool or
+     * `'required'`. Absent means it does. When `false`, the prompt runner sends `'auto'` in place of a
+     * forced choice, and the agent's prompt is what steers the model to the tool.
+     */
+    SupportsForcedToolChoice?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI). Per-iteration framework state must then be appended, never
@@ -325,6 +404,23 @@ export interface DecisionConfigurationSettings {
 }
 
 /**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
+}
+
+/**
  * The per-modality bag common to every AI configuration column. Sections are optional and
  * per-modality so one row can configure everything the thing it describes does.
  */
@@ -339,6 +435,8 @@ export interface AIConfigurationSections {
     Audio?: AudioConfigurationSettings | null;
     /** Typed-decision limits. Honored at the catalog layers. */
     Decision?: DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -466,6 +564,16 @@ function mergeInto(target: JSONObject, source: JSONObject): void {
 }
 
 /**
+ * Whether an effective model configuration declares the model is served under zero data retention
+ * (`Privacy.ZeroDataRetention === true`). Absent, `null` and `false` all read as "not declared". Read
+ * it through {@link ResolveEffectiveModelConfiguration} (or `AIEngineBase.GetEffectiveModelConfiguration`)
+ * so the most specific layer's answer wins.
+ */
+export function IsZeroDataRetention(config: AIModelConfiguration | null | undefined): boolean {
+    return config?.Privacy?.ZeroDataRetention === true;
+}
+
+/**
  * Whether an effective model configuration declares a byte-prefix prompt cache
  * (`LLM.PrefixPromptCache === true`). Absent, `null` or `false` all mean a block cache. Read through
  * {@link ResolveEffectiveModelConfiguration} (or `AIEngineBase.GetEffectiveModelConfiguration`) so
@@ -474,3 +582,31 @@ function mergeInto(target: JSONObject, source: JSONObject): void {
 export function IsPrefixPromptCache(config: AIModelConfiguration | null | undefined): boolean {
     return config?.LLM?.PrefixPromptCache === true;
 }
+
+/**
+ * Resolves whether a realtime model/session is full-duplex.
+ *
+ * Resolution order:
+ * 1. The cascaded metadata value (`modelConfig.Realtime.FullDuplex`) if explicitly set (boolean).
+ * 2. Otherwise falls back to the driver capability (`driverCapabilities?.FullDuplex === true`).
+ *
+ * @param modelConfig The effective model configuration (or raw Realtime configuration section).
+ * @param driverCapabilities Optional capabilities declared by the realtime session/driver.
+ * @returns Whether full-duplex mode is active for this model/session.
+ */
+export function ResolveIsModelFullDuplex(
+    modelConfig?: { Realtime?: { FullDuplex?: boolean | null } | null } | { FullDuplex?: boolean | null } | null,
+    driverCapabilities?: { FullDuplex?: boolean | null } | boolean | null
+): boolean {
+    if (modelConfig) {
+        const realtime = 'Realtime' in modelConfig ? modelConfig.Realtime : (modelConfig as { FullDuplex?: boolean | null });
+        if (typeof realtime?.FullDuplex === 'boolean') {
+            return realtime.FullDuplex;
+        }
+    }
+    if (typeof driverCapabilities === 'boolean') {
+        return driverCapabilities;
+    }
+    return driverCapabilities?.FullDuplex === true;
+}
+

@@ -115,7 +115,6 @@ vi.mock('@memberjunction/core-entities', () => ({
             Config: vi.fn().mockResolvedValue(undefined),
             GetEntityDocumentsForEntity: mocks.GetEntityDocumentsForEntity,
             GetEntityDocumentByID: mocks.GetEntityDocumentByID,
-            GetVectorIndexByID: mocks.GetVectorIndexByID,
         },
     },
 }));
@@ -142,8 +141,17 @@ vi.mock('@memberjunction/ai-vectors', () => ({
 
 vi.mock('@memberjunction/ai-vector-sync', () => ({
     EntityDocumentTemplateParser: { CreateInstance: vi.fn() },
+    // Rendering's related-data step is covered by duplicateRecordDetectorTemplateText.test.ts;
+    // here each record renders its own values, as for a template with no Entity params.
+    EntityDocumentTemplateDataBuilder: class {
+        LoadRelatedData = vi.fn().mockResolvedValue([]);
+        MissingRelatedParams = vi.fn().mockReturnValue([]);
+        BuildTemplateData = vi.fn((_entity: unknown, record: Record<string, unknown>) => ({ ...record }));
+    },
     EntityVectorSyncer: class {},
     VectorizeEntityParams: class {},
+    // No record filter: the filter's own behavior is covered by duplicateRecordDetectorRecordFilter.test.ts.
+    GetEntityDocumentRecordFilter: vi.fn().mockReturnValue(null),
 }));
 
 vi.mock('@memberjunction/templates', () => ({
@@ -165,6 +173,9 @@ vi.mock('@memberjunction/aiengine', () => ({
                 { ID: 'prompt-decision', Name: 'Default Decision' },
                 { ID: 'prompt-reasoning', Name: 'Duplicate Resolution' },
             ],
+            GetVectorIndexByID: mocks.GetVectorIndexByID,
+            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+            GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
         },
     },
 }));

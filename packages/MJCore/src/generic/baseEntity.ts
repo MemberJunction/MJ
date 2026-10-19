@@ -1,4 +1,4 @@
-import { ClassFactory, ClassRegistration, DeserializeValidationErrors, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager, ComputeContentHashAsync } from '@memberjunction/global';
+import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager, ComputeContentHashAsync } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
@@ -16,6 +16,7 @@ import { COMPANION_PAYLOAD_KEY, EntityCompanion, EntityCompanionDeserializeMode,
 import { EmbeddedRecord, type EmbeddedRecordOptions } from './embeddedRecord';
 import { EntitySavePlan, ExecuteEntitySavePlan } from './entitySavePlan';
 import { EntityTransactionScope } from './entityTransactionScope';
+import { JSONFieldBinding, JSONFieldRuleSet, JSONFieldSeverity, ValidateJSONFieldValue } from './jsonFieldBinding';
 import { BaseRemotableOperation } from './baseRemotableOperation';
 import {
     SAVE_ENTITY_GRAPH_OPERATION_KEY,
@@ -269,7 +270,7 @@ export class EntityField {
             return false
         else {
             const oldNull = this._oldValue === null || this.OldValue === undefined || Number.isNaN(this.OldValue); // check for NaN because sometimes we have old values that are NaN and we need to account for that
-            const curNull = this.Value === null || this.Value === undefined || Number.isNaN(this.OldValue);
+            const curNull = this.Value === null || this.Value === undefined || Number.isNaN(this.Value);
             if (oldNull && curNull)
                 return false; // BOTH are null or undefined, not dirty
             else {
@@ -285,9 +286,10 @@ export class EntityField {
                     newCompare = this.Value.getTime();
                 }
 
+                const tsType = this._entityFieldInfo.TSType;
+
                 // Special handling for bit/Boolean types - treat truthy values as equivalent
-                if (this._entityFieldInfo.TSType === EntityFieldTSType.Boolean || 
-                    this._entityFieldInfo.Type.toLowerCase() === 'bit') {
+                if (tsType === EntityFieldTSType.Boolean) {
                     // Convert both values to boolean for comparison
                     const oldBool = this.convertToBoolean(oldCompare);
                     const newBool = this.convertToBoolean(newCompare);
@@ -295,7 +297,7 @@ export class EntityField {
                 }
 
                 // Special handling for numeric types - treat numeric strings that convert to same value as equivalent
-                if (this._entityFieldInfo.TSType === EntityFieldTSType.Number || this.isNumericType(this._entityFieldInfo.Type)) {
+                if (tsType === EntityFieldTSType.Number) {
                     const oldNum = this.convertToNumber(oldCompare);
                     const newNum = this.convertToNumber(newCompare);
                     
@@ -312,7 +314,7 @@ export class EntityField {
                 }
 
                 // for string types where the comparisons are not both strings
-                if (this._entityFieldInfo.TSType === EntityFieldTSType.String) {
+                if (tsType === EntityFieldTSType.String) {
                     if (typeof oldCompare === 'object') {
                         // need to convert the object to a string for comparison
                         oldCompare = JSON.stringify(oldCompare);
@@ -435,6 +437,9 @@ export class EntityField {
                 result.Success = false;
                 result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} cannot be longer than ${ef.MaxLength} characters. Current value is ${this.Value.length} characters`, this.Value));
             }
+            if (ef.IsBinaryFieldType && this.Value !== null && this.Value !== undefined) {
+                this.validateBinaryValue(ef, result);
+            }
             if (ef.TSType == EntityFieldTSType.Date && (this.Value !== null && this.Value !== undefined && !(this.Value instanceof Date)) ) {
                 // invalid non-null date, but that is okay if we are a new record and we have a default value
                 result.Success = false;
@@ -502,6 +507,27 @@ export class EntityField {
     }
 
 
+    /**
+     * Validates a non-null binary field value. A binary field (`varbinary` / `bytea`) holds a base64
+     * string in a `BaseEntity`, and the database providers decode it when the record is saved, so a
+     * value that is not base64 — a data URI, raw text, a byte array — would fail the save with a
+     * database error that names no field. Catching it here reports it against the field instead.
+     * A fixed-size column (`varbinary(n)` / `binary(n)`) also has its decoded byte length checked.
+     */
+    private validateBinaryValue(ef: EntityFieldInfo, result: ValidationResult): void {
+        const value: unknown = this.Value;
+        if (typeof value !== 'string' || !IsValidBase64(value)) {
+            result.Success = false;
+            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} is a binary field; its value must be a base64-encoded string`, this.Value));
+            return;
+        }
+        const byteLength = Base64DecodedByteLength(value);
+        if (ef.MaxByteLength > 0 && byteLength > ef.MaxByteLength) {
+            result.Success = false;
+            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} cannot be longer than ${ef.MaxByteLength} bytes. Current value is ${byteLength} bytes`, this.Value));
+        }
+    }
+
     constructor(fieldInfo: EntityFieldInfo, Value?: any) {
         // NOTE: constructing an EntityField for a deprecated/disabled field is always allowed — the
         // column is physically part of the entity and the instance must exist. Active-status is
@@ -512,92 +538,19 @@ export class EntityField {
             this.Value = Value;
         }
         else if (fieldInfo.DefaultValue) {
-            if (fieldInfo.TSType === EntityFieldTSType.Boolean) {
-                // special handling for booleans as we don't want a string passed into a boolean field, we want a true boolean
-                if (typeof fieldInfo.DefaultValue === "string" && fieldInfo.DefaultValue.trim() === "1" || fieldInfo.DefaultValue.trim().toLowerCase() === "true")
-                    this.Value = true;
-                else
-                    this.Value = false;
-            }
-            else if (fieldInfo.TSType === EntityFieldTSType.Number) {
-                // special handling for numbers as we don't want a string passed into a value for a numeric field
-                if (!isNaN(Number(fieldInfo.DefaultValue))) {
-                    this.Value = Number(fieldInfo.DefaultValue);
-                }
-                else if (fieldInfo.DefaultValue.trim().toLowerCase() === "null") {
-                    this.Value = null;
-                }
-            }
-            else if (fieldInfo.IsUniqueIdentifier) {
-                // special handling for GUIDs (SQL Server `uniqueidentifier` / PostgreSQL `uuid`),
-                // we don't want to populate anything here because the server always sets the value, leave blank
-                this.Value = null;
-            }
-            else if (fieldInfo.TSType === EntityFieldTSType.Date) {
-                if (fieldInfo.DefaultValue.trim().length > 0) {
-                    // special handling for dates as we don't want to use getdate() type defaults as is, we want to convert them to a JS Date object
-                    try {
-                        // attempt to convert the default value to a date
-                        const temp = new Date(fieldInfo.DefaultValue);
-                        // if we get here, that means it worked, but we could have an invalid date, so check for that
-                        if (isNaN(temp.getTime())) {
-                            // this is an invalid date, so throw an error
-                            throw new Error(); // blank error because we just end up going to the catch block anyway and in there we have logic to handle this properly
-                        }
-                        else
-                            this.Value = temp;
-                    }
-                    catch (e) {
-                        // if we get here, that means the default value is not a valid date, so we need to check to see if it's a SQL current date function
-                        if (EntityFieldInfo.IsDefaultValueSQLCurrentDateFunction(fieldInfo.DefaultValue)) {
-                            // we have a SQL current date function default, leave the field alone if its a special date field as the server (i.e. database) will handle
-                            //setting the value, otherwise set the value to the current date
-                            if(fieldInfo.IsSpecialDateField){
-                                this.Value = null;
-                            }
-                            else {
-                                this.Value = new Date();
-                            }
-                        }
-                        else {
-                            // we have a default value that is not a valid date and not a getdate() type default, so we need to throw an error
-                            throw new Error(`Invalid default value for ${fieldInfo.Entity}.${fieldInfo.Name} of ${fieldInfo.DefaultValue}. Default values for date fields must be a valid date or a getdate() type default`);
-                        }
-                    }
-                }
-            }
-            else {
-                // For strings: strip PostgreSQL's typed-literal wrapper.
-                //
-                // PG's pg_get_expr() (used by vwSQLColumnsAndEntityFields →
-                // EntityField.DefaultValue) renders a string default like:
-                //   'Single'::character varying
-                //   'pending'::text
-                // SQL Server stores the same default as just `'Single'` or
-                // `'pending'`. If we set the field value to the raw PG form,
-                // the value is `'Single'::character varying` (27 chars), and
-                // a MaxLength=20 constraint immediately fails validation —
-                // even though the actual content is `Single` (6 chars).
-                //
-                // Unwrap a leading single-quoted string followed by a `::type`
-                // suffix. Function-call defaults (`nextval('...')`,
-                // `now() AT TIME ZONE 'UTC'`) deliberately don't match this
-                // shape and are left untouched — the database evaluates them
-                // server-side at INSERT time.
-                const dv = fieldInfo.DefaultValue.trim();
-                const pgTypedLiteral = /^'((?:[^']|'')*)'::[A-Za-z][\w "()\[\],]*$/;
-                const m = dv.match(pgTypedLiteral);
-                if (m) {
-                    // Replace the SQL-escaped doubled quotes back to a single quote.
-                    this.Value = m[1].replace(/''/g, "'");
-                } else {
-                    this.Value = fieldInfo.DefaultValue;
-                }
+            const parsed = typeof fieldInfo.GetParsedDefaultValue === 'function'
+                ? fieldInfo.GetParsedDefaultValue()
+                : EntityFieldInfo.ParseDefaultValue(fieldInfo);
+            if (parsed.isCurrentDateFunction) {
+                this.Value = new Date();
+            } else if (parsed.hasValue) {
+                this.Value = parsed.value instanceof Date ? new Date(parsed.value.getTime()) : parsed.value;
             }
             this._neverSet = true; // set this back to true because we are setting the default value and we want to be able to set this ONCE from BaseEntity when we load
         }
         else {
-            this.Value = null; // we need to set the value to null instead of being undefined as the value is defined, it is NULL
+            this._value = null; // we need to set the value to null instead of being undefined as the value is defined, it is NULL
+            this._oldValue = null;
             this._neverSet = true; // set this back to true because we are setting the value to null;
         }
     }
@@ -1230,7 +1183,7 @@ export abstract class BaseEntity<T = unknown> {
      * remote-invalidate). Exposed publicly via `Event$` so engines and UI components can react
      * to entity lifecycle events.
      */
-    private _eventSubject: Subject<BaseEntityEvent>;
+    private _eventSubject: Subject<BaseEntityEvent> | null = null;
 
     /**
      * Bounded ring of `BaseEntityResult` objects from each Save/Delete attempt. The most
@@ -1484,7 +1437,6 @@ export abstract class BaseEntity<T = unknown> {
     get ISAParentEntity(): BaseEntity | null { return this._parentEntity; }
 
     constructor(Entity: EntityInfo, Provider: IEntityDataProvider | null = null) {
-        this._eventSubject = new Subject<BaseEntityEvent>();
         this._entityInfo = Entity;
         EntityInfo.AssertEntityActiveStatus(Entity, 'BaseEntity::constructor');
         this._provider = Provider;
@@ -2085,7 +2037,26 @@ export abstract class BaseEntity<T = unknown> {
         return e instanceof Error ? e.message : String(e);
     }
 
-    private static _subtypeLookupCache = new Map<string, BaseEntity | null>();
+    /**
+     * The create path's SubtypeSelector lookup memo, partitioned by the provider that ran the lookup. A memo
+     * shared across providers would hand provider B a row loaded through provider A (another connection,
+     * another user's context) or a `null` miss recorded against A's database. Keyed weakly so a
+     * request-scoped provider's memo is collected with it.
+     */
+    private static _subtypeLookupCache = new WeakMap<object, Map<string, BaseEntity | null>>();
+
+    /** Partition key for lookups made by an entity that has no provider at all. */
+    private static readonly _noProviderSubtypeKey: object = {};
+
+    private static subtypeLookupCacheFor(provider: object | null | undefined): Map<string, BaseEntity | null> {
+        const partitionKey = provider ?? BaseEntity._noProviderSubtypeKey;
+        let cache = BaseEntity._subtypeLookupCache.get(partitionKey);
+        if (!cache) {
+            cache = new Map<string, BaseEntity | null>();
+            BaseEntity._subtypeLookupCache.set(partitionKey, cache);
+        }
+        return cache;
+    }
 
     /** Per entity (lowercased name): the resolver asked for load hints, decided once per registration. */
     private static _subtypeLoadHintResolvers = new Map<string, SubtypeLoadHintResolverEntry>();
@@ -2100,7 +2071,7 @@ export abstract class BaseEntity<T = unknown> {
      * reported again.
      */
     public static ClearSubtypeLookupCache(): void {
-        BaseEntity._subtypeLookupCache.clear();
+        BaseEntity._subtypeLookupCache = new WeakMap();
         BaseEntity._subtypeLoadHintResolvers.clear();
         BaseEntity._engineCachedRowIndexes = new WeakMap();
         BaseEntity._loggedSubtypeLoadHintMessages.clear();
@@ -2382,28 +2353,29 @@ export abstract class BaseEntity<T = unknown> {
 
     private async getSubtypePathTargetEntity(entityName: string, pkValue: unknown): Promise<BaseEntity | null> {
         const cacheKey = `${entityName.trim().toLowerCase()}|${String(pkValue).trim().toLowerCase()}`;
-        if (BaseEntity._subtypeLookupCache.has(cacheKey)) {
-            return BaseEntity._subtypeLookupCache.get(cacheKey) ?? null;
+        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const lookupCache = BaseEntity.subtypeLookupCacheFor(provider);
+        if (lookupCache.has(cacheKey)) {
+            return lookupCache.get(cacheKey) ?? null;
         }
 
         // 1. Check BaseEngineRegistry for loaded cached entities
         const cached = BaseEntity.findSubtypePathTargetInEngineCache(entityName, pkValue);
         if (cached) {
-            BaseEntity._subtypeLookupCache.set(cacheKey, cached);
+            lookupCache.set(cacheKey, cached);
             return cached;
         }
 
         // 2. Fall back to loading via provider
-        const provider = this.ProviderToUse as unknown as IMetadataProvider;
         if (!provider?.GetEntityObject) {
-            BaseEntity._subtypeLookupCache.set(cacheKey, null);
+            lookupCache.set(cacheKey, null);
             return null;
         }
 
         try {
             const targetObj = await provider.GetEntityObject<BaseEntity>(entityName, this._contextCurrentUser);
             if (!targetObj) {
-                BaseEntity._subtypeLookupCache.set(cacheKey, null);
+                lookupCache.set(cacheKey, null);
                 return null;
             }
 
@@ -2418,14 +2390,14 @@ export abstract class BaseEntity<T = unknown> {
 
             const loaded = await targetObj.InnerLoad(key);
             if (loaded) {
-                BaseEntity._subtypeLookupCache.set(cacheKey, targetObj);
+                lookupCache.set(cacheKey, targetObj);
                 return targetObj;
             }
         } catch {
             // On load failure, return null
         }
 
-        BaseEntity._subtypeLookupCache.set(cacheKey, null);
+        lookupCache.set(cacheKey, null);
         return null;
     }
 
@@ -2643,6 +2615,7 @@ export abstract class BaseEntity<T = unknown> {
         // Reset this entity to pristine state: clears _compositeKey, _recordLoaded,
         // _everSaved, and recreates all EntityField instances with _NeverSet = true
         this.init();
+        this.discardJSONFieldObjects();
 
         // Recursively hydrate parent entities first (deepest ancestor resets first).
         // After init(), parent fields have fresh _NeverSet=true, so SetMany can set PKs.
@@ -3642,6 +3615,9 @@ export abstract class BaseEntity<T = unknown> {
      * @returns
      */
     public RegisterEventHandler(callback: (event: BaseEntityEvent) => void): Subscription {
+        if (!this._eventSubject) {
+            this._eventSubject = new Subject<BaseEntityEvent>();
+        }
         return this._eventSubject.asObservable().subscribe(callback);
     }
 
@@ -3667,6 +3643,9 @@ export abstract class BaseEntity<T = unknown> {
 
 
     private static _baseEventCode = 'BaseEntityEvent';
+    private static readonly _globalEventTypes: ReadonlySet<BaseEntityEvent["type"]> = new Set([
+        'save', 'delete', 'load_complete', 'save_started', 'delete_started', 'load_started'
+    ]);
     /**
      * When a BaseEntity class raises an event with MJGlobal, the eventCode property is set to this value. This is used to identify events that are raised by BaseEntity objects.
      * Any MJGlobal event that is raised by a BaseEntity class will use a BaseEntityEvent type as the args parameter
@@ -3690,12 +3669,11 @@ export abstract class BaseEntity<T = unknown> {
 
         // this is the local event handler that is specific to THIS instance of the entity object
         LogDebug(`BaseEntity.RaiseEvent() - ${type === 'save' ? 'save:' + saveSubType : type} event raised for ${this.EntityInfo.Name}, about to call this._eventSubject.next()`);
-        this._eventSubject.next({type: type, payload: payload, saveSubType: saveSubType, baseEntity: this, provider});
+        this._eventSubject?.next({type: type, payload: payload, saveSubType: saveSubType, baseEntity: this, provider});
 
         // this next call is to MJGlobal to let everyone who cares knows that we had an event on an entity object
         // we broadcast save/delete/load events and their _started counterparts
-        const globalEventTypes: BaseEntityEvent["type"][] = ['save', 'delete', 'load_complete', 'save_started', 'delete_started', 'load_started'];
-        if (globalEventTypes.includes(type)) {
+        if (BaseEntity._globalEventTypes.has(type)) {
             const event = new BaseEntityEvent();
             event.baseEntity = this;
             event.payload = payload;
@@ -3905,6 +3883,11 @@ export abstract class BaseEntity<T = unknown> {
         // Lookup needs an EntityField instance to return — hydrate.
         this.hydrateFieldsIfNeeded();
 
+        if (this._entityInfo && typeof this._entityInfo.FieldIndexByName === 'function' && this._fields.length === this._entityInfo.Fields.length && this._fieldCache === null) {
+            const idx = this._entityInfo.FieldIndexByName(fieldName);
+            return idx >= 0 ? (this._fields[idx] ?? null) : null;
+        }
+
         const lcase = fieldName.trim().toLowerCase(); // do this once as we will use it multiple times
 
         if (this._fieldCache === null) {
@@ -3972,6 +3955,11 @@ export abstract class BaseEntity<T = unknown> {
 
         // Lookup needs an EntityField instance to return — hydrate.
         this.hydrateFieldsIfNeeded();
+
+        if (this._entityInfo && typeof this._entityInfo.FieldIndexByCodeName === 'function' && this._fields.length === this._entityInfo.Fields.length && this._codeNameCache === null) {
+            const idx = this._entityInfo.FieldIndexByCodeName(codeName);
+            return idx >= 0 ? (this._fields[idx] ?? null) : null;
+        }
 
         const lcase = codeName.trim().toLowerCase();
 
@@ -4145,35 +4133,42 @@ export abstract class BaseEntity<T = unknown> {
     private setLocal(FieldName: string, Value: any) {
         const field = this.GetFieldByName(FieldName);
         if (field != null) {
-            if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof Value === 'string' || typeof Value === 'number') ) {
-                field.Value = new Date(Value);
-            }
-            else if (field.EntityFieldInfo.TSType === EntityFieldTSType.Number && typeof Value === 'string' && Value !== null && Value !== undefined) {
-                const numericValue = Number(Value);
-                if (!isNaN(numericValue)) {
-                    field.Value = numericValue;
-                } else {
-                    field.Value = Value;
-                }
-            }
-            else if (field.EntityFieldInfo.TSType === EntityFieldTSType.Boolean && Value !== null && Value !== undefined) {
-                if (typeof Value === 'string') {
-                    if (Value.trim() === '1' || Value.trim().toLowerCase() === 'true') {
-                        field.Value = true;
-                    } else if (Value.trim() === '0' || Value.trim().toLowerCase() === 'false') {
-                        field.Value = false;
-                    } else {
-                        field.Value = Value;
-                    }
-                } else if (typeof Value === 'number') {
-                    field.Value = Value !== 0;
-                } else {
-                    field.Value = Value;
-                }
-            }
-            else {
+            this.setFieldValue(field, Value);
+        }
+    }
+
+    private setFieldValue(field: EntityField, Value: any) {
+        const tsType = field.EntityFieldInfo.TSType;
+        if (tsType === EntityFieldTSType.Date && (typeof Value === 'string' || typeof Value === 'number')) {
+            field.Value = new Date(Value);
+        }
+        else if (tsType === EntityFieldTSType.Number && typeof Value === 'string' && Value !== null && Value !== undefined) {
+            const numericValue = Number(Value);
+            if (!isNaN(numericValue)) {
+                field.Value = numericValue;
+            } else {
                 field.Value = Value;
             }
+        }
+        else if (tsType === EntityFieldTSType.Boolean && Value !== null && Value !== undefined) {
+            if (typeof Value === 'string') {
+                const trimmed = Value.trim();
+                const lower = trimmed.toLowerCase();
+                if (trimmed === '1' || lower === 'true') {
+                    field.Value = true;
+                } else if (trimmed === '0' || lower === 'false') {
+                    field.Value = false;
+                } else {
+                    field.Value = Value;
+                }
+            } else if (typeof Value === 'number') {
+                field.Value = Value !== 0;
+            } else {
+                field.Value = Value;
+            }
+        }
+        else {
+            field.Value = Value;
         }
     }
 
@@ -4283,8 +4278,8 @@ export abstract class BaseEntity<T = unknown> {
                 if (checkStatus) {
                     EntityFieldInfo.AssertEntityFieldActiveStatus(field.EntityFieldInfo, 'BaseEntity.SetMany');
                 }
-                // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
-                this.setLocal(key, object[key]);
+                // Use setFieldValue directly so we don't repeat GetFieldByName(key)
+                this.setFieldValue(field, object[key]);
                 if (replaceOldValues) {
                     field.ResetOldValue();
                 }
@@ -4297,8 +4292,8 @@ export abstract class BaseEntity<T = unknown> {
                     if (checkStatus) {
                         EntityFieldInfo.AssertEntityFieldActiveStatus(field.EntityFieldInfo, 'BaseEntity.SetMany');
                     }
-                    // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
-                    this.setLocal(field.Name, object[key]);
+                    // Use setFieldValue directly so we don't repeat GetFieldByName(field.Name)
+                    this.setFieldValue(field, object[key]);
                     if (replaceOldValues) {
                         field.ResetOldValue();
                     }
@@ -4609,37 +4604,46 @@ export abstract class BaseEntity<T = unknown> {
 
         if (!this.EntityInfo) return;
 
-        // 1. Allocate one EntityField per column. Same construction the old `init()` used to do
-        //    up-front — we just deferred it.
-        for (const rawField of this.EntityInfo.Fields) {
-            const key = this.EntityInfo.Name + '.' + rawField.Name;
-            const newField = MJGlobal.Instance.ClassFactory.CreateInstance<EntityField>(EntityField, key, rawField);
-            this._fields.push(newField);
+        // 1. Allocate one EntityField per column. Check once whether any custom EntityField
+        //    subclasses are registered in ClassFactory; in standard deployments none are, so we
+        //    can instantiate EntityField directly without N string concatenations + factory lookups.
+        const hasCustomEntityFieldRegistrations =
+            MJGlobal.Instance.ClassFactory.GetAllRegistrations(EntityField).length > 0;
+        const entityFields = this.EntityInfo.Fields;
+        if (hasCustomEntityFieldRegistrations) {
+            const prefix = this.EntityInfo.Name + '.';
+            for (let i = 0; i < entityFields.length; i++) {
+                const rawField = entityFields[i];
+                const newField = MJGlobal.Instance.ClassFactory.CreateInstance<EntityField>(
+                    EntityField,
+                    prefix + rawField.Name,
+                    rawField
+                );
+                this._fields.push(newField);
+            }
+        } else {
+            for (let i = 0; i < entityFields.length; i++) {
+                this._fields.push(new EntityField(entityFields[i]));
+            }
         }
 
-        // 2. If we have raw data from LoadFromData, populate Fields. The first set of each Field
-        //    runs through the EntityField setter with `_NeverSet=true`, which simultaneously sets
-        //    Value AND OldValue (so the field is not marked dirty). This matches the old
-        //    SetMany(replaceOldValues=true) semantics on initial load.
+        // 2. If we have raw data from LoadFromData, populate Fields and mark omitted fields as
+        //    NotLoaded in a single pass.
         if (this._raw) {
-            for (const field of this._fields) {
-                const value = this._raw[field.Name];
+            const raw = this._raw;
+            for (let i = 0; i < this._fields.length; i++) {
+                const field = this._fields[i];
+                const value = raw[field.Name];
                 if (value !== undefined) {
-                    // Populating fields from the loaded row writes EntityField.Value directly, which does
-                    // not assert active status — so a deprecated column still present in the table emits
-                    // no warning on load (hydration is not user use of the field). No suppression toggle
-                    // is needed now that the assertion lives at BaseEntity.Get/Set/SetMany.
-                    // Date conversion mirrors what SetLocal / Get does for raw string/number dates.
                     if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
                         field.Value = new Date(value);
                     } else {
                         field.Value = value;
                     }
+                } else if (raw[field.CodeName] === undefined) {
+                    field.MarkNotLoaded();
                 }
             }
-            // _raw IS a hydration source (LoadFromData fast path) — fields whose key it omitted
-            // are not-loaded, not defaulted. See EntityField.NotLoaded.
-            this.markFieldsOmittedBySourceAsNotLoaded(this._raw);
             // Raw data has been promoted into Fields — release the reference so we don't carry
             // duplicate state. Fields hold their own copies, so a frozen source no longer
             // constrains anything from here on.
@@ -4717,6 +4721,7 @@ export abstract class BaseEntity<T = unknown> {
      */
     public NewRecord(newValues?: FieldValueCollection) : boolean {
         this.init();
+        this.discardJSONFieldObjects();
         this._everSaved = false; // Reset save state for new record
 
         // Clear child entity state — new records don't have children yet
@@ -4955,6 +4960,10 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Promise<boolean>
      */
     public async Save(options?: EntitySaveOptions): Promise<boolean> {
+        // JSONType safety net: pick up in-place edits made through un-proxied references BEFORE any
+        // dirty evaluation, plan building or SQL construction below reads the raw field values.
+        this.FlushJSONFieldObjects();
+
         // IS-A parent chain saves bypass the debounce to prevent deadlock:
         // Root.Save() → delegates to Leaf.Save() → Leaf saves parent chain →
         // calls Root.Save(IsParentEntitySave=true). Without this bypass, the second
@@ -5037,6 +5046,7 @@ export abstract class BaseEntity<T = unknown> {
         let part: UnitOfWorkPart | null = null;
 
         try {
+            this.FlushJSONFieldObjects(); // idempotent; covers graph-node saves that bypass Save()
             const initialDirtyState = this.Dirty; // save this because parent entity save cycle, if any, will clear their dirty flags
 
             const _options: EntitySaveOptions = options ? options : new EntitySaveOptions();
@@ -5234,7 +5244,7 @@ export abstract class BaseEntity<T = unknown> {
                         const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
                         if (!this.TransactionGroup) {
                             // no transaction group, so we have our results here
-                            const result = this.finalizeSave(data, saveSubType);
+                            const result = this.finalizeSave(data, saveSubType, _options);
 
                             // Settle the scope this entity opened, if any (only the initiator holds
                             // one). The provider can fail by RETURNING falsy data rather than
@@ -5257,7 +5267,7 @@ export abstract class BaseEntity<T = unknown> {
                             this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
                                 const transItem = success && results ? results.find(r => r.Transaction.BaseEntity === this) : undefined;
                                 if (transItem) {
-                                    this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
+                                    this.finalizeSave(transItem.Result, saveSubType, _options); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
                                 }
                                 else {
                                     // The transaction group failed / rolled back, OR (should never happen) reported success
@@ -5372,10 +5382,23 @@ export abstract class BaseEntity<T = unknown> {
     }
 
 
-    private finalizeSave(data: any, saveSubType: BaseEntityEvent["saveSubType"]): boolean {
+    private finalizeSave(
+        data: BaseEntity | Record<string, unknown> | null | undefined,
+        saveSubType: BaseEntityEvent["saveSubType"],
+        options?: EntitySaveOptions,
+    ): boolean {
         if (data) {
+            const effectiveReturnMode = options?.SaveReturnMode ?? this.EntityInfo.SaveReturnMode;
+            const hasGetAll = (val: BaseEntity | Record<string, unknown>): val is BaseEntity =>
+                val instanceof BaseEntity || typeof (val as { GetAll?: () => Record<string, unknown> }).GetAll === 'function';
+            const rawFieldData: Record<string, unknown> = hasGetAll(data) ? data.GetAll() : data;
+            // In 'datestamps_only' mode, the database only returned PK + __mj_CreatedAt / __mj_UpdatedAt.
+            // Merge those returned values onto the current in-memory values BEFORE init() wipes Fields,
+            // so caller-set fields remain loaded and intact without a post-save BaseView SELECT.
+            const fieldData: Record<string, unknown> = (effectiveReturnMode === 'datestamps_only' && typeof rawFieldData === 'object' && !Array.isArray(rawFieldData))
+                ? { ...(this.GetAll() as Record<string, unknown>), ...rawFieldData }
+                : rawFieldData;
             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
-            const fieldData = (data instanceof BaseEntity || (data && typeof data.GetAll === 'function')) ? data.GetAll() : data;
             // IS-A GetAll() merges the parent, including parent virtuals this entity
             // does not own (e.g. OrderHeader on Event Order Line). Keep only columns
             // this entity defines, and ignore anything leftover.
@@ -5415,7 +5438,8 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Caches the entity record name in the provider's EntityRecordNameCache for faster lookups.
+     * Offers the record's name to the provider for later synchronous lookups. Only a provider that
+     * serves a single user keeps it; see {@link IMetadataProvider.GetCachedRecordName}.
      * Called automatically after successful Load(), LoadFromData(), and Save() operations.
      */
     private cacheRecordName(): void {
@@ -5689,6 +5713,7 @@ export abstract class BaseEntity<T = unknown> {
      * @returns
      */
     public Revert(): boolean {
+        this.discardJSONFieldObjects(); // unconditional: an un-flushed edit through a stale reference must go too
         if (this.Dirty) {
             for (let field of this.Fields) {
                 field.Value = field.OldValue;
@@ -5731,6 +5756,7 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             const data = await this.readRowForLoad(CompositeKey, EntityRelationshipsToLoad);
+            this.discardJSONFieldObjects(); // a reload replaces the record's data
             if (!data) {
                 // A subtype-hint probe asks whether this row exists, so "no" is an answer, not an error
                 if (!this._subtypeHintProbe) {
@@ -5899,6 +5925,7 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Promise<boolean> - Returns true if the load was successful
      */
     public async LoadFromData(data: any, _replaceOldValues: boolean = false): Promise<boolean> {
+        this.discardJSONFieldObjects(); // the record's data is being replaced: parsed JSON objects are stale
         // IS-A: hydrate parent chain from data before populating self.
         // Hydrate resets each parent via init() (giving fresh _NeverSet=true on PK fields)
         // then populates from data, ensuring correct PK and saved state on parents.
@@ -6014,6 +6041,113 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Per-field live bindings for JSONType fields, created lazily by {@link GetJSONFieldObject}.
+     * Undefined until a generated `<Field>Object` accessor is first used, so entities without
+     * JSONType fields pay nothing.
+     */
+    private _jsonFieldBindings: Map<string, JSONFieldBinding> | undefined;
+
+    private getJSONFieldBinding(fieldName: string): JSONFieldBinding {
+        this._jsonFieldBindings ??= new Map<string, JSONFieldBinding>();
+        let binding = this._jsonFieldBindings.get(fieldName);
+        if (!binding) {
+            binding = new JSONFieldBinding(
+                fieldName,
+                () => this.Get(fieldName),
+                (raw) => this.Set(fieldName, raw),
+            );
+            this._jsonFieldBindings.set(fieldName, binding);
+        }
+        return binding;
+    }
+
+    /**
+     * Backs the generated typed `<Field>Object` accessor of a JSONType field. Returns a live view of
+     * the parsed JSON: assigning to it, or mutating it in place at any depth (`obj.a.b = 1`,
+     * `arr.push(x)`, `delete obj.k`), updates the raw field through {@link Set}, so the field becomes
+     * dirty and `Save()` persists the edit. Reading after the raw value changed by any other route
+     * (`Load`, `LoadFromData`, `Set`, revert) re-parses; references obtained earlier are then
+     * detached. Use `ToPlainJSON()` to clone/`structuredClone`/`postMessage` a value from here.
+     *
+     * @param fieldName - the JSON text field (its `EntityField.Name`)
+     * @returns the live object/array, a bare primitive for a primitive JSON root, or `null`
+     * @throws Error when the field holds text that is not valid JSON
+     */
+    protected GetJSONFieldObject<TObject>(fieldName: string): TObject | null {
+        return this.getJSONFieldBinding(fieldName).GetValue() as TObject | null;
+    }
+
+    /**
+     * Backs the generated setter of a `<Field>Object` accessor. `null`/`undefined` clears the field.
+     * A plain object/array is adopted, so later edits through the caller's own reference are still
+     * picked up before validation and save (see {@link FlushJSONFieldObjects}).
+     */
+    protected SetJSONFieldObject<TObject>(fieldName: string, value: TObject | null | undefined): void {
+        this.getJSONFieldBinding(fieldName).SetValue(value);
+    }
+
+    /**
+     * Safety net for JSONType accessors: re-serializes every materialized JSON object and writes any
+     * difference to its raw field. Catches an object that was assigned into the tree and then
+     * mutated through the caller's original (un-proxied) reference. Called automatically before
+     * `Validate()` and at the start of `Save()`; cheap because only fields whose object was actually
+     * read are visited.
+     */
+    protected FlushJSONFieldObjects(): void {
+        if (!this._jsonFieldBindings) {
+            return;
+        }
+        for (const binding of this._jsonFieldBindings.values()) {
+            binding.Flush();
+        }
+    }
+
+    /**
+     * Drops every materialized JSON object so the next accessor read re-parses from the raw field and
+     * all earlier references detach. Called wherever the record's data is replaced wholesale
+     * (`Revert`, `NewRecord`, `Hydrate`, `From`, a load) — NOT on the save round trip, so a reference
+     * held across `Save()` stays live.
+     */
+    private discardJSONFieldObjects(): void {
+        if (!this._jsonFieldBindings) {
+            return;
+        }
+        for (const binding of this._jsonFieldBindings.values()) {
+            binding.Invalidate();
+        }
+    }
+
+    /**
+     * Validates one JSONType field against its structural schema and `@CHECK` rules, appending any
+     * problems to `result`. Called from generated `Validate()` overrides for JSONTypes opted in with
+     * `@mjValidate`; the field is checked only when it is dirty or the record is new, so opting a type
+     * in never blocks unrelated edits to existing rows.
+     *
+     * Error `Source`s are dotted/indexed paths (`Configuration.Items[2].EndHour`). `severity` is
+     * `'Warning'` for `@mjValidate warn`: such errors are reported but do not fail the save.
+     *
+     * @param fieldName - the JSON text field
+     * @param schema - structural Zod schema for the whole field value (arrays included)
+     * @param rules - `@CHECK` rules and the type graph to find their scope, or null
+     * @param severity - severity the results are reported at
+     * @param result - the result object to add errors to
+     */
+    protected ValidateJSONField(
+        fieldName: string,
+        schema: z.ZodTypeAny,
+        rules: JSONFieldRuleSet | null,
+        severity: JSONFieldSeverity,
+        result: ValidationResult,
+    ): void {
+        // Flush FIRST: a field changed only through an un-proxied reference is not dirty until flushed.
+        this.FlushJSONFieldObjects();
+        if (this.IsSaved && !this.FieldIsDirty(fieldName)) {
+            return;
+        }
+        ValidateJSONFieldValue(fieldName, this.Get(fieldName), schema, rules, severity, this, result);
+    }
+
+    /**
      * This method is used automatically within Save() and is used to determine if the state of the object is valid relative to the validation rules that are defined in metadata. In addition, sub-classes can
      * override or wrap this base class method to add other logic for validation.
      * 
@@ -6029,6 +6163,9 @@ export abstract class BaseEntity<T = unknown> {
         }
         this._isValidating = true;
         try {
+            // Safety net for JSONType object accessors: an object mutated through the caller's own
+            // (un-proxied) reference must reach the raw field before that field is validated.
+            this.FlushJSONFieldObjects();
             const result = new ValidationResult();
             result.Success = true; // start off with assumption of success, if any field fails, we'll set this to false
 
@@ -6703,9 +6840,7 @@ export abstract class BaseEntity<T = unknown> {
         // field that reads like the record itself is broken.
         //
         // Returning null is the same answer callers already handle for "this entity has no name
-        // field", and every one of them degrades to the primary key. It also keeps a denied name
-        // OUT of the provider's record-name cache, which is keyed by entity + primary key and NOT
-        // by user — caching it would leak it to the next caller.
+        // field", and every one of them degrades to the primary key.
         if (!this.EntityInfo.IsFieldReadableByUser(f.Name, this.ActiveUser)) {
             return null;
         }
@@ -6744,6 +6879,7 @@ export abstract class BaseEntity<T = unknown> {
      */
     public From<K extends z.AnyZodObject>(data: unknown, schema?: z.infer<K>): boolean {
         this.init();
+        this.discardJSONFieldObjects();
         if(schema){
             const parseResult = schema.safeParse(data);
             if(parseResult.success){
@@ -6787,13 +6923,14 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Generates vector embeddings for multiple text fields by their field names.
      * Processes fields in parallel for better performance.
-     * @param fields - Array of field configurations specifying source text field, target vector field, and model ID field names
+     * @param fields - Array of field configurations specifying source text field, target vector field, model ID field
+     *   and, optionally, the binary companion of the vector field (see {@link GenerateEmbedding})
      * @returns Promise that resolves to true if all embeddings were generated successfully, false if any failed
      */
-    protected async GenerateEmbeddingsByFieldName(fields: Array<{fieldName: string, vectorFieldName: string, modelFieldName: string}>): Promise<boolean> {
+    protected async GenerateEmbeddingsByFieldName(fields: Array<{fieldName: string, vectorFieldName: string, modelFieldName: string, binaryVectorFieldName?: string}>): Promise<boolean> {
         const promises = [];
-        for (const {fieldName, vectorFieldName, modelFieldName} of fields) {
-            promises.push(this.GenerateEmbeddingByFieldName(fieldName, vectorFieldName, modelFieldName));
+        for (const {fieldName, vectorFieldName, modelFieldName, binaryVectorFieldName} of fields) {
+            promises.push(this.GenerateEmbeddingByFieldName(fieldName, vectorFieldName, modelFieldName, binaryVectorFieldName));
         }
         const results = await Promise.all(promises);
         return results.every(result => result === true);
@@ -6803,11 +6940,14 @@ export abstract class BaseEntity<T = unknown> {
      * Generates a vector embedding for a single text field identified by field name.
      * Retrieves the field objects and delegates to GenerateEmbedding method.
      * @param fieldName - Name of the text field to generate embedding from
-     * @param vectorFieldName - Name of the field to store the vector embedding
+     * @param vectorFieldName - Name of the field to store the vector embedding (JSON)
      * @param modelFieldName - Name of the field to store the model ID used for embedding
+     * @param binaryVectorFieldName - Optional name of the binary (varbinary/bytea) companion of `vectorFieldName`,
+     *   which receives the same vector as little-endian float32 bytes. Omit for entities without one.
      * @returns Promise that resolves to true if embedding was generated successfully, false otherwise
+     * @throws Error when a named field does not exist on the entity
      */
-    protected async GenerateEmbeddingByFieldName(fieldName: string, vectorFieldName: string, modelFieldName: string): Promise<boolean> {
+    protected async GenerateEmbeddingByFieldName(fieldName: string, vectorFieldName: string, modelFieldName: string, binaryVectorFieldName?: string): Promise<boolean> {
         const field = this.GetFieldByName(fieldName);
         const vectorField = this.GetFieldByName(vectorFieldName);
         const modelField = this.GetFieldByName(modelFieldName);
@@ -6817,20 +6957,27 @@ export abstract class BaseEntity<T = unknown> {
             throw new Error(`Vector field not found: ${vectorFieldName}`);
         if (modelFieldName?.trim().length > 0 && !modelField)
             throw new Error(`Model field not found: ${modelFieldName}`);
-        
-        return await this.GenerateEmbedding(field, vectorField, modelField);
+        let binaryVectorField: EntityField | undefined;
+        if (binaryVectorFieldName?.trim().length) {
+            binaryVectorField = this.GetFieldByName(binaryVectorFieldName);
+            if (!binaryVectorField)
+                throw new Error(`Binary vector field not found: ${binaryVectorFieldName}`);
+        }
+
+        return await this.GenerateEmbedding(field, vectorField, modelField, binaryVectorField);
     }
 
     /**
      * Generates vector embeddings for multiple text fields using EntityField objects.
      * Processes fields in parallel for better performance.
-     * @param fields - Array of field configurations with EntityField objects for source, vector, and model fields
+     * @param fields - Array of field configurations with EntityField objects for source, vector, model and
+     *   (optionally) binary vector fields
      * @returns Promise that resolves to true if all embeddings were generated successfully, false if any failed
      */
-    protected async GenerateEmbeddings(fields: Array<{field: EntityField, vectorField: EntityField, modelField: EntityField}>): Promise<boolean> {
+    protected async GenerateEmbeddings(fields: Array<{field: EntityField, vectorField: EntityField, modelField: EntityField, binaryVectorField?: EntityField}>): Promise<boolean> {
         const promises = [];
-        for (const {field, vectorField, modelField} of fields) {
-            promises.push(this.GenerateEmbedding(field, vectorField, modelField));
+        for (const {field, vectorField, modelField, binaryVectorField} of fields) {
+            promises.push(this.GenerateEmbedding(field, vectorField, modelField, binaryVectorField));
         }
         const results = await Promise.all(promises);
         return results.every(result => result === true);
@@ -6839,13 +6986,23 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Generates a vector embedding for a single text field using AI engine.
      * Only generates embeddings for new records or when the source field has changed.
-     * Stores both the vector embedding and the model ID used to generate it.
+     * Stores the vector embedding, the model ID used to generate it and, when the entity has one, the
+     * vector's binary companion.
+     *
+     * **Two persisted forms.** The JSON field holds the vector as a JSON number array. The optional
+     * binary field (`varbinary(MAX)` / `bytea`) holds the same vector as little-endian float32 bytes —
+     * set here as a base64 string via `Float32VectorToBase64`, which is how every binary field travels
+     * in MJ. Readers prefer the binary form because decoding it is a copy, not a JSON parse (see
+     * `ReadStoredVector` in `@memberjunction/ai-vectors-memory`). Both are written and cleared together
+     * so they never disagree.
+     *
      * @param field - The EntityField containing the text to embed
      * @param vectorField - The EntityField to store the generated vector embedding (as JSON string)
      * @param modelField - The EntityField to store the ID of the AI model used
+     * @param binaryVectorField - Optional EntityField to store the same vector as base64-encoded float32 bytes
      * @returns Promise that resolves to true if embedding was generated successfully, false otherwise
      */
-    protected async GenerateEmbedding(field: EntityField, vectorField: EntityField, modelField: EntityField): Promise<boolean> {
+    protected async GenerateEmbedding(field: EntityField, vectorField: EntityField, modelField: EntityField, binaryVectorField?: EntityField): Promise<boolean> {
         try {
             if (this._skipEmbeddings) return true;
             if (!this.IsSaved || field.Dirty) {
@@ -6854,23 +7011,27 @@ export abstract class BaseEntity<T = unknown> {
                     const e = await this.EmbedTextLocal(field.Value)
                     if (e && e.vector) {
                         vectorField.Value = JSON.stringify(e.vector);
+                        if (binaryVectorField)
+                            binaryVectorField.Value = Float32VectorToBase64(e.vector);
                         if (modelField)
                             modelField.Value = e.modelID;
                     }
                 }
                 else {
                     vectorField.Value = null;
+                    if (binaryVectorField)
+                        binaryVectorField.Value = null;
                     if (modelField)
                         modelField.Value = null;
                 }
-            }        
+            }
             return true;
         }
         catch (e) {
             console.error("Error generating embedding:", e);
             return false;
         }
-    }    
+    }
 
     /**
      * In the BaseEntity class this method is not implemented. This method shoudl be implemented only in 
@@ -6898,7 +7059,7 @@ export abstract class BaseEntity<T = unknown> {
      * however it is possible for the string in the map to be any unique key relative to the object so you could have vectors
      * that embed multiple fields if desired.
      */
-    private _vectors: Map<string, number[]> = new Map<string, number[]>();
+    private _vectors: Map<string, number[]> | null = null;
 
     /**
      * When true, GenerateEmbedding() returns immediately without computing vectors.
@@ -6915,6 +7076,9 @@ export abstract class BaseEntity<T = unknown> {
      * use this to track vectors associated with 
      */
     public get Vectors(): Map<string, number[]> {
+        if (!this._vectors) {
+            this._vectors = new Map<string, number[]>();
+        }
         return this._vectors;
     }
 
@@ -6922,7 +7086,7 @@ export abstract class BaseEntity<T = unknown> {
      * Resets the vector embeddings for this entity to an empty state.
      */
     public ResetVectors(): void {
-        this._vectors.clear();
+        this._vectors?.clear();
     }
 
     /**

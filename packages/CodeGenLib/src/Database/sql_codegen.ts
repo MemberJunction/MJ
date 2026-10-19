@@ -117,9 +117,17 @@ export class SQLCodeGenBase {
      */
     protected existingRoutines: Set<string> | null = null;
 
+    /**
+     * Map of `schema.routine` (lowercased) to its live `OBJECT_DEFINITION` text on SQL Server,
+     * used by {@link isRoutineSaveReturnModeChanged} to detect when `Entity.Configuration.SaveReturnMode`
+     * changed via `mj sync push` without a physical table/column change.
+     */
+    protected existingRoutineDefinitions: Map<string, string> | null = null;
+
     public async ManageSQLScriptsAndExecution(pool: CodeGenConnection, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
             this.existingRoutines = null;
+            this.existingRoutineDefinitions = null;
             // Build list of entities qualified for forced regeneration if entityWhereClause is provided
             if (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.entityWhereClause) {
                 this.filterEntitiesQualifiedForRegeneration = true; // Enable filtering
@@ -1466,8 +1474,12 @@ export class SQLCodeGenBase {
 
             // now, append the permissions to the return string IF we did NOT generate the base view - because if we generated the base view, that
             // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
+            // Pass the RAW body: generateCustomBaseViewRefreshAndPermissions applies the layered-view
+            // guard itself. Passing the already-guarded file copy wrapped the GRANTs twice — harmless
+            // inside SQL Server's sp_executesql literal, but on PostgreSQL the inner
+            // `DO $if_view_exists$` reuses the outer dollar-quote tag and the script fails to parse.
             if (!options.entity.BaseViewGenerated) {
-                sRet += this.generateCustomBaseViewRefreshAndPermissions(options.entity, permHeader, permBody);
+                sRet += this.generateCustomBaseViewRefreshAndPermissions(options.entity, permHeader, rawPermBody);
             }
 
             // CREATE SP
@@ -1637,10 +1649,12 @@ export class SQLCodeGenBase {
     /**
      * Snapshot every CRUD routine currently in the database (one query) so
      * generate-and-log can force-emit CREATE PROC for objects that vanished
-     * without the entity landing on newEntityList/modifiedEntityList.
+     * without the entity landing on newEntityList/modifiedEntityList, or whose
+     * return-row mode (`SaveReturnMode`) changed via `mj sync push`.
      */
     protected async loadExistingRoutines(pool: CodeGenConnection, entities: EntityInfo[]): Promise<void> {
         this.existingRoutines = new Set<string>();
+        this.existingRoutineDefinitions = null;
         const schemas = [...new Set(entities.map((e) => e.SchemaName).filter((s) => !!s))];
         const sql = this._dbProvider.getRoutineNamesBySchemaSQL(schemas);
         if (!sql || !sql.trim()) {
@@ -1655,9 +1669,27 @@ export class SQLCodeGenBase {
                     this.existingRoutines.add(`${schemaName}.${routineName}`);
                 }
             }
+
+            if (this._dbProvider.PlatformKey === 'sqlserver' && schemas.length > 0) {
+                const inList = schemas.map((s) => `'${s.replace(/'/g, "''")}'`).join(', ');
+                const defResult = await pool.query(
+                    `SELECT s.name AS schema_name, p.name AS routine_name, OBJECT_DEFINITION(p.object_id) AS routine_definition ` +
+                    `FROM sys.procedures p INNER JOIN sys.schemas s ON s.schema_id = p.schema_id WHERE s.name IN (${inList})`
+                );
+                this.existingRoutineDefinitions = new Map<string, string>();
+                for (const row of defResult.recordset ?? []) {
+                    const schemaName = String(row.schema_name ?? '').toLowerCase();
+                    const routineName = String(row.routine_name ?? '').toLowerCase();
+                    const routineDef = row.routine_definition != null ? String(row.routine_definition) : '';
+                    if (schemaName && routineName && routineDef) {
+                        this.existingRoutineDefinitions.set(`${schemaName}.${routineName}`, routineDef);
+                    }
+                }
+            }
         } catch (e) {
             LogWarning(`Could not load existing CRUD routines (missing-proc self-heal disabled this run): ${e instanceof Error ? e.message : String(e)}`);
             this.existingRoutines = null;
+            this.existingRoutineDefinitions = null;
         }
     }
 
@@ -1668,8 +1700,37 @@ export class SQLCodeGenBase {
         return !this.existingRoutines.has(`${schema}.${routineName}`.toLowerCase());
     }
 
+    /**
+     * Returns true when `spCreate` or `spUpdate` in the database was generated under a different
+     * `SaveReturnMode` (`'full'` vs `'datestamps_only'`) than the entity's current metadata.
+     * This ensures that when `Entity.Configuration.SaveReturnMode` is updated via `mj sync push`,
+     * the subsequent `mj codegen` run automatically logs and executes the updated stored procedures.
+     */
+    protected isRoutineSaveReturnModeChanged(entity: EntityInfo, routineName: string): boolean {
+        if (!this.existingRoutineDefinitions || !entity.BaseView) {
+            return false;
+        }
+        const createSpName = this.GetSPName(entity, SPType.Create).toLowerCase();
+        const updateSpName = this.GetSPName(entity, SPType.Update).toLowerCase();
+        const lowerRoutine = routineName.toLowerCase();
+        if (lowerRoutine !== createSpName && lowerRoutine !== updateSpName) {
+            return false;
+        }
+        const def = this.existingRoutineDefinitions.get(`${entity.SchemaName}.${routineName}`.toLowerCase());
+        if (!def) {
+            return false;
+        }
+        const selectsFromBaseView = def.toLowerCase().includes(`[${entity.BaseView.toLowerCase()}]`);
+        if (entity.SaveReturnMode === 'datestamps_only') {
+            return selectsFromBaseView;
+        }
+        return !selectsFromBaseView;
+    }
+
     protected forceLogForRoutine(entity: EntityInfo, routineName: string, baseViewChanged: boolean): boolean {
-        return baseViewChanged || this.isRoutineMissing(entity.SchemaName, routineName);
+        return baseViewChanged ||
+               this.isRoutineMissing(entity.SchemaName, routineName) ||
+               this.isRoutineSaveReturnModeChanged(entity, routineName);
     }
 
     public GetEntityPermissionFileNames(entity: EntityInfo): string[] {

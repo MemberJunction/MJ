@@ -1,0 +1,7 @@
+{
+  "resource_changes": [
+    { "address": "module.work_queue.aws_sns_topic_subscription.this[\"email.archive\"]", "type": "aws_sns_topic_subscription", "change": { "actions": ["delete"] } },
+    { "address": "module.work_queue.aws_lambda_event_source_mapping.consumer[\"email.archive\"]", "type": "aws_lambda_event_source_mapping", "change": { "actions": ["delete", "create"] } },
+    { "address": "module.work_queue.aws_sqs_queue_policy.subscription[\"email.archive\"]", "type": "aws_sqs_queue_policy", "change": { "actions": ["delete"] } }
+  ]
+}

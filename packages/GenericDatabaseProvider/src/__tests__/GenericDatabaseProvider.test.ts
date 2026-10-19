@@ -38,6 +38,10 @@ import {
     QueryInfo,
     QueryCategoryInfo,
     Metadata,
+    ProviderBase,
+    ProviderConfigDataBase,
+    InMemoryLocalStorageProvider,
+    LocalCacheManager,
 } from '@memberjunction/core';
 import type { PostCommitToken, QueryExecutionSpec, RunViewParams } from '@memberjunction/core';
 import type { MJEntityAIActionEntity } from '@memberjunction/core-entities';
@@ -218,6 +222,36 @@ describe('GenericDatabaseProvider', () => {
         provider = new TestGenericProvider();
     });
 
+    describe('Config with a storage provider', () => {
+        it('installs the configured storage before the base configuration runs', async () => {
+            const shared = new InMemoryLocalStorageProvider();
+            let seenDuringConfig: unknown;
+            const baseConfig = vi.spyOn(ProviderBase.prototype, 'Config').mockImplementation(async function (this: ProviderBase) {
+                seenDuringConfig = this.LocalStorageProvider;
+                return true;
+            });
+            try {
+                const data = new ProviderConfigDataBase({});
+                data.LocalStorageProvider = shared;
+                expect(await provider.Config(data)).toBe(true);
+                expect(seenDuringConfig).toBe(shared);
+                expect(provider.LocalStorageProvider).toBe(shared);
+            } finally {
+                baseConfig.mockRestore();
+            }
+        });
+
+        it('keeps the default in-memory storage when none is configured', async () => {
+            const baseConfig = vi.spyOn(ProviderBase.prototype, 'Config').mockResolvedValue(true);
+            try {
+                await provider.Config(new ProviderConfigDataBase({}));
+                expect(provider.LocalStorageProvider).toBeInstanceOf(InMemoryLocalStorageProvider);
+            } finally {
+                baseConfig.mockRestore();
+            }
+        });
+    });
+
     describe('Inheritance', () => {
         it('extends DatabaseProviderBase', () => {
             expect(provider).toBeInstanceOf(DatabaseProviderBase);
@@ -237,7 +271,7 @@ describe('GenericDatabaseProvider', () => {
 
     describe('PostProcessRows', () => {
         it('returns empty array for empty input', async () => {
-            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [], BinaryFields: [] } as unknown as EntityInfo;
             const result = await provider.testPostProcessRows([], entityInfo, mockUser);
             expect(result).toEqual([]);
         });
@@ -249,6 +283,7 @@ describe('GenericDatabaseProvider', () => {
                     { Name: 'Name', Encrypt: false, EncryptionKeyID: null },
                 ],
                 DatetimeFields: [],
+                BinaryFields: [],
             } as unknown as EntityInfo;
             const rows = [{ ID: '1', Name: 'Test' }];
             const result = await provider.testPostProcessRows(rows, entityInfo, mockUser);
@@ -256,7 +291,7 @@ describe('GenericDatabaseProvider', () => {
         });
 
         it('returns null input unchanged', async () => {
-            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [], BinaryFields: [] } as unknown as EntityInfo;
             const result = await provider.testPostProcessRows(null as unknown as Record<string, unknown>[], entityInfo, mockUser);
             expect(result).toBeNull();
         });
@@ -283,12 +318,12 @@ describe('GenericDatabaseProvider', () => {
         });
 
         it('TransformExternalSQLClause returns clause unchanged by default', () => {
-            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [], BinaryFields: [] } as unknown as EntityInfo;
             expect(provider.testTransformExternalSQLClause('Status = 1', entityInfo)).toBe('Status = 1');
         });
 
         it('TransformExternalSQLClause passes empty string through', () => {
-            const entityInfo = { Fields: [], DatetimeFields: [] } as unknown as EntityInfo;
+            const entityInfo = { Fields: [], DatetimeFields: [], BinaryFields: [] } as unknown as EntityInfo;
             expect(provider.testTransformExternalSQLClause('', entityInfo)).toBe('');
         });
     });
@@ -500,6 +535,7 @@ describe('GenericDatabaseProvider', () => {
                 ],
                 Fields: [],
                 DatetimeFields: [],
+                BinaryFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
                 GetEffectiveRowFilterWhereClause: () => '',
@@ -537,6 +573,7 @@ describe('GenericDatabaseProvider', () => {
                 ],
                 Fields: [],
                 DatetimeFields: [],
+                BinaryFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
                 GetEffectiveRowFilterWhereClause: () => '',
@@ -570,6 +607,7 @@ describe('GenericDatabaseProvider', () => {
                     { Name: 'Name', TSType: EntityFieldTSType.String, Type: 'varchar' },
                 ],
                 DatetimeFields: [],
+                BinaryFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
                 GetEffectiveRowFilterWhereClause: () => '',
@@ -608,6 +646,7 @@ describe('GenericDatabaseProvider', () => {
                 ],
                 Fields: [],
                 DatetimeFields: [],
+                BinaryFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => opts.exempt,
                 GetEffectiveRowFilterWhereClause: () => opts.exempt ? '' : opts.rlsClause,
@@ -770,9 +809,10 @@ describe('GenericDatabaseProvider', () => {
          */
         interface RLSAccess {
             CheckRecordRLS: (e: BaseEntity, u: UserInfo, t: EntityPermissionType) => Promise<boolean>;
+            CheckCreateRLS: (e: BaseEntity, u: UserInfo) => Promise<boolean>;
             CheckUpdateRLSPostImage: (e: BaseEntity, u: UserInfo) => Promise<boolean>;
             TryExtractSimpleFilterColumns: (clause: string) => string[] | null;
-            BuildRLSSyntheticRowProjections: (e: BaseEntity, ei: EntityInfo, includeNulls: boolean) => string;
+            BuildRLSSyntheticRowProjections: (e: BaseEntity, ei: EntityInfo) => string;
         }
         const RLS = (): RLSAccess => provider as unknown as RLSAccess;
 
@@ -969,7 +1009,7 @@ describe('GenericDatabaseProvider', () => {
         });
 
         describe('BuildRLSSyntheticRowProjections', () => {
-            it('includeNulls=true emits a typed CAST(NULL AS <type>) for null fields', () => {
+            it('emits a typed CAST(NULL AS <type>) for null fields', () => {
                 // No dialect on this test provider (`getDialect()` returns null), so the code takes
                 // its documented fallback and emits `SQLFullType` verbatim — the exact string it
                 // emitted before dialect mapping existed.
@@ -978,7 +1018,7 @@ describe('GenericDatabaseProvider', () => {
                     fields: [{ Name: 'Notes', NeedsQuotes: true, Type: 'nvarchar', Length: 200, SQLFullType: 'nvarchar(100)', Value: null }],
                 });
 
-                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo);
 
                 expect(projections).toBe('CAST(NULL AS nvarchar(100)) AS "Notes"');
             });
@@ -1000,7 +1040,7 @@ describe('GenericDatabaseProvider', () => {
                     (provider as unknown as { getDialect(): unknown }).getDialect = () => dialect;
 
                     expect(
-                        provider.BuildRLSSyntheticRowProjections(entity, entityInfo, true),
+                        provider.BuildRLSSyntheticRowProjections(entity, entityInfo),
                         `${dialect.constructor.name}: byte length must be halved to characters`,
                     ).toBe(expected);
                 }
@@ -1014,32 +1054,36 @@ describe('GenericDatabaseProvider', () => {
                 const provider = RLS();
                 (provider as unknown as { getDialect(): unknown }).getDialect = () => new SQLServerDialect();
 
-                expect(provider.BuildRLSSyntheticRowProjections(entity, entityInfo, true))
+                expect(provider.BuildRLSSyntheticRowProjections(entity, entityInfo))
                     .toBe('CAST(NULL AS NVARCHAR(MAX)) AS "Body"');
             });
 
-            it('includeNulls=true throws for a null field with no resolvable SQLFullType', () => {
+            it('throws for a null field with no resolvable SQLFullType', () => {
                 const { entity, entityInfo } = MakeRLSEntity({
                     rlsClause: '',
                     fields: [{ Name: 'Notes', NeedsQuotes: true, SQLFullType: '', Value: null }],
                 });
 
-                expect(() => RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true))
+                expect(() => RLS().BuildRLSSyntheticRowProjections(entity, entityInfo))
                     .toThrow(/no resolvable SQL type/i);
             });
 
-            it('includeNulls=false skips null fields instead of projecting them', () => {
-                const { entity, entityInfo } = MakeRLSEntity({
-                    rlsClause: '',
+            it('CheckCreateRLS projects a null field as a typed NULL, so a filter on it evaluates instead of failing to bind', async () => {
+                // A shared folder leaves OwnerUserID NULL. Skipping the column made any create filter
+                // that mentions it fail with `Invalid column name` instead of evaluating.
+                const { entity } = MakeRLSEntity({
+                    rlsClause: "OwnerUserID IS NULL OR OwnerUserID = 'u1'",
                     fields: [
-                        { Name: 'Notes', NeedsQuotes: true, SQLFullType: 'nvarchar(100)', Value: null },
-                        { Name: 'Name', NeedsQuotes: true, Value: 'Keep' },
+                        { Name: 'Name', NeedsQuotes: true, Value: 'Shared folder' },
+                        { Name: 'OwnerUserID', NeedsQuotes: true, Type: 'uniqueidentifier', SQLFullType: 'uniqueidentifier', Value: null },
                     ],
                 });
+                provider.executeSQLResults = [[{ pass: 1 }]];
 
-                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, false);
+                const result = await RLS().CheckCreateRLS(entity, mockUser);
 
-                expect(projections).toBe('\'Keep\' AS "Name"');
+                expect(result).toBe(true);
+                expect(provider.executeSQLCalls[0].sql).toContain('CAST(NULL AS uniqueidentifier) AS "OwnerUserID"');
             });
 
             it('throws for a non-numeric string in a numeric (NeedsQuotes=false) field instead of interpolating it', () => {
@@ -1048,7 +1092,7 @@ describe('GenericDatabaseProvider', () => {
                     fields: [{ Name: 'Amount', NeedsQuotes: false, Value: 'abc' }],
                 });
 
-                expect(() => RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true))
+                expect(() => RLS().BuildRLSSyntheticRowProjections(entity, entityInfo))
                     .toThrow(/does not parse as a number/i);
             });
 
@@ -1062,7 +1106,7 @@ describe('GenericDatabaseProvider', () => {
                     ],
                 });
 
-                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo);
 
                 expect(projections).toContain('42 AS "Amount"');
                 expect(projections).toContain('1 AS "IsActive"');
@@ -1078,7 +1122,7 @@ describe('GenericDatabaseProvider', () => {
                     ],
                 });
 
-                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo);
 
                 expect(projections).toBe('\'abc\' AS "OrganizationID"');
             });
@@ -1782,7 +1826,7 @@ describe('RenderedSQL in ExecuteQueryFromSpec', () => {
         expect(result.RenderedSQL).toMatch(/\bTOP\s+10\b/i);
     });
 
-    it('RenderedSQL shows MaxRows outer-wrap transformation for unparseable SQL', async () => {
+    it('RenderedSQL shows the MaxRows cap applied to unparseable SQL', async () => {
         // Simulate a DB execution failure
         vi.spyOn(provider, 'ExecuteSQL').mockRejectedValueOnce(
             new Error('The ORDER BY clause is invalid')
@@ -1804,10 +1848,9 @@ ORDER BY Cnt DESC`,
         const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
 
         expect(result.Success).toBe(false);
-        // RenderedSQL reveals the outer-wrap transformation that the error message alone cannot
+        // RenderedSQL reveals the cap transformation that the error message alone cannot
         expect(result.RenderedSQL).toBeDefined();
-        expect(result.RenderedSQL).toMatch(/_mj_capped/);
-        expect(result.RenderedSQL).toMatch(/\bTOP\s+10\b/i);
+        expect(result.RenderedSQL).toMatch(/^SELECT TOP 10 t\.ID/);
         // Nunjucks tokens should be resolved
         expect(result.RenderedSQL).not.toContain('{{');
         expect(result.RenderedSQL).toMatch(/2024-01-01/);
@@ -2079,6 +2122,307 @@ describe('GenericDatabaseProvider nested transactions', () => {
         expect(p.executeSQLCalls.map((c) => c.sql)).not.toContain('UPDATE Orders SET Status=Confirmed');
         await p.ExecuteSQL('SELECT 1', undefined, { connectionSource: {} });
         expect(p.executeSQLCalls.map((c) => c.sql)).toContain('SELECT 1');
+    });
+});
+
+/** Records, for every statement, whether the issuing scope was part of the ambient transaction. */
+class AffinityProvider extends RecordingProvider {
+    public memberAtSQL: boolean[] = [];
+
+    public get CallerIsMember(): boolean {
+        return this.IsCallerInAmbientTransaction();
+    }
+
+    public get CallerDedupScope(): string {
+        return this.RunViewDedupScope;
+    }
+
+    override async ExecuteSQL<T>(sql?: string, params?: unknown[], options?: { connectionSource?: unknown }): Promise<Array<T>> {
+        this.memberAtSQL.push(this.IsCallerInAmbientTransaction());
+        return super.ExecuteSQL<T>(sql, params, options);
+    }
+}
+
+describe('GenericDatabaseProvider transaction scope affinity (#4786)', () => {
+    const tick = (): Promise<void> => new Promise<void>((resolve) => setTimeout(resolve, 1));
+    /** A promise opened on demand — code awaiting it was scheduled before whatever runs before `open()`. */
+    function gate(): { wait: Promise<void>; open: () => void } {
+        let open!: () => void;
+        const wait = new Promise<void>((resolve) => { open = resolve; });
+        return { wait, open };
+    }
+    const reports4786 = (spy: { mock: { calls: unknown[][] } }): string[] =>
+        spy.mock.calls.flat().map((m) => String(m)).filter((m) => m.includes('#4786'));
+
+    it('the caller that began is a member; an unrelated caller on the same instance is not', async () => {
+        const p = new AffinityProvider();
+        const g = gate();
+        const unrelated = (async () => { await g.wait; return p.CallerIsMember; })();
+        await p.BeginTransaction();
+        g.open();
+        expect(p.CallerIsMember).toBe(true);
+        expect(await unrelated).toBe(false);
+        await p.RollbackTransaction();
+    });
+
+    it('work spawned inside the transaction scope is a member; after commit nobody is', async () => {
+        const p = new AffinityProvider();
+        await p.BeginTransaction();
+        expect(await (async () => { await tick(); return p.CallerIsMember; })()).toBe(true);
+        await p.CommitTransaction();
+        expect(p.CallerIsMember).toBe(false);
+    });
+
+    it('a nested begin from the member scope creates a savepoint and does not report a foreign join', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new AffinityProvider();
+            await p.BeginTransaction();
+            await p.BeginTransaction();
+            expect(p.TransactionDepth).toBe(2);
+            expect(reports4786(errorSpy)).toEqual([]);
+            await p.CommitTransaction();
+            await p.CommitTransaction();
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('an unrelated caller that begins while a transaction is open joins it and it is reported once', async () => {
+        // LogError writes through console.error.
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new AffinityProvider();
+            const g = gate();
+            const unrelated = (async () => {
+                await g.wait;
+                await p.BeginTransaction();
+                const depth = p.TransactionDepth;
+                const member = p.CallerIsMember;
+                await p.BeginTransaction(); // a second nested begin in the same foreign scope
+                await p.CommitTransaction();
+                await p.CommitTransaction();
+                return { depth, member };
+            })();
+            await p.BeginTransaction();
+            g.open();
+            expect(await unrelated).toEqual({ depth: 2, member: true });
+            expect(reports4786(errorSpy)).toHaveLength(1);
+            await p.CommitTransaction();
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('savepoint SQL runs as a member even when the frame is settled from an unrelated scope', async () => {
+        const p = new AffinityProvider();
+        const g = gate();
+        const settler = (async () => {
+            await g.wait;
+            expect(p.CallerIsMember).toBe(false);
+            await p.RollbackTransaction();
+        })();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.memberAtSQL = [];
+        g.open();
+        await settler;
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.memberAtSQL.length).toBeGreaterThan(0);
+        expect(p.memberAtSQL.every(Boolean)).toBe(true);
+        await p.CommitTransaction();
+    });
+
+    it('post-commit work registered by an unrelated caller is not dropped when the open transaction rolls back', async () => {
+        const p = new AffinityProvider();
+        const ran: string[] = [];
+        const g = gate();
+        const unrelated = (async () => {
+            await g.wait;
+            const token = p.CapturePostCommitToken();
+            p.RunAfterCommit(async () => { ran.push('with-token'); }, 'unrelated with token', token);
+            p.RunAfterCommit(async () => { ran.push('no-token'); }, 'unrelated without token');
+        })();
+        await p.BeginTransaction();
+        g.open();
+        await unrelated;
+        await p.RollbackTransaction();
+        await tick();
+        expect(ran.sort()).toEqual(['no-token', 'with-token']);
+    });
+
+    it('post-commit work registered by the member is still dropped when its transaction rolls back', async () => {
+        const p = new AffinityProvider();
+        const ran: string[] = [];
+        await p.BeginTransaction();
+        p.RunAfterCommit(async () => { ran.push('member'); }, 'member task');
+        await p.RollbackTransaction();
+        await tick();
+        expect(ran).toEqual([]);
+    });
+
+    it('a non-member\'s post-commit task starts now, as a non-member, and the owner\'s commit does not await it', async () => {
+        const p = new AffinityProvider();
+        const registered = gate();
+        const taskMayFinish = gate();
+        let memberInsideTask: boolean | undefined;
+        let finished = false;
+        const unrelated = (async () => {
+            await registered.wait;
+            p.RunAfterCommit(async () => {
+                memberInsideTask = p.CallerIsMember;
+                await taskMayFinish.wait;
+                finished = true;
+            }, 'unrelated task');
+        })();
+        await p.BeginTransaction();
+        registered.open();
+        await unrelated;
+        await tick();
+        expect(p.TransactionDepth).toBe(1); // the owner's transaction is still open...
+        expect(memberInsideTask).toBe(false); // ...and the task already started, outside it
+        await p.CommitTransaction(); // resolves while the task is still blocked
+        expect(finished).toBe(false);
+        taskMayFinish.open();
+        await tick();
+        expect(finished).toBe(true);
+    });
+
+    it('a non-member\'s post-commit task is not stranded by the open transaction\'s failed commit', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new (class extends AffinityProvider {
+                protected override async CommitPhysicalTransaction(): Promise<void> {
+                    throw new Error('commit failed');
+                }
+            })();
+            const ran: string[] = [];
+            const registered = gate();
+            const unrelated = (async () => {
+                await registered.wait;
+                p.RunAfterCommit(async () => { ran.push('unrelated'); }, 'unrelated task');
+            })();
+            await p.BeginTransaction();
+            registered.open();
+            await unrelated;
+            await expect(p.CommitTransaction()).rejects.toThrow('commit failed');
+            await tick();
+            expect(ran).toEqual(['unrelated']);
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('a post-commit task that begins in its synchronous prefix does not make the registering caller a member', async () => {
+        const p = new AffinityProvider();
+        const taskMayCommit = gate();
+        const taskDone = gate();
+        p.RunAfterCommit(async () => {
+            await p.BeginTransaction(); // claims before its first await — inside the task's own scope
+            await taskMayCommit.wait;
+            await p.CommitTransaction();
+            taskDone.open();
+        }, 'self-transacting task');
+        await tick();
+        expect(p.TransactionDepth).toBe(1); // the task's transaction is open...
+        expect(p.CallerIsMember).toBe(false); // ...and the caller that registered it is not in it
+        taskMayCommit.open();
+        await taskDone.wait;
+    });
+
+    it('reports a foreign join once per transaction, however many foreign scopes join it', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new AffinityProvider();
+            /** A scope created before the owner begins: it begins on `start`, commits its frame on `end`. */
+            function foreignScope(): { start: () => void; end: () => void; done: Promise<void> } {
+                const start = gate();
+                const end = gate();
+                const done = (async () => {
+                    await start.wait;
+                    await p.BeginTransaction();
+                    await end.wait;
+                    await p.CommitTransaction();
+                })();
+                return { start: start.open, end: end.open, done };
+            }
+            const a = foreignScope();
+            const b = foreignScope();
+            await p.BeginTransaction();
+            a.start();
+            await tick();
+            b.start();
+            await tick();
+            expect(p.TransactionDepth).toBe(3);
+            expect(reports4786(errorSpy)).toHaveLength(1);
+            b.end(); // LIFO: the innermost frame settles first
+            await b.done;
+            a.end();
+            await a.done;
+            await p.CommitTransaction();
+            expect(p.TransactionDepth).toBe(0);
+
+            // A new transaction is a new epoch: its first foreign join is reported again.
+            const c = foreignScope();
+            await p.BeginTransaction();
+            c.start();
+            await tick();
+            expect(p.TransactionDepth).toBe(2);
+            expect(reports4786(errorSpy)).toHaveLength(2);
+            c.end();
+            await c.done;
+            await p.CommitTransaction();
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('a failed begin leaves no reusable claim: work forked after it is not a member of the next transaction', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new (class extends AffinityProvider {
+                public failNextBegin = true;
+                protected override async BeginPhysicalTransaction(): Promise<void> {
+                    if (this.failNextBegin) {
+                        this.failNextBegin = false;
+                        throw new Error('begin failed');
+                    }
+                    await super.BeginPhysicalTransaction();
+                }
+            })();
+            await expect(p.BeginTransaction()).rejects.toThrow('begin failed');
+            const forkedMayCheck = gate();
+            const forked = (async () => { await forkedMayCheck.wait; return p.CallerIsMember; })(); // e.g. a poller
+            await p.BeginTransaction();
+            expect(p.CallerIsMember).toBe(true);
+            forkedMayCheck.open();
+            expect(await forked).toBe(false);
+            await p.RollbackTransaction();
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('a member whose nested begin fails stays a member of its transaction', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new AffinityProvider();
+            await p.BeginTransaction();
+            const orig = p.ExecuteSQL.bind(p);
+            p.ExecuteSQL = async <T,>(sql?: string, params?: unknown[], options?: { connectionSource?: unknown }): Promise<Array<T>> => {
+                if (typeof sql === 'string' && sql.includes('SAVE TRANSACTION')) {
+                    throw new Error('savepoint failed');
+                }
+                return orig<T>(sql, params, options);
+            };
+            await expect(p.BeginTransaction()).rejects.toThrow('savepoint failed');
+            expect(p.TransactionDepth).toBe(1);
+            expect(p.CallerIsMember).toBe(true);
+            p.ExecuteSQL = orig;
+            await p.RollbackTransaction();
+        } finally {
+            errorSpy.mockRestore();
+        }
     });
 });
 
@@ -2428,41 +2772,27 @@ describe('GenericDatabaseProvider RunAfterCommit with a PostCommitToken (late re
         await p.BeginTransaction();
         p.RunAfterCommit(r.task('unrelated-open'), 'unrelated-open', token);
         expect(p.PendingPostCommitTaskCount).toBe(0);
-        await p.RollbackTransaction();
         await settle();
+        expect(r.ran).toEqual(['unrelated-open']); // before the open transaction settles
+        await p.RollbackTransaction();
         expect(r.ran).toEqual(['unrelated-open']);
     });
 
-    it('a task whose own transaction committed waits for an unrelated open one, then runs', async () => {
-        // Running it inside the unrelated transaction would enlist its writes in that transaction.
-        const p = new RecordingProvider();
-        const r = recorder();
+    it('a task whose own transaction committed runs now, outside the transaction open when it registers', async () => {
+        // Detached, so its writes run on the pool and cannot be rolled back with that transaction (#4786).
+        const p = new AffinityProvider();
         await p.BeginTransaction();
         const token = p.CapturePostCommitToken();
         await p.CommitTransaction();
 
-        await p.BeginTransaction();                       // an unrelated transaction opens
-        p.RunAfterCommit(r.task('late'), 'late', token);  // ...and only now does the task register
+        await p.BeginTransaction();                       // another transaction opens
+        let memberInsideTask: boolean | undefined;
+        p.RunAfterCommit(async () => { memberInsideTask = p.CallerIsMember; }, 'late', token);
         await settle();
-        expect(r.ran).toEqual([]);
-        expect(p.PendingIdlePostCommitTaskCount).toBe(1);
-
-        await p.RollbackTransaction();                    // it ends — either way the task is owed
-        expect(r.ran).toEqual(['late']);
-        expect(p.PendingIdlePostCommitTaskCount).toBe(0);
-    });
-
-    it('the same, when the unrelated transaction commits', async () => {
-        const p = new RecordingProvider();
-        const r = recorder();
-        await p.BeginTransaction();
-        const token = p.CapturePostCommitToken();
-        await p.CommitTransaction();
-
-        await p.BeginTransaction();
-        p.RunAfterCommit(r.task('late'), 'late', token);
-        await p.CommitTransaction();
-        expect(r.ran).toEqual(['late']);
+        expect(p.TransactionDepth).toBe(1);               // still open...
+        expect(memberInsideTask).toBe(false);             // ...and the task already ran, not in it
+        expect(p.PendingIdlePostCommitTaskCount).toBe(0); // deprecated: there is no idle queue any more
+        await p.RollbackTransaction();
     });
 
     it('captured in a savepoint that was then rolled back: dropped even though the outer commits', async () => {
@@ -2494,9 +2824,9 @@ describe('GenericDatabaseProvider RunAfterCommit with a PostCommitToken (late re
         expect(r.ran).toEqual([]);
     });
 
-    it('follows the token epoch, not a NEW transaction: old epoch committed -> owed, and run once idle', async () => {
-        // The task is owed because ITS transaction committed. It is not run inside the unrelated
-        // one, whose rollback would take the task's own writes with it.
+    it('follows the token epoch, not a NEW transaction: old epoch committed -> owed, and runs even if the new one rolls back', async () => {
+        // The task is owed because ITS transaction committed. It is not queued on the new one,
+        // whose rollback would otherwise drop it.
         const p = new RecordingProvider();
         const r = recorder();
         await p.BeginTransaction();
@@ -2504,10 +2834,9 @@ describe('GenericDatabaseProvider RunAfterCommit with a PostCommitToken (late re
         await p.CommitTransaction();
         await p.BeginTransaction();
         p.RunAfterCommit(r.task('late'), 'late', token);
-        await settle();
-        expect(r.ran).toEqual([]);
         expect(p.PendingPostCommitTaskCount).toBe(0);
         await p.RollbackTransaction();
+        await settle();
         expect(r.ran).toEqual(['late']);
     });
 
@@ -2673,5 +3002,93 @@ describe('TransactionFrameTracker', () => {
             t.EndEpoch('committed');
         }
         expect(t.Resolve(first, false).Kind).toBe('drop');
+    });
+});
+
+describe('GenericDatabaseProvider entity-event batch levels follow the begin outcome (#4786 merge)', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    function spyBatch() {
+        const cache = LocalCacheManager.Instance;
+        return {
+            begin: vi.spyOn(cache, 'BeginEntityEventBatch').mockImplementation(() => undefined),
+            end: vi.spyOn(cache, 'EndEntityEventBatch').mockResolvedValue(undefined),
+            abandon: vi.spyOn(cache, 'AbandonEntityEventBatch').mockResolvedValue(undefined),
+        };
+    }
+
+    it('opens a level only after the begin succeeds, and closes it on commit as a success', async () => {
+        const spies = spyBatch();
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        expect(spies.begin).toHaveBeenCalledTimes(1);
+        await p.CommitTransaction();
+        expect(spies.end).toHaveBeenCalledTimes(1);
+        expect(spies.end).toHaveBeenCalledWith(p, true);
+    });
+
+    it('a begin that throws opens no level, so the caller\'s rollback closes none', async () => {
+        const spies = spyBatch();
+        class FailingBegin extends RecordingProvider {
+            protected override async BeginPhysicalTransaction(): Promise<void> {
+                throw new Error('pool exhausted');
+            }
+        }
+        const p = new FailingBegin();
+        await expect(p.BeginTransaction()).rejects.toThrow(/pool exhausted/);
+        expect(spies.begin).not.toHaveBeenCalled();
+        await p.RollbackTransaction().catch(() => undefined);
+        expect(spies.end).not.toHaveBeenCalled();
+    });
+
+    it('a nested begin whose savepoint fails adds no level; the outer settle closes exactly one', async () => {
+        const spies = spyBatch();
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        const realExecute = p.ExecuteSQL.bind(p);
+        p.ExecuteSQL = async <T,>(sql?: string, params?: unknown[], options?: { connectionSource?: unknown }): Promise<Array<T>> => {
+            if (sql?.startsWith('SAVE TRANSACTION')) throw new Error('savepoint refused');
+            return realExecute<T>(sql, params, options);
+        };
+        await expect(p.BeginTransaction()).rejects.toThrow(/savepoint refused/);
+        expect(spies.begin).toHaveBeenCalledTimes(1);
+        await p.CommitTransaction();
+        expect(spies.end).toHaveBeenCalledTimes(1);
+        expect(spies.end).toHaveBeenCalledWith(p, true);
+    });
+
+    it('rollback closes the level as a failure; reset abandons the batch', async () => {
+        const spies = spyBatch();
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.RollbackTransaction();
+        expect(spies.end).toHaveBeenCalledWith(p, false);
+        await p.BeginTransaction();
+        await p.ResetTransactionState();
+        expect(spies.abandon).toHaveBeenCalledWith(p);
+    });
+});
+
+describe('GenericDatabaseProvider RunView dedup scope follows transaction membership (#4786)', () => {
+    it('a member is scoped to its transaction, a non-member is not, and the scope ends with the transaction', async () => {
+        const p = new AffinityProvider();
+        let outsiderScope: string | null = null;
+        let release!: () => void;
+        const opened = new Promise<void>((resolve) => { release = resolve; });
+        const outsider = (async () => { await opened; outsiderScope = p.CallerDedupScope; })();
+        expect(p.CallerDedupScope).toBe('');
+        await p.BeginTransaction();
+        const memberScope = p.CallerDedupScope;
+        release();
+        await outsider;
+        expect(memberScope).not.toBe('');
+        expect(outsiderScope).toBe('');
+        await p.CommitTransaction();
+        expect(p.CallerDedupScope).toBe('');
+        await p.BeginTransaction();
+        expect(p.CallerDedupScope).not.toBe(memberScope);
+        await p.RollbackTransaction();
     });
 });

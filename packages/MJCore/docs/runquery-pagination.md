@@ -19,7 +19,7 @@ export type RunQueryParams = {
     Parameters?: Record<string, any>
     /**
      * Optional maximum number of rows to return from the query.
-     * If not provided, all rows will be returned.
+     * There is no default: without it, the query returns every row it matches.
      */
     MaxRows?: number
     /**
@@ -117,16 +117,21 @@ query GetQueryData {
 
 ### How It Works
 
-1. **Query Execution**: The full query is executed on the database to ensure accurate results
-2. **Total Count**: The total number of rows is captured before pagination
-3. **Pagination**: Results are sliced based on `StartRow` and `MaxRows` parameters
-4. **Response**: Both `RowCount` (actual rows returned) and `TotalRowCount` (total available) are provided
+1. **Paging in the database**: the query is wrapped so the database returns only the requested page (`OFFSET … FETCH` on SQL Server, `LIMIT … OFFSET` on PostgreSQL). Rows outside the page are never sent to the server.
+2. **Total count**: a count query over the same SQL gives `TotalRowCount`.
+3. **Response**: `RowCount` is the number of rows returned and `TotalRowCount` the number available.
 
-### Performance Considerations
+### Bounding Result Size
 
-- The current implementation executes the full query and applies pagination in memory
-- This ensures result consistency and accurate total counts
-- For very large result sets, consider adding query-level filtering to reduce the initial dataset
+There is **no default row limit**. A query run without `MaxRows`, whose SQL has no `TOP` / `LIMIT`, returns every row it matches. Bounding the result is the job of the caller (pass `MaxRows`) and of the query author (filter, or cap the query in its SQL).
+
+`MaxRows` limits the rows returned, **not the work the database does**. The database still reads everything the query's SQL asks for, sorting included, and the count query runs over the whole result. To make a query cheaper, narrow it in its SQL or its parameters.
+
+### Queries With Their Own Cap
+
+When a query's SQL has its own cap (`TOP n`, `LIMIT n`, `OFFSET … FETCH`) and the caller also passes `MaxRows`, **the smaller of the two wins**, and `TotalRowCount` counts the capped result: a `TOP 5` query asked for 100 rows returns 5, with a total of 5. Paging (`StartRow`) moves through the capped result. The cap is part of what the query means, so `MaxRows` never widens it.
+
+A query that returns a document rather than rows (`FOR JSON` / `FOR XML` at the end) cannot be paged; asking for a page of one fails with an error that says so.
 
 ### Consistent Ordering
 
