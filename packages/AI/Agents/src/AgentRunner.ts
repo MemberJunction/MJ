@@ -30,13 +30,17 @@ import { FileStorageEngine } from '@memberjunction/storage';
  */
 interface ArtifactVersionRow {
     VersionID: string;
+    ArtifactID?: string;
+    VersionNumber?: number;
     VersionName: string | null;
+    VersionDescription?: string | null;
     ContentMode: 'File' | 'Text';
     FileID: string | null;
     Content: string | null;
     MimeType: string | null;
     ForceToolsOnly: boolean | null;
     ArtifactName: string;
+    ArtifactDescription?: string | null;
     TypeName: string;
     ToolLibraryClass: string | null;
     DefaultDeliveryMode: 'Inline' | 'ToolsOnly' | null;
@@ -196,13 +200,35 @@ export class AgentRunner {
                 throw new Error(`Failed to create agent instance for driver class: ${driverClass}`);
             }
             
+            // Ensure caller params carries the shared AgentTreeBudget reference before any shallow
+            // clone occurs in hydrateConversationArtifacts or Execute.
+            if (!params.treeBudget) {
+                params.treeBudget = {
+                    maxTreeSteps: params.maxTreeSteps,
+                    maxTreeTokens: params.maxTreeTokens,
+                    maxTreeCost: params.maxTreeCost,
+                    maxTreeDurationMs: params.maxTreeDurationMs,
+                    totalSteps: 0,
+                    totalTokens: 0,
+                    totalCost: 0,
+                    startedAtMs: Date.now()
+                };
+            }
+
             // A conversation-linked run must see the conversation's artifacts no matter which
             // entry point the caller used. See hydrateConversationArtifacts for why.
             const runParams = await this.hydrateConversationArtifacts(params);
+            runParams.treeBudget = params.treeBudget;
 
             // Execute the agent and return the result directly, threading the isolated provider.
             // Favor provider already in params (caller-supplied) over the instance-level provider.
-            return await agentInstance.Execute({ ...runParams, provider: runParams.provider || this._provider } as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
+            try {
+                return await agentInstance.Execute({ ...runParams, provider: runParams.provider || this._provider }) as ExecuteAgentResult<R>;
+            } finally {
+                if (agentInstance.TreeBudget) {
+                    params.treeBudget = agentInstance.TreeBudget;
+                }
+            }
             
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -1206,29 +1232,68 @@ export class AgentRunner {
             version.Content = serializedContent;
             version.UserID = contextUser.ID;
 
+            const directiveName = AgentRunner.safeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH);
+            const directiveDescription = AgentRunner.safeDirectiveText(directive?.description);
+            const payloadRecord = (typeof payload === 'object' && payload !== null && !Array.isArray(payload))
+                ? (payload as Record<string, unknown>)
+                : undefined;
+            const payloadName = AgentRunner.safeDirectiveText(
+                payloadRecord?.title ?? payloadRecord?.name ?? payloadRecord?.savedQueryName,
+                AgentRunner.ARTIFACT_NAME_MAX_LENGTH
+            );
+            const payloadDescription = AgentRunner.safeDirectiveText(
+                payloadRecord?.description ?? payloadRecord?.interpretation
+            );
+
+            if (directiveName || payloadName) {
+                version.Name = directiveName || payloadName || null;
+            }
+            if (directiveDescription || payloadDescription) {
+                version.Description = directiveDescription || payloadDescription || null;
+            }
+
             if (!(await version.Save())) {
                 throw new Error('Failed to save artifact version');
             }
 
             LogStatus(`Created artifact version ${newVersionNumber} (${version.ID})`);
 
-            // First version of a new artifact: adopt the extracted Name attribute unless the agent named it
-            if (isNewArtifact && newVersionNumber === 1 && !AgentRunner.safeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)) {
-                const nameAttr = (version as any).Attributes?.find((attr: any) =>
+            // First version of a new artifact: adopt the extracted Name/Description attribute (or payload title/description)
+            // unless the agent explicitly named/described it via artifactDirective.
+            if (isNewArtifact && newVersionNumber === 1 && (!directiveName || !directiveDescription)) {
+                const attrs = (version as unknown as { Attributes?: Array<{ StandardProperty?: string; Name?: string; Value?: string }> }).Attributes;
+                const nameAttr = attrs?.find((attr) =>
                     attr.StandardProperty === 'name' || attr.Name?.toLowerCase() === 'name'
                 );
+                const descAttr = attrs?.find((attr) =>
+                    attr.StandardProperty === 'description' || attr.Name?.toLowerCase() === 'description'
+                );
 
-                let extractedName = nameAttr?.Value?.trim();
-                if (extractedName && extractedName.toLowerCase() !== 'null') {
-                    extractedName = extractedName.replace(/^["']|["']$/g, '');
+                const cleanAttr = (val: string | undefined, maxLen?: number): string | undefined => {
+                    const trimmed = val?.trim();
+                    if (!trimmed || trimmed.toLowerCase() === 'null') {
+                        return undefined;
+                    }
+                    const unquoted = trimmed.replace(/^["']|["']$/g, '').trim();
+                    return AgentRunner.safeDirectiveText(unquoted, maxLen);
+                };
 
+                const resolvedName = !directiveName ? (cleanAttr(nameAttr?.Value, AgentRunner.ARTIFACT_NAME_MAX_LENGTH) || payloadName) : undefined;
+                const resolvedDescription = !directiveDescription ? (cleanAttr(descAttr?.Value) || payloadDescription) : undefined;
+
+                if (resolvedName || resolvedDescription) {
                     const artifact = await md.GetEntityObject<MJArtifactEntity>(
                         'MJ: Artifacts',
                         contextUser
                     );
 
                     if (await artifact.Load(artifactId)) {
-                        artifact.Name = extractedName;
+                        if (resolvedName) {
+                            artifact.Name = resolvedName;
+                        }
+                        if (resolvedDescription) {
+                            artifact.Description = resolvedDescription;
+                        }
                         if (await artifact.Save()) {
                             LogStatus(`Updated artifact name to: ${artifact.Name}`);
                         }
@@ -2374,10 +2439,18 @@ export class AgentRunner {
                         }
 
                         if (content) {
+                            const rawDescription = row.VersionDescription || row.ArtifactDescription;
+                            const cleanDescription = rawDescription && !rawDescription.startsWith('Payload returned by ')
+                                ? rawDescription
+                                : undefined;
                             inputArtifacts.push({
                                 name: artifactName,
                                 typeName,
                                 content,
+                                ...(row.ArtifactID ? { artifactId: row.ArtifactID } : {}),
+                                ...(row.VersionID ? { versionId: row.VersionID } : {}),
+                                ...(row.VersionNumber != null ? { versionNumber: row.VersionNumber } : {}),
+                                ...(cleanDescription ? { description: cleanDescription } : {}),
                                 mimeType: row.MimeType ?? undefined,
                                 ...(row.ToolLibraryClass ? { toolLibraryClass: row.ToolLibraryClass } : {}),
                                 deliveryMode: row.DefaultDeliveryMode ?? 'ToolsOnly',

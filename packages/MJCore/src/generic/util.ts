@@ -557,6 +557,9 @@ export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(
             }
 
             const e = new SubClassCtor!(entityInfo, provider);
+            if (provider && typeof (e as unknown as { BindProvider?: (p: IEntityDataProvider) => void }).BindProvider === 'function' && (e as unknown as { BoundProvider?: IEntityDataProvider | null }).BoundProvider !== provider) {
+                (e as unknown as { BindProvider: (p: IEntityDataProvider) => void }).BindProvider(provider);
+            }
             if (contextUser) {
                 (e as unknown as { ContextCurrentUser?: UserInfo }).ContextCurrentUser = contextUser;
             }
