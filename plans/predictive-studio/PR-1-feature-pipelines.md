@@ -211,7 +211,7 @@ recorded `not-run: budget` in §11 and in the PR description's test plan, and th
   every removed alias (an out-of-repo caller breaks at compile time). PR 6's last milestone removes whatever remains.
 - Commit and push only at a milestone checkpoint after its exit tests pass, only on `ps/pr-1-feature-pipelines`. Never
   `git checkout -- <file>`, `git restore <file>`, `git reset --hard`, force-push or rebase.
-- One migration, T-SQL only: `migrations/v6/V202610161457__v6.2.x__Feature_Value_Key_And_Versions.sql`. Its version
+- One migration, T-SQL only: `migrations/v6/V202610181000__v6.2.x__Feature_Value_Key_And_Versions.sql`. Its version
   must sort after the newest versioned migration on `origin/next` whenever `next` is merged in; if it no longer does,
   re-time the file name to now with byte-identical content (same folder rule: `v6.*` → `migrations/v6/`) and relabel the
   old version's `flyway_schema_history` row on this PR's dev databases (re-timed from `V202610122200` after the
@@ -456,7 +456,7 @@ model is exercised by `fp-live-jobtitle` (§7).
 
 ### 5.1 Data model — one migration
 
-File: `migrations/v6/V202610161457__v6.2.x__Feature_Value_Key_And_Versions.sql`. Hand-written part (complete text, as
+File: `migrations/v6/V202610181000__v6.2.x__Feature_Value_Key_And_Versions.sql`. Hand-written part (complete text, as
 shipped — synced to the file after the slimming pass: `AIModelID` throughout (D-036), the `ProcessRunDetail.Warnings`
 column (audit B40) and the replaced `FeatureValue` table description were added during execution; the one-time
 orphan-cache DELETE and the `macro-f1` metric were removed again):
@@ -996,7 +996,7 @@ added during execution; they are recorded below in the same format. Later milest
 
 #### Task M1.1: Migration, CodeGen and the generated tail
 
-**Files:** Create `migrations/v6/V202610161457__v6.2.x__Feature_Value_Key_And_Versions.sql` · Modify (generated)
+**Files:** Create `migrations/v6/V202610181000__v6.2.x__Feature_Value_Key_And_Versions.sql` · Modify (generated)
 `packages/MJCoreEntities/src/generated/entities/__mj.ts`, `packages/MJServer/src/generated/graphql-schemas/__mj.ts`,
 `packages/Angular/Explorer/core-entity-forms/src/lib/generated/**` (new `Entities/MJFeaturePipelineVersion/` form;
 regenerated forms of the changed entities; `generated-forms.module.ts`), `packages/Angular/Bootstrap/src/generated/mj-class-registrations.ts`,
@@ -9860,7 +9860,7 @@ Sequence 6, tier `live-model`).
     "Feature Pipeline Version Steward" scheduled job evaluates and backfills changed versions without a person; an
     Action scheduled job paused for a missing class resumes by itself once the class is loaded; Gemini, Vertex and
     Bedrock send temperature 0 as 0 and strict calls refuse a changed parameter. Migration
-    `V202610161457__v6.2.x__Feature_Value_Key_And_Versions.sql`.
+    `V202610181000__v6.2.x__Feature_Value_Key_And_Versions.sql`.
     ```
     Add any other package the branch touched that `npm run check:changeset` names (e.g. `@memberjunction/ai-vertex`
     if its tests changed); keep every entry `minor` (the `fixed` group makes one minor repo-wide either way).
@@ -10130,12 +10130,12 @@ Assumption checks (run from the MJ repo unless a path says otherwise):
 - [ ] A3 `grep -c "temperature: params.temperature || 0.7" packages/AI/Providers/Bedrock/src/models/bedrockLLM.ts` → `0` at HEAD (satisfied by M5.3; still `8` on `origin/next`).
 - [ ] A4 `grep -c "export class VertexLLM extends GeminiLLM" packages/AI/Providers/Vertex/src/models/vertexLLM.ts` → `1` (Vertex inherits the Gemini fix).
 - [ ] A5 `gh pr view 5185 --json state --jq .state` → `MERGED` (merged before 2026-10-15; M5.2's merged branch was taken and is satisfied at HEAD; A2 confirms). No further action.
-- [ ] A6 `ls migrations/v6 | grep '^V' | sort | tail -1` → at HEAD the newest file is this PR's `V202610161457__v6.2.x__Feature_Value_Key_And_Versions.sql`; on `origin/next` it is `V202610141513__v6.2.x__Theme_Login_Screen.sql`, which sorts before it (satisfied: Q-8 re-timed the migration at the 2026-10-15 `next` merge). Run with `git ls-tree --name-only origin/next migrations/v6/ | sed 's#.*/##' | grep '^V' | sort | tail -1`; a `next` file newer than this PR's migration → re-time this PR's migration to a later timestamp when `next` is merged.
+- [ ] A6 `ls migrations/v6 | grep '^V' | sort | tail -1` → at HEAD the newest file is this PR's `V202610181000__v6.2.x__Feature_Value_Key_And_Versions.sql`; on `origin/next` it is `V202610141513__v6.2.x__Theme_Login_Screen.sql`, which sorts before it (satisfied: Q-8 re-timed the migration at the 2026-10-15 `next` merge). Run with `git ls-tree --name-only origin/next migrations/v6/ | sed 's#.*/##' | grep '^V' | sort | tail -1`; a `next` file newer than this PR's migration → re-time this PR's migration to a later timestamp when `next` is merged.
 - [ ] A7 `git show origin/next:metadata/prompts/.job-function-seniority-prompt.json | grep -c '"deleteRecord"'` → `1` on `origin/next` (F-ENV-6 residue on `next`); at HEAD the file is deleted by M2.3 (`git show HEAD:metadata/prompts/.job-function-seniority-prompt.json` fails; satisfied by PR 1).
 - [ ] A8 `grep -c "Re-deleting" packages/MetadataSync/src/services/PushService.ts` → `1` (unchanged at HEAD and on `next`).
 - [ ] A9 `grep -c "SkipValidation?: boolean, SuppressWarnings?: boolean): Promise<TemplateRenderResult>" packages/Templates/engine/src/TemplateEngine.ts` → `1` on `origin/next`, `0` at HEAD (satisfied by M3.3: `RenderTemplate` now takes `options?: { autoescape?: boolean }`).
 - [ ] A10 `gh api 'repos/MemberJunction/bizapps-common/contents/metadata/record-processes/.job-function-seniority-pipeline.json?ref=next' --jq .content | base64 -d | grep -c "pjf.PersonID = ID))"` → `1` on bizapps-common `next` (F-FP-1 still shipped there); `0` on the companion branch (`~/repos/bizapps-common` HEAD: the scope filter uses `vwPeople.[ID]`; satisfied by M2.1).
-- [ ] A11 `gh api 'repos/MemberJunction/bizapps-common/contents/migrations?ref=next' --jq '.[].name' | sort | tail -1` → `V202610141644__v5.53.x__Metadata_Sync.sql` on bizapps-common `next`; the companion branch's newest is `V202610151021__v5.53.x__Restamp_Pipeline_Job_Functions.sql` (with `V202610151020__v5.53.x__Missing_FK_Indexes.sql` before it), which sorts after it (satisfied: Q-8 re-timed both companion migrations when the companion merged `next`). A newer `next` file → re-time both again, keeping their order.
+- [ ] A11 `gh api 'repos/MemberJunction/bizapps-common/contents/migrations?ref=next' --jq '.[].name' | sort | tail -1` → `V202610141644__v5.53.x__Metadata_Sync.sql` on bizapps-common `next`; the companion branch's newest is `V202610181000__v5.55.x__Restamp_Pipeline_Job_Functions.sql`, which sorts after `next`'s `V202610171645__v5.55.x__SaveReturnMode_DatestampsOnly_StoredProcedures.sql` (re-timed 2026-10-18; the FK-index migration was dropped because `next`'s `V202610161900` ships all seven indexes). A newer `next` file → re-time again.
 - [ ] A12 `grep -c "HandleIndividualBaseEntityEvent" packages/Templates/base-types/src/TemplateEngineBase.ts` → `0` on `origin/next` and `2` at HEAD (satisfied by M1.6: template saves now refresh the dataset), and `grep -c "DatasetName: 'Template_Metadata'" packages/Templates/base-types/src/TemplateEngineBase.ts` → `1`.
 - [ ] A13 `grep -c '"@memberjunction/testing-engine"' packages/RecordSetProcessor/engine/package.json` → `0` and `grep -rc '"@memberjunction/record-set-processor"' packages/TestingFramework/Engine/package.json` → `1` at HEAD (M6.2's edge, now present and acyclic; the first grep stays `0`); `0` on `origin/next`.
 - [ ] A14 `ls -a metadata-optional/integration-test/tests/integration | grep -oE "IT[0-9]+" | sort -t T -k2 -n | tail -1` → at HEAD `IT124` (this PR's own `.IT124-feature-pipeline-core.json`; its live bundle is `IT125` under `tests/gates`); on `origin/next` `IT123` (`.IT123-search-scope-bound.json`), below this PR's numbers (satisfied: Q-8 renumbered IT123/IT124 to IT124/IT125). Compare the highest `next` number, not HEAD's; a `next` number at or above `IT124` → renumber again.
@@ -10323,7 +10323,7 @@ Assumption checks (run from the MJ repo unless a path says otherwise):
   re-time the companion migration after it. Default: each is done in the commit that merges `origin/next` (or the
   companion's `next`) into the branch, with the check that detects it re-run afterwards. Nothing was renamed by the
   refresh, which edits the plan only.
-  Resolution: (1) this PR's migration is now `V202610161457__v6.2.x__Feature_Value_Key_And_Versions.sql`; its CodeGen copy
+  Resolution: (1) this PR's migration is now `V202610181000__v6.2.x__Feature_Value_Key_And_Versions.sql`; its CodeGen copy
   of `spDeleteAIPrompt` was regenerated so it carries `next`'s `AIPrompt.TemplateDataCapture` (it now runs after
   `V202610140418`, which also emits that procedure); every other procedure and view in it is byte-identical to CodeGen's
   output on the merged schema. (2) IT123 → IT124 (`feature-pipeline-core`) and IT124 → IT125 (`fp-live-jobtitle`), with
@@ -10420,7 +10420,7 @@ PascalCase. `VendorCallParameters.VendorModelName` is the vendor's model name, `
 
 ### Migration
 
-`migrations/v6/V202610161457__v6.2.x__Feature_Value_Key_And_Versions.sql`: columns on `FeatureValue`
+`migrations/v6/V202610181000__v6.2.x__Feature_Value_Key_And_Versions.sql`: columns on `FeatureValue`
 (`PipelineVersion`, `AIModelID`, `ParametersHash`, `InputHash`, `ValueKeyHash`, `Source`), `FeatureValueCache`
 (`AIModelID`, `ParametersHash`, rebuilt unique indexes; cache rows that can never match the new key and that no
 Feature Value references are deleted), `ProcessRun.ResultSummary`, `ProcessRunDetail.Warnings`, new table
@@ -10573,6 +10573,57 @@ duplicate of a `next` mechanism, an unrequested feature, or a near-duplicate tes
 - `855c611206`, `7e3b785aa2` Explorer: QA fixes at minimal size; the Testing dashboard aggregates and notices cut.
 - `3edfc52d7b` rigs, tooling and docs: one-shot rigs, the host sleep guard, the suspension monitor and the cost ledger cut; tests of test helpers shrunk; query-parameter pins and the demo-query rewrite back to `next`; guides, READMEs and one changeset sized to the kept behaviour.
 - Final review fixes: `0c07ba445f` a plain engine load skips a blocked pool reload when the caller is in a transaction on any provider instance (MJAPI saves through per-request providers); `fba199c1d8` a Feature Pipeline unit runs on its own instance unless the caller is in the open transaction; `05d0e01bf1` a user view with no provider fails validation; `65f775cdd8` IT22 holds the User Routine Dispatcher job lock; `3b9f525e3a` near-duplicate and tooling tests cut; `ba2f083a8c` minors.
+
+### 2026-10-17 — feature-value-only outputs, Feature Values panel, steward under load — Claude Opus 5.5 (controller, subagent-driven execution)
+
+21 reviewed commits `beb20ae9c2..7155f953a3`, each with a task review, a whole-branch review (one Critical and three
+Important findings, all fixed and re-reviewed) and a scoped re-review of every fix round. Scope: an output may omit its
+write target (`OutputTargets.HasWriteTarget`; builder target mode "Feature value only (no write-back)"; typed storage by
+constraint; dry-run `previewFeatureValues`), a generic Feature Values panel on every record form (wildcard slot panel,
+latest row per pipeline+feature, history, reasoning, "no value" for a withheld answer), the Version Steward under load
+(timer heartbeat, deferred backfill while a run is Running, clean-run-only `MarkBackfilled`, 30-minute checkpoint
+lease), and the insert-race `Unchanged` outcome. IT126 "Feature Value Only Outputs" (5 checks) joins the deterministic
+tier. Large-scale exercise through the product: "Member Bio Profile" over 1,308 People, three target-less outputs,
+accuracy 1.000 / 1.000 / 1.000 on v1–v3, backfill 1,308/1,308/0 on the fixed steward, $2.76 model spend — every number
+in the QA doc, section "Large-scale exercise". Unit counts at `7155f953a3`: feature-pipelines 279, record-set-processor
+base 27 / engine 413, entity-action-ux 46, record-process-studio 70, core-entity-forms 516, scheduling engine 284 (1
+skipped), integration-test-suite 713; deterministic tier 91 passed / 0 failed / 17 skipped of 108 (suite run `CB9A49A8`).
+
+### 2026-10-18 — `next` merged, migration re-timed, standards pass, companion PR — Claude Fable 5.1
+
+- **Fixes before the merge:** `aa0d475436` the Feature Values panel shows the newest row per pipeline+feature even when
+  it withheld the value ("no value", muted; the superseded value moves to history); `3d4da0d13b` base-forms re-resolves
+  the chrome when a collapsible panel mounts after first render (`FormChromeCoordinator.SectionsChanged`), so the panel
+  gets its rail entry. Unit: base-forms 71 files / 1,442 tests; core-entity-forms 62 / 519.
+- **Merge `origin/next` (`961b560b49`, 168 commits behind):** 12 conflicts, resolved by hand — Bedrock keeps `next`'s
+  `buildAnthropicRequestBody` / Titan `textGenerationConfig` with the F-FP-13 `??` re-applied inside them (now
+  commented); TemplateEngine keeps both cache resets (the env-keyed `WeakMap` is replaced, not `.clear()`ed);
+  scheduling index exports both new modules; check-registry pins `entity-writes` 12 plus the two Feature Pipeline
+  bundles (130 bundles); generated manifests, the MJUser form and the GraphQL schema regenerated by CodeGen.
+- **Migration re-timed (`a0347f46db`):** `V202610161457` → `V202610181000__v6.2.x__Feature_Value_Key_And_Versions.sql`,
+  after `next`'s `V202610171900`. Hazard found and closed: `next`'s `V202610171645` sets `SaveReturnMode =
+  datestamps_only` on 23 log-type entities including `ProcessRunDetail`, and our appended `spCreate`/
+  `spUpdateProcessRunDetail` were still the full-row shape, so on a fresh install (ours runs last) the procedure
+  disagreed with its declared mode. Clean database `MJ_PS_PR1_merge_clean` built from scratch (migrate 132 → codegen
+  --skipfiles → sync push → codegen): CodeGen regenerated exactly the ProcessRunDetail pair (`Warnings` kept,
+  `[ID],[__mj_CreatedAt],[__mj_UpdatedAt]` returned) and that output replaced the two blocks in the tail. The other 22
+  regenerations CodeGen emits on a clean `next` bootstrap (procs flipped to full before the metadata push declares
+  datestamps-only, then back) are `next`'s ordering artefact, not this PR's; nothing of theirs is in our tail. Gates:
+  codegen-tail OK, entityfield-sequence OK, migration filename ordering OK, id-determinism OK, changeset OK (one
+  `minor`, now naming the re-timed file, `ng-base-forms` and the 10-17 work).
+- **Standards pass (coding_standards.md):** audit of the 170 hand-written files in `origin/next...HEAD`; 18 confirmed
+  findings fixed — see the commit(s) `d2c1e7c418`. Summary: required providers instead of `Metadata.Provider` fallbacks (WatermarkService, RecordFeatureValues); Feature Value writes sequential inside the write-back transaction; no `.then()`; strict equality; one `TemplateRenderOptions`; `OrdinalCompare`, `ResolveMappingRef`, `TaggedEntityIDOf` as a static; shared `ActiveLLMID` / `TeardownStubPipeline` on the gate fixture; debounced lookup preview and bounded row cache in the builder; the panel computes history once and uses `mjButton`; `LogWarning` in the steward; casing (`previewErrors`, `overwriteHumanValues`, `Correct`, `{ Cases, LabelQuality }`), ID casing, `unknown` comments; IT126 in the integration guide and the golden-set drivers in the Engine README. Three agents, disjoint packages, every touched package built and unit-tested.
+- **Verification at ``d2c1e7c418` (the docs commit that follows carries this entry)`:** feature-pipelines 279, record-set-processor base 27 / engine 413, entity-action-ux 46, record-process-studio 71, core-entity-forms 520, base-forms 1,443, scheduling engine 296 (1 skipped), templates base-types 5 / engine 291, ai-prompts 791, testing engine 673, integration-test-suite 715, Bedrock 56; gates changeset / codegen-tail / entityfield-sequence / migration ordering / id-determinism / esm / ui-tokens / buttons / peer-deps / browser-manifest green. Deterministic tier: 105 passed / 3 failed / 1 skipped of 109 (suite run `99ACA974-E5B6-43D4-8B10-8319C750EA58`; IT124 7/7, IT126 5/5; the 3 are `entity-writes.EW2`/`EW12` (next #5865) and `ai-cost.AC7` (the clean bootstrap's CodeGen prompt runs), the skip is IT52 Unified Search as configured). Chrome at the merged build on the
+  clean database: magic-link sign-in as qa-bot (Owner; Developer, UI, Integration; the local `provisioningGuard` set to `warn` so an Owner may redeem); the People form of a seeded person renders with its related-entity rail and no console errors; the Record Process form shows the Feature Pipeline overview, the Feature Values and Feature Pipeline Versions sections; the steward evaluated and activated v1 unattended on the fresh database (0.9655, two completed job runs); a dry run then a real run of the job-title pipeline on that person through the product's `RecordProcess.RunNow` operation (the call behind the Bulk Operations ▶) both completed 1/1/0; the Feature Values panel then shows SeniorityLevel "Vice President" and JobFunctions under "Job Function and Seniority Derivation v1", Source Pipeline, with the `mjButton` Refresh and expand controls, and the person's Seniority Level and a Derived "Sales" job function were written. The Bulk Operations app route itself redirected to Data Explorer for this user on the clean database (the user's apps were only Data Explorer; adding the UserApplication and ApplicationRole rows did not change it) — noted for the QA doc, not a Feature Pipeline matter.
+- **Companion (`~/repos/bizapps-common`):** `next` merged (`8d3fddb`); the FK-index migration dropped (all seven indexes
+  ship from `next`'s `V202610161900`); the restamp re-timed to `V202610181000__v5.55.x__Restamp_Pipeline_Job_Functions.sql`
+  (`9680e50`); changeset covers the restamp only (`76809d3`); pushed with upstream and PR opened: https://github.com/MemberJunction/bizapps-common/pull/354 (from the fork `arie-glazier-bcc/bizapps-common`; the account has no push rights on the upstream repo).
+- **Docs:** explainer re-dated 2026-10-18, "hand-labelled" corrected to the guide + two model labelers (D-PR1-17), the
+  target-less outputs / panel item and the large-scale exercise added; QA doc sign-off table filled; PR body links the
+  QA doc, names the re-timed migration and the ProcessRunDetail shape, and carries the 2026-10-18 verification.
+- **Found on `next`, reported, not changed here:** `entity-writes.EW2` / `EW12` fail on this branch and on `next`'s tip — #5865 (delta-only return selection on Update, merged 2026-10-18 12:59 UTC, after the 06:17 UTC nightly that last ran the mutation checks green) no longer returns virtual or untouched fields on a client `Save()`, which those two checks assert; this branch's GraphQLDataProvider / MJServer / MJCore are byte-identical to `next`'s and the failure reproduces in isolation on both databases. `ai-cost.AC7` flags the 19 "CodeGen: Check Constraint Parser" prompt runs a clean bootstrap makes before the metadata push seeds the model cost rows (CI never runs CodeGen on its database). `task-graph-execution.TX26` needs MJAPI booted with `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`, as CI does.
+- **Still open:** release-note cost check on the target environment (needs that environment's data); `next`'s
+  clean-bootstrap regeneration of 22 datestamps-only procs (reported to the build engineer, not fixed here).
 
 ## 12. Refresh log (append-only)
 
