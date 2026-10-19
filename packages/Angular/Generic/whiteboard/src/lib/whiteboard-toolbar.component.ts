@@ -126,7 +126,22 @@ export class RealtimeWhiteboardToolbarComponent {
    */
   public VisibleTools: ToolbarEntry[] = [...this.Tools];
 
-  public readonly PenColors = WHITEBOARD_PEN_COLORS;
+  /**
+   * The pen flyout's swatches. Defaults to {@link WHITEBOARD_PEN_COLORS} (tuned for MJ's dark
+   * canvas); a host on a light theme passes its own hexes. Anything that is not a non-empty
+   * array reads as the default — a static template attribute (`PenColors="#000,#fff"`, a
+   * plausible slip) hands us a string, and a string reaching the template's `@for` would
+   * throw. The kept value is a frozen COPY so a host mutating its array afterwards changes
+   * theirs, not ours, until they bind it again.
+   */
+  @Input()
+  set PenColors(value: readonly string[] | null | undefined) {
+    this._penColors = Array.isArray(value) && value.length > 0 ? Object.freeze([...value]) : WHITEBOARD_PEN_COLORS;
+  }
+  get PenColors(): readonly string[] {
+    return this._penColors;
+  }
+  private _penColors: readonly string[] = WHITEBOARD_PEN_COLORS;
   public readonly PenWidths = WHITEBOARD_PEN_WIDTHS;
   public readonly ShapeKinds: { Kind: WhiteboardShapeKind; Icon: string; Title: string }[] = [
     { Kind: 'rect', Icon: 'fa-regular fa-square', Title: 'Rectangle' },

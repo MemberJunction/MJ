@@ -460,4 +460,46 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
       expect(focusButton(f)).toBeNull();
     });
   });
+
+  // ── PenPalette: the host's palette reaches the toolbar; the pen never points off it (LXP P14.3) ──
+  describe('PenPalette', () => {
+    const DEFAULT_FIRST = '#cbd5e1';
+
+    it('defaults to the five MJ pen colors with the first selected', () => {
+      const f = render();
+      expect(f.componentInstance.PenPalette).toBeNull();
+      expect(f.componentInstance.PenColor).toBe(DEFAULT_FIRST);
+    });
+
+    it('a palette that excludes the current pen color moves the pen to its first entry', () => {
+      const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
+        inputs: { State: new WhiteboardState(), PenPalette: ['#1d4ed8', '#b91c1c'] },
+      });
+      expect(f.componentInstance.PenColor).toBe('#1d4ed8');
+    });
+
+    it('a palette that still contains the current pen color leaves the pen alone', () => {
+      const f = render();
+      f.componentInstance.PenColor = '#f87171';
+      f.componentInstance.PenPalette = ['#f87171', '#1d4ed8'];
+      expect(f.componentInstance.PenColor).toBe('#f87171');
+    });
+
+    it('a non-array reads as no palette, and the default palette comes back', () => {
+      const f = render();
+      f.componentInstance.PenPalette = ['#1d4ed8'];
+      f.componentInstance.PenPalette = '#000' as unknown as string[];
+      expect(f.componentInstance.PenPalette).toBeNull();
+      expect(f.componentInstance.PenColor).toBe(DEFAULT_FIRST);
+    });
+
+    it('the toolbar renders the host palette', () => {
+      const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
+        inputs: { State: new WhiteboardState(), PenPalette: ['#1d4ed8', '#b91c1c'] },
+      });
+      f.componentInstance.Tool = 'pen';
+      f.detectChanges();
+      expect(f.nativeElement.querySelectorAll('.pen-flyout .pen-c').length).toBe(2);
+    });
+  });
 });
