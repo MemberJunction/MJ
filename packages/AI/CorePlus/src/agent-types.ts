@@ -2149,6 +2149,10 @@ export type AgentContextData = {
     subAgentCount: number;
     /** Markdown formatted list of sub-agent names and descriptions */
     subAgentDetails: string;
+    /** Number of directly discoverable, user-runnable top-level agents preloaded into context */
+    availableAgentCount?: number;
+    /** Compact markdown formatted directory of user-runnable top-level agents (name + 1-line summary) */
+    availableAgentDetails?: string;
     /** Number of actions available to this agent */
     actionCount: number;
     /** Markdown formatted details of available actions (name, params, result codes) */
