@@ -266,10 +266,25 @@ type TaskBodyOutcome = {
     PayloadAtStart?: Record<string, unknown>;
 };
 
+interface GlobalUserCacheLookup {
+    Users: UserInfo[];
+    FindUser(criteria: { ID?: string; Email?: string }): Promise<UserInfo | undefined>;
+}
+
 /** What a task's position in its graph tells the runner: how deep, and who submitted it. */
 type GraphContext = {
     Depth: number;
     SubmittingAgentRunID: string | null;
+    /**
+     * The submitting invocation's `data` / `context` — an input mapping's roots of the same names,
+     * as in the in-run walker (R3-3). Empty when the graph was submitted without one.
+     */
+    Invocation: { data?: unknown; context?: unknown };
+    /**
+     * The resolved `UserInfo` of the user who submitted the graph (or owns the task), falling back
+     * to the dispatcher's `this.contextUser` when no distinct submitting user is recorded.
+     */
+    ExecutionUser: UserInfo;
 };
 
 /**
@@ -1795,28 +1810,81 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
-     * How deep the continuation chain already is, read from the graph's parent metadata.
+     * How deep the continuation chain already is, read from the graph's parent metadata, plus
+     * the resolved `ExecutionUser` of the user who submitted the graph.
      *
      * A run started by a graph inherits that graph's depth **plus one**. Without this every spawned
      * run begins at zero, so a self-referencing flow — one that dispatches a graph containing itself
      * — recurses without bound while the cap it should be hitting compares against a permanent zero.
      */
     private async graphContext(provider: IMetadataProvider, task: MJTaskEntity): Promise<GraphContext> {
-        if (!task.ParentID) return { Depth: 0, SubmittingAgentRunID: null };
-        try {
-            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-            if (!(await parent.Load(task.ParentID))) return { Depth: 0, SubmittingAgentRunID: null };
-            return {
-                Depth: ParseTaskGraphParentMetadata(parent.InputPayload).reinvokeDepth + 1,
-                // The graph's own row carries the run that submitted it. One load answers both
-                // questions, which is why they are resolved together rather than in two passes.
-                SubmittingAgentRunID: parent.AgentRunID,
-            };
-        } catch {
-            // An unreadable parent must not stop the work; depth zero is the safe reading, and the
-            // submit-time cap still guards the next hop.
-            return { Depth: 0, SubmittingAgentRunID: null };
+        let depth = 0;
+        let submittingAgentRunID: string | null = null;
+        let invocation: { data?: unknown; context?: unknown } = {};
+        let submittedByUserID: string | null | undefined = task.UserID;
+
+        if (task.ParentID && typeof provider?.GetEntityObject === 'function') {
+            try {
+                const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+                if (!(await parent.Load(task.ParentID))) {
+                    LogError(`[TaskGraphDispatcher] Task ${task.ID}: parent ${task.ParentID} could not be loaded; running at depth 0 with no invocation data/context.`);
+                } else {
+                    const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
+                    depth = meta.reinvokeDepth + 1;
+                    submittingAgentRunID = parent.AgentRunID;
+                    invocation = { data: meta.invocation?.data, context: meta.invocation?.context };
+                    submittedByUserID = meta.submittedByUserID ?? parent.UserID ?? task.UserID;
+                }
+            } catch (e) {
+                // An unreadable parent must not stop the work; depth zero is the safe reading, and the
+                // submit-time cap still guards the next hop. Logged, because it also blanks `data.*`.
+                LogError(`[TaskGraphDispatcher] Task ${task.ID}: reading parent ${task.ParentID} failed; running at depth 0 with no invocation data/context: ${e instanceof Error ? e.message : String(e)}`);
+            }
         }
+
+        const executionUser = await this.resolveGraphExecutionUser(submittedByUserID, task.ParentID ?? task.ID);
+        return {
+            Depth: depth,
+            SubmittingAgentRunID: submittingAgentRunID,
+            Invocation: invocation,
+            ExecutionUser: executionUser,
+        };
+    }
+
+    /**
+     * Resolves the submitting user's `UserInfo` for a task graph so durable node executions
+     * (Agent, Action, Prompt, Decision) run under the submitting user's security context
+     * rather than the background server daemon's `this.contextUser`.
+     */
+    protected async resolveGraphExecutionUser(
+        submittedByUserID: string | null | undefined,
+        graphDescription?: string,
+    ): Promise<UserInfo> {
+        const targetUserID = submittedByUserID?.trim();
+        if (!targetUserID) {
+            return this.contextUser;
+        }
+        if (this.contextUser?.ID && UUIDsEqual(this.contextUser.ID, targetUserID)) {
+            return this.contextUser;
+        }
+        const userCache = (globalThis as { ___SINGLETON__UserCache?: GlobalUserCacheLookup }).___SINGLETON__UserCache;
+        if (userCache && typeof userCache.FindUser === 'function') {
+            const ownerUser = await userCache.FindUser({ ID: targetUserID });
+            if (ownerUser) {
+                if (ownerUser.IsActive === false) {
+                    throw new Error(
+                        `Cannot execute task graph${graphDescription ? ` (${graphDescription})` : ''}: submitting user ${targetUserID} is inactive.`,
+                    );
+                }
+                return ownerUser;
+            }
+            if (Array.isArray(userCache.Users) && userCache.Users.length > 0) {
+                throw new Error(
+                    `Cannot execute task graph${graphDescription ? ` (${graphDescription})` : ''}: submitting user ${targetUserID} not found in UserCache.`,
+                );
+            }
+        }
+        return this.contextUser;
     }
 
     /**
@@ -3437,7 +3505,12 @@ export class TaskGraphDispatcher implements IShutdownable {
             return { ...await this.runDecisionNode(task, provider, payload, onProgress), PayloadAtStart: payload };
         }
 
-        const { params, errors } = BuildMappedInput(config?.inputMapping, { payload });
+        // `data.*` / `context.*` resolve against the invocation that submitted the graph, exactly as
+        // the in-run walker resolves them and as branch conditions already see them (R3-3). Without
+        // it a mapping like `RecordID: data.ID` reached the action as the literal "data.ID".
+        const context = await this.graphContext(provider, task);
+        const invocation = config?.inputMapping ? context.Invocation : {};
+        const { params, errors } = BuildMappedInput(config?.inputMapping, { payload, ...invocation });
         for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${e}`);
         // `payload`, NOT `inputPayload` — the MERGED value computed above, which includes what every
         // dependency produced.
@@ -3466,7 +3539,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 DependencyOutputs: dependencyOutputs,
                 TemplateParameters: config?.prompt?.templateParameters,
                 Provider: provider,
-                ContextUser: this.contextUser,
+                ContextUser: context.ExecutionUser,
                 OnProgress: onProgress,
             });
 
@@ -3498,10 +3571,10 @@ export class TaskGraphDispatcher implements IShutdownable {
                 InputPayload: effectiveInput,
                 DependencyOutputs: dependencyOutputs,
                 Provider: provider,
-                ContextUser: this.contextUser,
+                ContextUser: context.ExecutionUser,
                 OnProgress: onProgress,
             }), AgentRunID: null }
-            : await this.runAgentNode(task, provider, effectiveInput, dependencyOutputs, onProgress);
+            : await this.runAgentNode(task, provider, effectiveInput, dependencyOutputs, onProgress, context);
 
         return {
             ...raw,
@@ -3578,7 +3651,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // Bindings go INTO the payload rather than beside it, so an authored mapping reaches the
             // current item the same way it reaches anything else: `payload.<itemVariable>`.
             const iterationPayload = { ...livePayload, ...Bindings };
-            const resolved = ResolveMappedInput(bodyMapping, { payload: iterationPayload }) as Record<string, unknown>;
+            const resolved = ResolveMappedInput(bodyMapping, { payload: iterationPayload, ...graphContext.Invocation }) as Record<string, unknown>;
 
             /**
              * Folds an iteration's output into the running payload the next pass will see, and
@@ -3648,7 +3721,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     // confidently about nothing.
                     TemplateParameters: { ...stringifyBindings(Bindings), ...op.prompt?.templateParameters },
                     Provider: provider,
-                    ContextUser: this.contextUser,
+                    ContextUser: graphContext.ExecutionUser,
                 }), iterationPayload);
             }
 
@@ -3659,7 +3732,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     InputPayload: resolved,
                     DependencyOutputs: dependencyOutputs,
                     Provider: provider,
-                    ContextUser: this.contextUser,
+                    ContextUser: graphContext.ExecutionUser,
                 }), resolved);
             }
 
@@ -3675,7 +3748,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ContinuationDepth: graphContext.Depth,
                 SubmittingAgentRunID: graphContext.SubmittingAgentRunID,
                 Provider: provider,
-                ContextUser: this.contextUser,
+                ContextUser: graphContext.ExecutionUser,
             }), agentInput);
         };
 
@@ -3823,8 +3896,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         effectiveInput: unknown,
         dependencyOutputs: Map<string, unknown>,
         onProgress?: TaskRunProgressCallback,
+        resolvedContext?: GraphContext,
     ): Promise<TaskBodyOutcome> {
-        const context = await this.graphContext(provider, task);
+        const context = resolvedContext ?? await this.graphContext(provider, task);
         return this.agentRunner.RunAgentForTask({
             TaskID: task.ID,
             AgentID: task.AgentID!,
@@ -3833,7 +3907,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             ContinuationDepth: context.Depth,
             SubmittingAgentRunID: context.SubmittingAgentRunID,
             Provider: provider,
-            ContextUser: this.contextUser,
+            ContextUser: context.ExecutionUser,
             OnProgress: onProgress,
         });
     }
@@ -3871,6 +3945,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         const conflict = DecisionsPayloadConflict(payload);
         if (conflict) return notAsked(conflict);
 
+        const context = await this.graphContext(provider, task);
         const startedAt = new Date();
         const result = await this.decisionRunner.RunDecisionForTask({
             TaskID: task.ID,
@@ -3878,10 +3953,10 @@ export class TaskGraphDispatcher implements IShutdownable {
             State: state.State,
             Questions: toAsk,
             Provider: provider,
-            ContextUser: this.contextUser,
+            ContextUser: context.ExecutionUser,
             OnProgress: onProgress,
         });
-        await this.logDecisionStep(provider, task, config, toAsk, state.State, result, startedAt);
+        await this.logDecisionStep(provider, task, config, toAsk, state.State, result, startedAt, context);
 
         if (!result.Success || !result.Answers) {
             const message = result.ErrorMessage || `Decision "${task.Name}" returned no answers.`;
@@ -3968,9 +4043,10 @@ export class TaskGraphDispatcher implements IShutdownable {
         state: string | Record<string, unknown>,
         result: TaskDecisionRunResult,
         startedAt: Date,
+        resolvedContext?: GraphContext,
     ): Promise<void> {
         try {
-            const { SubmittingAgentRunID: agentRunID } = await this.graphContext(provider, task);
+            const { SubmittingAgentRunID: agentRunID } = resolvedContext ?? await this.graphContext(provider, task);
             if (!agentRunID) return;
 
             // The number is read and the step saved as one unit per run, so two Decision steps
@@ -4178,7 +4254,11 @@ export class TaskGraphDispatcher implements IShutdownable {
         try {
             const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
             if (await parent.Load(parentTaskID)) return ParseTaskGraphParentMetadata(parent.InputPayload);
-        } catch { /* fall through to the safe defaults */ }
+            LogError(`[TaskGraphDispatcher] Parent task ${parentTaskID} could not be loaded; using default graph metadata (no invocation data/context).`);
+        } catch (e) {
+            // Safe defaults still apply — but say so: a missing invocation turns every `data.*` mapping literal.
+            LogError(`[TaskGraphDispatcher] Reading parent task ${parentTaskID} failed; using default graph metadata: ${e instanceof Error ? e.message : String(e)}`);
+        }
         return ParseTaskGraphParentMetadata(null);
     }
 

@@ -65,6 +65,7 @@ export {
   type InstallConfig,
   type PartialInstallConfig,
   InstallConfigDefaults,
+  ParseDatabasePlatform,
   ResolveFromEnvironment, resolveFromEnvironment,
   LoadConfigFile, loadConfigFile,
   MergeConfigs, mergeConfigs,
@@ -82,6 +83,7 @@ export { GitHubReleaseProvider } from './adapters/GitHubReleaseProvider.js';
 export { FileSystemAdapter } from './adapters/FileSystemAdapter.js';
 export { ProcessRunner, type ProcessResult, type ProcessOptions } from './adapters/ProcessRunner.js';
 export { SqlServerAdapter, type SqlConnectivityResult } from './adapters/SqlServerAdapter.js';
+export { PostgresAdapter, type PgConnectivityResult } from './adapters/PostgresAdapter.js';
 export { RepoFetcher, type SparseFetchOptions, type SparseFetchResult } from './adapters/RepoFetcher.js';
 
 // Distribution assembly (sparse-checkout install + `mj bundle`)

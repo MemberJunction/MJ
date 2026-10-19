@@ -1,0 +1,67 @@
+<div class="wq-overview">
+  @if (IsLoading && Rows.length === 0) {
+    <div class="wq-loading"><mj-loading text="Loading topology and stats..." size="medium"></mj-loading></div>
+  } @else if (Rows.length === 0) {
+    <mj-empty-state Icon="fa-solid fa-layer-group" Title="No subscriptions"
+      Message="Create a topic and a subscription (MJ: Work Queue Topics / Subscriptions) to see them here." />
+  } @else {
+    @for (group of Groups; track group.Transport) {
+      <section class="wq-group">
+        <header class="wq-group-header">
+          <i class="fa-solid fa-server"></i>
+          <span class="wq-group-title">{{ group.Transport }}</span>
+          <span class="wq-chip wq-chip-neutral">{{ group.DriverClass }}</span>
+          <span class="wq-group-count">{{ group.Rows.length }} subscription{{ group.Rows.length === 1 ? '' : 's' }}</span>
+        </header>
+        <table class="wq-table">
+          <thead>
+            <tr>
+              <th>Topic</th>
+              <th>Subscription</th>
+              <th>Mode</th>
+              <th>Host</th>
+              <th>Status</th>
+              <th class="wq-num">Pending</th>
+              <th class="wq-num">In flight</th>
+              <th class="wq-num">Dead</th>
+              <th class="wq-num">Blocked keys</th>
+              <th class="wq-num">Oldest pending</th>
+              <th class="wq-num">Done / hour</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of group.Rows; track row.SubscriptionID) {
+              <tr class="wq-row" [class.wq-row-attention]="NeedsAttention(row)" (click)="Select(row)" title="Open dead letters for this subscription">
+                <td>
+                  <a class="wq-link" (click)="Open('MJ: Work Queue Topics', row.TopicID, $event)" title="Open topic record">{{ row.Topic }}</a>
+                  @if (row.IsFifo) { <span class="wq-chip wq-chip-neutral">FIFO</span> }
+                </td>
+                <td>
+                  <a class="wq-link" (click)="Open('MJ: Work Queue Subscriptions', row.SubscriptionID, $event)" title="Open subscription record">{{ row.Subscription }}</a>
+                </td>
+                <td>{{ row.PartitionMode }}</td>
+                <td><span class="wq-host">{{ row.HostType }}</span>@if (row.HandlerKey) { <span class="wq-handler">{{ row.HandlerKey }}</span> }</td>
+                <td><span class="wq-chip" [class.wq-chip-success]="row.Status === 'Active'" [class.wq-chip-warning]="row.Status !== 'Active'">{{ row.Status }}</span></td>
+                @if (row.Error) {
+                  <td colspan="6" class="wq-error"><i class="fa-solid fa-triangle-exclamation"></i> {{ row.Error }}</td>
+                } @else {
+                  <td class="wq-num">{{ Count(row.Stats?.Pending) }}</td>
+                  <td class="wq-num">{{ Count(row.Stats?.InFlight) }}</td>
+                  <td class="wq-num" [class.wq-num-error]="(row.Stats?.DeadLettered ?? 0) > 0">{{ Count(row.Stats?.DeadLettered) }}</td>
+                  <td class="wq-num" [class.wq-num-error]="(row.Stats?.BlockedKeys ?? 0) > 0">{{ Count(row.Stats?.BlockedKeys) }}</td>
+                  <td class="wq-num">{{ Age(row.Stats?.OldestPendingAgeSeconds) }}</td>
+                  <td class="wq-num">{{ Count(row.Stats?.CompletedLastHour) }}</td>
+                }
+                <td class="wq-num"><i class="fa-solid fa-chevron-right wq-row-arrow"></i></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+    }
+    @if (LastRefreshedAt) {
+      <p class="wq-refreshed">Stats as of {{ LastRefreshedAt | date:'mediumTime' }}. Rows with dead letters or blocked keys sort first.</p>
+    }
+  }
+</div>

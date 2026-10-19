@@ -185,7 +185,59 @@ Every prompt execution creates an `AIPromptRun` record with:
 - Parent/child relationships for hierarchical prompts
 - Agent run linkage via `agentRunId`
 
-**Persistence is fire-and-forget.** The initial `Running` INSERT and the final `Completed`/`Failed` UPDATE are queued, not awaited, so the model call is never blocked on a DB round-trip. Saves for the same run are chained (the INSERT always completes before the UPDATE, so a slow INSERT can't clobber the finalized row), and the record's ID is available immediately because `NewRecord()` client-generates the UUID. Save failures are logged but never fail the prompt (the record is observability, not part of the success contract). Callers that need the rows durably written before continuing can `await runner.WaitForPendingPromptRunSaves()`.
+**Persistence is fire-and-forget (`BaseEntitySaveQueue`).** The initial `Running` INSERT (`CreateRunRecord`) and the final `Completed`/`Failed`/`Cancelled` UPDATE (`FinalizeRunRecord`) are queued on `_promptRunQueue`, not awaited on the hot path, so model calls are never blocked on database round-trips:
+- **Synchronous in-memory finalization + reload-safe queued UPDATE**: `FinalizeRunRecord` mutates `CompletedAt`, `ExecutionTimeMS`, `Success`, `Status`, failover counters, `TotalCost`, token rollups, and `applyResultFields(promptRun)` synchronously in memory before enqueueing the UPDATE, so callers inspecting `result.promptRun` immediately see finalized state. The queued UPDATE callback also re-applies the captured finalized snapshot so an in-flight `INSERT` reload (`BaseEntity.Save()` reloading server fields when `INSERT` completes) cannot revert the finalized columns back to `Running`.
+- **Parent-child FK ordering (`FK_AIPromptRun_ParentID`)**: When a child prompt run (`params.parentPromptRunId`) is created while its parent `AIPromptRun`'s `INSERT` is still in flight (`!parentRun.IsSaved`), `CreateRunRecord` chains the child via `_promptRunQueue.InsertAfter(promptRun, parentRun)` so the parent row is guaranteed to exist in the database before the child `INSERT` executes.
+- **Terminal settlement (`FlushPendingSaves()` / `WaitForPendingPromptRunSaves()`)**: Callers that need all queued `AIPromptRun` INSERTs and UPDATEs durably written before continuing (such as `BaseAgent` on run completion, failure, cancellation, or post-turn compaction) can `await runner.FlushPendingSaves()` (or `await runner.WaitForPendingPromptRunSaves()`). Save failures are logged via `LogError` and surfaced in the returned `BaseEntitySaveQueueFlushResult`, never failing the prompt itself.
+
+### Template data capture
+
+`AIPromptRun.Messages` stores the messages the model received. The template inputs (`data` and `templateData`) can be large, so a capture mode sets how much of them the run stores:
+
+| Mode | What `Messages` stores for `data` and `templateData` |
+|---|---|
+| `None` (default) | A `dataShape` record. For each input: the key count, the total byte size of the values, and the UTF-8 byte length of each top-level value's JSON. It lists at most 25 keys per input (the largest; `keysElided: true` when there are more). It never stores values. |
+| `Referenced` | Only the top-level keys that the run's templates read: the prompt's template, every child prompt template, and the templates they pull in by literal name. If the analysis cannot finish (for example, a template name is an expression or a template is not found), the run stores all keys, with `dataCapture: 'Full'` and a `dataCaptureNote` that gives the reason. |
+| `Full` | All keys. |
+
+The run uses the first setting that is present:
+
+1. `AIPromptParams.TemplateDataCapture` (the call)
+2. `AIPrompt.TemplateDataCapture` on the run's child prompts (`AIPromptParams.childPrompts`), depth first: each child prompt, then its own child prompts. The first value that is not `NULL` applies.
+3. `AIPrompt.TemplateDataCapture` on the main prompt (`NULL` uses the next setting)
+4. `aiPromptRuns.templateDataCapture` in `mj.config.cjs` (the server default)
+5. `'None'`
+
+So the most specific prompt wins. For a Loop or Harness agent, the main prompt is the agent-type system prompt, which all agents of that type share, and the agent's own prompt is a child prompt. A value on the agent's prompt applies to that agent only. A value on the agent-type prompt applies to every agent of that type that has no value on its own prompt. A Flow agent has no agent-type prompt, so its own prompt is the main prompt.
+
+```js
+// mj.config.cjs
+module.exports = {
+  aiPromptRuns: { templateDataCapture: 'None' }, // 'None' | 'Referenced' | 'Full'
+};
+```
+
+The runner reads the server default once per process, from the `mj.config.cjs` it finds from the working directory. If the value is not valid, the runner logs a warning and uses `'None'`. MJServer also checks the value when it starts, so a typo stops MJAPI.
+
+No mode stores `_CURRENT_PAYLOAD` (the agent payload). The agent run steps already store it.
+
+`data` and `templateData` are normally objects. An input that is not a key/value object (a string, number, boolean, `null` or array) has no keys: `None` records only its size (`keyCount: 0` and the byte length of its JSON), and `Referenced` and `Full` store it as passed. A `Referenced` run with no key/value input does not run the template analysis.
+
+The capture step never fails a run. If it throws, the runner logs the error and the run stores `dataCapture: 'None'` with the note `Template data was not stored: the capture step failed. See the server log.`, the messages and (on a consolidated parallel run) the `parallelExecution` summary, and no template data.
+
+Example (`None`):
+
+```json
+{
+  "dataCapture": "None",
+  "dataShape": {
+    "data": { "keyCount": 2, "totalBytes": 419840, "keys": { "compositionContext": 266240, "componentCatalog": 153600 } }
+  },
+  "messages": [ { "role": "system", "content": "…" } ]
+}
+```
+
+A consolidated parallel run (`RunType = 'ParallelParent'`) also stores a `parallelExecution` summary. `StoredPromptRunMessages` in `@memberjunction/ai-core-plus` is the type of the stored object. Rows written before this setting existed have no `dataCapture` key and store `data` and `templateData` in full.
 
 ### Credential Resolution
 
@@ -197,6 +249,14 @@ Hierarchical credential resolution for API keys:
 4. `AIVendor.CredentialID` (vendor default)
 5. `AIPromptParams.apiKeys[]` (legacy runtime keys)
 6. `AI_VENDOR_API_KEY__<DRIVER>` environment variables (legacy)
+
+**Credential scope.** `AIPromptParams.CredentialScope` (`'Any' | 'RuntimeOnly'`, default `'Any'`)
+decides which of these tiers a run may use. Under `'RuntimeOnly'` only 1 and 5 count — the caller's
+own `credentialId` and `apiKeys`. Credential bindings, the vendor default and environment keys are
+skipped, a candidate the run has no key for is unavailable, so failover stays on the caller's
+vendors, and a run the keys do not cover fails with *"… The credential scope is RuntimeOnly …"*
+instead of running on the platform's account. Prompts the runner starts on a caller's behalf (JSON
+repair, the result-selector judge, decisions' chat prompts) run under the caller's scope.
 
 ### Failover
 
@@ -224,7 +284,7 @@ Whether a failed call fails over is `ErrorAnalyzer`'s decision, as it is for cha
 
 A driver that reports only `errorMessage` is classified from the message, which recognizes rate limits, outages and a few malformed requests; any other message reads as `Unknown`, which fails over. A driver should set `errorInfo` with `ErrorAnalyzer.AnalyzeError(error)` on the error it caught.
 
-`TimeoutMS` and `CancellationToken` bound each driver call as `timeoutMS` and `cancellationToken` bound a chat call. A call that exceeds `TimeoutMS` fails with an `AIPromptTimeoutError` and fails over. A cancelled call ends at once, never fails over, and its run row is recorded as `Cancelled`. The media drivers take no abort signal, so in both cases the request already sent is abandoned rather than torn down.
+`TimeoutMS` and `CancellationToken` bound each driver call as `timeoutMS` and `cancellationToken` bound a chat call. A call that exceeds `TimeoutMS` fails with an `AIPromptTimeoutError` and fails over. A cancelled call ends at once, never fails over, and its run row is recorded as `Cancelled`. Each driver call is handed the bound's signal (the caller's token composed with the timeout) as its params' `CancellationToken`. The shipped drivers pass it to their request (OpenAI and Groq transcription, which also send no further piece once it aborts; OpenAI and ElevenLabs speech; HeyGen avatar video), so the request already sent is torn down. A driver that ignores the signal is abandoned instead: the runner stops waiting and ignores its result.
 
 Video generation is asynchronous at the provider, and the primitive offers no status call, so `AIVideoRunner` does not wait for a render. A successful run means the provider accepted the request; the row records the video ID (for HeyGen, the render job's ID) and records the video's length only if a driver reports it.
 

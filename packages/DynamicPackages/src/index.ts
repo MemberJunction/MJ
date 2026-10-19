@@ -27,6 +27,7 @@ export type {
     DynamicPackageEntry,
     DynamicPackageSkipReason,
     DynamicPackageSource,
+    DynamicPackageStartupContext,
     DynamicPackageTier,
     DynamicPackagesConfig,
     DynamicPackagesLogger,

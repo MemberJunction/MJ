@@ -19,6 +19,7 @@ import { CreateRelatedEntitySectionKeyResolver } from '../panel-slot/form-contri
 import { BaseFormPolicy, type FormChromeContext } from './base-form-policy';
 import {
     DETAILS_SECTION_KEY,
+    DETAILS_SECTION_TITLE,
     MORE_SECTION_KEY,
     HumanizeEntityTitle,
     IsAlwaysMoreSection,
@@ -78,6 +79,12 @@ export interface ResolveFormChromeInput {
      * appear for grids the template already owns (or chose not to show).
      */
     IncludeUnbakedRelated?: boolean;
+    /**
+     * Sections known to be empty whose metadata says to hide them or move them
+     * to More (`whenEmpty`). Applied AFTER the layout is chosen, so counts
+     * arriving never flip accordion ↔ left-nav. Omit / empty = no change.
+     */
+    EmptySectionBehavior?: ReadonlyMap<string, 'hide' | 'more'>;
 }
 
 export interface ResolveFormChromeResult {
@@ -179,12 +186,43 @@ export function ResolveFormChrome(input: ResolveFormChromeInput): ResolveFormChr
         const decorated = policy.DecorateChrome(defaultSpec, ctx);
         const spec = TakeDecoratedChrome(defaultSpec, decorated ?? defaultSpec);
         ApplyUserChromeMembership(spec, input.Membership, visiblePanels);
+        ApplyEmptySectionBehavior(spec, input.EmptySectionBehavior, visiblePanels);
         ApplyFormChromeRuleTitles(spec, input.Entity, input.ChromeRules ?? []);
         return { Spec: spec, RelatedRoles: resolution, PolicyUsed: true };
     }
 
+    ApplyEmptySectionBehavior(defaultSpec, input.EmptySectionBehavior, visiblePanels);
     ApplyFormChromeRuleTitles(defaultSpec, input.Entity, input.ChromeRules ?? []);
     return { Spec: defaultSpec, RelatedRoles: resolution, PolicyUsed: false };
+}
+
+/**
+ * Empty-section chrome (`whenEmpty`). `'hide'` removes the section from every
+ * group and from More. `'more'` moves a first-class group into More — only when
+ * EVERY section in that group is empty-`'more'`, so a merged Bill-To / Ship-To
+ * group with rows in one half stays put. Layout is left unchanged. Runs after
+ * user membership so a hidden-when-empty section never reappears through a
+ * persisted rail order, and after the policy decorate so it cannot be undone.
+ */
+export function ApplyEmptySectionBehavior(
+    spec: FormChromeSpec,
+    behavior: ReadonlyMap<string, 'hide' | 'more'> | null | undefined,
+    panels: readonly FormChromePanelSnapshot[] = [],
+): FormChromeSpec {
+    if (!behavior || behavior.size === 0) return spec;
+    const hide = new Set([...behavior].filter(([, b]) => b === 'hide').map(([key]) => key));
+    const more = new Set(spec.MoreSectionKeys.filter((key) => !hide.has(key)));
+    for (const group of spec.Groups) {
+        if (group.IsMore) continue;
+        group.SectionKeys = group.SectionKeys.filter((key) => !hide.has(key));
+        const keys = group.SectionKeys;
+        if (keys.length > 0 && keys.every((key) => behavior.get(key) === 'more')) {
+            for (const key of keys) more.add(key);
+        }
+    }
+    spec.Groups = spec.Groups.filter((g) => g.IsMore || g.SectionKeys.length > 0);
+    spec.MoreSectionKeys = spec.MoreSectionKeys.filter((key) => !hide.has(key));
+    return RebuildChromeSpecMembership(spec, [...more], panels);
 }
 
 /**
@@ -365,7 +403,7 @@ export function BuildDefaultChromeSpec(
         const firstField = panels.find((p) => p.SectionKey === fieldKeys[0]);
         groups.push({
             Key: DETAILS_SECTION_KEY,
-            Title: 'Details',
+            Title: DETAILS_SECTION_TITLE,
             Icon: firstField?.Icon?.trim() || 'fa-solid fa-id-card',
             SectionKeys: fieldKeys,
             IsMore: false,

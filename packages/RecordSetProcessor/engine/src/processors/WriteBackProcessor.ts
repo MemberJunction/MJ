@@ -46,6 +46,13 @@ export class WriteBackProcessor implements IRecordProcessor {
         return this.GetWriteBackFields();
     }
 
+    /** Forwards the run-level readiness check to the wrapped processor, when it declares one. */
+    public async Preflight(context: RecordProcessorContext): Promise<void> {
+        if (this.inner.Preflight) {
+            await this.inner.Preflight(context);
+        }
+    }
+
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
         const result = await this.inner.ProcessRecord(record, context);
         if (result.Status !== 'Succeeded') {
@@ -103,7 +110,8 @@ export class WriteBackProcessor implements IRecordProcessor {
      */
     public async ProcessBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>> {
         if ('ProcessBatch' in this.inner && typeof (this.inner as { ProcessBatch?: unknown }).ProcessBatch === 'function') {
-            const innerResults = await (this.inner as { ProcessBatch: (recs: RecordRef[], ctx: RecordProcessorContext) => Promise<Map<string, RecordResult>> }).ProcessBatch(records, context);
+            const rawResults = await (this.inner as { ProcessBatch: (recs: RecordRef[], ctx: RecordProcessorContext) => Promise<Map<string, RecordResult> | RecordResult[]> }).ProcessBatch(records, context);
+            const innerResults = this.toResultMap(records, rawResults);
             const outResults = new Map<string, RecordResult>();
 
             for (const record of records) {
@@ -157,5 +165,23 @@ export class WriteBackProcessor implements IRecordProcessor {
             results.set(record.RecordID, await this.ProcessRecord(record, context));
         }
         return results;
+    }
+
+    /**
+     * Normalizes an inner `ProcessBatch` result to a RecordID-keyed map. The `IRecordProcessor`
+     * contract allows either a `Map` keyed by RecordID or an array positionally aligned with the
+     * input records (e.g. the Predictive Studio ML scorer returns an array) — both must work here.
+     */
+    private toResultMap(records: RecordRef[], results: Map<string, RecordResult> | RecordResult[]): Map<string, RecordResult> {
+        if (results instanceof Map) {
+            return results;
+        }
+        const map = new Map<string, RecordResult>();
+        records.forEach((record, i) => {
+            if (results[i]) {
+                map.set(record.RecordID, results[i]);
+            }
+        });
+        return map;
     }
 }

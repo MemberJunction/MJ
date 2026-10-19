@@ -11,11 +11,28 @@ describe('InstrumentedLocalStorageProvider', () => {
         provider = new InstrumentedLocalStorageProvider(inner);
     });
 
+    it('reports the inner store\'s SupportsCrossProcessPersistence', () => {
+        expect(provider.SupportsCrossProcessPersistence).toBe(false);
+        const persistent = Object.assign(new InMemoryLocalStorageProvider(), { SupportsCrossProcessPersistence: true });
+        expect(new InstrumentedLocalStorageProvider(persistent).SupportsCrossProcessPersistence).toBe(true);
+    });
+
     it('counts SetItem globally and per-category', async () => {
         await provider.SetItem('k', 'v', 'RunViewCache');
         expect(provider.SetItemCount).toBe(1);
         expect(provider.SetCount('RunViewCache')).toBe(1);
         expect(provider.SetCount('Other')).toBe(0);
+    });
+
+    it('counts SetItem per key, and ResetCounts clears it', async () => {
+        await provider.SetItem('a', 'v', 'RunViewCache');
+        await provider.SetItem('a', 'w', 'RunViewCache');
+        await provider.SetItem('b', 'v', 'RunViewCache');
+        expect(provider.SetCountForKey('a')).toBe(2);
+        expect(provider.SetCountForKey('b')).toBe(1);
+        expect(provider.SetCountForKey('c')).toBe(0);
+        provider.ResetCounts();
+        expect(provider.SetCountForKey('a')).toBe(0);
     });
 
     it('counts GetItem and GetItems separately and per-category', async () => {
@@ -46,6 +63,25 @@ describe('InstrumentedLocalStorageProvider', () => {
         expect(provider.GetItemCount).toBe(0);
         expect(provider.SetCount('RunViewCache')).toBe(0);
         expect(provider.GetCount('RunViewCache')).toBe(0);
+    });
+
+    it('exposes the optional shared-store members only when the inner provider has them', async () => {
+        expect(provider.WithKeyLock).toBeUndefined();
+        expect(provider.TryAcquireLease).toBeUndefined();
+
+        const shared = new InMemoryLocalStorageProvider() as InMemoryLocalStorageProvider & {
+            TryAcquireLease: (name: string, ttlMs: number) => Promise<boolean>;
+            WithKeyLock: <T>(key: string, category: string, work: () => Promise<T>) => Promise<T>;
+        };
+        const leases: Array<[string, number]> = [];
+        shared.TryAcquireLease = async (name, ttlMs) => { leases.push([name, ttlMs]); return leases.length === 1; };
+        shared.WithKeyLock = async (_key, _category, work) => work();
+        const wrapped = new InstrumentedLocalStorageProvider(shared);
+
+        expect(await wrapped.TryAcquireLease!('sweep:X', 500)).toBe(true);
+        expect(await wrapped.TryAcquireLease!('sweep:X', 500)).toBe(false);
+        expect(leases).toEqual([['sweep:X', 500], ['sweep:X', 500]]);
+        expect(await wrapped.WithKeyLock!('k', 'cat', async () => 42)).toBe(42);
     });
 
     it('delegates the stored value to the inner provider', async () => {

@@ -1,0 +1,36 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"]
+  },
+  // Explicit file list: the DOM project AOT-compiles only these components and their specs.
+  "include": [
+    "src/lib/components/agent-state.component.ts",
+    "src/lib/components/agent-state.component.dom.test.ts",
+    "src/lib/components/connection-overlay.component.ts",
+    "src/lib/components/connection-overlay.component.dom.test.ts",
+    "src/lib/components/media-device-menu.component.ts",
+    "src/lib/components/media-device-menu.component.dom.test.ts",
+    "src/lib/components/audio-meter.component.ts",
+    "src/lib/components/audio-meter.component.dom.test.ts",
+    "src/lib/components/media-tile.component.ts",
+    "src/lib/components/media-tile.component.dom.test.ts",
+    "src/lib/components/media-stage.component.ts",
+    "src/lib/components/media-stage.component.dom.test.ts",
+    "src/lib/components/media-controls.component.ts",
+    "src/lib/components/media-controls.component.dom.test.ts",
+    "src/lib/components/media-move-menu.component.ts",
+    "src/lib/components/media-move-menu.component.dom.test.ts",
+    "src/lib/components/self-view.component.ts",
+    "src/lib/components/self-view.component.dom.test.ts",
+    "src/lib/components/share-preview.component.ts",
+    "src/lib/components/share-preview.component.dom.test.ts",
+    "src/lib/components/camera-check.component.ts",
+    "src/lib/components/camera-check.component.dom.test.ts",
+    "src/lib/share-panel-registry.ts",
+    "src/lib/share-panel-registry.dom.test.ts",
+    "src/lib/share-panel.directive.ts",
+    "src/lib/share-panel.directive.dom.test.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

@@ -27,10 +27,11 @@ import { WhiteboardSyncCoordinator } from '../whiteboard-sync';
       (SceneDelta)="SceneDelta.emit($event)"
     ></mj-realtime-whiteboard-host>
   `,
+  // Only the surface is styled here. The board host lays itself out (a flex column filling its parent: its header, then
+  // the board); a rule on it from here outranks its own `:host` and would leave the board with no height.
   styles: [
     `
-      :host,
-      .lk-wb {
+      :host {
         display: block;
         width: 100%;
         height: 100%;

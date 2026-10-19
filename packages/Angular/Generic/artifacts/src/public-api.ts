@@ -51,6 +51,11 @@ export * from './lib/components/file-artifact-toolbar.component';
 export * from './lib/components/plugins/pdf-artifact-viewer.component';
 export * from './lib/components/plugins/xlsx-artifact-viewer.component';
 export * from './lib/components/plugins/docx-artifact-viewer.component';
+
+// Shared Office previews: Explorer's one Word renderer and one spreadsheet renderer, used by the plugins above and by the Files form
+export * from './lib/components/previews/docx-preview.component';
+export * from './lib/components/previews/xlsx-preview.component';
+export * from './lib/components/previews/office-preview.logic';
 export * from './lib/components/plugins/image-artifact-viewer.component';
 export * from './lib/components/plugins/video-artifact-viewer.component';
 export * from './lib/components/plugins/audio-artifact-viewer.component';
