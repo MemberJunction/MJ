@@ -2966,8 +2966,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     if (!step.AgentRunID) {
       return;
     }
-    const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: step.AgentRunID }]);
-    this.OpenEntityRecord.emit({ entityName: 'MJ: AI Agent Runs', compositeKey });
+    const entityName = 'MJ: AI Agent Runs';
+    const compositeKey = CompositeKey.FromID(step.AgentRunID);
+    this.OpenEntityRecord.emit({ entityName, compositeKey });
   }
 
   /**
