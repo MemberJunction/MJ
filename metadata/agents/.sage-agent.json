@@ -620,6 +620,8 @@
             "ModelSelectionMode": "Agent",
             "ArtifactCreationMode": "Never",
             "ExposeAsAction": false,
+            "MessageMode": "Latest",
+            "MaxMessages": 10,
             "AgentTypePromptParams": {
               "includeForEachDocs": false,
               "includeWhileDocs": false,
@@ -717,6 +719,8 @@
             "ExposeAsAction": false,
             "DriverClass": "FormBuilderAgent",
             "IconClass": "fa-solid fa-pen-ruler",
+            "MessageMode": "Latest",
+            "MaxMessages": 10,
             "AgentTypePromptParams": {
               "includeForEachDocs": false,
               "includeWhileDocs": false,
@@ -740,6 +744,8 @@
                   "ExposeAsAction": false,
                   "DriverClass": "FormBuilderDesignerAgent",
                   "IconClass": "fa-solid fa-drafting-compass",
+                  "MessageMode": "Latest",
+                  "MaxMessages": 10,
                   "PayloadDownstreamPaths": [
                     "*"
                   ],
