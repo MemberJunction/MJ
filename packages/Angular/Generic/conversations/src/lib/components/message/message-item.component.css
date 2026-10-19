@@ -314,17 +314,23 @@
   z-index: 10;
 }
 
-/* Multi-artifact showcase: supporting step outputs in a collapsible 2-column grid + full-width final deliverable */
+/* Multi-artifact showcase: supporting step outputs in a collapsible grid + brand-tinted final deliverable */
 .multi-artifact-showcase {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-top: 10px;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* Strip the default 12px top/bottom margin from inner <mj-artifact-message-card> when inside the showcase
+   so the grid and Final Deliverable containers control padding and vertical rhythm directly. */
+.multi-artifact-showcase ::ng-deep .artifact-message-card {
+  margin: 0;
 }
 
 .multi-artifact-supporting-section {
   border: 1px solid var(--mj-border-default);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--mj-bg-surface-sunken);
   overflow: hidden;
 }
@@ -334,15 +340,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  background: transparent;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--mj-bg-surface-sunken) 65%, var(--mj-bg-surface-card));
   border: none;
+  border-bottom: 1px solid var(--mj-border-subtle);
   cursor: pointer;
   color: var(--mj-text-secondary);
   font-size: 12px;
   font-weight: 600;
   text-align: left;
   transition: background-color 0.15s ease;
+}
+
+.multi-artifact-supporting-section.is-collapsed .supporting-artifacts-header {
+  border-bottom: none;
 }
 
 .supporting-artifacts-header:hover {
@@ -352,7 +363,7 @@
 .supporting-header-left {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
 }
 
 .supporting-header-icon {
@@ -402,7 +413,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 10px;
-  padding: 4px 10px 10px 10px;
+  padding: 12px 14px;
 }
 
 .supporting-artifact-cell {
@@ -410,14 +421,20 @@
   min-width: 0;
 }
 
+.supporting-artifact-cell ::ng-deep .artifact-info-bar {
+  padding: 10px 66px 10px 12px;
+  border-radius: 8px;
+}
+
 .supporting-step-badge {
   position: absolute;
-  top: 14px;
-  right: 10px;
+  top: 50%;
+  right: 36px;
+  transform: translateY(-50%);
   z-index: 5;
   display: inline-flex;
   align-items: center;
-  padding: 1px 6px;
+  padding: 2px 6px;
   border-radius: 999px;
   font-size: 10px;
   font-weight: 700;
@@ -430,18 +447,22 @@
 .multi-artifact-primary-section {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+  padding: 10px 14px 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 7%, var(--mj-bg-surface-card));
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 38%, var(--mj-border-default));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
 }
 
 .primary-artifact-header {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 4px;
+  gap: 7px;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--mj-brand-primary);
 }
 
@@ -452,19 +473,33 @@
 .primary-step-badge {
   display: inline-flex;
   align-items: center;
-  padding: 1px 6px;
+  padding: 1px 7px;
   border-radius: 999px;
   font-size: 10px;
   font-weight: 700;
   color: var(--mj-brand-primary);
-  background: var(--mj-bg-surface-sunken);
-  border: 1px solid var(--mj-border-subtle);
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 32%, var(--mj-border-subtle));
 }
 
 .primary-artifact-card {
-  border-left: 3px solid var(--mj-brand-primary);
-  border-radius: 10px;
-  padding-left: 6px;
+  min-width: 0;
+}
+
+.primary-artifact-card ::ng-deep .artifact-info-bar {
+  background: color-mix(in srgb, var(--mj-brand-primary) 11%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 38%, var(--mj-border-default));
+  border-radius: 8px;
+}
+
+.primary-artifact-card ::ng-deep .artifact-info-bar:hover {
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+}
+
+.primary-artifact-card ::ng-deep .artifact-icon {
+  background: color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-bg-surface-sunken));
+  color: var(--mj-brand-primary);
 }
 
 .message-content {
