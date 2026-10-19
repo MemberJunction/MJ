@@ -565,6 +565,7 @@ interface DetailAgentRunCandidate {
     ID?: string | null;
     ParentRunID?: string | null;
     ContinuationDepth?: number | null;
+    StartedAt?: Date | string | null;
     __mj_CreatedAt?: Date | string | null;
 }
 
@@ -585,8 +586,9 @@ function agentRunPriorityTier(run: DetailAgentRunCandidate): number {
 /**
  * Returns true when `candidate` should replace `existing` as the representative agent run
  * for a single `ConversationDetailID`. Lower tier wins (primary root run beats continuation
- * synthesis run, which beats child sub-agent run); within the same tier, a newer run wins
- * (so user retries of a message still replace the earlier run).
+ * synthesis run, which beats child sub-agent run); within the same tier, a strictly newer run
+ * wins (so user retries of a message replace the earlier run while DESC-ordered queries keep
+ * the first row when timestamps are tied or omitted in test fixtures).
  */
 export function ShouldReplaceDetailAgentRun(
     existing: DetailAgentRunCandidate | undefined,
@@ -603,9 +605,12 @@ export function ShouldReplaceDetailAgentRun(
     if (candidateTier !== existingTier) {
         return candidateTier < existingTier;
     }
-    const existingTime = ToEpochMs(existing.__mj_CreatedAt) ?? 0;
-    const candidateTime = ToEpochMs(candidate.__mj_CreatedAt) ?? 0;
-    return candidateTime >= existingTime;
+    const existingTime = ToEpochMs(existing.__mj_CreatedAt ?? existing.StartedAt) ?? 0;
+    const candidateTime = ToEpochMs(candidate.__mj_CreatedAt ?? candidate.StartedAt) ?? 0;
+    if (candidateTime !== existingTime) {
+        return candidateTime > existingTime;
+    }
+    return false;
 }
 
 function selectPreferredDetailAgentRun(runs: AgentRunJSON[]): AgentRunJSON | undefined {

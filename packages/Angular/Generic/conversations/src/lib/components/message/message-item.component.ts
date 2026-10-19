@@ -764,6 +764,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   @Output() public TaskGraphPanelRequested = new EventEmitter<{
     parentTaskId: string;
+    workflowTitle: string;
     workflowName: string;
     isRunning: boolean;
   }>();
@@ -2968,6 +2969,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
     this.TaskGraphPanelRequested.emit({
       parentTaskId: parentId,
+      workflowTitle: this.WorkflowTitle,
       workflowName: this.WorkflowTitle,
       isRunning: this.WorkflowStatus === 'Running',
     });

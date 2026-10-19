@@ -7276,7 +7276,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.OnArtifactClicked(data);
   }
 
-  public OnTaskGraphPanelRequested(data: { parentTaskId: string; workflowTitle: string }): void {
+  public OnTaskGraphPanelRequested(data: { parentTaskId: string; workflowTitle?: string; workflowName?: string; isRunning?: boolean }): void {
     if (!data?.parentTaskId) {
       return;
     }
@@ -7288,7 +7288,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.SelectedArtifactId = null;
     this.SelectedTaskGraphPanel = {
       parentTaskId: data.parentTaskId,
-      workflowTitle: data.workflowTitle || 'Task Graph',
+      workflowTitle: data.workflowTitle || data.workflowName || 'Task Graph',
     };
     this.cdr.detectChanges();
   }

@@ -590,7 +590,11 @@
 
 .task-graph-pane-body {
   flex: 1;
+  width: 100%;
   min-height: 0;
+  min-width: 0;
+  padding: 12px 16px 16px;
+  box-sizing: border-box;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -598,8 +602,11 @@
 
 .task-graph-pane-body > mj-task-graph-run-view {
   display: flex;
+  flex-direction: column;
   flex: 1;
+  width: 100%;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
 }
 

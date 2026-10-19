@@ -712,7 +712,12 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public afterResponseFormSubmitted = this.AfterResponseFormSubmitted;
-  @Output() public TaskGraphPanelRequested = new EventEmitter<{ parentTaskId: string; workflowTitle: string }>();
+  @Output() public TaskGraphPanelRequested = new EventEmitter<{
+    parentTaskId: string;
+    workflowTitle: string;
+    workflowName?: string;
+    isRunning?: boolean;
+  }>();
   /** @deprecated Use {@link TaskGraphPanelRequested}. */
   @Output() public taskGraphPanelRequested = this.TaskGraphPanelRequested;
 
@@ -2189,7 +2194,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.messagePinToggled.subscribe((msg: MJConversationDetailEntity) => this.MessagePinToggled.emit(msg));
     instance.beforeResponseFormSubmitted.subscribe((e: BeforeResponseFormSubmittedEventArgs) => this.BeforeResponseFormSubmitted.emit(e));
     instance.afterResponseFormSubmitted.subscribe((e: AfterResponseFormSubmittedEventArgs) => this.AfterResponseFormSubmitted.emit(e));
-    instance.TaskGraphPanelRequested.subscribe((data: { parentTaskId: string; workflowTitle: string }) => this.TaskGraphPanelRequested.emit(data));
+    instance.TaskGraphPanelRequested.subscribe((data: { parentTaskId: string; workflowTitle: string; workflowName?: string; isRunning?: boolean }) => this.TaskGraphPanelRequested.emit(data));
 
     if (instance.artifactActionPerformed) {
       instance.artifactActionPerformed.subscribe((data: {action: string; artifactId: string}) => {
