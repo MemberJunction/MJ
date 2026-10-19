@@ -57,7 +57,7 @@ export interface GoldenSetScore {
 }
 
 /** One scored case of one output and its verdict. */
-interface ScoredPair { CaseID: string; correct: boolean; }
+interface ScoredPair { CaseID: string; Correct: boolean; }
 
 /** Golden-set scoring; pure and deterministic. */
 export class GoldenSetScorer {
@@ -86,7 +86,7 @@ export class GoldenSetScorer {
         for (const output of outputs) {
             const pairs = GoldenSetScorer.ScoredPairs(cases, byCase, output);
             perOutput[output] = GoldenSetScorer.ScoreOutput(pairs);
-            for (const p of pairs.filter((x) => !x.correct)) {
+            for (const p of pairs.filter((x) => !x.Correct)) {
                 wrongByCase.set(p.CaseID, [...(wrongByCase.get(p.CaseID) || []), output]);
             }
         }
@@ -115,15 +115,15 @@ export class GoldenSetScorer {
                 const withheld = (answer?.Withheld || []).includes(output);
                 // An answered record that gave nothing abstained; a record that failed for another reason did not answer at all
                 const abstained = withheld || (!!answer?.Values && (predicted === null || accepted.includes(norm(predicted))));
-                return { CaseID: c.ID, correct: abstained };
+                return { CaseID: c.ID, Correct: abstained };
             }
-            return { CaseID: c.ID, correct: predicted !== null && accepted.includes(norm(predicted)) };
+            return { CaseID: c.ID, Correct: predicted !== null && accepted.includes(norm(predicted)) };
         });
     }
 
     /** One output's accuracy over its scored cases. */
     protected static ScoreOutput(pairs: ScoredPair[]): OutputScore {
-        const correct = pairs.filter((p) => p.correct).length;
+        const correct = pairs.filter((p) => p.Correct).length;
         const w = GoldenSetScorer.WilsonInterval(correct, pairs.length);
         return { Correct: correct, N: pairs.length, Value: pairs.length > 0 ? correct / pairs.length : 0, Lower: w.Lower, Upper: w.Upper };
     }

@@ -33,6 +33,8 @@ export class FeatureValuesPanel extends BaseFormPanel implements OnInit {
     public Loaded = false;
     /** Key of the card whose detail/history is expanded. */
     public ExpandedKey: string | null = null;
+    /** The expanded card's older values, newest first; computed when the card is toggled or the rows reload, not per binding. */
+    public ExpandedHistory: FeatureValueRow[] = [];
 
     private rows: FeatureValueRow[] = [];
     /** Sequence number of the latest load; an older load's answer is dropped. */
@@ -50,16 +52,18 @@ export class FeatureValuesPanel extends BaseFormPanel implements OnInit {
     /** Reload the feature values for the current record (one RunView); a load overtaken by a later one is dropped. */
     public async Refresh(): Promise<void> {
         const sequence = ++this.loadSequence;
-        const entityId = this.Record?.EntityInfo?.ID ?? null;
+        const entityID = this.Record?.EntityInfo?.ID ?? null;
         // Same encoding the pipeline writes into RecordID: bare value for a single key, F1|v1||F2|v2 for composite.
-        const recordId = this.Record?.PrimaryKey?.ToCompactURLSegment() ?? '';
-        if (!this.Record?.IsSaved || !entityId || !recordId) {
+        const recordID = this.Record?.PrimaryKey?.ToCompactURLSegment() ?? '';
+        if (!this.Record?.IsSaved || !entityID || !recordID) {
             this.rows = [];
             this.Cards = [];
+            this.syncExpandedHistory();
             this.Loaded = true;
             this.cdr.markForCheck();
             return;
         }
+        this.Loaded = false;
         try {
             const result = await this.runView().RunView<FeatureValueRow>(
                 {
@@ -67,7 +71,7 @@ export class FeatureValuesPanel extends BaseFormPanel implements OnInit {
                     Fields: ['ID', 'RecordProcessID', 'EntityID', 'RecordID', 'FeatureName', 'ValueText', 'ValueNumeric',
                         'ValueDate', 'ValueBoolean', 'ValueJSON', 'Reasoning', 'Confidence', 'ProcessRunID', 'ComputedAt',
                         'PipelineVersion', 'Source', 'RecordProcess'],
-                    ExtraFilter: `EntityID='${EscapeSQLString(entityId)}' AND RecordID='${EscapeSQLString(recordId)}'`,
+                    ExtraFilter: `EntityID='${EscapeSQLString(entityID)}' AND RecordID='${EscapeSQLString(recordID)}'`,
                     OrderBy: 'ComputedAt DESC',
                     MaxRows: 500,
                     ResultType: 'simple',
@@ -92,6 +96,7 @@ export class FeatureValuesPanel extends BaseFormPanel implements OnInit {
             this.rows = [];
             this.Cards = [];
         }
+        this.syncExpandedHistory();
         this.Loaded = true;
         this.cdr.markForCheck();
     }
@@ -99,11 +104,14 @@ export class FeatureValuesPanel extends BaseFormPanel implements OnInit {
     /** Expand/collapse a card's reasoning + history. */
     public Toggle(card: FeatureValueCard): void {
         this.ExpandedKey = this.ExpandedKey === card.Key ? null : card.Key;
+        this.syncExpandedHistory();
     }
 
-    /** Older values of the card's feature, newest first. */
-    public HistoryFor(card: FeatureValueCard): FeatureValueRow[] {
-        return FeatureValuesPanelModel.History(this.rows, card);
+    /** Recomputes the expanded card's history from the current rows; collapses when that card is no longer shown. */
+    private syncExpandedHistory(): void {
+        const card = this.Cards.find((c) => c.Key === this.ExpandedKey);
+        this.ExpandedKey = card ? card.Key : null;
+        this.ExpandedHistory = card ? FeatureValuesPanelModel.History(this.rows, card) : [];
     }
 
     /** Display string for a history row ("no value" for a valueless one). */

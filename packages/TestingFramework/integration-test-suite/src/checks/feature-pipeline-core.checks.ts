@@ -9,8 +9,7 @@
  * everything the bundle created.
  */
 import { RunView } from '@memberjunction/core';
-import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
-import type { MJAIModelEntity, MJFeaturePipelineVersionEntity, MJFeatureValueCacheEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
+import type { MJFeaturePipelineVersionEntity, MJFeatureValueCacheEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { EscapeSQLString, ExcludeByUUIDs, UUIDsEqual } from '@memberjunction/global';
@@ -76,7 +75,7 @@ class FeaturePipelineCoreBundle {
                 TypeID: await F.LookupID(ctx, 'MJ: AI Prompt Types', `Name = 'Chat'`), CategoryID: null, ResponseFormat: 'JSON',
                 TemplateText: 'Name: {{ record.Name }}\n{{ ConstraintBlock }}',
             },
-            Model: { ModelID: await FeaturePipelineCoreBundle.FirstLLM(ctx), VendorID: null },
+            Model: { ModelID: await F.ActiveLLMID(ctx), VendorID: null },
             Spec: spec,
             // Never run by scope: the checks hand the processor their own in-memory records.
             RecordProcess: { CategoryID: null, ScopeFilter: '1=0', OutputMapping: null, WatermarkStrategy: 'Checksum' },
@@ -89,30 +88,7 @@ class FeaturePipelineCoreBundle {
 
     /** Deletes the bundle's pipeline and everything hanging off it, and restores the shared stub table. Never throws. */
     public static async Teardown(ctx: IntegrationCheckContext): Promise<void> {
-        try {
-            const problems = await F.DeleteStubPipeline(ctx, FeaturePipelineCoreBundle.NAME, FeaturePipelineCoreBundle.TYPE_NAME);
-            FeaturePipelineGateStubTable.Instance.Clear();
-            await AIEngine.Instance.Config(true, ctx.User, ctx.Provider);
-            await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
-            if (problems.length > 0) {
-                console.warn(`feature-pipeline-core teardown: ${problems.join('; ')}`);
-            }
-        } catch (e) {
-            console.warn(`feature-pipeline-core teardown: ${e instanceof Error ? e.message : String(e)}`);
-        }
-    }
-
-    /** The first active LLM by name (the stub answers, so which one does not matter; a stable choice keeps the pin stable). */
-    protected static async FirstLLM(ctx: IntegrationCheckContext): Promise<string> {
-        const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJAIModelEntity, 'ID'>>({
-            EntityName: 'MJ: AI Models', Fields: ['ID'], ResultType: 'simple', MaxRows: 1, OrderBy: 'Name',
-            ExtraFilter: `AIModelType = 'LLM' AND IsActive = 1`,
-        }, ctx.User);
-        const id = res.Success ? res.Results?.[0]?.ID : undefined;
-        if (!id) {
-            throw new Error(`no active LLM model exists${res.Success ? '' : `: ${res.ErrorMessage}`}`);
-        }
-        return id;
+        await F.TeardownStubPipeline(ctx, FeaturePipelineCoreBundle.NAME, FeaturePipelineCoreBundle.TYPE_NAME, 'feature-pipeline-core');
     }
 
     /** An in-memory `MJ: Entities` record the pipeline reads `Name` from. */

@@ -5,10 +5,8 @@
  * Feature Values. Setup deletes what an interrupted run left; teardown deletes everything the bundle created.
  */
 import { RunView } from '@memberjunction/core';
-import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
-import type { MJAIModelEntity, MJFeatureValueEntity, MJProcessRunDetailEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
-import { AIEngine } from '@memberjunction/aiengine';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import type { MJFeatureValueEntity, MJProcessRunDetailEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import { ValidateSpec, type DataFeatureSpec, type SpecValidationIssue } from '@memberjunction/feature-pipelines';
 import { RecordProcessExecutor } from '@memberjunction/record-set-processor';
 import type { FeatureValuePreview, ProcessRunResult } from '@memberjunction/record-set-processor-base';
@@ -51,7 +49,7 @@ class FeatureValueOnlyBundle {
     /** The Feature Value count after the real run (FV4 compares against it). */
     public static StoredAfterRealRun = 0;
     /** Each bundle record's `__mj_UpdatedAt` (ms) at setup: the pipeline has no targets, so it must never change. */
-    public static UpdatedAtAtSetup = new Map<string, number>();
+    public static UpdatedAtAtSetup = new UUIDMap<number>();
 
     /** The record the stub answers with a low `ScoreConfidence`, so its `Score` is withheld. */
     public static get LowConfidence(): { ID: string; Name: string } {
@@ -77,7 +75,7 @@ class FeatureValueOnlyBundle {
                 TypeID: await F.LookupID(ctx, 'MJ: AI Prompt Types', `Name = 'Chat'`), CategoryID: null, ResponseFormat: 'JSON',
                 TemplateText: 'Name: {{ record.Name }}\n{{ ConstraintBlock }}',
             },
-            Model: { ModelID: await FeatureValueOnlyBundle.FirstLLM(ctx), VendorID: null },
+            Model: { ModelID: await F.ActiveLLMID(ctx), VendorID: null },
             Spec: FeatureValueOnlyBundle.Spec(),
             // The runs hand the executor an explicit records scope, so the filter only has to admit those rows. No OutputMapping:
             // the executor wraps the processor in the write-back because an output has no write target, which carries the dry-run preview.
@@ -122,49 +120,26 @@ class FeatureValueOnlyBundle {
     }
 
     /** The bundle records' `__mj_UpdatedAt` in ms, by record ID (read past the cache). */
-    public static async ReadUpdatedAt(ctx: IntegrationCheckContext): Promise<Map<string, number>> {
+    public static async ReadUpdatedAt(ctx: IntegrationCheckContext): Promise<UUIDMap<number>> {
         const ids = FeatureValueOnlyBundle.Records.map((r) => `'${EscapeSQLString(r.ID)}'`).join(',');
         const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string; __mj_UpdatedAt: Date | string }>({
             EntityName: 'MJ: Entities', Fields: ['ID', '__mj_UpdatedAt'], ResultType: 'simple', BypassCache: true, ExtraFilter: `ID IN (${ids})`,
         }, ctx.User);
         Assert(res.Success, `reading the MJ: Entities rows: ${res.ErrorMessage}`);
-        return new Map((res.Results || []).map((x) => [x.ID.toLowerCase(), new Date(x.__mj_UpdatedAt).getTime()]));
+        return new UUIDMap((res.Results || []).map((x): [string, number] => [x.ID, new Date(x.__mj_UpdatedAt).getTime()]));
     }
 
     /** Asserts the processed `MJ: Entities` rows were not written (their `__mj_UpdatedAt` is what Setup recorded). */
     public static async AssertRecordsUntouched(ctx: IntegrationCheckContext): Promise<void> {
         const now = await FeatureValueOnlyBundle.ReadUpdatedAt(ctx);
         for (const rec of FeatureValueOnlyBundle.Records) {
-            AssertEqual(now.get(rec.ID.toLowerCase()), FeatureValueOnlyBundle.UpdatedAtAtSetup.get(rec.ID.toLowerCase()), `${rec.Name} __mj_UpdatedAt unchanged`);
+            AssertEqual(now.Get(rec.ID), FeatureValueOnlyBundle.UpdatedAtAtSetup.Get(rec.ID), `${rec.Name} __mj_UpdatedAt unchanged`);
         }
     }
 
     /** Deletes the bundle's pipeline and everything hanging off it, and restores the shared stub table. Never throws. */
     public static async Teardown(ctx: IntegrationCheckContext): Promise<void> {
-        try {
-            const problems = await F.DeleteStubPipeline(ctx, FeatureValueOnlyBundle.NAME, FeatureValueOnlyBundle.TYPE_NAME);
-            FeaturePipelineGateStubTable.Instance.Clear();
-            await AIEngine.Instance.Config(true, ctx.User, ctx.Provider);
-            await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
-            if (problems.length > 0) {
-                console.warn(`feature-value-only teardown: ${problems.join('; ')}`);
-            }
-        } catch (e) {
-            console.warn(`feature-value-only teardown: ${e instanceof Error ? e.message : String(e)}`);
-        }
-    }
-
-    /** The first active LLM by name (the stub answers, so which one does not matter; a stable choice keeps the pin stable). */
-    protected static async FirstLLM(ctx: IntegrationCheckContext): Promise<string> {
-        const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJAIModelEntity, 'ID'>>({
-            EntityName: 'MJ: AI Models', Fields: ['ID'], ResultType: 'simple', MaxRows: 1, OrderBy: 'Name',
-            ExtraFilter: `AIModelType = 'LLM' AND IsActive = 1`,
-        }, ctx.User);
-        const id = res.Success ? res.Results?.[0]?.ID : undefined;
-        if (!id) {
-            throw new Error(`no active LLM model exists${res.Success ? '' : `: ${res.ErrorMessage}`}`);
-        }
-        return id;
+        await F.TeardownStubPipeline(ctx, FeatureValueOnlyBundle.NAME, FeatureValueOnlyBundle.TYPE_NAME, 'feature-value-only');
     }
 
     /** Runs the pipeline through the executor over the three records (so write-back wraps the processor). */
@@ -278,7 +253,7 @@ export const FeatureValueOnlyChecks: NamedCheck[] = [
                 AssertEqual(B.ValueOf(stored, rec.ID, 'Flag')?.ValueBoolean, true, `${rec.Name} Flag ValueBoolean`);
                 if (UUIDsEqual(rec.ID, B.LowConfidence.ID)) {
                     const score = B.ValueOf(stored, rec.ID, 'Score');
-                    Assert(!score || (score.ValueNumeric == null && score.ValueText == null), `${rec.Name} withheld Score holds no value`);
+                    Assert(!score || (score.ValueNumeric === null && score.ValueText === null), `${rec.Name} withheld Score holds no value`);
                 } else {
                     AssertEqual(Number(B.ValueOf(stored, rec.ID, 'Score')?.ValueNumeric), 0.75, `${rec.Name} Score ValueNumeric`);
                 }
@@ -306,7 +281,7 @@ export const FeatureValueOnlyChecks: NamedCheck[] = [
         Fn: async (ctx) => {
             const stored = await B.Stored(ctx);
             const score = B.ValueOf(stored, B.LowConfidence.ID, 'Score');
-            Assert(!score || (score.ValueNumeric == null && score.ValueText == null), 'the withheld Score holds no value');
+            Assert(!score || (score.ValueNumeric === null && score.ValueText === null), 'the withheld Score holds no value');
             AssertEqual(B.ValueOf(stored, B.LowConfidence.ID, 'Label')?.ValueText, 'A', 'its other outputs are stored');
             const other = B.Records.find((r) => !UUIDsEqual(r.ID, B.LowConfidence.ID));
             AssertEqual(Number(B.ValueOf(stored, other?.ID || '', 'Score')?.ValueNumeric), 0.75, 'a confident record keeps its Score');

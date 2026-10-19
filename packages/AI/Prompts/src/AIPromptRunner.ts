@@ -14,7 +14,7 @@ import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResul
 import { MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { TemplateEngineServer, type ReferencedVariablesResult } from '@memberjunction/templates';
-import { TemplateRenderResult } from '@memberjunction/templates-base-types';
+import { TemplateRenderResult, type TemplateRenderOptions } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
 import { ParseManifestEntryMime, TrimSpacesAndTabs } from './linearTextScan';
@@ -165,7 +165,7 @@ interface ResolvedScalarInferenceParams {
 
 export class AIPromptRunner extends BaseModelRunner {
   /** The render options a prompt asks for: a raw render when `templateAutoescape` is false, else the engine's default. */
-  public static RenderOptions(params: AIPromptParams): { autoescape?: boolean } | undefined {
+  public static RenderOptions(params: AIPromptParams): TemplateRenderOptions | undefined {
     return params.templateAutoescape === false ? { autoescape: false } : undefined;
   }
 

@@ -66,12 +66,12 @@ class GoldenSetGate {
             const answer = { JobFunctions: g.Functions, SeniorityLevel: g.Seniority };
             return { ID: g.ID, Input: { CurrentJobTitle: g.Title }, A: answer, B: answer, C: answer };
         }), ['JobFunctions', 'SeniorityLevel'], labelers);
-        Assert(golden.labelQuality.Passed, `fixture label quality: ${golden.labelQuality.Problems.join('; ')}`);
+        Assert(golden.LabelQuality.Passed, `fixture label quality: ${golden.LabelQuality.Problems.join('; ')}`);
         const config: FeaturePipelineGoldenSetConfig = {
             RecordProcessID: F.Require(ctx).RecordProcessID,
             Outputs: { JobFunctions: { PrimaryItemOrderBy: 'Sequence', Compare: 'display-name' }, SeniorityLevel: { Compare: 'value' } },
         };
-        const input: FeaturePipelineGoldenSetInput = { Cases: golden.cases, LabelQuality: golden.labelQuality };
+        const input: FeaturePipelineGoldenSetInput = { Cases: golden.Cases, LabelQuality: golden.LabelQuality };
         const test = await ctx.Provider.GetEntityObject<MJTestEntity>('MJ: Tests', ctx.User);
         test.NewRecord();
         test.Name = `${FIXTURE_NAME_PREFIX}golden set ${Date.now()}`;

@@ -165,9 +165,9 @@ export class WriteBackProcessor implements IRecordProcessor {
         const preserved = (writeBack.preservedHumanFields?.length || 0) + (writeBack.preservedHumanChildIDs?.length || 0);
         if (dry) {
             const previewed = WriteBackProcessor.WithoutOutcome(result);
-            if (writeBack.PreviewErrors && writeBack.PreviewErrors.length > 0) {
+            if (writeBack.previewErrors && writeBack.previewErrors.length > 0) {
                 // A dry run that reports success for a write that would fail tells the operator the opposite of the truth.
-                return { ...previewed, Status: 'Failed', ErrorMessage: `Dry run: the real write would fail: ${writeBack.PreviewErrors.join('; ')}`,
+                return { ...previewed, Status: 'Failed', ErrorMessage: `Dry run: the real write would fail: ${writeBack.previewErrors.join('; ')}`,
                     ResultPayload: payload, DryRun: true };
             }
             return { ...previewed, ResultPayload: payload, HumanValuesPreserved: preserved, DryRun: true };

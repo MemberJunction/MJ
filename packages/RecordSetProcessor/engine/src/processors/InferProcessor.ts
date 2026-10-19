@@ -16,7 +16,7 @@
 
 import { createHash } from 'node:crypto';
 import { type IMetadataProvider, LogError, LogStatus, Metadata, RunQuery, RunView } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual, Canonicalize, ComputeContentHashAsync, EscapeSQLString, ResolveMappingRef, SafeJSONParse, resolveMappingRef, resolveValueMapping } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, Canonicalize, ComputeContentHashAsync, EscapeSQLString, ResolveMappingRef, ResolveValueMapping, SafeJSONParse } from '@memberjunction/global';
 import { KnowledgeHubMetadataEngine, type MJFeatureValueCacheEntity, type MJFeaturePipelineTypeEntity, type MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptParams, type AIPromptRunResult, type MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
@@ -1414,7 +1414,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         });
         const previews: FeatureValuePreview[] = [];
         for (const output of outputs) {
-            const resolved = resolveMappingRef(output.Ref, { $: params.Payload });
+            const resolved = ResolveMappingRef(output.Ref, { $: params.Payload });
             const proposed = FeatureValueCacheService.ToTypedValue(resolved !== undefined ? resolved : null, output.Constraint?.Type);
             const latest = stored.get(output.Name.toLowerCase());
             const proposedValue = FeatureValueCacheService.NativeValueOf(proposed);
@@ -1448,7 +1448,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         }
     }
 
-    /** Whether two native Feature Values are the same value (dates by instant, objects by content). */
+    /** Whether two native Feature Values are the same value (dates by instant, objects by content). `unknown`: a Feature Value is of any output type. */
     private static sameFeatureValue(a: unknown, b: unknown): boolean {
         return Canonicalize(a instanceof Date ? a.toISOString() : a) === Canonicalize(b instanceof Date ? b.toISOString() : b);
     }
@@ -1473,7 +1473,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         const withheld = new Set(InferProcessor.WithheldOutputsOf(params.Payload).map((w) => w.OutputName));
 
         for (const output of outputs) {
-            const val = params.OmitValues || withheld.has(output.Name) ? null : resolveMappingRef(output.Ref, sources);
+            const val = params.OmitValues || withheld.has(output.Name) ? null : ResolveMappingRef(output.Ref, sources);
             outputsList.push({
                 featureName: output.Name,
                 value: val !== undefined ? val : null,
@@ -1707,7 +1707,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             }
 
             const sources = { $: rawResult };
-            const rawVal = resolveMappingRef(output.Ref, sources);
+            const rawVal = ResolveMappingRef(output.Ref, sources);
 
             // A field target lends its column's TSType; an output with no write target takes the type its constraint
             // implies, so a quoted '0.75' or 'true' coerces as it would for a typed column
@@ -1971,7 +1971,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         if (!mappingToUse) {
             promptData = { record: recordData };
         } else {
-            const mapped = resolveValueMapping(mappingToUse, { record: recordData });
+            const mapped = ResolveValueMapping(mappingToUse, { record: recordData });
             promptData = mapped && typeof mapped === 'object' ? (mapped as Record<string, unknown>) : { record: recordData };
         }
 
@@ -2004,7 +2004,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                 const queryParams: Record<string, unknown> = {};
                 if (this.spec.Context.QueryParams) {
                     for (const [pName, pRef] of Object.entries(this.spec.Context.QueryParams)) {
-                        queryParams[pName] = resolveMappingRef(pRef, { record: recordData, $: recordData });
+                        queryParams[pName] = ResolveMappingRef(pRef, { record: recordData, $: recordData });
                     }
                 }
                 const qResult = await rq.RunQuery(

@@ -8,7 +8,7 @@
  * bizapps-common's server package). SQL Server only: the filters select through MJ core views with subqueries.
  */
 import { BaseEntity, EntityDeleteOptions, EntitySaveOptions, RunView } from '@memberjunction/core';
-import type { MJAIPromptModelEntity, MJFeaturePipelineTypeEntity, MJRecordProcessEntity, MJTemplateContentEntity, MJTemplateEntity, MJTestEntity } from '@memberjunction/core-entities';
+import type { MJAIModelEntity, MJAIPromptModelEntity, MJFeaturePipelineTypeEntity, MJRecordProcessEntity, MJTemplateContentEntity, MJTemplateEntity, MJTestEntity } from '@memberjunction/core-entities';
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -202,17 +202,40 @@ export class FeaturePipelineGateFixtures {
         throw new Error(`Timed out after ${ms} ms waiting for ${what}`);
     }
 
-    /** Adds one fixture person with an active Employee relationship carrying the title (entity layer). */
-    public static async AddPerson(ctx: IntegrationCheckContext, n: number, title: string): Promise<string> {
+    /**
+     * The ID of an active LLM, the first by name (a stable choice keeps a pin stable); with `otherThanModelID`, the
+     * first other than that model. The stub answers, so which model it is does not matter. @throws Error when none exists
+     */
+    public static async ActiveLLMID(ctx: IntegrationCheckContext, otherThanModelID?: string): Promise<string> {
+        const exclude = otherThanModelID ? ` AND ID <> '${EscapeSQLString(otherThanModelID)}'` : '';
+        const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJAIModelEntity, 'ID'>>({
+            EntityName: 'MJ: AI Models', Fields: ['ID'], ResultType: 'simple', MaxRows: 1, OrderBy: 'Name',
+            ExtraFilter: `AIModelType = 'LLM' AND IsActive = 1${exclude}`,
+        }, ctx.User);
+        const id = res.Success ? res.Results?.[0]?.ID : undefined;
+        if (!id) {
+            throw new Error(`no ${otherThanModelID ? 'other ' : ''}active LLM model exists${res.Success ? '' : `: ${res.ErrorMessage}`}`);
+        }
+        return id;
+    }
+
+    /** The ID of the Employee relationship type (one read for every fixture person). */
+    public static async EmployeeRelationshipTypeID(ctx: IntegrationCheckContext): Promise<string> {
+        return FeaturePipelineGateFixtures.LookupID(ctx, 'MJ_BizApps_Common: Relationship Types', `Name = 'Employee'`);
+    }
+
+    /** Adds one fixture person with an active Employee relationship (of type `employeeTypeID`) carrying the title (entity layer). */
+    public static async AddPerson(ctx: IntegrationCheckContext, n: number, title: string, employeeTypeID: string): Promise<string> {
         const id = FeaturePipelineGateFixtures.PersonID(n);
-        const employeeTypeID = await FeaturePipelineGateFixtures.LookupID(ctx, 'MJ_BizApps_Common: Relationship Types', `Name = 'Employee'`);
+        // Recorded before the saves so the fixture's Inputs keep call order when people are added in parallel; a failed
+        // save throws out of Setup, whose Teardown clears the fixture anyway.
+        ctx.FeaturePipelineGateFixture?.Inputs.set(id, title);
         await FeaturePipelineGateFixtures.SaveBizAppsRow(ctx, 'MJ_BizApps_Common: People',
             { ID: id, FirstName: 'FP Gate', LastName: `Person ${n}`, Status: 'Active' });
         await FeaturePipelineGateFixtures.SaveBizAppsRow(ctx, 'MJ_BizApps_Common: Relationships', {
             ID: `${PREFIX}0000002${String(n).padStart(5, '0')}`, RelationshipTypeID: employeeTypeID, FromPersonID: id,
             ToOrganizationID: FeaturePipelineGateFixtures.ORGANIZATION_ID, Title: title, StartDate: '2026-09-01', Status: 'Active',
         });
-        ctx.FeaturePipelineGateFixture?.Inputs.set(id, title);
         return id;
     }
 
@@ -223,15 +246,13 @@ export class FeaturePipelineGateFixtures {
         const fixture = await FeaturePipelineGateFixtures.CreateStubPipeline(ctx, await FeaturePipelineGateFixtures.CloneOptions(ctx, source));
         await FeaturePipelineGateFixtures.SaveBizAppsRow(ctx, 'MJ_BizApps_Common: Organizations',
             { ID: FeaturePipelineGateFixtures.ORGANIZATION_ID, Name: 'FP Gate Organization', Status: 'Active' });
-        let n = 1;
-        for (const g of GOLDEN_TITLES) {
-            await FeaturePipelineGateFixtures.AddPerson(ctx, n++, g.Title);
-        }
+        const employeeTypeID = await FeaturePipelineGateFixtures.EmployeeRelationshipTypeID(ctx);
+        const people: Array<[number, string]> = GOLDEN_TITLES.map((g, i): [number, string] => [i + 1, g.Title]);
         if (opts.ForcedInvalid) {
-            await FeaturePipelineGateFixtures.AddPerson(ctx, 901, FORCED_INVALID.Seniority);
-            await FeaturePipelineGateFixtures.AddPerson(ctx, 902, FORCED_INVALID.Function);
-            await FeaturePipelineGateFixtures.AddPerson(ctx, 903, FORCED_INVALID.Both);
+            people.push([901, FORCED_INVALID.Seniority], [902, FORCED_INVALID.Function], [903, FORCED_INVALID.Both]);
         }
+        // In parallel: each person's two saves are independent of every other person's, and no transaction is open here.
+        await Promise.all(people.map(([n, title]) => FeaturePipelineGateFixtures.AddPerson(ctx, n, title, employeeTypeID)));
         await FeaturePipelineGateFixtures.ConfigureStub(ctx);
         return fixture;
     }
@@ -401,20 +422,37 @@ export class FeaturePipelineGateFixtures {
 
     /** Deletes everything the fixtures created, children first. Never throws (teardown is best-effort); logs what failed. */
     public static async Teardown(ctx: IntegrationCheckContext): Promise<void> {
+        await FeaturePipelineGateFixtures.TeardownWith('Feature Pipeline gate fixture', ctx, async () => [
+            ...(await FeaturePipelineGateFixtures.DeleteStubPipeline(ctx, FIXTURE_NAME_PREFIX, STUB_TYPE_NAME)),
+            ...(await FeaturePipelineGateFixtures.DeleteCreatedTests(ctx)),
+            ...(await FeaturePipelineGateFixtures.DeleteFixturePeople(ctx)),
+        ]);
+    }
+
+    /**
+     * Teardown of a bundle that owns one stub pipeline (see {@link CreateStubPipeline}): deletes the pipeline named
+     * `name` on the type `typeName` with everything hanging off it, then restores the shared stub table and the engine
+     * caches. Never throws; logs what failed under `label`.
+     */
+    public static async TeardownStubPipeline(ctx: IntegrationCheckContext, name: string, typeName: string, label: string): Promise<void> {
+        await FeaturePipelineGateFixtures.TeardownWith(label, ctx, () => FeaturePipelineGateFixtures.DeleteStubPipeline(ctx, name, typeName));
+    }
+
+    /**
+     * Runs `deleteRows` (which returns the failures), then clears the shared stub table and refreshes the AI and
+     * Knowledge Hub engine caches that the deleted rows were in. Never throws; warns under `label`.
+     */
+    protected static async TeardownWith(label: string, ctx: IntegrationCheckContext, deleteRows: () => Promise<string[]>): Promise<void> {
         try {
-            const problems = [
-                ...(await FeaturePipelineGateFixtures.DeleteStubPipeline(ctx, FIXTURE_NAME_PREFIX, STUB_TYPE_NAME)),
-                ...(await FeaturePipelineGateFixtures.DeleteCreatedTests(ctx)),
-                ...(await FeaturePipelineGateFixtures.DeleteFixturePeople(ctx)),
-            ];
+            const problems = await deleteRows();
             FeaturePipelineGateStubTable.Instance.Clear();
             await AIEngine.Instance.Config(true, ctx.User, ctx.Provider);
             await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
             if (problems.length > 0) {
-                console.warn(`Feature Pipeline gate fixture teardown: ${problems.join('; ')}`);
+                console.warn(`${label} teardown: ${problems.join('; ')}`);
             }
         } catch (e) {
-            console.warn(`Feature Pipeline gate fixture teardown: ${e instanceof Error ? e.message : String(e)}`);
+            console.warn(`${label} teardown: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 

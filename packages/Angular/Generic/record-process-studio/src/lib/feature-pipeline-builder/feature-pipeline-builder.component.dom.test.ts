@@ -1223,6 +1223,25 @@ describe('the constraint block preview', () => {
     expect(views.filter((v) => v.EntityName === 'Seniority Levels')).toHaveLength(1);
   });
 
+  it('reads a lookup once after typing in its filter pauses, with the filter as typed', async () => {
+    const views: RunViewParams[] = [];
+    const rec = makeRecord({ PipelineType: 'LLM', Outputs: OUTPUTS });
+    const f = renderComponentFixture(FeaturePipelineBuilderComponent, { inputs: { Record: rec, Provider: previewProvider(views), EntityID: rec.EntityID } });
+    const builder = f.componentInstance;
+    const lookupViews = () => views.filter((v) => v.EntityName === 'Seniority Levels');
+    await vi.waitFor(() => expect(builder.RenderedConstraintPreview).toContain('"Director"'));
+    expect(lookupViews()).toHaveLength(1);
+
+    for (const typed of ["Name='D", "Name='Dir", "Name='Director'"]) {
+      builder.UpdateLookupFilter(1, eventWithValue(typed, 'input'));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(lookupViews()).toHaveLength(1); // nothing read while the filter is still being typed
+
+    await vi.waitFor(() => expect(lookupViews()).toHaveLength(2));
+    expect(lookupViews()[1].ExtraFilter).toBe("Name='Director'");
+  });
+
   it('keeps a later edit\'s preview when an earlier lookup load finishes after it', async () => {
     const rec = makeRecord({ PipelineType: 'LLM', Outputs: OUTPUTS });
     const f = renderComponentFixture(FeaturePipelineBuilderComponent, { inputs: { Record: rec, Provider: previewProvider([]), EntityID: rec.EntityID } });

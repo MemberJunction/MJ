@@ -5,7 +5,7 @@
  * @module @memberjunction/scheduling-engine
  */
 import { BaseSingleton, EscapeSQLString } from '@memberjunction/global';
-import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogWarning, RunView, UserInfo } from '@memberjunction/core';
 import type { MJProcessRunEntity, MJRecordProcessEntity, MJTestRunEntity } from '@memberjunction/core-entities';
 import { FeaturePipelineVersionService, type FeaturePipelineStewardPlan } from '@memberjunction/feature-pipelines';
 import { InferProcessor, RecordProcessExecutor } from '@memberjunction/record-set-processor';
@@ -248,7 +248,7 @@ export class FeaturePipelineVersionSteward extends BaseSingleton<FeaturePipeline
         }
         const updated = new Date(run.__mj_UpdatedAt); // epoch milliseconds: a UTC comparison
         if (Date.now() - updated.getTime() > STALE_RUN_MS) {
-            console.warn(`FeaturePipelineVersionSteward: ignoring stale Process Run ${run.ID} (Running, last updated ${updated.toISOString()}); backfilling`);
+            LogWarning(`FeaturePipelineVersionSteward: ignoring stale Process Run ${run.ID} (Running, last updated ${updated.toISOString()}); backfilling`);
             return null;
         }
         return run;

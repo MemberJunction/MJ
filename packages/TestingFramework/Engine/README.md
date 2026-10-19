@@ -100,6 +100,9 @@ graph LR
 |--------|-------------|
 | `BaseTestDriver` | Abstract base class for all test drivers |
 | `AgentEvalDriver` | Executes AI agents and captures their outputs |
+| `FeaturePipelineGoldenSetDriver` | Driver of the *Feature Pipeline Golden Set* test type. Checks the pipeline names the test as its `Activation.GoldenSetTestID` and that model-made labels pass `GoldenLabelQualityCheck`, runs the current version as one dry-run batch with the cache bypassed (AI Prompt Runs are recorded), scores the answers with `GoldenSetScorer` and stores the result on that version through the version registry, which activates or refuses it against the pipeline's `Activation` threshold |
+| `GoldenSetScorer` | Pure scoring of a golden set (not a driver): per-output accuracy with alternates accepted case-insensitively and a Wilson 95% interval, abstention cases, and the pipeline value = its lowest output, or 0 when a `Required` case is wrong |
+| `GoldenLabelQualityCheck` | Automated quality check for model-made golden labels (not a driver): `Adjudicate` builds the cases from labelers A, B and C (A–B agreement keeps A, C decides a disagreement, a three-way disagreement is excluded) and `Check` re-verifies a stored `InputDefinition.LabelQuality` record — pairwise Wilson lower bound, excluded count and the cases' SHA-256 — before every evaluation |
 
 ### Oracles
 

@@ -3,6 +3,7 @@ import { Component, Input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunView, type BaseEntity, type CompositeKey, type EntityInfo, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
 import type { FormContext } from '@memberjunction/ng-base-forms';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { query, queryAll } from '@memberjunction/ng-test-utils';
 import { FeatureValuesPanel } from './feature-values.panel';
 import type { FeatureValueRow } from './feature-values.logic';
@@ -45,7 +46,7 @@ function stubRunView(rows: FeatureValueRow[]): RunViewParams[] {
 }
 
 async function render(record: RecordDouble): Promise<ComponentFixture<FeatureValuesPanel>> {
-  TestBed.configureTestingModule({ imports: [CollapsiblePanelStub], declarations: [FeatureValuesPanel] });
+  TestBed.configureTestingModule({ imports: [MJButtonDirective, CollapsiblePanelStub], declarations: [FeatureValuesPanel] });
   const fixture = TestBed.createComponent(FeatureValuesPanel);
   const form: FormDouble = { ProviderToUse: { CurrentUser: { ID: 'user-1' } } };
   fixture.componentRef.setInput('Record', record);
@@ -78,12 +79,19 @@ describe('FeatureValuesPanel (DOM)', () => {
     expect(calls[0].ExtraFilter).toBe("EntityID='ent-1' AND RecordID='OrderID|11||LineNo|3'");
   });
 
-  it('Refresh button runs a second RunView', async () => {
+  it('Refresh button runs a second RunView, disabled and spinning while it loads', async () => {
     const calls = stubRunView([fv({ ValueNumeric: 1 })]);
     const fixture = await render(saved);
-    (query(fixture, '.fvp-refresh') as HTMLButtonElement).click();
+    const refresh = query(fixture, '.fvp-refresh') as HTMLButtonElement;
+    expect(refresh.disabled).toBe(false);
+    refresh.click();
+    fixture.detectChanges(false);
+    expect(refresh.disabled).toBe(true);
+    expect(refresh.querySelector('i')?.classList.contains('fa-spin')).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges(false);
     expect(calls).toHaveLength(2);
+    expect(refresh.disabled).toBe(false);
   });
 
   it('OnRecordRefreshed reloads', async () => {
@@ -135,6 +143,34 @@ describe('FeatureValuesPanel (DOM)', () => {
     const items = queryAll(fixture, '.fvp-history-item');
     expect(items).toHaveLength(1);
     expect(items[0].textContent).toContain('10');
+  });
+
+  it('recomputes the expanded history when the rows reload, and collapses when the card is gone', async () => {
+    stubRunView([
+      fv({ ID: 'a', ValueNumeric: 14, ComputedAt: '2026-02-01T00:00:00Z' }),
+      fv({ ID: 'b', ValueNumeric: 10, ComputedAt: '2026-01-01T00:00:00Z' }),
+    ]);
+    const fixture = await render(saved);
+    (query(fixture, '.fvp-toggle') as HTMLButtonElement).click();
+    fixture.detectChanges(false);
+    expect(queryAll(fixture, '.fvp-history-item')).toHaveLength(1);
+
+    vi.restoreAllMocks();
+    stubRunView([
+      fv({ ID: 'c', ValueNumeric: 20, ComputedAt: '2026-03-01T00:00:00Z' }),
+      fv({ ID: 'a', ValueNumeric: 14, ComputedAt: '2026-02-01T00:00:00Z' }),
+      fv({ ID: 'b', ValueNumeric: 10, ComputedAt: '2026-01-01T00:00:00Z' }),
+    ]);
+    await fixture.componentInstance.Refresh();
+    fixture.detectChanges(false);
+    expect(queryAll(fixture, '.fvp-history-item .fvp-value').map((i) => i.textContent?.trim())).toEqual(['14', '10']);
+
+    vi.restoreAllMocks();
+    stubRunView([fv({ ID: 'z', FeatureName: 'plan', ValueText: 'pro' })]);
+    await fixture.componentInstance.Refresh();
+    fixture.detectChanges(false);
+    expect(fixture.componentInstance.ExpandedKey).toBeNull();
+    expect(query(fixture, '.fvp-detail')).toBeNull();
   });
 
   it('shows "no value" for a valueless history row instead of a blank', async () => {

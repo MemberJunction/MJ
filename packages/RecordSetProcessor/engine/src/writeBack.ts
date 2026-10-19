@@ -7,7 +7,7 @@
  */
 
 import { BaseEntity, CompositeKey, DatabaseProviderBase, type EntityFieldInfo, EntityFieldTSType, type EntityInfo, IMetadataProvider, type IRunViewProvider, LogStatus, RunInEntityTransaction, RunView, UserInfo, LogError } from '@memberjunction/core';
-import { EscapeSQLString, NormalizeUUID, UUIDSet, UUIDsEqual, resolveMappingRef } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID, ResolveMappingRef, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import type { RecordProcessorContext, RecordRef, RecordResult, TagWriteBackPreview, WriteBackResult } from '@memberjunction/record-set-processor-base';
 import { TagEngine, TaxonomyMode } from '@memberjunction/tag-engine';
 import type { MJTagEntity } from '@memberjunction/core-entities';
@@ -28,11 +28,11 @@ export interface RunProvenance {
 export interface HumanValueQuestion {
     /** The mapped (config-named) field. */
     FieldName: string;
-    /** The field's current value; never empty (an empty field holds no human value and is not asked about). */
+    /** The field's current value; never empty (an empty field holds no human value and is not asked about). `unknown`: the field is config-named, so its value has no static type. */
     CurrentValue: unknown;
-    /** Read-only: the stored form of a value the pipeline produced (a lookup miss is null; nothing is created). */
+    /** Read-only: the stored form of a value the pipeline produced (a lookup miss is null; nothing is created). `unknown` in and out: the mapped value comes from `ResolveMappingRef`, the stored form is the config-named field's. */
     Resolve: (pipelineValue: unknown) => Promise<unknown>;
-    /** Whether a stored value equals a resolved pipeline value by the field's type ({@link OutputMappingWriter.OwnedValuesEqual}). */
+    /** Whether a stored value equals a resolved pipeline value by the field's type ({@link OutputMappingWriter.OwnedValuesEqual}). `unknown`: both are values of the config-named field. */
     Equals: (stored: unknown, resolved: unknown) => boolean;
     /** The write-back unit's provider: the guard's reads and writes run on it, inside the unit's transaction. */
     Provider: IMetadataProvider;
@@ -42,7 +42,7 @@ export interface HumanValueQuestion {
 export interface HumanValueGuard {
     /** True when the field's current value must be preserved. */
     IsHumanOwned(question: HumanValueQuestion): Promise<boolean>;
-    /** Records the preserved human value (a `Source='Human'` Feature Value) on the unit's provider. */
+    /** Records the preserved human value (a `Source='Human'` Feature Value) on the unit's provider. `currentValue` is `unknown`: the config-named field's value. */
     RecordPreserved(fieldName: string, currentValue: unknown, provider: IMetadataProvider): Promise<void>;
     /** Retires the record's Human value of the field (an overwriting run made it the pipeline's); true when one existed. */
     RetireHumanValue(fieldName: string, provider: IMetadataProvider): Promise<boolean>;
@@ -461,7 +461,7 @@ export class OutputMappingWriter {
     /**
      * The stored form of one mapped field value: a match string becomes the related row's key by the mapping's lookup
      * rules; a UUID, or a value of a field that is not a foreign key, is returned unchanged.
-     * @param val - the mapped value; `unknown` because it comes from `resolveMappingRef`
+     * @param val - the mapped value; `unknown` because it comes from `ResolveMappingRef`
      */
     public async ResolveFieldValue(entity: EntityInfo, field: string, val: unknown): Promise<unknown> {
         return this.ResolveKey(entity, field, val, false);
@@ -652,6 +652,11 @@ export class OutputMappingWriter {
             throw new Error(`invalid parentField identifier '${config.parentField}' for '${config.entity}'`);
         }
         return config.parentField;
+    }
+
+    /** The entity a mapping's tags are linked on (its `taggedEntityName`'s, else the record's); undefined when unknown. */
+    public static TaggedEntityIDOf(provider: IMetadataProvider, mapping: TagOutputMapping, record: RecordRef): string | undefined {
+        return mapping.taggedEntityName ? provider.EntityByName(mapping.taggedEntityName)?.ID : record.EntityID;
     }
 
     /** Inserts one child row; throws with the save's CompleteMessage when the save fails. */
@@ -1036,11 +1041,6 @@ function computeTagDepth(
     return -1;
 }
 
-/** The entity a mapping's tags are linked on (its `taggedEntityName`'s, else the record's); undefined when unknown. */
-function TaggedEntityIDOf(provider: IMetadataProvider, mapping: TagOutputMapping, record: RecordRef): string | undefined {
-    return mapping.taggedEntityName ? provider.EntityByName(mapping.taggedEntityName)?.ID : record.EntityID;
-}
-
 /**
  * Applies an {@link OutputMappingConfig} against a work result.
  * Supports updating fields (both single-key and composite-key entities), writing child records
@@ -1101,7 +1101,7 @@ export async function ApplyOutputMapping(opts: {
     // Set when there are field mappings: the processed record's entity and its resolved values, written in step 3.
     let fieldEntity: EntityInfo | undefined;
     let fieldsToWrite: Record<string, unknown> | undefined;
-    // On a dry run: what the real write would fail on (WriteBackResult.PreviewErrors).
+    // On a dry run: what the real write would fail on (WriteBackResult.previewErrors).
     const previewErrors: string[] = [];
 
     // 1) Resolve the fields of the processed record.
@@ -1123,7 +1123,7 @@ export async function ApplyOutputMapping(opts: {
                     continue;
                 }
             }
-            resolved[field] = withheld ? null : resolveMappingRef(ref, sources);
+            resolved[field] = withheld ? null : ResolveMappingRef(ref, sources);
         }
 
         // Foreign-key fields whose mapped value is a match string (e.g. 'Director') resolve to the related row's key.
@@ -1155,7 +1155,7 @@ export async function ApplyOutputMapping(opts: {
             }
             const rows: ChildToWrite[] = [];
             if (childConfig.fanOutRef) {
-                const fanOutVal = resolveMappingRef(childConfig.fanOutRef, sources);
+                const fanOutVal = ResolveMappingRef(childConfig.fanOutRef, sources);
                 let items: unknown[];
                 if (Array.isArray(fanOutVal)) {
                     items = fanOutVal;
@@ -1179,14 +1179,14 @@ export async function ApplyOutputMapping(opts: {
                     };
                     const childMap: Record<string, unknown> = { [childConfig.parentField]: record.RecordID };
                     for (const [field, ref] of Object.entries(childConfig.map)) {
-                        childMap[field] = resolveMappingRef(ref, itemSources);
+                        childMap[field] = ResolveMappingRef(ref, itemSources);
                     }
                     rows.push({ Entity: childConfig.entity, Data: childMap, IsLegacySingle: isLegacySingle, Config: childConfig });
                 }
             } else {
                 const childMap: Record<string, unknown> = { [childConfig.parentField]: record.RecordID };
                 for (const [field, ref] of Object.entries(childConfig.map)) {
-                    childMap[field] = resolveMappingRef(ref, sources);
+                    childMap[field] = ResolveMappingRef(ref, sources);
                 }
                 rows.push({ Entity: childConfig.entity, Data: childMap, IsLegacySingle: isLegacySingle, Config: childConfig });
             }
@@ -1237,7 +1237,7 @@ export async function ApplyOutputMapping(opts: {
         await TagEngine.Instance.Config(false, contextUser);
 
         for (const tagMapping of outputMapping.tags) {
-            const rawTagVal = resolveMappingRef(tagMapping.ref, sources);
+            const rawTagVal = ResolveMappingRef(tagMapping.ref, sources);
             const tagNames: string[] = [];
             if (typeof rawTagVal === 'string') {
                 tagNames.push(rawTagVal);
@@ -1251,7 +1251,7 @@ export async function ApplyOutputMapping(opts: {
                 }
             }
 
-            const taggedEntityID = TaggedEntityIDOf(provider, tagMapping, record);
+            const taggedEntityID = OutputMappingWriter.TaggedEntityIDOf(provider, tagMapping, record);
             if (dryRun && !taggedEntityID && tagNames.some((t) => t.trim().length > 0)) {
                 // The real write refuses it when it links this mapping's first tag.
                 previewErrors.push(`taggedEntityName '${tagMapping.taggedEntityName}' not found in metadata`);
@@ -1386,7 +1386,7 @@ export async function ApplyOutputMapping(opts: {
     }
 
     if (previewErrors.length > 0) {
-        out.PreviewErrors = previewErrors;
+        out.previewErrors = previewErrors;
     }
     return out;
 }

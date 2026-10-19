@@ -5,7 +5,7 @@
  * diffs the gates' copy of the golden titles against the golden set bizapps-common installs.
  */
 import { RunView } from '@memberjunction/core';
-import { type MJAIModelEntity, type MJAIPromptModelEntity, type MJFeatureValueCacheEntity, type MJFeatureValueEntity, type MJTemplateContentEntity } from '@memberjunction/core-entities';
+import { type MJAIPromptModelEntity, type MJFeatureValueCacheEntity, type MJFeatureValueEntity, type MJTemplateContentEntity } from '@memberjunction/core-entities';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { EscapeSQLString, UUIDSet, UUIDsEqual } from '@memberjunction/global';
@@ -84,19 +84,6 @@ class ChangeRecomputeSteps {
         return content;
     }
 
-    /** Another active LLM than `modelID` (by name, so the choice is stable). */
-    public static async OtherLLM(ctx: IntegrationCheckContext, modelID: string): Promise<string> {
-        const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJAIModelEntity, 'ID'>>({
-            EntityName: 'MJ: AI Models', Fields: ['ID'], ResultType: 'simple', MaxRows: 1, OrderBy: 'Name',
-            ExtraFilter: `AIModelType = 'LLM' AND IsActive = 1 AND ID <> '${EscapeSQLString(modelID)}'`,
-        }, ctx.User);
-        const id = res.Success ? res.Results?.[0]?.ID : undefined;
-        if (!id) {
-            throw new Error(`no other active LLM model exists${res.Success ? '' : `: ${res.ErrorMessage}`}`);
-        }
-        return id;
-    }
-
     /** The fixture's cache rows for one title under `pin`. */
     public static async CacheRows(ctx: IntegrationCheckContext, title: string, pin: FeaturePipelineRunPin): Promise<MJFeatureValueCacheEntity[]> {
         const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJFeatureValueCacheEntity>({
@@ -141,7 +128,7 @@ export const FpGateC21Checks: NamedCheck[] = [
             await ChangeRecomputeSteps.ChangeThenRecompute(ctx, 'AI model change', async () => {
                 const pm = await ctx.Provider.GetEntityObject<MJAIPromptModelEntity>('MJ: AI Prompt Models', ctx.User);
                 Assert(await pm.Load(fx.PromptModelID), 'load prompt model');
-                const otherID = await ChangeRecomputeSteps.OtherLLM(ctx, pm.ModelID);
+                const otherID = await F.ActiveLLMID(ctx, pm.ModelID);
                 pm.ModelID = otherID;
                 Assert(await pm.Save(), `save prompt model: ${pm.LatestResult?.CompleteMessage}`);
                 await F.WaitFor(() => AIEngine.Instance.PromptModels.some((x) => UUIDsEqual(x.ID, fx.PromptModelID) && UUIDsEqual(x.ModelID, otherID)),
@@ -173,7 +160,8 @@ export const FpGateC21Checks: NamedCheck[] = [
             AssertEqual(before.length, 1, 'one cache row for the title under the current pin');
             before[0].ExpiresAt = new Date(Date.now() - 86_400_000);
             Assert(await before[0].Save(), `expire the cache row: ${before[0].LatestResult?.CompleteMessage}`);
-            const p1 = await F.AddPerson(ctx, 950, title);
+            const employeeTypeID = await F.EmployeeRelationshipTypeID(ctx);
+            const p1 = await F.AddPerson(ctx, 950, title, employeeTypeID);
             stub().ResetCalls();
             AssertEqual((await F.Run(ctx, { Records: [p1] })).Status, 'Completed', 'run on a new person with the expired title');
             AssertEqual(stub().Calls.length, 1, 'the expired entry was recomputed');
@@ -181,7 +169,7 @@ export const FpGateC21Checks: NamedCheck[] = [
             AssertEqual(after.length, 1, 'no duplicate cache row');
             Assert(UUIDsEqual(after[0].ID, before[0].ID), 'refreshed in place');
             Assert(!!after[0].ExpiresAt && new Date(after[0].ExpiresAt).getTime() > Date.now(), 'expiry pushed into the future');
-            const p2 = await F.AddPerson(ctx, 951, title);
+            const p2 = await F.AddPerson(ctx, 951, title, employeeTypeID);
             stub().ResetCalls();
             AssertEqual((await F.Run(ctx, { Records: [p2] })).Status, 'Completed', 'run on the next person with the title');
             AssertEqual(stub().Calls.length, 0, 'the refreshed entry is served to the next person');

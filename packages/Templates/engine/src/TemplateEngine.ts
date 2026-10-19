@@ -5,7 +5,7 @@ import { BaseSingleton, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
 import { HardenNunjucksRuntime } from "./NunjucksSandbox";
 import { CollectReferencedVariables, ReferencedVariablesResult } from "./TemplateVariableAnalysis";
-import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
+import { TemplateRenderOptions, TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
 
 // Stored templates are user-editable, so nunjucks is guarded as soon as the engine loads. The guard
 // is process-wide: it also covers nunjucks environments that other packages create.
@@ -250,7 +250,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * @param options `autoescape` (default `true`) toggles HTML escaping; pass `false` when the output is plain text for
      *   a model, where `Affineur & Owner` must not become `Affineur &amp; Owner`
      */
-    public async RenderTemplate(templateEntity: MJTemplateEntityExtended, templateContent: MJTemplateContentEntity, data: any, SkipValidation?: boolean, SuppressWarnings?: boolean, options?: { autoescape?: boolean }): Promise<TemplateRenderResult> {
+    public async RenderTemplate(templateEntity: MJTemplateEntityExtended, templateContent: MJTemplateContentEntity, data: any, SkipValidation?: boolean, SuppressWarnings?: boolean, options?: TemplateRenderOptions): Promise<TemplateRenderResult> {
         try {
             if (!templateContent) {
                 return {
@@ -326,7 +326,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      *   `false` for plain-text contexts such as email subject lines, where `Acme & Co` must not become `Acme &amp; Co`.
      * @returns
      */
-    public async RenderTemplateSimple(templateText: string, data: any, options?: { autoescape?: boolean }): Promise<TemplateRenderResult> {
+    public async RenderTemplateSimple(templateText: string, data: any, options?: TemplateRenderOptions): Promise<TemplateRenderResult> {
         try {
             const autoescape = options?.autoescape ?? true;
             const cacheKey = `${autoescape ? '1:' : '0:'}${templateText}`;

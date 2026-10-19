@@ -55,6 +55,7 @@ export class ConfidenceFloor {
      * @param outputCount - how many outputs the spec has
      */
     public static Validate(output: DataFeatureOutput, basePath: string, isLLMPipeline: boolean, outputCount: number): SpecValidationIssue[] {
+        // The spec is parsed JSON: a floor or policy of the wrong type is reported here, not trusted to match the declared type
         const floor: unknown = output.MinConfidence;
         const policy: unknown = output.OnLowConfidence;
         if (floor === undefined && policy === undefined) {

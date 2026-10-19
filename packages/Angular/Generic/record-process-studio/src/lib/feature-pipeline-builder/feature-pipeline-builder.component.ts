@@ -13,11 +13,14 @@ import {
     EventEmitter,
     Input,
     OnChanges,
+    OnDestroy,
     OnInit,
     Output,
     SimpleChanges,
     inject,
 } from '@angular/core';
+import { Subject } from 'rxjs';
+import { debounceTime, takeUntil } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -57,6 +60,16 @@ import { EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/glob
 import { MJButtonDirective, MJConfirmDialogComponent } from '@memberjunction/ng-ui-components';
 
 export type PromptOption = Pick<MJAIPromptEntity, 'ID' | 'Name' | 'Description'>;
+
+/** How long typing in a lookup's editor must pause before the preview reads the lookup entity's rows. */
+const LOOKUP_PREVIEW_DEBOUNCE_MS = 400;
+
+/** One preview render's lookup step: the outputs and entity it rendered, and its render version. */
+interface LookupPreviewRequest {
+    Outputs: DataFeatureOutput[];
+    Entity: EntityInfo | undefined;
+    Version: number;
+}
 
 export type EntityDocOption = Pick<MJEntityDocumentEntity, 'ID' | 'Name' | 'EntityID'>;
 
@@ -627,7 +640,7 @@ export function ParseConfidenceFloor(raw: string): number {
         .fpb-checkbox-label input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--mj-brand-primary); }
     `],
 })
-export class FeaturePipelineBuilderComponent extends BaseAngularComponent implements OnInit, OnChanges {
+export class FeaturePipelineBuilderComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
 
     @Input() Record: MJRecordProcessEntity | null = null;
@@ -909,13 +922,16 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     /** Counts preview renders, so a lookup load that finishes after a later edit does not overwrite that edit's preview. */
     private previewRenderVersion = 0;
 
-    /** @deprecated Use {@link RenderedConstraintPreview}. */
-    public get renderedConstraintPreview() {
-        return this.RenderedConstraintPreview;
-    }
-    /** @deprecated Use {@link RenderedConstraintPreview}. */
-    public set renderedConstraintPreview(value) {
-        this.RenderedConstraintPreview = value;
+    /** The lookup step of each preview render, debounced so typing in a lookup's editor does not read its entity per keystroke. */
+    private readonly lookupPreviewRequests = new Subject<LookupPreviewRequest>();
+
+    private readonly destroy$ = new Subject<void>();
+
+    constructor() {
+        super();
+        this.lookupPreviewRequests
+            .pipe(debounceTime(LOOKUP_PREVIEW_DEBOUNCE_MS), takeUntil(this.destroy$))
+            .subscribe((request) => void this.RenderPreviewWithLookupRows(request.Outputs, request.Entity, request.Version));
     }
 
     async ngOnInit(): Promise<void> {
@@ -927,6 +943,11 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         await this.loadEntityDocs();
         await this.LoadEscalationTargets();
         this.SyncFromRecord();
+    }
+
+    ngOnDestroy(): void {
+        this.destroy$.next();
+        this.destroy$.complete();
     }
 
     ngOnChanges(changes: SimpleChanges): void {
@@ -1899,7 +1920,8 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
 
     /**
      * Renders the constraint block preview as the runner renders the block it sends ({@link OutputConstraintResolver}):
-     * at once from the entity's fields, then again once the lookup outputs' allowed rows have loaded.
+     * at once from the entity's fields, then again once the lookup outputs' allowed rows have loaded. The lookup step
+     * is debounced ({@link LOOKUP_PREVIEW_DEBOUNCE_MS}) so a filter typed character by character reads its entity once.
      */
     protected RenderConstraintPreview(): void {
         const outputs = this.spec.Outputs;
@@ -1907,7 +1929,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.RenderedConstraintPreview = RenderConstraintBlock(outputs, OutputConstraintResolver.ResolveFromFields(outputs, entity));
         const version = ++this.previewRenderVersion;
         if (outputs.some((o) => o.Constraint?.Type === 'lookup')) {
-            void this.RenderPreviewWithLookupRows(outputs, entity, version);
+            this.lookupPreviewRequests.next({ Outputs: outputs, Entity: entity, Version: version });
         }
     }
 
@@ -1917,23 +1939,36 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return entityID ? this.ProviderToUse.EntityByID(entityID) : undefined;
     }
 
-    /** Re-renders the preview with the lookup rows loaded, unless a later edit has rendered it since. */
+    /**
+     * Re-renders the preview with the lookup rows loaded, unless a later edit has rendered it since. Afterwards the
+     * rows cache keeps only the lookups this render used, so edited-away filters and removed outputs do not pile up.
+     */
     protected async RenderPreviewWithLookupRows(outputs: DataFeatureOutput[], entity: EntityInfo | undefined, version: number): Promise<void> {
-        const resolved = await OutputConstraintResolver.Resolve(outputs, entity, (lookup) => this.PreviewLookupRows(lookup));
+        const keysInUse = new Set<string>();
+        const resolved = await OutputConstraintResolver.Resolve(outputs, entity, (lookup) => this.PreviewLookupRows(lookup, keysInUse));
         if (version !== this.previewRenderVersion) {
             return;
+        }
+        for (const key of this.previewLookupRows.keys()) {
+            if (!keysInUse.has(key)) {
+                this.previewLookupRows.delete(key);
+            }
         }
         this.RenderedConstraintPreview = RenderConstraintBlock(outputs, resolved);
         this.cdr.markForCheck();
     }
 
-    /** A lookup's allowed rows for the preview; none for an entity that is not known (one still being typed). */
-    protected PreviewLookupRows(lookup: ResolvedConstraint): Promise<LookupValueRow[]> {
+    /**
+     * A lookup's allowed rows for the preview; none for an entity that is not known (one still being typed). The
+     * lookup's cache key is added to `keysInUse`, so the render can drop the cache entries it no longer needs.
+     */
+    protected PreviewLookupRows(lookup: ResolvedConstraint, keysInUse: Set<string>): Promise<LookupValueRow[]> {
         const entityName = lookup.RelatedEntityName;
         if (!entityName || !this.ProviderToUse.EntityByName(entityName)) {
             return Promise.resolve([]);
         }
         const key = JSON.stringify([entityName.toLowerCase(), lookup.LookupMatchField || 'Name', lookup.DisplayFields || [], lookup.Filter || '']);
+        keysInUse.add(key);
         let rows = this.previewLookupRows.get(key);
         if (!rows) {
             rows = this.LoadPreviewLookupRows(lookup, key);

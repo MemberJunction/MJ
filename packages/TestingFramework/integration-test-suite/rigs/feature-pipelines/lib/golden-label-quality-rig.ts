@@ -365,7 +365,7 @@ export class GoldenLabelQualityRig {
             const checkpoint = GoldenLabelQualityRig.LoadCheckpoint(checkpointPath, GoldenLabelQualityRig.CheckpointKey(instructions, models, a), spend);
             const labelled = await GoldenLabelQualityRig.LabelAll(a, labelers, instructions, allowed, spend, args.MaxCost, checkpoint, checkpointPath);
             const identities: LabelerIdentity[] = [LABELER_A_IDENTITY, ...labelers.map((l) => l.Identity)];
-            const { cases, labelQuality } = await GoldenLabelQualityCheck.Adjudicate(labelled, [...GOLDEN_LABEL_OUTPUTS], identities);
+            const { Cases: cases, LabelQuality: labelQuality } = await GoldenLabelQualityCheck.Adjudicate(labelled, [...GOLDEN_LABEL_OUTPUTS], identities);
             const specification = GoldenLabelQualityRig.SpecificationCasesOf(args.OutPath);
             writeFileSync(args.OutPath, JSON.stringify({ Cases: [...cases, ...specification], LabelQuality: labelQuality }, null, 2) + '\n');
             writeFileSync(args.AuditPath, JSON.stringify({ InstructionsSha256: sha, Instructions: instructions, Labelers: identities,

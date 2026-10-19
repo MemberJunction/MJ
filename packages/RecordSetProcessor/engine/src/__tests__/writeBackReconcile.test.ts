@@ -155,7 +155,7 @@ describe('ApplyOutputMapping reconcile', () => {
         const out = await ApplyOutputMapping({ outputMapping: mapping, result, record, contextUser: USER, provider: h.provider, dryRun: true });
         expect(out.previewFields).toEqual({});
         expect(out.previewChildren).toBeUndefined();
-        expect(out.PreviewErrors).toBeUndefined();
+        expect(out.previewErrors).toBeUndefined();
         expect(existing.every((r) => r.Saved === 0)).toBe(true);
     });
 
@@ -649,8 +649,8 @@ const childOnly: OutputMappingConfig = { childRecords: mapping.childRecords };
 /** One proposed job function; the value is deliberately any shape, since the preview must judge non-key shapes too. */
 const oneFunction = (JobFunctionID: string | number | Record<string, string>) => ({ Functions: [{ JobFunctionID, Sequence: 1, Confidence: 0.9 }] });
 /** The write-back payload of a processed record. */
-const writeBackOf = (r: { ResultPayload?: unknown }): { PreviewErrors?: string[] } =>
-    (r.ResultPayload as { writeBack: { PreviewErrors?: string[] } }).writeBack; // the processor's payload shape at this seam
+const writeBackOf = (r: { ResultPayload?: unknown }): { previewErrors?: string[] } =>
+    (r.ResultPayload as { writeBack: { previewErrors?: string[] } }).writeBack; // the processor's payload shape at this seam
 
 describe('dry-run preview reports what the real write would fail on', () => {
     it('names a child value that does not exist in its related entity, reading each related entity once, and writes nothing', async () => {
@@ -661,7 +661,7 @@ describe('dry-run preview reports what the real write would fail on', () => {
         ] };
         const out = await ApplyOutputMapping({ outputMapping: childOnly, result: bad, record, contextUser: USER, provider: d, dryRun: true });
         expect(out.dryRun).toBe(true);
-        expect(out.PreviewErrors).toEqual([`'Person Job Functions.JobFunctionID' = '${MISSING_ID}' does not exist in 'Job Functions' (the real write fails on its foreign key)`]);
+        expect(out.previewErrors).toEqual([`'Person Job Functions.JobFunctionID' = '${MISSING_ID}' does not exist in 'Job Functions' (the real write fails on its foreign key)`]);
         expect(d.RelatedReads).toEqual([expect.objectContaining({ EntityName: 'Job Functions', Fields: ['ID'], ResultType: 'simple' })]);
         expect(d.Loads).toHaveLength(0);
     });
@@ -673,7 +673,7 @@ describe('dry-run preview reports what the real write would fail on', () => {
             { JobFunctionID: JOB_FUNCTION_ID.toLowerCase(), Sequence: 2, Confidence: 0.5 },
         ] };
         const out = await ApplyOutputMapping({ outputMapping: childOnly, result: twice, record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors?.join(' ')).toContain('twice');
+        expect(out.previewErrors?.join(' ')).toContain('twice');
     });
 
     it('fails a dry-run record whose real write would fail (WriteBackProcessor)', async () => {
@@ -712,7 +712,7 @@ describe('dry-run preview — the other checks a real write would fail', () => {
         const inner = { ProcessRecord: async () => ({ Status: 'Succeeded' as const, ResultPayload: { ...result, Functions: [result.Functions[0]] } }) };
         const r = await new WriteBackProcessor(inner, mapping, true).ProcessRecord(record, { contextUser: USER, provider: d });
         expect(r.Status).toBe('Succeeded');
-        expect(writeBackOf(r).PreviewErrors).toBeUndefined();
+        expect(writeBackOf(r).previewErrors).toBeUndefined();
         expect(d.RelatedReads).toHaveLength(2); // one read per related entity: job functions, seniority levels
         expect(d.LoadedRecords.every((r) => r.Saved === 0)).toBe(true);
     });
@@ -720,7 +720,7 @@ describe('dry-run preview — the other checks a real write would fail', () => {
     it('names a record field key that does not exist in its related entity', async () => {
         const d = new PreviewDbProvider([PEOPLE, LEVELS], {});
         const out = await ApplyOutputMapping({ outputMapping: { fields: mapping.fields }, result, record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toEqual([`'People.SeniorityLevelID' = '${result.SeniorityLevel}' does not exist in 'Seniority Levels' (the real write fails on its foreign key)`]);
+        expect(out.previewErrors).toEqual([`'People.SeniorityLevelID' = '${result.SeniorityLevel}' does not exist in 'Seniority Levels' (the real write fails on its foreign key)`]);
     });
 
     it('refuses a reconcile config the real write refuses, even for an empty answer', async () => {
@@ -738,7 +738,7 @@ describe('dry-run preview checks what the database constraint checks', () => {
         const functions = relatedEntity('Job Functions', 'JobFunction', 'uniqueidentifier', [field('RefID', 'uniqueidentifier')]);
         const d = new PreviewDbProvider([byRef, PEOPLE, functions], { JobFunction: [{ ID: MISSING_ID, RefID: JOB_FUNCTION_ID }] });
         const out = await ApplyOutputMapping({ outputMapping: childOnly, result: oneFunction(JOB_FUNCTION_ID.toLowerCase()), record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toBeUndefined();
+        expect(out.previewErrors).toBeUndefined();
         expect(d.RelatedReads).toEqual([expect.objectContaining({ ExtraFilter: `RefID IN ('${JOB_FUNCTION_ID.toLowerCase()}')`, Fields: ['RefID'] })]);
     });
 });
@@ -750,7 +750,7 @@ describe('dry-run preview checks only what the real write writes', () => {
         const guard: HumanValueGuard = { IsHumanOwned: vi.fn().mockResolvedValue(true), RecordPreserved: vi.fn(), RetireHumanValue: vi.fn() };
         const out = await ApplyOutputMapping({ outputMapping: { fields: mapping.fields }, result: { SeniorityLevel: MISSING_ID }, record, contextUser: USER,
             provider: d, dryRun: true, humanGuard: guard });
-        expect(out.PreviewErrors).toBeUndefined();
+        expect(out.previewErrors).toBeUndefined();
         expect(guard.IsHumanOwned).toHaveBeenCalledTimes(1);
         expect(guard.RecordPreserved).not.toHaveBeenCalled();
         expect(out.preservedHumanFields).toBeUndefined();
@@ -774,7 +774,7 @@ describe('dry-run preview checks only what the real write writes', () => {
             { JobFunctionID: 'AAAAAAAA-0000-0000-0000-000000000003', Sequence: 3, LevelID: '55555555-5555-5555-5555-555555555555' }, // insert writes every value
         ] };
         const out = await ApplyOutputMapping({ outputMapping: withLevel, result: answer, record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toEqual([`'Person Job Functions.LevelID' = '55555555-5555-5555-5555-555555555555' does not exist in 'Seniority Levels' (the real write fails on its foreign key)`]);
+        expect(out.previewErrors).toEqual([`'Person Job Functions.LevelID' = '55555555-5555-5555-5555-555555555555' does not exist in 'Seniority Levels' (the real write fails on its foreign key)`]);
         expect(d.ExistingChildren.every((r) => r.Saved === 0)).toBe(true);
     });
 });

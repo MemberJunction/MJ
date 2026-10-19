@@ -31,7 +31,7 @@ export interface WriteBackPreviewRows {
 export class WriteBackPreviewModel {
     /** The changes and errors one record's preview shows; a record whose real write would fail has no changes. */
     public static Build(recordID: string, writeBack: WriteBackResult): WriteBackPreviewRows {
-        const errors = writeBack.PreviewErrors || [];
+        const errors = writeBack.previewErrors || [];
         if (errors.length > 0) {
             return { Changes: [], Errors: [...errors], Withheld: [] };
         }

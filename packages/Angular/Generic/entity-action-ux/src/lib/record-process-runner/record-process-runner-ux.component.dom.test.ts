@@ -96,7 +96,7 @@ describe('RecordProcessRunnerUXComponent dry-run preview (DOM)', () => {
 
     it('shows what the real write would fail on as the record\'s errors, counts none of its changes and offers no Apply', async () => {
         const { f } = await renderPreview([detail('id-1', writeBackPayload({
-            PreviewErrors: ['Seniority "Chief" has no row', 'Level proposed twice'],
+            previewErrors: ['Seniority "Chief" has no row', 'Level proposed twice'],
             previewFields: { Tier: 'b' },
         }), {
             Status: 'Failed', ErrorMessage: 'Dry run: the real write would fail: Seniority "Chief" has no row; Level proposed twice',

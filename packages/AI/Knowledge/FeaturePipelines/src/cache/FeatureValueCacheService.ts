@@ -66,6 +66,7 @@ export interface CacheStoreParams extends FeatureValueCacheScope {
 /** Feature output item for MJ: Feature Values. */
 export interface FeatureValueOutputItem {
     featureName: string;
+    /** `unknown`: a Feature Value of any output type (string, number, boolean, date or JSON), typed by its constraint at write time. */
     value: unknown;
     /** The output's declared constraint type; lets a string answer land in its typed column. */
     constraintType?: ValueConstraint['Type'];
@@ -99,7 +100,8 @@ export interface RecordFeatureValuesParams {
     /** The rows are history (a decision an escalation superseded), never made the feature's latest value again. */
     historyOnly?: boolean;
     contextUser: UserInfo;
-    provider?: IMetadataProvider;
+    /** The caller's provider (on the server, the request's own connection); the rows are read and written through it. */
+    provider: IMetadataProvider;
 }
 
 /** One record's Feature Values of one feature in one pipeline, and the user and provider to read or write them with. */
@@ -275,21 +277,27 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             }
 
             if (params.recordHit !== false) {
-                entry.HitCount = (entry.HitCount ?? 0) + 1;
-                entry.LastHitAt = new Date();
-                void entry.Save().then((saved) => {
-                    if (!saved) {
-                        LogError(`FeatureValueCacheService: failed updating HitCount on cache '${entry.ID}': ${entry.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-                    }
-                }).catch((err) => {
-                    LogError(`FeatureValueCacheService: failed updating HitCount on cache '${entry.ID}': ${err instanceof Error ? err.message : String(err)}`);
-                });
+                // fire-and-forget: a failed hit count must not fail the lookup
+                void this.recordHitCount(entry);
             }
 
             results.set(entry.KeyHash, entry);
         }
 
         return results;
+    }
+
+    /** Counts a hit on a cache entry; a failed save is logged, never thrown (the lookup already succeeded). */
+    private async recordHitCount(entry: MJFeatureValueCacheEntity): Promise<void> {
+        try {
+            entry.HitCount = (entry.HitCount ?? 0) + 1;
+            entry.LastHitAt = new Date();
+            if (!(await entry.Save())) {
+                LogError(`FeatureValueCacheService: failed updating HitCount on cache '${entry.ID}': ${entry.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        } catch (err) {
+            LogError(`FeatureValueCacheService: failed updating HitCount on cache '${entry.ID}': ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     /**
@@ -352,7 +360,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
      * @throws FeatureValueSaveError when a row cannot be saved; Error when the rows cannot be read.
      */
     public async RecordFeatureValues(params: RecordFeatureValuesParams): Promise<RecordFeatureValuesOutcome> {
-        const provider = params.provider ?? Metadata.Provider;
+        const provider = params.provider;
         const keyed = await Promise.all(params.outputs.map(async (out) => ({
             out,
             keyHash: await FeatureValueKey.ComputeHash({
@@ -364,11 +372,13 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         })));
         const previous = await this.LoadLatestPipelineValues(params, provider);
         const existing = await this.LoadByKeyHashes(params, provider, keyed.map((k) => k.keyHash));
-        const results = await Promise.all(keyed.map(({ out, keyHash }) => {
+        // Sequential, not Promise.all: the caller's entity transaction belongs to one async scope, so the rows are saved one at a time on its provider
+        const results: Array<'Upserted' | 'Unchanged'> = [];
+        for (const { out, keyHash } of keyed) {
             const latest = previous.get(out.featureName.toLowerCase());
             const supersededByAnotherKey = params.historyOnly !== true && !!latest && latest.ValueKeyHash !== keyHash;
-            return this.WriteOne(params, provider, out, keyHash, existing.get(keyHash), supersededByAnotherKey);
-        }));
+            results.push(await this.WriteOne(params, provider, out, keyHash, existing.get(keyHash), supersededByAnotherKey));
+        }
 
         const outcome: RecordFeatureValuesOutcome = { Upserted: 0, Unchanged: 0, Previous: {} };
         keyed.forEach(({ out }, i) => {

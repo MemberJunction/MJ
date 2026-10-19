@@ -9,10 +9,14 @@
  */
 import { GoldenLabelQualityRig } from './lib/golden-label-quality-rig';
 
-Promise.resolve().then(() => GoldenLabelQualityRig.Run(GoldenLabelQualityRig.ParseArgs(process.argv.slice(2)))).then(
-    (code) => process.exit(code),
-    (e: unknown) => {
+async function main(): Promise<void> {
+    try {
+        const code = await GoldenLabelQualityRig.Run(GoldenLabelQualityRig.ParseArgs(process.argv.slice(2)));
+        process.exit(code);
+    } catch (e: unknown) {
         console.error(e instanceof Error ? e.message : String(e));
         process.exit(2);
-    },
-);
+    }
+}
+
+void main();

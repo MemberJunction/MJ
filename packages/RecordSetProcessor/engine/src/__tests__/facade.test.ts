@@ -647,7 +647,7 @@ describe('ApplyOutputMapping', () => {
             error: undefined,
         });
         // Only the depth overrun is what the real write would fail on.
-        expect(out.PreviewErrors).toEqual([`tag 'Deep Tag': Match exceeds maxDepth (2 > 1)`]);
+        expect(out.previewErrors).toEqual([`tag 'Deep Tag': Match exceeds maxDepth (2 > 1)`]);
         expect(created.length).toBe(0);
         expect(mockResolveTag).toHaveBeenCalledWith(
             'Existing Tag',
@@ -725,7 +725,7 @@ describe('ApplyOutputMapping', () => {
             provider,
             dryRun: true,
         });
-        expect(out.PreviewErrors).toEqual([`tag 'Brand New Tag': Created tag exceeds maxDepth (1 > 0)`]);
+        expect(out.previewErrors).toEqual([`tag 'Brand New Tag': Created tag exceeds maxDepth (1 > 0)`]);
         mockResolveTag.mockRestore();
         mockConfig.mockRestore();
     });
@@ -765,7 +765,7 @@ describe('ApplyOutputMapping', () => {
         expect(out.previewTags?.[0].depth).toBe(-1);
         expect(out.previewTags?.[0].error).toContain('is not a descendant of root tag');
         // The real write throws on it, so the dry run reports it as what the real write would fail on.
-        expect(out.PreviewErrors).toEqual([`tag 'Unrelated Tag': Matched tag 'Unrelated Tag' is not a descendant of root tag 'root-1'`]);
+        expect(out.previewErrors).toEqual([`tag 'Unrelated Tag': Matched tag 'Unrelated Tag' is not a descendant of root tag 'root-1'`]);
 
         mockResolveTag.mockRestore();
         mockGetTagByID.mockRestore();

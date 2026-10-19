@@ -41,8 +41,13 @@ export interface FeatureValueCard {
     RowID: string;
 }
 
+/** True for null and undefined alike. `unknown` because a view row's column may be absent as well as null. */
+function isNullish(value: unknown): value is null | undefined {
+    return value === null || value === undefined;
+}
+
 function toDate(value: string | Date | null | undefined): Date | null {
-    if (value == null) return null;
+    if (isNullish(value)) return null;
     const d = value instanceof Date ? value : new Date(value);
     return Number.isNaN(d.getTime()) ? null : d;
 }
@@ -58,23 +63,23 @@ function keyOf(recordProcessID: string, featureName: string): string {
 export class FeatureValuesPanelModel {
     /** Human-readable value: number, Yes/No, ISO date part, compact JSON, or text. Empty when valueless. */
     public static DisplayValue(row: FeatureValueRow): string {
-        if (row.ValueNumeric != null) return String(row.ValueNumeric);
-        if (row.ValueBoolean != null) {
+        if (!isNullish(row.ValueNumeric)) return String(row.ValueNumeric);
+        if (!isNullish(row.ValueBoolean)) {
             const v: boolean | number | string = row.ValueBoolean;
             return v === true || v === 1 || v === '1' ? 'Yes' : 'No';
         }
-        if (row.ValueDate != null) {
+        if (!isNullish(row.ValueDate)) {
             const d = toDate(row.ValueDate);
             return d ? d.toISOString().slice(0, 10) : String(row.ValueDate);
         }
-        if (row.ValueJSON != null && row.ValueJSON !== '') {
+        if (!isNullish(row.ValueJSON) && row.ValueJSON !== '') {
             try {
                 return JSON.stringify(JSON.parse(row.ValueJSON));
             } catch {
                 return row.ValueJSON;
             }
         }
-        if (row.ValueText != null) return row.ValueText;
+        if (!isNullish(row.ValueText)) return row.ValueText;
         return '';
     }
 
@@ -84,8 +89,8 @@ export class FeatureValuesPanelModel {
     }
 
     private static hasValue(row: FeatureValueRow): boolean {
-        return row.ValueNumeric != null || row.ValueBoolean != null || row.ValueDate != null
-            || (row.ValueJSON != null && row.ValueJSON !== '') || row.ValueText != null;
+        return !isNullish(row.ValueNumeric) || !isNullish(row.ValueBoolean) || !isNullish(row.ValueDate)
+            || (!isNullish(row.ValueJSON) && row.ValueJSON !== '') || !isNullish(row.ValueText);
     }
 
     /**

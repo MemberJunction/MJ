@@ -5,7 +5,7 @@
  */
 import { BaseEntity } from '@memberjunction/core';
 import { MJFeaturePipelineVersionEntity } from '@memberjunction/core-entities';
-import { RegisterClass, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/global';
+import { IsPlainObject, RegisterClass, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/global';
 
 /** The fields the activation check reads. */
 export type VersionActivationFields = Pick<MJFeaturePipelineVersionEntity, 'Version' | 'Status' | 'Gated' | 'Threshold' | 'ResultValue' | 'GoldenSetTestRunID' | 'ResultDetails'>;
@@ -65,19 +65,21 @@ export class MJFeaturePipelineVersionEntityExtended extends MJFeaturePipelineVer
     /** The required cases a version's stored golden-set result answered wrong; empty when the details carry none. */
     public static RequiredFailuresOf(v: Pick<MJFeaturePipelineVersionEntity, 'ResultDetails'>): RequiredCaseFailure[] {
         const score = MJFeaturePipelineVersionEntityExtended.ParseDetails(v.ResultDetails)?.Score;
-        const failures = score && typeof score === 'object' ? score.RequiredFailures : undefined;
-        return Array.isArray(failures) ? failures.filter((f) => MJFeaturePipelineVersionEntityExtended.IsRequiredCaseFailure(f)) : [];
+        const failures = IsPlainObject(score) ? score.RequiredFailures : undefined;
+        return Array.isArray(failures) ? failures.filter(MJFeaturePipelineVersionEntityExtended.IsRequiredCaseFailure) : [];
     }
 
-    /** The stored details JSON as an object; null when absent or not a JSON object. */
-    protected static ParseDetails(details: string | null): Partial<GoldenSetResultDetails> | null {
+    /**
+     * The stored details JSON as an object; null when absent or not a JSON object. Its values are `unknown`: stored JSON
+     * (any writer, any era) is narrowed where it is read, not trusted to be a {@link GoldenSetResultDetails}.
+     */
+    protected static ParseDetails(details: string | null): Record<string, unknown> | null {
         if (!details) {
             return null;
         }
         try {
-            // unknown: stored JSON (any writer, any era) is narrowed below before it is read as the typed shape
             const parsed: unknown = JSON.parse(details);
-            return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed as Partial<GoldenSetResultDetails> : null;
+            return IsPlainObject(parsed) ? parsed : null;
         } catch (e) {
             if (e instanceof SyntaxError) {
                 return null;
@@ -87,8 +89,8 @@ export class MJFeaturePipelineVersionEntityExtended extends MJFeaturePipelineVer
     }
 
     /** Whether a stored list entry is a well-formed {@link RequiredCaseFailure}. */
-    protected static IsRequiredCaseFailure(f: RequiredCaseFailure): boolean {
-        return typeof f === 'object' && f !== null && typeof f.CaseID === 'string' && Array.isArray(f.Outputs)
+    protected static IsRequiredCaseFailure(f: unknown): f is RequiredCaseFailure {
+        return IsPlainObject(f) && typeof f.CaseID === 'string' && Array.isArray(f.Outputs)
             && f.Outputs.every((o) => typeof o === 'string');
     }
 

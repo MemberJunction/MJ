@@ -262,7 +262,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
                     processRunID: ctx.handle.ProcessRunID,
                     maxConcurrency: ctx.maxConcurrency,
                     excludeFields: writeBackFields,
-                    OverwriteHumanValues: options.overwriteHumanValues === true,
+                    overwriteHumanValues: options.overwriteHumanValues === true,
                 });
             } catch (e) {
                 LogError(`RecordSetProcessor: Watermark check failed (proceeding without skipping): ${e instanceof Error ? e.message : String(e)}`);

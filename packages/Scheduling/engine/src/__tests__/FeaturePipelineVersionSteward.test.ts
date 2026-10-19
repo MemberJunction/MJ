@@ -218,13 +218,15 @@ describe('FeaturePipelineVersionSteward.RunOnce', () => {
     });
 
     it('ignores a Running run not checkpointed for over 30 minutes (its server stopped), warning once, and backfills', async () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        // LogWarning writes through the error channel with a [WARNING] prefix, so it stays visible in production
+        const warn = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         plan.mockResolvedValue({ Kind: 'backfill', Version: 2, RecordIDs: ['r1', 'r2'] });
         provider.RunningProcessRuns = [{ ID: 'PR-STALE', StartTime: new Date('2026-10-16T01:00:00Z'), __mj_UpdatedAt: new Date(Date.now() - 45 * 60_000) }];
         runByID.mockResolvedValue(completedRun);
         expect(await steward.RunOnce({ ContextUser: user, Provider: provider })).toMatchObject([{ Action: 'backfilled', ProcessRunID: 'PR-1' }]);
         expect(runByID).toHaveBeenCalledTimes(1);
         expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toContain('[WARNING]');
         expect(warn.mock.calls[0][0]).toContain('PR-STALE');
         warn.mockRestore();
     });

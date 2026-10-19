@@ -6,7 +6,7 @@
  */
 
 import { BaseSingleton, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
-import { BaseEntity, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import type { MJRecordProcessEntity, MJRecordProcessWatermarkEntity } from '@memberjunction/core-entities';
 import type { IRecordProcessor, RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import { RecordIDs } from '@memberjunction/record-set-processor-base';
@@ -34,12 +34,13 @@ export interface CheckBatchWatermarksParams {
     lastRunAt?: Date | null;
     processor?: IRecordProcessor;
     contextUser: UserInfo;
-    provider?: IMetadataProvider;
+    /** The run's provider: the watermark reads run on it (never the global provider). */
+    provider: IMetadataProvider;
     processRunID?: string;
     maxConcurrency?: number;
     excludeFields?: string[];
     /** The run overwrites human values: no record is skipped (an unchanged record still holds the values to overwrite). */
-    OverwriteHumanValues?: boolean;
+    overwriteHumanValues?: boolean;
 }
 
 /** Parameters for updating/upserting a watermark after a successful process. */
@@ -49,7 +50,8 @@ export interface UpdateWatermarkParams {
     recordID: string;
     basisHash: string;
     contextUser: UserInfo;
-    provider?: IMetadataProvider;
+    /** The run's provider: the watermark is read and saved on it (never the global provider). */
+    provider: IMetadataProvider;
     existingWatermark?: MJRecordProcessWatermarkEntity;
 }
 
@@ -92,7 +94,7 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
         }
 
         const decisions = params.strategy === 'UpdatedAt' ? this.checkUpdatedAtBatch(params) : await this.checkChecksumBatch(params);
-        if (params.OverwriteHumanValues) {
+        if (params.overwriteHumanValues) {
             // keep each record's basis hash and loaded watermark, so it is refreshed once processed
             for (const [recordID, decision] of decisions) {
                 decisions.set(recordID, { ...decision, shouldSkip: false });
@@ -113,7 +115,7 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
             return WatermarkService.ProcessAll(params.records);
         }
         const hashes = await this.computeBasisHashes(params, (record, context) => processor.ComputeBasisHash(record, context));
-        const existing = await this.loadExistingWatermarks(params.recordProcessID, params.entityID, Array.from(hashes.keys()), params.contextUser, params.provider ?? Metadata.Provider);
+        const existing = await this.loadExistingWatermarks(params.recordProcessID, params.entityID, Array.from(hashes.keys()), params.contextUser, params.provider);
         const results = new Map<string, WatermarkDecision>();
         for (const r of params.records) {
             const basisHash = hashes.get(r.RecordID);
@@ -137,7 +139,7 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
     protected ProcessorContextOf(params: CheckBatchWatermarksParams): RecordProcessorContext {
         return {
             contextUser: params.contextUser,
-            provider: params.provider ?? Metadata.Provider,
+            provider: params.provider,
             processRunID: params.processRunID,
             recordProcessID: params.recordProcessID,
             entityID: params.entityID,
@@ -175,7 +177,6 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
      */
     private async checkChecksumBatch(params: CheckBatchWatermarksParams): Promise<Map<string, WatermarkDecision>> {
         const results = new Map<string, WatermarkDecision>();
-        const provider = params.provider ?? Metadata.Provider;
 
         // Step 1: Compute basis hash for each record with bounded concurrency
         const computedHashes = await this.computeBasisHashes(params, (record, context) =>
@@ -191,7 +192,7 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
             params.entityID,
             Array.from(computedHashes.keys()),
             params.contextUser,
-            provider
+            params.provider
         );
 
         // Step 3: Compare hashes
@@ -292,7 +293,7 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
         entityID: string,
         recordIDs: string[],
         contextUser: UserInfo,
-        provider?: IMetadataProvider
+        provider: IMetadataProvider
     ): Promise<Map<string, MJRecordProcessWatermarkEntity>> {
         const map = new Map<string, MJRecordProcessWatermarkEntity>();
         if (recordIDs.length === 0) {
@@ -302,7 +303,7 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
         const quotedIDs = recordIDs.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
         const filter = `RecordProcessID = '${EscapeSQLString(recordProcessID)}' AND EntityID = '${EscapeSQLString(entityID)}' AND RecordID IN (${quotedIDs})`;
 
-        const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+        const rv = RunView.FromMetadataProvider(provider);
         const res = await rv.RunView<MJRecordProcessWatermarkEntity>(
             {
                 EntityName: 'MJ: Record Process Watermarks',
@@ -330,11 +331,11 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
      * Upserts a watermark row for a record on success.
      */
     public async UpdateWatermark(params: UpdateWatermarkParams): Promise<void> {
-        const provider = params.provider ?? Metadata.Provider;
+        const provider = params.provider;
         let wm = params.existingWatermark;
 
         if (!wm) {
-            const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+            const rv = RunView.FromMetadataProvider(provider);
             const filter = `RecordProcessID = '${EscapeSQLString(params.recordProcessID)}' AND EntityID = '${EscapeSQLString(params.entityID)}' AND RecordID = '${EscapeSQLString(params.recordID)}'`;
             const res = await rv.RunView<MJRecordProcessWatermarkEntity>(
                 {

@@ -4,6 +4,7 @@
  * @module @memberjunction/feature-pipelines
  */
 import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { OrdinalCompare } from '@memberjunction/global';
 import type { ResolvedConstraint } from '../spec/value-constraint.js';
 
 /** One allowed value of a lookup: the matched column and the text shown to the model. */
@@ -53,7 +54,7 @@ export class LookupConstraintValues {
      * (or not at all), and the ordinal order is the same on every provider.
      */
     public static InStableOrder(rows: LookupValueRow[]): LookupValueRow[] {
-        return [...rows].sort((a, b) => (a.Match < b.Match ? -1 : a.Match > b.Match ? 1 : 0));
+        return [...rows].sort((a, b) => OrdinalCompare(a.Match, b.Match));
     }
 
     /** A resolved lookup constraint carrying its allowed values and their display text. */

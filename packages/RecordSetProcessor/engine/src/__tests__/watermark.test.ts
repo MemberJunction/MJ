@@ -12,6 +12,9 @@ vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
     class MockRunView {
         public static mockResults: unknown[] = [];
+        public static FromMetadataProvider(): MockRunView {
+            return new MockRunView();
+        }
         public async RunView() {
             return {
                 Success: true,
@@ -29,6 +32,7 @@ describe('WatermarkService', () => {
     const mockUser = { ID: 'user-1', Email: 'test@example.com' } as unknown as UserInfo;
     const recordProcessID = 'rp-123';
     const entityID = 'entity-456';
+    const provider = new EntitiesOnlyProvider([]);
 
     beforeEach(() => {
         (RunView as unknown as { mockResults: unknown[] }).mockResults = [];
@@ -47,6 +51,7 @@ describe('WatermarkService', () => {
             strategy: 'None',
             skipUnchanged: true,
             contextUser: mockUser,
+            provider,
         });
 
         expect(decisionsNone.get('rec-1')?.shouldSkip).toBe(false);
@@ -59,6 +64,7 @@ describe('WatermarkService', () => {
             strategy: 'Checksum',
             skipUnchanged: false,
             contextUser: mockUser,
+            provider,
         });
 
         expect(decisionsDisabled.get('rec-1')?.shouldSkip).toBe(false);
@@ -102,6 +108,7 @@ describe('WatermarkService', () => {
             skipUnchanged: true,
             lastRunAt,
             contextUser: mockUser,
+            provider,
         });
 
         expect(decisions.get('rec-old')?.shouldSkip).toBe(true);
@@ -160,6 +167,7 @@ describe('WatermarkService', () => {
             strategy: 'Checksum',
             skipUnchanged: true,
             contextUser: mockUser,
+            provider,
         });
 
         expect(decisions.get('rec-1')?.shouldSkip).toBe(true);
@@ -181,7 +189,7 @@ describe('WatermarkService', () => {
         };
         vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue(loaded);
         const decisions = await WatermarkService.Instance.CheckBatchWatermarks({
-            recordProcessID, entityID, records: [scoped], strategy: 'Checksum', skipUnchanged: true, contextUser: mockUser,
+            recordProcessID, entityID, records: [scoped], strategy: 'Checksum', skipUnchanged: true, contextUser: mockUser, provider,
         });
         expect(decisions.get(scoped.RecordID)?.shouldSkip).toBe(true);
     });
@@ -216,6 +224,7 @@ describe('WatermarkService', () => {
             skipUnchanged: true,
             processor: mockProcessor,
             contextUser: mockUser,
+            provider,
         });
 
         expect(mockProcessor.ComputeBasisHash).toHaveBeenCalledWith(
@@ -229,7 +238,7 @@ describe('WatermarkService', () => {
     it('hands the processor the run\'s pipeline and entity when it computes a basis hash', async () => {
         const mockProcessor = { ProcessRecord: vi.fn(), ComputeBasisHash: vi.fn().mockResolvedValue('h') };
         const record: RecordRef = { EntityID: entityID, RecordID: 'rec-1', Record: { Title: 'Nurse' } };
-        const base = { recordProcessID, entityID, records: [record], strategy: 'Checksum' as const, skipUnchanged: true, processor: mockProcessor, contextUser: mockUser };
+        const base = { recordProcessID, entityID, records: [record], strategy: 'Checksum' as const, skipUnchanged: true, processor: mockProcessor, contextUser: mockUser, provider };
         await WatermarkService.Instance.CheckBatchWatermarks(base);
         expect(mockProcessor.ComputeBasisHash.mock.calls[0][1]).toMatchObject({ recordProcessID, entityID });
     });
@@ -289,6 +298,7 @@ describe('WatermarkService: a run that overwrites human values', () => {
     const user = new UserInfo();
     const recordProcessID = 'rp-out';
     const entityID = 'entity-out';
+    const provider = new EntitiesOnlyProvider([]);
     const kept: RecordRef = { EntityID: entityID, RecordID: 'rec-kept', Record: { Title: 'Nurse' } };
     const other: RecordRef = { EntityID: entityID, RecordID: 'rec-other', Record: { Title: 'Surgeon' } };
     /** The stored watermarks: both records match their hash. */
@@ -315,9 +325,9 @@ describe('WatermarkService: a run that overwrites human values', () => {
 
     it('processes every unchanged record, keeping each hash so its watermark is refreshed', async () => {
         const processor = hashingProcessor();
-        const params = { recordProcessID, entityID, records: [kept, other], strategy: 'Checksum' as const, skipUnchanged: true, processor, contextUser: user };
+        const params = { recordProcessID, entityID, records: [kept, other], strategy: 'Checksum' as const, skipUnchanged: true, processor, contextUser: user, provider };
         expect((await WatermarkService.Instance.CheckBatchWatermarks(params)).get('rec-kept')?.shouldSkip).toBe(true);
-        const decisions = await WatermarkService.Instance.CheckBatchWatermarks({ ...params, OverwriteHumanValues: true });
+        const decisions = await WatermarkService.Instance.CheckBatchWatermarks({ ...params, overwriteHumanValues: true });
         expect(decisions.get('rec-kept')).toMatchObject({ shouldSkip: false, basisHash: 'hash-rec-kept' });
         expect(decisions.get('rec-other')).toMatchObject({ shouldSkip: false, basisHash: 'hash-rec-other' });
     });

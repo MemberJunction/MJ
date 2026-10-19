@@ -33,7 +33,7 @@ export interface GoldenLabelPolicy { MinAgreementLower: number; MaxExcluded: num
 export const DEFAULT_GOLDEN_LABEL_POLICY: GoldenLabelPolicy = { MinAgreementLower: 0.7, MaxExcluded: 5 };
 /** Agreement of one labeler pair on one output, with its Wilson interval. */
 export interface PairAgreement { Agree: number; N: number; Lower: number; Upper: number; }
-/** The stored label-quality record of a golden set (`InputDefinition.labelQuality`). */
+/** The stored label-quality record of a golden set (`InputDefinition.LabelQuality`). */
 export interface GoldenLabelQuality {
     Procedure: 'labeler-agreement-with-adjudication';
     Labelers: LabelerIdentity[];
@@ -70,7 +70,7 @@ export class GoldenLabelQualityCheck {
 
     /** Builds the golden cases and their quality record from three labelers' answers. Deterministic. */
     public static async Adjudicate(labelled: LabelledCase[], outputs: string[], labelers: LabelerIdentity[],
-        policy: GoldenLabelPolicy = DEFAULT_GOLDEN_LABEL_POLICY): Promise<{ cases: GoldenCase[]; labelQuality: GoldenLabelQuality }> {
+        policy: GoldenLabelPolicy = DEFAULT_GOLDEN_LABEL_POLICY): Promise<{ Cases: GoldenCase[]; LabelQuality: GoldenLabelQuality }> {
         const counts: AgreementCounts = { AB: GoldenLabelQualityCheck.Zeros(outputs), AC: GoldenLabelQualityCheck.Zeros(outputs) };
         const cases: GoldenCase[] = [];
         const excluded: GoldenLabelQuality['Excluded'] = [];
@@ -92,7 +92,7 @@ export class GoldenLabelQualityCheck {
         };
         labelQuality.Problems = await GoldenLabelQualityCheck.Check(cases, labelQuality, policy);
         labelQuality.Passed = labelQuality.Problems.length === 0;
-        return { cases, labelQuality };
+        return { Cases: cases, LabelQuality: labelQuality };
     }
 
     /**
@@ -116,7 +116,7 @@ export class GoldenLabelQualityCheck {
             return [];
         }
         if (!q) {
-            return ['the golden set has model-made labels and no labelQuality record'];
+            return ['the golden set has model-made labels and no LabelQuality record'];
         }
         const problems: string[] = [];
         if (q.CasesSha256 !== (await GoldenLabelQualityCheck.CasesSha256(labelled))) {

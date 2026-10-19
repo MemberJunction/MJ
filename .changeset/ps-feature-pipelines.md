@@ -21,6 +21,7 @@
 "@memberjunction/server-bootstrap": minor
 "@memberjunction/server-bootstrap-lite": minor
 "@memberjunction/templates": minor
+"@memberjunction/templates-base-types": minor
 "@memberjunction/testing-engine": minor
 "@memberjunction/testing-integration": minor
 "@memberjunction/unit-testing": minor

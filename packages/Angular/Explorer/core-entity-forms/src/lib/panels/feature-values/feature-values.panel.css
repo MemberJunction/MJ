@@ -38,14 +38,6 @@
     font-style: italic;
 }
 
-.fvp-toggle {
-    background: transparent;
-    border: 0;
-    cursor: pointer;
-    color: var(--mj-text-secondary);
-    padding: 2px 6px;
-}
-
 .fvp-detail td {
     background: var(--mj-bg-surface-card);
 }
@@ -74,17 +66,9 @@
     padding: 2px 0;
 }
 
+/* The Refresh and expand buttons are mjButton; .fvp-refresh / .fvp-toggle are hooks only. */
 .fvp-toolbar {
     display: flex;
     justify-content: flex-end;
     margin-bottom: 6px;
-}
-
-.fvp-refresh {
-    background: transparent;
-    border: 1px solid var(--mj-border-default);
-    border-radius: var(--mj-radius-md, 8px);
-    color: var(--mj-text-secondary);
-    cursor: pointer;
-    padding: 2px 10px;
 }

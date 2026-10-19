@@ -38,6 +38,9 @@ function makeRunner(template: MJTemplateEntityExtended) {
     const render = vi.spyOn(engine, 'RenderTemplate').mockResolvedValue(RENDERED);
     vi.spyOn(engine, 'Config').mockResolvedValue(undefined);
     vi.spyOn(engine, 'Templates', 'get').mockReturnValue([template]);
+    // The runner resolves a prompt's template through the engine's by-ID index, which is built from the engine's own
+    // metadata (not the mocked getter), so the lookup is mocked too.
+    vi.spyOn(engine, 'FindTemplateByID').mockImplementation((id) => (id === template.ID ? template : undefined));
     const params = new AIPromptParams();
     params.data = { a: 'Affineur & Owner' };
     return { runner, render, params };

@@ -60,7 +60,7 @@ describe('WriteBackPreviewModel.Build', () => {
     });
 
     it('gives a record whose real write would fail its errors and no changes', () => {
-        const rows = WriteBackPreviewModel.Build('id-1', { ...base, PreviewErrors: ['no such row'], previewFields: { Tier: 'b' } });
+        const rows = WriteBackPreviewModel.Build('id-1', { ...base, previewErrors: ['no such row'], previewFields: { Tier: 'b' } });
 
         expect(rows).toEqual({ Changes: [], Errors: ['no such row'], Withheld: [] });
     });

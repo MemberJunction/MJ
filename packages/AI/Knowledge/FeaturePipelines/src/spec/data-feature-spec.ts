@@ -592,6 +592,7 @@ function validateEscalation(spec: DataFeatureSpec): SpecValidationIssue[] {
       Severity: 'error',
     });
   }
+  // The spec is parsed JSON: a floor of the wrong type is reported here, not trusted to be a number
   const floor: unknown = escalation.BelowConfidence;
   if (typeof floor !== 'number' || !Number.isFinite(floor) || floor <= 0 || floor >= 1) {
     issues.push({
@@ -606,6 +607,7 @@ function validateEscalation(spec: DataFeatureSpec): SpecValidationIssue[] {
 
 /** `Context.RecordAsUserMessage`, when present, is a boolean; `true` needs an LLM pipeline and `Context.Fields`. */
 function validateRecordAsUserMessage(spec: DataFeatureSpec): SpecValidationIssue[] {
+  // The spec is parsed JSON: a flag of the wrong type is reported here, not trusted to be a boolean
   const flag: unknown = spec.Context?.RecordAsUserMessage;
   if (flag === undefined) {
     return [];
@@ -618,6 +620,7 @@ function validateRecordAsUserMessage(spec: DataFeatureSpec): SpecValidationIssue
     return [];
   }
   const issues: SpecValidationIssue[] = [];
+  // A PipelineType that is not a string is reported by validatePipelineType; here it is simply not the LLM type
   const pipelineType: unknown = spec.PipelineType;
   if (!((pipelineType === undefined || pipelineType === null || typeof pipelineType === 'string') && IsLLMPipelineType(spec.PipelineType))) {
     issues.push({ Path: path, Message: 'Context.RecordAsUserMessage is only honoured by an LLM pipeline, which builds the prompt\'s messages.', FixRecommendation: 'Remove Context.RecordAsUserMessage, or make the pipeline an LLM pipeline.', Severity: 'error' });
