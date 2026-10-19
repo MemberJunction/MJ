@@ -65,7 +65,7 @@ describe('widget bridge helper (executed): auto-submit fallback', () => {
     expect(submissions()).toEqual([]);
   });
 
-  it('a typeless <button> inside a form whose own handler prevents default ("Play") does not auto-submit', () => {
+  it('a typeless <button> inside a form with a neutral label ("Play") does not auto-submit: the label keeps the click fallback quiet, and its own preventDefault keeps the native submit quiet', () => {
     root = mount(`
       <form>
         <input name="answer" value="Mercury">
@@ -188,6 +188,16 @@ describe('widget bridge helper (executed): collectFields', () => {
       </form>
     `);
     expect(submitForm(root.querySelector('form')!)).toEqual({ bare: ['on'] });
+  });
+
+  it('an EMPTY value attribute counts as absent: the label text still comes through', () => {
+    root = mount(`
+      <form>
+        <label><input type="checkbox" name="toppings" value="" checked> Olives</label>
+        <label><input type="checkbox" name="toppings" value="  " checked> Chili</label>
+      </form>
+    `);
+    expect(submitForm(root.querySelector('form')!)).toEqual({ toppings: ['Olives', 'Chili'] });
   });
 
   it('an explicit value attribute always wins over the label text', () => {

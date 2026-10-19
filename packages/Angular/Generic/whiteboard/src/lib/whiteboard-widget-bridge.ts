@@ -93,7 +93,8 @@ export const WHITEBOARD_INTERACTION_TYPE_DEBOUNCE_MS = 800;
  *    shape whatever the count, so the agent can react to a multi-select answer. A ticked
  *    box or radio with NO `value` attribute reports its own label text (`<label>` wrapper
  *    or `for=`) instead of the native "on", so valueless agent HTML still says WHICH box;
- *    an explicit `value` always wins, and a box with neither keeps "on".
+ *    a non-blank `value` always wins (an empty or whitespace-only attribute counts as
+ *    absent), and a box with neither keeps "on".
  */
 export const WHITEBOARD_SUBMIT_HELPER =
   `<script>window.MJWhiteboard={__lastSubmitAt:0,submit:function(data){window.MJWhiteboard.__lastSubmitAt=Date.now();parent.postMessage({__mjWhiteboardSubmit:true,data:data},'*');}};
@@ -115,7 +116,7 @@ document.addEventListener('focusin',function(e){try{var el=e.target;if(!isField(
 document.addEventListener('focusout',function(e){try{var el=e.target;if(!isField(el)||isPrivate(el)){return;}push({kind:'blur',target:fieldLabel(el)});}catch(err){}});
 var AUTO_DEDUPE_MS=600;
 function ownLabelText(el){try{var t='';if(el.labels&&el.labels.length){t=el.labels[0].textContent||'';}if(!t&&el.closest){var w=el.closest('label');t=w?(w.textContent||''):'';}return t.replace(/\\s+/g,' ').trim();}catch(e){return '';}}
-function checkedValue(el){if(el.hasAttribute&&el.hasAttribute('value')){return clip(el.value,VALUE_MAX);}var lt=ownLabelText(el);return clip(lt||el.value,VALUE_MAX);}
+function checkedValue(el){var v=el.getAttribute?el.getAttribute('value'):null;if(v!=null&&v.trim()!==''){return clip(v,VALUE_MAX);}var lt=ownLabelText(el);return clip(lt||el.value,VALUE_MAX);}
 function collectFields(scope){var out={},els=(scope&&scope.querySelectorAll?scope:document).querySelectorAll('input,select,textarea');for(var i=0;i<els.length;i++){var el=els[i];if(isPrivate(el)){continue;}var t=(el.type||'').toLowerCase();if((t==='radio'||t==='checkbox')&&!el.checked){continue;}var name=fieldLabel(el);if(t==='checkbox'){(out[name]=Array.isArray(out[name])?out[name]:[]).push(checkedValue(el));}else if(t==='radio'){out[name]=checkedValue(el);}else{out[name]=clip(el.value,VALUE_MAX);}}return out;}
 function autoSubmit(scope,trigger){try{var last=window.MJWhiteboard.__lastSubmitAt||0;if(Date.now()-last<AUTO_DEDUPE_MS){return;}var fields=collectFields(scope);var payload={__auto:true,trigger:clip(trigger||'submit',LABEL_MAX),fields:fields};window.MJWhiteboard.submit(payload);}catch(err){}}
 document.addEventListener('submit',function(e){try{e.preventDefault();autoSubmit(e.target,'form');}catch(err){}},true);
