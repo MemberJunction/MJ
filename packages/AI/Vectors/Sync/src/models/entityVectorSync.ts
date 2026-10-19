@@ -512,14 +512,15 @@ export class EntityVectorSyncer extends VectorBase {
    *
    * Order of preference:
    *
-   *   1. `VectorIndex.Dimensions` when it is set. This is the operator's declaration and what
-   *      the embedding request already honours.
-   *   2. The provider's own answer, via `ListIndexes()`, written back onto the row. Existing
-   *      tenants overwhelmingly have `Dimensions` null — the Knowledge Hub create-index form
-   *      never set it, and the server-side write-back used to be fire-and-forget, so it lost the
-   *      race against any client that re-read the row (and never ran at all when the provider
-   *      call failed). Refusing those rows outright would strand them, so the provider is asked
-   *      first and the row is repaired.
+   *   1. `VectorIndex.Dimensions` when it is set. This is the operator's declaration, or the width
+   *      `MJVectorIndexEntityServer` learned by probing the embedding model at create time and
+   *      wrote back once the provider accepted the index. It is what the embedding request honours.
+   *   2. Fallback only: the provider's own answer, via `ListIndexes()`, written back onto the row.
+   *      This covers rows whose `Dimensions` is still null: indexes created before the create-time
+   *      probe existed (the Knowledge Hub create-index form never set it, and the old write-back
+   *      never ran when the provider call failed), and a row read before its detached provisioning
+   *      has finished writing back. Refusing those rows outright would strand them, so the
+   *      provider is asked first and the row is repaired.
    *   3. Refuse. An index whose width nobody can state cannot have embeddings checked against
    *      it, and that is the exact state the check exists to prevent.
    *

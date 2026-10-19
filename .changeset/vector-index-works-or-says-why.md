@@ -4,46 +4,17 @@
 "@memberjunction/ai-vectors": patch
 "@memberjunction/ai-vectordb": patch
 "@memberjunction/ai-vectors-memory": patch
+"@memberjunction/entity-documents": patch
 ---
 
-Creating a vector index either provisions one or says why it did not.
+A vector index records whether it was provisioned, vectorizing refuses embeddings the index cannot hold, and the embedding model is chosen deterministically.
 
-`MJVectorIndexEntityServer` called `createIndexInProvider().catch(LogError)` — fired and forgotten.
-Two consequences, both invisible to the caller. A provider returning `success: false` reached only
-the log while the committed row kept `ExternalID`, `Dimensions` and `Metric` null and `Save()`
-returned true; and on the happy path the write-back resolved *after* `Save()` had already returned,
-so a client re-reading immediately saw the pre-provisioning values. That race, not a missing write,
-is why `Dimensions` is null on so many rows. `metric` was also hardcoded to `'cosine'` and written
-straight back, so the column could only ever echo our own constant.
+`MJVectorIndexEntityServer` still provisions in the background, so the save that creates the row returns at once. But the outcome of that background call used to reach only the server log, and a row whose provider refused, threw or never answered looked identical to one with an index behind it. The outcome is now written onto the row's `ProviderConfig` as `provisionState`, `provisionMessage` and `provisionCheckedAt`: `provisioned`, `failed` (with the provider's message), `timed-out` (the provider did not answer within `CREATE_INDEX_TIMEOUT_MS` and may still finish, so this is not recorded as a failure), `not-applicable` (the driver owns no index objects) or `unprovisioned` (no driver instance in this process). `Save()` never throws over provisioning. `Dimensions` and `Metric` are written back from the provider's response when it reports them, and `Metric` is requested from the row instead of hardcoded to `cosine`.
 
-Provisioning is now awaited and returns a discriminated outcome. `Dimensions` and `Metric` come off
-the provider's response and fall back to the request only when it does not carry them. A provider
-that refuses, or an index that was created but whose row cannot be made to address it, now throws
-and quotes the provider instead of reporting success.
+`VectorDBBase.ManagesIndexes` (default `true`, `false` on both Memory drivers) separates "this driver owns no index objects" from `IsReadOnly`, which is about record ingestion. MJ ships a Vector Index row for `SimpleVectorServiceProvider`, whose `CreateIndex` correctly answers `success: false`; that is now recorded as `not-applicable`, not as a failure, and its delete no longer asks the driver to remove an index it never had.
 
-Two outcomes are deliberately non-fatal, because MJ ships a Vector Index row for
-`SimpleVectorServiceProvider`, whose `CreateIndex` correctly returns `success: false` — escalating it
-would break `mj sync push` of MJ's own metadata on every install. `VectorDBBase.ManagesIndexes`
-(default `true`, `false` on both Memory drivers) separates "this driver owns no index objects" from
-`IsReadOnly`, which is about record ingestion; and a process with no vector-DB driver loaded is an
-environment gap, not a provider verdict. Both leave the row visibly unprovisioned, and the vectorize
-side refuses exactly that state.
+Vectorizing now refuses an index whose width disagrees with the embeddings it was handed, naming both widths, the index and the model. The width is the index's `Dimensions`, which is set at create time from the embedding-model probe. For rows whose `Dimensions` is still null, such as indexes created before that probe existed, the width is backfilled from `ListIndexes()` (matched on `ExternalID`, then `Name`), and a reported `dimension: 0` is treated as unknown rather than zero.
 
-Vectorizing now refuses an index whose declared width disagrees with the embeddings it was handed,
-naming both widths, the index and the model — previously the vectors were upserted regardless.
-Indexes with no declared `Dimensions` are backfilled from `ListIndexes()` first, matched on
-`ExternalID` then `Name`; a reported `dimension: 0` is treated as "unknown" rather than zero.
+Embedding-model selection is no longer whichever row the view happened to return first. `GetAIModel`'s no-id branch orders active models ahead of inactive ones, then by `PowerRank`, then by name, and logs that nobody asked for the model it picked. The model-type comparison is normalised, so a type row spelled `embeddings` no longer hides every embedding model. Vectorizing takes the model from `VectorIndex.EmbeddingModelID`, which is NOT NULL, rather than the nullable `EntityDocument.AIModelID`, and logs a disagreement between the two without failing the run.
 
-Embedding-model selection is no longer whichever row the view happened to return first.
-`GetAIModel`'s no-id branch orders active models ahead of inactive ones, then by `PowerRank`, then by
-name, and logs that nobody asked for the model it picked. The model-type comparison is normalised, so
-a type row spelled `embeddings` no longer makes every embedding model invisible. The real binding now
-takes the model from `VectorIndex.EmbeddingModelID`, which is NOT NULL, rather than the nullable
-`EntityDocument.AIModelID`, reporting a disagreement without failing the run.
-
-`EntityDocumentCache` no longer needs a process restart to see a new or edited entity document. Its
-`_loaded` flag was a one-way latch, and every production caller passes `refresh: false`, so the flag
-won every time; document *types* were restart-only unconditionally because `_typeCache` is populated
-only inside `Refresh`. The cache now carries a staleness window (`StaleAfterMs`, default 60s) plus an
-`Invalidate()` hook for a host that wants an exact guarantee. Within the window the skip is preserved,
-so a vectorize run over many entities still does not re-read metadata per entity.
+`EntityDocumentCache` no longer needs a process restart to see a new or edited entity document. Its `_loaded` flag was a one-way latch, and every production caller passes `refresh: false`. The cache now has a staleness window (`StaleAfterMs`, default 60s) plus an `Invalidate()` hook, and within the window a vectorize run over many entities still does not re-read metadata per entity.

@@ -9,9 +9,10 @@
  * similarity search quietly meaningless. The Pinecone driver already knew this failure by name, in
  * a comment, after the fact.
  *
- * Compounding it, the index's own `Dimensions` column is null on most existing rows: the Knowledge
- * Hub create-index form never set it, and the server-side write-back was fire-and-forget. So the
- * refusal cannot simply reject null — it asks the provider first and repairs the row.
+ * The index's own `Dimensions` column is set at create time now (the create-time model probe), but
+ * it is null on indexes created before that: the Knowledge Hub create-index form never set it, and
+ * the old write-back never ran when the provider call failed. So the refusal cannot simply reject
+ * null; as a fallback it asks the provider first and repairs the row.
  *
  * And the model that decides the width used to be chosen by `EntityDocument.AIModelID`, a nullable
  * column that fell through to an arbitrary pick. The index's `EmbeddingModelID` is NOT NULL and the
@@ -157,8 +158,15 @@ describe('EntityVectorSyncer.ResolveIndexDimensions', () => {
     syncer = new TestableSyncer();
   });
 
-  it('uses the width declared on the index', async () => {
-    await expect(syncer.resolveDims(indexRow({ Dimensions: 384 }), driver({}))).resolves.toBe(384);
+  it('uses the width recorded on the index at create time, without asking the provider', async () => {
+    // Dimensions is what the create-time model probe wrote back; ListIndexes is only the fallback
+    // for rows that predate it, so a recorded width must never be second-guessed by the provider.
+    const db = driver({ indexes: { indexes: [{ name: 'knowledge index', dimension: 1536, metric: 'cosine', host: 'h' }] } });
+    const listIndexes = vi.spyOn(db, 'ListIndexes');
+
+    await expect(syncer.resolveDims(indexRow({ Dimensions: 384 }), db)).resolves.toBe(384);
+    expect(listIndexes).not.toHaveBeenCalled();
+    expect(saveEntityMock).not.toHaveBeenCalled();
   });
 
   it('declines to police a driver that owns no index object', async () => {
