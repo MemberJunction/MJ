@@ -37,7 +37,8 @@
   "scripts": {
     "build": "tsc -b && tsc-alias -f",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.2.0",
