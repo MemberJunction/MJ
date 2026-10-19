@@ -109,12 +109,25 @@ export function SaveParameterFromLiteral(field: EntityFieldInfo, literal: string
     case EntityFieldTSType.Boolean:
       return { Type: SaveParameterType(field), Value: literal === '1' };
     case EntityFieldTSType.Number:
-      return { Type: SaveParameterType(field), Value: name === 'bigint' ? bigintFromLiteral(literal) : Number(literal) };
+      return { Type: SaveParameterType(field), Value: name === 'bigint' ? bigintFromLiteral(literal) : finiteNumberFromLiteral(field, literal) };
     case EntityFieldTSType.Date:
       return { Type: SaveParameterType(field), Value: new Date(QuotedLiteralText(literal)) };
     default:
       return { Type: SaveParameterType(field), Value: QuotedLiteralText(literal) };
   }
+}
+
+/**
+ * A number literal as a number. `Number('')` and `Number(' ')` are 0, and `NaN` binds as NULL, so a
+ * literal that is not a finite number would store a value nobody wrote; the literal batch failed on
+ * it, and so does this.
+ */
+function finiteNumberFromLiteral(field: EntityFieldInfo, literal: string): number {
+  const value = Number(literal);
+  if (literal.trim() === '' || !Number.isFinite(value)) {
+    throw new Error(`Field "${field.Name}" has value ${JSON.stringify(literal)}, which is not a number`);
+  }
+  return value;
 }
 
 /** A bigint literal as a BigInt; a fraction is truncated toward zero, as SQL Server converts it. */
@@ -153,13 +166,17 @@ const EXACT_NUMERIC_TYPES = new Set(['decimal', 'numeric', 'money', 'smallmoney'
 
 /**
  * Date types sent as their ISO-8601 literal text (`varchar(34)`) so the typed `SET @x = @p$n`
- * performs the conversion on SQL Server:
+ * performs the conversion on SQL Server, exactly as the literal batch did. None is bound as a JS
+ * `Date`, because tedious mishandles each:
  * - `datetimeoffset`: tedious encodes `sql.DateTimeOffset()` with `-date.getTimezoneOffset()`,
  *   which stamps the Node host's local offset instead of the `+00:00` written by `.toISOString()`.
  * - `smalldatetime`: tedious truncates seconds (`date.getUTCMinutes()`) instead of rounding >=30s
  *   to the next minute as SQL Server does, and throws a Node `RangeError` for pre-1900 dates.
+ * - `date`, `time`, `datetime`, `datetime2`: tedious encodes them in UTC but range-checks them with
+ *   the host's local `getFullYear()`, so on a server west of UTC `0001-01-01` fails as "Out of
+ *   range", and east of UTC so do `9999-12-31` values — common "no end date" placeholders.
  */
-const TEXT_DATE_TYPES = new Set(['datetimeoffset', 'smalldatetime']);
+const TEXT_DATE_TYPES = new Set(['date', 'time', 'datetime', 'datetime2', 'datetimeoffset', 'smalldatetime']);
 
 /**
  * Types a save keeps as their inline literal instead of binding a parameter.

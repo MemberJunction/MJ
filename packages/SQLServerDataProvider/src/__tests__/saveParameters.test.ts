@@ -71,7 +71,8 @@ describe('SaveParameterType', () => {
 
   it('matches type names case-insensitively and ignores surrounding space', () => {
     expect(SaveParameterType(field(' UniqueIdentifier '))).toEqual(sql.UniqueIdentifier());
-    expect(SaveParameterType(field('DATETIME2'))).toEqual(sql.DateTime2());
+    expect(SaveParameterType(field('BIT'))).toEqual(sql.Bit());
+    expect(SaveParameterType(field('DATETIME2'))).toEqual(sql.VarChar(34));
   });
 
   it('sends exact numerics as text, because the driver encodes them through a double', () => {
@@ -80,9 +81,10 @@ describe('SaveParameterType', () => {
     }
   });
 
-  it('sends datetimeoffset and smalldatetime as varchar(34) ISO text so SQL Server handles offset and rounding', () => {
-    expect(SaveParameterType(field('datetimeoffset'))).toEqual(sql.VarChar(34));
-    expect(SaveParameterType(field('smalldatetime'))).toEqual(sql.VarChar(34));
+  it('sends every date and time type as varchar(34) ISO text so SQL Server does the conversion', () => {
+    for (const typeName of ['date', 'time', 'datetime', 'datetime2', 'datetimeoffset', 'smalldatetime']) {
+      expect(SaveParameterType(field(typeName))).toEqual(sql.VarChar(34));
+    }
   });
 
   it('refuses to give sql_variant a parameter type, since a save writes it as its inline literal', () => {
@@ -130,6 +132,25 @@ describe('SaveParameterFromLiteral', () => {
     expect(SaveParameterFromLiteral(field('real'), '1e+21')).toEqual({ Type: sql.Real(), Value: 1e21 });
   });
 
+  // A JS Date is range-checked in the host's local time zone, so on a server west of UTC 0001-01-01
+  // was "out of range", and east of UTC so was 9999-12-31. Both are common "no end date" values.
+  it.each([
+    ['date', "'0001-01-01T00:00:00.000Z'"],
+    ['datetime2', "'0001-01-01T00:00:00.000Z'"],
+    ['datetime2', "'9999-12-31T23:59:59.999Z'"],
+    ['datetime', "'9999-12-31T23:59:59.997Z'"],
+    ['date', "'9999-12-31T20:00:00.000Z'"],
+  ])('sends a %s at the edge of the range (%s) as text, whatever the host time zone', (typeName, literal) => {
+    expect(SaveParameterFromLiteral(field(typeName), literal)).toEqual({ Type: sql.VarChar(34), Value: QuotedLiteralText(literal) });
+  });
+
+  // Number('') and Number(' ') are 0, and Number('abc') is NaN, which binds as NULL. Saving either
+  // would store a value nobody wrote; the literal batch failed on these, so the save still fails.
+  it.each(['', ' ', 'abc', 'NaN', 'Infinity'])('refuses a number literal that is not a finite number (%j)', (literal) => {
+    expect(() => SaveParameterFromLiteral(field('int', 4, 'Quantity'), literal)).toThrow('Field "Quantity"');
+    expect(() => SaveParameterFromLiteral(field('float', 8, 'Ratio'), literal)).toThrow('Field "Ratio"');
+  });
+
   it('keeps every digit of a bigint and truncates a fraction toward zero, as SQL Server converts it', () => {
     expect(SaveParameterFromLiteral(field('bigint'), '9007199254740993').Value).toBe(9007199254740993n);
     expect(SaveParameterFromLiteral(field('bigint'), '-7.9').Value).toBe(-7n);
@@ -159,10 +180,9 @@ describe('SaveParameterFromLiteral', () => {
     expect(SaveParameterFromLiteral(field('bit'), '0')).toEqual({ Type: sql.Bit(), Value: false });
   });
 
-  it('binds datetime2 as a Date and sends datetimeoffset/smalldatetime as ISO text', () => {
+  it('sends dates as their ISO text, not a JS Date', () => {
     const dt2 = SaveParameterFromLiteral(field('datetime2'), "'2025-04-05T12:00:00.000Z'");
-    expect(dt2.Type).toEqual(sql.DateTime2());
-    expect(dt2.Value).toEqual(new Date('2025-04-05T12:00:00.000Z'));
+    expect(dt2).toEqual({ Type: sql.VarChar(34), Value: '2025-04-05T12:00:00.000Z' });
 
     const dto = SaveParameterFromLiteral(field('datetimeoffset'), "'2025-04-05T12:00:00.000Z'");
     expect(dto).toEqual({ Type: sql.VarChar(34), Value: '2025-04-05T12:00:00.000Z' });
