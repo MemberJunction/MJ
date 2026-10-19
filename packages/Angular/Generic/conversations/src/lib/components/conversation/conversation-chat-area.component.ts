@@ -3125,7 +3125,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
         if (command.type === 'open:resource') {
           if (this.isConversationArtifactCommand(command)) {
-            if (this.openConversationArtifactForCommand(command)) {
+            if (this.OpenConversationArtifactForCommand(command)) {
               return;
             }
           }
@@ -7721,7 +7721,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Opens the matching (or most recent) artifact in the current conversation's artifact viewer panel.
    * Returns true if a conversation artifact was found and opened.
    */
-  public openConversationArtifactForCommand(command: OpenResourceCommand): boolean {
+  public OpenConversationArtifactForCommand(command: OpenResourceCommand): boolean {
     const rawTarget = String(command.resourceId ?? '').trim();
     const labelTarget = String(command.label ?? '').trim().toLowerCase();
     let latestArtifact: LazyArtifactInfo | null = null;
@@ -7758,7 +7758,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private handleOverlayOpenResourceCommand(command: OpenResourceCommand): void {
     const rt = (command.resourceType ?? '').trim().toLowerCase();
     if (rt === 'report' || rt === 'dashboard') {
-      if (!this.openConversationArtifactForCommand(command)) {
+      if (!this.OpenConversationArtifactForCommand(command)) {
         MJNotificationService.Instance?.CreateSimpleNotification(
           'No artifact found in this conversation to open.',
           'info',
@@ -7824,7 +7824,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       const isUuidPk = pkField?.Type?.toLowerCase() === 'uniqueidentifier';
       const isPlaceholder = !rawVal || (rawVal.startsWith('<') && rawVal.endsWith('>'));
       if (isPlaceholder || (isUuidPk && !IsValidUUID(rawVal))) {
-        if (this.openConversationArtifactForCommand(command)) {
+        if (this.OpenConversationArtifactForCommand(command)) {
           return;
         }
         console.warn('open:resource: invalid or placeholder primary key value', command.entityName, kv);
