@@ -1,6 +1,6 @@
 {
     "taskComplete": false,
-    "message": "Delegating dataset to Video Studio for a KPI Briefing video.",
+    "message": "Delegating dataset to Video Studio for a Social Short video.",
     "payloadChangeRequest": {
         "newElements": {
             "title": "Q3 Revenue Breakdown",
@@ -15,7 +15,7 @@
         "type": "Sub-Agent",
         "subAgent": {
             "name": "Video Studio",
-            "message": "Create a 16:9 KPI Briefing video from the caller dataset.",
+            "message": "Create a 16:9 Social Short video from the caller dataset.",
             "terminateAfter": false
         }
     }

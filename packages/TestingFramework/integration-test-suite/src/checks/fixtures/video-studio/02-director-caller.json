@@ -1,10 +1,10 @@
 {
     "taskComplete": true,
-    "message": "Creative brief completed for caller dataset using KPI Briefing archetype.",
+    "message": "Creative brief completed for caller dataset using Social Short archetype.",
     "payloadChangeRequest": {
         "newElements": {
             "Archetype": {
-                "Name": "KPI Briefing"
+                "Name": "Social Short"
             },
             "Film": {
                 "OneSentence": "Quarterly revenue metrics from the caller query show steady enterprise expansion.",

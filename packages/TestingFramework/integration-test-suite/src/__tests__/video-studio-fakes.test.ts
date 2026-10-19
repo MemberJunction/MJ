@@ -12,6 +12,7 @@ import {
     SCRIPTED_API_KEY,
     UseMemoryStorage,
 } from '../checks/video-studio-fakes';
+import { FirstFailedOrRetryStep, type StepDiagnosticInput } from '../checks/video-studio-production.checks';
 
 describe('video-studio-fakes', () => {
     it('RegisterFakeAPIKeys returns SCRIPTED_API_KEY while active and restores base AIAPIKeys on restore() even when no custom AIAPIKeys was registered before', () => {
@@ -200,5 +201,57 @@ describe('video-studio-fakes', () => {
         } finally {
             vi.restoreAllMocks();
         }
+    });
+
+    it('FirstFailedOrRetryStep given steps [ok, refused, failed] returns the refused step', () => {
+        const ok: StepDiagnosticInput = {
+            StepName: 'Prompt - Step 1',
+            StepNumber: 1,
+            StepType: 'Prompt',
+            Status: 'Completed',
+            ErrorMessage: null,
+            InputData: JSON.stringify({ context: { agentHierarchy: ['Video Studio'] } }),
+            OutputData: JSON.stringify({
+                nextStep: { step: 'Sub-Agent', subAgent: { name: 'Video Studio - Director' } },
+            }),
+        };
+        const refused: StepDiagnosticInput = {
+            StepName: 'Prompt - Step 3',
+            StepNumber: 3,
+            StepType: 'Prompt',
+            Status: 'Completed',
+            ErrorMessage: null,
+            InputData: JSON.stringify({ context: { agentHierarchy: ['Video Studio'] } }),
+            OutputData: JSON.stringify({
+                nextStep: {
+                    step: 'Retry',
+                    retryInstructions:
+                        'Cannot advance to "Video Studio - Art Director": Mandatory Gate G1 (Brief Gate) FAILED',
+                    errorMessage:
+                        'Cannot advance to "Video Studio - Art Director": Mandatory Gate G1 (Brief Gate) FAILED',
+                },
+            }),
+        };
+        const failed: StepDiagnosticInput = {
+            StepName: 'Prompt - Step 15',
+            StepNumber: 15,
+            StepType: 'Prompt',
+            Status: 'Failed',
+            ErrorMessage: 'video-studio-production: TestLLM script exhausted (13 step(s) configured)',
+            InputData: JSON.stringify({ context: { agentHierarchy: ['Video Studio'] } }),
+            OutputData: null,
+        };
+
+        const result = FirstFailedOrRetryStep({
+            Agent: 'Video Studio',
+            Steps: [ok, refused, failed],
+        });
+
+        expect(result).toEqual({
+            stepName: 'Prompt - Step 3',
+            agent: 'Video Studio',
+            message:
+                'Cannot advance to "Video Studio - Art Director": Mandatory Gate G1 (Brief Gate) FAILED',
+        });
     });
 });

@@ -14,7 +14,7 @@
  *   every run passes `CredentialScope: 'RuntimeOnly'`.
  *
  * Checks:
- * - VSP1: Standalone Topic Explainer under Draft walks Director -> Art Director -> Storyboard ->
+ * - VSP1: Standalone Social Short under Draft walks Director -> Art Director -> Storyboard ->
  *   Pre-Production -> Motion Engineer -> Render -> Critic -> Delivered, passes all 6 gates (G1..G6),
  *   persists Output.Videos['16:9'].FileID, Output.PosterFileID, and Output.ContactSheetFileIDs['16:9'][0]
  *   in MJ: Files, leaves InlineBase64 unset and zero MP4 bytes in MJ: AI Agent Run Medias.InlineData,
@@ -43,7 +43,11 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIVideoRunner } from '@memberjunction/ai-prompts';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import type {
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
+    MJAIAgentRunStepEntityExtended,
+} from '@memberjunction/ai-core-plus';
 import type {
     MJAIAgentConfigurationEntity,
     MJAIAgentRelationshipEntity,
@@ -272,10 +276,202 @@ const HAPPY_PATH_13_STEPS: readonly string[] = [
     '13-root-finish.json',
 ];
 
+export type StepDiagnosticInput = Partial<
+    Pick<
+        MJAIAgentRunStepEntityExtended,
+        | 'StepName'
+        | 'StepNumber'
+        | 'StepType'
+        | 'Status'
+        | 'ErrorMessage'
+        | 'FinalPayloadValidationResult'
+        | 'FinalPayloadValidationMessages'
+        | 'InputData'
+        | 'OutputData'
+        | 'SubAgentRun'
+    >
+> & {
+    Agent?: string | null;
+};
+
+export interface RunDiagnosticInput {
+    Agent?: string | null;
+    AgentID?: string | null;
+    Steps?: ReadonlyArray<StepDiagnosticInput> | null;
+}
+
+export interface StepDiagnostic {
+    stepName: string;
+    agent: string;
+    message: string;
+}
+
+function parseJsonObject(raw: unknown): Record<string, unknown> | undefined {
+    if (!raw) {
+        return undefined;
+    }
+    if (typeof raw === 'object') {
+        return raw as Record<string, unknown>;
+    }
+    if (typeof raw === 'string') {
+        try {
+            const parsed: unknown = JSON.parse(raw);
+            return typeof parsed === 'object' && parsed !== null
+                ? (parsed as Record<string, unknown>)
+                : undefined;
+        } catch {
+            return undefined;
+        }
+    }
+    return undefined;
+}
+
+function resolveStepAgentName(
+    step: StepDiagnosticInput,
+    run?: RunDiagnosticInput | null,
+    defaultAgent?: string,
+): string {
+    if (step.Agent?.trim()) {
+        return step.Agent.trim();
+    }
+    const inputObj = parseJsonObject(step.InputData);
+    const ctx = inputObj?.context as { agentHierarchy?: unknown } | undefined;
+    if (Array.isArray(ctx?.agentHierarchy) && ctx.agentHierarchy.length > 0) {
+        const last = ctx.agentHierarchy[ctx.agentHierarchy.length - 1];
+        if (typeof last === 'string' && last.trim()) {
+            return last.trim();
+        }
+    }
+    if (run?.Agent?.trim()) {
+        return run.Agent.trim();
+    }
+    if (run?.AgentID) {
+        try {
+            const found = AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, run.AgentID))?.Name?.trim();
+            if (found) {
+                return found;
+            }
+        } catch {
+            // AIEngine may be uninitialized in unit tests without a DB.
+        }
+    }
+    return defaultAgent ?? 'unknown';
+}
+
+/**
+ * Returns the first step of a run with a non-empty error or a `Retry` rewrite:
+ * `{ stepName, agent, message }`, or `null` when every step succeeded without retry/error.
+ */
+export function FirstFailedOrRetryStep(
+    runOrSteps: RunDiagnosticInput | ReadonlyArray<StepDiagnosticInput> | null | undefined,
+    defaultAgent?: string,
+): StepDiagnostic | null {
+    if (!runOrSteps) {
+        return null;
+    }
+    const isArray = Array.isArray(runOrSteps);
+    const run: RunDiagnosticInput | undefined = isArray ? undefined : (runOrSteps as RunDiagnosticInput);
+    const steps: ReadonlyArray<StepDiagnosticInput> = isArray
+        ? (runOrSteps as ReadonlyArray<StepDiagnosticInput>)
+        : (run?.Steps ?? []);
+
+    for (const step of steps) {
+        const outputObj = parseJsonObject(step.OutputData);
+        const nextStepObj =
+            typeof outputObj?.nextStep === 'object' && outputObj.nextStep !== null
+                ? (outputObj.nextStep as Record<string, unknown>)
+                : undefined;
+        const nextStepKind =
+            typeof nextStepObj?.step === 'string'
+                ? nextStepObj.step
+                : typeof nextStepObj?.type === 'string'
+                  ? nextStepObj.type
+                  : undefined;
+        const nextStepError =
+            typeof nextStepObj?.errorMessage === 'string' ? nextStepObj.errorMessage.trim() : '';
+        const nextStepRetryInstructions =
+            typeof nextStepObj?.retryInstructions === 'string' ? nextStepObj.retryInstructions.trim() : '';
+        const nextStepMessage =
+            typeof nextStepObj?.message === 'string'
+                ? nextStepObj.message.trim()
+                : typeof nextStepObj?.reason === 'string'
+                  ? nextStepObj.reason.trim()
+                  : '';
+
+        const subAgentResult =
+            typeof outputObj?.subAgentResult === 'object' && outputObj.subAgentResult !== null
+                ? (outputObj.subAgentResult as Record<string, unknown>)
+                : undefined;
+        const subAgentFailedMsg =
+            subAgentResult?.success === false && typeof subAgentResult.errorMessage === 'string'
+                ? subAgentResult.errorMessage.trim()
+                : '';
+
+        const stepError = typeof step.ErrorMessage === 'string' ? step.ErrorMessage.trim() : '';
+        const validationMsg =
+            typeof step.FinalPayloadValidationMessages === 'string'
+                ? step.FinalPayloadValidationMessages.trim()
+                : '';
+        const isRetryRewrite =
+            nextStepKind === 'Retry' ||
+            step.FinalPayloadValidationResult === 'Retry' ||
+            Boolean(nextStepRetryInstructions);
+        const hasError =
+            Boolean(stepError) ||
+            Boolean(nextStepError) ||
+            Boolean(subAgentFailedMsg) ||
+            step.Status === 'Failed' ||
+            step.FinalPayloadValidationResult === 'Fail';
+
+        if (isRetryRewrite || hasError) {
+            const stepName =
+                step.StepName?.trim() ||
+                (step.StepNumber != null ? `Step ${step.StepNumber}` : step.StepType ?? 'unknown');
+            const agent = resolveStepAgentName(step, run, defaultAgent);
+            const message =
+                nextStepError ||
+                nextStepRetryInstructions ||
+                stepError ||
+                validationMsg ||
+                subAgentFailedMsg ||
+                nextStepMessage ||
+                (isRetryRewrite ? 'Retry rewrite' : `Status=${step.Status ?? 'Failed'}`);
+            return { stepName, agent, message };
+        }
+    }
+    return null;
+}
+
+function formatRunDiagnostic(
+    run: MJAIAgentRunEntityExtended | RunDiagnosticInput | null | undefined,
+    defaultAgent?: string,
+): string {
+    if (!run) {
+        return '';
+    }
+    const parts: string[] = [];
+    const primary = FirstFailedOrRetryStep(run, defaultAgent);
+    if (primary) {
+        parts.push(`[${primary.agent} :: ${primary.stepName}: ${primary.message}]`);
+    }
+    for (const step of run.Steps ?? []) {
+        if (step.SubAgentRun) {
+            const childDiag = FirstFailedOrRetryStep(
+                step.SubAgentRun,
+                step.StepName?.trim() || 'Video Studio',
+            );
+            if (childDiag) {
+                parts.push(`child [${childDiag.agent} :: ${childDiag.stepName}: ${childDiag.message}]`);
+            }
+        }
+    }
+    return parts.length > 0 ? ` (${parts.join('; ')})` : '';
+}
+
 export const VideoStudioProductionChecks: NamedCheck[] = [
     {
         Id: `${BUNDLE}.VSP1`,
-        Name: 'VSP1: Standalone Topic Explainer under Draft reaches Delivered, passes G1..G6, persists MP4/poster/contact-sheet in MJ: Files, and leaves InlineBase64 unset',
+        Name: 'VSP1: Standalone Social Short under Draft reaches Delivered, passes G1..G6, persists MP4/poster/contact-sheet in MJ: Files, and leaves InlineBase64 unset',
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
             const f = requireFixture();
             f.Render.Driver.RenderCallCount = 0;
@@ -286,7 +482,7 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             const runner = new AgentRunner(ctx.Provider);
             const result = await runner.RunAgent<VideoGenerationSpec>({
                 agent: f.VideoStudioAgent,
-                conversationMessages: UserTurn('Create a 15-second Topic Explainer video.'),
+                conversationMessages: UserTurn('Create a 15-second Social Short video.'),
                 payload: seedInlineArrSpec() as VideoGenerationSpec,
                 configurationId: draftPreset?.AIConfigurationID ?? undefined,
                 contextUser: ctx.User,
@@ -301,9 +497,14 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             const spec = result.payload as VideoGenerationSpec | undefined;
             collectSpecCleanupIds(spec, f);
 
-            AssertEqual(result.success, true, `VSP1: RunAgent failed: ${result.agentRun?.ErrorMessage ?? 'unknown'}`);
+            const vsp1Diag = formatRunDiagnostic(result.agentRun, 'Video Studio');
+            AssertEqual(
+                result.success,
+                true,
+                `VSP1: RunAgent failed: ${result.agentRun?.ErrorMessage ?? 'unknown'}${vsp1Diag}`,
+            );
             Assert(Boolean(spec), 'VSP1: result.payload must be defined');
-            AssertEqual(spec!.Status, 'Delivered', 'VSP1: VideoGenerationSpec.Status must be Delivered');
+            AssertEqual(spec!.Status, 'Delivered', `VSP1: VideoGenerationSpec.Status must be Delivered${vsp1Diag}`);
 
             const gates = spec!.Review?.Gates ?? [];
             for (const gateId of ['G1', 'G2', 'G3', 'G4', 'G5', 'G6'] as const) {
@@ -392,7 +593,7 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             const runner = new AgentRunner(ctx.Provider);
             const result = await runner.RunAgent<Record<string, unknown>>({
                 agent: f.CallerAgent,
-                conversationMessages: UserTurn('Render a short video briefing for our Q3 revenue breakdown.'),
+                conversationMessages: UserTurn('Render a Social Short video for our Q3 revenue breakdown.'),
                 contextUser: ctx.User,
                 CredentialScope: 'RuntimeOnly',
                 apiKeys: runtimeApiKeys(f),
@@ -403,7 +604,12 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
                 f.RootRunIDs.push(result.agentRun.ID);
             }
 
-            AssertEqual(result.success, true, `VSP2: Caller RunAgent failed: ${result.agentRun?.ErrorMessage ?? 'unknown'}`);
+            const vsp2Diag = formatRunDiagnostic(result.agentRun, 'IT: VS Data Caller');
+            AssertEqual(
+                result.success,
+                true,
+                `VSP2: Caller RunAgent failed: ${result.agentRun?.ErrorMessage ?? 'unknown'}${vsp2Diag}`,
+            );
 
             // Inspect the child Video Studio run row
             const rv = RunView.FromMetadataProvider(ctx.Provider);
@@ -503,8 +709,8 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             params.SkipActionLog = true;
             params.CredentialScope = 'Any';
             params.Params = [
-                { Name: 'Topic', Type: 'Input', Value: '15-second Topic Explainer' },
-                { Name: 'Archetype', Type: 'Input', Value: 'Topic Explainer' },
+                { Name: 'Topic', Type: 'Input', Value: '15-second Social Short' },
+                { Name: 'Archetype', Type: 'Input', Value: 'Social Short' },
                 { Name: 'DurationSeconds', Type: 'Input', Value: 15 },
                 { Name: 'PowerLevel', Type: 'Input', Value: 'Draft' },
             ];
@@ -660,7 +866,7 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             const runner = new AgentRunner(ctx.Provider);
             const result = await runner.RunAgent<VideoGenerationSpec>({
                 agent: f.VideoStudioAgent,
-                conversationMessages: UserTurn('Create a 15-second Topic Explainer with a 4s generative hero B-roll clip.'),
+                conversationMessages: UserTurn('Create a 15-second Social Short with a 4s generative hero B-roll clip.'),
                 payload: seedInlineArrSpec() as VideoGenerationSpec,
                 configurationId: draftPreset?.AIConfigurationID ?? undefined,
                 contextUser: ctx.User,
@@ -675,7 +881,12 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             const spec = result.payload as VideoGenerationSpec | undefined;
             collectSpecCleanupIds(spec, f);
 
-            AssertEqual(result.success, true, `VSP4: RunAgent failed: ${result.agentRun?.ErrorMessage ?? 'unknown'}`);
+            const vsp4Diag = formatRunDiagnostic(result.agentRun, 'Video Studio');
+            AssertEqual(
+                result.success,
+                true,
+                `VSP4: RunAgent failed: ${result.agentRun?.ErrorMessage ?? 'unknown'}${vsp4Diag}`,
+            );
             AssertEqual(f.VideoGen.Driver.SubmitCount, 1, 'VSP4: FakeVideoGenerator SubmitCount must be 1');
 
             const genAsset = spec?.Assets?.Approved?.find((a) => a.Key === 'hero_broll');
@@ -772,7 +983,7 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
 
             const resultA = await runner.RunAgent<VideoGenerationSpec>({
                 agent: f.VideoStudioAgent,
-                conversationMessages: UserTurn('Create a Topic Explainer with a generated clip of our CEO speaking.'),
+                conversationMessages: UserTurn('Create a Social Short with a generated clip of our CEO speaking.'),
                 payload: seedInlineArrSpec() as VideoGenerationSpec,
                 configurationId: draftPreset?.AIConfigurationID ?? undefined,
                 contextUser: ctx.User,
@@ -787,11 +998,12 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             const specA = resultA.payload as VideoGenerationSpec | undefined;
             collectSpecCleanupIds(specA, f);
 
-            Assert(Boolean(specA), 'VSP5(a): result.payload must be defined');
+            const vsp5aDiag = formatRunDiagnostic(resultA.agentRun, 'Video Studio');
+            Assert(Boolean(specA), `VSP5(a): result.payload must be defined${vsp5aDiag}`);
             const genReqA = specA!.Assets?.Generate?.[0];
-            AssertEqual(genReqA?.Status, 'Blocked', 'VSP5(a): Assets.Generate[0].Status must be Blocked');
-            AssertEqual(specA!.Status, 'Blocked', 'VSP5(a): spec.Status must be Blocked');
-            AssertEqual(resultA.agentRun?.FinalStep, 'Chat', 'VSP5(a): agentRun.FinalStep must be Chat');
+            AssertEqual(genReqA?.Status, 'Blocked', `VSP5(a): Assets.Generate[0].Status must be Blocked${vsp5aDiag}`);
+            AssertEqual(specA!.Status, 'Blocked', `VSP5(a): spec.Status must be Blocked${vsp5aDiag}`);
+            AssertEqual(resultA.agentRun?.FinalStep, 'Chat', `VSP5(a): agentRun.FinalStep must be Chat${vsp5aDiag}`);
             AssertEqual(f.VideoGen.Driver.SubmitCount, 0, 'VSP5(a): FakeVideoGenerator SubmitCount must be 0');
             AssertEqual(f.Render.Driver.RenderCallCount, 0, 'VSP5(a): FakeRenderDriver RenderCallCount must be 0');
             const genPrResA = await rv.RunView<{ ID: string }>({
@@ -821,7 +1033,7 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
 
             const resultB = await runner.RunAgent<VideoGenerationSpec>({
                 agent: f.VideoStudioAgent,
-                conversationMessages: UserTurn('Create a Topic Explainer with a 25-second generated background clip.'),
+                conversationMessages: UserTurn('Create a Social Short with a 25-second generated background clip.'),
                 payload: seedInlineArrSpec() as VideoGenerationSpec,
                 configurationId: draftPreset?.AIConfigurationID ?? undefined,
                 contextUser: ctx.User,
@@ -836,12 +1048,13 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             const specB = resultB.payload as VideoGenerationSpec | undefined;
             collectSpecCleanupIds(specB, f);
 
-            Assert(Boolean(specB), 'VSP5(b): result.payload must be defined');
+            const vsp5bDiag = formatRunDiagnostic(resultB.agentRun, 'Video Studio');
+            Assert(Boolean(specB), `VSP5(b): result.payload must be defined${vsp5bDiag}`);
             const g2GateB = specB!.Review?.Gates?.find((g) => g.Gate === 'G2');
-            AssertEqual(g2GateB?.Status, 'Failed', 'VSP5(b): Gate G2 Status must be Failed');
+            AssertEqual(g2GateB?.Status, 'Failed', `VSP5(b): Gate G2 Status must be Failed${vsp5bDiag}`);
             Assert(
                 (g2GateB?.Notes ?? '').includes('GenerationDurationExceedsLimit'),
-                `VSP5(b): Gate G2 Notes must include GenerationDurationExceedsLimit, got: ${g2GateB?.Notes ?? '(empty)'}`,
+                `VSP5(b): Gate G2 Notes must include GenerationDurationExceedsLimit, got: ${g2GateB?.Notes ?? '(empty)'}${vsp5bDiag}`,
             );
 
             const preProdAgent = loadAgent('Video Studio - Pre-Production');
@@ -859,7 +1072,7 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
                 'VSP5(b): Video Studio - Pre-Production must not execute when Gate G2 fails',
             );
 
-            AssertEqual(resultB.agentRun?.FinalStep, 'Chat', 'VSP5(b): agentRun.FinalStep must be Chat');
+            AssertEqual(resultB.agentRun?.FinalStep, 'Chat', `VSP5(b): agentRun.FinalStep must be Chat${vsp5bDiag}`);
             AssertEqual(f.VideoGen.Driver.SubmitCount, 0, 'VSP5(b): FakeVideoGenerator SubmitCount must be 0');
             AssertEqual(f.Render.Driver.RenderCallCount, 0, 'VSP5(b): FakeRenderDriver RenderCallCount must be 0');
             const genPrResB = await rv.RunView<{ ID: string }>({
