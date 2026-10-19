@@ -29,6 +29,14 @@ export interface ThemeDefinition {
     Description?: string;
     /** Optional preview swatch colors for a future theme picker UI */
     PreviewColors?: string[];
+    /**
+     * The theme {@link ThemeService.Initialize} applies when the user has no saved preference
+     * (or the saved one is no longer registered). At most one registered theme should set it;
+     * the first registered wins. Without one the default stays `'system'`. A single-brand host
+     * registers its brand as the default instead of calling `SetTheme` on every login, which
+     * fought `Initialize()`'s own resolution and wrote a preference the user never chose.
+     */
+    IsDefault?: boolean;
 }
 
 /**
@@ -366,13 +374,28 @@ export class ThemeService {
 
         this._starred$.next(this.loadStarredIds());
 
+        // A saved preference wins; without one the host's default theme (IsDefault), else 'system'.
         const savedPreference = await this.loadSetting();
-        this._preference$.next(savedPreference);
+        const preference = savedPreference ?? this.DefaultPreference;
+        this._preference$.next(preference);
 
-        const resolvedThemeId = this.resolveTheme(savedPreference);
+        const resolvedThemeId = this.resolveTheme(preference);
         await this.applyTheme(resolvedThemeId);
 
         this._initialized = true;
+    }
+
+    /**
+     * What {@link Initialize} applies when nothing is saved: the first registered theme flagged
+     * {@link ThemeDefinition.IsDefault}, else `'system'`. Public so a picker can mark the default.
+     */
+    public get DefaultPreference(): string {
+        for (const theme of this.themeRegistry.values()) {
+            if (theme.IsDefault) {
+                return theme.Id;
+            }
+        }
+        return 'system';
     }
 
     /**
@@ -708,13 +731,18 @@ export class ThemeService {
      * Accepts any registered theme ID or 'system'.
      * Falls back to 'system' if saved value is not recognized.
      */
-    private async loadSetting(): Promise<string> {
+    /**
+     * The user's saved preference ('system' or a registered theme ID), or `null` when there is
+     * none to honor — nothing saved, a saved theme that is no longer registered, or a failed
+     * read. The caller decides what `null` means (see {@link DefaultPreference}).
+     */
+    private async loadSetting(): Promise<string | null> {
         try {
             const engine = UserInfoEngine.Instance;
             const settingValue = engine.GetSetting(THEME_SETTING_KEY);
 
             if (!settingValue) {
-                return 'system';
+                return null;
             }
 
             // Accept 'system' or any registered theme ID
@@ -722,11 +750,11 @@ export class ThemeService {
                 return settingValue;
             }
 
-            // Saved theme no longer registered — fall back
-            return 'system';
+            // Saved theme no longer registered — nothing to honor
+            return null;
         } catch (error) {
             console.warn('Failed to load theme setting:', error);
-            return 'system';
+            return null;
         }
     }
 
