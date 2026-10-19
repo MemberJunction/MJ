@@ -9,7 +9,7 @@ import {
     DataSourceResult,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
-import { ordinalCompare, RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, ordinalCompare, RegisterClass } from '@memberjunction/global';
 import { SortBySequenceAndCreatedAt } from '../../../Misc/util';
 import { configInfo, dbDatabase, MjCoreSchema } from '../../../Config/config';
 import { MSSQLConnection, GetSqlConfig } from '../../../Config/db-connection';
@@ -1614,6 +1614,26 @@ WHERE s.name IN (${inList})`;
                    FROM sys.index_columns ic2
                    WHERE ic2.object_id = i.object_id
                      AND ic2.index_id = i.index_id) > 1`;
+    }
+
+    /** @inheritdoc */
+    public override GetUniqueIndexMembershipSQL(schema: string, tableName: string, columnName: string): string | null {
+        return `SELECT ic.is_included_column AS IsIncludedColumn,
+                (SELECT COUNT(*)
+                   FROM sys.index_columns k
+                  WHERE k.object_id = i.object_id
+                    AND k.index_id = i.index_id
+                    AND k.is_included_column = 0) AS KeyColumnCount
+            FROM sys.indexes i
+            INNER JOIN sys.tables t ON t.object_id = i.object_id
+            INNER JOIN sys.schemas s ON s.schema_id = t.schema_id
+            INNER JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+            INNER JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+            WHERE i.is_unique = 1
+              AND i.is_primary_key = 0
+              AND s.name = '${EscapeSQLString(schema)}'
+              AND t.name = '${EscapeSQLString(tableName)}'
+              AND c.name = '${EscapeSQLString(columnName)}'`;
     }
 
     /** @inheritdoc */

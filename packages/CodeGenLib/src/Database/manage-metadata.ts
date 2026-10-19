@@ -143,6 +143,16 @@ export interface SoftFKTargetCheck {
    IsUnique: boolean;
    /** Why the target is not unique on its own, when it is not. */
    NotUniqueReason?: string;
+   /** True when only the field's IsUnique flag, not a primary key, makes the target unique. */
+   UniqueByFlagOnly?: boolean;
+}
+
+/** One non-primary-key unique index that contains a soft FK's target column. */
+export interface SoftFKUniqueIndexMembership {
+   /** Key columns in the index, not counting INCLUDE columns. */
+   KeyColumnCount: number;
+   /** True when the column is only an INCLUDE column of the index. */
+   IsIncludedColumn: boolean;
 }
 
 /**
@@ -4954,10 +4964,58 @@ export class ManageMetadataBase {
       if (target.IsPrimaryKey && pkCount > 1) {
          return { ResolvedName: target.Name, IsUnique: false, NotUniqueReason: `it is one column of a ${pkCount}-column primary key` };
       }
-      if (target.IsUnique || target.IsPrimaryKey) {
+      if (target.IsPrimaryKey) {
          return { ResolvedName: target.Name, IsUnique: true };
       }
+      if (target.IsUnique) {
+         return { ResolvedName: target.Name, IsUnique: true, UniqueByFlagOnly: true };
+      }
       return { ResolvedName: target.Name, IsUnique: false, NotUniqueReason: 'it is neither a primary key nor unique' };
+   }
+
+   /**
+    * Confirms a target that only `IsUnique` vouches for against the database's unique indexes.
+    * Schema sync sets `IsUnique` on every column of a composite unique constraint, so the flag
+    * alone cannot say whether a join on the column returns one row. A failed or unsupported
+    * lookup keeps the flag's answer.
+    */
+   protected async confirmSoftFKTargetUnique(pool: CodeGenConnection, schemaName: string, tableName: string, target: SoftFKTargetCheck): Promise<SoftFKTargetCheck> {
+      if (!target.UniqueByFlagOnly || target.ResolvedName === null) {
+         return target;
+      }
+      const sql = this.uniqueIndexMembershipSQL(schemaName, tableName, target.ResolvedName);
+      if (!sql) {
+         return target;
+      }
+      try {
+         const res = await this.runQuery(pool, sql);
+         const rows = res.recordset.map(r => ({ KeyColumnCount: Number(r.KeyColumnCount), IsIncludedColumn: this.isFlagSet(r.IsIncludedColumn) }));
+         return this.uniquenessFromIndexes(target, rows);
+      } catch (e) {
+         LogWarning(`         ⚠️  Could not read the unique indexes of ${schemaName}.${tableName}.${target.ResolvedName}; trusting IsUnique: ${e}`);
+         return target;
+      }
+   }
+
+   /** The platform's unique-index lookup for a column, or null when it has none. */
+   protected uniqueIndexMembershipSQL(schemaName: string, tableName: string, columnName: string): string | null {
+      return this.dbProvider.GetUniqueIndexMembershipSQL(schemaName, tableName, columnName);
+   }
+
+   /**
+    * Decides uniqueness from the unique indexes a column belongs to. A single-key-column index makes
+    * it unique. Otherwise a composite unique index, or being only an INCLUDE column, means it is not.
+    * No rows (a view, or IsUnique set by configuration) keeps the target as it is.
+    */
+   protected uniquenessFromIndexes(target: SoftFKTargetCheck, indexes: SoftFKUniqueIndexMembership[]): SoftFKTargetCheck {
+      const keyIndexes = indexes.filter(ix => !ix.IsIncludedColumn);
+      if (indexes.length === 0 || keyIndexes.some(ix => ix.KeyColumnCount === 1)) {
+         return target;
+      }
+      const reason = keyIndexes.length > 0
+         ? `it is one column of a ${Math.min(...keyIndexes.map(ix => ix.KeyColumnCount))}-column unique constraint`
+         : 'it is only an INCLUDE column of a unique index';
+      return { ResolvedName: target.ResolvedName, IsUnique: false, NotUniqueReason: reason };
    }
 
    /**
@@ -5035,11 +5093,12 @@ export class ManageMetadataBase {
                                   FROM ${this.qs(schema, 'EntityField')}
                                   WHERE ${this.qi('EntityID')} = '${relatedEntityId}'`;
          const targetFieldsRes = await this.runQuery(pool, targetFieldsSQL);
-         const target = this.checkSoftFKTarget(
+         const flagCheck = this.checkSoftFKTarget(
             targetFieldsRes.recordset.map(r => ({ Name: String(r.Name), IsPrimaryKey: this.isFlagSet(r.IsPrimaryKey), IsUnique: this.isFlagSet(r.IsUnique) })),
             fk.RelatedField,
             DbPlatform() === 'postgresql'
          );
+         const target = await this.confirmSoftFKTargetUnique(pool, fkSchema, fk.RelatedTable, flagCheck);
          if (target.ResolvedName === null) {
             LogWarning(`         ⚠️  Soft FK ${table.SchemaName}.${table.TableName}.${fk.FieldName} targets ${fkSchema}.${fk.RelatedTable}.${fk.RelatedField}, which has no such column - skipping`);
             continue;

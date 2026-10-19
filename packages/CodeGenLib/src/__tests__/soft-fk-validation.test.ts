@@ -56,30 +56,43 @@ vi.mock('../Misc/sql_logging', () => ({
 }));
 vi.mock('@memberjunction/aiengine', () => ({ AIEngine: class {} }));
 
-import { ManageMetadataBase, SoftPKFKTableConfig, SoftFKTargetField, SoftFKConflict, SoftFKTargetCheck } from '../Database/manage-metadata';
+import { ManageMetadataBase, SoftPKFKTableConfig, SoftFKTargetField, SoftFKConflict, SoftFKTargetCheck, SoftFKUniqueIndexMembership } from '../Database/manage-metadata';
 import { CodeGenConnection, CodeGenQueryResult } from '../Database/codeGenDatabaseProvider';
 import { SQLServerDialect } from '@memberjunction/sql-dialect';
 import type { SQLDialect } from '@memberjunction/sql-dialect';
 
 interface FakeField { Name: string; IsPrimaryKey: boolean; IsUnique: boolean; IsSoftPrimaryKey: boolean }
-interface FakeEntity { ID: string; SchemaName: string; BaseTable: string; Fields: FakeField[] }
+interface FakeEntity { ID: string; SchemaName: string; BaseTable: string; Fields: FakeField[]; UniqueIndexes?: Record<string, SoftFKUniqueIndexMembership[]> }
 
 /**
  * Real SQL Server dialect, identity qsql, and runQuery answered from an in-memory catalog. Soft PK
  * UPDATEs captured by the SQLLogging mock are applied back to the catalog, so a later FK check sees them.
+ * The unique-index lookup is answered from each entity's UniqueIndexes, or is unsupported or fails.
  */
 class TestableSoftKeys extends ManageMetadataBase {
+   public IndexLookup: 'catalog' | 'unsupported' | 'fails' = 'catalog';
    constructor(private entities: FakeEntity[]) { super(); }
    protected get dialect(): SQLDialect { return new SQLServerDialect(); }
    protected qsql(sql: string): string { return sql; }
 
    public testConflicts(tables: SoftPKFKTableConfig[]): SoftFKConflict[] { return this.findConflictingSoftForeignKeys(tables); }
    public testTarget(fields: SoftFKTargetField[], name: string, caseSensitive: boolean): SoftFKTargetCheck { return this.checkSoftFKTarget(fields, name, caseSensitive); }
+   public testUniqueness(target: SoftFKTargetCheck, indexes: SoftFKUniqueIndexMembership[]): SoftFKTargetCheck { return this.uniquenessFromIndexes(target, indexes); }
    public async testApply(tables: SoftPKFKTableConfig[]): Promise<number> { return this.applySoftKeysToTables({} as CodeGenConnection, tables, false); }
+
+   protected uniqueIndexMembershipSQL(schemaName: string, tableName: string, columnName: string): string | null {
+      return this.IndexLookup === 'unsupported' ? null : `UNIQUE INDEXES OF ${schemaName}|${tableName}|${columnName}`;
+   }
 
    protected async runQuery(_pool: CodeGenConnection, sql: string): Promise<CodeGenQueryResult> {
       this.applyCapturedUpdates();
       const flat = sql.replace(/\s+/g, ' ');
+      const indexLookup = flat.match(/^UNIQUE INDEXES OF ([^|]*)\|([^|]*)\|(.*)$/);
+      if (indexLookup) {
+         if (this.IndexLookup === 'fails') throw new Error('permission denied on sys.indexes');
+         const e = this.entities.find(x => x.SchemaName === indexLookup[1] && x.BaseTable === indexLookup[2]);
+         return { recordset: e?.UniqueIndexes?.[indexLookup[3]] ?? [] };
+      }
       const entityLookup = flat.match(/FROM \[__mj\]\.\[Entity\] WHERE SchemaName = '([^']*)' AND BaseTable = '([^']*)'/);
       if (entityLookup) {
          const e = this.entities.find(x => x.SchemaName === entityLookup[1] && x.BaseTable === entityLookup[2]);
@@ -121,7 +134,18 @@ const table = (TableName: string, ForeignKeys: SoftPKFKTableConfig['ForeignKeys'
 
 function catalog(): FakeEntity[] {
    return [
-      { ID: 'E-LINE', SchemaName: 'app', BaseTable: 'line', Fields: [field('id', true, true), field('a_key'), field('a_prd_key'), field('a_ptp_key'), field('owner_id')] },
+      { ID: 'E-LINE', SchemaName: 'app', BaseTable: 'line', Fields: [field('id', true, true), field('a_key'), field('a_prd_key'), field('a_ptp_key'), field('owner_id'), field('region_code'), field('region_slug'), field('region_label')] },
+      // schema sync flags every column below IsUnique; only the unique indexes tell them apart
+      {
+         ID: 'E-REGION', SchemaName: 'app', BaseTable: 'region',
+         Fields: [field('id', true, true), field('tenant_id', false, true), field('code', false, true), field('slug', false, true), field('label', false, true)],
+         UniqueIndexes: {
+            tenant_id: [{ KeyColumnCount: 2, IsIncludedColumn: false }],                                     // UNIQUE (tenant_id, code)
+            code: [{ KeyColumnCount: 2, IsIncludedColumn: false }],                                          // UNIQUE (tenant_id, code)
+            slug: [{ KeyColumnCount: 1, IsIncludedColumn: false }, { KeyColumnCount: 2, IsIncludedColumn: false }], // UNIQUE (slug) and UNIQUE (slug, tenant_id)
+            label: [{ KeyColumnCount: 1, IsIncludedColumn: true }],                                          // UNIQUE (slug) INCLUDE (label)
+         },
+      },
       // composite primary key: prc_key alone is not unique
       { ID: 'E-PRICE', SchemaName: 'app', BaseTable: 'price', Fields: [field('prc_key', true), field('prc_prd_key', true), field('prc_prd_ptp_key', true)] },
       { ID: 'E-PRODUCT', SchemaName: 'app', BaseTable: 'product', Fields: [field('ID', true, true)] },
@@ -176,6 +200,10 @@ describe('checkSoftFKTarget', () => {
 
    it('treats a single-column primary key as unique', () => {
       expect(gen.testTarget([{ Name: 'id', IsPrimaryKey: true, IsUnique: false }], 'id', true)).toEqual({ ResolvedName: 'id', IsUnique: true });
+   });
+
+   it('marks a target that only its IsUnique flag makes unique, so the indexes are checked', () => {
+      expect(gen.testTarget([{ Name: 'code', IsPrimaryKey: false, IsUnique: true }], 'code', true)).toEqual({ ResolvedName: 'code', IsUnique: true, UniqueByFlagOnly: true });
    });
 
    it('does not treat one column of a composite primary key as unique', () => {
@@ -254,5 +282,67 @@ describe('applySoftKeysToTables', () => {
       ]);
       expect(updatesFor('owner_id')).toHaveLength(1);
       expect(logs.warnings).toEqual([]);
+   });
+
+   it('warns on a target that is IsUnique only as one column of a composite unique constraint', async () => {
+      const gen = new TestableSoftKeys(catalog());
+      await gen.testApply([table('line', [{ FieldName: 'region_code', RelatedTable: 'region', RelatedField: 'code' }])]);
+      expect(updatesFor('region_code')).toHaveLength(1);
+      expect(logs.warnings).toHaveLength(1);
+      expect(logs.warnings[0]).toContain('region.code, but it is one column of a 2-column unique constraint');
+   });
+
+   it('does not warn on a target with its own unique index, even if it is also in a composite one', async () => {
+      const gen = new TestableSoftKeys(catalog());
+      await gen.testApply([table('line', [{ FieldName: 'region_slug', RelatedTable: 'region', RelatedField: 'slug' }])]);
+      expect(updatesFor('region_slug')).toHaveLength(1);
+      expect(logs.warnings).toEqual([]);
+   });
+
+   it('warns on a target that is only an INCLUDE column of a unique index', async () => {
+      const gen = new TestableSoftKeys(catalog());
+      await gen.testApply([table('line', [{ FieldName: 'region_label', RelatedTable: 'region', RelatedField: 'label' }])]);
+      expect(updatesFor('region_label')).toHaveLength(1);
+      expect(logs.warnings.some(w => w.includes('only an INCLUDE column of a unique index'))).toBe(true);
+   });
+
+   it('trusts IsUnique when the platform has no unique-index lookup', async () => {
+      const gen = new TestableSoftKeys(catalog());
+      gen.IndexLookup = 'unsupported';
+      await gen.testApply([table('line', [{ FieldName: 'region_code', RelatedTable: 'region', RelatedField: 'code' }])]);
+      expect(updatesFor('region_code')).toHaveLength(1);
+      expect(logs.warnings).toEqual([]);
+   });
+
+   it('trusts IsUnique, and says so, when the unique-index lookup fails', async () => {
+      const gen = new TestableSoftKeys(catalog());
+      gen.IndexLookup = 'fails';
+      await gen.testApply([table('line', [{ FieldName: 'region_code', RelatedTable: 'region', RelatedField: 'code' }])]);
+      expect(updatesFor('region_code')).toHaveLength(1);
+      expect(logs.warnings).toHaveLength(1);
+      expect(logs.warnings[0]).toContain('Could not read the unique indexes of app.region.code; trusting IsUnique: Error: permission denied on sys.indexes');
+   });
+});
+
+describe('uniquenessFromIndexes', () => {
+   const gen = new TestableSoftKeys([]);
+   const flagged: SoftFKTargetCheck = { ResolvedName: 'code', IsUnique: true, UniqueByFlagOnly: true };
+
+   it('keeps a column with a single-key-column unique index unique', () => {
+      expect(gen.testUniqueness(flagged, [{ KeyColumnCount: 1, IsIncludedColumn: false }])).toBe(flagged);
+   });
+
+   it('keeps the target as it is when the column is in no unique index (a view, or configured)', () => {
+      expect(gen.testUniqueness(flagged, [])).toBe(flagged);
+   });
+
+   it('reports the narrowest composite unique constraint a column is in', () => {
+      expect(gen.testUniqueness(flagged, [{ KeyColumnCount: 3, IsIncludedColumn: false }, { KeyColumnCount: 2, IsIncludedColumn: false }]))
+         .toEqual({ ResolvedName: 'code', IsUnique: false, NotUniqueReason: 'it is one column of a 2-column unique constraint' });
+   });
+
+   it('does not count a single-column index the column is only INCLUDEd in', () => {
+      expect(gen.testUniqueness(flagged, [{ KeyColumnCount: 1, IsIncludedColumn: true }]))
+         .toEqual({ ResolvedName: 'code', IsUnique: false, NotUniqueReason: 'it is only an INCLUDE column of a unique index' });
    });
 });

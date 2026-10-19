@@ -1272,6 +1272,23 @@ export abstract class CodeGenDatabaseProvider {
     abstract getCompositeUniqueConstraintCheckSQL(schema: string, tableName: string, columnName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
+     * Returns a query listing every non-primary-key unique index (or unique constraint) that
+     * contains a column, one row per index, with two columns:
+     * - `KeyColumnCount`: the number of key columns in the index, not counting INCLUDE columns
+     * - `IsIncludedColumn`: true when the column is only an INCLUDE column of that index
+     *
+     * A column that is unique on its own has a row with `KeyColumnCount = 1` and
+     * `IsIncludedColumn = false`. `EntityField.IsUnique` cannot tell that apart: schema sync sets it
+     * on every column of a composite unique constraint.
+     *
+     * The default returns null, meaning the platform cannot answer; callers then keep relying on
+     * `EntityField.IsUnique`.
+     */
+    public GetUniqueIndexMembershipSQL(schema: string, tableName: string, columnName: string): string | null {
+        return null;
+    }
+
+    /**
      * Returns a SQL query string to check if a foreign key index already exists.
      * Used by the orchestrator to conditionally create FK indexes.
      * SQL Server: queries `sys.indexes` with OBJECT_ID
