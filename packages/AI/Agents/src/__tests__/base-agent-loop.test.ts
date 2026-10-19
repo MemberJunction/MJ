@@ -662,10 +662,11 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         const [, prompt1, actionStep, prompt2] = harness.steps;
         expect(JSON.parse(prompt1.PayloadAtStart ?? 'null')).toEqual(initialPayload);
         expect(JSON.parse(prompt1.PayloadAtEnd ?? 'null')).toEqual(afterStep1);
-        // The action step starts from prompt 1's end, so it stores a pointer to prompt 1 instead of a copy
+        // The action step starts from prompt 1's end and leaves the payload unchanged, so both its start and end store a pointer to prompt 1 instead of a copy
         expect(actionStep.PayloadAtStart).toBeNull();
         expect(actionStep.PayloadAtStartSourceStepID).toBe(prompt1.ID);
-        expect(JSON.parse(actionStep.PayloadAtEnd ?? 'null')).toEqual(afterStep1);
+        expect(actionStep.PayloadAtEnd).toBeNull();
+        expect(actionStep.PayloadAtEndSourceStepID).toBe(prompt1.ID);
         expect(JSON.parse(prompt2.PayloadAtEnd ?? 'null')).toEqual(finalPayload);
 
         // The final run payload is the LAST step's payload
@@ -2614,3 +2615,92 @@ describe('BaseAgent.buildAgentBaseCatalog — relationship targets', () => {
         expect(catalog.subAgentDetails).not.toContain('Skip');
     });
 });
+
+describe('BaseAgent.Execute — agent.AgentTypePromptParams task graph gate & folded peer-agent resolution', () => {
+    const PEER_QB_ID = 'aaaaaaaa-5555-4000-8000-000000000001';
+
+    it('propagates agent.AgentTypePromptParams.enableTaskGraphs into DetermineNextStep and resolves folded 1-node peer agents', async () => {
+        harness.agent = makeAgentRow({
+            Name: 'Sage',
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+
+        const peerQueryBuilder = makeAgentRow({
+            ID: PEER_QB_ID,
+            Name: 'Query Builder',
+            Status: 'Active',
+        });
+
+        // Expose the peer agent in AIEngine.Instance.Agents (not as a ParentID child or AgentRelationship of Sage)
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [harness.agent, peerQueryBuilder],
+        });
+
+        const singleTaskEnvelope = {
+            taskComplete: false,
+            message: "I'll have Query Builder handle this.",
+            nextStep: {
+                type: 'Tasks',
+                tasks: {
+                    workflowName: 'Order Revenue Breakdown',
+                    reasoning: 'Single-agent SQL query delegation',
+                    tasks: [
+                        {
+                            tempId: 'task1',
+                            name: 'Build Order Revenue Query',
+                            description: 'Build a parameterized SQL query for order revenue by status',
+                            kind: 'Agent',
+                            configuration: {
+                                agentName: 'Query Builder',
+                            },
+                            dependsOn: [],
+                            inputPayload: {},
+                        },
+                    ],
+                },
+            },
+        } as unknown as LoopAgentResponse;
+
+        const { agent, internals } = makeAgent([
+            () => llmEnvelope(singleTaskEnvelope),
+            () => llmEnvelope(successEnvelope({ message: 'Here is your query from Query Builder.' })),
+        ]);
+
+        // Verify resolveSubAgentByName only resolves peer agents when allowAnyActiveAgent=true (folded task graph)
+        const internalResolver = agent as unknown as {
+            resolveSubAgentByName: (
+                p: ExecuteAgentParams,
+                name: string,
+                allowAnyActiveAgent?: boolean
+            ) => { subAgentEntity: { ID: string; Name: string } } | undefined;
+        };
+        const execParams = makeParams();
+        expect(internalResolver.resolveSubAgentByName(execParams, 'Query Builder', false)).toBeUndefined();
+        expect(internalResolver.resolveSubAgentByName(execParams, 'Query Builder', true)?.subAgentEntity.ID).toBe(PEER_QB_ID);
+
+        // Stub processSubAgentStep to verify validateSubAgentNextStep approved the folded peer agent
+        const seenDecisions: BaseAgentNextStep[] = [];
+        internals.processSubAgentStep = async function (this: unknown, _p?: ExecuteAgentParams, decision?: BaseAgentNextStep) {
+            if (decision) {
+                seenDecisions.push(decision);
+            }
+            return {
+                step: 'Success',
+                terminate: false,
+                newPayload: { sql: 'SELECT 1' },
+                previousPayload: {},
+            } as BaseAgentNextStep;
+        } as unknown as () => Promise<BaseAgentNextStep>;
+
+        const result = await agent.Execute(execParams);
+
+        expect(result.success).toBe(true);
+        expect(seenDecisions).toHaveLength(1);
+        expect(seenDecisions[0].step).toBe('Sub-Agent');
+        expect(seenDecisions[0].subAgent?.name).toBe('Query Builder');
+        expect(seenDecisions[0].taskGraph?.folded).toBe(true);
+    });
+});
+

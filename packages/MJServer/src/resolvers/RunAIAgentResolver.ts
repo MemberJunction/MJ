@@ -253,6 +253,14 @@ export class RunAIAgentResolver extends ResolverBase {
             throw new Error(`AI Agent "${agentEntity.Name}" is not active (Status: ${agentEntity.Status})`);
         }
 
+        // Enforce agent run permissions for the calling user
+        if (currentUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
+            const canRun = await AIEngine.Instance.CanUserRunAgent(agentEntity.ID, currentUser);
+            if (!canRun) {
+                throw new Error(`User does not have permission to run AI Agent "${agentEntity.Name}" (${agentEntity.ID})`);
+            }
+        }
+
         return agentEntity;
     }
 

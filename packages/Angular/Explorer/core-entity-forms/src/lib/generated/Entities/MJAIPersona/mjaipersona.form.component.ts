@@ -23,7 +23,8 @@ export class MJAIPersonaFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIPersonaVendors', sectionName: 'AI Persona Vendors', isExpanded: false },
             { sectionKey: 'mJAIAgentPersonas', sectionName: 'AI Agent Personas', isExpanded: false },
-            { sectionKey: 'mJAIModelPersonas', sectionName: 'AI Model Personas', isExpanded: false }
+            { sectionKey: 'mJAIModelPersonas', sectionName: 'AI Model Personas', isExpanded: false },
+            { sectionKey: 'mJAIAgentUserPolicies', sectionName: 'AI Agent User Policies', isExpanded: false }
         ]);
     }
 }
