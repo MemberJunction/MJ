@@ -422,7 +422,7 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
         // `MJConversationDetailEntityExtended.Save()` refuses writes when the entity's context user
         // is not the conversation owner (`this.contextUser` is the server system user). Re-bind
         // `OriginDetail` to `actingUser` whenever `ownerUserId` was discovered after loading `detail`.
-        if (actingUser.ID !== initialUser.ID) {
+        if (!UUIDsEqual(actingUser.ID, initialUser.ID)) {
             const writableDetail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', actingUser);
             if (await writableDetail.Load(conversationDetailID)) {
                 detail = writableDetail;

@@ -164,6 +164,21 @@ describe('externalizeSubProperties', () => {
         expect(ext.calls).toHaveLength(0);
     });
 
+    it('keeps an @env: leaf and a sub-object that holds @env: inline, without calling the externalizer', async () => {
+        const ext = fakeExternalizer();
+        const input = { apiKey: '@env:MJ_SUB_TEST', auth: { token: '@env:MJ_SUB_TEST' } };
+        const result = await ExternalizeSubProperties(
+            input,
+            [
+                { path: ['apiKey'], pattern: '@file:keys/{Name}.txt' },
+                { path: ['auth'], pattern: '@file:auth/{Name}.json' },
+            ],
+            ext.fn
+        );
+        expect(result).toEqual(input);
+        expect(ext.calls).toHaveLength(0);
+    });
+
     it('leaves an unparseable string value alone rather than throwing', async () => {
         const ext = fakeExternalizer();
         expect(await ExternalizeSubProperties('not json at all', configs, ext.fn)).toBe('not json at all');
