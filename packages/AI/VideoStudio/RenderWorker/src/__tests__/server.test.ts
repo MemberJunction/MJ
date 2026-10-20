@@ -502,8 +502,12 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
                 clientReq.end();
             });
 
-            // Give the server a moment to process socket close & release the semaphore
-            await new Promise((r) => setTimeout(r, 40));
+            // The client is gone, so nothing signals when the server finishes its cleanup after the socket
+            // closes. Poll for it (up to 2 s) instead of sleeping a fixed time, which flakes on slow runners.
+            const cleanupDeadline = Date.now() + 2000;
+            while ((await fs.readdir(tempRoot)).length > 0 && Date.now() < cleanupDeadline) {
+                await new Promise((r) => setTimeout(r, 10));
+            }
             expect(await fs.readdir(tempRoot)).toEqual([]);
 
             // 3. Subsequent request succeeds promptly and cleans up TempRoot
