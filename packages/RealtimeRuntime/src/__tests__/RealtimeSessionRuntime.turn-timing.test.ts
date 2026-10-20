@@ -31,8 +31,8 @@ class FakeFinalOnlyClient extends BaseRealtimeClient {
         this.emitTranscript(transcript);
     }
     /** The provider's VAD saw the user start to speak (OpenAI `input_audio_buffer.speech_started`). */
-    public SpeechStart(): void {
-        this.emitUserSpeechStart();
+    public SpeechStart(itemId?: string): void {
+        this.emitUserSpeechStart(itemId);
     }
     /** The call is live, so the runtime accepts typed turns ({@link RealtimeSessionRuntime.SendText}). */
     public GoLive(): void {
@@ -356,5 +356,32 @@ describe('RealtimeSessionRuntime per-turn timing: the user speech start keeps it
 
         expect(provider.Relayed[1].utteranceStartMs).not.toBe(8400);
         expect(provider.Relayed[2]).toEqual({ role: 'user', utteranceStartMs: 8400, utteranceEndMs: 11000 });
+    });
+
+    it('gives each user turn its own onset when a transcript arrives after the next onset', async () => {
+        const { provider, client, advanceTo } = await startRecorded();
+        speakAssistantTurn(client, advanceTo);
+
+        advanceTo(8400);
+        client.SpeechStart('item-a'); // utterance A
+        advanceTo(9000);
+        client.Emit({ Role: 'Assistant', Text: 'Sure', IsFinal: false, Kind: 'normal' });
+        advanceTo(12000);
+        client.Emit({ Role: 'Assistant', Text: 'Sure, let us start', IsFinal: true, Kind: 'normal' });
+        advanceTo(12500);
+        client.SpeechStart('item-b'); // utterance B, before A's transcript
+        advanceTo(12700);
+        client.Emit({ Role: 'Assistant', Text: 'Right', IsFinal: false, Kind: 'normal' }); // reply to B
+        advanceTo(13000);
+        client.Emit({ Role: 'User', Text: 'Utterance A text', IsFinal: true, Kind: 'normal', ItemId: 'item-a' });
+        advanceTo(15000);
+        client.Emit({ Role: 'User', Text: 'Utterance B text', IsFinal: true, Kind: 'normal', ItemId: 'item-b' });
+        advanceTo(18000);
+        client.Emit({ Role: 'Assistant', Text: 'Right, here is more detail', IsFinal: true, Kind: 'normal' });
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(5));
+
+        expect(provider.Relayed[2]).toEqual({ role: 'user', utteranceStartMs: 8400, utteranceEndMs: 13000 });
+        expect(provider.Relayed[3]).toEqual({ role: 'user', utteranceStartMs: 12500, utteranceEndMs: 15000 });
+        expect(provider.Relayed[4]).toEqual({ role: 'assistant', utteranceStartMs: 12700, utteranceEndMs: 18000 });
     });
 });
