@@ -89,6 +89,9 @@ export function CacheManagerConfigFromSettings(settings: CacheSettingsConfig | u
     return {
         maxSizeBytes: (settings?.maxMemoryMB ?? 150) * 1024 * 1024,
         maxPercentOfCachePerEntity: settings?.maxPercentOfCachePerEntity ?? 50,
+        // Passed through so the per-entry ceiling is reachable from mj.config.cjs at all. It was
+        // not, which is what made it a hardcoded fraction in every deployment.
+        maxEntryPercentOfCache: settings?.maxEntryPercentOfCache ?? 'auto',
         defaultTTLMs: (settings?.defaultTTLSeconds ?? 0) * 1000,
         evictionSweepIntervalMs: (settings?.evictionSweepIntervalSeconds ?? 300) * 1000,
         verboseLogging: settings?.verboseLogging ?? false,
