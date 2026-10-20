@@ -31,6 +31,14 @@ import {
 import { WorkflowSpecSync, type WorkflowAgentWriter } from '../WorkflowSpecSync';
 
 /**
+ * Stub base class matching the `WorkflowAgentWriterBase` class name used in
+ * `@RegisterClass(WorkflowAgentWriterBase, 'WorkflowAgentWriter')` inside `@memberjunction/ai-agent-manager`.
+ * `ClassFactory` indexes registrations by `baseClass.name`, so passing `Object` (`Object.name === 'Object'`)
+ * previously missed the registration and instantiated `new Object()`.
+ */
+class WorkflowAgentWriterBase {}
+
+/**
  * Resolves the host's agent writer, or null.
  *
  * Looked up through the ClassFactory rather than imported so this package does not depend on the
@@ -38,12 +46,11 @@ import { WorkflowSpecSync, type WorkflowAgentWriter } from '../WorkflowSpecSync'
  * failure rather than a half-saved workflow.
  */
 function resolveAgentWriter(): WorkflowAgentWriter | null {
-    return MJGlobal.Instance.ClassFactory.CreateInstance<WorkflowAgentWriter>(
-        // The base class is declared in the agent-manager; resolving by key alone keeps this package
-        // free of that import while still finding whatever the host registered.
-        Object as unknown as new () => WorkflowAgentWriter,
+    const candidate = MJGlobal.Instance.ClassFactory.CreateInstance<WorkflowAgentWriter>(
+        WorkflowAgentWriterBase as unknown as new () => WorkflowAgentWriter,
         'WorkflowAgentWriter',
     );
+    return candidate && typeof candidate.PersistFlowAgent === 'function' ? candidate : null;
 }
 
 /** `Workflow.Save` — validate a workflow and reconcile every substrate it owns. */

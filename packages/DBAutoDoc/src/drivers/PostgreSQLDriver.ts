@@ -552,23 +552,34 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
     schemaName: string,
     tableName: string
   ): Promise<AutoDocForeignKey[]> {
+    // Read pg_constraint and pair each source column with its referenced column by position
+    // (conkey[i] -> confkey[i]). information_schema cannot do this: constraint_column_usage does not
+    // say which referenced column pairs with which source column, so joining it to key_column_usage
+    // turns an N-column composite key into N x N pairs. Its table_schema is also the referenced
+    // table's schema, so joining it on the source schema dropped every cross-schema foreign key.
+    // A foreign key into a partitioned table also has an internal clone (conparentid <> 0) aimed at
+    // each partition, which would read as extra FKs; those are skipped. A partition of a referencing
+    // partitioned table keeps its inherited FK, which is also a clone but targets the parent table.
     const query = `
       SELECT
-        kcu.column_name,
-        ccu.table_schema as referenced_schema,
-        ccu.table_name as referenced_table,
-        ccu.column_name as referenced_column,
-        tc.constraint_name
-      FROM information_schema.table_constraints tc
-      JOIN information_schema.key_column_usage kcu
-        ON tc.constraint_name = kcu.constraint_name
-        AND tc.table_schema = kcu.table_schema
-      JOIN information_schema.constraint_column_usage ccu
-        ON ccu.constraint_name = tc.constraint_name
-        AND ccu.table_schema = tc.table_schema
-      WHERE tc.constraint_type = 'FOREIGN KEY'
-        AND tc.table_schema = $1
-        AND tc.table_name = $2
+        a.attname AS column_name,
+        rn.nspname AS referenced_schema,
+        rc.relname AS referenced_table,
+        ra.attname AS referenced_column,
+        con.conname AS constraint_name
+      FROM pg_catalog.pg_constraint con
+      JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
+      JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+      JOIN pg_catalog.pg_class rc ON rc.oid = con.confrelid
+      JOIN pg_catalog.pg_namespace rn ON rn.oid = rc.relnamespace
+      CROSS JOIN LATERAL UNNEST(con.conkey, con.confkey) WITH ORDINALITY AS cols(attnum, ref_attnum, position)
+      JOIN pg_catalog.pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = cols.attnum
+      JOIN pg_catalog.pg_attribute ra ON ra.attrelid = con.confrelid AND ra.attnum = cols.ref_attnum
+      WHERE con.contype = 'f'
+        AND (con.conparentid = 0 OR NOT rc.relispartition)
+        AND n.nspname = $1
+        AND c.relname = $2
+      ORDER BY con.conname, cols.position
     `;
 
     const result = await this.executeQuery<{

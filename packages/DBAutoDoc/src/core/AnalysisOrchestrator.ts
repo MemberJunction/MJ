@@ -277,7 +277,7 @@ export class AnalysisOrchestrator {
       await promptEngine.initialize();
 
       const iterationTracker = new IterationTracker();
-      const analysisEngine = new AnalysisEngine(this.config, promptEngine, stateManager, iterationTracker, this.onProgress);
+      const analysisEngine = new AnalysisEngine(this.config, promptEngine, stateManager, iterationTracker, this.onProgress, db.getDriver());
 
       // ONE verifier for the whole run, shared by the LLM-FK path and the organic-key
       // path. Deliberately shared rather than one each: the probe cap is the cost bound,
