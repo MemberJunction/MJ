@@ -141,6 +141,7 @@ export class Introspector {
           isForeignKey: col.isForeignKey,
           checkConstraint: col.checkConstraint,
           defaultValue: col.defaultValue,
+          maxLength: col.maxLength,
           descriptionIterations: []
         }));
 
@@ -270,6 +271,9 @@ export class DataSampler {
           nullCount: stats.nullCount,
           nullPercentage: stats.nullPercentage,
           sampleValues: stats.sampleValues,
+          // Every distinct value of a low-cardinality column. The enum candidate gate reads it to know
+          // which values a column holds; without it, the gate falls back to the 20-row random sample.
+          valueDistribution: stats.valueDistribution?.map(v => ({ value: v.value, frequency: v.frequency })),
           min: stats.min,
           max: stats.max,
           avg: stats.avg,

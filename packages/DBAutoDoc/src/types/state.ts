@@ -159,6 +159,11 @@ export interface ColumnDefinition {
   isPrimaryKey: boolean;
   isForeignKey: boolean;
   foreignKeyReferences?: ForeignKeyReference;
+  /**
+   * Declared maximum length, in characters, of a character column. Undefined when unknown or
+   * unbounded (varchar(max), PostgreSQL varchar without a length).
+   */
+  maxLength?: number;
   checkConstraint?: string;
   defaultValue?: string;
   possibleValues?: any[];

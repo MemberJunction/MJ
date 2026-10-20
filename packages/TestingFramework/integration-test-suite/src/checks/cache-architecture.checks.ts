@@ -40,7 +40,7 @@ async function makeDispatcherContext(ctx: IntegrationCheckContext): Promise<Sche
     schedule.Name = `User Routine Dispatcher (cache-architecture) ${TAG}`;
     const run = await ctx.Provider.GetEntityObject<MJScheduledJobRunEntity>('MJ: Scheduled Job Runs', ctx.User);
     run.NewRecord();
-    return { Schedule: schedule, Run: run, ContextUser: ctx.User };
+    return { Schedule: schedule, Run: run, ContextUser: ctx.User, Provider: ctx.Provider };
 }
 
 /** Cache keys the storage provider holds for one entity (RunView fingerprints start `<Entity>|`). */

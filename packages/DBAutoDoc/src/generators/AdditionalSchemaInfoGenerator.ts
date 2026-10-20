@@ -21,6 +21,7 @@ import { IsUniquelyIndexed } from '../utils/index-hints.js';
 import { DatabaseDocumentation, SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
 import { PKCandidate, FKCandidate } from '../types/discovery.js';
 import { DetectedOrganicKeysOutput, OrganicKeyConfig } from '../discovery/OrganicKeyTranslator.js';
+import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
 
 export interface AdditionalSchemaInfoOptions {
   /** Only include AI-discovered keys, not keys already present in the database schema */
@@ -91,6 +92,8 @@ interface AdditionalSchemaInfoOutput {
 }
 
 export class AdditionalSchemaInfoGenerator {
+  private readonly enumCandidateGate = new EnumCandidateGate();
+
   /**
    * Generate additionalSchemaInfo JSON from analysis state.
    *
@@ -320,6 +323,15 @@ export class AdditionalSchemaInfoGenerator {
    * Collect value-list field entries from columns with enum verdicts.
    * Only includes columns where the LLM marked isEnum=true and confidence
    * meets the threshold.
+   *
+   * Unless a user approved the column, the verdict must also pass the enum candidate gate against
+   * the column's statistics, and only values observed in the column are kept. That way, a state
+   * file written before the gate existed does not export `__mj_*`, audit, year or GUID lists, or
+   * invented values. A list is closed (`List`) only when a user approved it; a list inferred from
+   * data is `ListOrUserEntry`, since the data cannot show that no other value is allowed. That holds
+   * for a column with a CHECK constraint too: CodeGen builds the closed list from a value-list
+   * CHECK itself, and a CHECK that is not a value list (e.g. `Status <> ''`) allows values the
+   * data does not hold.
    */
   private collectValueListFields(
     table: TableDefinition,
@@ -334,12 +346,17 @@ export class AdditionalSchemaInfoGenerator {
       if (verdict.confidence * 100 < threshold) continue;
       if (confirmedOnly && !col.userApproved) continue;
 
+      const values = col.userApproved
+        ? verdict.values
+        : this.enumCandidateGate.FilterVerdictValues(col, table.rowCount, verdict.values);
+      if (!values) continue;
+
       // Sort values alphabetically — matches CHECK-constraint pass behavior
-      const sortedValues = [...verdict.values].sort();
+      const sortedValues = [...values].sort();
 
       fields.push({
         FieldName: col.name,
-        ValueListType: verdict.type,
+        ValueListType: col.userApproved ? verdict.type : 'ListOrUserEntry',
         PossibleValues: sortedValues,
         Description: col.description ?? undefined,
         Confidence: Math.round(verdict.confidence * 100),

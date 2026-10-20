@@ -265,3 +265,23 @@ describe('TemplateEngineServer sandbox: ordinary templates still render', () => 
         expect(result.Output).toBe('[]');
     });
 });
+
+describe('TemplateEngineServer sandbox: stored templates rendered without escaping', () => {
+    async function renderRaw(templateText: string, data: Record<string, unknown> = {}) {
+        return engine.RenderTemplate(makeTemplate(), makeContent(templateText), data, true, true, { autoescape: false });
+    }
+
+    it('refuses a dictionary key that every object inherits before compiling it', async () => {
+        const result = await renderRaw('{% set d = {__proto__: {a: "MJ-MARKER"} } %}[{{ d.a }}]');
+
+        expect(result.Success).toBe(false);
+        expect(result.Message).toContain('TemplateSandboxError');
+        expect(result.Output ?? '').not.toContain('MJ-MARKER');
+    });
+
+    it('still renders ordinary text raw', async () => {
+        const result = await renderRaw('{{ title }} <b>', { title: 'Affineur & Owner' });
+
+        expect(result.Output).toBe('Affineur & Owner <b>');
+    });
+});

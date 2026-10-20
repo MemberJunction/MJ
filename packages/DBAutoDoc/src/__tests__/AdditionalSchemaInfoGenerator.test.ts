@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
-import { DatabaseDocumentation, SchemaDefinition, TableDefinition, ColumnDefinition, ForeignKeyReference } from '../types/state.js';
+import { DatabaseDocumentation, SchemaDefinition, TableDefinition, ColumnDefinition, ColumnStatistics, ForeignKeyReference } from '../types/state.js';
 import { PKCandidate, FKCandidate, RelationshipDiscoveryPhase } from '../types/discovery.js';
 
 /**
@@ -36,6 +36,19 @@ function createColumn(overrides: Partial<ColumnDefinition> & { name: string; dat
     isForeignKey: false,
     descriptionIterations: [],
     ...overrides
+  };
+}
+
+/** Column statistics that observed exactly these values in a 100-row table: what the enum candidate gate reads. */
+function observed(values: string[]): ColumnStatistics {
+  return {
+    totalRows: 100,
+    distinctCount: values.length,
+    uniquenessRatio: values.length / 100,
+    nullCount: 0,
+    nullPercentage: 0,
+    sampleValues: values,
+    valueDistribution: values.map(value => ({ value, frequency: Math.floor(100 / values.length) })),
   };
 }
 
@@ -923,6 +936,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
               createColumn({
                 name: 'Status',
                 dataType: 'varchar(20)',
+                statistics: observed(['Pending', 'Active', 'Cancelled']),
                 valueListVerdict: {
                   isEnum: true,
                   type: 'List',
@@ -943,7 +957,8 @@ describe('AdditionalSchemaInfoGenerator', () => {
       expect(result.dbo).toHaveLength(1);
       expect(result.dbo[0].Fields).toHaveLength(1);
       expect(result.dbo[0].Fields[0].FieldName).toBe('Status');
-      expect(result.dbo[0].Fields[0].ValueListType).toBe('List');
+      // No CHECK constraint backs the list, so it is not emitted as closed
+      expect(result.dbo[0].Fields[0].ValueListType).toBe('ListOrUserEntry');
       // Values should be sorted alphabetically
       expect(result.dbo[0].Fields[0].PossibleValues).toEqual(['Active', 'Cancelled', 'Pending']);
       expect(result.dbo[0].Fields[0].Confidence).toBe(92);
@@ -987,6 +1002,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
               createColumn({
                 name: 'Category',
                 dataType: 'varchar(20)',
+                statistics: observed(['Electronics', 'Books']),
                 valueListVerdict: {
                   isEnum: true,
                   type: 'ListOrUserEntry',
@@ -1077,6 +1093,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
                 name: 'Category',
                 dataType: 'varchar(30)',
                 description: 'Product category',
+                statistics: observed(['Hardware', 'Software', 'Services']),
                 valueListVerdict: {
                   isEnum: true,
                   type: 'List',
@@ -1153,6 +1170,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
               createColumn({
                 name: 'Department',
                 dataType: 'varchar(30)',
+                statistics: observed(['Engineering', 'Marketing', 'Sales']),
                 valueListVerdict: {
                   isEnum: true,
                   type: 'List',
@@ -1166,6 +1184,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
               createColumn({
                 name: 'Level',
                 dataType: 'varchar(10)',
+                statistics: observed(['Junior', 'Mid', 'Senior', 'Lead']),
                 valueListVerdict: {
                   isEnum: true,
                   type: 'ListOrUserEntry',

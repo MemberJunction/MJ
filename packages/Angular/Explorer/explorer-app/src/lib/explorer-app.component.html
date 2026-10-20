@@ -34,6 +34,7 @@
         [TopBoundaryPx]="ChatOverlayTopBoundaryPx"
         (ToolExecuted)="OnOverlayToolExecuted($event)"
         (OpenEntityRecord)="OnOverlayOpenRecord($event)"
+        (NavigationRequested)="OnOverlayNavigationRequested($event)"
         (OpenFullChatWorkspace)="OnOverlayOpenFullChatWorkspace($event)"
       ></mj-chat-agents-overlay>
     }

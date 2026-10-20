@@ -192,6 +192,55 @@ describe('MeetingDialInService', () => {
       vi.restoreAllMocks();
     });
 
+    it('sweeps at most once per 1,000 new keys under a flood, not on every failure', () => {
+      const sweeps = vi.spyOn(DialInRateLimiter.prototype as unknown as { sweepExpired(now: number): void }, 'sweepExpired');
+      const flood = new DialInRateLimiter(3, 10_000_000, 10_000_000);
+      for (let i = 0; i < 12000; i++) {
+        flood.RecordFailure(`live-${i}`);
+      }
+      // Once per 1,000 new keys after the first 1,000; it used to run on all 11,000 of those failures.
+      expect(sweeps.mock.calls.length).toBeLessThanOrEqual(12);
+      expect(flood.Size).toBe(10000);
+      vi.restoreAllMocks();
+    });
+
+    it('does not evict a lockout when a flood of new keys passes the cap', () => {
+      const limiter = new DialInRateLimiter(1, 100, 100000);
+      limiter.RecordFailure('locked');
+      limiter.RecordFailure('locked'); // reaches maxAttempts => locked for 100s
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 500); // window over, lockout still active
+      for (let i = 0; i < 15000; i++) {
+        limiter.RecordFailure(`flood-${i}`);
+      }
+      expect(limiter.CheckAllowed('locked').allowed).toBe(false);
+      expect(limiter.Size).toBeLessThanOrEqual(10000);
+      vi.restoreAllMocks();
+    });
+
+    it('evicts the oldest lockout only when every tracked key is locked out', () => {
+      const limiter = new DialInRateLimiter(1, 10_000_000, 10_000_000);
+      for (let i = 0; i <= 10000; i++) {
+        limiter.RecordFailure(`k-${i}`);
+        limiter.RecordFailure(`k-${i}`); // second failure locks the key
+      }
+      expect(limiter.Size).toBeLessThanOrEqual(10000);
+      expect(limiter.CheckAllowed('k-0').allowed).toBe(true); // the oldest lockout made room
+      expect(limiter.CheckAllowed('k-10000').allowed).toBe(false);
+    });
+
+    it('leaves an active lockout unchanged when another failure is recorded', () => {
+      const limiter = new DialInRateLimiter(1, 100, 100000);
+      limiter.RecordFailure('caller');
+      limiter.RecordFailure('caller'); // locked for 100s
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 500); // window over, lockout still active
+      limiter.RecordFailure('caller');
+      const check = limiter.CheckAllowed('caller');
+      expect(check.allowed).toBe(false);
+      // The original lockout, 0.5s into it: not reset to a fresh 100s, and not extended.
+      expect(check.remainingMs).toBeLessThan(100000);
+      vi.restoreAllMocks();
+    });
+
     it('keeps locked-out entries through a sweep and enforces the hard ceiling', () => {
       const limiter = new DialInRateLimiter(1, 100, 100000);
       limiter.RecordFailure('locked');
