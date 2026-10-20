@@ -16,6 +16,7 @@ import {
     AgentSpec,
     AgentActionSpec,
     AgentStep,
+    AgentStepPath,
     SubAgentSpec
 } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -748,7 +749,9 @@ export class AgentSpecSync {
     }
 
     /**
-     * Map MJAIAgentStepEntity to AgentStep format.
+     * Map MJAIAgentStepEntity to AgentStep format, preserving execution policy
+     * (`TimeoutSeconds`, `RetryCount`, `OnErrorBehavior`) and canvas geometry
+     * (`PositionX`, `PositionY`, `Width`, `Height`) across save/load round trips.
      *
      * @private
      * @param step - The agent step entity
@@ -770,25 +773,34 @@ export class AgentSpecSync {
             LoopBodyType: step.LoopBodyType || undefined,
             Configuration: step.Configuration || undefined,
             ActionInputMapping: this.parseJsonField<Record<string, unknown>>(step.ActionInputMapping),
-            ActionOutputMapping: this.parseJsonField<Record<string, unknown>>(step.ActionOutputMapping)
+            ActionOutputMapping: this.parseJsonField<Record<string, unknown>>(step.ActionOutputMapping),
+            TimeoutSeconds: step.TimeoutSeconds ?? undefined,
+            RetryCount: step.RetryCount ?? undefined,
+            OnErrorBehavior: step.OnErrorBehavior || undefined,
+            PositionX: step.PositionX ?? undefined,
+            PositionY: step.PositionY ?? undefined,
+            Width: step.Width ?? undefined,
+            Height: step.Height ?? undefined
         };
     }
 
     /**
-     * Map MJAIAgentStepPathEntity to AgentStepPath format.
+     * Map MJAIAgentStepPathEntity to AgentStepPath format, preserving canvas routing
+     * (`PathPoints`) across save/load round trips.
      *
      * @private
      * @param path - The agent step path entity
      * @returns Mapped path spec
      */
-    private mapPathEntityToSpec(path: MJAIAgentStepPathEntity): any {
+    private mapPathEntityToSpec(path: MJAIAgentStepPathEntity): AgentStepPath {
         return {
             ID: path.ID,
             OriginStepID: path.OriginStepID,
             DestinationStepID: path.DestinationStepID,
             Condition: path.Condition || undefined,
             Description: path.Description || undefined,
-            Priority: path.Priority
+            Priority: path.Priority,
+            PathPoints: path.PathPoints || undefined
         };
     }
 

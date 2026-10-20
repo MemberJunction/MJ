@@ -2313,7 +2313,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const filteredFields = entity.Fields.filter(f =>
                 (!f.ReadOnly || (f.IsPrimaryKey && (entity.IsSaved || isaPromotionCreate))) &&
                 (f.IsPrimaryKey || (!f.NotLoaded && !isDeniedRead(f.Name) && (!filterToDirtyOnly || this.isFieldDirtyOnChain(entity, f)))));
-            const hasDirtyForeignKey = filterToDirtyOnly && entity.Fields.some(f => Boolean(f.EntityFieldInfo.RelatedEntityID) && this.isFieldDirtyOnChain(entity, f));
             const returnFields = entity.Fields.filter(f => {
                 if (isDeniedRead(f.Name)) {
                     return false;
@@ -2326,7 +2325,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         f.IsPrimaryKey ||
                         f.EntityFieldInfo.IsSpecialDateField ||
                         this.isFieldDirtyOnChain(entity, f) ||
-                        (hasDirtyForeignKey && Boolean(f.EntityFieldInfo.IsVirtual))
+                        (!f.NotLoaded &&
+                            !f.EntityFieldInfo.IsBinaryFieldType &&
+                            (Boolean(f.EntityFieldInfo.IsVirtual) ||
+                                Boolean(f.EntityFieldInfo.IsComputed) ||
+                                f.ReadOnly))
                     );
                 }
                 return true;

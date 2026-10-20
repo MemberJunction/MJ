@@ -191,4 +191,32 @@ describe('BaseAgent prompt-step delta recording — resume rebuilds the live sta
         const run = simulateRun({ 3: expiryStub, 4: expirySplice });
         expect(resume(run.FullSteps)).toEqual(expectedTurns(run));
     });
+
+    it('detects append-only extensions by reference and metadata flags without calling JSON.stringify per message', () => {
+        const agent = internals(new BaseAgent());
+        let toJsonCallCount = 0;
+        const trackedMsg: Msg = {
+            role: 'user',
+            content: 'Tracked message with custom toJSON spy',
+            metadata: { turnAdded: 1 },
+        };
+        Object.defineProperty(trackedMsg, 'toJSON', {
+            value() {
+                toJsonCallCount++;
+                return { role: this.role, content: this.content };
+            },
+        });
+
+        const stack: Msg[] = [trackedMsg];
+        const first = agent.capturePromptStepMessages(stack);
+        expect(first.conversationMessagesDelta).toBeUndefined();
+        expect(toJsonCallCount).toBe(0);
+
+        // Append a second message and capture again — still zero JSON.stringify calls inside capturePromptStepMessages
+        stack.push({ role: 'assistant', content: 'Turn 2 reply', metadata: { turnAdded: 2 } });
+        const second = agent.capturePromptStepMessages(stack);
+        expect(second.conversationMessagesDelta).toBe(true);
+        expect(second.conversationMessages).toHaveLength(1);
+        expect(toJsonCallCount).toBe(0);
+    });
 });
