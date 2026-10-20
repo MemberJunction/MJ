@@ -3690,8 +3690,9 @@ export class EntityInfo extends BaseInfo {
     public FieldByName(name: string): EntityFieldInfo | undefined {
         if (name == null) return undefined;
         if (this._fieldByNameMap === null) {
+            const fields = this._fields ?? this.Fields ?? [];
             const map = new Map<string, EntityFieldInfo>();
-            for (const f of this._fields) {
+            for (const f of fields) {
                 if (f.Name != null) map.set(f.Name.trim().toLowerCase(), f);
             }
             this._fieldByNameMap = map;
@@ -3700,24 +3701,26 @@ export class EntityInfo extends BaseInfo {
     }
 
     private ensureFieldIndexEntry(): { byName: Map<string, number>; byCodeName: Map<string, number> } {
+        const fields = this._fields ?? this.Fields ?? [];
         let entry = _entityFieldIndexCache.get(this);
-        if (!entry || entry.fieldsRef !== this._fields || entry.fieldsLen !== this._fields.length) {
+        if (!entry || entry.fieldsRef !== fields || entry.fieldsLen !== fields.length) {
             const byName = new Map<string, number>();
             const byCodeName = new Map<string, number>();
-            for (let i = 0; i < this._fields.length; i++) {
-                const f = this._fields[i];
+            for (let i = 0; i < fields.length; i++) {
+                const f = fields[i];
                 if (f.Name != null) {
                     const nameKey = f.Name.trim().toLowerCase();
                     if (!byName.has(nameKey)) {
                         byName.set(nameKey, i);
                     }
-                    const codeKey = f.CodeName.trim().toLowerCase();
+                    const rawCodeName = f.CodeName ?? f.Name;
+                    const codeKey = rawCodeName.trim().toLowerCase();
                     if (!byCodeName.has(codeKey)) {
                         byCodeName.set(codeKey, i);
                     }
                 }
             }
-            entry = { fieldsRef: this._fields, fieldsLen: this._fields.length, byName, byCodeName };
+            entry = { fieldsRef: fields, fieldsLen: fields.length, byName, byCodeName };
             _entityFieldIndexCache.set(this, entry);
         }
         return entry;
@@ -3751,7 +3754,8 @@ export class EntityInfo extends BaseInfo {
      */
     public FieldByCodeName(codeName: string): EntityFieldInfo | undefined {
         const idx = this.FieldIndexByCodeName(codeName);
-        return idx >= 0 ? this._fields[idx] : undefined;
+        const fields = this._fields ?? this.Fields;
+        return idx >= 0 && fields ? fields[idx] : undefined;
     }
 
     /**

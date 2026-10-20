@@ -204,7 +204,9 @@ export class AIPromptRunner extends BaseModelRunner {
 
   constructor() {
     super();
-    this._metadata = (this._provider as unknown as Metadata) ?? new Metadata();
+    this._metadata =
+      (this._provider as unknown as Metadata) ??
+      (typeof Metadata === 'function' ? new Metadata() : ({} as Metadata));
     this._templateEngine = TemplateEngineServer.Instance;
     this._executionPlanner = new ExecutionPlanner();
     this._jsonValidator = new JSONValidator();
