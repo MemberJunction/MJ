@@ -146,12 +146,12 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  
      * ReplacesPrevious, collapsing the stream into ONE in-place-updating user bubble. The
      * per-turn flag resets on the next `speech_started` ({@link onSpeechStartedFrame}).
      */
-    protected override onUserTranscriptFrame(transcript: string): void {
+    protected override onUserTranscriptFrame(transcript: string, itemId?: string): void {
         if (!transcript || transcript.trim().length === 0) {
             // An empty transcription (a VAD false positive) passes through as a plain final, like the
             // OpenAI base: the host releases the speech onset it stamped (MJ#5483). It is not part of
             // the streamed utterance, so the per-turn flags stay as they are.
-            super.onUserTranscriptFrame(transcript ?? '');
+            super.onUserTranscriptFrame(transcript ?? '', itemId);
             return;
         }
         // Two ways this caption REPLACES rather than appends: another already landed in this turn,
@@ -164,6 +164,7 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  
         this.emitTranscript({
             Role: 'User', Text: transcript, IsFinal: true, Kind: 'normal',
             ReplacesPrevious: replacesPrevious,
+            ...(itemId !== undefined ? { ItemId: itemId } : {}),
         });
         this.userTurnTranscribed = true;
         this.lastUserTranscript = transcript;
