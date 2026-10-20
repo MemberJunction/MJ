@@ -1,8 +1,9 @@
-import { Component, Input, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { TimelineItem } from './ai-agent-run-timeline.component';
 import { MJAIAgentRunStepEntity, MJAIAgentRunStepEntity_AgentSkillInvocation } from '@memberjunction/core-entities';
 import { ResolveTaskGraphPositions, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import type { FlowPosition } from '@memberjunction/ng-flow-editor';
+import { TaskGraphRunViewComponent } from '@memberjunction/ng-task-graph-editor';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import type { IMetadataProvider } from '@memberjunction/core';
 
@@ -35,6 +36,8 @@ export class AIAgentRunStepDetailComponent {
   }
   /** The provider the host is on, so the run view reads through the right one. */
   @Input() Provider: IMetadataProvider | null = null;
+  /** True while the host is persisting the workflow via WorkflowSaveOperation. */
+  @Input() SavingWorkflow = false;
   @Output() ClosePanel = new EventEmitter<void>();
 
   /**
@@ -494,9 +497,12 @@ export class AIAgentRunStepDetailComponent {
     return this.StepTaskGraphWasFolded;
   }
 
+  @ViewChild(TaskGraphRunViewComponent)
+  public TaskGraphRunView?: TaskGraphRunViewComponent;
+
   /** Asks the host to save this run's graph as a reusable workflow. */
   public RequestSaveAsWorkflow(): void {
-    const spec = this.StepTaskGraph;
+    const spec = this.StepTaskGraph ?? this.TaskGraphRunView?.Spec ?? null;
     if (spec) this.SaveAsWorkflowRequested.emit(spec);
   }
 

@@ -272,6 +272,15 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="PayloadAtEndSourceStepID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -394,6 +403,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRequests', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Run Steps (Payload At End Source Step ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentRunStepsPayloadAtEndSourceStepID"
+        SectionName="AI Agent Run Steps (Payload At End Source Step ID)"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentRunStepsPayloadAtEndSourceStepID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Steps','PayloadAtEndSourceStepID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Steps','PayloadAtEndSourceStepID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRunStepsPayloadAtEndSourceStepID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunStepsPayloadAtEndSourceStepID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

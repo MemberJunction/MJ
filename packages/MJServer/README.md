@@ -629,6 +629,8 @@ All built-in resolvers extend `ResolverBase`, which provides:
 | `BeforeUpdate()` / `AfterUpdate()` | Lifecycle hooks for update |
 | `BeforeDelete()` / `AfterDelete()` | Lifecycle hooks for delete |
 
+`UpdateRecord()` supports both full-record and **delta-only** `Update<Type>Input` mutations (where `GraphQLDataProvider.Save()` sends only primary keys and dirty writable fields in `input` and `input.OldValues___`). When `hasCompleteOldValues()` detects a partial `OldValues___` delta, `MustLoadTruthFromDatabase()` ensures `InnerLoad` populates the full baseline row from the database before `TestAndSetClientOldValuesToDBValues()` checks dirty fields for concurrent modifications and applies `entityObject.SetMany(clientNewValues)`.
+
 ## REST API
 
 In addition to GraphQL, MJServer provides a REST API at `/api/v1/`. By default it is disabled and can be enabled via configuration.

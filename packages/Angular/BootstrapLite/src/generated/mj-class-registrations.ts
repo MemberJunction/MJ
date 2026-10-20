@@ -35,7 +35,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (452 classes)
+// @memberjunction/core-entities (453 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -84,6 +84,7 @@ import {
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -778,6 +779,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -918,11 +920,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardCategoryLinkEntity,
     MJDashboardCategoryPermissionEntity,
     MJDashboardEntity,
-    MJDashboardEntityExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardEntityExtended,
     MJDashboardPartTypeEntity,
     MJDashboardPermissionEntity,
     MJDashboardPermissionEntityExtended,
@@ -1122,11 +1124,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSignatureRequestLogEntity,
     MJSignatureRequestRecipientEntity,
     MJSkillEntity,
-    MJStateProvinceEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJStateProvinceEntity,
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
@@ -1326,11 +1328,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     QueryCategoryHierarchyPanel,
     RecordProcessCategoryHierarchyPanel,
     RecordProcessFormComponentExtended,
-    RecordProcessFormPolicy,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RecordProcessFormPolicy,
     RubricAuthorPanel,
     RubricDiffPanel,
     RubricEvaluationComparePanel,
@@ -1364,7 +1366,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 619;
+export const CLASS_REGISTRATIONS_COUNT = 620;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

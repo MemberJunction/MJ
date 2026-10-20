@@ -12,7 +12,7 @@ import {
   DoCheck,
   TemplateRef
 } from '@angular/core';
-import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity, RatingJSON } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity, RatingJSON, UserInfoEngine } from '@memberjunction/core-entities';
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -29,7 +29,8 @@ import {
   AfterResponseFormSubmittedEventArgs,
   BeforeStopClickedEventArgs,
 } from '../../events/chat-events';
-import { ExcludeByUUIDs, UUIDsEqual } from '@memberjunction/global';
+import { ExcludeByUUIDs, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { Subscription } from 'rxjs';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
 import { EMPTY_FORK_CHIPS, ForkChipAriaLabel, ForkChipIcon, ForkChipOpenRequestOf, type ForkChipOpenRequest, type MessageForkChip } from '../../utils/conversation-forks';
@@ -493,8 +494,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public ReadOnly = false;
 
   /**
-   * Whether the Stop control is offered on an in-progress agent reply. A host can turn stopping
-   * off for a surface without making the conversation read-only. Default true.
+   * Whether the Stop control is offered on an in-progress agent reply, and the Continue control on
+   * a stopped one. A host can turn stopping off for a surface without making the conversation
+   * read-only. Default true.
    */
   @Input() public AllowStopRun = true;
 
@@ -757,6 +759,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public StopRequested = new EventEmitter<MJConversationDetailEntity>();
 
   /**
+   * Fired when the user clicks the Task Graph button on the inline workflow card to view
+   * the visual `<mj-task-graph-run-view>` flowchart in the conversation's right-side panel.
+   */
+  @Output() public TaskGraphPanelRequested = new EventEmitter<{
+    parentTaskId: string;
+    workflowTitle: string;
+    workflowName: string;
+    isRunning: boolean;
+  }>();
+
+  /** @deprecated Use {@link TaskGraphPanelRequested}. */
+  @Output() public taskGraphPanelRequested = this.TaskGraphPanelRequested;
+
+  /**
    * True from the moment Stop was clicked until the message leaves In-Progress, so the button
    * reads "Stopping…" and cannot be clicked twice while the server catches up. Falls back to
    * false after {@link STOP_RETRY_AFTER_MS} if the run is still going, so a stop that did not
@@ -850,6 +866,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this.DetailTasks = value;
   }
   private tasksLoaded: boolean = false;
+  private _tasksLoadInFlight: boolean = false;
+  private _tasksReloadQueued: boolean = false;
+  private _taskGraphSub: Subscription | null = null;
+  private _taskPollCounter: number = 0;
+  public WorkflowElapsedFormatted: string = '0:00';
+  public ExpandedWorkflowStepIds = new Set<string>();
+  /**
+   * When this message is a bottom continuation reply (`this.message.ParentID` points to the
+   * originating workflow message), holds the root `MJ: Tasks` row for that workflow so the UI
+   * can render a relational Workflow Context Header without string-parsing.
+   */
+  public OriginatingWorkflowTask: MJTaskEntity | null = null;
 
   // Memoization for mention parsing to prevent repeated parsing on change detection
   private _cachedDisplayMessage: string = '';
@@ -882,14 +910,45 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // matching the pre-PR-2 behavior of the previous hardcoded check.
     void this.agentService.getConversationManagerAgent();
 
+    // Auto-load associated workflow tasks for AI messages so the inline workflow
+    // execution card renders immediately without requiring the user to open the gear icon.
+    if (this.IsAIMessage && this.message?.ID) {
+      void this.loadTasks();
+      this.subscribeToTaskGraphEvents();
+    }
+
     // Execute automatic commands if present
     await this.executeAutomaticCommands();
   }
 
+  private subscribeToTaskGraphEvents(): void {
+    if (this._taskGraphSub) {
+      return;
+    }
+    this._taskGraphSub = ConversationsRuntime.Instance.Streaming.TaskGraphEvents$.subscribe((evt) => {
+      if (!this.IsAIMessage || !this.message?.ID) {
+        return;
+      }
+      const matchesMessage = evt.conversationDetailId && UUIDsEqual(evt.conversationDetailId, this.message.ID);
+      const matchesTask =
+        this.DetailTasks.length > 0 &&
+        this.DetailTasks.some(
+          (t) =>
+            (evt.ParentTaskID && (UUIDsEqual(t.ID, evt.ParentTaskID) || UUIDsEqual(t.ParentID, evt.ParentTaskID))) ||
+            (evt.TaskID && UUIDsEqual(t.ID, evt.TaskID))
+        );
+      if (matchesMessage || matchesTask || (this.DetailTasks.length === 0 && this.IsLastMessageInConversation)) {
+        void this.loadTasks();
+      }
+    });
+  }
+
   ngOnChanges(_changes: SimpleChanges) {
-    // No longer need to manage timer for agentRun changes
-    // Parent's 1-second timer + agentRunDuration getter handles all agent run timing
-    // Component's timer only runs for temporary messages (handled in ngAfterViewInit)
+    // Reload tasks if message ID is present on an AI message and hasn't loaded yet
+    if (this.IsAIMessage && this.message?.ID && !this.tasksLoaded) {
+      void this.loadTasks();
+      this.subscribeToTaskGraphEvents();
+    }
   }
 
   /**
@@ -906,7 +965,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Check if status changed from non-Complete to Complete
     if (this._previousMessageStatus !== 'Complete' && currentStatus === 'Complete') {
-      this.stopElapsedTimeUpdater();
+      // When an AI turn finishes, check if it submitted a durable task graph for this message
+      if (this.IsAIMessage && this.message.ID) {
+        void this.loadTasks();
+      }
+      if (!this.HasActiveWorkflowTasks) {
+        this.stopElapsedTimeUpdater();
+      }
 
       // Force immediate synchronous change detection for dynamically created components
       // markForCheck() only schedules a check which may not run for dynamic components
@@ -934,15 +999,16 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // Nothing in flight means nothing to watch — restart the clock so a run that begins later is
     // measured from when it began, not from when this component was created.
     const inFlight = this.isLivenessInFlight();
+    const needsTimer = inFlight || this.HasActiveWorkflowTasks;
     this.refreshLivenessState();
 
     // Re-arm the elapsed timer here, not only in ngAfterViewInit. A message that becomes
     // in-progress AFTER the view initialised — the common case, since the row is rendered before
     // the agent starts — otherwise never got an interval, so its pill never ticked and its liveness
     // state was never recomputed on a schedule.
-    if (inFlight && this._elapsedTimeInterval === null) {
+    if (needsTimer && this._elapsedTimeInterval === null) {
       this.startElapsedTimeUpdater();
-    } else if (!inFlight) {
+    } else if (!needsTimer) {
       this.stopElapsedTimeUpdater();
     }
   }
@@ -1075,6 +1141,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   ngOnDestroy() {
     this.stopElapsedTimeUpdater();
     this.clearStopRetryTimer();
+    if (this._taskGraphSub) {
+      this._taskGraphSub.unsubscribe();
+      this._taskGraphSub = null;
+    }
   }
 
   /**
@@ -1130,14 +1200,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
-   * Starts the elapsed time updater interval for temporary messages only
-   * For agent runs with IDs, the parent's timer + agentRunDuration getter handles updates
-   * Updates every second for temporary messages that use _elapsedTimeFormatted
+   * Starts the elapsed time updater interval for temporary messages, active agent runs,
+   * and active durable workflow task graphs.
    */
   private startElapsedTimeUpdater(): void {
-    // Start timer for temporary messages (in-progress, no ID) OR active agent runs
-    // Both need periodic updates to _elapsedTimeFormatted / _agentRunDurationFormatted
-    if (this.IsInProgressAIMessage || this.IsAgentRunActive) {
+    if (this.IsInProgressAIMessage || this.IsAgentRunActive || this.HasActiveWorkflowTasks) {
       // Initial update
       this.updateTimers();
       this.cdRef.markForCheck();
@@ -1167,17 +1234,54 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Called every second by the interval timer
    */
   private updateTimers(): void {
+    const currentStatus = this.message?.Status;
+    this._stableIsInProgressAIMessage = this.IsAIMessage && currentStatus === 'In-Progress';
+    this._stableDisplayMessage = this.computeDisplayMessage();
+    this._messageClasses = this.buildMessageClasses();
+
+    if (this._previousMessageStatus !== 'Complete' && currentStatus === 'Complete') {
+      this._previousMessageStatus = 'Complete';
+      if (this.IsAIMessage && this.message?.ID) {
+        void this.loadTasks();
+      }
+    }
+
     // Update temporary message elapsed time
     if (this.IsInProgressAIMessage) {
       this.ElapsedTimeFormatted = this.formatElapsedTime(this.ElapsedTimeSinceLoad);
     }
 
-    // Update agent run duration for active runs
-    if (this.IsAgentRunActive && this.AgentRun?.__mj_CreatedAt) {
-      const createdAt = new Date(this.AgentRun.__mj_CreatedAt);
-      const now = new Date();
-      const diffMs = now.getTime() - createdAt.getTime();
-      this.AgentRunDurationFormatted = this.formatDurationFromMs(diffMs);
+    // Update agent run duration for active runs or while child workflow tasks are still running
+    if (this.IsAgentRunActive || this.HasActiveWorkflowTasks) {
+      const startCandidates: number[] = [];
+      if (this.AgentRun?.__mj_CreatedAt) {
+        const t = new Date(this.AgentRun.__mj_CreatedAt).getTime();
+        if (!Number.isNaN(t)) {
+          startCandidates.push(t);
+        }
+      }
+      for (const task of (this.DetailTasks ?? [])) {
+        const raw = task.StartedAt || task.__mj_CreatedAt;
+        if (raw) {
+          const t = new Date(raw).getTime();
+          if (!Number.isNaN(t)) {
+            startCandidates.push(t);
+          }
+        }
+      }
+      if (startCandidates.length > 0) {
+        const earliestStart = Math.min(...startCandidates);
+        this.AgentRunDurationFormatted = this.formatDurationFromMs(Math.max(0, Date.now() - earliestStart));
+      }
+    }
+
+    // Update active workflow elapsed timer and poll task rows every 3s for real-time status updates
+    if (this.HasActiveWorkflowTasks) {
+      this.WorkflowElapsedFormatted = this.computeWorkflowElapsedFormatted();
+      this._taskPollCounter = (this._taskPollCounter + 1) % 3;
+      if (this._taskPollCounter === 0) {
+        void this.loadTasks();
+      }
     }
 
     // Silence only grows with time, so it has to be re-evaluated on the clock rather than on
@@ -1185,7 +1289,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this.refreshLivenessState();
 
     // The tick stops itself: change detection does not reliably reach this row once it finishes.
-    if (!this.isLivenessInFlight()) {
+    if (!this.isLivenessInFlight() && !this.HasActiveWorkflowTasks && !this._tasksLoadInFlight) {
       this.stopElapsedTimeUpdater();
     }
   }
@@ -1207,7 +1311,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return '0:00';
     }
 
-    let seconds = Math.floor(diffMs / 1000);
+    let seconds = Math.max(1, Math.floor(diffMs / 1000));
     let minutes = Math.floor(seconds / 60);
     seconds = seconds % 60;
     let hours = Math.floor(minutes / 60);
@@ -1826,14 +1930,74 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.ShouldShowInlineActions();
   }
 
+  private static readonly SUPPORTING_ARTIFACTS_EXPANDED_SETTING_KEY = 'mj.conversations.supportingArtifactsExpanded';
+
+  private _lastArtifactsInput: MessageArtifactRef[] | null = null;
+  private _sortedDisplayArtifactsCache: MessageArtifactRef[] = [];
+
   /**
-   * The artifacts to render under this message, one card each. Prefers the
-   * `artifacts` array; falls back to the legacy single `artifact`/`artifactVersion`
+   * Whether the Supporting Artifacts grid is expanded when a message has multiple artifacts.
+   * Defaults to `false` (collapsed) when unset and persists the user's global preference via `UserInfoEngine`.
+   */
+  public IsSupportingArtifactsExpanded: boolean = MessageItemComponent.readSupportingArtifactsExpandedPref();
+
+  private static readSupportingArtifactsExpandedPref(): boolean {
+    try {
+      const raw = UserInfoEngine.Instance?.GetSetting(MessageItemComponent.SUPPORTING_ARTIFACTS_EXPANDED_SETTING_KEY);
+      if (raw === 'true') {
+        return true;
+      }
+      if (raw === 'false') {
+        return false;
+      }
+    } catch {
+      // Fallback when UserInfoEngine is not initialized (e.g., unit test harnesses)
+    }
+    return false;
+  }
+
+  public ToggleSupportingArtifacts(event?: Event): void {
+    event?.stopPropagation();
+    this.IsSupportingArtifactsExpanded = !this.IsSupportingArtifactsExpanded;
+    try {
+      UserInfoEngine.Instance?.SetSettingDebounced(
+        MessageItemComponent.SUPPORTING_ARTIFACTS_EXPANDED_SETTING_KEY,
+        String(this.IsSupportingArtifactsExpanded)
+      );
+    } catch {
+      // Ignore in test harnesses without UserInfoEngine
+    }
+    this.cdRef.detectChanges();
+  }
+
+  /**
+   * The artifacts to render under this message, one card each, ordered chronologically
+   * (`version.__mj_CreatedAt` / `artifact.__mj_CreatedAt` ascending) so intermediate
+   * step outputs appear first and the final deliverable appears last.
+   * Prefers the `artifacts` array; falls back to the legacy single `artifact`/`artifactVersion`
    * inputs so older callers that set only those keep working.
    */
   public get DisplayArtifacts(): MessageArtifactRef[] {
     if (this.Artifacts && this.Artifacts.length > 0) {
-      return this.Artifacts;
+      if (this.Artifacts.length === 1) {
+        return this.Artifacts;
+      }
+      if (this._lastArtifactsInput !== this.Artifacts) {
+        this._lastArtifactsInput = this.Artifacts;
+        const indexed = this.Artifacts.map((item, idx) => {
+          const rawDate = item.version?.__mj_CreatedAt ?? item.artifact?.__mj_CreatedAt ?? null;
+          const timeMs = rawDate ? new Date(rawDate).getTime() : NaN;
+          return { item, idx, timeMs };
+        });
+        indexed.sort((a, b) => {
+          if (!Number.isNaN(a.timeMs) && !Number.isNaN(b.timeMs) && a.timeMs !== b.timeMs) {
+            return a.timeMs - b.timeMs;
+          }
+          return a.idx - b.idx;
+        });
+        this._sortedDisplayArtifactsCache = indexed.map((entry) => entry.item);
+      }
+      return this._sortedDisplayArtifactsCache;
     }
     if (this.Artifact && this.artifactVersion) {
       return [{ artifact: this.Artifact, version: this.artifactVersion }];
@@ -1844,6 +2008,24 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /** @deprecated Use {@link DisplayArtifacts}. */
   public get displayArtifacts(): MessageArtifactRef[] {
     return this.DisplayArtifacts;
+  }
+
+  /**
+   * Earlier step-output artifacts (`#1 .. #N-1`) when this message carries multiple artifacts.
+   * Rendered in a compact, collapsible 2-column grid above the featured final deliverable.
+   */
+  public get SupportingArtifacts(): MessageArtifactRef[] {
+    const all = this.DisplayArtifacts;
+    return all.length > 1 ? all.slice(0, -1) : [];
+  }
+
+  /**
+   * The final deliverable artifact (created last) when this message carries multiple artifacts,
+   * or the sole artifact when there is only one.
+   */
+  public get PrimaryArtifact(): MessageArtifactRef | null {
+    const all = this.DisplayArtifacts;
+    return all.length > 0 ? all[all.length - 1] : null;
   }
 
   public get HasArtifact(): boolean {
@@ -1913,8 +2095,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Unified time pill text for all AI message states
    * Returns the appropriate time display based on message state:
    * - Temporary messages (in-progress): Live elapsed time
-   * - Active agent runs: Live agent run duration (calculated on-demand)
-   * - Completed messages: Final generation time
+   * - Active agent runs / active workflow task graphs: Live duration (updated every second)
+   * - Completed messages: Final generation time (including any child workflow task graph)
    * - Failed messages: Time before failure
    */
   public get TimePillText(): string | null {
@@ -1946,10 +2128,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Whether the Continue control is offered: the last message in the conversation is a reply the
-   * user stopped, and the viewer may write. Any message resumes the run; this one says so.
+   * user stopped, the viewer may write, and the host allows stopping ({@link AllowStopRun}). Any
+   * message resumes the run; this one says so.
    */
   public get CanContinueStoppedRun(): boolean {
-    return this.WasStoppedByUser && this.IsLastMessageInConversation && !this.ReadOnly;
+    return this.WasStoppedByUser && this.IsLastMessageInConversation && !this.ReadOnly && this.AllowStopRun !== false;
   }
 
   /** The Continue control: sends {@link ContinueMessage} the way a suggested response is sent. */
@@ -1981,17 +2164,19 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return this.ElapsedTimeFormatted;
     }
 
-    // For active agent runs, calculate live duration from agentRun timestamps
-    // This getter recalculates every time using new Date(), so it updates smoothly
-    if (this.IsAgentRunActive && this.AgentRun?.__mj_CreatedAt) {
+    // For active agent runs or active child workflow task graphs, keep the pill ticking live
+    if (this.IsAgentRunActive || this.HasActiveWorkflowTasks) {
+      return this.AgentRunDuration ?? this.WorkflowDurationDisplay;
+    }
+
+    // For completed/failed messages with an agent run (and optional child workflow tasks),
+    // use the combined agentRun + workflow task span.
+    if (this.AgentRun?.__mj_CreatedAt && this.AgentRun?.__mj_UpdatedAt) {
       return this.AgentRunDuration;
     }
 
-    // For completed/failed messages with an agent run, use agentRun timestamps.
-    // These are set when the run finishes and never change, so pin/edit saves on the
-    // message entity cannot corrupt the displayed duration.
-    if (this.AgentRun?.__mj_CreatedAt && this.AgentRun?.__mj_UpdatedAt) {
-      return this.AgentRunDuration;
+    if ((this.DetailTasks?.length ?? 0) > 0) {
+      return this.WorkflowDurationDisplay;
     }
 
     // No agent run — fall back to message entity timestamps.
@@ -2545,54 +2730,439 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Load tasks associated with this conversation detail
    */
   private async loadTasks(): Promise<void> {
-    if (!this.message?.ID) {
+    if (!this.message?.ID || !this.CurrentUser) {
+      return;
+    }
+    if (this._tasksLoadInFlight) {
+      this._tasksReloadQueued = true;
       return;
     }
 
+    this._tasksLoadInFlight = true;
     try {
+      const safeMsgId = this.message.ID.replace(/'/g, "''");
+      const safeParentId = this.message.ParentID ? this.message.ParentID.replace(/'/g, "''") : null;
+      const extraFilter = safeParentId
+        ? `ConversationDetailID='${safeMsgId}' OR (ConversationDetailID='${safeParentId}' AND ParentID IS NULL)`
+        : `ConversationDetailID='${safeMsgId}'`;
+
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTaskEntity>(
         {
           EntityName: 'MJ: Tasks',
-          ExtraFilter: `ConversationDetailID='${this.message.ID}'`,
-          OrderBy: '__mj_CreatedAt DESC',
-          ResultType: 'entity_object'
+          ExtraFilter: extraFilter,
+          OrderBy: '__mj_CreatedAt ASC',
+          ResultType: 'entity_object',
+          BypassCache: true
         },
         this.CurrentUser
       );
 
       if (result.Success) {
-        this.DetailTasks = result.Results || [];
+        const allTasks = result.Results || [];
+        if (safeParentId) {
+          this.DetailTasks = allTasks.filter((t) => UUIDsEqual(t.ConversationDetailID, this.message.ID));
+          this.OriginatingWorkflowTask =
+            allTasks.find(
+              (t) => !t.ParentID && UUIDsEqual(t.ConversationDetailID, this.message.ParentID)
+            ) || null;
+        } else {
+          this.DetailTasks = allTasks;
+          this.OriginatingWorkflowTask = null;
+        }
         this.tasksLoaded = true;
+        this.WorkflowElapsedFormatted = this.computeWorkflowElapsedFormatted();
+        if (this.HasActiveWorkflowTasks) {
+          this.AgentRunDurationFormatted = this.WorkflowElapsedFormatted;
+          if (this._elapsedTimeInterval === null) {
+            this.startElapsedTimeUpdater();
+          }
+        }
+        this.cdRef?.detectChanges();
       }
     } catch (error) {
       console.error('Failed to load tasks for conversation detail:', error);
+    } finally {
+      this._tasksLoadInFlight = false;
+      if (this._tasksReloadQueued) {
+        this._tasksReloadQueued = false;
+        void this.loadTasks();
+      }
     }
   }
 
   /**
-   * Get formatted duration for the agent run
-   * For active runs: Calculate from created to NOW (live updates)
-   * For completed runs: Calculate from created to updated timestamp (static)
+   * Smoothly scrolls the chat viewport to the originating workflow message (`this.message.ParentID`)
+   * and briefly highlights it when the user clicks the Workflow Context Header chip.
+   */
+  public ScrollToOriginatingWorkflow(event: MouseEvent): void {
+    event.stopPropagation();
+    if (!this.message?.ParentID || typeof document === 'undefined') {
+      return;
+    }
+    const targetId = this.message.ParentID;
+    const candidates = Array.from(document.querySelectorAll<HTMLElement>('[data-message-id]'));
+    const targetEl = candidates.find((el) => UUIDsEqual(el.getAttribute('data-message-id'), targetId));
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      targetEl.classList.add('workflow-origin-highlight');
+      setTimeout(() => targetEl.classList.remove('workflow-origin-highlight'), 2200);
+    }
+  }
+
+  /**
+   * Returns the parent workflow container task when `DetailTasks` contains a parent-child hierarchy.
+   * Prevents rendering the container parent task as a duplicate step card alongside its child steps.
+   */
+  public get WorkflowParentTask(): MJTaskEntity | null {
+    const tasks = this.DetailTasks;
+    if (!tasks || tasks.length <= 1) {
+      return null;
+    }
+    const parentIdsWithChildren = new UUIDSet(tasks.map((child) => child.ParentID));
+    const parentCandidate = tasks.find(
+      (t) => !t.ParentID && parentIdsWithChildren.Has(t.ID)
+    );
+    if (parentCandidate) {
+      return parentCandidate;
+    }
+    const unagentedRoot = tasks.find((t) => !t.ParentID && !t.AgentID);
+    return unagentedRoot ?? null;
+  }
+
+  /**
+   * Ordered executable workflow steps for this message (excluding the container parent row).
+   */
+  public get WorkflowSteps(): MJTaskEntity[] {
+    const tasks = this.DetailTasks;
+    if (!tasks || tasks.length === 0) {
+      return [];
+    }
+    const parent = this.WorkflowParentTask;
+    const steps = parent
+      ? tasks.filter((t) => !UUIDsEqual(t.ID, parent.ID))
+      : [...tasks];
+    return steps.sort((a, b) => {
+      const aTime = a.__mj_CreatedAt ? new Date(a.__mj_CreatedAt).getTime() : 0;
+      const bTime = b.__mj_CreatedAt ? new Date(b.__mj_CreatedAt).getTime() : 0;
+      return aTime - bTime;
+    });
+  }
+
+  /** Title shown in the inline Workflow Execution Card header. */
+  public get WorkflowTitle(): string {
+    if (this.WorkflowParentTask?.Name) {
+      return this.WorkflowParentTask.Name;
+    }
+    if (this.WorkflowSteps.length === 1) {
+      return this.WorkflowSteps[0].Name || 'Agent Task';
+    }
+    return 'Agent Workflow';
+  }
+
+  /** Aggregate status of the workflow ('Running' | 'Complete' | 'Failed' | 'Cancelled'). */
+  public get WorkflowStatus(): 'Running' | 'Complete' | 'Failed' | 'Cancelled' {
+    const steps = this.WorkflowSteps;
+    if (steps.length === 0) {
+      return 'Complete';
+    }
+    if (steps.some((s) => s.Status === 'Failed')) {
+      return 'Failed';
+    }
+    if (steps.some((s) => s.Status === 'In Progress' || s.Status === 'Pending' || s.Status === 'Deferred')) {
+      return 'Running';
+    }
+    if (steps.every((s) => s.Status === 'Cancelled')) {
+      return 'Cancelled';
+    }
+    return 'Complete';
+  }
+
+  /** Whether any workflow step is still pending or actively executing. */
+  public get HasActiveWorkflowTasks(): boolean {
+    return this.WorkflowSteps.length > 0 && this.WorkflowStatus === 'Running';
+  }
+
+  /** Number of completed workflow steps. */
+  public get WorkflowCompletedStepCount(): number {
+    return this.WorkflowSteps.filter((s) => s.Status === 'Complete').length;
+  }
+
+  /** Number of conditionally skipped workflow steps. */
+  public get WorkflowSkippedStepCount(): number {
+    return this.WorkflowSteps.filter((s) => s.Status === 'Skipped').length;
+  }
+
+  /** Overall completion percentage (0-100) across all workflow steps. */
+  public get WorkflowProgressPercent(): number {
+    const steps = this.WorkflowSteps;
+    if (steps.length === 0) {
+      return 0;
+    }
+    let sum = 0;
+    for (const step of steps) {
+      if (step.Status === 'Complete' || step.Status === 'Skipped') {
+        sum += 100;
+      } else if (step.Status === 'In Progress') {
+        sum += Math.max(15, Math.min(95, step.PercentComplete || 50));
+      }
+    }
+    return Math.round(sum / steps.length);
+  }
+
+  /** Formatted total duration for the workflow execution card. */
+  public get WorkflowDurationDisplay(): string {
+    if (this.HasActiveWorkflowTasks) {
+      return this.WorkflowElapsedFormatted;
+    }
+    return this.computeWorkflowElapsedFormatted();
+  }
+
+  private computeWorkflowElapsedFormatted(): string {
+    const tasks = this.DetailTasks ?? [];
+    if (tasks.length === 0) {
+      return '0:00';
+    }
+    const startTimes = tasks
+      .map((t) => (t.StartedAt ? new Date(t.StartedAt).getTime() : t.__mj_CreatedAt ? new Date(t.__mj_CreatedAt).getTime() : NaN))
+      .filter((n) => !Number.isNaN(n));
+    if (startTimes.length === 0) {
+      return '0:00';
+    }
+    const earliest = Math.min(...startTimes);
+    if (this.HasActiveWorkflowTasks) {
+      return this.formatDurationFromMs(Math.max(0, Date.now() - earliest));
+    }
+    const endTimes = tasks
+      .map((t) => (t.CompletedAt ? new Date(t.CompletedAt).getTime() : t.__mj_UpdatedAt ? new Date(t.__mj_UpdatedAt).getTime() : NaN))
+      .filter((n) => !Number.isNaN(n));
+    const latest = endTimes.length > 0 ? Math.max(...endTimes) : Date.now();
+    return this.formatDurationFromMs(Math.max(1000, latest - earliest));
+  }
+
+  /** Parent task ID for opening `<mj-task-graph-run-view>` in the right-side panel. */
+  public get WorkflowParentTaskID(): string | null {
+    return (
+      this.WorkflowParentTask?.ID ??
+      (this.DetailTasks ?? []).find((t) => !!t.ParentID)?.ParentID ??
+      null
+    );
+  }
+
+  /** Whether the completed workflow step list is expanded (always expanded while Running). */
+  public IsWorkflowStepsExpanded: boolean = true;
+
+  public ToggleWorkflowStepsExpanded(event?: Event): void {
+    event?.stopPropagation();
+    if (this.WorkflowStatus === 'Running') {
+      return;
+    }
+    this.IsWorkflowStepsExpanded = !this.IsWorkflowStepsExpanded;
+    this.cdRef.detectChanges();
+  }
+
+  public OpenTaskGraphPanel(event?: Event): void {
+    event?.stopPropagation();
+    const parentId = this.WorkflowParentTaskID;
+    if (!parentId) {
+      return;
+    }
+    this.TaskGraphPanelRequested.emit({
+      parentTaskId: parentId,
+      workflowTitle: this.WorkflowTitle,
+      workflowName: this.WorkflowTitle,
+      isRunning: this.WorkflowStatus === 'Running',
+    });
+  }
+
+  public ToggleWorkflowStepExpand(stepId: string): void {
+    if (this.ExpandedWorkflowStepIds.has(stepId)) {
+      this.ExpandedWorkflowStepIds.delete(stepId);
+    } else {
+      this.ExpandedWorkflowStepIds.add(stepId);
+    }
+    this.cdRef.detectChanges();
+  }
+
+  public IsWorkflowStepExpanded(stepId: string): boolean {
+    return this.ExpandedWorkflowStepIds.has(stepId);
+  }
+
+  public FormatWorkflowStepDuration(step: MJTaskEntity): string | null {
+    if (step.Status === 'Skipped') {
+      return 'Skipped';
+    }
+    if (step.Status === 'Cancelled') {
+      return 'Cancelled';
+    }
+    const startRaw = step.StartedAt || step.__mj_CreatedAt;
+    if (!startRaw) {
+      return null;
+    }
+    const startMs = new Date(startRaw).getTime();
+    if (Number.isNaN(startMs)) {
+      return null;
+    }
+    if (step.Status === 'In Progress') {
+      return this.formatDurationFromMs(Math.max(0, Date.now() - startMs));
+    }
+    if (step.Status === 'Pending') {
+      return 'Queued';
+    }
+    const endRaw = step.CompletedAt || step.__mj_UpdatedAt;
+    if (!endRaw) {
+      return null;
+    }
+    const endMs = new Date(endRaw).getTime();
+    if (Number.isNaN(endMs) || endMs < startMs) {
+      return null;
+    }
+    return this.formatDurationFromMs(Math.max(1000, endMs - startMs));
+  }
+
+  public GetWorkflowStepSummary(step: MJTaskEntity): string | null {
+    const desc = step.Description || '';
+    const outputMarker = desc.indexOf('--- Output ---');
+    if (outputMarker !== -1) {
+      const rawOutput = desc.slice(outputMarker + '--- Output ---'.length).trim();
+      if (rawOutput.length > 0 && !rawOutput.startsWith('output available (')) {
+        return rawOutput.length > 360 ? rawOutput.slice(0, 360) + '…' : rawOutput;
+      }
+    }
+    if (step.OutputPayload) {
+      const deltaText = this.extractStepDeltaPreview(step);
+      if (deltaText) {
+        return deltaText.length > 360 ? deltaText.slice(0, 360) + '…' : deltaText;
+      }
+    }
+    const cleanDesc = desc.trim();
+    if (step.Status === 'Skipped') {
+      return cleanDesc.length > 0
+        ? `Skipped (conditional prerequisite not met) — ${cleanDesc}`
+        : 'Skipped (conditional prerequisite not met)';
+    }
+    return cleanDesc.length > 0 ? cleanDesc : null;
+  }
+
+  /**
+   * Strips upstream keys inherited unchanged from earlier workflow steps and extracts a concise
+   * human-readable summary from `step.OutputPayload`.
+   */
+  private extractStepDeltaPreview(step: MJTaskEntity): string | null {
+    const raw = step.OutputPayload?.trim();
+    if (!raw) {
+      return null;
+    }
+    try {
+      const steps = this.WorkflowSteps;
+      const seenUpstream = new Map<string, string>();
+      for (const prior of steps) {
+        if (UUIDsEqual(prior.ID, step.ID)) {
+          break;
+        }
+        if (prior.OutputPayload) {
+          try {
+            const priorObj = JSON.parse(prior.OutputPayload) as Record<string, unknown>;
+            if (priorObj && typeof priorObj === 'object' && !Array.isArray(priorObj)) {
+              for (const [k, v] of Object.entries(priorObj)) {
+                seenUpstream.set(k, JSON.stringify(v));
+              }
+            }
+          } catch {
+            // Ignore non-JSON upstream payload
+          }
+        }
+      }
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const delta: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(parsed)) {
+          if (seenUpstream.get(k) !== JSON.stringify(v)) {
+            delta[k] = v;
+          }
+        }
+        const source = Object.keys(delta).length > 0 ? delta : parsed;
+        const synthesis = (typeof source.synthesis === 'object' && source.synthesis !== null && !Array.isArray(source.synthesis))
+          ? (source.synthesis as Record<string, unknown>)
+          : undefined;
+        const report = (typeof source.report === 'object' && source.report !== null && !Array.isArray(source.report))
+          ? (source.report as Record<string, unknown>)
+          : undefined;
+        const candidate =
+          source.summary ??
+          source.message ??
+          source.explanation ??
+          source.analysis ??
+          synthesis?.executiveSummary ??
+          report?.description ??
+          report?.name ??
+          source.title ??
+          source.queryName;
+        if (typeof candidate === 'string' && candidate.trim()) {
+          return candidate.trim();
+        }
+        return JSON.stringify(source);
+      }
+    } catch {
+      return raw;
+    }
+    return raw;
+  }
+
+  public OpenWorkflowStepAgentRun(step: MJTaskEntity, event: MouseEvent): void {
+    event.stopPropagation();
+    if (!step.AgentRunID) {
+      return;
+    }
+    const entityName = 'MJ: AI Agent Runs';
+    const compositeKey = CompositeKey.FromID(step.AgentRunID);
+    this.OpenEntityRecord.emit({ entityName, compositeKey });
+  }
+
+  /**
+   * Get formatted duration for the agent run (including any child workflow task graph).
+   * For active runs or active workflow task graphs: returns the 1s interval-updated string.
+   * For completed runs: spans from earliest start (agentRun or task) to latest end (agentRun or task).
    */
   public get AgentRunDuration(): string | null {
+    const detailTasks = this.DetailTasks ?? [];
     if (!this.AgentRun || !this.AgentRun.__mj_CreatedAt) {
-      return null;
+      return detailTasks.length > 0 ? this.WorkflowDurationDisplay : null;
     }
 
-    // For active runs, return the interval-updated field to avoid
-    // ExpressionChangedAfterItHasBeenCheckedError (new Date() changes between CD cycles)
-    if (this.IsAgentRunActive) {
-      return this.AgentRunDurationFormatted;
+    // For active runs or active child workflow task graphs, return the interval-updated field
+    // to avoid ExpressionChangedAfterItHasBeenCheckedError
+    if (this.IsAgentRunActive || this.HasActiveWorkflowTasks) {
+      return this.AgentRunDurationFormatted !== '0:00'
+        ? this.AgentRunDurationFormatted
+        : this.WorkflowElapsedFormatted;
     }
 
-    // For completed runs, calculate static duration from timestamps
+    // For completed runs, calculate static duration spanning the agent run and any child workflow tasks
     if (!this.AgentRun.__mj_UpdatedAt) {
-      return null;
+      return detailTasks.length > 0 ? this.WorkflowDurationDisplay : null;
     }
-    const createdAt = new Date(this.AgentRun.__mj_CreatedAt);
-    const endTime = new Date(this.AgentRun.__mj_UpdatedAt);
-    const diffMs = endTime.getTime() - createdAt.getTime();
+    const startCandidates: number[] = [new Date(this.AgentRun.__mj_CreatedAt).getTime()];
+    const endCandidates: number[] = [new Date(this.AgentRun.__mj_UpdatedAt).getTime()];
+    for (const task of detailTasks) {
+      const sRaw = task.StartedAt || task.__mj_CreatedAt;
+      if (sRaw) {
+        const sMs = new Date(sRaw).getTime();
+        if (!Number.isNaN(sMs)) {
+          startCandidates.push(sMs);
+        }
+      }
+      const eRaw = task.CompletedAt || task.__mj_UpdatedAt;
+      if (eRaw) {
+        const eMs = new Date(eRaw).getTime();
+        if (!Number.isNaN(eMs)) {
+          endCandidates.push(eMs);
+        }
+      }
+    }
+    const earliestStart = Math.min(...startCandidates.filter((n) => !Number.isNaN(n)));
+    const latestEnd = Math.max(...endCandidates.filter((n) => !Number.isNaN(n)));
+    const diffMs = latestEnd - earliestStart;
 
     if (diffMs <= 0) {
       return null;

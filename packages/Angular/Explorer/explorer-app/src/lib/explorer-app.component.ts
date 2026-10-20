@@ -542,15 +542,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           }
         }
 
-        // Navigate to initial route
-        if (this.initialPath === '/') {
-          // use first nav item url instead
-          setTimeout(() => {
-            // Find the KendoDrawer element, and simulate a click for the first item
-            const drawerElement = this.Document.querySelector('li.k-drawer-item.k-level-0') as HTMLElement;
-            if (drawerElement) drawerElement.click();
-          }, 10); // wait for the drawer to finish rerender and then do this
-        } else {
+        // Navigate to the initial route. A deep link is replayed through the router;
+        // a bare '/' is left to the router's default route (the Home app).
+        if (this.initialPath !== '/') {
           this.router.navigateByUrl(this.initialPath, { replaceUrl: true });
         }
       } else if (result.error) {
@@ -800,6 +794,36 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     const md = this.ProviderToUse;
     const chatApp = md.Applications.find(a => a.Name === 'Chat');
     this.navigationService.OpenNavItemByName('Conversations', params, chatApp?.ID);
+  }
+
+  /** Handle app/nav-item navigation requests emitted from the floating chat overlay */
+  public async OnOverlayNavigationRequested(event: { navItemName: string; appName?: string; queryParams?: Record<string, string> }): Promise<void> {
+    const normalize = (v: string | null | undefined): string =>
+      String(v ?? '').toLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const apps = this.ProviderToUse?.Applications || [];
+    const targetApp = event.appName
+      ? apps.find(a =>
+          a.ID?.toLowerCase() === event.appName?.toLowerCase() ||
+          a.Name?.toLowerCase() === event.appName?.toLowerCase() ||
+          a.Path?.toLowerCase() === event.appName?.toLowerCase() ||
+          normalize(a.Name) === normalize(event.appName) ||
+          normalize(a.Path) === normalize(event.appName)
+        )
+      : undefined;
+
+    if (targetApp) {
+      const navHint = event.navItemName && normalize(event.navItemName) !== normalize(event.appName)
+        ? event.navItemName
+        : undefined;
+      await this.navigationService.SwitchToApp(targetApp.ID, navHint, event.queryParams);
+      return;
+    }
+
+    if (event.navItemName) {
+      await this.navigationService.OpenNavItemByName(event.navItemName, undefined, undefined, {
+        queryParams: event.queryParams
+      });
+    }
   }
 
   /** Build and update the application context snapshot for AI agent awareness */

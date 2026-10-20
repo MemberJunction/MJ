@@ -246,7 +246,7 @@ vi.mock('../engines/artifacts', () => ({
 // ---------------------------------------------------------------------------
 // Import the module under test AFTER mocks
 // ---------------------------------------------------------------------------
-import { ConversationEngine, ConversationWindowFields, BuildProjectVisibilityFilter, ExplainProjectDeleteFailure } from '../engines/conversations';
+import { ConversationEngine, ConversationWindowFields, BuildProjectVisibilityFilter, ExplainProjectDeleteFailure, ShouldReplaceDetailAgentRun } from '../engines/conversations';
 import { ResourcePermissionEngine } from '../custom/ResourcePermissions/ResourcePermissionEngine';
 import { UserInfo } from '@memberjunction/core';
 
@@ -2792,4 +2792,76 @@ describe('ConversationEngine', () => {
             expect(input.map((c) => c.ID)).toEqual(['old', 'new']);
         });
     });
+
+    describe('SaveConversation optimistic emission (NG0100 prevention)', () => {
+        it('emits Conversations$ synchronously when mutating the cached entity before Save() resolves', async () => {
+            let resolveSave!: (ok: boolean) => void;
+            const conv = createMockConversation({ ID: 'c1', Name: 'New Conversation' });
+            (conv as Record<string, unknown>)['Save'] = vi.fn().mockImplementation(
+                () => new Promise<boolean>((resolve) => { resolveSave = resolve; }),
+            );
+            runViewResultQueue.push({ Success: true, Results: [conv] });
+            await engine.LoadConversations('env-1', contextUser);
+
+            const namesSeenOnEmit: string[] = [];
+            const sub = engine.Conversations$.subscribe((list) => {
+                if (list[0]) namesSeenOnEmit.push(list[0].Name ?? '');
+            });
+            namesSeenOnEmit.length = 0; // ignore BehaviorSubject initial replay
+
+            const savePromise = engine.SaveConversation('c1', { Name: 'Renamed Title' }, contextUser);
+            // Synchronously (before await savePromise resolves), Conversations$ must have emitted the new Name
+            expect(namesSeenOnEmit).toEqual(['Renamed Title']);
+
+            resolveSave(true);
+            await savePromise;
+            sub.unsubscribe();
+        });
+    });
+
+    describe('ShouldReplaceDetailAgentRun (primary orchestrating run vs continuation synthesis run)', () => {
+        const primaryRun = {
+            ID: '05FCC2C8-6D72-416D-A774-0C7F15F4CA6E',
+            ParentRunID: null,
+            ContinuationDepth: 0,
+            __mj_CreatedAt: '2026-10-19T14:00:00.000Z',
+        };
+        const continuationRun = {
+            ID: '858AB1A5-20AD-425A-896E-58D34494FCF3',
+            ParentRunID: null,
+            ContinuationDepth: 1,
+            __mj_CreatedAt: '2026-10-19T14:06:00.000Z',
+        };
+        const childSubAgentRun = {
+            ID: '11111111-2222-3333-4444-555555555555',
+            ParentRunID: '05FCC2C8-6D72-416D-A774-0C7F15F4CA6E',
+            ContinuationDepth: 0,
+            __mj_CreatedAt: '2026-10-19T14:03:00.000Z',
+        };
+
+        it('keeps the primary orchestrating run (ContinuationDepth=0) over a newer post-workflow continuation synthesis run (ContinuationDepth=1)', () => {
+            expect(ShouldReplaceDetailAgentRun(primaryRun, continuationRun)).toBe(false);
+        });
+
+        it('replaces a continuation synthesis run (ContinuationDepth=1) when the primary orchestrating run (ContinuationDepth=0) is evaluated', () => {
+            expect(ShouldReplaceDetailAgentRun(continuationRun, primaryRun)).toBe(true);
+        });
+
+        it('keeps a root run (ParentRunID=null) over a child sub-agent run (ParentRunID!=null)', () => {
+            expect(ShouldReplaceDetailAgentRun(continuationRun, childSubAgentRun)).toBe(false);
+            expect(ShouldReplaceDetailAgentRun(childSubAgentRun, continuationRun)).toBe(true);
+        });
+
+        it('prefers the newer root primary run when a user retries a message (both ContinuationDepth=0)', () => {
+            const retriedPrimaryRun = {
+                ID: '99999999-8888-7777-6666-555555555555',
+                ParentRunID: null,
+                ContinuationDepth: 0,
+                __mj_CreatedAt: '2026-10-19T14:10:00.000Z',
+            };
+            expect(ShouldReplaceDetailAgentRun(primaryRun, retriedPrimaryRun)).toBe(true);
+            expect(ShouldReplaceDetailAgentRun(retriedPrimaryRun, primaryRun)).toBe(false);
+        });
+    });
 });
+

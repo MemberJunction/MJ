@@ -3,7 +3,7 @@
  *
  * The compiler is pure, so every rule that decides whether a flow keeps its behaviour on the new
  * engine is testable here — before anything changes execution. The phase ORDER is what most of
- * these pin: exclusion → single entry → reachability → cycle rejection → emission. Each ordering
+ * these pin: exclusion → entry points → reachability → cycle rejection → emission. Each ordering
  * exists because the naive alternative silently runs work the flow never ran.
  */
 import { describe, it, expect } from 'vitest';
@@ -70,24 +70,18 @@ describe('phase 1 — exclusion', () => {
     });
 });
 
-describe('phase 2 — single entry', () => {
-    it('takes the alphabetically-first starting step, and REFUSES the orphaned one', () => {
+describe('phase 2 — entry points', () => {
+    it('compiles all active starting steps as parallel wave-1 roots', () => {
         const res = CompileFlowToTaskGraph(
             [step({ ID: 'z', Name: 'Zebra', StartingStep: true }), step({ ID: 'a', Name: 'Apple', StartingStep: true })],
             [],
             options,
         );
-        // Apple is the entry; Zebra is not reachable from it and is pruned rather than becoming a
-        // second root that runs work the flow never ran. That much is unchanged.
-        //
-        // What changed is that this now FAILS to compile. It used to succeed, quietly shipping a
-        // workflow missing a step its author had explicitly marked as an entry — which is how the
-        // Content Pipeline demo drafted from half its research for its entire life, with nothing
-        // anywhere reporting a problem. Refusing at submission, before anything runs, is strictly
-        // better than running half a workflow and reporting success.
-        expect(res.Success).toBe(false);
-        expect(res.Errors.map((e) => e.Code)).toContain('UnreachableStartingStep');
-        expect(res.Excluded).toContainEqual({ StepID: 'z', Reason: 'Unreachable' });
+        expect(res.Success).toBe(true);
+        expect(res.Errors).toHaveLength(0);
+        expect(res.Spec!.tasks.map((t) => t.tempId).sort()).toEqual(['a', 'z']);
+        expect(depsOf(res.Spec!, 'a')).toEqual([]);
+        expect(depsOf(res.Spec!, 'z')).toEqual([]);
     });
 
     it('refuses a workflow with no active starting step, in workflow vocabulary', () => {
@@ -372,31 +366,31 @@ describe('human steps', () => {
     });
 });
 
-describe('a second starting step is reported, not silently dropped', () => {
-    it('names the step that would never run', () => {
-        // A workflow has ONE entry. A step flagged as a second one is pruned as unreachable — and
-        // pruning it in silence is how a workflow ships with half its work missing while looking
-        // complete on the canvas. The Content Pipeline demo lived that: its second research step
-        // was dropped, the join it fed had one input instead of two, and every draft was written
-        // from half the evidence with nothing anywhere saying so.
+describe('multiple starting steps and fan-in joins', () => {
+    it('compiles two starting steps feeding a join step into wave-1 roots and a wave-2 dependent', () => {
         const res = CompileFlowToTaskGraph(
             [
-                step({ ID: 'a', Name: 'A first', StartingStep: true }),
-                step({ ID: 'b', Name: 'B second', StartingStep: true }),
+                step({ ID: 'a', Name: 'Top 5 Customer Organizations by Invoice Amount', StartingStep: true }),
+                step({ ID: 'b', Name: 'Top 5 Products by Order Revenue', StartingStep: true }),
+                step({ ID: 'join', Name: 'Revenue Concentration Analysis', StartingStep: false }),
             ],
-            [],
+            [
+                path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'join' }),
+                path({ ID: 'p2', OriginStepID: 'b', DestinationStepID: 'join' }),
+            ],
             options,
         );
 
-        const unreachable = res.Errors.filter((e) => e.Code === 'UnreachableStartingStep');
-        expect(unreachable).toHaveLength(1);
-        expect(unreachable[0].Message).toContain('B second');
-        expect(unreachable[0].Message).toContain('A first');   // says where it DOES begin
+        expect(res.Success).toBe(true);
+        expect(res.Errors).toHaveLength(0);
+        expect(res.Spec!.tasks.map((t) => t.tempId).sort()).toEqual(['a', 'b', 'join']);
+        expect(depsOf(res.Spec!, 'a')).toEqual([]);
+        expect(depsOf(res.Spec!, 'b')).toEqual([]);
+        expect(depsOf(res.Spec!, 'join').map((d) => d.tempId).sort()).toEqual(['a', 'b']);
+        expect(ValidateTaskGraphSpec(res.Spec!)).toEqual({ Valid: true, Errors: [] });
     });
 
-    it('stays quiet when the second starting step is reachable from the entry', () => {
-        // Wired into the flow, it runs — the flag is redundant but harmless, and warning here would
-        // train people to ignore the message that matters.
+    it('keeps both steps when a second starting step also has an incoming edge from another starting step', () => {
         const res = CompileFlowToTaskGraph(
             [
                 step({ ID: 'a', Name: 'A first', StartingStep: true }),
@@ -406,7 +400,8 @@ describe('a second starting step is reported, not silently dropped', () => {
             options,
         );
 
-        expect(res.Errors.filter((e) => e.Code === 'UnreachableStartingStep')).toHaveLength(0);
+        expect(res.Success).toBe(true);
+        expect(res.Errors).toHaveLength(0);
         expect(res.Spec!.tasks.map((t) => t.tempId).sort()).toEqual(['a', 'b']);
     });
 });
