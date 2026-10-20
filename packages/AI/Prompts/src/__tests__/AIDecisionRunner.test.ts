@@ -127,7 +127,7 @@ const h = vi.hoisted(() => {
     GetHighestPriorityContent: () => { ID: string; TemplateText: string } | null;
   }> = [];
 
-  const mockRenderTemplate = vi.fn(async (_template: unknown, _content: unknown, data: Record<string, unknown>) => {
+  const mockRenderTemplate = vi.fn(async (_template: unknown, _content: unknown, data: Record<string, unknown>, _skipValidation?: boolean, _skipFeedback?: boolean, _options?: { autoescape?: boolean }) => {
     return {
       Success: true,
       Output: `Rendered state for entity ${data?.entityId ?? 'default'}`,
@@ -566,6 +566,33 @@ describe('AIDecisionRunner', () => {
     expect(result.status).toBe('Failed');
     expect(result.errorMessage).toMatch(/requires.*Decision/i);
     expect(result.Answers).toEqual({});
+  });
+
+  it('renders the state template raw when templateAutoescape is false', async () => {
+    const params = new AIDecisionParams();
+    params.prompt = makeDecisionPrompt({ TemplateID: TEMPLATE_ID });
+    params.Questions = defaultQuestions;
+    params.data = { entityId: 'Affineur & Owner' };
+    params.provider = fakeProvider;
+    params.templateAutoescape = false;
+
+    h.mockRenderTemplate.mockClear();
+    await runner.ExecuteDecision(params);
+
+    expect(h.mockRenderTemplate.mock.calls[0][5]).toEqual({ autoescape: false });
+  });
+
+  it('renders the state template with the engine default when templateAutoescape is unset', async () => {
+    const params = new AIDecisionParams();
+    params.prompt = makeDecisionPrompt({ TemplateID: TEMPLATE_ID });
+    params.Questions = defaultQuestions;
+    params.data = { entityId: 'Affineur & Owner' };
+    params.provider = fakeProvider;
+
+    h.mockRenderTemplate.mockClear();
+    await runner.ExecuteDecision(params);
+
+    expect(h.mockRenderTemplate.mock.calls[0][5]).toBeUndefined();
   });
 
   // 4. Template rendering path: when State is omitted from params, renders template and passes rendered string to driver

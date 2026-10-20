@@ -98,6 +98,7 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
 // self-hides unless that entity has an active MJ: ML Model Scoring Binding.
 // Imported here so the @RegisterClassEx decorator runs at module load.
 import { ModelPredictionPanel } from "../panels/model-predictions/model-prediction.panel";
+import { FeatureValuesPanel } from "../panels/feature-values/feature-values.panel";
 // AI Skills sharing/portability panel (Pattern 1 — BaseFormPanel slot): Share
 // dialog + SKILL.md export/import actions, mounted on the generated MJ: AI
 // Skills form. Imported so the @RegisterClassEx decorator runs at module load.
@@ -176,6 +177,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         WebsiteCrawlerSettingsPanel,
         // Entity-agnostic ('*') Model Predictions panel — mounts on every form, self-hides when N/A.
         ModelPredictionPanel,
+        FeatureValuesPanel,
         AISkillSharingPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
@@ -285,6 +287,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         TagPipelineConfigurationPanel,
         WebsiteCrawlerSettingsPanel,
         ModelPredictionPanel,
+        FeatureValuesPanel,
         AISkillSharingPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
