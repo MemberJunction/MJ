@@ -92,7 +92,7 @@ import { SQLParser, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFrag
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
-import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from './saveTypes.js';
+import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from './saveTypes.js';
 import type { RecordChangePayload } from '@memberjunction/core';
 
 import {
@@ -1371,6 +1371,53 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     ): SaveCallBinding;
 
     /**
+     * Builds the dialect-quoted, comma-separated column list for {@link EntityInfo.DatestampReturnFields}
+     * (primary key column(s) followed by `__mj_CreatedAt` and `__mj_UpdatedAt`) using {@link QuoteIdentifier}.
+     *
+     * Examples:
+     * - SQL Server: `[ID], [__mj_CreatedAt], [__mj_UpdatedAt]`
+     * - PostgreSQL: `"ID", "__mj_CreatedAt", "__mj_UpdatedAt"`
+     */
+    protected GetDatestampSelectColumnsSQL(entityInfo: EntityInfo): string {
+        const fields = entityInfo.DatestampReturnFields ?? entityInfo.PrimaryKeys ?? [];
+        return fields.map((f) => this.QuoteIdentifier(f.Name)).join(', ');
+    }
+
+    /**
+     * Resolves the compile-time vs. effective runtime {@link SaveReturnContext} for a save operation.
+     *
+     * Centralizes the `SaveReturnMode` decision logic in `GenericDatabaseProvider` so dialect providers
+     * (`SQLServerDataProvider`, `PostgreSQLDataProvider`, and future providers) never duplicate the
+     * rules for:
+     * - `spReturnMode`: the return shape compiled into the stored procedure / function (`EntityInfo.SaveReturnMode`).
+     * - `effectiveReturnMode`: the return shape requested for this call (`options?.SaveReturnMode ?? spReturnMode`).
+     * - `needsDatestampProjection`: `true` when the compiled routine returns the full row (`spReturnMode === 'full'`)
+     *   but the caller requested `'datestamps_only'` at runtime, requiring the provider to project the result down
+     *   to `datestampSelectColumnsSQL` before wire transmission.
+     */
+    protected ResolveSaveReturnContext(
+        entity: BaseEntity,
+        options?: EntitySaveOptions,
+    ): SaveReturnContext {
+        const spReturnMode = entity.EntityInfo.SaveReturnMode ?? 'full';
+        const effectiveReturnMode = options?.SaveReturnMode ?? spReturnMode;
+        const spReturnsDatestampsOnly = spReturnMode === 'datestamps_only';
+        const needsDatestampProjection = !spReturnsDatestampsOnly && effectiveReturnMode === 'datestamps_only';
+        const datestampSelectColumnsSQL = this.GetDatestampSelectColumnsSQL(entity.EntityInfo);
+        const routineSelectColumnsSQL = needsDatestampProjection ? datestampSelectColumnsSQL : '*';
+        const finalSelectColumnsSQL = effectiveReturnMode === 'datestamps_only' ? datestampSelectColumnsSQL : '*';
+        return {
+            spReturnMode,
+            effectiveReturnMode,
+            spReturnsDatestampsOnly,
+            needsDatestampProjection,
+            datestampSelectColumnsSQL,
+            routineSelectColumnsSQL,
+            finalSelectColumnsSQL,
+        };
+    }
+
+    /**
      * Wraps the bare SP-call binding with the dialect's result-capture
      * pattern. SQL Server emits `DECLARE @ResultTable + INSERT INTO @ResultTable EXEC + SELECT * FROM @ResultTable`;
      * PostgreSQL emits the bare `SELECT * FROM schema."fn"(...)`.
@@ -1380,6 +1427,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         entity: BaseEntity,
         spName: string,
         options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
+    ): SaveSQLFragment;
+
+    /**
+     * Projects a save call's result set down to {@link SaveReturnContext.datestampSelectColumnsSQL}
+     * when a caller requests `SaveReturnMode: 'datestamps_only'` at runtime on an entity whose
+     * compiled stored procedure / function returns the full row (`returnContext.needsDatestampProjection === true`).
+     *
+     * - SQL Server captures `EXEC` into `DECLARE @ResultTable TABLE (...)` and emits
+     *   `SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;`.
+     * - PostgreSQL emits `SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM schema."fn"(...)`.
+     */
+    protected abstract ProjectSaveCallToDatestamps(
+        binding: SaveCallBinding,
+        entity: BaseEntity,
+        spName: string,
+        returnContext: SaveReturnContext,
     ): SaveSQLFragment;
 
     /**
@@ -1397,6 +1461,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         payload: RecordChangePayload,
         entity: BaseEntity,
         options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
     ): SaveSQLFragment;
 
     /**
@@ -1516,11 +1581,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // 3. Render the provider-specific binding.
         const binding = this.RenderSaveCallBinding(entity, fieldValueMap, isUpdate, spName);
 
-        // 4. Wrap with result capture. This is the "no-record-change" save
-        //    shape; we also keep it as simpleSQL so consumers (e.g.
-        //    DatabaseProviderBase's `simpleSQLFallback` flow) have a
-        //    record-change-free form to fall back to.
-        const baseSaveSQL = this.WrapSaveCallForResult(binding, entity, spName, options);
+        // 4. Resolve SaveReturnContext and wrap with result capture.
+        //    `unprojectedSaveSQL` is the bare SP/function call (kept for `simpleSQL` fallback so
+        //    SQL logging / migration replay never gets polluted with runtime datestamp projection wrappers).
+        //    When `returnContext.needsDatestampProjection` is true, `ProjectSaveCallToDatestamps`
+        //    projects the executed result down to `datestampSelectColumnsSQL`.
+        const returnContext = this.ResolveSaveReturnContext(entity, options);
+        const unprojectedSaveSQL = this.WrapSaveCallForResult(binding, entity, spName, undefined, {
+            ...returnContext,
+            effectiveReturnMode: returnContext.spReturnMode,
+            needsDatestampProjection: false,
+            routineSelectColumnsSQL: '*',
+            finalSelectColumnsSQL: returnContext.spReturnsDatestampsOnly ? returnContext.datestampSelectColumnsSQL : '*',
+        });
+        const baseSaveSQL = returnContext.needsDatestampProjection
+            ? this.ProjectSaveCallToDatestamps(binding, entity, spName, returnContext)
+            : unprojectedSaveSQL;
         let saveSQL = baseSaveSQL;
         // A CREATE's logged form is guarded on the primary key so a migration replay of
         // the recording converges on a database that already holds the row (#4503). An
@@ -1538,7 +1614,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                       ? undefined
                       : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap, dirtyFields));
                 // A statement that runs with parameters is logged in its literal form, which replays alone.
-                cachedSimpleSQL = replaySQL ?? baseSaveSQL.literalSQL ?? baseSaveSQL.sql;
+                cachedSimpleSQL = replaySQL ?? unprojectedSaveSQL.literalSQL ?? unprojectedSaveSQL.sql;
             }
             return cachedSimpleSQL;
         };
@@ -1571,7 +1647,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         changesDescription: payload.changesDescription,
                     };
                 }
-                saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity, options);
+                saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity, options, returnContext);
             }
         }
 
