@@ -541,11 +541,12 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         // Load dependent engines in parallel with our own entity configs so AIEngineBase's
         // 51 entity configs coalesce into the initial startup RunViews batch instead of
         // waiting for TemplateEngineBase/ArtifactMetadataEngine to finish first.
-        await Promise.all([
+        const [, , loadResult] = await Promise.all([
             TemplateEngineBase.Instance.Config(false, contextUser),
             ArtifactMetadataEngine.Instance.Config(false, contextUser),
             this.Load(params, provider, forceRefresh, contextUser)
         ]);
+        return loadResult;
     }
 
     /**

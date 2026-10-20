@@ -84,13 +84,9 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      * On subsequent loads (unless forceRefresh is true), cached results will be validated
      * via smart cache check and returned from local storage if still current.
      *
-     * Defaults to true because BaseEngine instances cache reference/metadata tables that
-     * benefit from local persistence across browser refreshes. Set explicitly to `false`
-     * to opt a specific config out of local caching.
-     *
-     * @default true
+     * @default false
      */
-    CacheLocal?: boolean = true;
+    CacheLocal?: boolean = false;
 
     /**
      * Optional TTL (time-to-live) in milliseconds for locally cached results when CacheLocal is true.

@@ -2866,7 +2866,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (
             GraphQLDataProvider._datasetStatusCoalesceMs > 0 &&
             !itemFilters &&
-            !(datasetName === 'MJ_Metadata' && GraphQLDataProvider._datasetStatusQueue.length === 0)
+            !(datasetName === ProviderBase._mjMetadataDatasetName && GraphQLDataProvider._datasetStatusQueue.length === 0)
         ) {
             return this.enqueueDatasetStatusCheck(datasetName);
         }
