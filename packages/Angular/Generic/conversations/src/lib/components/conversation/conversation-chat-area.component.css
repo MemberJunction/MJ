@@ -568,6 +568,31 @@
   flex-shrink: 0;
 }
 
+.task-graph-pane-save-btn {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--mj-brand-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #ffffff);
+  cursor: pointer;
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+.task-graph-pane-save-btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.task-graph-pane-save-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .task-graph-pane-btn {
   width: 30px;
   height: 30px;
