@@ -4,6 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { MarkdownComponent, type MarkdownImageClickEvent } from './markdown.component';
+import { MarkdownModule } from '../markdown.module';
 import { MarkdownRenderEvent } from '@memberjunction/markdown-core';
 
 /**
@@ -183,14 +184,17 @@ describe('MarkdownComponent (DOM)', () => {
     it('reports each click once when a template binds the output and the data is there from the start', async () => {
       // The real wiring (message-item): post-render runs from ngAfterViewInit AND the render microtask.
       @Component({
-        standalone: false,
+        // Standalone, importing the module: the package build (ngc) compiles this file too, and a
+        // module-declared host would be unknown to it outside TestBed.
+        standalone: true,
+        imports: [MarkdownModule],
         template: `<mj-markdown [data]="Md" (ImageClicked)="Events.push($event)"></mj-markdown>`,
       })
       class HostComponent {
         Md = `![Pattern 5](${SRC})`;
         Events: MarkdownImageClickEvent[] = [];
       }
-      TestBed.configureTestingModule({ imports: [CommonModule], declarations: [MarkdownComponent, HostComponent] });
+      TestBed.configureTestingModule({ imports: [HostComponent] });
       const f = TestBed.createComponent(HostComponent);
       f.detectChanges();
       await Promise.resolve();
