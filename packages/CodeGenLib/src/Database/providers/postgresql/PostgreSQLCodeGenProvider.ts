@@ -1,5 +1,5 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, ResolveStartupMode, SetProvider, StartupManager } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
     CRUDType,
@@ -2935,6 +2935,28 @@ WHERE p.prokind IN ('f', 'p')
             AND a.attname = '${columnName}'
       )
       AND array_length(ix.indkey, 1) > 1`;
+    }
+
+    /**
+     * @inheritdoc
+     * `indkey` lists the key columns first, then the INCLUDE columns; `indnkeyatts` is how many are keys.
+     */
+    public override GetUniqueIndexMembershipSQL(schema: string, tableName: string, columnName: string): string | null {
+        return `SELECT
+        NOT EXISTS (
+            SELECT 1 FROM generate_series(0, ix.indnkeyatts - 1) AS k(pos)
+            WHERE ix.indkey[k.pos] = a.attnum
+        ) AS "IsIncludedColumn",
+        ix.indnkeyatts AS "KeyColumnCount"
+    FROM pg_catalog.pg_index ix
+    INNER JOIN pg_catalog.pg_class t ON t.oid = ix.indrelid
+    INNER JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+    INNER JOIN pg_catalog.pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+    WHERE ix.indisunique
+      AND NOT ix.indisprimary
+      AND n.nspname = '${EscapeSQLString(schema)}'
+      AND t.relname = '${EscapeSQLString(tableName)}'
+      AND a.attname = '${EscapeSQLString(columnName)}'`;
     }
 
     /** @inheritdoc */
