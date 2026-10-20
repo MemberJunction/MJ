@@ -34,7 +34,7 @@ import {
     BuildRunScopedDetailsQuery,
     GroupMatchesByDetail,
     PickDefaultEntityDocument,
-    SelectCurrentRunForEntity,
+    SelectCurrentRunForDocument,
 } from './duplicate-detection-run-scope';
 import { ValidateStringParam } from '../../../shared/agent-tool-validation';
 
@@ -722,7 +722,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
      * current (see reviewLoadGeneration).
      */
     private async fetchReviewRowsForSelectedDocument(): Promise<ReviewRows> {
-        const run = SelectCurrentRunForEntity(this.Runs, this.SelectedDocumentThresholds?.EntityID);
+        const run = SelectCurrentRunForDocument(this.Runs, this.SelectedEntityDocumentID);
         if (!run) {
             return { run: null, details: [], matches: [] };
         }
@@ -842,7 +842,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             const md = this.ProviderToUse;
 
             // Look up the EntityID from the entity document's entity name
-            const entityInfo = md.Entities.find(e => e.Name === selectedDoc.EntityName);
+            const entityInfo = md.EntityByName(selectedDoc.EntityName);
             if (!entityInfo) {
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Entity "${selectedDoc.EntityName}" not found in metadata`, 'error', 5000
@@ -878,6 +878,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             const dupeRun = await md.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs');
             dupeRun.NewRecord();
             dupeRun.EntityID = entityInfo.ID;
+            // The run uses the document picked here, not whichever document the entity updated last.
+            dupeRun.EntityDocumentID = selectedDoc.ID;
             dupeRun.StartedByUserID = this.ProviderToUse.CurrentUser.ID;
             dupeRun.StartedAt = new Date();
             dupeRun.ProcessingStatus = 'In Progress';

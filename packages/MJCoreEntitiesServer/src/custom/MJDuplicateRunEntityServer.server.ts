@@ -1,5 +1,5 @@
 import { BaseEntity, DuplicateDetectionOptions, DuplicateDetectionProgress, EntitySaveOptions, IMetadataProvider, LogError, LogStatus, PotentialDuplicateRequest, RunView } from "@memberjunction/core";
-import { RegisterClass, GetGlobalObjectStore, EscapeSQLString } from "@memberjunction/global";
+import { RegisterClass, GetGlobalObjectStore, EscapeSQLString, UUIDsEqual } from "@memberjunction/global";
 import { MJDuplicateRunEntity, MJEntityDocumentEntity } from "@memberjunction/core-entities";
 import { DuplicateRecordDetector } from "@memberjunction/ai-vector-dupe";
 
@@ -9,14 +9,14 @@ const PIPELINE_PROGRESS_TOPIC = 'PIPELINE_PROGRESS';
 const RECORD_DUPLICATE_DOCUMENT_TYPE = 'Record Duplicate';
 
 /**
- * Chooses the entity document a duplicate run uses, from the entity's active documents ordered
- * newest-updated first. A 'Record Duplicate' document wins over any other type: an entity can
- * also have a Search document (MJ ships one for several core entities), whose template and
- * vectors are built for search, not for matching records. Without a 'Record Duplicate'
- * document, the newest active document is used, as before.
+ * Chooses the default entity document for a new duplicate run that was created without one, from
+ * the entity's active documents ordered newest-updated first. A 'Record Duplicate' document wins
+ * over any other type: an entity can also have a Search document (MJ ships one for several core
+ * entities), whose template and vectors are built for search, not for matching records. Without a
+ * 'Record Duplicate' document, the newest active document is used.
  *
- * The run itself does not record which document it was started for, so when an entity has more
- * than one 'Record Duplicate' document the newest-updated one is used.
+ * Only callers that name no document get this default; the Duplicates tab always names the one
+ * the user picked.
  *
  * @param activeDocuments the entity's active documents, newest `__mj_UpdatedAt` first
  * @returns the document to use, or null when there is none
@@ -24,6 +24,23 @@ const RECORD_DUPLICATE_DOCUMENT_TYPE = 'Record Duplicate';
 export function PickDuplicateDetectionDocument<T extends Pick<MJEntityDocumentEntity, 'Type'>>(activeDocuments: T[]): T | null {
     const recordDuplicate = activeDocuments.find(d => d.Type === RECORD_DUPLICATE_DOCUMENT_TYPE);
     return recordDuplicate ?? activeDocuments[0] ?? null;
+}
+
+/**
+ * Checks that the entity document a run names belongs to the run's entity.
+ *
+ * @param entityDocument the run's document
+ * @param entityID the run's EntityID
+ * @returns why the document cannot be used, or null when it can
+ */
+export function CheckRunEntityDocument(
+    entityDocument: Pick<MJEntityDocumentEntity, 'EntityID' | 'Name'>,
+    entityID: string
+): string | null {
+    if (!UUIDsEqual(entityDocument.EntityID, entityID)) {
+        return `Entity Document "${entityDocument.Name}" belongs to a different entity than this duplicate run`;
+    }
+    return null;
 }
 
 /**
@@ -68,6 +85,15 @@ const PHASE_TO_STAGE: Record<DuplicateDetectionProgress['Phase'], string> = {
 @RegisterClass(BaseEntity, 'MJ: Duplicate Runs')
 export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        // A run must name its entity document. Server-side callers that create a run without one
+        // (GetRecordDuplicates, scripts) get the entity's default duplicate-detection document.
+        if (!this.IsSaved && !this.EntityDocumentID) {
+            const defaultDocument = await this.findDefaultEntityDocument();
+            if (defaultDocument) {
+                this.EntityDocumentID = defaultDocument.ID;
+            }
+        }
+
         const saveResult: boolean = await super.Save(options);
 
         // Only kick off detection on the INITIAL save of an unfinished run, and never
@@ -106,28 +132,19 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
             request.EntityID = this.EntityID;
             request.ListID = this.SourceListID || undefined; // Optional — if not set, scans all entity records
 
-            // The entity document supplies the template, vectors and thresholds for this run.
-            const rv = new RunView(this.RunViewProviderToUse);
-            const edResult = await rv.RunView<MJEntityDocumentEntity>({
-                EntityName: 'MJ: Entity Documents',
-                ExtraFilter: `EntityID='${EscapeSQLString(this.EntityID)}' AND Status='Active'`,
-                OrderBy: '__mj_UpdatedAt DESC',
-                ResultType: 'entity_object'
-            }, this.ContextCurrentUser);
-            const entityDocument = edResult.Success ? PickDuplicateDetectionDocument(edResult.Results) : null;
-            if (entityDocument) {
-                request.EntityDocumentID = entityDocument.ID;
-            }
+            // The run's entity document supplies the template, vectors and thresholds.
+            const entityDocument = await this.loadRunEntityDocument();
+            request.EntityDocumentID = entityDocument.ID;
 
             // Build detection options with threshold normalization.
             // A threshold left at 1.0 (100%) matches nothing, so treat it as unconfigured and use
             // the fallback instead.
             const potentialThreshold = this.normalizeThreshold(
-                entityDocument ? entityDocument.PotentialMatchThreshold : 1.0,
+                entityDocument.PotentialMatchThreshold,
                 0.70 // fallback: 70% for potential matches
             );
             const absoluteThreshold = this.normalizeThreshold(
-                entityDocument ? entityDocument.AbsoluteMatchThreshold : 1.0,
+                entityDocument.AbsoluteMatchThreshold,
                 0.95 // fallback: 95% for absolute matches
             );
 
@@ -170,6 +187,50 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
                 LogError(`Failed to update run ${this.ID} after detection error`, undefined, updateError);
             }
         }
+    }
+
+    /**
+     * The entity's default duplicate-detection document (see {@link PickDuplicateDetectionDocument}),
+     * or null when the entity has no active document.
+     */
+    private async findDefaultEntityDocument(): Promise<MJEntityDocumentEntity | null> {
+        const rv = new RunView(this.RunViewProviderToUse);
+        const result = await rv.RunView<MJEntityDocumentEntity>({
+            EntityName: 'MJ: Entity Documents',
+            ExtraFilter: `EntityID='${EscapeSQLString(this.EntityID)}' AND Status='Active'`,
+            OrderBy: '__mj_UpdatedAt DESC',
+            ResultType: 'entity_object'
+        }, this.ContextCurrentUser);
+        if (!result.Success) {
+            LogError(`Duplicate run: could not load entity documents for entity ${this.EntityID}: ${result.ErrorMessage}`);
+            return null;
+        }
+        return PickDuplicateDetectionDocument(result.Results);
+    }
+
+    /**
+     * Loads the entity document this run names. Throws when it is missing or belongs to another
+     * entity, which fails the run with that message.
+     */
+    private async loadRunEntityDocument(): Promise<MJEntityDocumentEntity> {
+        const rv = new RunView(this.RunViewProviderToUse);
+        const result = await rv.RunView<MJEntityDocumentEntity>({
+            EntityName: 'MJ: Entity Documents',
+            ExtraFilter: `ID='${EscapeSQLString(this.EntityDocumentID)}'`,
+            ResultType: 'entity_object'
+        }, this.ContextCurrentUser);
+        if (!result.Success) {
+            throw new Error(`Could not load Entity Document ${this.EntityDocumentID}: ${result.ErrorMessage}`);
+        }
+        const entityDocument = result.Results[0];
+        if (!entityDocument) {
+            throw new Error(`Entity Document ${this.EntityDocumentID} was not found`);
+        }
+        const problem = CheckRunEntityDocument(entityDocument, this.EntityID);
+        if (problem) {
+            throw new Error(problem);
+        }
+        return entityDocument;
     }
 
     /**

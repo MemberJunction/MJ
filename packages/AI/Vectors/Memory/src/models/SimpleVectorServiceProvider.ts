@@ -540,6 +540,22 @@ function parseRecordData(recordData: string): RecordDocumentVectorRow | null {
 }
 
 /**
+ * Converts a SimpleVectorService cosine score back to cosine similarity.
+ *
+ * SimpleVectorService reports cosine as `(cos + 1) / 2`, so its own API stays in [0, 1]. A vector
+ * database reports cosine similarity itself, in [-1, 1]: Pinecone, SQL Server and pgvector all do,
+ * and the thresholds that read these scores (an Entity Document's match thresholds, search's
+ * MinScore) are written for that scale. Without this, the same threshold meant a different
+ * similarity on the in-memory store: 0.92 matched at cosine 0.84 here and at 0.92 on Pinecone.
+ *
+ * @param serviceScore a cosine score from SimpleVectorService, in [0, 1]
+ * @returns the cosine similarity, in [-1, 1]
+ */
+export function CosineFromServiceScore(serviceScore: number): number {
+    return serviceScore * 2 - 1;
+}
+
+/**
  * In-process VectorDBBase driver that loads embeddings from
  * `MJ: Entity Record Documents` rows (`VectorBinary`, falling back to `VectorJSON`) associated with a given
  * `EntityDocumentID`.
@@ -681,7 +697,8 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
      * Run cosine search over the cached vector pool for the supplied
      * EntityDocumentID. Match objects surface the parent entity's RecordID
      * under `metadata.RecordID` so callers can map results back without
-     * a second lookup.
+     * a second lookup. Scores are cosine similarity, as every other vector
+     * database reports it (see {@link CosineFromServiceScore}).
      */
     public async QueryIndex(params: QueryOptions, contextUser?: UserInfo): Promise<BaseResponse> {
         const p = params as { id?: string; vector?: number[]; topK?: number };
@@ -711,7 +728,7 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
             data: {
                 matches: matches.map(m => ({
                     id: m.key,                                   // EntityRecordDocument.ID
-                    score: m.score,
+                    score: CosineFromServiceScore(m.score),
                     metadata: { RecordID: m.metadata?.RecordID ?? null },
                 })),
             },

@@ -1228,6 +1228,7 @@ export class DuplicateRecordDetector extends VectorBase {
         const dupeRun = await this.Metadata.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs', this.CurrentUser);
         dupeRun.NewRecord();
         dupeRun.EntityID = entityDocument.EntityID;
+        dupeRun.EntityDocumentID = entityDocument.ID;
         dupeRun.StartedByUserID = this.CurrentUser?.ID;
         dupeRun.StartedAt = new Date();
         dupeRun.ProcessingStatus = 'In Progress';

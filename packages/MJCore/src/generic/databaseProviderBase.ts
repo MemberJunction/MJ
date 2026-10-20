@@ -2478,6 +2478,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         duplicateRun.Set('ProcessingStatus', 'In Progress');
         duplicateRun.Set('ApprovalStatus', 'Pending');
         duplicateRun.Set('SourceListID', listEntity.Get('ID'));
+        // Without a document, the server-side Duplicate Run entity defaults to the entity's
+        // duplicate-detection document.
+        if (params.EntityDocumentID) {
+            duplicateRun.Set('EntityDocumentID', params.EntityDocumentID);
+        }
 
         const saveResult = await duplicateRun.Save();
         if (!saveResult) {

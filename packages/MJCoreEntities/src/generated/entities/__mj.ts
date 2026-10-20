@@ -17103,6 +17103,12 @@ export const MJDuplicateRunSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When set to 1, duplicate detection stops after the current batch. Used for pause/cancel.`),
+    EntityDocumentID: z.string().describe(`
+        * * Field Name: EntityDocumentID
+        * * Display Name: Entity Document
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Documents (vwEntityDocuments.ID)
+        * * Description: The Entity Document this run used: its template, vectors, match thresholds and LLM reasoning settings produced the run's matches.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
@@ -17119,6 +17125,10 @@ export const MJDuplicateRunSchema = z.object({
         * * Field Name: ApprovedByUser
         * * Display Name: Approved By User
         * * SQL Data Type: nvarchar(100)`),
+    EntityDocument: z.string().describe(`
+        * * Field Name: EntityDocument
+        * * Display Name: Entity Document Name
+        * * SQL Data Type: nvarchar(250)`),
 });
 
 export type MJDuplicateRunEntityType = z.infer<typeof MJDuplicateRunSchema>;
@@ -87290,6 +87300,41 @@ export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailE
     }
 
     /**
+    * MJ: Duplicate Run Details - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof MJDuplicateRunDetailEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -87505,6 +87550,41 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Duplicate Runs - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof MJDuplicateRunEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**
@@ -87753,6 +87833,20 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
     }
 
     /**
+    * * Field Name: EntityDocumentID
+    * * Display Name: Entity Document
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Documents (vwEntityDocuments.ID)
+    * * Description: The Entity Document this run used: its template, vectors, match thresholds and LLM reasoning settings produced the run's matches.
+    */
+    get EntityDocumentID(): string {
+        return this.Get('EntityDocumentID');
+    }
+    set EntityDocumentID(value: string) {
+        this.Set('EntityDocumentID', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
@@ -87786,6 +87880,15 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
     */
     get ApprovedByUser(): string | null {
         return this.Get('ApprovedByUser');
+    }
+
+    /**
+    * * Field Name: EntityDocument
+    * * Display Name: Entity Document Name
+    * * SQL Data Type: nvarchar(250)
+    */
+    get EntityDocument(): string {
+        return this.Get('EntityDocument');
     }
 }
 

@@ -37,6 +37,8 @@ vi.mock('@memberjunction/core-entities', () => {
     class MockMJDuplicateRunEntity {
         public ID = 'run-1';
         public EntityID = 'entity-1';
+        public EntityDocumentID = 'doc-1';
+        public IsSaved = true;
         public SourceListID: string | null = null;
         public EndedAt: Date | null = null;
         public ProcessingStatus: 'Complete' | 'Failed' | 'In Progress' | 'Pending' = 'In Progress';
@@ -68,7 +70,7 @@ vi.mock('@memberjunction/ai-vector-dupe', () => ({
     },
 }));
 
-import { MJDuplicateRunEntityServer, PickDuplicateDetectionDocument } from '../custom/MJDuplicateRunEntityServer.server';
+import { CheckRunEntityDocument, MJDuplicateRunEntityServer, PickDuplicateDetectionDocument } from '../custom/MJDuplicateRunEntityServer.server';
 
 describe('PickDuplicateDetectionDocument', () => {
     it('prefers a Record Duplicate document over a newer Search document', () => {
@@ -100,6 +102,17 @@ describe('PickDuplicateDetectionDocument', () => {
     });
 });
 
+describe('CheckRunEntityDocument', () => {
+    it('accepts a document of the run\'s entity, comparing IDs case-insensitively', () => {
+        expect(CheckRunEntityDocument({ EntityID: 'ENTITY-1', Name: 'People dupes' }, 'entity-1')).toBeNull();
+    });
+
+    it('rejects a document of another entity', () => {
+        expect(CheckRunEntityDocument({ EntityID: 'entity-2', Name: 'Orgs dupes' }, 'entity-1'))
+            .toBe('Entity Document "Orgs dupes" belongs to a different entity than this duplicate run');
+    });
+});
+
 describe('MJDuplicateRunEntityServer', () => {
     beforeEach(() => {
         publishMock.mockReset();
@@ -115,7 +128,7 @@ describe('MJDuplicateRunEntityServer', () => {
     it('marks run as Failed with ProcessingErrorMessage and emits error when detector returns Status === Error', async () => {
         runViewMock.mockResolvedValue({
             Success: true,
-            Results: [{ ID: 'doc-1', PotentialMatchThreshold: 0.75, AbsoluteMatchThreshold: 0.92 }],
+            Results: [{ ID: 'doc-1', EntityID: 'entity-1', PotentialMatchThreshold: 0.75, AbsoluteMatchThreshold: 0.92 }],
         });
         getDuplicateRecordsMock.mockResolvedValue({
             Status: 'Error',
@@ -139,30 +152,82 @@ describe('MJDuplicateRunEntityServer', () => {
         });
     });
 
-    it('runs on the Record Duplicate document and its thresholds even when a Search document is newer', async () => {
+    it('runs on the document the run names, with that document\'s thresholds', async () => {
         runViewMock.mockResolvedValue({
             Success: true,
-            Results: [
-                { ID: 'search-doc', Type: 'Search', PotentialMatchThreshold: 0.5, AbsoluteMatchThreshold: 0.6 },
-                { ID: 'dupe-doc', Type: 'Record Duplicate', PotentialMatchThreshold: 0.94, AbsoluteMatchThreshold: 0.97 },
-            ],
+            Results: [{ ID: 'doc-1', EntityID: 'entity-1', PotentialMatchThreshold: 0.94, AbsoluteMatchThreshold: 0.97 }],
         });
         getDuplicateRecordsMock.mockResolvedValue({ Status: 'Success', PotentialDuplicateResult: [] });
 
         const run = new MJDuplicateRunEntityServer();
         await (run as unknown as { runDetectionAsync: () => Promise<void> }).runDetectionAsync();
 
+        const query = runViewMock.mock.calls[0][0] as { EntityName: string; ExtraFilter: string };
+        expect(query.ExtraFilter).toBe("ID='doc-1'");
         const request = getDuplicateRecordsMock.mock.calls[0][0] as PotentialDuplicateRequest;
         const options = request.Options as DuplicateDetectionOptions;
-        expect(request.EntityDocumentID).toBe('dupe-doc');
+        expect(request.EntityDocumentID).toBe('doc-1');
         expect(options.PotentialMatchThreshold).toBe(0.94);
         expect(options.AbsoluteMatchThreshold).toBe(0.97);
+    });
+
+    it('fails the run without detecting when its document belongs to another entity', async () => {
+        runViewMock.mockResolvedValue({
+            Success: true,
+            Results: [{ ID: 'doc-1', EntityID: 'entity-2', Name: 'Orgs dupes', PotentialMatchThreshold: 0.9, AbsoluteMatchThreshold: 0.99 }],
+        });
+
+        const run = new MJDuplicateRunEntityServer();
+        await (run as unknown as { runDetectionAsync: () => Promise<void> }).runDetectionAsync();
+
+        expect(getDuplicateRecordsMock).not.toHaveBeenCalled();
+        expect(run.ProcessingStatus).toBe('Failed');
+        expect(run.ProcessingErrorMessage).toBe('Entity Document "Orgs dupes" belongs to a different entity than this duplicate run');
+    });
+
+    it('fails the run when its document no longer exists', async () => {
+        runViewMock.mockResolvedValue({ Success: true, Results: [] });
+
+        const run = new MJDuplicateRunEntityServer();
+        await (run as unknown as { runDetectionAsync: () => Promise<void> }).runDetectionAsync();
+
+        expect(getDuplicateRecordsMock).not.toHaveBeenCalled();
+        expect(run.ProcessingStatus).toBe('Failed');
+        expect(run.ProcessingErrorMessage).toBe('Entity Document doc-1 was not found');
+    });
+
+    it('gives a new run without a document the entity\'s Record Duplicate document on save', async () => {
+        runViewMock.mockResolvedValue({
+            Success: true,
+            Results: [
+                { ID: 'search-doc', Type: 'Search' },
+                { ID: 'dupe-doc', Type: 'Record Duplicate' },
+            ],
+        });
+
+        const run = new MJDuplicateRunEntityServer();
+        Object.assign(run, { IsSaved: false, EntityDocumentID: null, EndedAt: new Date() });
+        await run.Save();
+
+        const query = runViewMock.mock.calls[0][0] as { ExtraFilter: string };
+        expect(query.ExtraFilter).toBe("EntityID='entity-1' AND Status='Active'");
+        expect(run.EntityDocumentID).toBe('dupe-doc');
+        expect(superSaveMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the document a new run names and looks nothing up', async () => {
+        const run = new MJDuplicateRunEntityServer();
+        Object.assign(run, { IsSaved: false, EntityDocumentID: 'picked-doc', EndedAt: new Date() });
+        await run.Save();
+
+        expect(runViewMock).not.toHaveBeenCalled();
+        expect(run.EntityDocumentID).toBe('picked-doc');
     });
 
     it('maps Embedding and Querying to extract and Matching/Merging to autotag without premature complete', async () => {
         runViewMock.mockResolvedValue({
             Success: true,
-            Results: [{ ID: 'doc-1', PotentialMatchThreshold: 0.70, AbsoluteMatchThreshold: 0.95 }],
+            Results: [{ ID: 'doc-1', EntityID: 'entity-1', PotentialMatchThreshold: 0.70, AbsoluteMatchThreshold: 0.95 }],
         });
 
         getDuplicateRecordsMock.mockImplementation(async (req: PotentialDuplicateRequest) => {

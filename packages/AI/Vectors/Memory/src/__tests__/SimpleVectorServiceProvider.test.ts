@@ -187,6 +187,27 @@ describe('SimpleVectorServiceProvider', () => {
             expect(result.data.matches[0].metadata.RecordID).toBe('parent-record-A');
         });
 
+        it('scores matches as cosine similarity, like Pinecone and SQL Server: identical 1, orthogonal 0, opposite -1', async () => {
+            runViewMock.mockResolvedValueOnce({
+                Success: true,
+                Results: [
+                    { ID: 'erd-same', RecordID: 'same', VectorJSON: JSON.stringify([1, 0, 0]) },
+                    { ID: 'erd-orthogonal', RecordID: 'orthogonal', VectorJSON: JSON.stringify([0, 1, 0]) },
+                    { ID: 'erd-opposite', RecordID: 'opposite', VectorJSON: JSON.stringify([-1, 0, 0]) },
+                ],
+            });
+
+            const result = await new SimpleVectorServiceProvider().QueryIndex(
+                { id: 'doc-1', vector: [1, 0, 0], topK: 3 } as never
+            );
+
+            const scoreOf = (recordID: string) =>
+                (result.data.matches as Match[]).find(m => m.metadata.RecordID === recordID)?.score;
+            expect(scoreOf('same')).toBeCloseTo(1, 6);
+            expect(scoreOf('orthogonal')).toBeCloseTo(0, 6);
+            expect(scoreOf('opposite')).toBeCloseTo(-1, 6);
+        });
+
         it('loads the whole index, not the entity\'s first page of rows', async () => {
             // Without IgnoreMaxRows the load stops at Entity Record Documents' UserViewMaxRows
             // (1,000), and every vector past it is invisible to search and duplicate detection.
