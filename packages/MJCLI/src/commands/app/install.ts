@@ -55,6 +55,7 @@ Private repositories need a GitHub credential. GitHub returns 404 (not 403) for 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AppInstall);
     const spinner = ora();
+    let failed = false;
 
     try {
       const context = await BuildOrchestratorContext(this, flags.verbose, !flags['non-interactive']);
@@ -76,12 +77,17 @@ Private repositories need a GitHub credential. GitHub returns 404 (not 403) for 
         }
       } else {
         spinner.fail(chalk.red(`Install failed: ${result.ErrorMessage}`));
-        this.exit(1);
+        failed = true;
       }
     } catch (error) {
       spinner.fail('Install failed');
       const message = error instanceof Error ? error.message : String(error);
       this.error(message);
+    }
+    // Outside the try on purpose: oclif's exit() works by throwing, and the catch above would
+    // swallow it — printing a second failure line and exiting 2 with "EEXIT: 1".
+    if (failed) {
+      this.exit(1);
     }
   }
 }
