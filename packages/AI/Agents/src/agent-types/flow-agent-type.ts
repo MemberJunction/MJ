@@ -11,7 +11,7 @@
  * @since 2.76.0
  */
 
-import { RegisterClass, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, SafeExpressionEvaluator, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import {
     CollectDecisionStepKeys,
     DecisionHoldReason,
@@ -1772,9 +1772,11 @@ export class FlowAgentType extends BaseAgentType {
      * @private
      */
     private async popNextPendingStartStep(flowState: FlowExecutionState): Promise<MJAIAgentStepEntity | null> {
+        // Built once: nothing in this loop completes a step. A UUIDSet matches IDs case-insensitively.
+        const completedStepIds = new UUIDSet(flowState.completedStepIds);
         while (flowState.pendingStartStepIds && flowState.pendingStartStepIds.length > 0) {
             const nextStartId = flowState.pendingStartStepIds.shift()!;
-            if (Array.from(flowState.completedStepIds).some((id) => UUIDsEqual(id, nextStartId))) {
+            if (completedStepIds.Has(nextStartId)) {
                 continue;
             }
             const nextStartStep = await this.getStepById(nextStartId);
@@ -1945,9 +1947,8 @@ export class FlowAgentType extends BaseAgentType {
         if (flowState.pendingStartStepIds && flowState.pendingStartStepIds.length > 0) {
             const repo = new AIEngineGraphRepository(flowState.agentId);
             const incomingOrigins = repo.GetIncomingEdges(nextStep.ID).map((e) => e.originNodeId);
-            const hasIncompleteJoinOrigin = incomingOrigins.some(
-                (originId) => !Array.from(flowState.completedStepIds).some((doneId) => UUIDsEqual(doneId, originId))
-            );
+            const completedStepIds = new UUIDSet(flowState.completedStepIds);
+            const hasIncompleteJoinOrigin = incomingOrigins.some((originId) => !completedStepIds.Has(originId));
             if (hasIncompleteJoinOrigin) {
                 const pendingStart = await this.popNextPendingStartStep(flowState);
                 if (pendingStart) {
