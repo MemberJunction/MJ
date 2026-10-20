@@ -188,6 +188,37 @@ describe('DiscoverAppManifestPackages — platform routing (#4428)', () => {
         }
     });
 
+    it.each([['Node'], [''], [null], [5]])(
+        'rejects an invalid platform value %j, naming the package and the value, instead of dropping the package',
+        (platform) => {
+            const dir = writePlatformManifest({
+                name: 'acme',
+                packages: { shared: [{ name: '@acme/entities', role: 'library' }, { name: '@acme/typo', role: 'library', platform }] },
+            });
+            try {
+                const expected = `packages.shared[1] "@acme/typo" has an invalid "platform" value ${JSON.stringify(platform)}`;
+                expect(() => DiscoverAppManifestPackages(dir, 'server')).toThrow(expected);
+                expect(() => DiscoverAppManifestPackages(dir, 'client')).toThrow(expected);
+                expect(() => DiscoverAppManifestPackages(dir, 'server')).toThrow(path.join(dir, 'mj-app.json'));
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        }
+    );
+
+    it('skips a null or non-object package entry and still loads the rest of the manifest, as before the platform axis', () => {
+        const dir = writePlatformManifest({
+            name: 'acme',
+            packages: { shared: [null, 'not-an-object', { name: '@acme/entities', role: 'library' }] },
+        });
+        try {
+            expect(DiscoverAppManifestPackages(dir, 'server')!.Entries.map((e) => e.Entry.PackageName)).toEqual(['@acme/entities']);
+            expect(DiscoverAppManifestPackages(dir, 'client')!.Entries.map((e) => e.Entry.PackageName)).toEqual(['@acme/entities']);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
     it('omits browser-only shared packages from the server tier', () => {
         const dir = writePlatformManifest({
             name: 'acme',

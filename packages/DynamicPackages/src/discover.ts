@@ -109,8 +109,8 @@ interface AppManifestPackage {
     name?: unknown;
     role?: unknown;
     startupExport?: unknown;
-    /** See ResolvePackagePlatform in packages/OpenApp/Engine/src/manifest/package-platform.ts. */
-    platform?: 'node' | 'browser' | 'both';
+    /** Raw JSON; narrowed by {@link readPlatform}. See ResolvePackagePlatform in packages/OpenApp/Engine/src/manifest/package-platform.ts. */
+    platform?: unknown;
 }
 interface AppManifest {
     name?: unknown;
@@ -128,6 +128,36 @@ export interface AppManifestDiscovery {
     Entries: DiscoveredDynamicPackage[];
 }
 
+/** The only valid values of a manifest package entry's `platform` field. */
+const VALID_PLATFORMS = ['node', 'browser', 'both'] as const;
+type PackagePlatform = (typeof VALID_PLATFORMS)[number];
+
+function isPackagePlatform(value: unknown): value is PackagePlatform {
+    return typeof value === 'string' && (VALID_PLATFORMS as readonly string[]).includes(value);
+}
+
+/**
+ * Narrows a raw `platform` value, throwing on anything but absent or one of the three literals.
+ *
+ * This module reads `mj-app.json` as raw JSON, so nothing upstream has validated it. An unchecked
+ * value such as a hand-typed `"Node"` would match neither tier in {@link packageRunsOnTier} and the
+ * package would vanish from the process with no log line. The install path (zod) and
+ * `mj dev workspace` (`readDeclaredEntries` in MJCLI) both reject such a manifest, so this reader
+ * rejects it too — the same "corrupt manifest is the operator's to see" contract as invalid JSON.
+ */
+function readPlatform(pkg: AppManifestPackage, where: string): PackagePlatform | undefined {
+    if (pkg.platform === undefined) {
+        return undefined;
+    }
+    if (isPackagePlatform(pkg.platform)) {
+        return pkg.platform;
+    }
+    const name = typeof pkg.name === 'string' ? JSON.stringify(pkg.name) : '(unnamed)';
+    throw new Error(
+        `${where} ${name} has an invalid "platform" value ${JSON.stringify(pkg.platform)} — must be one of ${VALID_PLATFORMS.join(', ')}`
+    );
+}
+
 /**
  * Whether a manifest package may be loaded by a process of `tier`.
  *
@@ -135,18 +165,15 @@ export interface AppManifestDiscovery {
  * `packages/OpenApp/Engine/src/manifest/package-platform.ts`, which is canonical. This package
  * ships to the browser and keeps exactly one dependency by design, so it cannot import from the
  * install engine. `packages/MJCLI/src/lib/dev-workspace/build.ts` keeps a third copy for the same
- * reason. Change one, change all three; the shared case table lives in the engine's
- * `package-platform.test.ts`.
+ * reason. Change one, change all three. The engine's `package-platform.test.ts` holds the canonical
+ * case list; this package's spec mirrors its cases by hand, because it cannot import the engine.
  */
-function packageRunsOnTier(pkg: AppManifestPackage, tier: DynamicPackageTier): boolean {
-    // Truthy, not `??`, to match canonical: `platform: ""` (unreachable through zod, but this
-    // package reads raw JSON directly) falls back to the role default instead of being treated as
-    // its own (invalid) platform value, which would otherwise drop the package from both tiers.
-    const platform = pkg.platform || (pkg.role === 'actions' ? 'node' : 'both');
-    if (platform === 'both') {
+function packageRunsOnTier(platform: PackagePlatform | undefined, role: unknown, tier: DynamicPackageTier): boolean {
+    const effective = platform ?? (role === 'actions' ? 'node' : 'both');
+    if (effective === 'both') {
         return true;
     }
-    return tier === 'server' ? platform === 'node' : platform === 'browser';
+    return tier === 'server' ? effective === 'node' : effective === 'browser';
 }
 
 /**
@@ -154,9 +181,9 @@ function packageRunsOnTier(pkg: AppManifestPackage, tier: DynamicPackageTier): b
  * load: `shared` libraries first (entities/actions register on import), then the tier's own
  * packages, with each `startupExport` carried through. Packages whose platform excludes `tier`
  * are omitted — an actions package is Node-side and must not be handed to a browser process
- * (#4428). Returns `null` when there is no manifest, and throws only when a manifest exists but
- * is not valid JSON — a corrupt file is a problem the operator must see, an absent one is the
- * common case.
+ * (#4428). Returns `null` when there is no manifest, and throws when a manifest exists but is not
+ * valid JSON or names an invalid `platform` — a corrupt file is a problem the operator must see,
+ * an absent one is the common case.
  */
 export function DiscoverAppManifestPackages(repoDir: string, tier: DynamicPackageTier): AppManifestDiscovery | null {
     const manifestPath = path.join(repoDir, APP_MANIFEST_FILE_NAME);
@@ -191,14 +218,17 @@ export function DiscoverAppManifestPackages(repoDir: string, tier: DynamicPackag
             },
         });
     };
-    for (const pkg of manifest.packages?.shared ?? []) {
-        if (packageRunsOnTier(pkg, tier)) {
-            push(pkg);
-        }
-    }
-    for (const pkg of manifest.packages?.[tier] ?? []) {
-        if (packageRunsOnTier(pkg, tier)) {
-            push(pkg);
+    for (const section of ['shared', tier] as const) {
+        for (const [index, pkg] of (manifest.packages?.[section] ?? []).entries()) {
+            // Raw JSON: a null or non-object element was always skipped (by `push`'s name guard),
+            // and the rest of the manifest still loaded. Keep that, rather than dereference it.
+            if (pkg === null || typeof pkg !== 'object') {
+                continue;
+            }
+            const platform = readPlatform(pkg, `${manifestPath}: packages.${section}[${index}]`);
+            if (packageRunsOnTier(platform, pkg.role, tier)) {
+                push(pkg);
+            }
         }
     }
     return { RepoDir: repoDir, AppName: appName, SourceDirectory: sourceDirectory, Entries: entries };
