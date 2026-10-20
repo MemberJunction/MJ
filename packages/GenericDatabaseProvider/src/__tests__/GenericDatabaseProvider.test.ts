@@ -195,6 +195,9 @@ class TestGenericProvider extends GenericDatabaseProvider {
     protected WrapSaveCallForResult(): SaveSQLFragment {
         throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
     }
+    protected ProjectSaveCallToDatestamps(): SaveSQLFragment {
+        throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
+    }
     protected WrapSaveCallWithRecordChange(): SaveSQLFragment {
         throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
     }
@@ -3136,5 +3139,69 @@ describe('GenericDatabaseProvider RunView dedup scope follows transaction member
         await p.BeginTransaction();
         expect(p.CallerDedupScope).not.toBe(memberScope);
         await p.RollbackTransaction();
+    });
+});
+
+describe('GenericDatabaseProvider SaveReturnContext & ProjectSaveCallToDatestamps abstraction', () => {
+    function makeMockEntity(saveReturnMode: 'full' | 'datestamps_only'): BaseEntity {
+        const datestampFields = [
+            { Name: 'ID', IsPrimaryKey: true },
+            { Name: '__mj_CreatedAt', IsPrimaryKey: false },
+            { Name: '__mj_UpdatedAt', IsPrimaryKey: false },
+        ] as unknown as EntityFieldInfo[];
+        return {
+            EntityInfo: {
+                Name: 'Widgets',
+                SchemaName: '__mj',
+                BaseTable: 'Widget',
+                SaveReturnMode: saveReturnMode,
+                DatestampReturnFields: datestampFields,
+                PrimaryKeys: [datestampFields[0]],
+                Fields: [],
+            },
+        } as unknown as BaseEntity;
+    }
+
+    it('GetDatestampSelectColumnsSQL quotes identifiers using the provider QuoteIdentifier implementation', () => {
+        const pgLike = new TestGenericProvider(); // QuoteIdentifier -> "col"
+        const entity = makeMockEntity('full');
+        const cols = (pgLike as unknown as { GetDatestampSelectColumnsSQL: (info: EntityInfo) => string }).GetDatestampSelectColumnsSQL(entity.EntityInfo);
+        expect(cols).toBe('"ID", "__mj_CreatedAt", "__mj_UpdatedAt"');
+    });
+
+    it('ResolveSaveReturnContext sets needsDatestampProjection only when compiled SP is full and runtime option is datestamps_only', () => {
+        const p = new TestGenericProvider();
+        const resolve = (e: BaseEntity, opts?: EntitySaveOptions) =>
+            (p as unknown as { ResolveSaveReturnContext: (ent: BaseEntity, o?: EntitySaveOptions) => Record<string, unknown> }).ResolveSaveReturnContext(e, opts);
+
+        const fullDefault = resolve(makeMockEntity('full'));
+        expect(fullDefault).toMatchObject({
+            spReturnMode: 'full',
+            effectiveReturnMode: 'full',
+            spReturnsDatestampsOnly: false,
+            needsDatestampProjection: false,
+            routineSelectColumnsSQL: '*',
+            finalSelectColumnsSQL: '*',
+        });
+
+        const runtimeProjected = resolve(makeMockEntity('full'), { SaveReturnMode: 'datestamps_only' } as EntitySaveOptions);
+        expect(runtimeProjected).toMatchObject({
+            spReturnMode: 'full',
+            effectiveReturnMode: 'datestamps_only',
+            spReturnsDatestampsOnly: false,
+            needsDatestampProjection: true,
+            routineSelectColumnsSQL: '"ID", "__mj_CreatedAt", "__mj_UpdatedAt"',
+            finalSelectColumnsSQL: '"ID", "__mj_CreatedAt", "__mj_UpdatedAt"',
+        });
+
+        const compiledDatestamps = resolve(makeMockEntity('datestamps_only'));
+        expect(compiledDatestamps).toMatchObject({
+            spReturnMode: 'datestamps_only',
+            effectiveReturnMode: 'datestamps_only',
+            spReturnsDatestampsOnly: true,
+            needsDatestampProjection: false,
+            routineSelectColumnsSQL: '*',
+            finalSelectColumnsSQL: '"ID", "__mj_CreatedAt", "__mj_UpdatedAt"',
+        });
     });
 });
