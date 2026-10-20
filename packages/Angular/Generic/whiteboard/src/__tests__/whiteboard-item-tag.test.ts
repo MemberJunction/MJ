@@ -79,7 +79,7 @@ describe('agent tools — the optional tag argument', () => {
   it('AddNote with a tag lands it on the item', () => {
     const state = new WhiteboardState();
     const result = JSON.parse(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.AddNote, JSON.stringify({ text: 'Fill this in', tag: 'slot' })));
-    expect(result.ok).toBe(true);
+    expect(result.success).toBe(true);
     expect(state.GetItem(result.itemId)?.Tag).toBe('slot');
   });
 

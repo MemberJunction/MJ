@@ -120,9 +120,9 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         text: { type: 'string', description: 'The note text. Keep it short — sticky-note sized.' },
         x: { type: 'number', description: 'Left position in board coordinates. Omit to auto-place near existing content.' },
         y: { type: 'number', description: 'Top position in board coordinates. Omit to auto-place near existing content.' },
-        fontSize: { type: 'number', enum: [...WHITEBOARD_FONT_SIZES], description: 'Optional note font size in px (curated steps).' }
+        fontSize: { type: 'number', enum: [...WHITEBOARD_FONT_SIZES], description: 'Optional note font size in px (curated steps).' },
+        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' }
       },
-        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' },
       required: ['text']
     }
   },
@@ -138,9 +138,9 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         x: { type: 'number', description: 'Left position in board coordinates.' },
         y: { type: 'number', description: 'Top position in board coordinates.' },
         w: { type: 'number', description: 'Width in px. Defaults to 172.' },
-        h: { type: 'number', description: 'Height in px. Defaults to 56.' }
+        h: { type: 'number', description: 'Height in px. Defaults to 56.' },
+        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' }
       },
-        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' },
       required: ['label']
     }
   },
@@ -156,9 +156,9 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         w: { type: 'number', description: 'Optional wrap width in px (60-800). Long text wraps at this width — use for sentences/paragraphs; omit for short labels.' },
         fontSize: { type: 'number', enum: [...WHITEBOARD_FONT_SIZES], description: 'Optional label font size in px (curated steps).' },
         fontFamily: { type: 'string', enum: ['sans', 'serif', 'mono'], description: 'Optional font family. Defaults to sans.' },
-        bold: { type: 'boolean', description: 'Optional bold weight. Labels render bold by default.' }
+        bold: { type: 'boolean', description: 'Optional bold weight. Labels render bold by default.' },
+        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' }
       },
-        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' },
       required: ['text']
     }
   },
@@ -172,9 +172,9 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         x: { type: 'number', description: 'Left position in board coordinates. Omit to auto-place near existing content.' },
         y: { type: 'number', description: 'Top position in board coordinates.' },
         w: { type: 'number', description: 'Panel width in px (160-800). Defaults to 280.' },
-        h: { type: 'number', description: 'Optional max height in px (80-800); content beyond it is clipped. Omit for content-driven height.' }
+        h: { type: 'number', description: 'Optional max height in px (80-800); content beyond it is clipped. Omit for content-driven height.' },
+        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' }
       },
-        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' },
       required: ['markdown']
     }
   },
@@ -189,9 +189,9 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         x: { type: 'number', description: 'Left position in board coordinates. Omit to auto-place near existing content.' },
         y: { type: 'number', description: 'Top position in board coordinates.' },
         w: { type: 'number', description: 'Widget width in px (200-960). Defaults to 360.' },
-        h: { type: 'number', description: 'Widget height in px (120-800). Defaults to 240.' }
+        h: { type: 'number', description: 'Widget height in px (120-800). Defaults to 240.' },
+        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' }
       },
-        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' },
       required: ['html']
     }
   },
