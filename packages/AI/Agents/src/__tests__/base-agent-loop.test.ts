@@ -2506,6 +2506,29 @@ describe("BaseAgent.Execute — memory, RAG and the prompt read the run's valida
     });
 });
 
+describe('BaseAgent.Execute — system placeholders in scoped prompt parts', () => {
+    afterEach(() => vi.useRealTimers());
+    const contentOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
+
+    it('replaces them in the messages InjectScopedPromptParts adds, even from an override, and nowhere else', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(2026, 9, 14, 12));
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const keyhole = agent as unknown as Record<string, (...args: unknown[]) => unknown>;
+        vi.spyOn(keyhole, 'InjectContextMemory').mockResolvedValue({ notes: [], examples: [] });
+        vi.spyOn(keyhole, 'InjectPreExecutionRAG').mockResolvedValue(null);
+        vi.spyOn(keyhole, 'InjectScopedPromptParts').mockImplementation((_agent, messages) => {
+            (messages as AgentChatMessage[]).unshift({ role: 'system', content: 'Today is {{ _CURRENT_DATE }}, {{ _USER_NAME }}.' });
+        });
+
+        await agent.Execute(makeParams({ conversationMessages: [{ role: 'user', content: 'Keep {{ _CURRENT_DATE }} as typed' }] }));
+
+        const sent = (runner.Calls[0].conversationMessages ?? []).map(contentOf);
+        expect(sent).toContain(`Today is 2026-10-14, ${TEST_USER.Name}.`);
+        expect(sent.some((c) => c.includes('Keep {{ _CURRENT_DATE }} as typed'))).toBe(true);
+    });
+});
+
 describe('BaseAgent.Execute — the reserved run-data keys count only with TrustReservedRunData', () => {
     const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000b7';
     /** What an untrusted caller (a browser, an Execute Agent action call, MCP, A2A) might put in `data`. */
