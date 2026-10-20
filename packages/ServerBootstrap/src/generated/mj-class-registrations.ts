@@ -43,9 +43,8 @@ import {
     BettyBotLLM,
 } from '@memberjunction/ai-betty-bot';
 
-// @memberjunction/ai-blackforestlabs (2 classes)
+// @memberjunction/ai-blackforestlabs (1 classes)
 import {
-    FLUX3VideoGenerator,
     FLUXImageGenerator,
 } from '@memberjunction/ai-blackforestlabs';
 
@@ -244,7 +243,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (456 classes)
+// @memberjunction/core-entities (454 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -371,8 +370,6 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
-    MJBrandKitAssetEntity,
-    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -493,6 +490,7 @@ import {
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
     MJFeaturePipelineTypeEntity,
+    MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -689,7 +687,6 @@ import {
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
-    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -1048,8 +1045,9 @@ import {
     SQLServerExternalDataSourceDriver,
 } from '@memberjunction/external-data-source-sqlserver';
 
-// @memberjunction/feature-pipelines (1 classes)
+// @memberjunction/feature-pipelines (2 classes)
 import {
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
 } from '@memberjunction/feature-pipelines';
 
@@ -1304,10 +1302,8 @@ import {
     ValidateEntitySchemaAction,
 } from '@memberjunction/database-designer-actions';
 
-// @memberjunction/record-set-processor (7 classes)
+// @memberjunction/record-set-processor (5 classes)
 import {
-    DecisionFeaturePipelineDriver,
-    LLMFeaturePipelineDriver,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
@@ -1375,13 +1371,12 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (64 classes)
+// @memberjunction/core-entities-server (62 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
-    MJAIAgentRelationshipEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
@@ -1398,7 +1393,6 @@ import {
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
-    MJBrandKitEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
@@ -1476,25 +1470,18 @@ import {
     ComputerUseTestDriver,
 } from '@memberjunction/computer-use-engine';
 
+// @memberjunction/feature-pipelines-engine (4 classes)
+import {
+    DecisionFeaturePipelineDriver,
+    FeaturePipelineGoldenSetDriver,
+    LLMFeaturePipelineDriver,
+    StewardFeaturePipelineVersionAction,
+} from '@memberjunction/feature-pipelines-engine';
+
 // @memberjunction/testing-integration (1 classes)
 import {
     IntegrationTestDriver,
 } from '@memberjunction/testing-integration';
-
-// @memberjunction/video-studio (11 classes)
-import {
-    DockerRenderDriver,
-    LocalWorkerRenderDriver,
-    ProduceVideoAction,
-    RemoteRenderDriver,
-    VideoStudioAgent,
-    VideoStudioArtDirectorAgent,
-    VideoStudioCriticAgent,
-    VideoStudioMotionEngineerAgent,
-    VideoStudioPreProductionAgent,
-    VideoStudioRenderAgent,
-    VideoStudioSetupHealthServerOperation,
-} from '@memberjunction/video-studio';
 
 // @memberjunction/web-search-engine (6 classes)
 import {
@@ -1506,7 +1493,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (165 classes)
+// @memberjunction/core-actions (164 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1572,7 +1559,6 @@ import {
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
-    GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
     GetDefaultFormScaffoldForEntityAction,
@@ -1732,7 +1718,6 @@ const CLASS_REGISTRATIONS_0: any[] = [
     BedrockLLM,
     BettyLLM,
     BettyBotLLM,
-    FLUX3VideoGenerator,
     FLUXImageGenerator,
     CerebrasLLM,
     CloudflareDecision,
@@ -1922,15 +1907,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
-    MJBrandKitAssetEntity,
-    MJBrandKitEntity,
+    MJClusterAnalysisClusterEntity,
+    MJClusterAnalysisEntity,
+    MJCollectionArtifactEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
-    MJClusterAnalysisClusterEntity,
-    MJClusterAnalysisEntity,
-    MJCollectionArtifactEntity,
     MJCollectionEntity,
     MJCollectionPermissionEntity,
     MJCollectionPermissionEntityExtended,
@@ -2048,6 +2031,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
     MJFeaturePipelineTypeEntity,
+    MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -2128,12 +2112,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryEntityExtended,
     MJQueryFieldEntity,
     MJQueryParameterEntity,
+    MJQueryPermissionEntity,
+    MJQuerySQLEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
-    MJQueryPermissionEntity,
-    MJQuerySQLEntity,
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
@@ -2248,7 +2232,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
-    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -2332,13 +2315,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CreateSurveyMonkeyAction,
     CreateTypeformAction,
     ExportGoogleFormsCSVAction,
+    ExportJotFormCSVAction,
+    ExportSurveyMonkeyCSVAction,
+    ExportTypeformCSVAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
-    ExportJotFormCSVAction,
-    ExportSurveyMonkeyCSVAction,
-    ExportTypeformCSVAction,
     GetGoogleFormAction,
     GetGoogleFormsStatisticsAction,
     GetJotFormAction,
@@ -2465,6 +2448,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PostgresExternalDataSourceDriver,
     SnowflakeExternalDataSourceDriver,
     SQLServerExternalDataSourceDriver,
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
     GeocodioGeocodingProvider,
     GoogleGeocodingProvider,
@@ -2536,12 +2520,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     BGEReRanker,
     CohereReRanker,
     ElasticsearchSearchProvider,
+    EntitySearchProvider,
+    FullTextSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
-    EntitySearchProvider,
-    FullTextSearchProvider,
     NoopReRanker,
     OpenAIReRanker,
     OpenSearchSearchProvider,
@@ -2601,8 +2585,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ListMyEntitiesAction,
     ModifyEntityAction,
     ValidateEntitySchemaAction,
-    DecisionFeaturePipelineDriver,
-    LLMFeaturePipelineDriver,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
@@ -2656,7 +2638,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
-    MJAIAgentRelationshipEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
@@ -2673,7 +2654,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
-    MJBrandKitEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
@@ -2733,22 +2713,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RubricCalibrationTestDriver,
     ComputerUseAction,
     ComputerUseTestDriver,
+    DecisionFeaturePipelineDriver,
+    FeaturePipelineGoldenSetDriver,
+    LLMFeaturePipelineDriver,
+    StewardFeaturePipelineVersionAction,
     IntegrationTestDriver,
-    DockerRenderDriver,
-    LocalWorkerRenderDriver,
-    ProduceVideoAction,
-    RemoteRenderDriver,
-    VideoStudioAgent,
-    VideoStudioArtDirectorAgent,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
-    VideoStudioCriticAgent,
-    VideoStudioMotionEngineerAgent,
-    VideoStudioPreProductionAgent,
-    VideoStudioRenderAgent,
-    VideoStudioSetupHealthServerOperation,
     BraveWebSearchProvider,
     DuckDuckGoWebSearchProvider,
     GoogleCustomSearchWebSearchProvider,
@@ -2757,6 +2726,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     WebSearchQueryServerOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     ActivateFormContributionVersionAction,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
@@ -2819,7 +2792,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
-    GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
     GetDefaultFormScaffoldForEntityAction,
@@ -2956,7 +2928,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1196;
+export const CLASS_REGISTRATIONS_COUNT = 1182;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -3078,8 +3050,8 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/scheduling-actions',
     '@memberjunction/testing-engine',
     '@memberjunction/computer-use-engine',
+    '@memberjunction/feature-pipelines-engine',
     '@memberjunction/testing-integration',
-    '@memberjunction/video-studio',
     '@memberjunction/web-search-engine',
     '@memberjunction/core-actions',
     '@memberjunction/actions-content-autotag',
