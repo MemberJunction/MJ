@@ -5894,17 +5894,18 @@
           "fields": {
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
-            "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
+            "StartedAt": "2024-06-20T00:00:00.000Z",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 3,
             "OutputPricePerUnit": 15,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude 3.5 Sonnet pricing as of Jan 2025",
+            "Comments": "Claude 3.5 Sonnet pricing as of Jan 2025. StartedAt corrected from the 2026-01-08 seed-import timestamp to 2024-06-20, the Claude 3.5 Sonnet launch, when the $3/$15 price began. EXPIRED 2025-10-28: Anthropic retired both claude-3-5-sonnet snapshots on the Claude API. Row preserved for historical pricing lookups. Source: https://docs.anthropic.com/en/docs/about-claude/model-deprecations",
             "CacheReadPricePerUnit": 0.3,
-            "CacheWritePricePerUnit": 3.75
+            "CacheWritePricePerUnit": 3.75,
+            "EndedAt": "2025-10-28T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "7C026453-4873-454F-B861-3E6CDBAB944F"
