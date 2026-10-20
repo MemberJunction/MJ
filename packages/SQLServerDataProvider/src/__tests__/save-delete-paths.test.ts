@@ -867,5 +867,33 @@ describe("SQLServerDataProvider SaveReturnMode ('datestamps_only')", () => {
       __mj_UpdatedAt: updatedAt,
     });
   });
+
+  it('captures EXEC into @ResultTable and projects only PK + datestamps when TrackRecordChanges is false and per-save options.SaveReturnMode is datestamps_only on a full entity', async () => {
+    const provider = makeProvider();
+    const entityInfo = makeWidgetEntityInfo({ trackRecordChanges: false, saveReturnMode: 'full' });
+    const entity = makeSavedWidgetEntity(entityInfo, TEST_USER);
+    entity.Set('Name', 'High-Write Step Update');
+
+    const createdAt = new Date('2025-01-01T00:00:00.000Z');
+    const updatedAt = new Date('2026-04-17T11:45:00.000Z');
+    mssqlState.QueueResult({
+      rows: [{ ID: 'w-0001', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt }],
+    });
+
+    const saveOpts = new EntitySaveOptions();
+    saveOpts.SaveReturnMode = 'datestamps_only';
+    const result = await provider.Save(entity, TEST_USER, saveOpts);
+
+    const sql = mssqlState.Queries[0].sql;
+    expect(sql).toContain('DECLARE @ResultTable TABLE');
+    expect(sql).toContain('[Name] nvarchar(100) NOT NULL');
+    expect(sql).toContain('SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;');
+    expect(result).toMatchObject({
+      ID: 'w-0001',
+      Name: 'High-Write Step Update',
+      __mj_CreatedAt: createdAt,
+      __mj_UpdatedAt: updatedAt,
+    });
+  });
 });
 

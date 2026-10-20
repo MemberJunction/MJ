@@ -337,7 +337,7 @@ export class EntitySaveOptions {
     /**
      * If set to true, the record will be saved to the database even if nothing is detected to be "dirty" or changed since the prior load.
      */
-    IgnoreDirtyState: boolean = false;
+    IgnoreDirtyState?: boolean = false;
     /**
      * If set to true, an AI actions associated with the entity will be skipped during the save operation
      */

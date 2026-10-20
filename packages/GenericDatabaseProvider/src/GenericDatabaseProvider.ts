@@ -1520,18 +1520,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const newData = entity.GetAll(false);
             const oldData = isUpdate ? entity.GetAll(true) : null;
 
-            // ISA propagation hook: capture the diff for SS subtype propagation.
-            // Returned via `extraData` so the SS subclass can consume it without re-diffing.
-            if (isUpdate && oldData) {
-                const diffChanges = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
-                if (diffChanges && Object.keys(diffChanges).length > 0) {
-                    overlappingChangeData = {
-                        changesJSON: JSON.stringify(diffChanges),
-                        changesDescription: this.CreateUserDescriptionOfChanges(diffChanges),
-                    };
-                }
-            }
-
             const payload = this.BuildRecordChangePayload(
                 newData,
                 oldData,
@@ -1544,6 +1532,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 entity.CloneContext,
             );
             if (payload) {
+                // ISA propagation hook: reuse the diff already computed by BuildRecordChangePayload
+                // for overlapping-subtype propagation without running DiffObjects a second time.
+                if (isUpdate && oldData) {
+                    overlappingChangeData = {
+                        changesJSON: payload.changesJSON,
+                        changesDescription: payload.changesDescription,
+                    };
+                }
                 saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity, options);
             }
         }

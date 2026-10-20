@@ -2148,7 +2148,7 @@ export class BaseAgent {
                     this._agentRun.ErrorMessage = existing
                         ? `${existing}\n\n[Data Preloading Warning] ${warningMessage}`
                         : `[Data Preloading Warning] ${warningMessage}`;
-                    await this._agentRun.Save();
+                    await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
                 }
             } else {
                 // All sources loaded successfully
@@ -2669,7 +2669,7 @@ export class BaseAgent {
         if (this._agentRun) {
             this._agentRun.Status = 'Failed';
             this._agentRun.ErrorMessage = errorMessage;
-            await this._agentRun.Save();
+            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
         }
         throw new Error(errorMessage);
     }
@@ -3356,7 +3356,7 @@ export class BaseAgent {
             promptRun.Cancelled = false;
             promptRun.CacheHit = false;
 
-            if (!await promptRun.Save()) {
+            if (!await promptRun.Save({ SaveReturnMode: 'datestamps_only' })) {
                 this.logError(`Failed to create realtime AIPromptRun: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
                     agent: params.agent,
                     category: 'RealtimeSession'
@@ -4035,7 +4035,7 @@ export class BaseAgent {
                 },
             });
         }
-        if (!await promptRun.Save()) {
+        if (!await promptRun.Save({ SaveReturnMode: 'datestamps_only' })) {
             this.logError(`Failed to checkpoint realtime usage: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
                 category: 'RealtimeSession'
             });
@@ -13333,7 +13333,7 @@ The context is now within limits. Please retry your request with the recovered c
         this.writeRunScope(params, this._runScope);
 
         // Save the agent run
-        if (!await this._agentRun.Save()) {
+        if (!await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' })) {
             const errorMessage = JSON.stringify(CopyScalarsAndArrays(this._agentRun.LatestResult));
             throw new Error(`Failed to create agent run record: Details: ${errorMessage}`);
         }
@@ -19440,7 +19440,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for failed runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save();
+            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
         }
 
         return {
@@ -19491,7 +19491,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for cancelled runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save();
+            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
             AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
         }
         
@@ -19657,7 +19657,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens from all prompts and sub-agents
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            const ok = await this._agentRun.Save();
+            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
             }

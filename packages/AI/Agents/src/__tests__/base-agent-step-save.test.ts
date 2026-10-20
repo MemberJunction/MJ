@@ -34,7 +34,7 @@ class MockStep {
   public PayloadAtEnd: string | null = null;
   public LatestResult: { CompleteMessage: string } | null = null;
 
-  public saveOptions: Array<{ IgnoreDirtyState?: boolean } | undefined> = []; // options seen per Save() call
+  public saveOptions: Array<{ IgnoreDirtyState?: boolean; SaveReturnMode?: string } | undefined> = []; // options seen per Save() call
 
   private callIndex = 0;
   constructor(
@@ -47,7 +47,7 @@ class MockStep {
     this.ID = `${this.name}-id`; // client-generated PK available immediately, before the INSERT lands
   }
 
-  async Save(options?: { IgnoreDirtyState?: boolean }): Promise<boolean> {
+  async Save(options?: { IgnoreDirtyState?: boolean; SaveReturnMode?: string }): Promise<boolean> {
     const n = ++this.callIndex;
     this.saveOptions.push(options);
     this.log.push(`${this.name}:start:${n}`);
@@ -288,10 +288,12 @@ describe('BaseAgent.createStepEntity / finalizeStepEntity — lifecycle', () => 
     const created = await internals(agent).createStepEntity({ stepType: 'Actions', stepName: 'Run Action', contextUser: ctx });
     await internals(agent).finalizeStepEntity(created, true, undefined, { result: 'ok' });
     await pending();
-    // Two Save() calls: INSERT plain (no options), UPDATE forced (IgnoreDirtyState=true).
+    // Two Save() calls: INSERT non-forced (IgnoreDirtyState=false, datestamps_only), UPDATE forced (IgnoreDirtyState=true, datestamps_only).
     expect(step.saveOptions).toHaveLength(2);
-    expect(step.saveOptions[0]?.IgnoreDirtyState).toBeUndefined();
+    expect(step.saveOptions[0]?.IgnoreDirtyState).toBe(false);
+    expect(step.saveOptions[0]?.SaveReturnMode).toBe('datestamps_only');
     expect(step.saveOptions[1]?.IgnoreDirtyState).toBe(true);
+    expect(step.saveOptions[1]?.SaveReturnMode).toBe('datestamps_only');
     expect(step.Status).toBe('Completed');
   });
 });
