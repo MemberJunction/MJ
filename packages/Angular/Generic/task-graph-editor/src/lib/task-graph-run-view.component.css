@@ -125,13 +125,68 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--mj-space-2);
-  padding: 4px 8px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--mj-border-default);
   color: var(--mj-text-secondary);
   font-size: var(--mj-font-size-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  min-width: 0;
+}
+.run-view-vars-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.run-view-vars-step-name {
+  color: var(--mj-text-primary);
+  font-size: var(--mj-font-size-xs);
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-view-vars-status {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: var(--mj-radius-full, 999px);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+}
+.run-view-vars-status[data-status="Complete"],
+.run-view-vars-status[data-status="Completed"] {
+  background: color-mix(in srgb, var(--mj-status-success) 15%, transparent);
+  color: var(--mj-status-success);
+}
+.run-view-vars-status[data-status="In Progress"],
+.run-view-vars-status[data-status="Running"] {
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+  color: var(--mj-brand-primary);
+}
+.run-view-vars-status[data-status="Failed"] {
+  background: color-mix(in srgb, var(--mj-status-error) 15%, transparent);
+  color: var(--mj-status-error);
+}
+.run-view-vars-error {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: color-mix(in srgb, var(--mj-status-error) 10%, transparent);
+  color: var(--mj-status-error);
+  font-size: var(--mj-font-size-xs);
+  line-height: 1.35;
 }
 .run-view-vars-min {
   width: 22px;
