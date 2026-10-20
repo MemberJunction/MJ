@@ -129,7 +129,10 @@ import {
     AgentUserPolicyEngine,
     type AgentPostRunCompactionConfig,
     type AIPromptExecutionScope,
-    type AgentRunAudience
+    type AgentRunAudience,
+    ConfigOf,
+    type TaskGraphSpec,
+    type TaskGraphSpecNode
 } from '@memberjunction/ai-core-plus';
 import {
     MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams, AUDIENCE_UNSUPPORTED_RESULT_CODE,
@@ -1194,6 +1197,15 @@ export class BaseAgent {
     private _feedbackRequestId: string | null = null;
 
     private _resolvedStorageAccountId: string | null = null;
+
+    /**
+     * Most recent artifactDirective returned by a child or related sub-agent during this run.
+     * Preserved as a fallback in {@link finalizeAgentRun} when an orchestrator (e.g. Sage) wraps
+     * up a delegated sub-agent's response on the subsequent turn without re-emitting its own
+     * artifactDirective.
+     * @private
+     */
+    private _lastSubAgentArtifactDirective: ArtifactDirective | undefined = undefined;
 
     /**
      * The resolved FileStorageAccount ID for this agent run. Set during Execute()
@@ -2386,7 +2398,7 @@ export class BaseAgent {
             // Report initialization progress
             wrappedParams.onProgress?.({
                 step: 'initialization',
-                message: this.formatHierarchicalMessage(`Initializing ${params.agent.Name} agent and preparing execution environment`),
+                message: this.buildInitializationProgressMessage(params),
                 metadata: {
                     stepCount: 0,
                     hierarchicalStep: this.buildHierarchicalStep(0, this._parentStepCounts)
@@ -2424,6 +2436,7 @@ export class BaseAgent {
             this._effectiveActions = [];
             this._dynamicActionLimits = {};
             this._mediaOutputs = [];
+            this._lastSubAgentArtifactDirective = undefined;
             this._messageLifecycleCallback = params.onMessageLifecycle;
             this._catalogNarrowing = undefined;
             this._openingRequest = OpeningRequestText(params.conversationMessages);
@@ -2449,7 +2462,7 @@ export class BaseAgent {
             // Report validation progress
             wrappedParams.onProgress?.({
                 step: 'validation',
-                message: this.formatHierarchicalMessage('Validating agent configuration and loading prompts'),
+                message: this.formatHierarchicalMessage('Gathering context...'),
                 metadata: {
                     stepCount: 0,
                     hierarchicalStep: this.buildHierarchicalStep(0, this._parentStepCounts)
@@ -2590,7 +2603,7 @@ export class BaseAgent {
                     stepCount: executionResult.stepCount,
                     hierarchicalStep: this.buildHierarchicalStep(executionResult.stepCount, this._parentStepCounts)
                 },
-                message: this.formatHierarchicalMessage('Finalizing agent execution')
+                message: this.formatHierarchicalMessage('Wrapping up...')
             });
 
             // Finalize the agent run
@@ -5525,6 +5538,7 @@ export class BaseAgent {
             // message at execution time (see injectArtifactToolResultsMessage) and decay
             // via pruneAndCompactExpiredMessages — same lifecycle as action results.
             const artifactToolsEnabled = agentTypePromptParams?.includeArtifactToolsDocs !== false;
+            promptParams.data['_ARTIFACTS_ENABLED'] = this.isArtifactSupportEnabled(params.agent);
             if (artifactToolsEnabled && this._artifactToolManager.HasArtifacts()) {
                 promptParams.data['_ARTIFACT_MANIFEST'] = this._artifactToolManager.ToManifestString();
                 promptParams.data['_ARTIFACT_TOOLS'] = this._artifactToolManager.GetToolDocumentation();
@@ -6067,9 +6081,21 @@ export class BaseAgent {
         promptResult: AIPromptRunResult,
         currentPayload: P
     ): Promise<BaseAgentNextStep<P>> {
-        // Let the agent type determine the next step
+        // Let the agent type determine the next step. Pass the merged agent-type prompt params
+        // (schema defaults -> agent.AgentTypePromptParams -> runtime override) without mutating
+        // the caller's ExecuteAgentParams or params.data object.
         this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
-        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, params, currentPayload, this.AgentTypeState, this._nativeToolBindings);
+        const paramsForAgentType: ExecuteAgentParams =
+            this._agentTypePromptParams && params?.data?.__agentTypePromptParams === undefined
+                ? {
+                      ...params,
+                      data: {
+                          ...(params.data ?? {}),
+                          __agentTypePromptParams: this._agentTypePromptParams,
+                      },
+                  }
+                : params;
+        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, paramsForAgentType, currentPayload, this.AgentTypeState, this._nativeToolBindings);
         return nextStep;
     }
 
@@ -6141,11 +6167,12 @@ export class BaseAgent {
                 // Client tools are valid - execution handled by executeClientToolsStep
                 return nextStep;
             // Type assertion required because 'Tasks' is not part of the BaseAgentNextStep step
-            // union (submit-and-detach — the terminal step it produces is 'Success'). The graph was
-            // already validated against TaskGraphSpec by the agent type, so there is nothing left
-            // to check here; submission is handled by executeTasksStep.
+            // union (submit-and-detach — the terminal step it produces is 'Success'). Pre-flight
+            // validation checks that all referenced agents and actions exist and are runnable by
+            // the context user so hallucinations or inaccessible targets convert to a self-correcting
+            // Retry step instead of hard-failing the run in executeTasksStep.
             case 'Tasks' as typeof nextStep.step:
-                return nextStep;
+                return this.validateTasksNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             default:
                 // if we get here, the next step is not recognized, we can return a retry step
                 this.logError(`Invalid next step '${nextStep.step}' for agent '${params.agent.Name}'`, {
@@ -6195,6 +6222,7 @@ export class BaseAgent {
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         const curAgentSubAgents = this.getEffectiveSubAgentsForValidation(params.agent.ID);
+        const allowFoldedTaskGraphTarget = nextStep.taskGraph?.folded === true;
 
         // Collect requested sub-agents. Prefer plural `subAgents` (parallel fan-out);
         // fall back to singular `subAgent` for the classic single-sub-agent next step.
@@ -6215,12 +6243,27 @@ export class BaseAgent {
             };
         }
 
-        // Validate each requested sub-agent: existence + MaxExecutionsPerRun
+        // Validate each requested sub-agent: existence + user run permission + MaxExecutionsPerRun
         for (const req of requested) {
             const name = req?.name;
-            const subAgent = curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === name?.trim().toLowerCase());
+            const normalizedName = name?.trim().toLowerCase();
+            const directSubAgent = curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === normalizedName);
+            const catalogSubAgent =
+                !directSubAgent && allowFoldedTaskGraphTarget && normalizedName
+                    ? AIEngine.Instance.Agents.find(
+                          a => a.Status === 'Active' && a.Name.trim().toLowerCase() === normalizedName
+                      )
+                    : undefined;
+            const subAgent = directSubAgent ?? catalogSubAgent;
+            const hasRunPermission =
+                subAgent && catalogSubAgent && params.contextUser
+                    ? await AIAgentPermissionHelper.HasPermission(subAgent.ID, params.contextUser, 'run')
+                    : true;
 
-            if (!name || !subAgent) {
+            if (!name || !subAgent || !hasRunPermission) {
+                const availableHint = allowFoldedTaskGraphTarget
+                    ? this.buildAvailableRunnableAgentsHint(params.contextUser)
+                    : '';
                 this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
                     agent: params.agent,
                     category: 'SubAgentExecution'
@@ -6231,7 +6274,7 @@ export class BaseAgent {
                 return {
                     step: 'Retry',
                     terminate: false,
-                    errorMessage: `Sub-agent '${name}' not found or not active`
+                    errorMessage: `Sub-agent '${name}' not found or not active${availableHint}`
                 };
             }
 
@@ -6261,6 +6304,128 @@ export class BaseAgent {
 
         // All requested sub-agents are valid
         return nextStep;
+    }
+
+    /**
+     * Builds a compact hint listing the current user's permitted runnable agents when a
+     * task-graph or folded sub-agent step references an unknown or inaccessible agent name.
+     */
+    protected buildAvailableRunnableAgentsHint(contextUser?: UserInfo): string {
+        const engine = AIEngine.Instance;
+        if (typeof engine.GetUserRunnableAgentDirectory === 'function') {
+            const runnable = engine.GetUserRunnableAgentDirectory(contextUser);
+            if (runnable.length > 0) {
+                const names = runnable.slice(0, 25).map(a => a.Name).join(', ');
+                return `. Available runnable agents: ${names}`;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Validates a `'Tasks'` next step before `executeTasksStep` submits the graph.
+     *
+     * Verifies that every referenced `Agent` (including `ForEach`/`While` loop sub-agents) is
+     * active and runnable by `params.contextUser`, and that every referenced `Action` is active.
+     * When an agent or action name is unknown or inaccessible, converts the step to a self-correcting
+     * `Retry` with the user's permitted runnable agent list instead of letting `TaskGraphService.Submit`
+     * terminate the entire agent run as `Failed`. Never reveals whether an invalid agent name was
+     * nonexistent versus restricted by permissions.
+     */
+    protected async validateTasksNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        _currentPayload: P,
+        _agentRun: MJAIAgentRunEntityExtended,
+        _currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        const spec: TaskGraphSpec | undefined = nextStep.taskGraph?.spec;
+        if (!spec || !Array.isArray(spec.tasks) || spec.tasks.length === 0) {
+            return nextStep;
+        }
+
+        const extractNodeAgentNames = (node: TaskGraphSpecNode): string[] => {
+            const loopOp = ConfigOf(node, 'ForEach') ?? ConfigOf(node, 'While');
+            return [ConfigOf(node, 'Agent')?.agentName, loopOp?.subAgent?.name].filter(
+                (n): n is string => typeof n === 'string' && n.trim().length > 0
+            );
+        };
+        const extractNodeActionNames = (node: TaskGraphSpecNode): string[] => {
+            const loopOp = ConfigOf(node, 'ForEach') ?? ConfigOf(node, 'While');
+            return [ConfigOf(node, 'Action')?.actionName, loopOp?.action?.name].filter(
+                (n): n is string => typeof n === 'string' && n.trim().length > 0
+            );
+        };
+
+        const referencedAgents = [...new Set(spec.tasks.flatMap(extractNodeAgentNames))];
+        const referencedActions = [...new Set(spec.tasks.flatMap(extractNodeActionNames))];
+
+        const invalidAgents: string[] = [];
+        const allAgents = AIEngine.Instance?.Agents ?? [];
+        if (referencedAgents.length > 0 && allAgents.length > 0) {
+            for (const agentName of referencedAgents) {
+                const normalized = agentName.trim().toLowerCase();
+                const matched = allAgents.find(
+                    a => a.Status === 'Active' && a.Name?.trim().toLowerCase() === normalized
+                );
+                const permitted = matched
+                    ? params.contextUser
+                        ? await AIAgentPermissionHelper.HasPermission(matched.ID, params.contextUser, 'run')
+                        : true
+                    : false;
+                if (!matched || !permitted) {
+                    invalidAgents.push(agentName);
+                }
+            }
+        }
+
+        const invalidActions: string[] = [];
+        const allActions = ActionEngineServer.Instance?.Actions ?? [];
+        if (referencedActions.length > 0 && allActions.length > 0) {
+            for (const actionName of referencedActions) {
+                const normalized = actionName.trim().toLowerCase();
+                const matched = allActions.find(
+                    act => act.Status === 'Active' && act.Name?.trim().toLowerCase() === normalized
+                );
+                if (!matched) {
+                    invalidActions.push(actionName);
+                }
+            }
+        }
+
+        if (invalidAgents.length === 0 && invalidActions.length === 0) {
+            return nextStep;
+        }
+
+        const errorParts: string[] = [];
+        if (invalidAgents.length > 0) {
+            const availableHint = this.buildAvailableRunnableAgentsHint(params.contextUser);
+            errorParts.push(
+                `Task graph "${spec.workflowName}" references unknown or inaccessible agent(s): ${invalidAgents.join(', ')}. ` +
+                `Use only exact agent names from the Available Agents for Task Graph & Sub-Agent Delegation list ` +
+                `(or discovered via "Find Candidate Agents")${availableHint}.`
+            );
+        }
+        if (invalidActions.length > 0) {
+            errorParts.push(
+                `Task graph "${spec.workflowName}" references unknown or inactive action(s): ${invalidActions.join(', ')}. ` +
+                `Use "Find Candidate Actions" first to discover exact action names.`
+            );
+        }
+
+        const errorMessage = errorParts.join(' ');
+        this.logError(errorMessage, {
+            agent: params.agent,
+            category: 'NextStepValidation'
+        });
+        if (nextStep.step !== 'Retry') {
+            this._generalValidationRetryCount++;
+        }
+        return {
+            step: 'Retry',
+            terminate: false,
+            errorMessage
+        };
     }
 
     /**
@@ -6992,7 +7157,7 @@ export class BaseAgent {
         step: BaseAgentNextStep<P>,
         payload: P,
     ): Promise<BaseAgentNextStep<P>> {
-        if (step.step !== 'Success' || !this._agentRun) return step;
+        if (step.step !== 'Success' || !this._agentRun || this._awaitingWorkflowTaskID) return step;
         const checked = await this.applySelfCheck(params, step, this._agentRun, payload);
         return checked ?? step;
     }
@@ -9571,6 +9736,33 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Determines whether artifact creation/lifecycle support (`artifactDirective`) is enabled for
+     * the given agent so the Loop Agent system prompt includes `artifactDirective` and its lifecycle
+     * instructions only when relevant.
+     *
+     * Returns `true` when:
+     * - `agent.ArtifactCreationMode` is not `'Never'`, OR
+     * - Conversation artifacts are already loaded in `_artifactToolManager`, OR
+     * - The agent is an embedded sub-agent (`agent.ParentID`) whose parent agent creates artifacts
+     *   (`parentAgent.ArtifactCreationMode === 'Always'`) and relies on the sub-agent's payload/directive.
+     */
+    protected isArtifactSupportEnabled(agent: MJAIAgentEntityExtended): boolean {
+        if (!agent.ArtifactCreationMode || agent.ArtifactCreationMode !== 'Never') {
+            return true;
+        }
+        if (this._artifactToolManager.HasArtifacts()) {
+            return true;
+        }
+        if (agent.ParentID) {
+            const parentAgent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agent.ParentID));
+            if (parentAgent && parentAgent.ArtifactCreationMode === 'Always') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Why this run saves no memory writes, or null when it may: the agent has not opted in (`AllowMemoryWrite`), or the
      * run's audience adds a reader. A write is the caller's note, and its reply — saved, superseded, "already exists
      * verbatim" — is read against the caller's own notes, so in a shared conversation it would tell the room what the
@@ -10524,12 +10716,30 @@ The context is now within limits. Please retry your request with the recovered c
                 ? AgentUserPolicyEngine.Instance.GetCachedPolicy(agent.ID, _contextUser.ID)
                 : null;
 
+            const runnableAgentDirectory =
+                typeof engine.GetUserRunnableAgentDirectory === 'function'
+                    ? engine.GetUserRunnableAgentDirectory(_contextUser)
+                    : [];
+            const maxPreloadedAgents = 25;
+            const visibleRunnableAgents = runnableAgentDirectory.slice(0, maxPreloadedAgents);
+            const availableAgentLines = visibleRunnableAgents.map(a =>
+                a.Description ? `- **${a.Name}**: ${a.Description}` : `- **${a.Name}**`
+            );
+            if (runnableAgentDirectory.length > maxPreloadedAgents) {
+                availableAgentLines.push(
+                    `*(Showing ${maxPreloadedAgents} of ${runnableAgentDirectory.length} runnable agents — use "Find Candidate Agents" to search the full catalog)*`
+                );
+            }
+            const availableAgentDetails = availableAgentLines.join('\n');
+
             const contextData: AgentContextData = {
                 agentName: cachedUserPolicy?.DisplayNameOverride?.trim() || agent.Name,
                 agentDescription: agent.Description,
                 parentAgentName: agent.Parent ? agent.Parent.trim() : "",
                 subAgentCount: subAgentCount,
                 subAgentDetails: subAgentDetails,
+                availableAgentCount: runnableAgentDirectory.length,
+                availableAgentDetails: availableAgentDetails,
                 actionCount: activeActions.length,
                 actionDetails: actionDetails,
                 clientToolDetails: clientToolDetails,
@@ -12170,6 +12380,7 @@ The context is now within limits. Please retry your request with the recovered c
                 PrimaryScopeRecordID: params.PrimaryScopeRecordID,
                 companyId: params.companyId,
                 SecondaryScopes: params.SecondaryScopes,
+                conversationDetailId: params.conversationDetailId, // propagate conversationDetailId so sub-agent task graphs attach to the chat message
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
                     // Re-apply post-INSERT: this callback can fire while the step's INSERT is still in flight,
@@ -12606,6 +12817,10 @@ The context is now within limits. Please retry your request with the recovered c
             lines.push(`**Error:** ${result.agentRun.ErrorMessage}`);
         }
 
+        if (result.agentRun?.Message?.trim()) {
+            lines.push(`**Message:**\n${result.agentRun.Message.trim()}`);
+        }
+
         // Payload — the actual result data the parent agent cares about.
         // Not truncated by default — the expiration/compaction lifecycle handles
         // context window management. Truncating here permanently discards data
@@ -12684,7 +12899,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     protected resolveActionResultCrush(params: ExecuteAgentParams): ActionResultCrushConfig | undefined {
-        const agentTypePromptParams = params.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+        const agentTypePromptParams = (params.data?.__agentTypePromptParams ?? this._agentTypePromptParams) as Record<string, unknown> | undefined;
         if (agentTypePromptParams?.crushActionResults === false) {
             return undefined;
         }
@@ -13014,6 +13229,7 @@ The context is now within limits. Please retry your request with the recovered c
         this._promptTurnCount = 0;
         this._lastRecordedPromptStack = null;
         this._heldDecisions = undefined;
+        this._awaitingWorkflowTaskID = null;
 
         // Resolve action-result compression config for this run (default on; opt out via
         // crushActionResults: false in the agent-type prompt params).
@@ -13796,6 +14012,76 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Builds the user-oriented initialization progress message for an agent run.
+     *
+     * - Root agent (`_depth === 0`): `'Getting ready...'`
+     * - Direct sub-agent (`_depth === 1`): `'Starting <SubAgentName>...'`
+     * - Nested sub-agent (`_depth > 1`): `'<ParentBreadcrumb>: Starting <SubAgentName>...'`
+     *
+     * @protected
+     * @param {ExecuteAgentParams} params - Execution parameters for the current agent
+     * @returns {string} Formatted initialization progress message
+     */
+    protected buildInitializationProgressMessage(params: ExecuteAgentParams): string {
+        if (this._depth === 0) {
+            return 'Getting ready...';
+        }
+        const startPhrase = `Starting ${params.agent.Name}...`;
+        const parentBreadcrumb = this._agentHierarchy.slice(1, -1).join(' → ');
+        return parentBreadcrumb ? `${parentBreadcrumb}: ${startPhrase}` : startPhrase;
+    }
+
+    /**
+     * Builds a user-oriented progress message for a prompt execution step without
+     * exposing internal framework terminology ("initial prompt", "payload", "context")
+     * or duplicating the sub-agent name when prefixed by {@link formatHierarchicalMessage}.
+     *
+     * @protected
+     * @param {ExecuteAgentParams} params - Execution parameters for the current agent
+     * @param {BaseAgentNextStep | null} [previousDecision] - Previous step decision when re-prompting
+     * @returns {string} Base progress message (before `formatHierarchicalMessage` breadcrumb prefixing)
+     */
+    protected buildPromptProgressMessage(
+        params: ExecuteAgentParams,
+        previousDecision?: BaseAgentNextStep | null
+    ): string {
+        if (!previousDecision) {
+            return this._depth > 0
+                ? 'Thinking...'
+                : `${params.agent.Name} is thinking...`;
+        }
+
+        const retryReason = previousDecision.retryReason?.trim();
+        if (retryReason) {
+            if (retryReason === 'Payload change applied') {
+                return this._depth > 0
+                    ? 'Thinking through the next steps...'
+                    : `${params.agent.Name} is thinking through the next steps...`;
+            }
+            if (retryReason.startsWith('Context recovery')) {
+                return this._depth > 0
+                    ? 'Thinking...'
+                    : `${params.agent.Name} is thinking...`;
+            }
+            if (retryReason === 'Error while processing actions, retry') {
+                return 'Recovering from an error and trying another approach...';
+            }
+            return retryReason;
+        }
+
+        const retryInstructions = previousDecision.retryInstructions?.trim();
+        if (retryInstructions) {
+            return this._depth > 0
+                ? 'Reviewing batch results...'
+                : `${params.agent.Name} is reviewing batch results...`;
+        }
+
+        return this._depth > 0
+            ? 'Thinking through the next steps...'
+            : `${params.agent.Name} is thinking through the next steps...`;
+    }
+
+    /**
      * Trims a step name to what `AIAgentRunStep.StepName` can hold. Step names are built from free
      * text — a termination message quoting a provider's error, a tool name with its arguments, the
      * hierarchy breadcrumb in front of either — and one longer than the column made the whole row
@@ -14196,9 +14482,7 @@ The context is now within limits. Please retry your request with the recovered c
         try {
             // Report prompt execution progress with context
             const isRetry = !!previousDecision;
-            const promptMessage = isRetry
-                ? `Running ${params.agent.Name} with context from ${previousDecision.retryReason || 'previous actions'}`
-                : `Running ${params.agent.Name}'s initial prompt...`;
+            const promptMessage = this.buildPromptProgressMessage(params, previousDecision);
 
             const hierarchicalStepToEmit = this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts);
 
@@ -14373,7 +14657,13 @@ The context is now within limits. Please retry your request with the recovered c
             const initialNextStep = await this.determineNextStep<P>(params, config.agentType, promptResult, payload);
             
             // Apply payload changes if provided
-            let finalPayload = payload; // Start with current payload
+            const isUnmodifiedInheritedPayload = payload === params.payload;
+            let finalPayload = (initialNextStep.artifactDirective?.behavior === 'create-new'
+                && !initialNextStep.payloadChangeRequest
+                && initialNextStep.step === 'Sub-Agent'
+                && (this._promptTurnCount <= 1 || isUnmodifiedInheritedPayload))
+                ? ({} as P)
+                : payload; // Start with current payload
             let currentStepPayloadChangeResult = undefined;
             if (initialNextStep.payloadChangeRequest) {
                 // Parse the allowed paths if configured
@@ -14381,9 +14671,18 @@ The context is now within limits. Please retry your request with the recovered c
                     ? JSON.parse(params.agent.PayloadSelfWritePaths) 
                     : this.getDefaultPayloadSelfWritePaths();
 
+                // When creating a brand-new artifact where the current payload is still the inherited
+                // payload from a prior conversation run (even if read-only action steps ran first) or when
+                // replaceElements is used with behavior='create-new', apply against a clean empty object
+                // so keys from the previous artifact cannot bleed in.
+                const basePayload = (initialNextStep.artifactDirective?.behavior === 'create-new'
+                    && (this._promptTurnCount <= 1 || isUnmodifiedInheritedPayload || Boolean(initialNextStep.payloadChangeRequest.replaceElements)))
+                    ? ({} as P)
+                    : payload;
+
                 // Apply the changes to the payload with operation control
                 const changeResult = this._payloadManager.applyAgentChangeRequest(
-                    payload,
+                    basePayload,
                     initialNextStep.payloadChangeRequest,
                     {
                         validateChanges: true,
@@ -14871,10 +15170,17 @@ The context is now within limits. Please retry your request with the recovered c
                     );
                 }
                 
+                // When either the parent or a terminal child sub-agent declared behavior='create-new',
+                // merge the child's result against a clean empty object so prior-turn keys never bleed in.
+                const mergeTargetPayload = (previousDecision?.artifactDirective?.behavior === 'create-new'
+                    || (subAgentRequest.terminateAfter && subAgentResult.artifactDirective?.behavior === 'create-new'))
+                    ? ({} as SR)
+                    : previousDecision.newPayload;
+
                 // Merge upstream changes back into parent payload
                 const mergeResult = this._payloadManager.mergeUpstreamPayload(
                     subAgentRequest.name,
-                    previousDecision.newPayload,
+                    mergeTargetPayload,
                     resultPayloadForMerge,
                     upstreamPaths,
                     params.verbose === true || IsVerboseLoggingEnabled()
@@ -14994,8 +15300,9 @@ The context is now within limits. Please retry your request with the recovered c
                 this.logStatus(`📄 Collected ${subAgentResult.fileOutputs.length} file output(s) from sub-agent '${subAgentRequest.name}'`, true);
             }
 
-            // Determine if we should terminate after sub-agent
-            const shouldTerminate = subAgentRequest.terminateAfter;
+            // Determine if we should terminate after sub-agent (including when the sub-agent parked on a durable workflow)
+            const subAgentParkedOnWorkflow = subAgentResult.agentRun?.Status === 'Paused';
+            const shouldTerminate = subAgentRequest.terminateAfter || subAgentParkedOnWorkflow;
             
             // Prepare output data
             const outputData = {
@@ -15038,14 +15345,36 @@ The context is now within limits. Please retry your request with the recovered c
                     newPayload: mergedPayload, // Preserve sub-agent payload changes
                     responseForm: subAgentResult.responseForm,
                     actionableCommands: subAgentResult.actionableCommands,
-                    automaticCommands: subAgentResult.automaticCommands
-                    // artifactDirective is deliberately NOT carried across the parent/child
-                    // boundary — see warnIfDiscardingSubAgentArtifactDirective.
+                    automaticCommands: subAgentResult.automaticCommands,
+                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
                 };
 
                 // Validate through parent's ChatHandlingOption (if configured)
                 // This ensures parent agents can override child Chat steps
                 return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
+            }
+
+            // When a sub-agent (e.g. Workflow Planner) submits a durable task graph, its run parks
+            // with Status === 'Paused'. Propagate the parked state to the parent run and terminate
+            // immediately with the sub-agent's workflow launch message so the parent orchestrator
+            // does not continue looping or re-invoking the sub-agent while the workflow runs.
+            if (subAgentParkedOnWorkflow) {
+                this._awaitingWorkflowTaskID = this.extractSubAgentWorkflowTaskID(subAgentResult.agentRun);
+                if (this._agentRun) {
+                    this._agentRun.FinalPayloadObject = mergedPayload;
+                }
+                return {
+                    ...subAgentResult,
+                    step: 'Success',
+                    terminate: true,
+                    message: subAgentResult.agentRun?.Message || null,
+                    previousPayload: previousDecision?.newPayload,
+                    newPayload: mergedPayload,
+                    responseForm: subAgentResult.responseForm,
+                    actionableCommands: subAgentResult.actionableCommands,
+                    automaticCommands: subAgentResult.automaticCommands,
+                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
+                };
             }
             
             // Add user message with the sub-agent results using markdown format
@@ -15091,22 +15420,27 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.FinalPayloadObject = mergedPayload;
             }
             
-            this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
+            if (previousDecision?.taskGraph?.folded === true && subAgentResult.artifactDirective) {
+                this._lastSubAgentArtifactDirective = subAgentResult.artifactDirective;
+            } else if (!previousDecision?.artifactDirective && !shouldTerminate) {
+                this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
+            }
             return {
                 ...subAgentResult,
                 step: subAgentResult.success ? 'Success' : 'Failed',
                 // Capture error message from sub-agent run for proper error propagation
                 errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Sub-agent failed with no error message'),
+                retryReason: subAgentResult.success
+                    ? `Reviewing results from ${subAgentRequest.name}`
+                    : `Handling error from ${subAgentRequest.name}`,
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload,
-                // An artifact directive describes the payload of the agent that ISSUED it. What the
-                // parent returns here is `mergedPayload` — its own payload with the child's changes
-                // folded in — so letting the spread above carry the child's directive through would
-                // persist the PARENT's payload onto an artifact the CHILD named, silently and with no
-                // way for the parent to opt out. Dropped explicitly, which also matches the Chat
-                // mapping in this method and `executeChatStep`: neither ever carried it.
-                artifactDirective: undefined
+                // Preserve the parent's own directive on this Sub-Agent step, or when the sub-agent
+                // terminates the parent run directly (shouldTerminate=true), carry the terminal
+                // sub-agent's directive if the parent did not specify one.
+                artifactDirective: previousDecision?.artifactDirective
+                    ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined)
             };            
         } catch (error) {
             // Preserve payload on error
@@ -15130,6 +15464,32 @@ The context is now within limits. Please retry your request with the recovered c
                 newPayload: payload
             };
         }
+    }
+
+    /**
+     * Extracts the workflow root task ID (`parentTaskID`) from a sub-agent run that parked on a
+     * durable task graph (`Status === 'Paused'`), falling back to the sub-agent run ID so the
+     * parent run's `_awaitingWorkflowTaskID` is guaranteed non-null when parking.
+     *
+     * @protected
+     */
+    protected extractSubAgentWorkflowTaskID(subAgentRun: MJAIAgentRunEntityExtended | undefined): string {
+        if (subAgentRun?.Steps) {
+            for (let i = subAgentRun.Steps.length - 1; i >= 0; i--) {
+                const rawOutput = subAgentRun.Steps[i]?.OutputData;
+                if (!rawOutput) continue;
+                try {
+                    const parsed = JSON.parse(rawOutput) as Record<string, unknown>;
+                    const candidate = parsed.parentTaskID ?? parsed.parentTaskId;
+                    if (typeof candidate === 'string' && candidate.length > 0) {
+                        return candidate;
+                    }
+                } catch {
+                    // Ignore non-JSON step output
+                }
+            }
+        }
+        return subAgentRun?.ID || 'sub-agent-workflow';
     }
 
     /**
@@ -15175,7 +15535,7 @@ The context is now within limits. Please retry your request with the recovered c
             };
         }
 
-        const resolved = this.resolveSubAgentByName(params, name);
+        const resolved = this.resolveSubAgentByName(params, name, previousDecision.taskGraph?.folded === true);
         if (resolved?.relationship) {
             return await this.executeRelatedSubAgentStep<SC, SR>(
                 params,
@@ -15235,7 +15595,8 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected resolveSubAgentByName(
         params: ExecuteAgentParams,
-        name: string
+        name: string,
+        allowAnyActiveAgent: boolean = false
     ): { subAgentEntity: MJAIAgentEntityExtended; relationship?: MJAIAgentRelationshipEntity } | undefined {
         const normalized = name.trim().toLowerCase();
         const childAgent = AIEngine.Instance.Agents.find(a =>
@@ -15270,6 +15631,18 @@ The context is now within limits. Please retry your request with the recovered c
         );
         if (effectiveAgent) {
             return { subAgentEntity: effectiveAgent };
+        }
+        // 4) Single-node constant-folded task graphs (D9): an orchestrator (e.g. Sage) may discover
+        // any active peer agent via Find Candidate Agents and delegate a 1-node Tasks graph to it.
+        // LoopAgentType folds that 1-node graph into an in-run Sub-Agent step (`taskGraph.folded === true`),
+        // so allow resolving any active agent in AIEngine.Instance.Agents.
+        if (allowAnyActiveAgent) {
+            const anyActiveAgent = AIEngine.Instance.Agents.find(a =>
+                a.Status === 'Active' && a.Name.trim().toLowerCase() === normalized
+            );
+            if (anyActiveAgent) {
+                return { subAgentEntity: anyActiveAgent };
+            }
         }
         return undefined;
     }
@@ -15761,8 +16134,12 @@ The context is now within limits. Please retry your request with the recovered c
         const shouldTerminateParent = allExecutions.some(e =>
             e.request.terminateAfter === true
         );
+        const subAgentNames = allExecutions.map(e => e.request.name).join(', ');
         return {
             step: anyFailure ? 'Failed' : (shouldTerminateParent ? 'Success' : 'Retry'),
+            retryReason: anyFailure
+                ? `Reviewing results and errors from ${subAgentNames}`
+                : `Reviewing results from ${subAgentNames}`,
             terminate: shouldTerminateParent,
             newPayload: mergedPayload,
             previousPayload: previousDecision.newPayload
@@ -15951,8 +16328,9 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
-            // Check if we should terminate after this sub-agent
-            const shouldTerminate = subAgentRequest.terminateAfter === true;
+            // Check if we should terminate after this sub-agent (including when the sub-agent parked on a durable workflow)
+            const subAgentParkedOnWorkflow = subAgentResult.agentRun?.Status === 'Paused';
+            const shouldTerminate = subAgentRequest.terminateAfter === true || subAgentParkedOnWorkflow;
 
             // Prepare output data
             const outputData = {
@@ -15995,14 +16373,35 @@ The context is now within limits. Please retry your request with the recovered c
                     newPayload: mergedPayload, // Preserve sub-agent payload changes
                     responseForm: subAgentResult.responseForm,
                     actionableCommands: subAgentResult.actionableCommands,
-                    automaticCommands: subAgentResult.automaticCommands
-                    // artifactDirective is deliberately NOT carried across the parent/child
-                    // boundary — see warnIfDiscardingSubAgentArtifactDirective.
+                    automaticCommands: subAgentResult.automaticCommands,
+                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
                 };
 
                 // Validate through parent's ChatHandlingOption (if configured)
                 // This ensures parent agents can override child Chat steps
                 return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
+            }
+
+            // When a related sub-agent submits a durable task graph, its run parks with Status === 'Paused'.
+            // Propagate the parked state to the parent run and terminate immediately with the sub-agent's
+            // workflow launch message instead of continuing the parent loop.
+            if (subAgentParkedOnWorkflow) {
+                this._awaitingWorkflowTaskID = this.extractSubAgentWorkflowTaskID(subAgentResult.agentRun);
+                if (this._agentRun) {
+                    this._agentRun.FinalPayloadObject = mergedPayload;
+                }
+                return {
+                    ...subAgentResult,
+                    step: 'Success',
+                    terminate: true,
+                    message: subAgentResult.agentRun?.Message || null,
+                    previousPayload: previousDecision?.newPayload,
+                    newPayload: mergedPayload,
+                    responseForm: subAgentResult.responseForm,
+                    actionableCommands: subAgentResult.actionableCommands,
+                    automaticCommands: subAgentResult.automaticCommands,
+                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
+                };
             }
 
             // Add sub-agent result to conversation as user message using markdown format
@@ -16050,22 +16449,22 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.FinalPayloadObject = mergedPayload;
             }
 
-            this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
+            if (!previousDecision?.artifactDirective && !shouldTerminate) {
+                this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
+            }
             return {
                 ...subAgentResult,
                 step: subAgentResult.success ? 'Success' : 'Failed',
                 // Capture error message from sub-agent run for proper error propagation
                 errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Related sub-agent failed with no error message'),
+                retryReason: subAgentResult.success
+                    ? `Reviewing results from ${subAgentRequest.name}`
+                    : `Handling error from ${subAgentRequest.name}`,
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload,
-                // An artifact directive describes the payload of the agent that ISSUED it. What the
-                // parent returns here is `mergedPayload` — its own payload with the child's changes
-                // folded in — so letting the spread above carry the child's directive through would
-                // persist the PARENT's payload onto an artifact the CHILD named, silently and with no
-                // way for the parent to opt out. Dropped explicitly, which also matches the Chat
-                // mapping in this method and `executeChatStep`: neither ever carried it.
-                artifactDirective: undefined
+                artifactDirective: previousDecision?.artifactDirective
+                    ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined)
             };
         } catch (error) {
             // Preserve payload on error
@@ -16718,6 +17117,8 @@ The context is now within limits. Please retry your request with the recovered c
             // After actions complete, we need to process the results
             // The retry step is used to re-execute the prompt with the action results
             // This allows the agent to analyze the results and determine what to do next
+            const failedNoun = failedActions.length === 1 ? 'action' : 'actions';
+            const completedNoun = actionSummaries.length === 1 ? 'action' : 'actions';
             return {
                 terminate: false,
                 step: 'Retry',
@@ -16725,8 +17126,8 @@ The context is now within limits. Please retry your request with the recovered c
                 newPayload: finalPayload, // Use the final payload after any post-processing
                 priorStepResult: actionSummaries,
                 retryReason: failedActions.length > 0
-                    ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
-                    : `Analyzing results from ${actionSummaries.length} completed action(s) to formulate response`
+                    ? `Processing results with ${failedActions.length} failed ${failedNoun}: ${failedActions.map(a => a.actionName).join(', ')}`
+                    : `Analyzing results from ${actionSummaries.length} completed ${completedNoun}`
             };
         }
         catch (e) {
@@ -19294,6 +19695,19 @@ The context is now within limits. Please retry your request with the recovered c
             this.PromoteMediaOutputs(finalStep.promoteMediaOutputs);
         }
 
+        // Resolve manifest alpha IDs (e.g. "A", "B") or version IDs in artifactDirective.targetArtifactId
+        // to the underlying MJ: Artifacts record UUID before returning.
+        let resolvedArtifactDirective = finalStep.artifactDirective ?? this._lastSubAgentArtifactDirective;
+        if (resolvedArtifactDirective?.targetArtifactId) {
+            const resolvedUuid = this._artifactToolManager.ResolveArtifactUuid(resolvedArtifactDirective.targetArtifactId);
+            if (resolvedUuid) {
+                resolvedArtifactDirective = {
+                    ...resolvedArtifactDirective,
+                    targetArtifactId: resolvedUuid
+                };
+            }
+        }
+
         // Return unified media outputs — all items are persisted by AgentRunner.
         // Sub-agents pass their mediaOutputs to parent for merging and placeholder resolution.
         return {
@@ -19303,7 +19717,7 @@ The context is now within limits. Please retry your request with the recovered c
             responseForm: finalStep.responseForm,
             actionableCommands: resolvedActionableCommands,
             automaticCommands: finalStep.automaticCommands,
-            artifactDirective: finalStep.artifactDirective,
+            artifactDirective: resolvedArtifactDirective,
             memoryContext: this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0
                 ? this._injectedMemory
                 : undefined,

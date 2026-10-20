@@ -712,6 +712,14 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public afterResponseFormSubmitted = this.AfterResponseFormSubmitted;
+  @Output() public TaskGraphPanelRequested = new EventEmitter<{
+    parentTaskId: string;
+    workflowTitle: string;
+    workflowName?: string;
+    isRunning?: boolean;
+  }>();
+  /** @deprecated Use {@link TaskGraphPanelRequested}. */
+  @Output() public taskGraphPanelRequested = this.TaskGraphPanelRequested;
 
   /**
    * Asks the host to load the next older page. Fired when the "earlier messages"
@@ -2072,9 +2080,13 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // ratings and attachments.
     this.applyArtifactsToInstance(instance, message.ID, ref.changeDetectorRef);
 
-    // Status change requires explicit markForCheck on the OnPush dynamic child.
+    // Status or in-place entity mutations (e.g. message.Load() in handleMessageCompletion)
+    // require explicit detectChanges on the dynamically created MessageItemComponent child.
     if (previousMessage && previousMessage.Status !== message.Status) {
       ref.changeDetectorRef.markForCheck();
+    }
+    if (!this.isViewDestroyed(ref.changeDetectorRef)) {
+      ref.changeDetectorRef.detectChanges();
     }
   }
 
@@ -2182,6 +2194,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.messagePinToggled.subscribe((msg: MJConversationDetailEntity) => this.MessagePinToggled.emit(msg));
     instance.beforeResponseFormSubmitted.subscribe((e: BeforeResponseFormSubmittedEventArgs) => this.BeforeResponseFormSubmitted.emit(e));
     instance.afterResponseFormSubmitted.subscribe((e: AfterResponseFormSubmittedEventArgs) => this.AfterResponseFormSubmitted.emit(e));
+    instance.TaskGraphPanelRequested.subscribe((data: { parentTaskId: string; workflowTitle: string; workflowName?: string; isRunning?: boolean }) => this.TaskGraphPanelRequested.emit(data));
 
     if (instance.artifactActionPerformed) {
       instance.artifactActionPerformed.subscribe((data: {action: string; artifactId: string}) => {

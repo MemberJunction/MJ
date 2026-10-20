@@ -1224,7 +1224,7 @@ export class PayloadManager {
         // siblings of updateElements/newElements instead of inside them. This detects those
         // stray keys and moves them into the appropriate bucket so the changes aren't silently lost.
         if (!options?.ignoreStrayKeys) {
-            this.autoCorrectStrayKeys(changeRequest, originalPayload, warnings, options?.agentName);
+            this.autoCorrectStrayKeys(changeRequest, originalPayload, warnings, options?.agentName, options?.allowedPaths);
         }
 
         const result = this.fastCloneDeep(originalPayload) || {} as P;
@@ -1331,7 +1331,8 @@ export class PayloadManager {
     /**
      * Detects and auto-corrects stray keys in a payloadChangeRequest.
      * LLMs sometimes place payload properties as siblings of updateElements/newElements
-     * instead of nesting them inside. This method moves those stray keys into the
+     * instead of nesting them inside, or wrap payload properties inside an alias object
+     * such as `setFields` / `setElements`. This method moves those stray keys into the
      * appropriate bucket (updateElements if the key exists on the payload, newElements if not).
      *
      * Only keys starting with a letter (a-z, A-Z) are considered — keys starting with
@@ -1342,9 +1343,14 @@ export class PayloadManager {
         changeRequest: AgentPayloadChangeRequest<any>,
         originalPayload: P,
         warnings: string[],
-        agentName?: string
+        agentName?: string,
+        allowedPaths?: string[]
     ): void {
         const recognizedKeys = new Set(['newElements', 'updateElements', 'replaceElements', 'removeElements', 'reasoning']);
+        const wrapperAliasKeys = new Set([
+            'setFields', 'setElements', 'createElements', 'addElements',
+            'modifyElements', 'patchElements', 'updates', 'fields', 'set', 'add'
+        ]);
         const strayKeys: string[] = [];
 
         for (const key of Object.keys(changeRequest)) {
@@ -1360,37 +1366,71 @@ export class PayloadManager {
 
         const prefix = agentName ? `[PayloadManager:${agentName}]` : '[PayloadManager]';
 
-        for (const key of strayKeys) {
-            const value = (changeRequest as any)[key];
-            const existsOnPayload = originalPayload && typeof originalPayload === 'object' && key in (originalPayload as any);
+        const placeKeyInBucket = (targetKey: string, targetValue: unknown, unwrappedFrom?: string): void => {
+            const existsOnPayload = originalPayload && typeof originalPayload === 'object' && targetKey in (originalPayload as Record<string, unknown>);
             const targetBucket = existsOnPayload ? 'updateElements' : 'newElements';
 
             // Ensure the target bucket exists
             if (!changeRequest[targetBucket]) {
-                (changeRequest as any)[targetBucket] = {};
+                (changeRequest as Record<string, unknown>)[targetBucket] = {};
             }
 
             // Deep-merge the stray value into the target bucket (don't overwrite existing explicit entries)
-            const bucket = (changeRequest as any)[targetBucket];
-            if (key in bucket) {
+            const bucket = (changeRequest as Record<string, Record<string, unknown>>)[targetBucket];
+            if (targetKey in bucket) {
                 // Existing explicit entry takes precedence — merge stray value underneath
-                if (typeof bucket[key] === 'object' && bucket[key] !== null &&
-                    typeof value === 'object' && value !== null &&
-                    !Array.isArray(bucket[key]) && !Array.isArray(value)) {
+                if (typeof bucket[targetKey] === 'object' && bucket[targetKey] !== null &&
+                    typeof targetValue === 'object' && targetValue !== null &&
+                    !Array.isArray(bucket[targetKey]) && !Array.isArray(targetValue)) {
                     // Deep merge: stray values fill in gaps, explicit values win
-                    bucket[key] = _.defaultsDeep(bucket[key], value);
+                    bucket[targetKey] = _.defaultsDeep(bucket[targetKey], targetValue);
                 }
                 // For primitives or mismatched types, explicit entry wins — skip
             } else {
-                bucket[key] = value;
+                bucket[targetKey] = targetValue;
             }
 
-            // Remove from top level
-            delete (changeRequest as any)[key];
-
-            const warningMsg = `${prefix} Auto-corrected stray key "${key}" in payloadChangeRequest — moved to ${targetBucket}`;
+            const warningMsg = unwrappedFrom
+                ? `${prefix} Auto-corrected stray key "${targetKey}" (unwrapped from "${unwrappedFrom}") in payloadChangeRequest — moved to ${targetBucket}`
+                : `${prefix} Auto-corrected stray key "${targetKey}" in payloadChangeRequest — moved to ${targetBucket}`;
             warnings.push(warningMsg);
             console.warn(`⚠️  ${warningMsg}`);
+        };
+
+        for (const key of strayKeys) {
+            const value = (changeRequest as Record<string, unknown>)[key];
+            const existsOnPayload = originalPayload && typeof originalPayload === 'object' && key in (originalPayload as Record<string, unknown>);
+            const isPlainObject = typeof value === 'object' && value !== null && !Array.isArray(value);
+
+            if (isPlainObject && !existsOnPayload) {
+                const innerEntries = Object.entries(value as Record<string, unknown>);
+                const isExplicitlyInAllowedPaths = Boolean(
+                    allowedPaths &&
+                    allowedPaths.some(p => p === key || p.startsWith(`${key}.`) || p.startsWith(`${key}:`))
+                );
+                const isAllowedDirectly = !allowedPaths || this.isOperationAllowedForPath(key, 'add', allowedPaths);
+                const isKnownWrapperAlias = wrapperAliasKeys.has(key) && !isExplicitlyInAllowedPaths;
+                const isDisallowedWrapperOfAllowedKeys = Boolean(
+                    allowedPaths &&
+                    !isAllowedDirectly &&
+                    innerEntries.length > 0 &&
+                    innerEntries.every(([ik]) =>
+                        this.isOperationAllowedForPath(ik, 'add', allowedPaths) ||
+                        this.isOperationAllowedForPath(ik, 'update', allowedPaths)
+                    )
+                );
+
+                if (isKnownWrapperAlias || isDisallowedWrapperOfAllowedKeys) {
+                    for (const [innerKey, innerValue] of innerEntries) {
+                        placeKeyInBucket(innerKey, innerValue, key);
+                    }
+                    delete (changeRequest as Record<string, unknown>)[key];
+                    continue;
+                }
+            }
+
+            placeKeyInBucket(key, value);
+            delete (changeRequest as Record<string, unknown>)[key];
         }
     }
 

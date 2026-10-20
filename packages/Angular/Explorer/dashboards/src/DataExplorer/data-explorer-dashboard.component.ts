@@ -3,7 +3,8 @@ import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, Input, 
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime } from 'rxjs/operators';
-import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
+import { BaseDashboard, NavigationService, GetDeletedRecordFromEvent, RecordIdentityMatches, NormalizeRecordIdForMatch } from '@memberjunction/ng-shared';
+import type { DeletedRecordRef } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -752,6 +753,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
+    // Wired before the async setup below, so a delete during a slow load isn't missed.
+    this.listenForRecordDeletes();
     try {
     // Ensure UserInfoEngine is configured before we try to access user settings
     // This prevents race conditions where we try to load default view settings
@@ -2257,6 +2260,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (this.pendingRecordSelection && this.SelectedEntity) {
       const recordId = this.pendingRecordSelection;
       this.pendingRecordSelection = null; // Clear it so we don't keep trying
+      if (this.wasDeletedInSession(this.SelectedEntity, recordId)) {
+        // A replayed key for a record deleted in this session — nothing to select.
+        this.StateService.closeDetailPanel();
+        this.cdr.detectChanges();
+        return;
+      }
 
       // Try to find the record by primary key or concatenated string
       const entity = this.SelectedEntity;
@@ -2276,7 +2285,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       }
     }
     // Restore selected record if we have a persisted selectedRecordId
-    else if (this.State.selectedRecordId && this.State.detailPanelOpen && !this.SelectedRecord && this.SelectedEntity) {
+    else if (this.State.selectedRecordId && this.State.detailPanelOpen && !this.SelectedRecord && this.SelectedEntity
+      && !this.wasDeletedInSession(this.SelectedEntity, this.State.selectedRecordId)) {
       const entity = this.SelectedEntity;
       const record = event.records.find(r =>
         buildPkString(r, entity) === this.State.selectedRecordId
@@ -2325,6 +2335,55 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** @deprecated Use {@link OnDetailPanelClosed}. */
   public onDetailPanelClosed(): void {
     return this.OnDetailPanelClosed();
+  }
+
+  /**
+   * Keep the preview and the grid honest when records are deleted — from a form in another tab,
+   * a custom form, or any other `BaseEntity.Delete()`; and, for the grid, by another session.
+   */
+  private listenForRecordDeletes(): void {
+    MJGlobal.Instance.GetEventListener()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(event => {
+        // Read the key now: right after raising 'delete' the entity is reset and its key is gone.
+        const deleted = GetDeletedRecordFromEvent(event);
+        if (deleted) {
+          this.OnRecordDeleted(deleted);
+        }
+      });
+    this.gridRefreshOnDelete$
+      .pipe(debounceTime(300), takeUntil(this.destroy$))
+      .subscribe(() => this.ViewWorkspaceRef?.RefreshInPlace());
+  }
+
+  /**
+   * A record was deleted. A delete in this session closes the preview if it shows that record,
+   * and the record is remembered so a replayed `record=` param can't reopen it. A delete by
+   * another session leaves the preview alone — the user may be reading it — as record tabs do.
+   * Either way, a grid showing that entity reloads in place, keeping the user's page and sort.
+   */
+  public OnRecordDeleted(deleted: DeletedRecordRef): void {
+    if (!deleted.Remote) {
+      this.deletedRecordKeys.add(this.deletedRecordKey(deleted.EntityName, deleted.RecordId));
+      const panelEntity = this.DetailPanelEntity;
+      if (this.SelectedRecord && panelEntity &&
+          RecordIdentityMatches(panelEntity.Name, buildPkString(this.SelectedRecord, panelEntity), deleted)) {
+        this.OnDetailPanelClosed();
+        this.cdr.detectChanges();
+      }
+    }
+    if (this.SelectedEntity?.Name.trim().toLowerCase() === deleted.EntityName.trim().toLowerCase()) {
+      this.gridRefreshOnDelete$.next();
+    }
+  }
+
+  private deletedRecordKey(entityName: string, recordId: string): string {
+    return `${entityName.trim().toLowerCase()}::${NormalizeRecordIdForMatch(recordId)}`;
+  }
+
+  /** True when this session deleted the record a URL / deep-link key names. */
+  private wasDeletedInSession(entity: EntityInfo | null, recordKey: string): boolean {
+    return !!entity && this.deletedRecordKeys.has(this.deletedRecordKey(entity.Name, recordKey));
   }
 
   /**
@@ -2598,6 +2657,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** Record ID to select once data loads (from deep link) */
   private pendingRecordSelection: string | null = null;
 
+  /**
+   * Records deleted in this session, as `entity::id` keys (see {@link deletedRecordKey}). Leaving a
+   * deleted record's tab returns here by replaying the query params captured when it was opened —
+   * `record=<its id>` included — so every path that would re-select a record from a key checks this
+   * first, or the preview reopens on a record that no longer exists.
+   */
+  private deletedRecordKeys = new Set<string>();
+
+  /** Grid reloads asked for by deletes, debounced so a burst of deletes reloads once. */
+  private gridRefreshOnDelete$ = new Subject<void>();
+
   // ========================================
   // BREADCRUMB NAVIGATION
   // ========================================
@@ -2829,8 +2899,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.DebouncedFilterText = '';
         }
 
-        // Handle record selection
-        if (urlState.record && !entityChanged && this.isSelectedRecord(urlState.record)) {
+        // Handle record selection. A key for a record deleted in this session (replayed when its
+        // tab closes and returns here) is treated as no record.
+        if (urlState.record && this.wasDeletedInSession(entity, urlState.record)) {
+          this.SelectedRecord = null;
+          this.DetailPanelEntity = null;
+          this.StateService.closeDetailPanel();
+        } else if (urlState.record && !entityChanged && this.isSelectedRecord(urlState.record)) {
           // Already showing this record — nothing to re-resolve
         } else if (urlState.record) {
           if (entityChanged) {
