@@ -21,8 +21,11 @@ import { FindMigrations, StripSqlComments } from '../lib/migrations.js';
 /** The reviewed-exception marker, on the guarded line or the line above it. */
 export const EXISTENCE_GUARD_MARKER = 'mj-standards-allow: existence-guard';
 
-/** Catalog functions whose only use in an `IF` is asking whether a schema object exists. */
-const CATALOG_FUNCTION_GUARD = /\bIF\s+(?:NOT\s+)?\(?\s*(OBJECT_ID|COL_LENGTH|TYPE_ID|SCHEMA_ID|INDEXPROPERTY|COLUMNPROPERTY|INDEXKEY_PROPERTY)\s*\(/i;
+/**
+ * Catalog functions whose only use in an `IF` is asking whether a schema object exists. The optional
+ * `(` carries its own whitespace so no two whitespace runs are adjacent (that backtracks badly).
+ */
+const CATALOG_FUNCTION_GUARD = /\bIF\s+(?:NOT\s+)?(?:\(\s*)?(OBJECT_ID|COL_LENGTH|TYPE_ID|SCHEMA_ID|INDEXPROPERTY|COLUMNPROPERTY|INDEXKEY_PROPERTY)\s*\(/i;
 
 /** `IF [NOT] EXISTS (` — a guard only when its subquery reads the catalog; see {@link CATALOG_SOURCE}. */
 const EXISTS_GUARD = /\bIF\s+(?:NOT\s+)?EXISTS\s*\(/i;
