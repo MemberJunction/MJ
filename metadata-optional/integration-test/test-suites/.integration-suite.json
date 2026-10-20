@@ -1848,7 +1848,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT152 - Video Studio Live Smoke",
-            "Sequence": 16,
+            "Sequence": 19,
             "Status": "Active"
           },
           "primaryKey": {
