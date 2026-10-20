@@ -403,7 +403,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * or tell {agent} what to do differently" placeholder. Defaults true (current behavior). Hosts
    * with no stop experience (a review surface, a space whose runs are managed elsewhere) set false
    * without making the conversation read-only. UI only: a run stopped from another client still
-   * shows as stopped, and the next message still continues it.
+   * shows as stopped, and the next message still continues it. The composer's status line
+   * ({@link StatusText}) is not part of the cap: it reports that a reply is in flight either way.
    */
   @Input() public AllowStopRun = true;
 
@@ -2228,23 +2229,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return agent ? `Stop ${agent}` : 'Stop';
   }
 
-  /** The composer's status line: who is working, or what is being stopped. Null when the slot is Send. */
+  /**
+   * The composer's status line: who is working, or what is being stopped. Null with nothing in
+   * flight. It is information, not a control, so it shows whenever a reply is in flight, whether
+   * or not the viewer may stop it (a read-only viewer, or a host with {@link AllowStopRun} off);
+   * only the send slot is gated. The stopping text likewise reads the stopping state itself, not
+   * the slot's mode.
+   */
   public get StatusText(): string | null {
-    const mode = this.SendSlotMode;
-    if (mode === 'send') {
+    const count = this.InFlightCount;
+    if (count === 0) {
       return null;
     }
-    const count = this.InFlightCount;
     const agent = this.inFlightAgentName();
-    if (mode === 'stopping') {
+    if (this.isAnyStopping()) {
       return count > 1 ? `Stopping ${count} runs…` : `Stopping ${agent ?? 'the run'}…`;
     }
     return count > 1 ? `${count} agents working` : `${agent ?? 'The agent'} is working`;
   }
 
-  /** The elapsed time after the status line, for a single run that is working. */
+  /** The elapsed time after the status line, for a single run that is working (not one being stopped). */
   public get StatusElapsed(): string | null {
-    return this.SendSlotMode === 'stop' && this.InFlightCount === 1 ? this.SendSlotElapsed : null;
+    return this.InFlightCount === 1 && !this.isAnyStopping() ? this.SendSlotElapsed : null;
   }
 
   /**
@@ -3119,7 +3125,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
         if (command.type === 'open:resource') {
           if (this.isConversationArtifactCommand(command)) {
-            if (this.openConversationArtifactForCommand(command)) {
+            if (this.OpenConversationArtifactForCommand(command)) {
               return;
             }
           }
@@ -7772,7 +7778,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Opens the matching (or most recent) artifact in the current conversation's artifact viewer panel.
    * Returns true if a conversation artifact was found and opened.
    */
-  public openConversationArtifactForCommand(command: OpenResourceCommand): boolean {
+  public OpenConversationArtifactForCommand(command: OpenResourceCommand): boolean {
     const rawTarget = String(command.resourceId ?? '').trim();
     const labelTarget = String(command.label ?? '').trim().toLowerCase();
     let latestArtifact: LazyArtifactInfo | null = null;
@@ -7809,7 +7815,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private handleOverlayOpenResourceCommand(command: OpenResourceCommand): void {
     const rt = (command.resourceType ?? '').trim().toLowerCase();
     if (rt === 'report' || rt === 'dashboard') {
-      if (!this.openConversationArtifactForCommand(command)) {
+      if (!this.OpenConversationArtifactForCommand(command)) {
         MJNotificationService.Instance?.CreateSimpleNotification(
           'No artifact found in this conversation to open.',
           'info',
@@ -7875,7 +7881,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       const isUuidPk = pkField?.Type?.toLowerCase() === 'uniqueidentifier';
       const isPlaceholder = !rawVal || (rawVal.startsWith('<') && rawVal.endsWith('>'));
       if (isPlaceholder || (isUuidPk && !IsValidUUID(rawVal))) {
-        if (this.openConversationArtifactForCommand(command)) {
+        if (this.OpenConversationArtifactForCommand(command)) {
           return;
         }
         console.warn('open:resource: invalid or placeholder primary key value', command.entityName, kv);

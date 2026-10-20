@@ -26,13 +26,13 @@
     <!-- Action row: its own strip below the editor (not floating over it), so text never runs behind a button -->
     <div class="composer-actions">
       <!-- Status line, left of the action row: what the host is waiting on ("Sage is working"). A polite
-           live region; the elapsed time sits in an aria-hidden child so its ticking is never announced. -->
+           live region; the elapsed time is a pill in an aria-hidden child so its ticking is never announced. -->
       @if (StatusText) {
         <div class="send-slot-status" [class.send-slot-status--stopping]="SendSlotMode === 'stopping'" role="status" aria-live="polite">
           <i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
           <span class="send-slot-status-text">{{ StatusText }}</span>
           @if (StatusElapsed) {
-            <span class="send-slot-status-elapsed" aria-hidden="true">, {{ StatusElapsed }}</span>
+            <span class="send-slot-status-elapsed" aria-hidden="true">{{ StatusElapsed }}</span>
           }
         </div>
       }
