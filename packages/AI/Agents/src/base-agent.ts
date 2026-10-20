@@ -12,7 +12,8 @@
  */
 
 import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
-import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
+import { BuildActionToolSet, CoerceActionArguments, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
+import { DescribeValueSchemaInline, GetStoredValueSchema } from './native-tools/action-param-schema';
 import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
@@ -11881,8 +11882,12 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /** The model's arguments as the engine's input parameters. */
-    private toEngineActionParams(action: AgentAction): ActionParam[] {
-        return Object.entries(action.params || {}).map(([key, value]) => ({
+    private toEngineActionParams(action: AgentAction, actionEntity: MJActionEntityExtended): ActionParam[] {
+        // Coerced against each param's declared schema on every path — envelope, native and flow —
+        // so `"640"` reaches an integer param as 640 whichever protocol produced it. Harness
+        // stand-ins may build an Action literal without the related-record collection.
+        const coerced = CoerceActionArguments(actionEntity.Params?.Items ?? [], action.params);
+        return Object.entries(coerced).map(([key, value]) => ({
             Name: key,
             Value: value,
             Type: 'Input' as const
@@ -12046,7 +12051,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Execute the action and return the full ActionResult
             const result = await ActionEngineServer.Instance.RunAction({
                 Action: actionEntity,
-                Params: this.toEngineActionParams(action),
+                Params: this.toEngineActionParams(action, actionEntity),
                 ContextUser: contextUser,
                 Filters: [],
                 SkipActionLog: false,
@@ -12122,7 +12127,7 @@ The context is now within limits. Please retry your request with the recovered c
             Params: [],
             RunParams: {
                 Action: actionEntity,
-                Params: this.toEngineActionParams(action),
+                Params: this.toEngineActionParams(action, actionEntity),
                 ContextUser: contextUser,
                 Filters: [],
             },
@@ -12719,8 +12724,13 @@ The context is now within limits. Please retry your request with the recovered c
             parts.push('array');
         }
 
+        // A stored ValueSchema is the real type, so it replaces the coarse ValueType label — the
+        // same information the native tool declaration carries.
+        const valueSchema = GetStoredValueSchema(param);
         const vt = param.ValueType?.trim();
-        if (vt && vt !== 'Scalar' && vt !== 'Other') {
+        if (valueSchema) {
+            parts.push(DescribeValueSchemaInline(valueSchema));
+        } else if (vt && vt !== 'Scalar' && vt !== 'Other') {
             parts.push(vt);
         }
 

@@ -9649,6 +9649,12 @@ export const MJActionParamSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this parameter's VALUE may be written to ActionExecutionLog.Params. Default 1. Set to 0 for parameters that carry records, credentials or personal data - for example the Data payload of Execute Agent. Independent of the hard rule that Entity Action params of ValueType 'Entity Object' or 'Entity Object Data' are never logged regardless of this flag. When logging is suppressed the log records the parameter name, its type and a redaction marker, never the value.`),
+    ValueSchema: z.any().nullable().describe(`
+        * * Field Name: ValueSchema
+        * * Display Name: Value Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJActionParamEntity_IActionParamValueSchema
+        * * Description: Optional JSON Schema fragment describing this parameter's value, limited to the cross-provider subset: type, description, enum, items, properties and required. When set, the native tool builder declares it to the model in place of the coarse ValueType mapping, and argument coercion follows it. For an IsArray parameter it describes one element. When NULL, the schema is derived from ValueType.`),
     Action: z.string().describe(`
         * * Field Name: Action
         * * Display Name: Action
@@ -68044,6 +68050,42 @@ export class MJActionLibraryEntity extends BaseEntity<MJActionLibraryEntityType>
 
 
 /**
+ * JSON Schema fragment for one Action parameter's value.
+ *
+ * Stored in the `ValueSchema` column of `MJ: Action Params`. CodeGen emits a typed
+ * `ValueSchemaObject` accessor that returns `MJActionParamEntity_IActionParamValueSchema | null`.
+ *
+ * When set, the native tool builder declares this schema to the model in place of the coarse
+ * `ValueType` mapping, and argument coercion follows it before the Action runs. For an `IsArray`
+ * param it describes ONE element; the builder wraps it in `{ type: 'array', items: … }`.
+ *
+ * Deliberately limited to the subset every tool-calling provider accepts (`type`, `description`,
+ * `enum`, `items`, `properties`, `required`). Keywords outside it (`oneOf`, `$ref`, `format`,
+ * `additionalProperties`, …) are rejected or handled differently from one provider to the next, so
+ * the interface does not offer them.
+ *
+ * @example { "type": "string", "enum": ["asc", "desc"] }
+ * @example { "type": "object", "properties": { "TopCount": { "type": "integer" } }, "required": ["TopCount"] }
+ */
+export interface MJActionParamEntity_IActionParamValueSchema {
+    /**
+     * The JSON type of the value. An array of types is a union; prefer a single type, since OpenAPI
+     * 3.0 (which Gemini's function declarations follow) has no union `type`.
+     */
+    type?: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'null' | Array<'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'null'>;
+    /** What the value means. On the top-level schema the param's own `Description` is used when this is absent. */
+    description?: string;
+    /** The only values allowed. */
+    enum?: Array<string | number | boolean | null>;
+    /** For `type: 'array'`: the schema of each element. */
+    items?: MJActionParamEntity_IActionParamValueSchema;
+    /** For `type: 'object'`: the schema of each named property. */
+    properties?: Record<string, MJActionParamEntity_IActionParamValueSchema>;
+    /** For `type: 'object'`: the property names that must be present. */
+    required?: string[];
+}
+
+/**
  * MJ: Action Params - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ActionParam
@@ -68256,6 +68298,35 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
     }
     set LogValue(value: boolean) {
         this.Set('LogValue', value);
+    }
+
+    /**
+    * * Field Name: ValueSchema
+    * * Display Name: Value Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJActionParamEntity_IActionParamValueSchema
+    * * Description: Optional JSON Schema fragment describing this parameter's value, limited to the cross-provider subset: type, description, enum, items, properties and required. When set, the native tool builder declares it to the model in place of the coarse ValueType mapping, and argument coercion follows it. For an IsArray parameter it describes one element. When NULL, the schema is derived from ValueType.
+    */
+    get ValueSchema(): string | null {
+        return this.Get('ValueSchema');
+    }
+    set ValueSchema(value: string | null) {
+        this.Set('ValueSchema', value);
+    }
+
+    /**
+    * Typed accessor for ValueSchema — a live view of the parsed JSON as MJActionParamEntity_IActionParamValueSchema.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ValueSchema field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ValueSchemaObject(): MJActionParamEntity_IActionParamValueSchema | null {
+        return this.GetJSONFieldObject<MJActionParamEntity_IActionParamValueSchema>('ValueSchema');
+    }
+    set ValueSchemaObject(value: MJActionParamEntity_IActionParamValueSchema | null) {
+        this.SetJSONFieldObject<MJActionParamEntity_IActionParamValueSchema>('ValueSchema', value);
     }
 
     /**
