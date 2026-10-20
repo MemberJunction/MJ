@@ -208,7 +208,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
-        ['performance-benchmark', PerformanceBenchmarkChecks, 13], // PB1-PB13 MJ primitives microbenchmarks + Sage/Query Builder/Research Agent deterministic and live runs + SaveReturnMode datestamps_only benchmark (IT128)
+        ['performance-benchmark', PerformanceBenchmarkChecks, 14], // PB1-PB14 MJ primitives microbenchmarks + Sage/Query Builder/Research Agent deterministic and live runs + SaveReturnMode datestamps_only & Phase 2 regression guards (IT128)
         ['search-origin-gate', SearchOriginGateChecks, 4], // SOG1-SOG4 the search origin-record gate against the live views (IT116)
         ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT118)
         ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT123)
@@ -334,7 +334,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'native-tool-calling-live': 4,
         'nested-transactions': 11,
         'open-app-teardown': 2,
-        'performance-benchmark': 13,
+        'performance-benchmark': 14,
         'permission-engine': 15,
         'perplexity-decider': 5,
         'predictive-studio': 5,
