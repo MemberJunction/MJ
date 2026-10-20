@@ -721,6 +721,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   /** @deprecated Use {@link TaskGraphPanelRequested}. */
   @Output() public taskGraphPanelRequested = this.TaskGraphPanelRequested;
 
+  @Output() public ScrollToMessageRequested = new EventEmitter<string>();
+  /** @deprecated Use {@link ScrollToMessageRequested}. */
+  @Output() public scrollToMessageRequested = this.ScrollToMessageRequested;
+
   /**
    * Asks the host to load the next older page. Fired when the "earlier messages"
    * sentinel scrolls into view — never on a raw scroll event, so a fast scroll costs
@@ -989,7 +993,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * back to the full path for that one update. A spacer or a session card standing in for the
    * message is a no-op: the entity holds the text and a remount renders it.
    */
-  public RefreshRenderedMessage(message: MJConversationDetailEntity): boolean {
+  public RefreshRenderedMessage(
+    message: MJConversationDetailEntity,
+    options?: { markStreaming?: boolean }
+  ): boolean {
     const existing = this._renderedMessages.get(this.getMessageKey(message));
     if (!existing) {
       return false;
@@ -1004,7 +1011,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
         return true;
       case 'component':
         existing.ref.instance.message = message;
-        existing.ref.instance.IsStreaming = true;
+        existing.ref.instance.agentRun = this.AgentRunMap?.get(message.ID) || null;
+        if (options?.markStreaming !== false) {
+          existing.ref.instance.IsStreaming = true;
+        }
         if (!this.isViewDestroyed(existing.ref.changeDetectorRef)) {
           existing.ref.changeDetectorRef.detectChanges();
         }
@@ -1509,6 +1519,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   }
 
   ngOnDestroy() {
+    this.detachScrollListener();
     this._olderObserver?.disconnect();
     this._olderObserver = undefined;
     this._spacerObserver?.disconnect();
@@ -2195,6 +2206,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.beforeResponseFormSubmitted.subscribe((e: BeforeResponseFormSubmittedEventArgs) => this.BeforeResponseFormSubmitted.emit(e));
     instance.afterResponseFormSubmitted.subscribe((e: AfterResponseFormSubmittedEventArgs) => this.AfterResponseFormSubmitted.emit(e));
     instance.TaskGraphPanelRequested.subscribe((data: { parentTaskId: string; workflowTitle: string; workflowName?: string; isRunning?: boolean }) => this.TaskGraphPanelRequested.emit(data));
+    instance.ScrollToMessageRequested.subscribe((messageId: string) => this.ScrollToMessageRequested.emit(messageId));
 
     if (instance.artifactActionPerformed) {
       instance.artifactActionPerformed.subscribe((data: {action: string; artifactId: string}) => {
