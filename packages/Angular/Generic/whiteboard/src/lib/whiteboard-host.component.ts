@@ -48,6 +48,7 @@ const PRESENCE_MS = 4200;
  *    toast and presence-cursor garnish, returning the result JSON for the tool round-trip;
  *  - `AgentUndo` fires when the user clicks Undo on the agent-action toast;
  *  - `FocusModeChange` asks the host to move the board to the stage or back to its tab ("Move to stage").
+ *    A host with no stage hides the control with `[ShowFocusToggle]="false"`.
  *
  * Extensibility (before/after events): the host mirrors the engine's cancelable
  * BEFORE / AFTER mutation pairs as outputs (`ItemAdding`/`ItemAdded`,
@@ -78,6 +79,13 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   @Input() BoardTitle = 'Whiteboard';
   /** Persistence chip text (e.g. "Saved to session · v14"). */
   @Input() SavedLabel = 'Saved to session';
+  /**
+   * Whether the header renders the Focus toggle ("Move to stage" / "Back to tab"). It only emits
+   * {@link FocusModeChange}; a host composing the board into its own chrome (a lesson's content
+   * seat, a full-surface room) has nothing to collapse and would otherwise ship a dead button.
+   * {@link SetOnStage} and {@link FocusMode} keep working with the toggle hidden.
+   */
+  @Input() ShowFocusToggle = true;
   /**
    * Opt back in to DOCUMENT-WIDE keyboard shortcuts.
    *

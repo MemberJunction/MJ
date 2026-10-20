@@ -985,14 +985,13 @@ graph ends your turn — you cannot read its output before replying.
 - The graph must be **acyclic**. A cycle can never execute, because nothing would ever become
   eligible to start, so it is rejected outright.
 - Every task declares a `kind` and a matching `configuration`:
-  - `kind: 'Agent'` → `configuration: { agentName }` — must name a real agent
+  - `kind: 'Agent'` → `configuration: { agentName }` — must match an existing agent's exact name (verified from your preloaded sub-agents or `Find Candidate Agents`; never guess or invent an agent name)
   - `kind: 'Action'` → `configuration: { actionName }` — must name a real action
   - `kind: 'Human'` → `configuration: {}` — a step a person completes
   - `kind: 'Prompt'` → `configuration: { promptName }`
   The pairing is the whole assignment; there is no separate flag to set.
-- An edge can be conditional: `dependsOn: [{ tempId: 'analyze', condition: 'severity === "high"' }]`
-  runs the step only when the expression holds. Use it for "only if" work rather than inventing a
-  branching step.
+- An edge can be conditional: `dependsOn: [{ tempId: 'analyze', condition: 'output.severity === "high"' }]`
+  runs the step only when the expression holds against the upstream task's output (`output.<field>`, `status`, `succeeded`, `failed`, `errorMessage`). Use it for "only if" work rather than inventing a branching step. Note: `Query Builder` returns `{ query, rows, columns, metadata: { rowCount, executionTimeMs, sql } }`, so row-count conditions on a `Query Builder` step must use `output.metadata.rowCount > 0` (or `output.rows.length > 0`), never `output.resultCount` or `output.rowCount`.
 - Put structured inputs in `inputPayload`. Describe intent in `description` — that is what the
   assigned agent reads.
 - Maximum 50 tasks per graph.
@@ -1006,8 +1005,10 @@ Your turn ends. You do **not** wait, and you must not claim the work is finished
 - `'reinvoke'` — you get a fresh turn with the outcome, so you can synthesize a final answer.
 - `'none'` — nothing further happens.
 
-A one-task graph with no dependencies is automatically run in-line instead, since a graph of one
-needs no dispatcher. Set `durable: true` if you specifically want the Task row anyway.
+A one-task `Agent` graph with no dependencies is automatically run in-line instead and returns the
+outcome to you on the next step of your current run, since a graph of one needs no dispatcher.
+Omit `continuation` and `durable` on one-task delegations so they run in-line; set `durable: true`
+only if you specifically want a durable background Task row.
 
 If your graph is malformed you will get every problem back at once — fix them all and re-emit the
 **complete** graph, not a patch.

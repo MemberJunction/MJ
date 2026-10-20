@@ -2506,6 +2506,29 @@ describe("BaseAgent.Execute — memory, RAG and the prompt read the run's valida
     });
 });
 
+describe('BaseAgent.Execute — system placeholders in scoped prompt parts', () => {
+    afterEach(() => vi.useRealTimers());
+    const contentOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
+
+    it('replaces them in the messages InjectScopedPromptParts adds, even from an override, and nowhere else', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(2026, 9, 14, 12));
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const keyhole = agent as unknown as Record<string, (...args: unknown[]) => unknown>;
+        vi.spyOn(keyhole, 'InjectContextMemory').mockResolvedValue({ notes: [], examples: [] });
+        vi.spyOn(keyhole, 'InjectPreExecutionRAG').mockResolvedValue(null);
+        vi.spyOn(keyhole, 'InjectScopedPromptParts').mockImplementation((_agent, messages) => {
+            (messages as AgentChatMessage[]).unshift({ role: 'system', content: 'Today is {{ _CURRENT_DATE }}, {{ _USER_NAME }}.' });
+        });
+
+        await agent.Execute(makeParams({ conversationMessages: [{ role: 'user', content: 'Keep {{ _CURRENT_DATE }} as typed' }] }));
+
+        const sent = (runner.Calls[0].conversationMessages ?? []).map(contentOf);
+        expect(sent).toContain(`Today is 2026-10-14, ${TEST_USER.Name}.`);
+        expect(sent.some((c) => c.includes('Keep {{ _CURRENT_DATE }} as typed'))).toBe(true);
+    });
+});
+
 describe('BaseAgent.Execute — the reserved run-data keys count only with TrustReservedRunData', () => {
     const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000b7';
     /** What an untrusted caller (a browser, an Execute Agent action call, MCP, A2A) might put in `data`. */
@@ -2615,3 +2638,92 @@ describe('BaseAgent.buildAgentBaseCatalog — relationship targets', () => {
         expect(catalog.subAgentDetails).not.toContain('Skip');
     });
 });
+
+describe('BaseAgent.Execute — agent.AgentTypePromptParams task graph gate & folded peer-agent resolution', () => {
+    const PEER_QB_ID = 'aaaaaaaa-5555-4000-8000-000000000001';
+
+    it('propagates agent.AgentTypePromptParams.enableTaskGraphs into DetermineNextStep and resolves folded 1-node peer agents', async () => {
+        harness.agent = makeAgentRow({
+            Name: 'Sage',
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+
+        const peerQueryBuilder = makeAgentRow({
+            ID: PEER_QB_ID,
+            Name: 'Query Builder',
+            Status: 'Active',
+        });
+
+        // Expose the peer agent in AIEngine.Instance.Agents (not as a ParentID child or AgentRelationship of Sage)
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [harness.agent, peerQueryBuilder],
+        });
+
+        const singleTaskEnvelope = {
+            taskComplete: false,
+            message: "I'll have Query Builder handle this.",
+            nextStep: {
+                type: 'Tasks',
+                tasks: {
+                    workflowName: 'Order Revenue Breakdown',
+                    reasoning: 'Single-agent SQL query delegation',
+                    tasks: [
+                        {
+                            tempId: 'task1',
+                            name: 'Build Order Revenue Query',
+                            description: 'Build a parameterized SQL query for order revenue by status',
+                            kind: 'Agent',
+                            configuration: {
+                                agentName: 'Query Builder',
+                            },
+                            dependsOn: [],
+                            inputPayload: {},
+                        },
+                    ],
+                },
+            },
+        } as unknown as LoopAgentResponse;
+
+        const { agent, internals } = makeAgent([
+            () => llmEnvelope(singleTaskEnvelope),
+            () => llmEnvelope(successEnvelope({ message: 'Here is your query from Query Builder.' })),
+        ]);
+
+        // Verify resolveSubAgentByName only resolves peer agents when allowAnyActiveAgent=true (folded task graph)
+        const internalResolver = agent as unknown as {
+            resolveSubAgentByName: (
+                p: ExecuteAgentParams,
+                name: string,
+                allowAnyActiveAgent?: boolean
+            ) => { subAgentEntity: { ID: string; Name: string } } | undefined;
+        };
+        const execParams = makeParams();
+        expect(internalResolver.resolveSubAgentByName(execParams, 'Query Builder', false)).toBeUndefined();
+        expect(internalResolver.resolveSubAgentByName(execParams, 'Query Builder', true)?.subAgentEntity.ID).toBe(PEER_QB_ID);
+
+        // Stub processSubAgentStep to verify validateSubAgentNextStep approved the folded peer agent
+        const seenDecisions: BaseAgentNextStep[] = [];
+        internals.processSubAgentStep = async function (this: unknown, _p?: ExecuteAgentParams, decision?: BaseAgentNextStep) {
+            if (decision) {
+                seenDecisions.push(decision);
+            }
+            return {
+                step: 'Success',
+                terminate: false,
+                newPayload: { sql: 'SELECT 1' },
+                previousPayload: {},
+            } as BaseAgentNextStep;
+        } as unknown as () => Promise<BaseAgentNextStep>;
+
+        const result = await agent.Execute(execParams);
+
+        expect(result.success).toBe(true);
+        expect(seenDecisions).toHaveLength(1);
+        expect(seenDecisions[0].step).toBe('Sub-Agent');
+        expect(seenDecisions[0].subAgent?.name).toBe('Query Builder');
+        expect(seenDecisions[0].taskGraph?.folded).toBe(true);
+    });
+});
+

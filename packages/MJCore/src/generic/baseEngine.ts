@@ -998,7 +998,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
             if (event.type === 'delete' || event.type === 'save') {
                 const eName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
-                const matchingConfigs = this.Configs.filter((config: BaseEnginePropertyConfig) => {
+                const matchingConfigs = this._metadataConfigs.filter((config: BaseEnginePropertyConfig) => {
                     return config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === eName;
                 });
 
@@ -1069,7 +1069,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 return true; // No entity name, nothing to do
             }
 
-            const matchingConfigs = this.Configs.filter((config: BaseEnginePropertyConfig) => {
+            const matchingConfigs = this._metadataConfigs.filter((config: BaseEnginePropertyConfig) => {
                 return config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === entityName;
             });
 
@@ -1243,7 +1243,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
             if (!this._entityEventSubjects.has(entityName)) {
                 // Find matching config to get custom debounce time
-                const matchingConfig = this.Configs.find(c =>
+                const matchingConfig = this._metadataConfigs.find(c =>
                     c.EntityName?.trim().toLowerCase() === entityName
                 );
 
@@ -1327,7 +1327,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             const entityName = events[0].baseEntity.EntityInfo.Name.toLowerCase().trim();
             let refreshCount = 0;
 
-            for (const config of this.Configs) {
+            for (const config of this._metadataConfigs) {
                 if (config.AutoRefresh && config.Type === 'entity' && config.EntityName?.trim().toLowerCase() === entityName) {
                     const classified = events.map(e => ({ event: e, disposition: this.classifyEventForConfig(config, e) }));
                     const needingWork = classified.filter(c => c.disposition.action === 'refresh');
