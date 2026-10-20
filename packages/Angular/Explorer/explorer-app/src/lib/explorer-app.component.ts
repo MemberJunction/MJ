@@ -313,12 +313,17 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   }
 
   /**
-   * Gate for the floating chat overlay bubble. Once the shell is rendered this is the shell's
+   * Gate for the floating chat overlay bubble. With the shell rendered this is the shell's
    * RESOLVED answer — Instance Config narrowed by the host's chrome policy (LXP P4: a learner
-   * portal that owns its own AI surface hides the bubble per audience, not with CSS). Before the
-   * shell exists the Instance Config read decides on its own; the overlay is gated on workspace
-   * init anyway (`IsChatOverlayReady`), which comes after the shell. The shell marks for check
-   * when its policy changes, and that marks this parent dirty too, so the bubble follows.
+   * portal that owns its own AI surface hides the bubble per audience, not with CSS). The shell
+   * marks for check when its policy changes, and that marks this parent dirty too, so the bubble
+   * follows.
+   *
+   * The Instance Config fallback is live in exactly one state: the shell is gone (`HasError`, or
+   * a pre-shell guard) while `IsChatOverlayReady` is already true — the error screen after a
+   * workspace that had loaded. There it keeps the pre-policy behaviour (the key alone decides),
+   * which is what shipped before the overlay followed the policy. On a normal load the overlay
+   * is gated on workspace init, which comes after the shell, so the shell always answers.
    */
   public get ShowChatOverlay(): boolean {
     return this.shellRef()?.ChromeFlags.chatOverlay ?? this.chromeFlags.chatOverlay;

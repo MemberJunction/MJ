@@ -467,9 +467,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * The resolved chrome, for collaborators outside the shell. explorer-app reads `chatOverlay`
    * from here (through its view query on this component) so the overlay follows the host's
    * chrome policy with ONE policy instance and ONE `Changed`; the memoization above makes a
-   * read from a parent's change detection a field access.
+   * read from a parent's change detection a field access. Read-only on purpose: this IS the
+   * memo, and a consumer writing to it would poison the shell's own chrome.
    */
-  public get ChromeFlags(): ShellChromeFlags {
+  public get ChromeFlags(): Readonly<ShellChromeFlags> {
       return this.chromeFlags;
   }
 
