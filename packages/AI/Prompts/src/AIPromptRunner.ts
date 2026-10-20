@@ -206,7 +206,7 @@ export class AIPromptRunner extends BaseModelRunner {
     super();
     this._metadata =
       (this._provider as unknown as Metadata) ??
-      (typeof Metadata === 'function' ? new Metadata() : ({} as Metadata));
+      (typeof Metadata === 'function' ? new Metadata() : ({} as Metadata)); // global-provider-ok: the same no-provider fallback as `provider ?? new Metadata()`; the typeof guard keeps core mocks without Metadata working
     this._templateEngine = TemplateEngineServer.Instance;
     this._executionPlanner = new ExecutionPlanner();
     this._jsonValidator = new JSONValidator();
