@@ -311,7 +311,7 @@ describe('calibration against MJ core entity field names', () => {
         // that goes red if the word boundary is removed from `ssn`.
         const collisions = FIELDS.filter((f) => normalizedForFixture(f).includes('ssn'));
         expect(collisions.length).toBeGreaterThanOrEqual(6);
-        expect(collisions.filter(IsSensitiveFieldName)).toEqual([]);
+        expect(collisions.filter((f) => IsSensitiveFieldName(f))).toEqual([]);
     });
 
     it('drops the whole `tin`-as-substring collision set, derived from the fixture', () => {
@@ -320,7 +320,7 @@ describe('calibration against MJ core entity field names', () => {
         // refused, and it is refused by `routing` on its own merits, not by `tin`.
         const collisions = FIELDS.filter((f) => normalizedForFixture(f).includes('tin'));
         expect(collisions.length).toBeGreaterThanOrEqual(40);
-        expect(collisions.filter(IsSensitiveFieldName)).toEqual(['RoutingOrder']);
+        expect(collisions.filter((f) => IsSensitiveFieldName(f))).toEqual(['RoutingOrder']);
     });
 
     it('accepts every plural `Tokens` field, because a count is not a secret', () => {
@@ -329,7 +329,7 @@ describe('calibration against MJ core entity field names', () => {
         // substring, which would refuse all of them again.
         const counts = FIELDS.filter((f) => normalizedForFixture(f).includes('tokens'));
         expect(counts.length).toBeGreaterThanOrEqual(20);
-        expect(counts.filter(IsSensitiveFieldName)).toEqual([]);
+        expect(counts.filter((f) => IsSensitiveFieldName(f))).toEqual([]);
     });
 
     it('pins the total refusal count as a bracket over the real fixture', () => {
@@ -343,7 +343,7 @@ describe('calibration against MJ core entity field names', () => {
         // or widening `token` back to a bare substring (+35) fails here rather than
         // silently making the guard unusable again. Raise it only with the same kind of
         // evidence that lowered it.
-        const refused = FIELDS.filter(IsSensitiveFieldName);
+        const refused = FIELDS.filter((f) => IsSensitiveFieldName(f));
         expect(refused.length).toBeGreaterThanOrEqual(30);
         expect(refused.length).toBeLessThanOrEqual(55);
         // And as a rate, so the bracket keeps its meaning if the fixture doubles in size.
