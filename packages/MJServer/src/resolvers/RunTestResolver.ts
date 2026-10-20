@@ -17,6 +17,7 @@ import { TestEngine } from '@memberjunction/testing-engine';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { StartLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { TestRunVariables, TestLogMessage, TestRunResult as EngineTestRunResult } from '@memberjunction/testing-engine-base';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 // ===== GraphQL Types =====
 
@@ -94,6 +95,7 @@ export class TestExecutionStreamMessage {
 
 // ===== Resolver =====
 
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class RunTestResolver extends ResolverBase {
 

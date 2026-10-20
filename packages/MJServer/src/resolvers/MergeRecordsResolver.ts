@@ -5,6 +5,7 @@ import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInp
 import { z } from 'zod';
 import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 @ObjectType()
 export class EntityDependencyResult {
@@ -18,6 +19,7 @@ export class EntityDependencyResult {
   FieldName: string; // required
 }
 
+@RefuseScopeLimitedPrincipals()
 @Resolver(EntityDependencyResult)
 export class EntityDependencyResolver {
   @Query(() => [EntityDependencyResult])
@@ -63,6 +65,7 @@ export class RecordDependencyResult {
   EntityIDFieldName?: string;
 }
 
+@RefuseScopeLimitedPrincipals()
 @Resolver(RecordDependencyResult)
 export class RecordDependencyResolver {
   @Query(() => [RecordDependencyResult])
@@ -177,6 +180,7 @@ export class RecordMergeResult {
   Request: RecordMergeRequestOutput;
 }
 
+@RefuseScopeLimitedPrincipals()
 @Resolver(RecordMergeResult)
 export class RecordMergeResolver extends ResolverBase {
   @Mutation(() => RecordMergeResult)

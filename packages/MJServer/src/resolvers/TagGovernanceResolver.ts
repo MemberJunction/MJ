@@ -3,6 +3,7 @@ import { AppContext } from '../types.js';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { TagGovernanceEngine, TagHealthJob, DEFAULT_TAG_HEALTH_THRESHOLDS, TagEngine } from '@memberjunction/tag-engine';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 @ObjectType()
 export class PromoteSuggestionResult {
@@ -74,6 +75,7 @@ export class RunTagHealthResult {
  * context and lets the engines use their default provider; if a non-default
  * provider is in play it should be passed via `TagGovernanceEngine.Provider`.
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class TagGovernanceResolver extends ResolverBase {
     @Mutation(() => PromoteSuggestionResult)

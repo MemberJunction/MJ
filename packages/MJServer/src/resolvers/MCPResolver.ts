@@ -22,6 +22,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { PublishStatusUpdate } from '../generic/PushStatusResolver.js';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { configInfo } from '../config.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 /**
  * Input type for syncing MCP tools
@@ -548,6 +549,7 @@ export class MCPToolCountsResult {
 /**
  * MCP Resolver for GraphQL operations
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class MCPResolver extends ResolverBase {
     /**

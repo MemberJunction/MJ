@@ -65,6 +65,7 @@ import type { MJCompanyIntegrationEntityServer } from "@memberjunction/core-enti
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
 import { UserCache } from "@memberjunction/generic-database-provider";
+import { RefuseScopeLimitedPrincipals } from "../auth/scopeLimitedAccess.js";
 
 // ─── RSU Pipeline Output Types ──────────────────────────────────────────────
 
@@ -1057,6 +1058,7 @@ class ListSourceObjectsOutput {
  * Provides endpoints to test connections, discover objects, and discover fields
  * on external systems via their registered connectors.
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class IntegrationDiscoveryResolver extends ResolverBase {
 

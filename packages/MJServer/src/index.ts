@@ -39,6 +39,7 @@ import { contextFunction, CreateReadOnlyProvider, CreateUnifiedAuthMiddleware, g
 import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import { variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
+import { ApplyScopeLimitedPrincipalGuards } from './auth/scopeLimitedAccess.js';
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
@@ -1095,6 +1096,12 @@ const setupComplete$ = new ReplaySubject(1);
     await new Promise<void>((res, rej) => profSession!.post('Profiler.enable', (e) => (e ? rej(e) : res())));
     await new Promise<void>((res, rej) => profSession!.post('Profiler.start', (e) => (e ? rej(e) : res())));
   }
+
+  // Attach the scope-limited-principal guard to every root field marked
+  // @RefuseScopeLimitedPrincipals(). Every resolver module is imported by now (MJServer's own,
+  // the dynamic paths, and middleware-contributed ones), and buildSchemaSync reads middleware
+  // metadata, so this must run here.
+  ApplyScopeLimitedPrincipalGuards();
 
   const tBuild = performance.now();
   const builtSchema = buildSchemaSync({

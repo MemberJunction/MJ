@@ -5,6 +5,7 @@ import {
     TelemetryCategory,
     TelemetryInsightSeverity
 } from '@memberjunction/core';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 // ============================================================================
 // GraphQL Types for TelemetryEvent
@@ -316,6 +317,7 @@ export class TelemetryInsightFilterInput {
 // Resolver
 // ============================================================================
 
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class TelemetryResolver {
     /**

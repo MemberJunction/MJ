@@ -6,6 +6,7 @@ import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import { AppContext } from "../types.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { GetReadWriteProvider } from "../util.js";
+import { RefuseScopeLimitedPrincipals } from "../auth/scopeLimitedAccess.js";
 
 /**
  * Input type for creating a new API key
@@ -91,6 +92,7 @@ export class RevokeAPIKeyResult {
  * Resolver for API key operations
  * Handles secure server-side API key generation
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class APIKeyResolver extends ResolverBase {
     /**

@@ -8,6 +8,7 @@ import { GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import { AIEngine } from '@memberjunction/aiengine';
 import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 /* ───── GraphQL types ───── */
 
@@ -52,6 +53,7 @@ const VECTOR_FETCH_CHUNK_SIZE = 1000;
 
 /* ───── Resolver ───── */
 
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class FetchEntityVectorsResolver extends ResolverBase {
 

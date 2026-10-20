@@ -8,6 +8,7 @@ import { PubSubManager } from '../generic/PubSubManager.js';
 import { PipelineProgressNotification } from './PipelineProgressResolver.js';
 import { v4 as uuidv4 } from 'uuid';
 import { GetReadWriteProvider } from '../util.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 const PIPELINE_PROGRESS_TOPIC = 'PIPELINE_PROGRESS';
 
@@ -26,6 +27,7 @@ export class AutotagPipelineResult {
     PipelineRunID?: string;
 }
 
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class AutotagPipelineResolver extends ResolverBase {
     @Mutation(() => AutotagPipelineResult)

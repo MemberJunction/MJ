@@ -39,6 +39,7 @@ import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 /** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -245,6 +246,7 @@ interface VisualInterpreterPayload {
  */
 const MAX_STREAM_ENTRY_AGE_MS = 4 * 60 * 60 * 1000; // 4 hours — generous vs. SessionJanitor's 15-minute idle threshold
 
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class RemoteBrowserActionResolver extends ResolverBase {
   /**
