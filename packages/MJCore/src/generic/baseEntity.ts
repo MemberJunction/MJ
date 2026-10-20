@@ -6008,8 +6008,10 @@ export abstract class BaseEntity<T = unknown> {
         // populating engine arrays of read-only data) and was previously the per-row bottleneck.
         const isPlainObject = data && typeof data === 'object' && !Array.isArray(data) && !(data instanceof Date);
         const isFirstOrUnhydratedLoad =
-            (!this._fieldsHydrated && this._fields.length === 0) ||
-            (!this._recordLoaded && !this._everSaved && this._fields.every(f => f.NeverSet));
+            this._raw === null &&
+            !this._recordLoaded &&
+            !this._everSaved &&
+            ((!this._fieldsHydrated && this._fields.length === 0) || this._fields.every(f => f.NeverSet));
         const hasCompanionPayload =
             this.HasCompanions &&
             isPlainObject &&
