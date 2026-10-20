@@ -2397,10 +2397,15 @@ export class EntityFieldInfo extends BaseInfo {
         return FormatValue(this.Type, value, decimals, currency, maxLength, trailingChars);
     }
 
+    private static readonly CHILD_INIT_KEYS: ReadonlySet<string> = new Set([
+        'EntityFieldValues', '_EntityFieldValues',
+        'EntityFieldPermissions', '_FieldPermissions', 'FieldPermissions',
+    ]);
+
     constructor(initData: any = null) {
         super();
         if (initData) {
-            this.copyInitData(initData);
+            this.copyInitData(initData, EntityFieldInfo.CHILD_INIT_KEYS);
 
             // Lazy-construct EntityFieldValueInfo objects — stash raw data now,
             // construct typed instances on first access via the getter.
@@ -4928,6 +4933,14 @@ export class EntityInfo extends BaseInfo {
     }
 
 
+    private static readonly CHILD_INIT_KEYS: ReadonlySet<string> = new Set([
+        'EntityFields', '_Fields', 'Fields',
+        'EntityPermissions', '_Permissions', 'Permissions',
+        'EntitySettings', '_Settings', 'Settings',
+        'EntityRelationships', '_RelatedEntities', 'RelatedEntities',
+        'EntityOrganicKeys', '_OrganicKeys', 'OrganicKeys',
+    ]);
+
     /**
      * @param initData - the raw entity row (or another EntityInfo being re-instantiated)
      * @param md - the provider that owns this metadata. Sibling lookups ({@link ParentEntityInfo},
@@ -4938,7 +4951,7 @@ export class EntityInfo extends BaseInfo {
         super();
         this.SetOwningProvider(md);
         if (initData) {
-            this.copyInitData(initData);
+            this.copyInitData(initData, EntityInfo.CHILD_INIT_KEYS);
 
             // do some special handling to create class instances instead of just data objects
             // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)

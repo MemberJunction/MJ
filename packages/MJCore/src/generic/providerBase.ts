@@ -4937,11 +4937,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // settings to give it, so a LATER caller that does (StartupManager, passing the host's
         // cacheSettings) is not a no-op: Initialize applies that configuration to the already
         // initialized manager rather than discarding it, which is what made cacheSettings inert
-        // before.
-        if (!LocalCacheManager.Instance.IsInitialized) {
-            const storageProvider = this.LocalStorageProvider;
-            await LocalCacheManager.Instance.Initialize(storageProvider);
-        }
+        // before. Kick off initialization without awaiting immediately so on warm boots it runs
+        // concurrently with LoadLocalMetadataFromStorage() instead of adding a serial IDB round-trip.
+        const localCacheInitPromise = !LocalCacheManager.Instance.IsInitialized
+            ? LocalCacheManager.Instance.Initialize(this.LocalStorageProvider)
+            : Promise.resolve();
 
         // first, let's check to see if we have an existing Metadata.Provider registered, if so
         // unless our data.IgnoreExistingMetadata is set to true, we will not refresh the metadata.
@@ -4959,6 +4959,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // we have an existing globally registered provider AND we are not
             // requested to ignore the existing metadata, so we will not refresh it
             if (this.CopyMetadataFromGlobalProvider()) {
+                await localCacheInitPromise;
                 return true; // we're done, if we fail here, we keep going and do normal logic
             }
         }
@@ -4974,7 +4975,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // This is a stale-while-revalidate pattern: serve cached data instantly, then
         // refresh if the server says it's outdated.
         if (!this.TrustLocalCacheCompletely && !hardRefresh && !this._localMetadata?.AllEntities?.length) {
-            await this.LoadLocalMetadataFromStorage();
+            await Promise.all([localCacheInitPromise, this.LoadLocalMetadataFromStorage()]);
             if (this._localMetadata?.AllEntities?.length) {
                 LogStatusEx({ message: `⚡ [Metadata Cache] Loaded ${this._localMetadata.AllEntities.length} entities from local cache — pre-validating before engine startup`, verboseOnly: false });
 
@@ -4985,6 +4986,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
                 return true; // App can proceed immediately with cached metadata
             }
+        } else {
+            await localCacheInitPromise;
         }
 
         // An empty graph has nothing to throttle: the throttle exists to stop redundant checks of a
@@ -5022,6 +5025,22 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // guaranteeing the final swap comes from a read that started after the last request.
         if (this._metadataReloadInFlight) {
             this._metadataReloadQueued = true;
+            if (this._metadataReadsJoinTransaction) {
+                // Caller owns an open database transaction (RefreshWithinTransaction) and is
+                // waiting for this reload before it can COMMIT or ROLLBACK. An in-flight pool
+                // reload may be blocked in the database on the caller's own uncommitted locks
+                // (LCK_M_S), so awaiting _metadataReloadInFlight here would self-deadlock.
+                // Run the transactional reload directly on the ambient transaction; setting
+                // _metadataReloadQueued = true above ensures the pool reload re-reads clean
+                // committed state once the transaction finishes and releases its locks.
+                await this.RefreshRemoteMetadataTimestamps(providerToUse);
+                const res = await this.GetAllMetadata(providerToUse, true);
+                if (res) {
+                    await this.adoptServerMetadata(res);
+                    this._configLoadedFromServer = true;
+                }
+                return true;
+            }
             await this._metadataReloadInFlight;
             return true;
         }
@@ -5271,7 +5290,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return;
         }
         try {
-            const needsRefresh = await this.CheckToSeeIfRefreshNeeded(providerToUse);
+            // Run the staleness check and CurrentUser refresh concurrently on warm boot so
+            // when metadata is current (99%+ of warm loads) we eliminate a sequential round-trip.
+            const [needsRefresh] = await Promise.all([
+                this.CheckToSeeIfRefreshNeeded(providerToUse),
+                this.RefreshCurrentUser(),
+            ]);
             if (needsRefresh) {
                 LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata is stale — refreshing before engine startup`, verboseOnly: false });
                 const start = Date.now();
@@ -5283,9 +5307,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 }
             } else {
                 LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata is current`, verboseOnly: false });
-                // Even when entity metadata is current, refresh CurrentUser so user roles and permissions
-                // stay in sync with the database without requiring a schema change or manual cache clear.
-                await this.RefreshCurrentUser();
             }
         } catch (e) {
             LogError(`[Metadata Cache] Pre-validation failed: ${e instanceof Error ? e.message : String(e)} — engines will smart-cache-check`);

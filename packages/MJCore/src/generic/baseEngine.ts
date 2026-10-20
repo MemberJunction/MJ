@@ -1942,6 +1942,32 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     protected CheckPermissionsOrSkipAll(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): BaseEnginePropertyConfig[] {
         if (configs.length === 0) return configs;
 
+        // First check whether any configured entity is missing from metadata altogether
+        // (e.g., an optional OpenApp engine registered in the bundle whose database schema
+        // is not installed in the target environment). Skip cleanly instead of firing N
+        // guaranteed-to-fail RunView calls and logging N error stack traces at startup.
+        const missingEntities = this.findMissingEntities(configs);
+        if (missingEntities.length > 0) {
+            LogStatusEx({
+                message: `${this.constructor.name}: Skipping ${configs.length} entity config(s) — entity metadata not installed for: ${missingEntities.join(', ')}`,
+                verboseOnly: true,
+                category: 'Cache',
+            });
+
+            for (const config of configs) {
+                if (config.AddToObject !== false) {
+                    (this as Record<string, unknown>)[config.PropertyName] = [];
+                }
+                this._dataMap.set(config.PropertyName, {
+                    entityName: config.EntityName,
+                    data: [],
+                    loadedSuccessfully: true,
+                });
+            }
+
+            return [];
+        }
+
         // Determine the user to check permissions for — on the client side contextUser
         // may be undefined, so fall back to the current logged-in user from Metadata.
         const user = contextUser || this.ProviderToUse?.CurrentUser;
@@ -1975,6 +2001,26 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
 
         return configs;
+    }
+
+    /**
+     * Returns entity names among `configs` that do not exist in the loaded metadata provider.
+     * Only checks when the metadata provider actually has entities loaded (`md.Entities.length > 0`)
+     * so unit tests with empty mock providers are unaffected.
+     */
+    private findMissingEntities(configs: BaseEnginePropertyConfig[]): string[] {
+        const md = this.ProviderToUse;
+        if (!md?.Entities || md.Entities.length === 0) {
+            return [];
+        }
+        const missing: string[] = [];
+        for (const config of configs) {
+            if (!config.EntityName) continue;
+            if (!md.EntityByName(config.EntityName)) {
+                missing.push(config.EntityName);
+            }
+        }
+        return missing;
     }
 
     /** The entity names among `configs` that `user` cannot read, per current metadata. */
