@@ -827,10 +827,14 @@ interface MemoryStorageHandle {
  * provider via `CreateAccountFixture`, refreshes the storage and credential caches, and asserts
  * `AIEngine.Instance.ResolveAgentStorageAccountID` and `AIEngine.Instance.ResolveAgentStorageAccount`
  * for `Video Studio` resolve unambiguously (`Ambiguous: false`) to the fixture account.
+ *
+ * Returns the reason instead of a handle, after cleaning up, when `CreateAccountFixture` cannot create
+ * the account (for example, CI has no credential to reuse and no encryption key to save one). Every
+ * other setup failure throws.
  */
 export async function UseMemoryStorage(
     ctx: IntegrationCheckContext,
-): Promise<MemoryStorageHandle> {
+): Promise<MemoryStorageHandle | string> {
     const storageEngine = FileStorageEngine.Instance;
     await storageEngine.Config(false, ctx.User, ctx.Provider);
 
@@ -891,7 +895,8 @@ export async function UseMemoryStorage(
     try {
         const fixtureOrReason = await CreateAccountFixture(ctx, storageEngine, provider);
         if (typeof fixtureOrReason === 'string') {
-            throw new Error(`UseMemoryStorage: failed to create storage account fixture: ${fixtureOrReason}`);
+            await restore();
+            return fixtureOrReason;
         }
         fixture = fixtureOrReason;
 

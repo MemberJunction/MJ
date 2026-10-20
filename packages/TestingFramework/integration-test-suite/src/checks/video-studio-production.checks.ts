@@ -119,7 +119,9 @@ interface VideoStudioProductionFixture {
     Render?: ReturnType<typeof UseFakeRenderDriver>;
     VideoGen?: ReturnType<typeof RegisterFakeVideoGenerator>;
     Tts?: ReturnType<typeof RegisterFakeTextToSpeech>;
-    Storage?: Awaited<ReturnType<typeof UseMemoryStorage>>;
+    Storage?: Exclude<Awaited<ReturnType<typeof UseMemoryStorage>>, string>;
+    /** Set when Setup could not create the storage account fixture; every check then skips. */
+    SkipReason?: string;
     RestoreApiKeys?: () => void;
     AllowedDriverClasses: readonly string[];
     RuntimeRelationshipID?: string;
@@ -155,6 +157,18 @@ type InitializedVideoStudioProductionFixture = Required<
 };
 
 let productionFixture: VideoStudioProductionFixture | undefined;
+
+/**
+ * True after logging a loud skip when Setup could not create the storage account fixture (for
+ * example, CI has no encryption key to save a credential). Any other Setup failure fails the check.
+ */
+function skippedForMissingStorage(checkId: string): boolean {
+    if (!productionFixture?.SkipReason) {
+        return false;
+    }
+    console.warn(`  ⚠ ${BUNDLE}.${checkId} SKIPPED — ${productionFixture.SkipReason}`);
+    return true;
+}
 
 function requireFixture(): InitializedVideoStudioProductionFixture {
     if (
@@ -512,6 +526,9 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
         Id: `${BUNDLE}.VSP1`,
         Name: 'VSP1: Standalone Social Short under Draft reaches Delivered, passes G1..G6, persists MP4/poster/contact-sheet in MJ: Files, and leaves InlineBase64 unset',
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            if (skippedForMissingStorage('VSP1')) {
+                return;
+            }
             const f = requireFixture();
             f.Render.Driver.RenderCallCount = 0;
             f.VideoGen.Driver.ResetSubmits();
@@ -606,6 +623,9 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
         Id: `${BUNDLE}.VSP2`,
         Name: 'VSP2: Related agent (IT: VS Data Caller) invokes Video Studio over Query Builder relationship contract, resolves Standard preset, maps DataSnapshot.Inline.caller, and bubbles fileOutputs',
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            if (skippedForMissingStorage('VSP2')) {
+                return;
+            }
             const f = requireFixture();
             f.Render.Driver.RenderCallCount = 0;
             f.VideoGen.Driver.ResetSubmits();
@@ -733,6 +753,9 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
         Id: `${BUNDLE}.VSP3`,
         Name: 'VSP3: Produce Video action invokes Video Studio headlessly, persists a Video Production artifact, and populates output Params',
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            if (skippedForMissingStorage('VSP3')) {
+                return;
+            }
             const f = requireFixture();
             f.Render.Driver.RenderCallCount = 0;
             f.VideoGen.Driver.ResetSubmits();
@@ -911,6 +934,9 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
         Id: `${BUNDLE}.VSP4`,
         Name: 'VSP4: Disclosed generated clip exercises AIVideoRunner, records PromptRunID cost and GenerationProvenance, emits HumanReviewNotes disclosure, and saves MJ: Artifacts',
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            if (skippedForMissingStorage('VSP4')) {
+                return;
+            }
             const f = requireFixture();
             f.Render.Driver.RenderCallCount = 0;
             f.VideoGen.Driver.ResetSubmits();
@@ -1027,6 +1053,9 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
         Id: `${BUNDLE}.VSP5`,
         Name: 'VSP5: Guards before spend: (a) NeverInvent blocks synthetic depiction of real people and (b) Draft 20s cap blocks a 25s request at Gate G2 with zero vendor/render calls',
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            if (skippedForMissingStorage('VSP5')) {
+                return;
+            }
             const f = requireFixture();
             const draftPreset = resolveAgentPreset(f.VideoStudioAgent, 'Draft');
             const runner = new AgentRunner(ctx.Provider);
@@ -1245,7 +1274,12 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         productionFixture.VideoGen = videoGen;
         const tts = RegisterFakeTextToSpeech();
         productionFixture.Tts = tts;
-        productionFixture.Storage = await UseMemoryStorage(ctx);
+        const storage = await UseMemoryStorage(ctx);
+        if (typeof storage === 'string') {
+            productionFixture.SkipReason = `no storage account fixture could be created (${storage})`;
+            return;
+        }
+        productionFixture.Storage = storage;
 
         const allowedDriverClasses = [
             ...CHAT_DRIVER_CLASSES,

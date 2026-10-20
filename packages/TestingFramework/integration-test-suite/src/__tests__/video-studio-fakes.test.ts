@@ -167,6 +167,9 @@ describe('video-studio-fakes', () => {
 
         try {
             const handle = await UseMemoryStorage(ctx);
+            if (typeof handle === 'string') {
+                throw new Error(`UseMemoryStorage returned a skip reason instead of a handle: ${handle}`);
+            }
 
             expect(providerEntity.IsActive).toBe(true);
             expect(providerEntity.Name).toContain('mj-integration-test — safe to delete');
@@ -198,6 +201,80 @@ describe('video-studio-fakes', () => {
             await handle.restore();
 
             expect(deleteOrder).toEqual(['permission', 'account', 'credential', 'provider']);
+        } finally {
+            vi.restoreAllMocks();
+        }
+    });
+
+    it('UseMemoryStorage returns the reason and deletes its provider when no storage account fixture can be created', async () => {
+        const deleteOrder: string[] = [];
+        const providerEntity = {
+            ID: '00000000-0000-0000-0000-000000000111',
+            Name: '',
+            Description: '',
+            ServerDriverKey: '',
+            ClientDriverKey: '',
+            Priority: 0,
+            IsActive: false,
+            SupportsSearch: false,
+            RequiresOAuth: false,
+            NewRecord: vi.fn(),
+            Save: vi.fn(async () => true),
+            Delete: vi.fn(async () => {
+                deleteOrder.push('provider');
+                return true;
+            }),
+        };
+        // CI has no credential to reuse, and saving one throws because no encryption key is configured.
+        const credentialEntity = {
+            ID: '',
+            Name: '',
+            CredentialTypeID: '',
+            Values: '',
+            LatestResult: undefined,
+            NewRecord: vi.fn(),
+            Save: vi.fn(async () => {
+                throw new Error('Failed to encrypt field "Values" on entity "MJ: Credentials".');
+            }),
+            Delete: vi.fn(async () => {
+                deleteOrder.push('credential');
+                return true;
+            }),
+        };
+
+        vi.spyOn(RunView.prototype, 'RunView').mockImplementation(async (params) => {
+            if (params.EntityName === 'MJ: Credential Types') {
+                return {
+                    Success: true,
+                    Results: [{ ID: '00000000-0000-0000-0000-000000000404' }],
+                } as never;
+            }
+            return { Success: true, Results: [] } as never;
+        });
+        vi.spyOn(FileStorageEngine.Instance, 'Config').mockResolvedValue(undefined);
+
+        const ctx = {
+            User: { ID: '00000000-0000-0000-0000-000000000999' },
+            Provider: {
+                GetEntityObject: vi.fn(async (entityName: string) => {
+                    if (entityName === 'MJ: File Storage Providers') {
+                        return providerEntity;
+                    }
+                    if (entityName === 'MJ: Credentials') {
+                        return credentialEntity;
+                    }
+                    throw new Error(`Unexpected entity '${entityName}'`);
+                }),
+            },
+        } as never;
+
+        try {
+            const result = await UseMemoryStorage(ctx);
+
+            expect(typeof result).toBe('string');
+            expect(result).toContain('fixture credential save failed');
+            expect(result).toContain('Failed to encrypt field "Values"');
+            expect(deleteOrder).toEqual(['provider']);
         } finally {
             vi.restoreAllMocks();
         }
