@@ -266,13 +266,11 @@ export class PayloadManager {
             };
         }
         
-        // Start with a deep clone of the parent payload
-        const result = _.cloneDeep(parentPayload || {});
         const counts = { additions: 0, updates: 0, deletions: 0 };
         
-        // Handle wildcard - merge everything
+        // Handle wildcard - merge everything (DeepMerge already returns a newly cloned object)
         if (upstreamPaths.includes('*')) {
-            const merged = this.DeepMerge(result, subAgentPayload);
+            const merged = this.DeepMerge((parentPayload || {}) as P, subAgentPayload);
             // Count changes
             this.countChanges(parentPayload, merged, counts);
             return {
@@ -284,6 +282,9 @@ export class PayloadManager {
             };
         }
         
+        // Start with a fast deep clone of the parent payload
+        const result = this.fastCloneDeep(parentPayload || {});
+
         // Check each path in the sub-agent payload
         const mergeResult = this.mergeAllowedPaths(result, subAgentPayload, upstreamPaths, subAgentName, verbose);
         
@@ -516,7 +517,7 @@ export class PayloadManager {
                 } else if (!_.isEqual(originalValue, subAgentValue)) {
                     counts.updates++;
                 }
-                _.set(result as object, actualPath, _.cloneDeep(subAgentValue));
+                _.set(result as object, actualPath, this.fastCloneDeep(subAgentValue));
             } else {
                 // Only track if the sub-agent is trying to change the value
                 if (!_.isEqual(subAgentValue, originalValue)) {
@@ -936,14 +937,41 @@ export class PayloadManager {
         }
     }
 
+    private getPathPatternRegex(pathPattern: string): RegExp {
+        let compiled = this._pathPatternRegexCache.get(pathPattern);
+        if (compiled) {
+            return compiled;
+        }
+        if (pathPattern.includes('**')) {
+            const regexStr = pathPattern
+                .replace(/\\/g, '\\\\')
+                .replace(/\./g, '\\.')
+                .replace(/\*\*/g, '.*')
+                .replace(/\*/g, '[^.]+');
+            compiled = new RegExp(`^${regexStr}$`);
+        } else if (pathPattern.endsWith('.*')) {
+            const basePath = pathPattern.slice(0, -2);
+            const escapedBase = basePath.replace(/\\/g, '\\\\').replace(/\./g, '\\.');
+            compiled = new RegExp(`^${escapedBase}(\\..*)?$`);
+        } else {
+            const regexStr = pathPattern
+                .replace(/\\/g, '\\\\')
+                .replace(/\./g, '\\.')
+                .replace(/\*/g, '[^.]+')
+                .replace(/\[(\*|\d+)\]/g, '\\[(\\*|\\d+)\\]');
+            compiled = new RegExp(`^${regexStr}$`);
+        }
+        this._pathPatternRegexCache.set(pathPattern, compiled);
+        return compiled;
+    }
+
     /**
-     * Static caches for parsed path specifications and compiled path-matching regular expressions.
-     * Avoids re-parsing pattern strings (`ParsePathsWithOperations`) and recompiling `new RegExp(...)`
-     * on every payload path during upstream merges and change-request validation.
+     * Static cache for parsed path specifications (`ParsePathWithOperations`).
+     * Avoids re-parsing pattern strings on every payload path during upstream merges
+     * and change-request validation.
      *
      * @private
      */
-    private static readonly _patternRegexCache = new Map<string, RegExp>();
     private static readonly _parsedPathSpecCache = new Map<string, ParsedPathWithOperations>();
 
     /**
@@ -970,43 +998,6 @@ export class PayloadManager {
     }
 
     /**
-     * Compiles (or retrieves from {@link _patternRegexCache}) the `RegExp` for a path pattern.
-     *
-     * @private
-     */
-    private compilePatternRegex(pathPattern: string): RegExp {
-        let cached = PayloadManager._patternRegexCache.get(pathPattern);
-        if (cached) {
-            return cached;
-        }
-        let patternSource: string;
-        if (pathPattern.includes('**')) {
-            // Handle deep wildcards
-            const regex = pathPattern
-                .replace(/\./g, '\\.')
-                .replace(/\*\*/g, '.*')
-                .replace(/\*/g, '[^.]+');
-            patternSource = `^${regex}$`;
-        } else if (pathPattern.endsWith('.*')) {
-            // Check if pattern ends with .* which means "everything under this path"
-            const basePath = pathPattern.slice(0, -2); // Remove the .*
-            const escapedBase = basePath.replace(/\./g, '\\.');
-            // Match the base path followed by a dot and anything after
-            patternSource = `^${escapedBase}(\\..*)?$`;
-        } else {
-            // Handle other wildcard patterns
-            const regex = pathPattern
-                .replace(/\./g, '\\.')
-                .replace(/\*/g, '[^.]+')
-                .replace(/\[(\*|\d+)\]/g, '\\[(\\*|\\d+)\\]');
-            patternSource = `^${regex}$`;
-        }
-        cached = new RegExp(patternSource);
-        PayloadManager._patternRegexCache.set(pathPattern, cached);
-        return cached;
-    }
-
-    /**
      * Checks if a path matches any of the allowed patterns.
      * 
      * @private
@@ -1021,7 +1012,8 @@ export class PayloadManager {
         
         for (const parsedPattern of parsedPatterns) {
             const pathPattern = parsedPattern.path;
-            if (pathPattern === '*' || this.compilePatternRegex(pathPattern).test(normalizedPath)) {
+            if (pathPattern === '*') return true;
+            if (this.getPathPatternRegex(pathPattern).test(normalizedPath)) {
                 return true;
             }
         }
@@ -1049,7 +1041,7 @@ export class PayloadManager {
         
         for (const parsedPattern of parsedPatterns) {
             const pathPattern = parsedPattern.path;
-            const pathMatches = pathPattern === '*' || this.compilePatternRegex(pathPattern).test(normalizedPath);
+            const pathMatches = pathPattern === '*' || this.getPathPatternRegex(pathPattern).test(normalizedPath);
             
             // If path matches, check if operation is allowed
             if (pathMatches && isOperationAllowed(parsedPattern, operation)) {
@@ -1118,23 +1110,34 @@ export class PayloadManager {
      */
     public DeepMerge<T = any>(destination: T | null | undefined, source: Partial<T> | null | undefined): T {
         if (!source) return destination as T;
-        if (!destination) return _.cloneDeep(source) as T;
-        
-        const result = _.cloneDeep(destination);
-        
-        for (const key in source) {
-            if (source.hasOwnProperty(key)) {
-                if (_.isObject(source[key]) && !_.isArray(source[key]) && _.isObject(result[key]) && !_.isArray(result[key])) {
-                    // Both are objects - recursive merge
-                    result[key] = this.DeepMerge(result[key], source[key]) as T[Extract<keyof T, string>];
-                } else {
-                    // Otherwise, source overwrites destination
-                    result[key] = _.cloneDeep(source[key]) as T[Extract<keyof T, string>];
-                }
+        if (!destination) return this.fastCloneDeep(source) as T;
+
+        const destObj = destination as Record<string, unknown>;
+        const srcObj = source as Record<string, unknown>;
+        const result: Record<string, unknown> = {};
+
+        for (const key of Object.keys(destObj)) {
+            if (!Object.prototype.hasOwnProperty.call(srcObj, key)) {
+                result[key] = this.fastCloneDeep(destObj[key]);
+            } else {
+                result[key] = undefined;
             }
         }
-        
-        return result;
+
+        for (const key of Object.keys(srcObj)) {
+            const srcVal = srcObj[key];
+            const destVal = destObj[key];
+            // Only plain objects merge key by key. A Date or class instance has no own keys to merge,
+            // so recursing would collapse it to `{}`; like an array or primitive, it replaces the
+            // destination value.
+            if (this.isPlainObject(srcVal) && this.isPlainObject(destVal)) {
+                result[key] = this.DeepMerge(destVal, srcVal);
+            } else {
+                result[key] = this.fastCloneDeep(srcVal);
+            }
+        }
+
+        return result as T;
     }
 
     /** @deprecated Use {@link DeepMerge}. */
@@ -1144,6 +1147,16 @@ export class PayloadManager {
 
     private _defaultAnalyzer = new PayloadChangeAnalyzer();
     private _defaultDiffer = new DeepDiffer();
+    private _pathPatternRegexCache = new Map<string, RegExp>();
+
+    /** True for an object literal or `Object.create(null)` object: not an array, Date or class instance. */
+    private isPlainObject(value: unknown): value is Record<string, unknown> {
+        if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+            return false;
+        }
+        const proto = Object.getPrototypeOf(value);
+        return proto === Object.prototype || proto === null;
+    }
 
     /**
      * Fast deep-clone for JSON-like payload trees (plain objects, arrays, primitives),
@@ -1162,8 +1175,7 @@ export class PayloadManager {
             }
             return copy as unknown as T;
         }
-        const proto = Object.getPrototypeOf(value);
-        if (proto === Object.prototype || proto === null) {
+        if (this.isPlainObject(value)) {
             const copy: Record<string, unknown> = {};
             const keys = Object.keys(value);
             for (let i = 0; i < keys.length; i++) {
