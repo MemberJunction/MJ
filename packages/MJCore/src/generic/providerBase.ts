@@ -1996,7 +1996,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // This touches ONLY how the slot is keyed. param.Fields is left untouched, so what the
         // provider FETCHES is unchanged — an earlier attempt cleared param.Fields instead and was
         // reverted precisely because fetch behavior could not be verified.
-        const fieldsKey = this.isFullCoverageFieldList(param) ? '*' : ProviderBase.normalizeFieldsKey(param.Fields);
+        const fieldsKey = (param.ResultType === 'entity_object' || this.isFullCoverageFieldList(param))
+            ? '*'
+            : ProviderBase.normalizeFieldsKey(param.Fields);
         const fingerprint = `${base}|f:${fieldsKey}`;
         this._clientFingerprintMemo.set(param, fingerprint);
         return fingerprint;
@@ -2004,8 +2006,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _clientFingerprintMemo = new WeakMap<RunViewParams, string>();
 
     /**
-     * True when `param.Fields` names EVERY field of the entity — i.e. an explicit list that is
-     * semantically "full width". Case-insensitive; order-independent. Returns false on any
+     * True when `param.Fields` names EVERY fetchable field of the entity — i.e. an explicit list
+     * that is semantically "full width" (accounting for binary fields excluded when
+     * `IncludeBinaryFields !== true`). Case-insensitive; order-independent. Returns false on any
      * uncertainty (unknown entity, missing fields) so the fingerprint falls back to the explicit
      * list — the safe direction, since misclassifying narrow-as-full would cross-serve shapes.
      */
@@ -2017,11 +2020,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (!entity || entity.Fields.length === 0) {
             return false;
         }
-        if (param.Fields.length < entity.Fields.length) {
+        const includeBinary = param.IncludeBinaryFields === true;
+        const expectedFields = includeBinary || !entity.HasBinaryFields
+            ? entity.Fields
+            : entity.Fields.filter(f => !f.IsBinaryFieldType);
+        if (param.Fields.length < expectedFields.length) {
             return false;   // cheap reject: cannot cover every field with fewer names
         }
         const requested = new Set(param.Fields.map(f => f.trim().toLowerCase()));
-        return entity.Fields.every(f => requested.has(f.Name.trim().toLowerCase()));
+        return expectedFields.every(f => requested.has(f.Name.trim().toLowerCase()));
     }
 
     /**
@@ -2929,10 +2936,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param fieldNames - Field names as a caller supplied them, e.g. `RunViewParams.Fields`.
      */
     protected static NamesAnyBinaryField(entity: EntityInfo, fieldNames: readonly string[] | null | undefined): boolean {
-        if (!fieldNames || fieldNames.length === 0) return false;
-        const binaryNames = new Set(entity.Fields.filter(f => f.IsBinaryFieldType).map(f => f.Name.toLowerCase()));
-        if (binaryNames.size === 0) return false;
-        return fieldNames.some(name => typeof name === 'string' && binaryNames.has(name.trim().toLowerCase()));
+        if (!fieldNames || fieldNames.length === 0 || !entity.HasBinaryFields) return false;
+        const binaryFields = entity.BinaryFields;
+        return fieldNames.some(name => {
+            if (typeof name !== 'string') return false;
+            const lower = name.trim().toLowerCase();
+            return binaryFields.some(bf => bf.Name.toLowerCase() === lower);
+        });
     }
 
     /**
@@ -3556,24 +3566,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const param = params[i];
             await this.EntityStatusCheck(param, 'PreRunViews', contextUser);
 
+            let entity: EntityInfo | undefined;
             if (param.ResultType === 'entity_object') {
-                const entity = this.EntityByName(param.EntityName);
+                entity = this.EntityByName(param.EntityName);
                 if (!entity) {
                     throw new Error(`Entity ${param.EntityName} not found in metadata`);
                 }
-                // NOTE (R2-GAP-1, logged as B44): widening to an explicit full field list makes
-                // the client fingerprint carry `f:<every field>` rather than `f:*`, so the cache
-                // classifier reads the slot as a NARROW projection and stops maintaining it in
-                // place. entity_object is the BaseEngine default, so this costs in-place
-                // maintenance on the client's most common slot shape. It is a PERF gap only —
-                // the slot is invalidated and refetched, never served wrong.
-                //
-                // Deliberately NOT "fixed" by clearing Fields here: that would change what the
-                // provider FETCHES, not just how the slot is keyed, and I could not verify the
-                // downstream fetch behavior tonight. The safe fix is to normalize a full-coverage
-                // field list to `*` in the FINGERPRINT only, which cannot affect fetching.
                 this.ResolveIncludeBinaryFields(param, entity);
-                param.Fields = this.ComputeRunViewFetchFields(entity, param);
             }
 
             // Gate on runViewCacheEligible (NOT raw param.CacheLocal): the smart-cache-check path is a
@@ -3582,8 +3581,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // BaseEntity event), count_only, AfterKey, BypassCache, cache-disallowed entities. On a client
             // (!TrustLocalCacheCompletely) runViewCacheEligible already implies CacheLocal===true, so this is
             // strictly a tightening — normal cacheable slots are unaffected.
+            //
+            // Compute clientCacheFingerprint BEFORE widening param.Fields for entity_object so the
+            // fingerprint sees the caller's original Fields (normalizing to `|f:*` in O(1) without
+            // building a full-entity field Set or misclassifying entities with excluded binary columns).
             if (this.runViewCacheEligibleForWrite(param) && LocalCacheManager.Instance.IsInitialized) {
                 cacheable.push({ paramIndex: i, fingerprint: this.clientCacheFingerprint(param) });
+            }
+
+            if (param.ResultType === 'entity_object' && entity) {
+                param.Fields = this.ComputeRunViewFetchFields(entity, param);
             }
         }
 

@@ -17,12 +17,11 @@ on every task regardless of what you're touching**. Everything else loads on dem
 
 ## 🚨 CRITICAL RULES — VIOLATIONS ARE UNACCEPTABLE 🚨
 
-### 1. NO COMMITS WITHOUT EXPLICIT APPROVAL
-- **NEVER run `git commit` without the user explicitly asking you to**
-- **Each commit requires ONE-TIME explicit approval** — don't assume ongoing permission
-- **NEVER ask to commit** — wait for the user to request it
-- **ONLY commit what is staged** — never modify or add to staged changes
-- **NEVER commit work-in-progress** that isn't staged by the user
+### 1. SAFE COMMITS & PR WORKFLOW
+- **PR & branch tasks**: When asked to create, fix, or update a PR/branch, commit and push your changes to that branch
+- **Shared checkouts**: When not asked for a PR or commit, ask before running `git commit`
+- **Stage explicitly**: Use `git add <file>` for your task's files — **NEVER `git add -A`/`.`** or commit unrelated WIP
+- **NEVER commit or push directly to `next` or `main`**
 
 ### 2. NO DESTRUCTIVE GIT OPERATIONS WITHOUT EXPLICIT APPROVAL
 - **NEVER run `git checkout -- <file>` or `git restore <file>`** to discard changes without the user explicitly approving — even in bypass/auto-approve permission mode
@@ -92,6 +91,8 @@ pnpm run test:integration    # = MJ_INTEGRATION_TEST=1 pnpm mj test suite "Integ
 pnpm mj test run "IT30 - Conversation Compaction (assembly layer)"   # single bundle while iterating
 ```
 Unit tests passing is necessary but **not sufficient** — the integration tier catches the seams between packages that unit tests mock away. Run it after migrations + CodeGen have been applied. Full details, authoring rules, and the client-first transport doctrine: [`guides/INTEGRATION_TESTING_QUICKSTART.md`](guides/INTEGRATION_TESTING_QUICKSTART.md).
+
+**Repo-wide gates** — `npm run check:guards` and `npm run check:standards` must pass. Neither is a required check, so a red one merges and breaks `next` for every later PR. A hook runs both before `git push` / `gh pr create`.
 
 ---
 
@@ -192,6 +193,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 ```bash
 npm run check:ui          # design-token + button gates on changed CSS/SCSS (mirrors the PR gate)
 npm run check:standards   # every adopted MJ standard (see .mj-standards.json)
+npm run check:guards      # UUID, global-provider and primary-key source scanners (CI "Source guards")
 npm run check:esm         # native-ESM import guard for "type": "module" packages
 npm run check:claude-md   # instruction-file budget, link validity, and routing-table coverage
 npm run check:changeset   # changeset bump levels (local only — no CI gate enforces this one)
