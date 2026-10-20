@@ -348,7 +348,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   private computeIsFieldReadableByUser(): boolean {
     const entityInfo = this.Record?.EntityInfo;
-    if (!entityInfo?.EnableFieldLevelSecurity) {
+    if (!entityInfo?.FieldLevelSecurityApplies) {
       return true; // one boolean for the overwhelming majority of entities
     }
     const user = this.ProviderToUse?.CurrentUser;
@@ -443,7 +443,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   private computeIsFieldWritableByUser(): boolean {
     const entityInfo = this.Record?.EntityInfo;
-    if (!entityInfo?.EnableFieldLevelSecurity) {
+    if (!entityInfo?.FieldLevelSecurityApplies) {
       return true; // one boolean for the overwhelming majority of entities
     }
     const user = this.ProviderToUse?.CurrentUser;
