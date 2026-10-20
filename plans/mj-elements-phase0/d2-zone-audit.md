@@ -21,8 +21,8 @@ or run.
 | Realtime widget (call code) | **Partly, in a weak sense. Nothing seen needs it; nothing proves it works without it.** | The widget's own components are signal-driven and `OnPush`. The overlay it hosts is `Default` change detection but calls `markForCheck()` on essentially every state change, and its `NgZone.run` / `runOutsideAngular` calls are no-ops when zoneless. zone.js is loaded as a default, not because a path was found that breaks without it. The overlay has never been run zoneless in this widget's tests (they stub it). |
 | Orders checkout | **Yes, one confirmed path, plus two soft spots.** | The Stripe card `change` handler sets `isPaymentReady` and nothing triggers a render afterwards. Zone is the only thing that does. Everything else is already written zoneless style (`detectChanges()` at the end of every async flow). |
 
-Short version for D2: both can go zoneless. Realtime is a "flip it and run the overlay" job with an unknown but
-probably small tail. Orders is about a day, and the one real bug is a one-line fix.
+Short version for D2: both can go zoneless. Realtime is a "flip it and smoke-test the overlay" job, since Explorer
+already runs the same overlay zoneless (section 1.1). Orders is about a day, and the one real bug is a one-line fix.
 
 ## 1. Realtime widget
 
@@ -44,10 +44,15 @@ replaces the real overlay with `StubRealtimeSessionOverlayComponent` (`src/__tes
 `OnPush`, three bindings). So the widget shell and its status/consent components are exercised zoneless; the
 ~2,500-line overlay and its children are not.
 
-The Explorer app also hosts this overlay (ng-conversations is the Explorer chat UI). An earlier session note says
-MJExplorer is zoneless (`bootstrapModuleFactory` prepends the zoneless provider) even though
-`MJExplorer/angular.json:17` lists the zone.js polyfill. I did not re-verify that here; treat it as a lead, not
-evidence. If it holds, it is the strongest signal that the overlay already works without zone patches.
+The Explorer app also hosts this overlay (ng-conversations is the Explorer chat UI), and Explorer runs it zoneless.
+Verified 2026-10-19: `packages/MJExplorer/src/main.ts:26` calls `platformBrowserDynamic().bootstrapModule(AppModule)`;
+in Angular 21.2.22 that reaches `bootstrapModuleFactory`, which prepends `provideZonelessChangeDetectionInternal()` to
+the application providers (`node_modules/@angular/core/fesm2022/core.mjs:722-723`, via `:735`); and nothing in
+`packages/MJExplorer/src`, `packages/Angular/Explorer` or `packages/Angular/Bootstrap/src` declares
+`provideZoneChangeDetection` or `provideZonelessChangeDetection`, so that default stands. The zone.js polyfill at
+`MJExplorer/angular.json:17` is loaded but does not drive change detection. So the ~2,500-line overlay and its children
+already run zoneless in Explorer every day, which is the evidence the stub-based tests cannot give; what Explorer does
+not exercise is the overlay inside the widget's own host element and shell.
 
 ### 1.2 Places that rely on zone patching to trigger a view update
 
@@ -149,8 +154,9 @@ loading a bundle without it.
 | 5 | Drop the zone.js lazy-load bookkeeping: shell tests (`element-bundle.test.ts:123-147`) and `scripts/boot-bundle.mjs:114,136` assert `zoneLoaded`; update them to assert it stays `false` after a call. README line 490 and FINDINGS' "who installs `window.Zone`" row change accordingly. | 1 to 2 |
 | 6 | Keep zone.js as a `devDependency` only if other tests need it; otherwise remove. | 0.5 |
 
-Total: about 12 to 20 hours, dominated by step 2 and 3. If the Explorer-is-zoneless lead (section 1.1) holds, the
-tail in step 3 shrinks, because the overlay would already be proven in a zoneless host.
+Total: about 4 to 7 hours. Steps 1, 4, 5 and 6 are the code, about three hours. Step 2 shrinks to a smoke call or two
+(connect, speak, open a channel, end) because the overlay already runs zoneless in Explorer (section 1.1); step 3 covers
+whatever that smoke run shows, likely little. Before the Explorer evidence was verified this list read 12 to 20 hours.
 
 Two cross-element effects worth keeping in view for D2:
 
@@ -246,12 +252,9 @@ and item 2 is the only change I would call mandatory.
 
 - Neither element has a hard architectural dependence on zone.js. Orders has one defect-level dependence (Stripe `change`);
   realtime has none that I could find, but it also has no zoneless run of the real overlay.
-- The Default-CD overlay is the unknown. It was written zone-defensively (`markForCheck` everywhere, `ngZone.run` re-entry,
-  `runOutsideAngular` for hot loops), which means it is probably close to zoneless-safe, but "probably" is all this audit
-  can say without running it.
-- Cheapest way to settle the realtime unknown before D2 is decided: confirm whether Explorer really runs zoneless (the lead
-  in 1.1), and if so treat the overlay as proven; if not, do conversion step 2 once, headless, with the fake driver already used
-  by `realtime-widget.element.dom.test.ts`.
-- If D2 says "zoneless runtime", the combined effort is roughly 20 to 30 hours across the two, most of it verification rather
-  than code. Savings: zone.js leaves the page entirely (38.8 KB in the realtime call chunk, 90.7 KB in Orders, unminified,
+- The Default-CD overlay was written zone-defensively (`markForCheck` everywhere, `ngZone.run` re-entry,
+  `runOutsideAngular` for hot loops) and runs zoneless in Explorer today (section 1.1), so it is proven in a zoneless host;
+  the remaining unknown is only the overlay inside the widget's own element, which a smoke call settles.
+- If D2 says "zoneless runtime", the combined effort is roughly 11 to 16 hours across the two: about five hours of code, the
+  rest the Orders payment-flow pass (the one place a silent stale view cannot be waved through) and a realtime smoke call. Savings: zone.js leaves the page entirely (38.8 KB in the realtime call chunk, 90.7 KB in Orders, unminified,
   per FINDINGS), and neither element patches page timers or promises for the others.
