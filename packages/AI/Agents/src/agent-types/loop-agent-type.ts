@@ -14,15 +14,18 @@ import { CHAT_FINISH_REASON_MALFORMED_TOOL_CALL } from '@memberjunction/ai';
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import type { NativeToolBinding } from '../native-tools/control-tools';
+import { CoerceActionArguments } from '../native-tools/action-tool-builder';
+import { DecodeJSONArgument } from '../native-tools/json-argument';
 import type { ChatToolCall } from '@memberjunction/ai';
 import { GetToolCallingDecision } from '@memberjunction/ai-prompts';
 
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction, AgentClientToolInvocation, AgentPayloadChangeRequest,
          FormatValidationErrors, ValidateTaskGraphSpec, type TaskGraphSpec,
-    ConfigOf, AgentResponseForm } from '@memberjunction/ai-core-plus';
+    ConfigOf, AgentResponseForm, AgentFinishIf } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { LoopAgentResponse, LOOP_NEXT_STEP_TYPES } from './loop-agent-response-type';
+import { IsValidFinishIf } from '../finish-if-state';
 import { ConversationMessageResolver } from '../utils/ConversationMessageResolver'; 
 /** A native tool call paired with the binding it resolved to. */
 interface ResolvedNativeCall<B extends NativeToolBinding = NativeToolBinding> {
@@ -106,7 +109,7 @@ export class LoopAgentType extends BaseAgentType {
      * combination could extend a run indefinitely).
      */
     private buildReadToolPreemptionStep<P>(response: LoopAgentResponse, hasClientTools: boolean): BaseAgentNextStep<P> | null {
-        const hasInlineReadTools = (response.artifactToolCalls?.length || 0) + (response.conversationToolCalls?.length || 0) > 0;
+        const hasInlineReadTools = (response.artifactToolCalls?.length || 0) + (response.conversationToolCalls?.length || 0) + (response.decisions?.length || 0) > 0;
         const wantsTerminalStep = response.nextStep?.type === 'Chat' || (response.taskComplete === true && !hasClientTools);
 
         if (!(hasInlineReadTools && wantsTerminalStep)) {
@@ -127,6 +130,7 @@ export class LoopAgentType extends BaseAgentType {
         });
         return this.createNextStep('Retry', {
             terminate: false,
+            decisions: response.decisions,
             artifactToolCalls: response.artifactToolCalls,
             conversationToolCalls: response.conversationToolCalls,
             memoryWrites: response.memoryWrites,
@@ -187,6 +191,12 @@ export class LoopAgentType extends BaseAgentType {
             return;
         }
 
+        // Backward-compatibility normalization: if a prompt or model emits the legacy v1 flat
+        // `"agentName": "..."` field on a task node without `kind` / `configuration`, normalize it
+        // in place to the v2 `kind: "Agent"` + `configuration: { agentName }` shape before running
+        // ValidateTaskGraphSpec so single-agent and multi-agent delegations do not needlessly fail.
+        this.normalizeLegacyTaskNodes(spec);
+
         // The same validator the server runs at submission (D16), so a graph that passes here
         // cannot fail a different check later. Every failure is reported at once — a model fixing a
         // malformed graph should not discover the problems one round-trip at a time.
@@ -227,6 +237,34 @@ export class LoopAgentType extends BaseAgentType {
     }
 
     /**
+     * Normalizes legacy v1 flat `agentName` task nodes into the v2 `{ kind: 'Agent', configuration: { agentName } }`
+     * shape in place before validation.
+     */
+    private normalizeLegacyTaskNodes(spec: TaskGraphSpec): void {
+        if (!spec || !Array.isArray(spec.tasks)) {
+            return;
+        }
+        for (const rawNode of spec.tasks) {
+            if (!rawNode || typeof rawNode !== 'object') {
+                continue;
+            }
+            const record = rawNode as unknown as Record<string, unknown>;
+            const legacyAgentName = typeof record.agentName === 'string' ? record.agentName.trim() : '';
+            if (!record.kind && legacyAgentName.length > 0) {
+                record.kind = 'Agent';
+                if (!record.configuration || typeof record.configuration !== 'object') {
+                    record.configuration = { agentName: legacyAgentName };
+                } else {
+                    const configRecord = record.configuration as Record<string, unknown>;
+                    if (typeof configRecord.agentName !== 'string' || configRecord.agentName.trim().length === 0) {
+                        configRecord.agentName = legacyAgentName;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Decides whether a graph folds to an in-run sub-agent call, and says why when it does not.
      *
      * The reason is carried onto the run step rather than discarded: a user who edits a two-node
@@ -242,10 +280,10 @@ export class LoopAgentType extends BaseAgentType {
         // action, a prompt, a loop — has no in-run equivalent and must reach the dispatcher.
         if (node.kind !== 'Agent') return { folded: false, reason: `the single node is a ${node.kind} step, which has no in-run equivalent` };
         if (spec.durable === true) return { folded: false, reason: 'the graph requested durable execution' };
-        if (spec.continuation && spec.continuation !== 'message') {
-            return { folded: false, reason: `continuation is '${spec.continuation}', not the default` };
+        if (spec.continuation && spec.continuation !== 'message' && spec.continuation !== 'reinvoke') {
+            return { folded: false, reason: `continuation is '${spec.continuation}', not foldable in-run` };
         }
-        return { folded: true, reason: 'single agent node, no dependencies, default continuation' };
+        return { folded: true, reason: 'single agent node, no dependencies, foldable continuation' };
     }
 
 
@@ -348,6 +386,10 @@ export class LoopAgentType extends BaseAgentType {
         if (askUser.length > 0) {
             return this.askUserStep(askUser[0], resolved.length);
         }
+        const completes = ofKind('complete');
+        if (completes.length > 0) {
+            return this.completeTaskStep(completes[0], resolved.length);
+        }
         if (payloads.length > 1) {
             return this.createRetryStep('Call payload_change_request at most once per turn; combine your changes into one call.');
         }
@@ -389,6 +431,71 @@ export class LoopAgentType extends BaseAgentType {
         return this.createNextStep('Chat', { message, terminate: true });
     }
 
+    /**
+     * `complete_task` → Success, carrying its payload change — the native twin of the envelope's
+     * `taskComplete: true` + `payloadChangeRequest`, so finishing costs one turn, not two.
+     *
+     * The call id rides on `payloadToolCallId`: if Success validation turns the step into a Retry,
+     * the loop answers this call with the validation feedback, exactly as it answers a
+     * payload-only turn.
+     */
+    private completeTaskStep(complete: ResolvedNativeCall<Extract<NativeToolBinding, { kind: 'complete' }>>, totalCalls: number): BaseAgentNextStep {
+        if (totalCalls > 1) {
+            return this.createRetryStep('complete_task must be the only call on its turn. Finish any other tool calls first, then call complete_task on its own.');
+        }
+        const message = typeof complete.call.arguments?.message === 'string' ? complete.call.arguments.message.trim() : '';
+        const decoded = this.decodePayloadChangeArgument(complete.call.arguments?.payloadChangeRequest);
+        if ('error' in decoded) {
+            return this.createRetryStep('complete_task.payloadChangeRequest must be an object (newElements / updateElements / replaceElements / removeElements), or be omitted.'
+                + ` Problem: ${decoded.error}`);
+        }
+        const payloadChangeRequest = decoded.payloadChangeRequest;
+        return this.createSuccessStep({
+            ...(message ? { message } : {}),
+            payloadChangeRequest,
+            payloadToolCallId: complete.call.id
+        });
+    }
+
+    /**
+     * Text that opens a JSON object with a quoted key, bare or in a json fence — an attempted
+     * structured answer, not prose. A code block or a sentence that merely starts with a brace
+     * is prose and still completes the task.
+     */
+    private looksLikeEnvelopeAttempt(text: string): boolean {
+        return /^(?:```(?:json)?\s*)?\{\s*(?:"|$)/i.test(text);
+    }
+
+    /**
+     * Reads `complete_task.payloadChangeRequest`: no change when absent, an error when unusable. The
+     * argument is declared as a JSON string (see `BuildCompleteTaskTool`); an object is accepted too,
+     * since some providers send one anyway. A string whose layout the model wrote as escape sequences
+     * is repaired rather than rejected — see `DecodeJSONArgument`.
+     */
+    private decodePayloadChangeArgument(value: unknown): { payloadChangeRequest?: AgentPayloadChangeRequest } | { error: string } {
+        if (value === undefined || value === null) {
+            return {};
+        }
+        // An empty or "null" string is the argument left out, not a malformed one.
+        if (typeof value === 'string' && (value.trim() === '' || value.trim() === 'null')) {
+            return {};
+        }
+        let candidate: unknown = value;
+        if (typeof value === 'string') {
+            const decoded = DecodeJSONArgument(value);
+            if ('Error' in decoded) {
+                return { error: decoded.Error };
+            }
+            if (decoded.Repaired) {
+                LogStatusEx({ message: '🩹 Loop Agent: complete_task.payloadChangeRequest had layout escapes outside its strings — repaired' });
+            }
+            candidate = decoded.Value;
+        }
+        return candidate !== null && typeof candidate === 'object' && !Array.isArray(candidate)
+            ? { payloadChangeRequest: candidate as AgentPayloadChangeRequest }
+            : { error: 'the value is not a JSON object' };
+    }
+
     /** One sub-agent tool → `subAgent`; several → the parallel `subAgents[]` form. */
     private subAgentStep(
         subAgents: ResolvedNativeCall<Extract<NativeToolBinding, { kind: 'subAgent' }>>[],
@@ -422,7 +529,9 @@ export class LoopAgentType extends BaseAgentType {
                 // Downstream dispatch resolves Actions by NAME, so hand back the Action's real
                 // name rather than the sanitized tool name the model used.
                 name: binding.action.Name,
-                params: call.arguments ?? {},
+                // Object params the model sent JSON-encoded are decoded here, so the Action sees
+                // the same shape the envelope path would have given it.
+                params: CoerceActionArguments(binding.params, call.arguments),
                 toolCallId: call.id
             })),
             payloadChangeRequest,
@@ -440,7 +549,7 @@ export class LoopAgentType extends BaseAgentType {
             payloadChangeRequest,
             payloadToolCallId,
             retryReason: 'Payload change applied',
-            retryInstructions: 'Your payload change was applied. Continue: call another tool if there is more to do, or reply in plain text when the task is complete.'
+            retryInstructions: 'Your payload change was applied. Continue: call another tool if there is more to do, or call complete_task when the task is complete.'
         });
     }
 
@@ -491,6 +600,16 @@ export class LoopAgentType extends BaseAgentType {
                 if (promptResult.promptRun?.ToolCallingMode === 'NativeImplicit') {
                     const text = typeof promptResult.result === 'string' ? promptResult.result.trim()
                         : typeof promptResult.rawResult === 'string' ? promptResult.rawResult.trim() : '';
+                    if (this.looksLikeEnvelopeAttempt(text)) {
+                        // JSON the envelope parser could not read is an attempted structured answer, not
+                        // prose. Accepting it as the final answer would end the run with any payload it
+                        // carried silently dropped.
+                        return this.createRetryStep(
+                            'Your reply looks like a JSON response, but it could not be read and plain text ends the task. ' +
+                            'To finish, call complete_task with your answer in message and any payload writes in payloadChangeRequest. ' +
+                            'Write JSON only for the nextStep types listed in the response format.'
+                        );
+                    }
                     if (text.length > 0) {
                         LogStatusEx({ message: '✅ Loop Agent (implicit): plain-text completion. ' + text.slice(0, 120), verboseOnly: true });
                         return this.createSuccessStep({ message: text });
@@ -528,6 +647,7 @@ export class LoopAgentType extends BaseAgentType {
                 return this.createNextStep('Retry', {
                     pipeline: response.nextStep.pipeline,
                     terminate: false,
+                    decisions: response.decisions,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
                     conversationToolCalls: response.conversationToolCalls,
@@ -541,6 +661,9 @@ export class LoopAgentType extends BaseAgentType {
             // Computed once here — consumed by the read-tool pre-emption AND the
             // taskComplete gate below (client tools are yield/await, see both sites).
             const hasClientTools = (response.nextStep?.clientTools?.length || 0) > 0;
+            // An Actions or Sub-Agent step with a valid finishIf runs even when taskComplete is set,
+            // so the gate decides whether the run ends.
+            const hasFinishIfStep = this.isGatedStep(response);
             const preemptionStep = this.buildReadToolPreemptionStep<P>(response, hasClientTools);
             if (preemptionStep) {
                 return preemptionStep;
@@ -559,7 +682,9 @@ export class LoopAgentType extends BaseAgentType {
                 return this.createNextStep('Chat', {
                     message: response.message,
                     terminate: true, // Chat always terminates to return to user
+                    decisions: response.decisions,
                     payloadChangeRequest: response.payloadChangeRequest,
+                    artifactDirective: response.artifactDirective,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
                     conversationToolCalls: response.conversationToolCalls,
@@ -578,7 +703,10 @@ export class LoopAgentType extends BaseAgentType {
             // the LLM loop. If taskComplete was true, the LLM will naturally complete on the
             // next iteration after seeing tool results. (hasClientTools is computed above,
             // where the inline read-tool pre-emption also consults it.)
-            if (response.taskComplete && !hasClientTools) {
+            // Similarly, if a valid finishIf completion gate is attached to an Actions or
+            // Sub-Agent step, let the step execute and evaluate the gate instead of
+            // short-circuiting to immediate success.
+            if (response.taskComplete && !hasClientTools && !hasFinishIfStep) {
                 LogStatusEx({
                     message: '✅ Loop Agent: Task completed successfully. Message: ' + response.message,
                     verboseOnly: true
@@ -587,7 +715,9 @@ export class LoopAgentType extends BaseAgentType {
                     message: response.message,
                     reasoning: response.reasoning,
                     confidence: response.confidence,
+                    decisions: response.decisions,
                     payloadChangeRequest: response.payloadChangeRequest,
+                    artifactDirective: response.artifactDirective,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
                     conversationToolCalls: response.conversationToolCalls,
@@ -605,12 +735,14 @@ export class LoopAgentType extends BaseAgentType {
 
             // Determine next step based on type
             const retVal: Partial<BaseAgentNextStep<P>> = {
+                decisions: response.decisions,
                 payloadChangeRequest: response.payloadChangeRequest,
+                artifactDirective: response.artifactDirective,
                 scratchpad: response.scratchpad,
                 artifactToolCalls: response.artifactToolCalls,
                 conversationToolCalls: response.conversationToolCalls,
                 memoryWrites: response.memoryWrites,
-                terminate: response.taskComplete,
+                terminate: hasFinishIfStep ? false : response.taskComplete,
                 responseForm: response.responseForm,
                 actionableCommands: response.actionableCommands,
                 automaticCommands: response.automaticCommands
@@ -639,6 +771,7 @@ export class LoopAgentType extends BaseAgentType {
                                 templateParameters: response.nextStep.subAgent.templateParameters || {}
                             };
                         }
+                        retVal.finishIf = this.carryFinishIf(response.nextStep.finishIf, 'Sub-Agent');
                     }
                     break;
                 case 'Actions':
@@ -652,7 +785,8 @@ export class LoopAgentType extends BaseAgentType {
                         retVal.actions = response.nextStep.actions.map(action => ({
                             name: action.name,
                             params: action.params
-                        }))
+                        }));
+                        retVal.finishIf = this.carryFinishIf(response.nextStep.finishIf, 'Actions');
                     }
                     break;
                 case 'ClientTools':
@@ -746,6 +880,34 @@ export class LoopAgentType extends BaseAgentType {
         }
     }
 
+    /** Whether the response requests an Actions or Sub-Agent step that carries a valid finishIf. */
+    private isGatedStep(response: LoopAgentResponse): boolean {
+        const nextStep = response.nextStep;
+        const isGateable = (nextStep?.type === 'Actions' && (nextStep.actions?.length ?? 0) > 0)
+            || (nextStep?.type === 'Sub-Agent' && Boolean(nextStep.subAgent));
+        return isGateable && this.isValidFinishIf(nextStep?.finishIf);
+    }
+
+    /** Returns a valid finishIf to carry onto the step, or drops an invalid one with a log line. */
+    private carryFinishIf(candidate: unknown, stepType: 'Actions' | 'Sub-Agent'): AgentFinishIf | undefined {
+        if (candidate === undefined) {
+            return undefined;
+        }
+        if (this.isValidFinishIf(candidate)) {
+            return candidate;
+        }
+        LogStatusEx({
+            message: `⚠️ Loop Agent: dropped an invalid finishIf on a ${stepType} step (it needs one to three non-empty questions and a non-empty message)`,
+            verboseOnly: true
+        });
+        return undefined;
+    }
+
+    /** A valid finishIf has one to three non-empty string questions and a non-empty string message. */
+    private isValidFinishIf(candidate: unknown): candidate is AgentFinishIf {
+        return IsValidFinishIf(candidate);
+    }
+
     /**
      * Validates that the response conforms to the expected LoopAgentResponse structure.
      * 
@@ -796,6 +958,7 @@ export class LoopAgentType extends BaseAgentType {
             }
             else if (response.payloadChangeRequest?.newElements ||
                     response.payloadChangeRequest?.updateElements ||
+                    response.payloadChangeRequest?.replaceElements ||
                     response.payloadChangeRequest?.removeElements) {
                 // the AI forgot to mark taskComplete as true but provided a payloadChangeRequest
                 // with changes to the elements, so we can consider this a valid response

@@ -10,6 +10,7 @@ export * from './custom/MJTemplateContentEntityServer.server';
 export * from './custom/MJUserViewEntityServer.server';
 export * from './custom/MJListEntityServer.server';
 export * from './custom/MJListDetailEntityServer.server';
+export * from './custom/MJDataContextItemEntityServer.server';
 export * from './custom/MJActionEntityServer.server';
 export * from './custom/MJApplicationEntityServer.server';
 export * from './custom/MJComponentEntityServer.server';
@@ -29,6 +30,8 @@ export * from './custom/MJAIBridgeProviderEntityServer.server';
 export * from './custom/MJAIBridgeAgentIdentityEntityServer.server';
 export * from './custom/MJAIBridgeProviderChannelEntityServer.server';
 export * from './custom/MJAIAgentSessionBridgeEntityServer.server';
+export * from './custom/sessionConfigGuard';
+export * from './custom/MJAIAgentSessionEntityServer.server';
 export * from './custom/MJAIAgentSessionBridgeParticipantEntityServer.server';
 export * from './custom/MJAIRemoteBrowserProviderEntityServer.server';
 export * from './custom/MJMaterializedResultEntityServer.server';
@@ -57,3 +60,26 @@ export * from './engines/QueryMatchResult';
 export * from './engines/ComponentMetadataEngineServer';
 export * from './engines/IdentityClaimEngineServer';
 export * from './custom/MJRemoteOperationEntityServer.server';
+export {
+    ApplyFormScopeValidation,
+    FormScopeDeleteRefusal,
+    FormScopeRefusalResult,
+    FormScopeReplayRefusal,
+    type GuardedFormScopeRow,
+} from './custom/FormScopeGuard';
+export * from './custom/MJEntityFormOverrideEntityServer.server';
+export * from './custom/MJEntityFormContributionEntityServer.server';
+export * from './custom/MJRecordChangeEntityServer.server';
+export * from './custom/MJRubricVersionEntityServer.server';
+export * from './custom/MJRubricCriterionEntityServer.server';
+export * from './custom/MJRubricCriterionLevelEntityServer.server';
+export * from './custom/MJRubricBandEntityServer.server';
+export * from './custom/MJRubricEvaluationEntityServer.server';
+export * from './custom/MJRubricEvaluationScoreEntityServer.server';
+export * from './custom/MJRubricScaleEntityServer.server';
+export * from './custom/MJRubricScaleLevelEntityServer.server';
+export * from './custom/rubrics/versionPublish';
+export * from './custom/rubrics/evaluationSubmit';
+export * from './custom/rubrics/scaleFreeze';
+export * from './custom/MJInteractionEventEntityServer.server';
+export * from './custom/MJFileEntityServer.server';

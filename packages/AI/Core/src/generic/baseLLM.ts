@@ -1,8 +1,9 @@
 import { SummarizeParams, SummarizeResult } from "./summarize.types";
 import { BaseModel, ModelUsage } from "./baseModel";
-import { ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks, ChatCompletionMessage, ValidateToolConversation } from "./chat.types";
+import { ChatMessage, ChatMessageRole, ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks, ChatCompletionMessage, ValidateToolConversation } from "./chat.types";
 import { ClassifyParams, ClassifyResult } from "./classify.types";
 import { ErrorAnalyzer } from "./errorAnalyzer";
+import { BuildCancellationErrorInfo, DescribeCancellation, IsAbortError } from "./cancellation";
 
 /**
  * Type for thinking stream state management
@@ -28,6 +29,26 @@ export interface FileCapabilities {
     MaxFilesPerRequest: number;
     /** Whether this driver has a separate file upload API (e.g. Gemini Files API) vs inline base64 */
     HasFileAPI: boolean;
+}
+
+/**
+ * The one piece of message metadata the framework and the providers agree on: `volatileState` marks
+ * a message the agent layer appended for THIS request only — per-iteration runtime state that is
+ * rebuilt every call and never persisted. Providers use it to keep such a message OUT of their
+ * cached prefix. The agent layer's fuller metadata type extends this shape; this is the narrow
+ * structural contract a driver may rely on without depending on the agents package.
+ */
+export interface VolatileStateMessageMetadata {
+    volatileState?: boolean;
+}
+
+/**
+ * An outgoing message list split around its trailing volatile-state message: `head` is the stable,
+ * cacheable history, `tail` is the volatile message and anything after it (an assistant prefill).
+ */
+export interface TrailingVolatileStateSplit {
+    head: ChatMessage[];
+    tail: ChatMessage[];
 }
 
 /**
@@ -90,13 +111,33 @@ export abstract class BaseLLM extends BaseModel {
         const toolsRequested = this.SupportsTools && params.tools != null && params.tools.length > 0;
         const streamingSuppressedForTools = toolsRequested && params.streaming === true;
 
+        // A request cancelled before it starts opens no socket, on every driver alike.
+        const signal = params.cancellationToken;
+        if (signal?.aborted) {
+            return this.BuildCancelledChatResult(new Date(), { signal });
+        }
+
         // Check if streaming is requested and if we support it
         if (params.streaming && params.streamingCallbacks && this.SupportsStreaming && !streamingSuppressedForTools) {
             return this.handleStreamingChatCompletion(params);
         }
 
         // Continue with normal non-streaming implementation
-        const result = await this.nonStreamingChatCompletion(params);
+        const startTime = new Date();
+        let result: ChatResult;
+        try {
+            result = await this.nonStreamingChatCompletion(params);
+        } catch (error) {
+            if (this.IsCancellationError(error, signal)) {
+                return this.BuildCancelledChatResult(startTime, { error, signal });
+            }
+            throw error;
+        }
+        // A driver that caught the abort itself still reports it as a cancellation, whatever shape of
+        // failure it built.
+        if (!result.success && signal?.aborted) {
+            return this.BuildCancelledChatResult(result.startTime ?? startTime, { error: result.exception, signal, message: result.errorMessage });
+        }
         if (streamingSuppressedForTools) {
             result.modelSpecificResponseDetails = {
                 ...result.modelSpecificResponseDetails,
@@ -181,7 +222,19 @@ export abstract class BaseLLM extends BaseModel {
      */
     protected abstract nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult>;
     
+    /**
+     * @deprecated Classification through a driver method is deprecated along with the legacy AI
+     * Actions system, its only caller, and will be removed in the next major version. Most drivers
+     * do not implement it. Run an AI Prompt through `AIPromptRunner` (`@memberjunction/ai-prompts`)
+     * instead, which adds model selection, failover and cost tracking.
+     */
     public abstract ClassifyText(params: ClassifyParams): Promise<ClassifyResult>;
+    /**
+     * @deprecated Summarization through a driver method is deprecated along with the legacy AI
+     * Actions system, its only caller, and will be removed in the next major version. Run a
+     * summarization AI Prompt through `AIPromptRunner` (`@memberjunction/ai-prompts`) instead,
+     * which adds model selection, failover and cost tracking.
+     */
     public abstract SummarizeText(params: SummarizeParams): Promise<SummarizeResult>;
     
     /**
@@ -219,6 +272,51 @@ export abstract class BaseLLM extends BaseModel {
      */
     public get SupportsPrefill(): boolean {
         return false;
+    }
+
+    /**
+     * Whether a message is framework-authored volatile state for this request only: the loop agent's
+     * trailing runtime-state fragment (date/time, scratchpad, payload, a relocated specialization),
+     * which is rebuilt every iteration and must never sit inside a provider's cached prefix.
+     *
+     * The base test is the {@link VolatileStateMessageMetadata.volatileState} flag the agent layer
+     * sets. A driver may override to recognise the message by other means (Anthropic also accepts
+     * the fragment's tag literal for callers that pass plain text), but should call `super` first.
+     */
+    protected isVolatileStateMessage(message: ChatMessage | undefined): boolean {
+        const metadata = message?.metadata as VolatileStateMessageMetadata | undefined;
+        return metadata?.volatileState === true;
+    }
+
+    /**
+     * Index of the trailing volatile-state message in an outgoing request, or -1 when there is none.
+     * The fragment is the LAST message, or the one before it when an assistant prefill has been
+     * appended after it. -1 is also returned when nothing precedes the fragment, because then there
+     * is no stable history for a provider to cache ahead of it.
+     */
+    protected trailingVolatileStateIndex(messages: ChatMessage[]): number {
+        const last = messages.length - 1;
+        if (last >= 1 && this.isVolatileStateMessage(messages[last])) {
+            return last;
+        }
+        if (last >= 2 && messages[last].role === ChatMessageRole.assistant && this.isVolatileStateMessage(messages[last - 1])) {
+            return last - 1;
+        }
+        return -1;
+    }
+
+    /**
+     * Splits an outgoing request around its trailing volatile-state message, so a driver can place
+     * its cache boundary on the last message of `head` and send `tail` uncached. Returns null when the
+     * request has no trailing volatile state, in which case the driver formats the whole list as usual.
+     * Neither array is a copy of the input's messages; only the list is new.
+     */
+    protected splitTrailingVolatileState(messages: ChatMessage[]): TrailingVolatileStateSplit | null {
+        const index = this.trailingVolatileStateIndex(messages);
+        if (index < 1) {
+            return null;
+        }
+        return { head: messages.slice(0, index), tail: messages.slice(index) };
     }
 
     /**
@@ -294,15 +392,20 @@ export abstract class BaseLLM extends BaseModel {
                         // an abort mid-response silently produced a partial answer that the caller was
                         // told was complete. That is data corruption, and it affected every provider.
                         //
-                        // Cancellation is the one case we deliberately let through to
-                        // finalizeStreamingResponse: providers differ on whether an abort throws here
-                        // or simply ends iteration (Anthropic's stream returns silently), so they own
-                        // that decision and return a cancelled result of their own shape. Everything
-                        // else is a genuine failure and must surface as one.
+                        // Cancellation is the one case let through: the signal check below turns it
+                        // into a cancelled result. Everything else is a genuine failure.
                         if (!params.cancellationToken?.aborted) {
                             throw streamError;
                         }
-                        console.error("Stream aborted while processing chunks:", streamError);
+                    }
+
+                    // An aborted stream is cancelled whether the SDK threw or simply ended iteration
+                    // (Anthropic's stream returns silently). The content so far is partial and is
+                    // never finalized as an answer. The signal is this request's own, so no driver
+                    // has to keep cancellation state on a shared instance.
+                    if (params.cancellationToken?.aborted) {
+                        this.settleCancelledStream(params, this.BuildCancelledChatResult(startTime, { signal: params.cancellationToken }), resolve);
+                        return;
                     }
 
                     // Flush any content the thinking-tag stripper was holding back waiting for more
@@ -350,6 +453,12 @@ export abstract class BaseLLM extends BaseModel {
 
                     resolve(result);
                 } catch (error) {
+                    // An abort raised while opening the stream is a cancellation, not an error.
+                    if (this.IsCancellationError(error, params.cancellationToken)) {
+                        this.settleCancelledStream(params, this.BuildCancelledChatResult(startTime, { error, signal: params.cancellationToken }), resolve);
+                        return;
+                    }
+
                     if (params.streamingCallbacks?.OnError) {
                         params.streamingCallbacks.OnError(error);
                     }
@@ -393,6 +502,58 @@ export abstract class BaseLLM extends BaseModel {
      */
     protected resetStreamingState(): void {
         // Default no-op. Providers override.
+    }
+
+    /**
+     * Settles a cancelled stream: resolves the request first, then tells `OnComplete`. A callback that
+     * throws is logged, never allowed to leave the request unsettled.
+     */
+    private settleCancelledStream(params: ChatParams, cancelled: ChatResult, resolve: (result: ChatResult) => void): void {
+        resolve(cancelled);
+        try {
+            params.streamingCallbacks?.OnComplete?.(cancelled);
+        } catch (callbackError) {
+            console.error('OnComplete threw for a cancelled stream:', callbackError);
+        }
+    }
+
+    /**
+     * Whether a request ended because it was aborted: its signal is aborted, the error is an abort by
+     * name (`AbortError`, `APIUserAbortError`, `RequestAbortedError`), or {@link IsProviderAbortError}
+     * recognizes it.
+     */
+    protected IsCancellationError(error: unknown, signal?: AbortSignal | null): boolean {
+        return signal?.aborted === true || IsAbortError(error) || this.IsProviderAbortError(error);
+    }
+
+    /**
+     * Recognizes an abort error the shared names miss. A driver whose SDK raises its own class for an
+     * aborted request overrides this. Default: false.
+     */
+    protected IsProviderAbortError(_error: unknown): boolean {
+        return false;
+    }
+
+    /**
+     * The result of a cancelled request, the same for every driver: a failed result with no choices,
+     * `statusText` `'cancelled'`, and an `errorInfo` that says `Cancelled` (Fatal, never failed over) —
+     * or, when the signal was aborted by a timeout, a retriable `NetworkError`.
+     *
+     * @param options.error The error the abort raised, kept on `exception`.
+     * @param options.signal The request's abort signal, read for why it was aborted.
+     * @param options.message The message to report; defaults to one naming the signal's reason.
+     */
+    protected BuildCancelledChatResult(startTime: Date, options: { error?: unknown; signal?: AbortSignal | null; message?: string } = {}): ChatResult {
+        const result = new ChatResult(false, startTime, new Date());
+        result.data = {
+            choices: [],
+            usage: new ModelUsage(0, 0)
+        };
+        result.statusText = 'cancelled';
+        result.errorMessage = options.message || DescribeCancellation(options.signal);
+        result.exception = options.error;
+        result.errorInfo = BuildCancellationErrorInfo({ error: options.error, signal: options.signal, provider: this.constructor.name });
+        return result;
     }
     
     /**

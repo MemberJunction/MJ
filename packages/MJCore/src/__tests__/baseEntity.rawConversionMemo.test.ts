@@ -125,6 +125,23 @@ describe('BaseEntity.Get() against frozen cache rows', () => {
         expect(e.Get('Currency')).toBe('USD');
     });
 
+    it('strips only trailing spaces from a fixed-width field', () => {
+        const read = (currency: string): unknown => {
+            const e = new MemoTestEntity();
+            e.LoadFromData({ ID: 'r-1', Name: 'Widget', Currency: currency, StartedAt: null });
+            return e.Get('Currency');
+        };
+
+        expect(read('A  B  ')).toBe('A  B');     // inner spaces are data
+        expect(read('USD\t  ')).toBe('USD\t');   // only spaces are padding, not other whitespace
+        expect(read('      ')).toBe('');
+        expect(read('USD')).toBe('USD');
+        // A long run of spaces that doesn't end the value is kept whole. `/ +$/` backtracked
+        // quadratically on this shape; the loop reads it once.
+        const long = ' '.repeat(50_000) + 'x';
+        expect(read(long)).toBe(long);
+    });
+
     it('non-converted fields still read straight through', () => {
         const e = new MemoTestEntity();
         e.LoadFromData(frozenRow());

@@ -8,6 +8,7 @@ import {
   RequireContextUser,
   RequireLoadedUser,
   RequireRoleProvider,
+  SessionUserFields,
   UserIdExtraFilter,
 } from './currentUserRoles.js';
 
@@ -42,22 +43,7 @@ export class UserResolver extends MJUserResolverBase {
 
     if (context.userPayload.userRecord) {
       const userRecord = context.userPayload.userRecord;
-      const userData = {
-        ID: userRecord.ID,
-        Name: userRecord.Name,
-        FirstName: userRecord.FirstName,
-        LastName: userRecord.LastName,
-        Title: userRecord.Title,
-        Email: userRecord.Email,
-        Type: userRecord.Type,
-        IsActive: userRecord.IsActive,
-        LinkedRecordType: userRecord.LinkedRecordType,
-        EmployeeID: userRecord.EmployeeID,
-        LinkedEntityID: userRecord.LinkedEntityID,
-        LinkedEntityRecordID: userRecord.LinkedEntityRecordID,
-        __mj_CreatedAt: userRecord.__mj_CreatedAt,
-        __mj_UpdatedAt: userRecord.__mj_UpdatedAt,
-      };
+      const userData = SessionUserFields(userRecord);
       console.log('CurrentUser (from userRecord)', userData.Email);
       const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
       const mapped = await this.MapFieldNamesToCodeNames('MJ: Users', userData, userRecord, provider) as MJUser_;

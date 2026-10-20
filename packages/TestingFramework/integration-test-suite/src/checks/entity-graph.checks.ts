@@ -32,6 +32,7 @@
 import { BaseEntity, RunView } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJListEntity, MJListDetailEntity, MJActionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
+import { MJListEntityServer } from '@memberjunction/core-entities-server';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -47,9 +48,13 @@ interface MJActionParamLike { ID: string }
  * The declaration under test. Deliberately mirrors the shape the guide documents for an order
  * header's lines — explicit load, delete-on-remove, and a renumbered sequence field — so what this
  * bundle proves is what an adopter would actually write.
+ *
+ * Extends {@link MJListEntityServer} (`BaseEntity -> MJListEntity -> MJListEntityExtended ->
+ * MJListEntityServer -> GraphTestListEntity`) so the registration for `MJ: Lists` forms a single
+ * linear inheritance chain with no unrelated sibling collision.
  */
 @RegisterClass(BaseEntity, LIST_ENTITY)
-export class GraphTestListEntity extends MJListEntity {
+export class GraphTestListEntity extends MJListEntityServer {
     public readonly Details = this.DeclareRelatedRecords<MJListDetailEntity>({
         Name: 'Details',
         RelatedEntity: LIST_DETAIL_ENTITY,

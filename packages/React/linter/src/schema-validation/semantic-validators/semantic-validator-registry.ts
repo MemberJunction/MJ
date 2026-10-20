@@ -25,6 +25,7 @@
  * - required-when
  */
 
+import { BaseSingleton } from '@memberjunction/global';
 import { SemanticValidator } from './semantic-validator';
 import { SubsetOfEntityFieldsValidator } from './subset-of-entity-fields-validator';
 import { SqlWhereClauseValidator } from './sql-where-clause-validator';
@@ -36,16 +37,22 @@ import { RequiredWhenValidator } from './required-when-validator';
  * Provides plugin system for validation constraints with singleton pattern
  * to ensure validators are only instantiated once.
  */
-export class SemanticValidatorRegistry {
-  private static instance: SemanticValidatorRegistry;
-  private validators: Map<string, SemanticValidator>;
+export class SemanticValidatorRegistry extends BaseSingleton<SemanticValidatorRegistry> {
+  private validators!: Map<string, SemanticValidator>;
 
   /**
-   * Private constructor to enforce singleton pattern
+   * Constructor initializes built-in validators on first singleton creation
    */
-  private constructor() {
-    this.validators = new Map();
-    this.registerBuiltInValidators();
+  public constructor() {
+    super();
+    if (!this.validators) {
+      this.validators = new Map();
+      this.registerBuiltInValidators();
+    }
+  }
+
+  public static get Instance(): SemanticValidatorRegistry {
+    return super.getInstance<SemanticValidatorRegistry>();
   }
 
   /**
@@ -54,15 +61,15 @@ export class SemanticValidatorRegistry {
    * @returns The singleton registry instance
    */
   static GetInstance(): SemanticValidatorRegistry {
-    if (!SemanticValidatorRegistry.instance) {
-      SemanticValidatorRegistry.instance = new SemanticValidatorRegistry();
-    }
-    return SemanticValidatorRegistry.instance;
+    return super.getInstance<SemanticValidatorRegistry>();
   }
 
-  /** @deprecated Use {@link GetInstance}. */
-  static getInstance(): SemanticValidatorRegistry {
-    return this.GetInstance();
+  /** @deprecated Use {@link Instance} or {@link GetInstance}. */
+  static override getInstance<T extends BaseSingleton<unknown> = SemanticValidatorRegistry>(
+    this: new () => T,
+    className?: string
+  ): T {
+    return super.getInstance<T>(className);
   }
 
   /**

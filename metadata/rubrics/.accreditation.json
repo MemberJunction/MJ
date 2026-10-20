@@ -1,0 +1,99 @@
+{
+  "fields": {
+    "Name": "Accreditation",
+    "Status": "Active",
+    "Description": "Records and faculty require evidence. The scale is met or not met. See guides/RUBRICS_GUIDE.md."
+  },
+  "primaryKey": {
+    "ID": "A37EF53C-7C21-458B-B16A-49A95881EA9B"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Draft",
+          "NotApplicablePolicy": "NotAllowed",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ChangeSummary": "Worked example from guides/RUBRICS_GUIDE.md. Draft because publish stamps are not set here."
+        },
+        "primaryKey": {
+          "ID": "66234F4B-11DA-43D2-9EB4-B9499E1E3FBE"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "standard-1",
+                "Name": "Standard 1",
+                "NodeType": "Group",
+                "Weight": 1,
+                "IsGate": false,
+                "Sequence": 0
+              },
+              "primaryKey": {
+                "ID": "1CF1D30B-EFAF-4FCD-BA3C-5A556EDB805B"
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:22.106Z",
+                "checksum": "417d46b750a1fe6e4daaedd54ce2fa3725896420e00f2c1ef3ccf70c49fa8148"
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "records",
+                "Name": "Records",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Binary (Met / Not met)",
+                "EvidenceRequired": true,
+                "ParentID": "1CF1D30B-EFAF-4FCD-BA3C-5A556EDB805B"
+              },
+              "primaryKey": {
+                "ID": "443ED8C8-379D-4960-9AAC-BD6EEDD3A984"
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:22.132Z",
+                "checksum": "20f3ad86a6526d0f7f681427f163ef4f2893fbe35ae9c709b10f18e306ffd501"
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "faculty",
+                "Name": "Faculty",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Binary (Met / Not met)",
+                "EvidenceRequired": true,
+                "ParentID": "1CF1D30B-EFAF-4FCD-BA3C-5A556EDB805B"
+              },
+              "primaryKey": {
+                "ID": "C608D806-B947-45E1-86FA-C93D1FDC1ADB"
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:22.147Z",
+                "checksum": "6e1cf605a7449167d146f384c75f494658a76e8d03acb90db14ce1705c1bf494"
+              }
+            }
+          ]
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:22.055Z",
+          "checksum": "4e2a9fa7f191e5bdf27e0428e498417cfde570f5e88dd618831064518bd07b8a"
+        }
+      }
+    ]
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:22.016Z",
+    "checksum": "a37fb701e00828f303facb8ba997838e4b8f29412b218d969b545b45917a45e8"
+  }
+}

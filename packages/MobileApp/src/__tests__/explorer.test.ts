@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 type RunViewParams = { EntityName: string };
 type RunViewResult = { Success: boolean; Results?: unknown[] };
@@ -10,7 +10,9 @@ const state = vi.hoisted(() => ({
     runView: (_p: { EntityName: string }): { Success: boolean; Results?: unknown[] } => ({ Success: true, Results: [] }),
 }));
 
-vi.mock('@memberjunction/core', () => {
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    // The real calendar-day helpers: the explorer's date-only rendering is what is under test.
+    const { FormatDateOnly, IsDateOnlySQLType } = await importOriginal<typeof import('@memberjunction/core')>();
     class Metadata {
         CurrentUser = { ID: 'user-1' };
         get Entities() {
@@ -48,7 +50,7 @@ vi.mock('@memberjunction/core', () => {
             };
         }
     }
-    return { Metadata, RunView, RunQuery, CompositeKey };
+    return { Metadata, RunView, RunQuery, CompositeKey, FormatDateOnly, IsDateOnlySQLType };
 });
 
 import {
@@ -59,6 +61,7 @@ import {
     LoadDashboard,
     LoadDashboards,
     LoadEntityRecords,
+    LoadRecordDetail,
 } from '@/data/services/explorer';
 
 beforeEach(() => {
@@ -231,6 +234,58 @@ describe('LoadEntityRecords — card subtitle rendering of normalized date cells
         const load = await LoadEntityRecords('Test Orders');
 
         expect(load?.Rows[0].subtitle).toBe('');
+    });
+});
+
+describe('date-only (SQL `date`) cells read as their stored day', () => {
+    // A calendar day arrives as UTC midnight. TZ is pinned west of Greenwich, where a device-zone
+    // formatter reads it as the previous day; at UTC it lands right by accident.
+    const originalTZ = process.env.TZ;
+    beforeEach(() => {
+        process.env.TZ = 'America/Chicago';
+        state.entities = [invoiceEntity as unknown as Record<string, unknown>];
+    });
+    afterEach(() => {
+        process.env.TZ = originalTZ;
+    });
+
+    const invoiceEntity = {
+        Name: 'Test Invoices',
+        Fields: [
+            { Name: 'ID', IsPrimaryKey: true, DefaultInView: false, Type: 'uniqueidentifier' },
+            { Name: 'Name', IsPrimaryKey: false, DefaultInView: true, Type: 'nvarchar', IsNameField: true },
+            { Name: 'DueDate', IsPrimaryKey: false, DefaultInView: true, Type: 'date', DisplayName: 'Due Date' },
+            { Name: 'ApprovedAt', IsPrimaryKey: false, DefaultInView: true, Type: 'datetimeoffset' },
+        ],
+        PrimaryKeys: [{ Name: 'ID' }],
+        FirstPrimaryKey: { Name: 'ID' },
+        NameField: { Name: 'Name' },
+    };
+    const storedDay = new Date('2026-10-01T00:00:00.000Z');
+    const instant = new Date('2026-10-01T02:30:00.000Z');
+
+    it('shows a date-only card subtitle cell as its stored day, a timestamp in the device zone', async () => {
+        state.runView = () => ({
+            Success: true,
+            Results: [{ ID: 'r1', Name: 'Invoice One', DueDate: storedDay, ApprovedAt: instant }],
+        });
+
+        const load = await LoadEntityRecords('Test Invoices');
+
+        expect(load?.Rows[0].subtitle).toBe(`${storedDay.toLocaleDateString(undefined, { timeZone: 'UTC' })} · ${instant.toLocaleDateString()}`);
+        // The device-zone rendering is the previous day here; the stored day is not.
+        expect(storedDay.toLocaleDateString()).not.toBe(storedDay.toLocaleDateString(undefined, { timeZone: 'UTC' }));
+    });
+
+    it('shows a date-only field in the record detail as its stored day', async () => {
+        const values: Record<string, unknown> = { ID: 'r1', Name: 'Invoice One', DueDate: storedDay, ApprovedAt: instant };
+        state.dashboard = { InnerLoad: async () => true, Get: (name: string) => values[name] };
+
+        const detail = await LoadRecordDetail('Test Invoices', 'r1');
+
+        const byKey = new Map(detail?.fields.map((f) => [f.key, f.value]));
+        expect(byKey.get('DueDate')).toBe(storedDay.toLocaleDateString(undefined, { timeZone: 'UTC' }));
+        expect(byKey.get('ApprovedAt')).toBe(instant.toLocaleDateString());
     });
 });
 

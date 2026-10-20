@@ -276,6 +276,16 @@ interface ListContextMenu {
         }
       </div>
 
+      <!-- Escalate the in-place filter to a full cross-entity search. Pinned below the
+           scroll region rather than appended to the results so it stays reachable without
+           scrolling past every match. Only meaningful while filtering. -->
+      @if (IsSearching && !IsSelectionMode) {
+        <button class="search-escalate" (click)="EscalateSearch()">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <span class="search-escalate-label">Search all of Chat for &ldquo;{{ SearchQuery }}&rdquo;</span>
+          <i class="fa-solid fa-arrow-right search-escalate-go"></i>
+        </button>
+      }
     </div>
 
     <!-- Recursive folder node: header + nested children + direct conversations -->
@@ -296,6 +306,25 @@ interface ListContextMenu {
         <i class="fas fa-chevron-right folder-chevron" [class.expanded]="IsFolderExpanded(node.project.ID)"></i>
         <i class="fas {{ node.project.Icon || 'fa-folder' }} folder-icon" [style.color]="node.project.Color || null"></i>
         <span class="folder-name">{{ node.project.Name }}</span>
+        <!-- SHARED is the marked state, not personal. Two reasons: it is the state with
+             consequences for other people ("anyone here can read this folder's name"),
+             and personal is the create-time default, so marking personal would badge
+             nearly every row in steady state while marking shared thins out over time.
+             On an environment upgrading to this column every existing folder is shared
+             and so every row is badged — which is exactly the disclosure people need at
+             that moment. Sits beside the name it describes rather than at the right
+             edge, which belongs to the count. -->
+        @if (!node.project.OwnerUserID) {
+          <!-- role="img" so the aria-label is actually announced: on a bare span with no
+               role, an aria-label is not reliably exposed, and the <i> carrying the glyph
+               is aria-hidden. -->
+          <span class="folder-shared" role="img"
+                title="Shared — everyone can see this folder and its name, but not the conversations in it"
+                aria-label="Shared folder">
+            <i class="fas fa-users" aria-hidden="true"></i>
+          </span>
+        }
+        <span class="folder-spacer"></span>
         <span class="folder-count">{{ node.totalCount }}</span>
       </div>
       @if (IsFolderExpanded(node.project.ID)) {
@@ -614,6 +643,40 @@ interface ListContextMenu {
 
     /* Collapsible Sections */
     .sidebar-section { margin-bottom: 20px; }
+
+    /* Reads as a continuation of the list rather than a second control: full-width row,
+       ink-derived like every other affordance in this panel, no input styling. */
+    .search-escalate {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 10px 12px;
+      border: none;
+      border-top: 1px solid color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      background: transparent;
+      color: color-mix(in srgb, var(--conv-list-ink) 70%, transparent);
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .search-escalate:hover {
+      background: var(--conv-list-hover-bg);
+      color: var(--conv-list-ink);
+    }
+
+    /* Truncate rather than wrap — the query is user text of unbounded length. */
+    .search-escalate-label {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .search-escalate-go { opacity: 0.6; }
     .pinned-section .section-title .section-icon {
       color: var(--mj-status-warning);
       font-size: 11px;
@@ -1136,7 +1199,11 @@ interface ListContextMenu {
     .folder-chevron.expanded { transform: rotate(90deg); }
     .folder-icon { font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; }
     .folder-name {
-      flex: 1;
+      /* NOT flex: 1. Growing to fill the row would push the shared badge to the right
+         edge, beside the count, instead of beside the name it describes. The
+         .folder-spacer after the badge takes the slack instead. Shrink + min-width:0
+         keeps the ellipsis behaviour on a long name. */
+      flex: 0 1 auto;
       min-width: 0;
       white-space: nowrap;
       overflow: hidden;
@@ -1151,6 +1218,19 @@ interface ListContextMenu {
       margin-left: auto;
       padding-left: 6px;
       text-align: right;
+    }
+    .folder-spacer {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .folder-shared {
+      flex-shrink: 0;
+      margin-left: 6px;
+      font-size: 10px;
+      line-height: 1;
+      /* Same muted treatment as .folder-count, so it reads as metadata and does not
+         compete with the folder's own colour. */
+      color: color-mix(in srgb, var(--conv-list-ink) 50%, transparent);
     }
     .folder-children { display: block; }
     .folder-empty-hint {
@@ -1264,6 +1344,13 @@ export class ConversationListComponent implements OnInit, OnDestroy {
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() refreshRequested = this.RefreshRequested; // Emitted after list refresh so chat area can also reload
+
+  /**
+   * The user wants the current filter term searched across all of Chat, not just this list.
+   * Emits the term. This panel filters only loaded conversations by Name/Description, so it
+   * cannot answer "where did we discuss X" — the host owns that surface and the routing to it.
+   */
+  @Output() SearchEscalated = new EventEmitter<string>();
 
   public DirectMessagesExpanded: boolean = true;
   public PinnedExpanded: boolean = true;
@@ -1387,6 +1474,11 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   /** True when a search filter is active. */
   get IsSearching(): boolean {
     return this._searchQuery.trim().length > 0;
+  }
+
+  /** Hand the current filter term to the host to search across every Chat entity. */
+  EscalateSearch(): void {
+    this.SearchEscalated.emit(this._searchQuery.trim());
   }
 
   /** Clears the search box and returns focus to it. */

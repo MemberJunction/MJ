@@ -1,18 +1,33 @@
 import { Injectable, EventEmitter } from '@angular/core';
-import { ActionableCommand, AutomaticCommand, RefreshDataCommand, OpenURLCommand } from '@memberjunction/ai-core-plus';
+import {
+  ActionableCommand,
+  AutomaticCommand,
+  RefreshDataCommand,
+  OpenURLCommand,
+  ComposeEmailCommand,
+  BuildMailtoURL
+} from '@memberjunction/ai-core-plus';
 import { DataCacheService } from './data-cache.service';
 
 export interface ActionableCommandRequest {
   command: ActionableCommand;
   conversationId?: string | null;
   conversationDetailId?: string | null;
+  /**
+   * Set only on the compose:email over-length fallback: whether the draft body is now on the
+   * user's clipboard. The copy overwrites whatever the user had copied, so the host must say it
+   * happened, and must not claim it when this is false (no body, clipboard unavailable over plain
+   * HTTP, or denied by permissions policy).
+   */
+  DraftCopiedToClipboard?: boolean;
 }
 
 /**
  * Service for handling UI commands from agents.
  *
- * Generic commands (open:url) are handled directly by this service.
- * App-specific commands (open:resource) are emitted for the host application to handle.
+ * Generic commands (open:url, and compose:email while it fits in a mailto: URL) are handled
+ * directly by this service. App-specific commands (open:resource, and the compose:email
+ * over-length fallback) are emitted for the host application to handle.
  */
 @Injectable({
   providedIn: 'root'
@@ -20,7 +35,13 @@ export interface ActionableCommandRequest {
 export class UICommandHandlerService {
   /**
    * Event emitted when an actionable command requires host-app handling.
-   * Currently only open:resource commands are emitted — open:url is handled directly.
+   *
+   * open:resource is always emitted. compose:email is emitted ONLY as a fallback, when the draft
+   * is too long for a mailto: URL and the host must open the draft artifact instead; a draft
+   * within the limit is handled here and never reaches the host. On that fallback the host also
+   * owns telling the user why their mail client did not open, because only the host knows whether
+   * a draft artifact opened (see {@link ActionableCommandRequest.DraftCopiedToClipboard}).
+   * open:url is always handled here.
    */
   public ActionableCommandRequested = new EventEmitter<ActionableCommandRequest>();
 
@@ -59,15 +80,38 @@ export class UICommandHandlerService {
   public async ExecuteActionableCommand(command: ActionableCommand, origin?: Omit<ActionableCommandRequest, 'command'>): Promise<void> {
     if (command.type === 'open:url') {
       this.handleOpenUrl(command);
-    } else {
-      // open:resource requires app-specific navigation — emit for host to handle
-      console.log('📤 Emitting actionable command for host app:', command);
-      this.ActionableCommandRequested.emit({
-        command,
-        conversationId: origin?.conversationId ?? null,
-        conversationDetailId: origin?.conversationDetailId ?? null
-      });
+      return;
     }
+
+    const request: ActionableCommandRequest = {
+      command,
+      conversationId: origin?.conversationId ?? null,
+      conversationDetailId: origin?.conversationDetailId ?? null
+    };
+
+    if (command.type === 'compose:email') {
+      const { url, withinLimit } = BuildMailtoURL(command);
+      if (withinLimit) {
+        this.openMailto(url);
+        return;
+      }
+      // Too long for a mailto: URL. We do NOT open it: a mail client past its limit does not
+      // refuse the URL, it opens a draft with the body SILENTLY TRUNCATED and the user sends half
+      // a message without noticing. Falls through to the host, which opens the full draft
+      // artifact and tells the user what happened.
+      request.DraftCopiedToClipboard = await this.copyDraftBody(command);
+    }
+
+    // open:resource (and the compose:email fallback above) require app-specific navigation.
+    // compose:email is logged by TYPE ONLY: its body is free-text member correspondence, and the
+    // whole command object would otherwise land in the browser console and any console-forwarding
+    // telemetry.
+    if (command.type === 'compose:email') {
+      console.log('📤 Emitting actionable command for host app:', command.type);
+    } else {
+      console.log('📤 Emitting actionable command for host app:', command);
+    }
+    this.ActionableCommandRequested.emit(request);
   }
 
   /** @deprecated Use {@link ExecuteActionableCommand}. */
@@ -89,6 +133,48 @@ export class UICommandHandlerService {
       const target = newTab ? '_blank' : '_self';
       window.open(url, target, target === '_blank' ? 'noopener,noreferrer' : undefined);
     }
+  }
+
+  /**
+   * Best-effort copy of an over-length draft's body, so the text is not lost even when the host
+   * cannot open the draft artifact.
+   *
+   * Never rejects, so a clipboard that is unavailable (plain HTTP) or denied by permissions policy
+   * cannot stop the fallback. Nothing on the click path awaits before writeText is called, so it
+   * still runs inside the click's user activation; the fallback then awaits the outcome only so
+   * the host's notice can say whether the copy happened.
+   *
+   * @returns true only when the body is on the clipboard, so the host never claims a copy that
+   *          did not happen.
+   */
+  private async copyDraftBody(command: ComposeEmailCommand): Promise<boolean> {
+    if (!command.body || !navigator.clipboard) {
+      return false;
+    }
+    try {
+      await navigator.clipboard.writeText(command.body);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Open the user's own mail client with a compose:email draft's fields pre-filled, via a
+   * synthesized anchor click.
+   *
+   * NOTHING IS SENT HERE. The agent drafted; the user sends. This only opens a compose window.
+   *
+   * Deliberately not window.open: Chrome treats window.open with a non-http scheme as a popup and
+   * strands an about:blank tab behind the compose window.
+   */
+  private openMailto(url: string): void {
+    const a = document.createElement('a');
+    a.href = url;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
   /**

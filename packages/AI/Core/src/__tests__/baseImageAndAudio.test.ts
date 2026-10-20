@@ -9,8 +9,11 @@ import {
     ImageVariationParams,
     ImageModelInfo
 } from '../generic/baseImage';
+import { MJGlobal } from '@memberjunction/global';
 import {
+    AudioSplitter,
     BaseAudioGenerator,
+    TranscriptionPiece,
     SpeechResult,
     VoiceInfo,
     VoiceSample,
@@ -20,7 +23,10 @@ import {
     TextToSpeechParams,
     SpeechToTextParams
 } from '../generic/baseAudio';
+import { BaseTextToSpeech } from '../generic/baseTextToSpeech';
+import { BaseSpeechToText } from '../generic/baseSpeechToText';
 import { BaseVideoGenerator, VideoResult, AvatarInfo, AvatarVideoParams, VideoTranslationParams } from '../generic/baseVideo';
+import { ModelUsage } from '../generic/baseModel';
 
 // Test implementations
 class TestImageGenerator extends BaseImageGenerator {
@@ -119,6 +125,34 @@ describe('BaseImageGenerator', () => {
         expect(models[0].id).toBe('dall-e-3');
         expect(models[0].name).toBe('DALL-E 3');
     });
+
+    describe('CancelledResult', () => {
+        class CancellingImageGenerator extends TestImageGenerator {
+            public Cancelled(signal: AbortSignal, error?: unknown): ImageGenerationResult {
+                return this.CancelledResult(signal, error);
+            }
+        }
+
+        it('classifies a caller cancellation as Cancelled, never failed over', () => {
+            const controller = new AbortController();
+            controller.abort('user stopped it');
+            const result = new CancellingImageGenerator('key').Cancelled(controller.signal);
+
+            expect(result.success).toBe(false);
+            expect(result.errorMessage).toContain('was cancelled');
+            expect(result.errorInfo?.errorType).toBe('Cancelled');
+            expect(result.errorInfo?.canFailover).toBe(false);
+        });
+
+        it('classifies an abort caused by a timeout as a retriable network error', () => {
+            const controller = new AbortController();
+            controller.abort(new DOMException('The operation timed out', 'TimeoutError'));
+            const result = new CancellingImageGenerator('key').Cancelled(controller.signal);
+
+            expect(result.errorInfo?.errorType).toBe('NetworkError');
+            expect(result.errorInfo?.canFailover).toBe(true);
+        });
+    });
 });
 
 describe('BaseDiffusion (deprecated)', () => {
@@ -190,6 +224,43 @@ describe('BaseAudioGenerator', () => {
 
         expect(models[0].supportsTextToSpeech).toBe(true);
     });
+
+    // BaseAudioGenerator is deprecated in favor of BaseTextToSpeech and BaseSpeechToText, and must keep working.
+    it('can be used wherever either of the classes it was split into is expected', async () => {
+        const gen = new TestAudioGenerator('key');
+        const tts: BaseTextToSpeech = gen;
+        const stt: BaseSpeechToText = gen;
+
+        expect((await tts.CreateSpeech({ voice: 'v1', text: 'Hello' })).content).toBe('audio-data');
+        expect((await stt.SpeechToText({ audioFile: 'base64data', model: 'whisper' })).content).toBe('Hello world');
+    });
+
+    it('still offers TranscribeWithSplitting to its drivers', async () => {
+        class SplittingAudioGenerator extends TestAudioGenerator {
+            public Transcribe(audio: Buffer, splitter: AudioSplitter): Promise<TranscriptionPiece> {
+                return this.TranscribeWithSplitting(audio, 4, 4, splitter, 'Test', async (piece) => ({ text: piece.toString(), durationSeconds: 2 }));
+            }
+        }
+        const splitter: AudioSplitter = { Split: async () => [Buffer.from('ab'), Buffer.from('cd')] };
+
+        const result = await new SplittingAudioGenerator('key').Transcribe(Buffer.from('abcdefgh'), splitter);
+
+        expect(result).toEqual({ text: 'ab cd', durationSeconds: 4 });
+    });
+
+    it('a driver registered against it and both new classes resolves through each, under one key', () => {
+        const key = 'CoreTestAudioGenerator';
+        const factory = MJGlobal.Instance.ClassFactory;
+        factory.Register(BaseAudioGenerator, TestAudioGenerator, key);
+        factory.Register(BaseTextToSpeech, TestAudioGenerator, key);
+        factory.Register(BaseSpeechToText, TestAudioGenerator, key);
+
+        for (const base of [BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText]) {
+            const resolved = factory.TryCreateInstance<BaseTextToSpeech | BaseSpeechToText>(base, key, 'key');
+            expect(resolved.Resolved).toBe(true);
+            expect(resolved.Instance).toBeInstanceOf(TestAudioGenerator);
+        }
+    });
 });
 
 describe('SpeechResult', () => {
@@ -240,5 +311,15 @@ describe('VideoResult', () => {
         result.videoId = 'vid-abc';
 
         expect(result.videoId).toBe('vid-abc');
+    });
+
+    it('carries the video length as usage when a driver reports it', () => {
+        const result = new VideoResult();
+        result.success = true;
+        result.videoId = 'vid-abc';
+        result.usage = ModelUsage.ForMedia('Seconds', 0, 30);
+
+        expect(result.usage.unitKind).toBe('Seconds');
+        expect(result.usage.outputUnits).toBe(30);
     });
 });

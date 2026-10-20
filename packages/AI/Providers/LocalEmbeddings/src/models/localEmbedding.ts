@@ -1,4 +1,4 @@
-import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, BaseEmbeddings, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
+import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, BaseEmbeddings, ModelUsage, ErrorAnalyzer, ThrowIfAborted } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 /**
@@ -112,6 +112,15 @@ export class LocalEmbedding extends BaseEmbeddings {
     constructor(apiKey?: string) {
         // Local embeddings don't require an API key
         super(apiKey || 'local');
+    }
+
+    /**
+     * Runs ONNX models in-process, so it needs no API key. Lets credential checks (e.g.
+     * `AIEmbeddingRunner`) accept a local model on an install with no
+     * `AI_VENDOR_API_KEY__LocalEmbedding` set.
+     */
+    public override get RequiresAPIKey(): boolean {
+        return false;
     }
 
     /**
@@ -293,8 +302,11 @@ export class LocalEmbedding extends BaseEmbeddings {
         const startTime = Date.now();
 
         try {
+            // In-process inference cannot be interrupted, so the signal is checked before it starts.
+            ThrowIfAborted(params.CancellationToken, 'LocalEmbedding');
             // Get or load the pipeline
             const pipe = await this.getPipeline(modelName);
+            ThrowIfAborted(params.CancellationToken, 'LocalEmbedding');
             
             // Generate embeddings
             const output = await pipe(params.text, {
@@ -321,6 +333,8 @@ export class LocalEmbedding extends BaseEmbeddings {
                 vector: embedding
             };
         } catch (error) {
+            // A cancellation is reported as such, not as an empty (failed) result.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'LocalEmbedding');
             console.error('Local embedding error:', errorInfo);
             
@@ -353,6 +367,8 @@ export class LocalEmbedding extends BaseEmbeddings {
             let totalTokens = 0;
             
             for (let i = 0; i < params.texts.length; i += batchSize) {
+                // In-process inference cannot be interrupted; a cancelled call stops before the next batch.
+                ThrowIfAborted(params.CancellationToken, 'LocalEmbedding');
                 const batch = params.texts.slice(i, i + batchSize);
                 
                 // Generate embeddings for batch
@@ -386,6 +402,8 @@ export class LocalEmbedding extends BaseEmbeddings {
                 vectors: vectors
             };
         } catch (error) {
+            // A cancellation is reported as such, not as an empty (failed) result.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'LocalEmbedding');
             console.error('Local embedding error:', errorInfo);
             

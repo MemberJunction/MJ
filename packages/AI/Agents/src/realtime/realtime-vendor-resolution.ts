@@ -13,7 +13,7 @@
  * @author MemberJunction.com
  */
 
-import { GetAIAPIKey } from '@memberjunction/ai';
+import { AIAPIKeyResolver, MakeAIAPIKeyResolver } from '@memberjunction/ai';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 
@@ -35,13 +35,17 @@ export interface RealtimeVendorSelection {
 }
 
 /**
- * Resolves a key for a `DriverClass` from the environment. Injectable so callers that already own a
- * key-resolution seam (and their tests) can substitute one without reaching into the environment.
+ * Resolves a key for a `DriverClass`. Injectable so callers that already own a key-resolution seam
+ * (and their tests) can substitute one without reaching into the environment.
+ *
+ * An alias of {@link AIAPIKeyResolver} in `@memberjunction/ai`, kept under this name because it is
+ * the published realtime API. A run-scoped resolver (e.g. `MakeAIAPIKeyResolver(params.apiKeys)`)
+ * is what carries a caller's own credentials in here; the default below is the platform-only lookup.
  */
-export type RealtimeAPIKeyResolver = (driverClass: string) => string | undefined;
+export type RealtimeAPIKeyResolver = AIAPIKeyResolver;
 
-/** The default resolver — the process's configured AI API keys. */
-const defaultAPIKeyResolver: RealtimeAPIKeyResolver = (driverClass) => GetAIAPIKey(driverClass) || undefined;
+/** The default resolver — the process's configured AI API keys, with no run-scoped keys. */
+const defaultAPIKeyResolver: RealtimeAPIKeyResolver = MakeAIAPIKeyResolver();
 
 /**
  * Selects the vendor that will run a realtime model: the highest-`Priority` **Active** `MJ: AI Model
@@ -59,14 +63,25 @@ export function SelectRealtimeVendorForModel(
     modelID: string,
     resolveAPIKey: RealtimeAPIKeyResolver = defaultAPIKeyResolver
 ): RealtimeVendorSelection | null {
-    const vendors = AIEngine.Instance.ModelVendors
-        .filter(mv => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
-        .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
-
-    for (const v of vendors) {
-        if (resolveAPIKey(v.DriverClass!)) {
-            return { VendorID: v.VendorID ?? '', ModelVendorID: v.ID, DriverClass: v.DriverClass!, APIName: v.APIName ?? '' };
+    for (const v of ListRealtimeVendorsForModel(modelID)) {
+        if (resolveAPIKey(v.DriverClass)) {
+            return v;
         }
     }
     return null;
+}
+
+/**
+ * The vendors that can run a realtime model, in the order {@link SelectRealtimeVendorForModel} tries them: the model's
+ * **Active** `MJ: AI Model Vendors` rows that carry a `DriverClass`, highest `Priority` first. Keys are not checked here.
+ * A co-agent with video on walks them all for one whose endpoint shows an avatar, not only the first with a key.
+ *
+ * @param modelID The `MJ: AI Models` row id.
+ * @returns The vendor identifiers, best first (empty when the model has none).
+ */
+export function ListRealtimeVendorsForModel(modelID: string): RealtimeVendorSelection[] {
+    return AIEngine.Instance.ModelVendors
+        .filter(mv => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
+        .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0))
+        .map(v => ({ VendorID: v.VendorID ?? '', ModelVendorID: v.ID, DriverClass: v.DriverClass!, APIName: v.APIName ?? '' }));
 }

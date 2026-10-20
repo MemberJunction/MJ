@@ -19,6 +19,7 @@ export class MJTestFormComponent extends BaseFormComponent {
             { sectionKey: 'testDefinition', sectionName: 'Test Definition', isExpanded: true },
             { sectionKey: 'testLogic', sectionName: 'Test Logic', isExpanded: true },
             { sectionKey: 'executionSettings', sectionName: 'Execution Settings', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTestRuns', sectionName: 'Test Runs', isExpanded: false },
             { sectionKey: 'mJTestSuiteTests', sectionName: 'Test Suite Tests', isExpanded: false }

@@ -55,6 +55,15 @@ export interface IAuthProvider {
   extractUserInfo(payload: JwtPayload): AuthUserInfo;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
+   * Releases any resources (keep-alive HTTP agent, JWKS client) this provider instance holds.
+   * Optional so implementations with nothing to release don't need a no-op override. Called by
+   * {@link AuthProviderFactory} before an existing provider is replaced (`register()`) or the
+   * registry is torn down (`clear()`), so a discarded provider's socket pool doesn't stay open
+   * until its own idle timeout.
+   */
+  Dispose?(): void;
+
+  /**
    * Checks if a given issuer URL belongs to this provider
    */
   matchesIssuer(issuer: string): boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub

@@ -19,6 +19,10 @@ export * from './lib/auth-provider-catalog';
 export * from './lib/catalog-environment';
 export * from './lib/login-picker.component';
 
+// Designed sign-in page (Login Studio): the pre-auth loader and the region renderer
+export * from './lib/login-screen-loader';
+export * from './lib/login-region.component';
+
 // Provider implementations
 export * from './lib/providers/mjexplorer-msal-provider.service';
 export * from './lib/providers/mjexplorer-auth0-provider.service';

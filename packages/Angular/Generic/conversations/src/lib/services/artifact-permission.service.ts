@@ -1,8 +1,14 @@
 import { Injectable } from '@angular/core';
 import { UserInfo, RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { MJArtifactPermissionEntity, MJArtifactEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
+import type { MJArtifactVersionEntity, MJCollectionPermissionEntity } from '@memberjunction/core-entities';
 import { CollectionPermissionService } from './collection-permission.service';
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+
+type ArtifactGrantRow = Pick<MJArtifactPermissionEntity, 'ArtifactID' | 'CanRead'>;
+type CollectionGrantRow = Pick<MJCollectionPermissionEntity, 'CollectionID'>;
+type CollectionArtifactRow = Pick<MJCollectionArtifactEntity, 'ArtifactVersionID'>;
+type ArtifactVersionRow = Pick<MJArtifactVersionEntity, 'ArtifactID'>;
 
 export interface ArtifactPermission {
     id: string;
@@ -398,6 +404,106 @@ export class ArtifactPermissionService {
     /** @deprecated Use {@link GetUserPermissions}. */
     async getUserPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermissionSet> {
         return this.GetUserPermissions(artifactId, currentUser);
+    }
+
+    /**
+     * Returns an `ExtraFilter` for `MJ: Artifacts` that matches the artifacts the user can read,
+     * by the same rule as {@link CheckPermission}: the user owns it, else an explicit grant
+     * decides, else a read grant on a collection that holds a version of it.
+     *
+     * Each lookup runs against its own entity, so the filter holds only `UserID` and IDs.
+     */
+    async GetReadableArtifactsFilter(userId: string, currentUser: UserInfo): Promise<string> {
+        const ownerOnly = `(UserID='${userId}')`;
+        const rv = RunView.FromMetadataProvider(this.Provider);
+        const [grantResult, collectionResult] = await rv.RunViews([
+            {
+                EntityName: 'MJ: Artifact Permissions',
+                ExtraFilter: `UserID='${userId}'`,
+                Fields: ['ArtifactID', 'CanRead'],
+                ResultType: 'simple'
+            },
+            {
+                EntityName: 'MJ: Collection Permissions',
+                ExtraFilter: `UserID='${userId}' AND CanRead=1`,
+                Fields: ['CollectionID'],
+                ResultType: 'simple'
+            }
+        ], currentUser);
+
+        // Without the explicit grants, a grant that withholds read is unknown, so collection
+        // access cannot be applied safely.
+        if (!grantResult.Success) {
+            console.error('Failed to load artifact grants:', grantResult.ErrorMessage);
+            return ownerOnly;
+        }
+
+        const grants = (grantResult.Results ?? []) as ArtifactGrantRow[];
+        const collectionIds = collectionResult.Success
+            ? ((collectionResult.Results ?? []) as CollectionGrantRow[]).map(r => r.CollectionID)
+            : [];
+        const collectionArtifactIds = await this.getArtifactIdsInCollections(collectionIds, currentUser);
+
+        const readableIds = this.resolveReadableArtifactIds(grants, collectionArtifactIds);
+        return readableIds.length > 0
+            ? `(UserID='${userId}' OR ID IN (${readableIds.map(id => `'${id}'`).join(',')}))`
+            : ownerOnly;
+    }
+
+    /**
+     * IDs of artifacts that have at least one version in any of the given collections.
+     */
+    private async getArtifactIdsInCollections(collectionIds: string[], currentUser: UserInfo): Promise<string[]> {
+        if (collectionIds.length === 0) {
+            return [];
+        }
+
+        const rv = RunView.FromMetadataProvider(this.Provider);
+        const versionResult = await rv.RunView<CollectionArtifactRow>({
+            EntityName: 'MJ: Collection Artifacts',
+            ExtraFilter: `CollectionID IN (${collectionIds.map(id => `'${id}'`).join(',')})`,
+            Fields: ['ArtifactVersionID'],
+            ResultType: 'simple'
+        }, currentUser);
+        const versionIds = versionResult.Success ? (versionResult.Results ?? []).map(r => r.ArtifactVersionID) : [];
+        if (versionIds.length === 0) {
+            return [];
+        }
+
+        const artifactResult = await rv.RunView<ArtifactVersionRow>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID IN (${versionIds.map(id => `'${id}'`).join(',')})`,
+            Fields: ['ArtifactID'],
+            ResultType: 'simple'
+        }, currentUser);
+        return artifactResult.Success ? (artifactResult.Results ?? []).map(r => r.ArtifactID) : [];
+    }
+
+    /**
+     * Applies the grant order: an explicit grant decides for its artifact; collection access
+     * counts only for artifacts that have no explicit grant.
+     */
+    private resolveReadableArtifactIds(grants: ArtifactGrantRow[], collectionArtifactIds: string[]): string[] {
+        const explicitRead = new Map<string, { id: string; canRead: boolean }>();
+        for (const grant of grants) {
+            const key = NormalizeUUID(grant.ArtifactID);
+            const canRead = (explicitRead.get(key)?.canRead ?? false) || !!grant.CanRead;
+            explicitRead.set(key, { id: grant.ArtifactID, canRead });
+        }
+
+        const readable = new Map<string, string>();
+        for (const { id, canRead } of explicitRead.values()) {
+            if (canRead) {
+                readable.set(NormalizeUUID(id), id);
+            }
+        }
+        for (const id of collectionArtifactIds) {
+            const key = NormalizeUUID(id);
+            if (!explicitRead.has(key) && !readable.has(key)) {
+                readable.set(key, id);
+            }
+        }
+        return [...readable.values()];
     }
 
     /**

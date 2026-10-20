@@ -12,7 +12,7 @@ import { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
-import { TemplateEditorConfig, TemplateEditorComponent } from '../../shared/components/template-editor.component';
+import { TemplateEditorComponent, TemplateEditorConfig } from '../../shared/components/template-editor.component';
 
 @RegisterClass(BaseFormComponent, 'MJ: Templates') 
 @Component({
@@ -32,13 +32,6 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
 
     /** Custom-layout Template form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
-
-    /**
-     * The embedded editor OWNS the template content rows: it loads them, the user edits its
-     * instances, and it saves them. This form delegates to it rather than holding a second copy —
-     * a second, separately loaded copy is what silently discarded edits in MJ#4754.
-     */
-    @ViewChild(TemplateEditorComponent) TemplateEditor: TemplateEditorComponent | undefined;
 
     /**
      * Read-only mirror of the editor's rows (fed only by {@link OnSharedTemplateContentChange}),
@@ -158,6 +151,13 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
     set codeEditor(value: CodeEditorComponent | null) {
       this.CodeEditor = value;
     }
+    /**
+     * The embedded editor OWNS the template content rows: it loads them and the user edits its
+     * instances. This form never loads a second copy (a second, separately loaded copy is what
+     * silently discarded edits in MJ#4754); on Save it folds the editor's dirty rows into its own
+     * transaction (see PopulatePendingRecords).
+     */
+    @ViewChild('templateEditor') TemplateEditor: TemplateEditorComponent | undefined;
     private isUpdatingEditorValue = false;
     public IsRunningTemplate = false;
 
@@ -219,7 +219,6 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
     private destroy$ = new Subject<void>();
     private activeTimeouts: number[] = [];
     private confirmService = inject(MJConfirmService);
-    private notificationService = inject(MJNotificationService);
 
     async ngOnInit() {
         await super.ngOnInit();
@@ -237,6 +236,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
     }
 
     ngOnDestroy() {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
         
@@ -623,27 +623,20 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
     }
 
     /**
-     * Saves the template contents through the embedded editor, which owns the rows the user edited
-     * and reports its own failures.
+     * The embedded editor's new/dirty Template Contents join this form's pending records, so
+     * `InternalSaveRecord()` commits the template and its contents in ONE transaction group (the
+     * template first, so the content's TemplateID resolves) and `Validate()` covers the contents too.
+     *
+     * Before this, the form saved each content on its own AFTER the template save had already been
+     * reported as successful; a content whose `Save()` returned false only reached `console.error`,
+     * no mutation was issued, and the editor kept showing "Unsaved changes" forever.
      */
-    async SaveTemplateContents(): Promise<boolean> {
-        if (this.TemplateEditor) {
-            return this.TemplateEditor.SaveTemplateContents();
+    protected override PopulatePendingRecords(): void {
+        super.PopulatePendingRecords();
+        const editorChanges = this.TemplateEditor?.GetPendingChanges() ?? [];
+        for (const change of editorChanges) {
+            this.PendingRecords.push(change);
         }
-        // No editor rendered means no edits were made through one. Unsaved rows here anyway mean
-        // something outside the editor changed them; saving this mirror is what lost edits before
-        // (MJ#4754), so refuse loudly rather than guess.
-        if (!this.TemplateContents.some(c => c.Dirty || !c.ID)) {
-            return true;
-        }
-        console.error(`Cannot save template contents for template ${this.record?.ID}: the template editor is not rendered, but there are unsaved content rows`);
-        this.notificationService.CreateSimpleNotification('Template contents could not be saved: the template editor is not available. Reload the template and try again.', 'error', 5000);
-        return false;
-    }
-
-    /** @deprecated Use {@link SaveTemplateContents}. */
-    async saveTemplateContents(): Promise<boolean> {
-      return this.SaveTemplateContents();
     }
 
     async SaveRecord(StopEditModeAfterSave: boolean = true): Promise<boolean> {
@@ -703,14 +696,17 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
             const md = this.ProviderToUse;
             this.record.UserID = md.CurrentUser.ID;
         }
+        // The template AND the editor's contents commit together here (see PopulatePendingRecords)
         const templateSaved = await super.SaveRecord(StopEditModeAfterSave);
-        
+
         if (templateSaved) {
-            // Then save all template contents
-            return await this.SaveTemplateContents();
+            this.TemplateEditor?.MarkContentsSaved();
+            this.IsAddingNewContent = false;
+            this.NewTemplateContent = null;
+            this.updateUnsavedChangesFlag();
         }
-        
-        return false;
+
+        return templateSaved;
     }
 
     GetContentTypeDisplayText(typeId: string): string {

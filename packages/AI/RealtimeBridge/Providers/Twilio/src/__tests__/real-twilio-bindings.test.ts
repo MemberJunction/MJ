@@ -3,6 +3,7 @@ import { muLawToPcm16Buffer, pcm16ToMuLawBuffer } from '@memberjunction/ai-bridg
 import {
     RealTwilioBindings,
     BuildConnectStreamTwiML,
+    TWILIO_MEDIA_TOKEN_PARAMETER,
     BuildDialTwiML,
     BuildPlayDigitsTwiML,
     ParseTwilioMediaFrame,
@@ -34,6 +35,7 @@ class FakeRest implements ITwilioRestLike {
 
 class FakeMediaPump implements ITwilioMediaPump {
     public readonly Sent: Array<{ callSid: string; frame: TwilioMediaFrame }> = [];
+    public readonly Expected: Array<{ callSid: string; token: string }> = [];
     private handlers = new Map<string, (frame: TwilioMediaFrame) => void>();
     private streamSids = new Map<string, string>();
 
@@ -45,6 +47,9 @@ class FakeMediaPump implements ITwilioMediaPump {
     }
     public GetStreamSid(callSid: string): string {
         return this.streamSids.get(callSid) ?? `MZ-${callSid}`;
+    }
+    public ExpectCall(callSid: string, token: string): void {
+        this.Expected.push({ callSid, token });
     }
     // drive helper: simulate an inbound frame for a call
     public Drive(callSid: string, frame: TwilioMediaFrame): void {
@@ -144,7 +149,7 @@ describe('RealTwilioBindings — REST mapping', () => {
         expect(sid).toBe('CA-created-1');
         expect(rest.Created?.To).toBe('+15551234567');
         expect(rest.Created?.From).toBe('+15559876543');
-        expect(rest.Created?.Twiml).toContain('<Stream url="wss://api.example/media" />');
+        expect(rest.Created?.Twiml).toContain('<Stream url="wss://api.example/media">');
         expect(rest.Created?.StatusCallback).toBeUndefined();
     });
 
@@ -167,10 +172,43 @@ describe('RealTwilioBindings — REST mapping', () => {
         expect(rest.Updates[0].params.Twiml).toContain('<Dial>+15550001111</Dial>');
     });
 
-    it('playDigits updates with <Play digits> TwiML', async () => {
+    it('playDigits sends in-band tones over the media stream and never replaces the call TwiML', async () => {
+        const { bindings, rest, pump } = makeBindings();
+        await bindings.playDigits('CA9', '5');
+        expect(rest.Updates).toEqual([]); // a TwiML update would end <Connect><Stream> and the agent's audio
+        // 100 ms tone = 800 samples = 5 frames of 20 ms (160 samples each); every frame is a μ-law media frame.
+        expect(pump.Sent.length).toBe(5);
+        expect(pump.Sent.every((f) => f.callSid === 'CA9' && f.frame.event === 'media')).toBe(true);
+        const decoded = muLawToPcm16Buffer(Uint8Array.from(Buffer.from(pump.Sent.map((f) => f.frame.media!.payload).join(''), 'base64')).buffer);
+        const samples = new Int16Array(decoded);
+        const power = (freq: number): number => {
+            const coeff = 2 * Math.cos((2 * Math.PI * freq) / 8000);
+            let s1 = 0;
+            let s2 = 0;
+            for (const x of samples) {
+                const s0 = x + coeff * s1 - s2;
+                s2 = s1;
+                s1 = s0;
+            }
+            return s1 * s1 + s2 * s2 - coeff * s1 * s2;
+        };
+        // Key 5 is 770 Hz + 1336 Hz.
+        expect(power(770)).toBeGreaterThan(power(697) * 20);
+        expect(power(1336)).toBeGreaterThan(power(1209) * 20);
+        expect(power(770)).toBeGreaterThan(power(852) * 20);
+    });
+
+    it('playDigits spans a gap between digits (two digits = 100 ms tone + 100 ms gap + 100 ms tone)', async () => {
+        const { bindings, pump } = makeBindings();
+        await bindings.playDigits('CA9', '12');
+        expect(pump.Sent.length).toBe(Math.ceil((800 + 800 + 800) / 160));
+    });
+
+    it('sayAndHangup replaces the TwiML with <Say> + <Hangup/> (the call is ending anyway)', async () => {
         const { bindings, rest } = makeBindings();
-        await bindings.playDigits('CA9', '456#');
-        expect(rest.Updates[0].params.Twiml).toContain('<Play digits="456#" />');
+        await bindings.sayAndHangup('CA9', 'We hit a problem & must end the call.');
+        expect(rest.Updates[0].callSid).toBe('CA9');
+        expect(rest.Updates[0].params.Twiml).toContain('<Say>We hit a problem &amp; must end the call.</Say><Hangup/>');
     });
 });
 
@@ -251,5 +289,76 @@ describe('RealTwilioBindings — Media Streams mapping', () => {
             event: 'clear',
             streamSid: 'MZ-xyz',
         });
+    });
+});
+
+describe('per-call media token', () => {
+    it('BuildConnectStreamTwiML adds <Parameter> children (escaped) when given parameters', () => {
+        const twiml = BuildConnectStreamTwiML('wss://h/media', { mjToken: 'abc', 'we"ird': 'a&b' });
+        expect(twiml).toContain('<Stream url="wss://h/media">');
+        expect(twiml).toContain('<Parameter name="mjToken" value="abc"/>');
+        expect(twiml).toContain('<Parameter name="we&quot;ird" value="a&amp;b"/>');
+        expect(twiml).toContain('</Stream>');
+    });
+
+    it('BuildConnectStreamTwiML is unchanged (self-closing Stream) when there are no parameters', () => {
+        expect(BuildConnectStreamTwiML('wss://h/media', {})).toContain('<Stream url="wss://h/media" />');
+    });
+
+    it('createCall embeds a fresh token in the TwiML <Parameter> and registers THE SAME token with the pump under the returned SID', async () => {
+        const { bindings, rest, pump } = makeBindings();
+
+        const sid = await bindings.createCall('+15551234567', '+15559876543');
+
+        const match = /<Parameter name="mjToken" value="([0-9a-f]{64})"\/>/.exec(rest.Created?.Twiml ?? '');
+        expect(match).not.toBeNull();
+        expect(pump.Expected).toEqual([{ callSid: sid, token: match?.[1] }]);
+        expect(TWILIO_MEDIA_TOKEN_PARAMETER).toBe('mjToken');
+    });
+
+    it('every call gets its own token', async () => {
+        const { bindings, pump } = makeBindings();
+        await bindings.createCall('+1', '+2');
+        await bindings.createCall('+1', '+2');
+        expect(pump.Expected[0].token).not.toBe(pump.Expected[1].token);
+    });
+
+    it('tolerates a media pump that does not authenticate sockets (no ExpectCall)', async () => {
+        const rest = new FakeRest();
+        const pump = new FakeMediaPump();
+        (pump as { ExpectCall?: unknown }).ExpectCall = undefined;
+        const bindings = new RealTwilioBindings({ Rest: rest, MediaPump: pump, StreamUrl: 'wss://x' });
+        await expect(bindings.createCall('+1', '+2')).resolves.toBe('CA-created-1');
+    });
+});
+
+describe('outbound status callbacks and answering-machine detection', () => {
+    it('requests the full lifecycle events whenever a status callback is configured', async () => {
+        const rest = new FakeRest();
+        const bindings = new RealTwilioBindings({ Rest: rest, MediaPump: new FakeMediaPump(), StreamUrl: 'wss://x', StatusCallbackUrl: 'https://api/status' });
+        await bindings.createCall('+1', '+2');
+        expect(rest.Created?.StatusCallback).toBe('https://api/status');
+        expect(rest.Created?.StatusCallbackEvents).toEqual(['initiated', 'ringing', 'answered', 'completed']);
+    });
+
+    it('requests no events when there is no status callback', async () => {
+        const { bindings, rest } = makeBindings();
+        await bindings.createCall('+1', '+2');
+        expect(rest.Created?.StatusCallbackEvents).toBeUndefined();
+    });
+
+    it('enables ASYNC answering-machine detection when an AMD callback URL is configured', async () => {
+        const rest = new FakeRest();
+        const bindings = new RealTwilioBindings({ Rest: rest, MediaPump: new FakeMediaPump(), StreamUrl: 'wss://x', AsyncAmdStatusCallbackUrl: 'https://api/amd' });
+        await bindings.createCall('+1', '+2');
+        expect(rest.Created?.AsyncAmd).toBe(true);
+        expect(rest.Created?.AsyncAmdStatusCallback).toBe('https://api/amd');
+    });
+
+    it('does not enable AMD without a callback URL', async () => {
+        const { bindings, rest } = makeBindings();
+        await bindings.createCall('+1', '+2');
+        expect(rest.Created?.AsyncAmd).toBeUndefined();
+        expect(rest.Created?.AsyncAmdStatusCallback).toBeUndefined();
     });
 });

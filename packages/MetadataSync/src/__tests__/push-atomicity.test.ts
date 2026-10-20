@@ -82,6 +82,19 @@ class FakeDbProvider {
         this.pending.push(row);
         await this.CommitTransaction();
     }
+
+    /** This fake records no metadata-dataset writes, so a push does not reload. */
+    IsMetadataDatasetMember(_entityName: string): boolean {
+        return false;
+    }
+
+    async RefreshWithinTransaction(): Promise<boolean> {
+        return true;
+    }
+
+    async Refresh(): Promise<boolean> {
+        return true;
+    }
 }
 
 let db = new FakeDatabase();
@@ -123,7 +136,7 @@ vi.mock('../lib/sync-metadata-engine', () => ({
     },
 }));
 
-vi.mock('../lib/entity-subclass-guard', () => ({ describeMissingEntitySubclass: () => undefined }));
+vi.mock('../lib/entity-subclass-guard', () => ({ DescribeMissingEntitySubclass: () => undefined, describeMissingEntitySubclass: () => undefined }));
 
 // The audit itself is not under test here; what matters is that a file carrying a delete has its
 // write deferred to Phase 3. Phase 2 then has nothing to do.

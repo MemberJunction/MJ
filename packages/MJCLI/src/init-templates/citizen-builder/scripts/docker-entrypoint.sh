@@ -33,16 +33,33 @@ echo "SQL Server is reachable!"
 
 cd /workspace
 
-# 2. First-time setup: install MemberJunction if not already installed
-if [ ! -f "/workspace/package.json" ]; then
+# 2. Provisioning. State lives on the workspace volume so it survives restarts, and each step
+#    that must not run twice records its own completion: `mj app install` of an app that is
+#    already installed is an error, so a failure in a LATER step has to be retried on restart
+#    without re-running an earlier one. Failures are not masked. With `set -e` a failed step
+#    exits the container loudly (see `docker compose logs mj`), `restart: unless-stopped`
+#    retries it, and nothing reports success until every step has actually succeeded.
+STATE_DIR="/workspace/.citizen-builder"
+
+# A workspace provisioned by an earlier version of this script kept no state. Its package.json
+# means `mj install` completed and the old script then ran every remaining step, so treat it as
+# provisioned: re-running `mj app install` against its already-installed app would fail.
+if [ -f "/workspace/package.json" ] && [ ! -d "$STATE_DIR" ]; then
+  mkdir -p "$STATE_DIR"
+  touch "$STATE_DIR/core-installed" "$STATE_DIR/app-installed" "$STATE_DIR/provisioned"
+fi
+mkdir -p "$STATE_DIR"
+
+if [ ! -f "$STATE_DIR/provisioned" ]; then
   echo ""
   echo "========================================================================"
   echo " First-Time Setup: Installing MemberJunction via 'mj install'..."
   echo " This runs once and initializes your database, API, and Explorer."
   echo "========================================================================"
 
-  # Generate install configuration
-  cat << EOF > /tmp/install.config.json
+  if [ ! -f "$STATE_DIR/core-installed" ]; then
+    # Generate install configuration
+    cat << EOF > /tmp/install.config.json
 {
   "PackageManager": "pnpm",
   "dbUrl": "$DB_HOST",
@@ -67,35 +84,54 @@ if [ ! -f "/workspace/package.json" ]; then
 }
 EOF
 
-  # Execute headless install
-  mj install --yes --fast --config /tmp/install.config.json --dir /workspace
-  pnpm add -w @angular/compiler@21.2.22 2>/dev/null || true
+    # Install the release this workspace is pinned to (MJ_VERSION, the same release as the CLI
+    # in this container). Without a tag, `mj install --yes` takes the newest stable GitHub
+    # release, which need not match that CLI.
+    INSTALL_TAG_ARGS=()
+    if [ -n "${MJ_VERSION:-}" ]; then
+      INSTALL_TAG_ARGS=(--tag "v${MJ_VERSION}")
+    else
+      echo "WARNING: MJ_VERSION is not set; 'mj install' will pick the newest stable release, which may not match this container's CLI."
+    fi
+
+    # Execute headless install. Safe to retry: the installer checkpoints completed phases.
+    mj install --yes --fast --config /tmp/install.config.json --dir /workspace "${INSTALL_TAG_ARGS[@]}"
+    touch "$STATE_DIR/core-installed"
+    pnpm add -w @angular/compiler@21.2.22 2>/dev/null || true
+  fi
 
   # Install Open App business context (More Cheese default or custom enterprise app)
-  APP_URL="${OPEN_APP_INSTALL_URL:-https://github.com/MemberJunction/more-cheese}"
-  echo "Installing business context Open App: $APP_URL..."
-  if [ -n "$GITHUB_TOKEN" ]; then
-    AUTH_APP_URL=$(echo "$APP_URL" | sed -E "s|https://github.com/|https://$GITHUB_TOKEN@github.com/|")
-    mj app install "$AUTH_APP_URL" || echo "Notice: mj app install completed or skipped."
-  else
-    mj app install "$APP_URL" || echo "Notice: mj app install completed or skipped."
+  if [ ! -f "$STATE_DIR/app-installed" ]; then
+    APP_URL="${OPEN_APP_INSTALL_URL:-https://github.com/MemberJunction/more-cheese}"
+    echo "Installing business context Open App: $APP_URL..."
+    if [ -n "$GITHUB_TOKEN" ]; then
+      AUTH_APP_URL=$(echo "$APP_URL" | sed -E "s|https://github.com/|https://$GITHUB_TOKEN@github.com/|")
+      mj app install "$AUTH_APP_URL"
+    else
+      mj app install "$APP_URL"
+    fi
+    touch "$STATE_DIR/app-installed"
   fi
 
-  # Generate capabilities catalog
+  # Generate capabilities catalog. Useful to the coding agent but not needed for a running
+  # stack, so a failure warns instead of stopping the container, and says what it means.
   if [ -f "/work/scripts/generate-capabilities.sh" ]; then
-    bash /work/scripts/generate-capabilities.sh || echo "Notice: Capabilities generation completed."
+    bash /work/scripts/generate-capabilities.sh \
+      || echo "WARNING: capabilities catalog generation failed, so the catalog may be missing or stale. Re-run scripts/generate-capabilities.sh."
   fi
 
-  # Push starter metadata
+  # Push starter metadata. --ci: never prompt (there is no terminal here) and exit non-zero
+  # on error. Safe to repeat on a retry: mj sync push upserts.
   if [ -d "/work/metadata" ]; then
-    mj sync push --dir /work/metadata || echo "Notice: Initial metadata push completed."
+    mj sync push --dir /work/metadata --ci
   fi
 
+  touch "$STATE_DIR/provisioned"
   echo "MemberJunction installation and provisioning complete!"
 else
   echo "Existing MemberJunction workspace detected in /workspace."
-  # Apply any pending migrations
-  mj migrate || echo "Database migrations up to date."
+  # Apply any pending migrations (exits 0 when already up to date)
+  mj migrate
 fi
 
 # Configure MJExplorer host binding and compiler alignment

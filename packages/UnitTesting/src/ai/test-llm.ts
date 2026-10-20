@@ -27,6 +27,7 @@ import {
   BaseLLM,
   ChatParams,
   ChatResult,
+  CreateCancellationError,
   ModelUsage,
   type ClassifyParams,
   type ClassifyResult,
@@ -50,6 +51,10 @@ import { MakeDriverFailureChatResult, MakeModelUsage, MakeSuccessChatResult } fr
  *   for cases where the test controls `errorInfo` (including leaving it absent).
  * - `throw` — SDK-style failure: the returned promise rejects with `error`.
  * - `hang` — never settles; models a hung provider socket (timeout tests).
+ * - `hangUntilAborted` — waits like a real SDK call until the request's
+ *   `cancellationToken` aborts, then rejects with an `AbortError`, which
+ *   BaseLLM reports as a cancelled result. `onStart` runs when the call begins,
+ *   so a test can abort at a known moment.
  * - `stream` — streams `chunks` through the real BaseLLM streaming template
  *   method when the caller requested streaming; in a non-streaming call the
  *   chunks resolve joined as one successful result.
@@ -60,6 +65,7 @@ export type TestLLMOutcome =
   | { kind: 'failResult'; result: ChatResult }
   | { kind: 'throw'; error: Error; delayMS?: number }
   | { kind: 'hang' }
+  | { kind: 'hangUntilAborted'; onStart?: () => void }
   | { kind: 'stream'; chunks: string[]; usage?: ModelUsage; model?: string };
 
 const DEFAULT_OUTCOME: TestLLMOutcome = { kind: 'succeed', content: 'test response' };
@@ -196,8 +202,8 @@ export class TestLLM extends BaseLLM {
     return super.ChatCompletion(params);
   }
 
-  protected override async nonStreamingChatCompletion(_params: ChatParams): Promise<ChatResult> {
-    return this.executeOutcome(this.nextOutcome());
+  protected override async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
+    return this.executeOutcome(this.nextOutcome(), params.cancellationToken);
   }
 
   public async ClassifyText(_params: ClassifyParams): Promise<ClassifyResult> {
@@ -212,7 +218,7 @@ export class TestLLM extends BaseLLM {
   // Streaming implementation (drives the REAL BaseLLM streaming template method)
   // ------------------------------------------------------------------
 
-  protected override async createStreamingRequest(_params: ChatParams): Promise<AsyncGenerator<string>> {
+  protected override async createStreamingRequest(params: ChatParams): Promise<AsyncGenerator<string>> {
     const outcome = this.nextOutcome();
     switch (outcome.kind) {
       case 'stream':
@@ -231,6 +237,10 @@ export class TestLLM extends BaseLLM {
       case 'failResult':
         throw new Error(outcome.result.errorMessage ?? 'TestLLM: scripted failResult during streaming');
       case 'hang':
+        return this.neverGenerator();
+      case 'hangUntilAborted':
+        outcome.onStart?.();
+        await this.untilAborted(params.cancellationToken);
         return this.neverGenerator();
     }
   }
@@ -261,7 +271,7 @@ export class TestLLM extends BaseLLM {
     return this.script.shift() ?? this.defaultOutcome;
   }
 
-  private async executeOutcome(outcome: TestLLMOutcome): Promise<ChatResult> {
+  private async executeOutcome(outcome: TestLLMOutcome, signal?: AbortSignal): Promise<ChatResult> {
     switch (outcome.kind) {
       case 'succeed':
         await this.wait(outcome.delayMS);
@@ -282,10 +292,25 @@ export class TestLLM extends BaseLLM {
         return new Promise<ChatResult>(() => {
           /* never settles — models a hung provider socket */
         });
+      case 'hangUntilAborted':
+        outcome.onStart?.();
+        return this.untilAborted(signal);
       case 'stream':
         // Non-streaming call against a stream outcome: resolve the joined chunks.
         return MakeSuccessChatResult(outcome.chunks.join(''), { usage: outcome.usage, model: outcome.model });
     }
+  }
+
+  /** Settles only when the signal aborts, rejecting the way an SDK does: with an `AbortError`. */
+  private untilAborted(signal: AbortSignal | undefined): Promise<ChatResult> {
+    return new Promise<ChatResult>((_, reject) => {
+      const abort = () => reject(CreateCancellationError({ signal, message: 'TestLLM request was aborted' }));
+      if (signal?.aborted) {
+        abort();
+      } else {
+        signal?.addEventListener('abort', abort, { once: true });
+      }
+    });
   }
 
   private async wait(delayMS?: number): Promise<void> {
@@ -321,7 +346,9 @@ export class TestLLM extends BaseLLM {
  * that must keep its real providers (the integration suite runs every bundle in one
  * process), call the returned `restore()` in a `finally` instead: it re-registers, above
  * the TestLLM, whatever class each name resolved to before. A name that had no prior
- * registration has nothing to restore and keeps resolving to the TestLLM.
+ * registration has nothing to restore and keeps resolving to the TestLLM. The TestLLM is
+ * registered at `priority` or above every registration the name already has, whichever is
+ * higher, so it also wins over a class an earlier `restore()` put back.
  *
  * @returns `restore` — hands every name back to its previous class.
  */
@@ -343,17 +370,23 @@ export function RegisterTestLLM(llm: TestLLM, driverClass: string | string[], pr
         return llm;
       }
     }
-    factory.Register(BaseLLM, TestLLMRegistrationHandle, name, priority);
+    // At least `priority`, and above everything registered for the name: an earlier restore()
+    // re-registered the production class above its TestLLM, and this registration must outrank it.
+    factory.Register(BaseLLM, TestLLMRegistrationHandle, name, Math.max(priority, highestPriority(name) + 1));
   }
 
   return () => {
     for (const { name, registration } of previous) {
       // An explicit priority above everything registered wins resolution outright, and avoids
       // the unrelated-class warning the auto-increment path emits.
-      const highest = Math.max(...factory.GetAllRegistrations(BaseLLM, name).map((r) => r.Priority));
-      factory.Register(BaseLLM, registration.SubClass, name, highest + 1);
+      factory.Register(BaseLLM, registration.SubClass, name, highestPriority(name) + 1);
     }
   };
+}
+
+/** The highest priority registered on BaseLLM for `name`, or 0 when it has none. */
+function highestPriority(name: string): number {
+  return Math.max(0, ...MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseLLM, name).map((r) => r.Priority));
 }
 
 /** @deprecated Use {@link RegisterTestLLM}. */

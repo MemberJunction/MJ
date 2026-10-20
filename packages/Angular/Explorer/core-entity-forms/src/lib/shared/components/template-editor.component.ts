@@ -1,17 +1,19 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, AfterViewInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, AfterViewInit, ElementRef, inject } from '@angular/core';
 import { MJTemplateEntity, MJTemplateContentEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
+import { EscapeSQLString, MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { IsDescendantElement } from '@memberjunction/ng-shared-generic';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 import { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
-import { EscapeSQLString } from '@memberjunction/global';
+import { takeUntil } from 'rxjs/operators';
 import { DEFAULT_SYSTEM_PLACEHOLDERS, SystemPlaceholder, SYSTEM_PLACEHOLDER_CATEGORIES, SystemPlaceholderCategory } from '@memberjunction/ai-core-plus';
 
-import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { BaseAngularComponent, BaseFormComponentEvent, BaseFormComponentEventCodes, PendingRecordItem } from '@memberjunction/ng-base-types';
 export interface TemplateEditorConfig {
     allowEdit?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     showRunButton?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -206,6 +208,7 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
     private loadGeneration = 0;
     /** The Template the most recent load was started for; lets ngOnInit skip a duplicate load. */
     private loadStartedFor: MJTemplateEntity | null = null;
+    private elementRef = inject(ElementRef);
 
     constructor(private notificationService: MJNotificationService, private confirmService: MJConfirmService) {
     super();}
@@ -213,10 +216,34 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
     async ngOnInit() {
         this.LoadContentTypes();
         this.organizePlaceholdersByCategory();
+        this.listenForHostFormEvents();
         // ngOnChanges runs first and has usually started the load for this Template already.
         if (this.Template && this.loadStartedFor !== this.Template) {
             await this.LoadTemplateContents();
         }
+    }
+
+    /**
+     * A host form that folds this editor's contents into its pending records (see GetPendingChanges)
+     * also reverts them when the user discards the edit: `BaseFormComponent.CancelEdit()` calls
+     * `Revert()` on every pending record and broadcasts REVERT_PENDING_CHANGES. The entities roll back
+     * on their own, but this editor's rows, CodeMirror's text and the dirty flag would not know, so
+     * the screen would keep showing discarded text and the next save would fail on it. Reload from
+     * the saved state when the event comes from a form this editor sits inside.
+     */
+    private listenForHostFormEvents(): void {
+        MJGlobal.Instance.GetEventListener(false).pipe(takeUntil(this.destroy$)).subscribe((e: MJEvent) => {
+            if (e.event !== MJEventType.ComponentEvent || e.eventCode !== BaseFormComponentEventCodes.BASE_CODE) {
+                return;
+            }
+            const formEvent = e.args as BaseFormComponentEvent;
+            if (formEvent.subEventCode !== BaseFormComponentEventCodes.REVERT_PENDING_CHANGES) {
+                return;
+            }
+            if (IsDescendantElement(formEvent.elementRef, this.elementRef)) {
+                void this.RefreshAndDiscardChanges();
+            }
+        });
     }
 
     async ngOnChanges(changes: SimpleChanges) {
@@ -305,8 +332,9 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
 
     /**
      * (Re)loads the contents of the bound Template and emits them through {@link ContentChange}.
-     * This editor owns those rows: hosts must save through {@link SaveTemplateContents} rather than
-     * loading and saving a copy of their own. If several loads overlap, only the latest one applies.
+     * This editor owns those rows: a host form folds them into its own save through
+     * {@link GetPendingChanges} (or calls {@link SaveTemplateContents}) rather than loading and saving
+     * a copy of its own. If several loads overlap, only the latest one applies.
      */
     async LoadTemplateContents() {
         const template = this.Template;
@@ -718,6 +746,45 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
     private reportSaveFailure(template: MJTemplateEntity, detail: string): void {
         console.error(`Failed to save template contents for template ${template.ID}: ${detail}`);
         this.notificationService.CreateSimpleNotification(`Failed to save template contents: ${detail}`, 'error', 5000);
+    }
+
+    /**
+     * The content rows a HOST FORM should persist inside its own save: every content that is new or
+     * dirty, each stamped with the template's ID. Forms that embed this editor (Templates, AI Prompts)
+     * call this from their `PopulatePendingRecords()` override, so the template and its contents
+     * commit in one transaction and a content that fails validation blocks the save visibly instead
+     * of being dropped on the floor. A brand-new content nobody typed into is not a change and is
+     * skipped; a read-only editor contributes nothing.
+     */
+    public GetPendingChanges(): PendingRecordItem[] {
+        if (!this.config.allowEdit || !this.Template) {
+            return [];
+        }
+        const pending: PendingRecordItem[] = [];
+        for (const content of this.TemplateContents) {
+            // An unsaved entity always reports Dirty; the empty-text guard keeps a default row nobody used out.
+            const untouchedNew = !content.IsSaved && !(content.TemplateText ?? '').trim();
+            if (untouchedNew || !content.Dirty) {
+                continue;
+            }
+            content.TemplateID = this.Template.ID;
+            const item = new PendingRecordItem();
+            item.entityObject = content;
+            item.action = 'save';
+            pending.push(item);
+        }
+        return pending;
+    }
+
+    /**
+     * The host form has persisted the rows from {@link GetPendingChanges}: clear the local dirty state
+     * and publish the saved set to listeners.
+     */
+    public MarkContentsSaved(): void {
+        this.IsAddingNewContent = false;
+        this.NewTemplateContent = null;
+        this.updateUnsavedChangesFlag();
+        this.ContentChange.emit(this.TemplateContents);
     }
 
     /** @deprecated Use {@link SaveTemplateContents}. */

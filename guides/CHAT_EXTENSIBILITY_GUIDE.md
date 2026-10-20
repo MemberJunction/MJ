@@ -53,6 +53,9 @@ Seven named zones, same names on both surfaces:
 `emptyState` · `agentPresence` · `header` · `headerActions` · `messageExtra` ·
 `demonstrationSurface` · `messageRenderer`
 
+The web adds an eighth, `composerExtra`, which only adds: host UI directly above the composer, such
+as a line saying who will see the message. React Native has no counterpart yet.
+
 Each has a typed contract and a **shipped default that is exported**, which is what makes three
 different override styles possible:
 
@@ -84,11 +87,14 @@ different override styles possible:
 />
 ```
 
-Two rules worth knowing before you design around them:
+Rules worth knowing before you design around them:
 
 - **`headerActions` is additive** — it renders inside the default header's action strip, after the
   stock buttons. It is deliberately **not** rendered when a full `header` slot is supplied, because
   that slot owns the whole header including its actions.
+- **`composerExtra` is additive too** — it renders above every composer the chat area shows, the
+  new-conversation composer and the empty state's included, and nothing renders there when no
+  template is projected.
 - **`messageRenderer` is per-item**, not positional. It replaces the feed-vs-bubble decision itself,
   so you can change how every message looks without touching the list, its scrolling, or its
   pending/progress handling. Two defaults ship on both surfaces: a **feed** layout (avatar, name,

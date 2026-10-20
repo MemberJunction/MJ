@@ -2,7 +2,7 @@ import { UserInfo, IMetadataProvider, RunView, LogError, LogStatus } from '@memb
 import { NormalizeUUID } from '@memberjunction/global';
 import { MJContentItemEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AIModelRunner, AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIEmbeddingRunner, AIPromptRunner } from '@memberjunction/ai-prompts';
 // NOTE: AIPromptParams lives in @memberjunction/ai-core-plus, which is a direct dependency
 // of @memberjunction/ai-prompts (already a TagEngine dependency) and is therefore resolvable.
 // Ideally it would be declared as a direct dependency in this package's package.json — that
@@ -163,7 +163,7 @@ async function embedContentItems(
 
     const texts = items.map(buildEmbeddingText);
     try {
-        const runner = new AIModelRunner();
+        const runner = new AIEmbeddingRunner();
         const result = await runner.RunEmbedding({
             Texts: texts,
             ContextUser: contextUser,

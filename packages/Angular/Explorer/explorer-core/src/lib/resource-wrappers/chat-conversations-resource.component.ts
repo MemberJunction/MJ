@@ -1,13 +1,16 @@
 import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
 import { Metadata, CompositeKey } from '@memberjunction/core';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { ResolveDeepLinkParam } from './chat-deeplink-params.js';
-import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService } from '@memberjunction/ng-conversations';
+import { ResolveChatSearchRoute } from './chat-search-routing.js';
+import { ResolveComposeEmailDraft, BuildComposeEmailFallbackNotice } from './compose-email-fallback.js';
+import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult, ActionableCommandRequest } from '@memberjunction/ng-conversations';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
-import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
+import { ComposeEmailCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil } from 'rxjs';
@@ -53,7 +56,8 @@ import { Subject, takeUntil } from 'rxjs';
                 (newConversationRequested)="onNewConversationRequested()"
                 (pinSidebarRequested)="pinSidebar()"
                 (unpinSidebarRequested)="unpinSidebar()"
-                (refreshRequested)="onRefreshRequested()">
+                (refreshRequested)="onRefreshRequested()"
+                (SearchEscalated)="OpenSearch($event)">
               </mj-conversation-list>
               <!-- Routines — pinned at the very bottom of the sidebar. Gated inside the
                    section component by Read permission on 'MJ: User Routines'. -->
@@ -78,7 +82,6 @@ import { Subject, takeUntil } from 'rxjs';
               [currentUser]="currentUser"
               [conversationId]="selectedConversationId"
               [conversation]="selectedConversation"
-              [threadId]="selectedThreadId"
               [isNewConversation]="isNewUnsavedConversation"
               [pendingMessage]="pendingMessageToSend"
               [pendingAttachments]="pendingAttachmentsToSend"
@@ -89,8 +92,6 @@ import { Subject, takeUntil } from 'rxjs';
               (sidebarToggleClicked)="expandSidebar()"
               (conversationRenamed)="onConversationRenamed($event)"
               (conversationCreated)="onConversationCreated($event)"
-              (threadOpened)="onThreadOpened($event)"
-              (threadClosed)="onThreadClosed()"
               (pendingArtifactConsumed)="onPendingArtifactConsumed()"
               (pendingMessageConsumed)="onPendingMessageConsumed()"
               (pendingMessageRequested)="onPendingMessageRequested($event)"
@@ -109,6 +110,18 @@ import { Subject, takeUntil } from 'rxjs';
       </div>
     }
     
+    <!-- Cross-entity search panel (conversations / messages / artifacts / collections / tasks) -->
+    @if (CurrentUser) {
+      <mj-search-panel
+        [InitialQuery]="SearchSeedQuery"
+        [IsOpen]="IsSearchPanelOpen"
+        [EnvironmentId]="EnvironmentId"
+        [CurrentUser]="CurrentUser"
+        (close)="CloseSearch()"
+        (ResultSelected)="OnSearchResultSelected($event)">
+      </mj-search-panel>
+    }
+
     <!-- Toast notifications container -->
     <mj-toast></mj-toast>
     `,
@@ -326,16 +339,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   public set selectedConversation(value: MJConversationEntity | null) {
     this.SelectedConversation = value;
   }
-  public SelectedThreadId: string | null = null;
-
-  /** @deprecated Use {@link SelectedThreadId}. */
-  public get selectedThreadId(): string | null {
-    return this.SelectedThreadId;
-  }
-  /** @deprecated Use {@link SelectedThreadId}. */
-  public set selectedThreadId(value: string | null) {
-    this.SelectedThreadId = value;
-  }
   public IsNewUnsavedConversation: boolean = false;
 
   /** @deprecated Use {@link IsNewUnsavedConversation}. */
@@ -551,9 +554,9 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
     // Subscribe to actionable commands (open:resource) from the UI command handler service.
     // open:url commands are handled directly by the service; open:resource needs NavigationService.
-    this.uiCommandHandler.actionableCommandRequested
+    this.uiCommandHandler.ActionableCommandRequested
       .pipe(takeUntil(this.destroy$))
-      .subscribe(request => this.handleActionableCommand(request.command));
+      .subscribe(request => this.handleActionableCommand(request));
 
     // Subscribe to bridge switch events so the overlay can hand off a conversation to this workspace
     this.bridge.SwitchEvent$
@@ -581,6 +584,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     }, 100);
   }
 
+  private renameAnimationTimeout: ReturnType<typeof setTimeout> | null = null;
+
   ngOnDestroy() {
     super.ngOnDestroy();
     this.bridge.NotifyWorkspaceActive(false);
@@ -588,6 +593,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // Clear any pending save timeout
     if (this.saveSettingsTimeout) {
       clearTimeout(this.saveSettingsTimeout);
+    }
+    if (this.renameAnimationTimeout) {
+      clearTimeout(this.renameAnimationTimeout);
+      this.renameAnimationTimeout = null;
     }
 
     // Clean up resize event listeners
@@ -635,6 +644,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     if (conversation) {
       this.SelectedConversation = conversation;
       this.updateTabTitle();
+      this.cdr.detectChanges();
     }
     // If not in cache, the chat area component will handle loading it
   }
@@ -954,7 +964,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       } else {
         this.SelectedConversationId = null;
         this.SelectedConversation = null;
-        this.SelectedThreadId = null;
         this.IsNewUnsavedConversation = true;
         this.updateUrl();
       }
@@ -971,7 +980,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   async OnConversationSelected(conversationId: string): Promise<void> {
     await this.selectConversation(conversationId);
-    this.SelectedThreadId = null; // Clear thread when switching conversations
     this.IsNewUnsavedConversation = false;
     this.updateUrl();
     this.updateTabTitle();
@@ -1231,7 +1239,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   OnNewConversationRequested(): void {
     this.SelectedConversationId = null;
     this.SelectedConversation = null;
-    this.SelectedThreadId = null;
     this.IsNewUnsavedConversation = true;
     this.updateUrl();
     this.NotifyDisplayNameChanged('New Conversation');
@@ -1240,6 +1247,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     if (this.IsMobileView || !this.IsSidebarPinned) {
       this.CollapseSidebar();
     }
+    this.cdr.detectChanges();
   }
 
   /** @deprecated Use {@link OnNewConversationRequested}. */
@@ -1265,6 +1273,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.bridge.SetActiveFromWorkspace(event.conversation.ID);
     this.updateUrl();
     this.updateTabTitle();
+    this.cdr.detectChanges();
   }
 
   /** @deprecated Use {@link OnConversationCreated}. */
@@ -1288,39 +1297,23 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       this.NotifyDisplayNameChanged(event.name);
     }
 
+    this.cdr.detectChanges();
+
+    if (this.renameAnimationTimeout) {
+      clearTimeout(this.renameAnimationTimeout);
+    }
+
     // Clear the animation trigger after it completes
-    setTimeout(() => {
+    this.renameAnimationTimeout = setTimeout(() => {
+      this.renameAnimationTimeout = null;
       this.RenamedConversationId = null;
+      this.cdr.detectChanges();
     }, 1500);
   }
 
   /** @deprecated Use {@link OnConversationRenamed}. */
   onConversationRenamed(event: { conversationId: string; name: string; description: string }): void {
     return this.OnConversationRenamed(event);
-  }
-
-  /**
-   * Handle thread opened event
-   */
-  OnThreadOpened(threadId: string): void {
-    this.SelectedThreadId = threadId;
-  }
-
-  /** @deprecated Use {@link OnThreadOpened}. */
-  onThreadOpened(threadId: string): void {
-    return this.OnThreadOpened(threadId);
-  }
-
-  /**
-   * Handle thread closed event
-   */
-  OnThreadClosed(): void {
-    this.SelectedThreadId = null;
-  }
-
-  /** @deprecated Use {@link OnThreadClosed}. */
-  onThreadClosed(): void {
-    return this.OnThreadClosed();
   }
 
   /**
@@ -1332,6 +1325,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.PendingArtifactVersionNumber = null;
     // Update URL to remove artifact params
     this.updateUrl();
+    this.cdr.detectChanges();
   }
 
   /** @deprecated Use {@link OnPendingArtifactConsumed}. */
@@ -1345,6 +1339,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   OnPendingMessageConsumed(): void {
     this.PendingMessageToSend = null;
     this.PendingAttachmentsToSend = null;
+    this.cdr.detectChanges();
   }
 
   /** @deprecated Use {@link OnPendingMessageConsumed}. */
@@ -1412,20 +1407,93 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
   }
 
+  // ========================================
+  // CROSS-ENTITY SEARCH PANEL
+  // ========================================
+
+  /** Whether the cross-entity search panel is open. */
+  public IsSearchPanelOpen = false;
+
+  /** Term the panel opens with, handed over from the conversation list's own filter. */
+  public SearchSeedQuery = '';
+
+  /**
+   * Open the cross-entity search panel, carrying over the term the user had already typed
+   * into the conversation list's filter so they do not retype it.
+   */
+  OpenSearch(query: string = ''): void {
+    this.SearchSeedQuery = query;
+    this.IsSearchPanelOpen = true;
+  }
+
+  /** Close the cross-entity search panel. */
+  CloseSearch(): void {
+    this.IsSearchPanelOpen = false;
+  }
+
+  /**
+   * Route a search result to the right Explorer surface.
+   *
+   * Explorer renders each chat surface as a separate resource, so results for another
+   * surface go through NavigationService. Conversations and messages resolve to a
+   * conversation, which this component owns, so they are selected in place; a message then
+   * opens on its branch at its sequence.
+   */
+  OnSearchResultSelected(result: SearchResult): void {
+    this.CloseSearch();
+
+    const route = ResolveChatSearchRoute(result);
+    switch (route?.Kind) {
+      case 'conversation':
+        void this.OnConversationSelected(route.ConversationId);
+        break;
+      case 'message':
+        this.openMessageResult(route.ConversationId, route.BranchId, route.Sequence)
+          .catch((error: unknown) => console.error('Failed to open the message from search:', error));
+        break;
+      case 'artifact':
+        this.navigationService.OpenArtifact(route.ArtifactId, route.Title);
+        break;
+      case 'nav-item':
+        void this.navigationService.OpenNavItemByName(route.NavItemName, route.Configuration);
+        break;
+    }
+  }
+
+  /**
+   * Selects the message's conversation, renders it into the chat area, then has the chat area
+   * switch to the message's branch and scroll to it.
+   */
+  private async openMessageResult(conversationId: string, branchId: string | null, sequence: number): Promise<void> {
+    await this.OnConversationSelected(conversationId);
+    this.cdr.detectChanges();
+    await this.ChatArea?.OpenMessage(conversationId, branchId, sequence);
+  }
+
   /** @deprecated Use {@link OnOpenEntityRecord}. */
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     return this.OnOpenEntityRecord(event);
   }
 
   /**
-   * Handle navigation request from artifact viewer plugins.
-   * Opens the target nav item (switching apps if needed) then applies query params to the URL.
+   * Handle navigation request from artifact viewer plugins or actionable commands.
+   * Opens the target nav item or application (switching apps if needed) then applies query params to the URL.
    */
   async OnNavigationRequest(event: NavigationRequest): Promise<void> {
     const appId = event.appName ? this.resolveAppId(event.appName) : undefined;
-    await this.navigationService.OpenNavItemByName(event.navItemName, undefined, appId, {
+    if (appId && (!event.navItemName || this.normalizeNavToken(event.navItemName) === this.normalizeNavToken(event.appName))) {
+      await this.navigationService.SwitchToApp(appId, undefined, event.queryParams);
+      return;
+    }
+    const resolvedNavName = appId && event.navItemName
+      ? (this.resolveNavItemLabelInApp(appId, event.navItemName) ?? event.navItemName)
+      : event.navItemName;
+    const tabId = await this.navigationService.OpenNavItemByName(resolvedNavName, undefined, appId, {
       queryParams: event.queryParams
     });
+    if (!tabId && appId) {
+      await this.navigationService.SwitchToApp(appId, resolvedNavName || undefined, event.queryParams);
+    }
   }
 
   /** @deprecated Use {@link OnNavigationRequest}. */
@@ -1433,33 +1501,253 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     return this.OnNavigationRequest(event);
   }
 
+  private normalizeNavToken(value: string | null | undefined): string {
+    return String(value ?? '')
+      .toLowerCase()
+      .replace(/[-_]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private stripActionVerbPrefix(label: string | null | undefined): string {
+    return String(label ?? '')
+      .replace(/^(open|view|go\s+to|launch|show|explore)\s+/i, '')
+      .trim();
+  }
+
   /**
-   * Resolve an application name to its ID.
+   * Resolve an application name, URL slug/path, or UUID to its ID.
    */
-  private resolveAppId(appName: string): string | undefined {
+  private resolveAppId(appNameOrId: string): string | undefined {
+    const raw = String(appNameOrId ?? '').trim();
+    if (!raw) {
+      return undefined;
+    }
     const md = this.ProviderToUse;
-    const apps = md.Applications;
-    const app = apps.find(a => a.Name.toLowerCase() === appName.toLowerCase());
+    const apps = md.Applications || [];
+    const lower = raw.toLowerCase();
+    const normalized = this.normalizeNavToken(raw);
+    const app = apps.find(a =>
+      UUIDsEqual(a.ID, raw) ||
+      a.Name?.toLowerCase() === lower ||
+      a.Path?.toLowerCase() === lower ||
+      this.normalizeNavToken(a.Name) === normalized ||
+      this.normalizeNavToken(a.Path) === normalized
+    );
     return app?.ID;
   }
 
   /**
-   * Handle actionable commands that require app-specific navigation (open:resource).
-   * open:url commands are already handled directly by UICommandHandlerService.
+   * Resolves a nav item label inside a specific application's DefaultNavItems by case/slug-insensitive match.
    */
-  private handleActionableCommand(command: ActionableCommand): void {
+  private resolveNavItemLabelInApp(appId: string, navItemTarget: string): string | undefined {
+    const raw = String(navItemTarget ?? '').trim();
+    if (!raw) {
+      return undefined;
+    }
+    const app = (this.ProviderToUse.Applications || []).find(a => UUIDsEqual(a.ID, appId));
+    if (!app?.DefaultNavItems) {
+      return undefined;
+    }
+    try {
+      const items = JSON.parse(app.DefaultNavItems) as Array<{ Label?: string; Route?: string }>;
+      const normalized = this.normalizeNavToken(raw);
+      const matched = items.find(item =>
+        this.normalizeNavToken(item.Label) === normalized ||
+        this.normalizeNavToken(item.Route) === normalized
+      );
+      return matched?.Label;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private toQueryParamsRecord(params?: Record<string, unknown>): Record<string, string> | undefined {
+    if (!params || Object.keys(params).length === 0) {
+      return undefined;
+    }
+    const result: Record<string, string> = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (v != null) {
+        result[k] = String(v);
+      }
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
+  }
+
+  /**
+   * Navigates to an Application or NavItem referenced by an `open:resource` command,
+   * matching by ID, Name, URL Path slug (e.g. `"data-explorer"` -> `"Data Explorer"`),
+   * or NavItem label across applications.
+   */
+  private async handleAppOrNavItemCommand(command: OpenResourceCommand): Promise<void> {
+    const queryParams = this.toQueryParamsRecord(command.parameters);
+    const rt = (command.resourceType ?? '').trim().toLowerCase();
+    const strippedLabel = this.stripActionVerbPrefix(command.label);
+
+    // 1. Try resolving as an Application directly
+    const appCandidates = rt === 'navitem'
+      ? [command.entityName, command.resourceId, strippedLabel]
+      : [command.resourceId, command.entityName, strippedLabel];
+
+    for (const candidate of appCandidates) {
+      if (!candidate) continue;
+      const appId = this.resolveAppId(candidate);
+      if (appId) {
+        const navHint = rt === 'navitem' ? command.resourceId : command.entityName;
+        const resolvedNavLabel = navHint ? this.resolveNavItemLabelInApp(appId, navHint) : undefined;
+        await this.navigationService.SwitchToApp(appId, resolvedNavLabel, queryParams);
+        return;
+      }
+    }
+
+    // 2. Search across all applications' DefaultNavItems for a matching NavItem label or route slug
+    const navCandidates = [command.resourceId, command.entityName, strippedLabel].filter(
+      (c): c is string => !!c && c.trim().length > 0
+    );
+    for (const candidate of navCandidates) {
+      for (const app of this.ProviderToUse.Applications || []) {
+        const matchedLabel = this.resolveNavItemLabelInApp(app.ID, candidate);
+        if (matchedLabel) {
+          await this.navigationService.SwitchToApp(app.ID, matchedLabel, queryParams);
+          return;
+        }
+      }
+    }
+
+    // 3. Fallback to OpenNavItemByName in the active app
+    for (const candidate of navCandidates) {
+      const tabId = await this.navigationService.OpenNavItemByName(
+        candidate,
+        command.parameters,
+        undefined,
+        queryParams ? { queryParams } : undefined
+      );
+      if (tabId) {
+        return;
+      }
+    }
+
+    MJNotificationService.Instance?.CreateSimpleNotification(
+      `Unable to open "${command.label || command.resourceId}": destination was not found.`,
+      'info',
+      4000
+    );
+  }
+
+  /**
+   * Handle actionable commands that require app-specific navigation (open:resource, and the
+   * compose:email over-length fallback). open:url commands are already handled directly by
+   * UICommandHandlerService.
+   */
+  private handleActionableCommand(request: ActionableCommandRequest): void {
+    const command = request.command;
     if (command.type === 'open:resource') {
       const resourceCommand = command as OpenResourceCommand;
-      if (resourceCommand.resourceType === 'Record') {
+      const rt = (resourceCommand.resourceType ?? '').trim().toLowerCase();
+      if (rt === 'record') {
         // Record opens are emitted as openEntityRecord from mj-conversation-chat-area
         // (composite-key aware). Handling them here too would open the record twice.
         return;
-      } else if (resourceCommand.resourceType === 'Report' || resourceCommand.resourceType === 'Dashboard') {
-        // Reports and dashboards from agents are stored as conversation artifacts.
-        // Find the most recent artifact in the active conversation and open it.
-        this.openMostRecentArtifact();
       }
+      const resourceId = resourceCommand.resourceId;
+      if (rt === 'artifact' || rt === 'file') {
+        if (this.ChatArea?.OpenConversationArtifactForCommand(resourceCommand)) {
+          return;
+        }
+        if (resourceId && IsValidUUID(resourceId)) {
+          this.navigationService.OpenArtifact(resourceId, resourceCommand.label);
+          return;
+        }
+        this.openMostRecentArtifact();
+        return;
+      }
+      if (rt === 'report' || rt === 'dashboard') {
+        if (this.ChatArea?.OpenConversationArtifactForCommand(resourceCommand)) {
+          return;
+        }
+        if (rt === 'dashboard' && resourceId && IsValidUUID(resourceId)) {
+          this.navigationService.OpenDashboard(resourceId, resourceCommand.label || 'Dashboard');
+          return;
+        }
+        this.openMostRecentArtifact();
+        return;
+      }
+      if (rt === 'app' || rt === 'navitem') {
+        void this.handleAppOrNavItemCommand(resourceCommand);
+        return;
+      }
+      if (rt === 'view') {
+        if (resourceId && IsValidUUID(resourceId)) {
+          this.navigationService.OpenView(resourceId, resourceCommand.label || 'View');
+        } else if (resourceCommand.entityName) {
+          const extraFilter = typeof resourceCommand.parameters?.['ExtraFilter'] === 'string'
+            ? resourceCommand.parameters['ExtraFilter']
+            : undefined;
+          this.navigationService.OpenDynamicView(resourceCommand.entityName, extraFilter);
+        } else {
+          void this.handleAppOrNavItemCommand(resourceCommand);
+        }
+        return;
+      }
+      if (rt === 'query') {
+        if (resourceId && IsValidUUID(resourceId)) {
+          this.navigationService.OpenQuery(resourceId, resourceCommand.label || 'Query');
+        } else {
+          void this.handleAppOrNavItemCommand(resourceCommand);
+        }
+        return;
+      }
+      if (rt === 'search') {
+        const query = String(
+          resourceCommand.resourceId ||
+          resourceCommand.parameters?.['query'] ||
+          this.stripActionVerbPrefix(resourceCommand.label) ||
+          ''
+        ).trim();
+        if (query) {
+          this.navigationService.OpenSearch(query);
+        }
+        return;
+      }
+      if (rt === 'form') {
+        if (resourceCommand.entityName) {
+          this.navigationService.OpenNewEntityRecord(resourceCommand.entityName, {
+            newRecordValues: resourceCommand.parameters
+          });
+        } else {
+          void this.handleAppOrNavItemCommand(resourceCommand);
+        }
+        return;
+      }
+      // Fallback for any unrecognized open:resource type
+      void this.handleAppOrNavItemCommand(resourceCommand);
+    } else if (command.type === 'compose:email') {
+      // The service handles compose:email directly whenever the draft fits in a mailto: URL, so
+      // reaching here means it did NOT fit. Opening the mail client would hand the user a draft
+      // with the body silently truncated, so the service declined and handed it to us instead —
+      // our job is to show the full draft, which lives in the artifact.
+      this.openComposeEmailDraft(command, request.DraftCopiedToClipboard === true);
     }
+  }
+
+  /**
+   * The compose:email over-length fallback: open the draft artifact and tell the user why their
+   * mail client did not open.
+   *
+   * With no artifactId (it is optional) the conversation's latest artifact opens, since for a
+   * single-artifact turn that IS the draft. A stated artifactId that is not loaded opens nothing:
+   * a different artifact would be passed off as the draft. Every outcome, including "nothing to
+   * open", ends in one notification, so the button never does nothing visible.
+   */
+  private openComposeEmailDraft(command: ComposeEmailCommand, copiedToClipboard: boolean): void {
+    const target = ResolveComposeEmailDraft(this.ChatArea?.ArtifactsByDetailId.values() ?? [], command.artifactId);
+    if (this.ChatArea && (target.Kind === 'stated' || target.Kind === 'most-recent')) {
+      void this.ChatArea.OnArtifactClicked({ artifactId: target.Artifact.ArtifactId, versionId: target.Artifact.ArtifactVersionId });
+    }
+    const notice = BuildComposeEmailFallbackNotice(target, copiedToClipboard);
+    // Longer than the default: the notice is two sentences and explains a changed clipboard.
+    MJNotificationService.Instance?.CreateSimpleNotification(notice.Message, notice.Style, 7000);
   }
 
   /**
@@ -1487,6 +1775,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       this.ChatArea.onArtifactClicked(latestArtifact);
     } else {
       console.warn('No artifacts found in conversation to open for Report/Dashboard command');
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        'No artifact found in this conversation to open.',
+        'info',
+        3500
+      );
     }
   }
 }

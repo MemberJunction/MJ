@@ -30,6 +30,20 @@ export class EntityActionEngineServer extends BaseSingleton<EntityActionEngineSe
      */
     private _contextUser?: UserInfo;
 
+    /**
+     * Cache of invocation-type instances, keyed by `InvocationType.Name`. Mirrors
+     * `CommunicationEngine._providerInstanceCache`: an `EntityActionInvocationBase` subclass can own
+     * its own internal bounded cache (e.g. the Script invocation type's `_scriptCache` in
+     * `EntityActionInvocationTypes.ts`), but that cache only pays off if the instance itself survives
+     * across calls. Without this cache, `RunEntityAction()` asked `ClassFactory.CreateInstance` for a
+     * brand-new instance on every single invocation — so `_scriptCache` was rebuilt from empty and
+     * discarded before a second lookup could ever hit it, recompiling every Script-type action's
+     * `new Function(...)` from source on every call. Bounded by the number of distinct registered
+     * invocation type names (a handful, admin-managed via `MJ: Entity Action Invocation Types`), so no
+     * eviction is needed.
+     */
+    private _invocationInstanceCache: Map<string, EntityActionInvocationBase> = new Map();
+
     /** Ensures the single EntityActionEngineBase cache is loaded. Delegates entirely to the base. */
     public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         if (contextUser) {
@@ -85,9 +99,14 @@ export class EntityActionEngineServer extends BaseSingleton<EntityActionEngineSe
             throw new Error('Invalid invocation type provided');
 
         // now we have the invocation type, use the name as the key for ClassFactory create instance to get what we need
-        const invocationInstance = MJGlobal.Instance.ClassFactory.CreateInstance<EntityActionInvocationBase>(EntityActionInvocationBase, params.InvocationType.Name);
-        if (!invocationInstance)
-            throw new Error('Error creating instance of invocation type');
+        const invocationTypeName = params.InvocationType.Name;
+        let invocationInstance = this._invocationInstanceCache.get(invocationTypeName);
+        if (!invocationInstance) {
+            invocationInstance = MJGlobal.Instance.ClassFactory.CreateInstance<EntityActionInvocationBase>(EntityActionInvocationBase, invocationTypeName);
+            if (!invocationInstance)
+                throw new Error('Error creating instance of invocation type');
+            this._invocationInstanceCache.set(invocationTypeName, invocationInstance);
+        }
 
         // now we have the instance, invoke the action
         return invocationInstance.InvokeAction(params);

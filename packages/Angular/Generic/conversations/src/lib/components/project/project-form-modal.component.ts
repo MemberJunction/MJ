@@ -9,6 +9,8 @@ export interface ProjectFormData {
   description: string;
   color: string;
   icon: string;
+  /** true = only the owner sees it; false = everyone in the environment does. */
+  isPersonal: boolean;
 }
 
 const DEFAULT_PROJECT_COLORS = [
@@ -106,6 +108,52 @@ const DEFAULT_PROJECT_ICONS = [
             placeholder="What goes in this folder? (optional)"
             class="mj-textarea full-width"
             rows="2"></textarea>
+        </div>
+
+        <!-- Visibility. TWO NAMED OPTIONS, not a checkbox: with a checkbox the unchecked
+             meaning lives only in the helper text, so the shared state is never actually
+             named. A fieldset/legend also gives the group a real accessible name, which a
+             bare <label>Visibility</label> did not, and the hint is a sibling of the
+             options rather than inside one — inside, a screen reader read the whole hint
+             as part of the option's name.
+
+             A SHARED folder shows a statement instead of the control. Visibility is a
+             create-time choice in one direction only: personal -> shared stays available,
+             because it only ever adds. See VisibilityIsLocked for why the reverse is not
+             offered. -->
+        <div class="form-field">
+          @if (VisibilityIsLocked) {
+            <fieldset class="visibility-set" aria-describedby="projectVisibilityHint">
+              <legend>Visibility</legend>
+              <p class="visibility-locked">
+                <i class="fa-solid fa-users" aria-hidden="true"></i>
+                Shared with everyone
+              </p>
+              <p class="visibility-hint" id="projectVisibilityHint">
+                A shared folder stays shared. To keep something to yourself, create a new
+                private folder and move it there.
+              </p>
+            </fieldset>
+          } @else {
+            <fieldset class="visibility-set" aria-describedby="projectVisibilityHint">
+              <legend>Visibility</legend>
+              <label class="visibility-choice">
+                <input type="radio" name="projectVisibility" [value]="true"
+                       [(ngModel)]="FormData.isPersonal" />
+                <span>Only me</span>
+              </label>
+              <label class="visibility-choice">
+                <input type="radio" name="projectVisibility" [value]="false"
+                       [(ngModel)]="FormData.isPersonal" />
+                <span>Everyone</span>
+              </label>
+              <p class="visibility-hint" id="projectVisibilityHint">
+                {{ FormData.isPersonal
+                    ? 'Only you can see this folder.'
+                    : 'Everyone can see this folder and its name. They will not see the conversations you keep in it.' }}
+              </p>
+            </fieldset>
+          }
         </div>
 
         <!-- Color Picker -->
@@ -228,6 +276,78 @@ const DEFAULT_PROJECT_ICONS = [
     }
 
     /* Color Picker */
+    .visibility-set {
+      border: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    /* A <legend> is not matched by the .form-field label rule, so it inherited 16px/400
+       and read larger and lighter than every other field label. Restated here rather than
+       widening that selector, which would also catch the option labels below.
+       (No backticks in this block: it is a template literal.) */
+    .visibility-set legend {
+      padding: 0;
+      margin-bottom: 0.15rem;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 0.01em;
+      color: var(--mj-text-secondary);
+    }
+
+    /* Scoped as .form-field .visibility-choice (0,2,1) so it deliberately outranks the
+       .form-field label rule (0,1,1) this sits inside — at equal specificity that rule
+       won on source order and rendered the option text bold.
+       (No backticks in here: this block is a template literal.) */
+    .form-field .visibility-choice {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      font-weight: 400;
+      font-size: 13px;
+      margin: 0;
+      /* The rows were the height of the radio alone (~16px). The checkbox this replaced
+         sat in a 31px row, so the tap target got smaller when the control got clearer. */
+      padding: 0.25rem 0;
+    }
+
+    .visibility-choice input {
+      flex: 0 0 auto;
+      margin: 0;
+    }
+
+    /* The shared-folder statement that stands in for the radios. Matches the option rows
+       it replaces — same size, same weight, same 0.25rem row padding — so the dialog does
+       not visibly reflow between a folder that offers the choice and one that does not.
+       (No backticks in here: this block is a template literal.) */
+    .form-field .visibility-locked {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0;
+      padding: 0.25rem 0;
+      font-weight: 400;
+      font-size: 13px;
+      color: var(--mj-text-primary);
+    }
+
+    .visibility-locked i {
+      font-size: 12px;
+      color: var(--mj-text-muted);
+    }
+
+    .visibility-hint {
+      margin: 0.15rem 0 0;
+      /* Unsized it inherited 16px and read LARGER than the options it describes. */
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--mj-text-muted);
+    }
+
     .color-picker-section {
       border: 1px solid var(--mj-border-default);
       border-radius: 12px;
@@ -415,7 +535,14 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
     name: '',
     description: '',
     color: '#0076B6',
-    icon: 'fa-folder'
+    icon: 'fa-folder',
+    // A NEW folder is personal by default. The conversation sidebar is a personal
+    // surface — the conversations in it are already bound to their owner — so a
+    // folder everyone can see is the surprising option, not the private one. Folder
+    // NAMES are user-authored free text, and before OwnerUserID existed every one of
+    // them was readable by every user of the environment, which is what prompted
+    // this. Existing folders are untouched: they carry NULL, which still means shared.
+    isPersonal: true
   };
 
   /** @deprecated Use {@link FormData}. */
@@ -468,6 +595,33 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
     this.AvailableIcons = value;
   }
 
+  /**
+   * True when this dialog is editing a folder that is currently SHARED — in which case
+   * visibility is shown as a statement rather than a control.
+   *
+   * Sharing is one-way by design, and the reason is in the data model rather than the UI.
+   * NULL-means-shared conflates "shared" with "unowned": the moment a folder is shared its
+   * `OwnerUserID` goes to NULL and there is no column anywhere recording who created it
+   * (`Project` has `__mj_CreatedAt`, but no created-by). So `OwnerUserID = currentUser.ID`
+   * on a shared folder is indistinguishable from any other user claiming it — the system
+   * cannot tell reclaiming from appropriating, which makes "take it back" an affordance
+   * that was never really there.
+   *
+   * What that would cost on day one is the deciding argument. Every folder that exists
+   * today carries NULL, so without this the whole team's folder structure — subfolders
+   * included — is one radio button away from belonging to whichever person opens its
+   * settings first. A confirm does not fix that; it only narrates it.
+   *
+   * Personal -> shared stays available, because it only ever adds. Someone who wants a
+   * private copy makes a private folder. If personal folders later grow features that need
+   * a stable creator (sharing with named users, transfer, recovering a departed employee's
+   * folders), the fix is a separate IsShared flag so ownership stops being erased by
+   * sharing — a bigger change, and deliberately not this one.
+   */
+  public get VisibilityIsLocked(): boolean {
+    return this.IsEditMode && !this.Project?.OwnerUserID;
+  }
+
   /** Translucent tint of the selected color, used behind the preview/icon glyph. */
   public get ChipBackground(): string {
     const hex = this.FormData.color || '#0076B6';
@@ -498,7 +652,10 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
       name: this.Project.Name || '',
       description: this.Project.Description || '',
       color: this.Project.Color || '#0076B6',
-      icon: this.Project.Icon || 'fa-folder'
+      icon: this.Project.Icon || 'fa-folder',
+      // Reflect what the folder IS, not the create-time default — otherwise opening
+      // a shared folder's settings and pressing Save would silently make it private.
+      isPersonal: !!this.Project.OwnerUserID
     };
   }
 
@@ -534,12 +691,26 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
 
     try {
       const md = this.ProviderToUse;
-      const project = this.Project || await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.CurrentUser);
+
+      // A shared folder cannot be taken private — the control is not rendered for one
+      // (see VisibilityIsLocked). This is the same rule expressed where the write happens,
+      // so a future template change, a stale `formData` from a reopened dialog, or anything
+      // else that sets the flag cannot quietly appropriate a folder the whole team uses.
+      // It resolves to the folder's CURRENT state, so it is a no-op in every other case.
+      const isPersonal = this.VisibilityIsLocked ? false : this.FormData.isPersonal;
+
+            const project = this.Project || await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.CurrentUser);
 
       project.Name = this.FormData.name.trim();
       project.Description = this.FormData.description.trim() || null;
       project.Color = this.FormData.color;
       project.Icon = this.FormData.icon;
+
+      // Settable on edit, in one direction: a personal folder can be shared with the team.
+      // Null means shared, which is what every folder created before this column existed
+      // carries — and, because sharing erases the owner, is also why the reverse is not on
+      // offer. See VisibilityIsLocked.
+      project.OwnerUserID = isPersonal ? this.CurrentUser.ID : null;
 
       if (!this.IsEditMode) {
         project.EnvironmentID = this.EnvironmentId;

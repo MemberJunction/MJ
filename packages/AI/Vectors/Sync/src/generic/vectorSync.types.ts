@@ -1,4 +1,5 @@
 import { BaseEmbeddings, EmbedTextsResult } from "@memberjunction/ai";
+import { AIEmbeddingRunner } from "@memberjunction/ai-prompts";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";
 import { BaseEntity, UserInfo } from "@memberjunction/core";
 import { MJEntityDocumentEntity, MJTemplateContentEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
@@ -89,20 +90,37 @@ export type EmbeddingData = {
     __mj_compositeKey?: string;
     /** Plain object representation of the entity document */
     EntityDocument?: Record<string, unknown>;
+    /**
+     * The RENDERED document text for this record: the exact string that was embedded, persisted as
+     * `EntityRecordDocument.DocumentText`. Not the raw template, which is identical for every record.
+     */
     TemplateContent?: string;
     VectorIndexID?: string;
 };
 
 export type VectorEmeddingData = {
-    embedding: BaseEmbeddings;
-    vectorDB: VectorDBBase,
-    vectorDBClassKey: string,
-    vectorDBAPIKey: string,
-    embeddingDriverClass: string,
-    embeddingAPIKey: string,
+    /**
+     * @deprecated Use {@link embeddingRunner}. Embedding now goes through AIEmbeddingRunner, which
+     * brings credential resolution, failover and run rows. For older callers this is still a working
+     * driver, built on first read with the legacy environment-variable key.
+     */
+    embedding?: BaseEmbeddings;
+    /** Runs the embedding calls. Pass {@link aiModelID} as `ModelID` so every vector comes from the document's model. */
+    embeddingRunner: AIEmbeddingRunner;
+    /** The entity document's embedding model (`MJ: AI Models.ID`). */
+    aiModelID: string;
+    vectorDB: VectorDBBase;
+    vectorDBClassKey: string;
+    vectorDBAPIKey: string;
+    embeddingDriverClass: string;
+    /**
+     * The legacy `AI_VENDOR_API_KEY__<DRIVER>` value, or '' when unset (normal for keyless drivers).
+     * Informational only: AIEmbeddingRunner resolves credentials itself.
+     */
+    embeddingAPIKey: string;
     /** The AIModel's APIName (e.g. 'Xenova/gte-small') — required by some providers
      *  (LocalEmbedding throws if absent) to identify the underlying model. */
-    embeddingModelAPIName: string,
+    embeddingModelAPIName: string;
 };
 
 /**

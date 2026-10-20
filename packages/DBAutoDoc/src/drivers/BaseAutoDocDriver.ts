@@ -13,7 +13,8 @@ import {
   AutoDocSchemaFilter,
   AutoDocTableFilter,
   AutoDocColumnStatistics,
-  AutoDocExistingDescription
+  AutoDocExistingDescription,
+  AutoDocIndex
 } from '../types/driver.js';
 
 /**
@@ -69,6 +70,12 @@ export abstract class BaseAutoDocDriver {
     schemaName: string,
     tableName: string
   ): Promise<AutoDocColumn[]>;
+
+  /**
+   * Get every existing index (primary-key indexes included) on the tables of one schema,
+   * in a single catalog query.
+   */
+  public abstract GetIndexes(schemaName: string): Promise<AutoDocIndex[]>;
 
   /**
    * Get existing descriptions from database metadata
@@ -148,15 +155,12 @@ export abstract class BaseAutoDocDriver {
       maxSampleSize
     );
 
-    // Calculate total rows from null percentage if available
-    const totalRows = stats.nullCount > 0 && stats.nullPercentage > 0
-      ? Math.round(stats.nullCount / stats.nullPercentage)
-      : stats.nullCount + stats.distinctCount; // Estimate
-
     return {
       columnName,
       dataType: columnType,
-      totalRows,
+      // The drivers fill totalRows from a full-table COUNT(*). Never estimate it from distinct and
+      // null counts: that equals distinctCount for a non-null column, so duplicates would look unique.
+      totalRows: stats.totalRows,
       nullCount: stats.nullCount,
       distinctCount: stats.distinctCount,
       minValue: stats.min,

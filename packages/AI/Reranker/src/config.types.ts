@@ -33,14 +33,21 @@ export interface RerankerConfiguration {
 
     /**
      * Minimum relevance score (0.0-1.0) for reranked results to be included.
-     * Results below this threshold are filtered out.
+     * Results below this threshold are filtered out. When none reaches it, the agent keeps the vector
+     * search results instead, as if reranking were off, so the threshold never empties the list.
+     *
+     * Recommended for a DecisionReranker: 0.1. Its scores are Likelihood probabilities that are not
+     * calibrated, so the order and the top-N cut do the ranking, and the threshold should only drop
+     * the candidates the model rules out. 0.1 is a starting point until a calibration is fitted for
+     * memory reranking.
      * Default: 0.5
      */
     minRelevanceThreshold: number;
 
     /**
-     * Optional: AIPrompt ID for LLM-based reranking.
-     * Only used when the reranker's DriverClass is 'LLMReranker'.
+     * Optional: AIPrompt ID for prompt-backed reranking.
+     * Only used when the reranker's DriverClass is 'LLMReranker' (the chat prompt it runs) or
+     * 'DecisionReranker' (the decision prompt it asks, 'Default Decision' otherwise).
      */
     rerankPromptID?: string;
 
@@ -57,6 +64,34 @@ export interface RerankerConfiguration {
      * Default: true
      */
     fallbackOnError: boolean;
+
+    /**
+     * Optional: whether examples get a reranking stage too.
+     * When true, example retrieval fetches maxExamples * retrievalMultiplier candidates and reranks
+     * them with the same reranker, threshold and fallbackOnError as notes.
+     * When absent or false, examples use vector search results directly.
+     * Default: false
+     */
+    // case-violation-ok-legacy-back-compat: a key of the camelCase JSON stored in AIAgent.RerankerConfiguration
+    rerankExamples?: boolean;
+
+    /**
+     * Optional: the time budget, in milliseconds, for a DecisionReranker's decision calls, all together.
+     * When it runs out the calls are aborted and the rerank fails, so the caller falls back as
+     * fallbackOnError says. Other rerankers ignore it.
+     * Default: 15000 (DEFAULT_DECISION_RERANK_TIMEOUT_MS)
+     */
+    // case-violation-ok-legacy-back-compat: a key of the camelCase JSON stored in AIAgent.RerankerConfiguration
+    decisionTimeoutMS?: number;
+
+    /**
+     * Optional: the most documents one DecisionReranker decision call carries, when no model its
+     * decision prompt can run on declares Decision.MaxQuestionsPerCall (a declared limit always wins).
+     * Larger reranks are split across parallel calls. Other rerankers ignore it.
+     * Default: 20 (DEFAULT_DECISION_RERANK_DOCUMENTS_PER_CALL)
+     */
+    // case-violation-ok-legacy-back-compat: a key of the camelCase JSON stored in AIAgent.RerankerConfiguration
+    decisionMaxDocumentsPerCall?: number;
 }
 
 /**
@@ -93,7 +128,10 @@ export function ParseRerankerConfiguration(configJson: string | null | undefined
             minRelevanceThreshold: parsed.minRelevanceThreshold ?? 0.5,
             rerankPromptID: parsed.rerankPromptID,
             contextFields: parsed.contextFields ?? [],
-            fallbackOnError: parsed.fallbackOnError ?? true
+            fallbackOnError: parsed.fallbackOnError ?? true,
+            rerankExamples: parsed.rerankExamples,
+            decisionTimeoutMS: parsed.decisionTimeoutMS,
+            decisionMaxDocumentsPerCall: parsed.decisionMaxDocumentsPerCall
         };
     } catch {
         return null;

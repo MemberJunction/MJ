@@ -5,8 +5,6 @@ import {
   EventEmitter,
   HostListener,
   ElementRef,
-  ViewChild,
-  AfterViewInit,
   OnDestroy,
   inject
 } from '@angular/core';
@@ -29,6 +27,19 @@ const SIZE_MAP: Record<MjDialogSize, string> = {
  * Supports both explicit width/height and size presets.
  * Content is projected, with an optional `<mj-dialog-actions>` for the footer.
  *
+ * On open, focus moves to `[data-autofocus]`, else the first field in the body,
+ * else the first button in the body or actions (never the ✕), else the container.
+ * Tab between stops is left to the browser. Tab on the last stop wraps to the
+ * first, and Shift+Tab on the first stop or the container wraps to the last.
+ * A Tab that arrives from outside is taken only by the topmost visible dialog,
+ * and only when that dialog traps focus and focus is on the page behind it:
+ * not in another modal, and not in an overlay panel rendered on the body.
+ * A dropdown or calendar that hands focus back to its field is wrapped when
+ * that field is the first or last stop, because the key started in the overlay.
+ * Focus returns to the trigger on close.
+ * `AutoFocus`, `TrapFocus`, and `RestoreFocus` each default on so a dialog that
+ * manages focus itself can turn that one behavior off.
+ *
  * @example
  * ```html
  * <mj-dialog [Visible]="showDialog" Title="Confirm" (Close)="onClose()">
@@ -49,11 +60,14 @@ const SIZE_MAP: Record<MjDialogSize, string> = {
         <div class="mj-dialog-container"
           [attr.role]="Role"
           aria-modal="true"
+          tabindex="-1"
           [attr.aria-labelledby]="Title ? 'mj-dialog-title-' + dialogId : null"
+          [attr.aria-label]="Title ? null : (AriaLabel || null)"
           [style.width]="resolvedWidth"
           [style.height]="resolvedHeight"
           [style.max-width]="'90vw'"
           [style.max-height]="'90vh'"
+          (keydown)="OnTabKey($event)"
           (click)="$event.stopPropagation()">
 
           <!-- Title bar -->
@@ -84,8 +98,47 @@ const SIZE_MAP: Record<MjDialogSize, string> = {
   `
 })
 export class MJDialogComponent implements OnDestroy {
+  private readonly host = inject(ElementRef) as ElementRef<HTMLElement>;
   private _visible = false;
+  /** Element that held focus when the dialog opened; restored on close. */
+  private previouslyFocused: HTMLElement | null = null;
+  /** Set while the open focus is waiting for the `@if (Visible)` container. */
+  private initialFocusPending = false;
+  /** Open dialogs, oldest first. The last visible one decides whether an outside Tab is taken. */
+  private static readonly openDialogs: MJDialogComponent[] = [];
   private static nextId = 0;
+
+  private static readonly TAB_STOP_SELECTOR =
+    'a[href], button, input, select, textarea, [contenteditable]:not([contenteditable="false"]), [tabindex]';
+
+  private readonly onDocumentKeyDown = (event: KeyboardEvent): void => {
+    if (event.defaultPrevented || event.key !== 'Tab' || !this.TrapFocus || !this._visible) return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (!this.isTopmostOpenDialog()) return;
+    const container = this.containerElement();
+    if (!container) return;
+    const active = document.activeElement;
+    // Another modal keeps its Tab. An overlay panel that still holds focus (a filter
+    // popover, or any panel that does not move focus itself) keeps it too.
+    if (active instanceof Element) {
+      const modal = active.closest('[aria-modal="true"]');
+      if (modal && modal !== container) return;
+      if (active.closest('.cdk-overlay-container')) return;
+    }
+    const focusInside = active instanceof Node && container.contains(active);
+    const startedOutside = !(event.target instanceof Node && container.contains(event.target));
+    // A dropdown or calendar focuses its field and leaves the key alone. The key
+    // started in the overlay, so the container never saw it. Wrap at the ends.
+    if (focusInside && startedOutside) {
+      this.wrapTabAtEnds(event, container);
+      return;
+    }
+    if (focusInside) return;
+    const stops = this.tabStops(container);
+    event.preventDefault();
+    const target = stops.length === 0 ? container : (event.shiftKey ? stops[stops.length - 1] : stops[0]);
+    target.focus();
+  };
 
   @Input()
   set Visible(value: boolean) {
@@ -116,6 +169,27 @@ export class MJDialogComponent implements OnDestroy {
    * response). Backward compatible — existing callers keep `'dialog'`.
    */
   @Input() Role: 'dialog' | 'alertdialog' = 'dialog';
+
+  /** Move focus into the dialog when it opens. Off when the dialog focuses itself. */
+  @Input() AutoFocus = true;
+
+  /**
+   * Keep focus in the dialog. The browser moves Tab between stops. Tab on the last
+   * stop wraps to the first, and Shift+Tab on the first stop or the container wraps
+   * to the last. A Tab from outside is brought in only when this dialog is the topmost
+   * visible one and it traps focus, and not while focus is already inside another
+   * modal or an overlay panel.
+   */
+  @Input() TrapFocus = true;
+
+  /** Return focus to the element that was focused when the dialog opened. */
+  @Input() RestoreFocus = true;
+
+  /**
+   * Accessible name (`aria-label`) used only when {@link Title} is empty.
+   * A set Title keeps `aria-labelledby` and does not also set `aria-label`.
+   */
+  @Input() AriaLabel: string | null = null;
 
   @Output() Close = new EventEmitter<void>();
 
@@ -166,16 +240,223 @@ export class MJDialogComponent implements OnDestroy {
     this.Close.emit();
   }
 
+  /**
+   * Wraps Tab at the ends of the dialog. A Tab that is already handled, including
+   * by a dialog nested inside this one, is left alone. With no enabled control,
+   * focus stays on the container (it is `tabindex="-1"`, so it is not itself a tab stop).
+   */
+  OnTabKey(event: KeyboardEvent): void {
+    if (event.defaultPrevented || event.key !== 'Tab' || !this.TrapFocus || !this.Visible) return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const container = event.currentTarget;
+    if (!(container instanceof HTMLElement)) return;
+    this.wrapTabAtEnds(event, container);
+  }
+
+  /**
+   * Tab on the last stop wraps to the first. Shift+Tab on the first stop or the
+   * container wraps to the last. A Tab in the middle is left for the browser.
+   */
+  private wrapTabAtEnds(event: KeyboardEvent, container: HTMLElement): void {
+    const stops = this.tabStops(container);
+    if (stops.length === 0) {
+      event.preventDefault();
+      container.focus();
+      return;
+    }
+
+    const active = document.activeElement;
+    const index = active instanceof HTMLElement ? stops.indexOf(active) : -1;
+    const onContainer = active === container;
+    if (event.shiftKey) {
+      if (index === 0 || onContainer) {
+        event.preventDefault();
+        stops[stops.length - 1].focus();
+      }
+      return;
+    }
+    if (index === stops.length - 1) {
+      event.preventDefault();
+      stops[0].focus();
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.cancelPendingInitialFocus();
+    this.forgetOpen();
+    document.removeEventListener('keydown', this.onDocumentKeyDown);
+    if (this._visible) {
+      this.restoreFocus();
+    }
+    document.body.style.overflow = '';
+  }
+
   private onOpen(): void {
+    this.rememberOpen();
     document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', this.onDocumentKeyDown);
+    const active = document.activeElement;
+    this.previouslyFocused = active instanceof HTMLElement ? active : null;
+    if (this.AutoFocus) {
+      this.scheduleInitialFocus();
+    }
   }
 
   private onCloseInternal(): void {
     document.body.style.overflow = '';
+    document.removeEventListener('keydown', this.onDocumentKeyDown);
+    this.cancelPendingInitialFocus();
+    this.forgetOpen();
+    this.restoreFocus();
   }
 
-  ngOnDestroy(): void {
-    document.body.style.overflow = '';
+  private rememberOpen(): void {
+    if (!MJDialogComponent.openDialogs.includes(this)) {
+      MJDialogComponent.openDialogs.push(this);
+    }
+  }
+
+  private forgetOpen(): void {
+    const index = MJDialogComponent.openDialogs.indexOf(this);
+    if (index >= 0) {
+      MJDialogComponent.openDialogs.splice(index, 1);
+    }
+  }
+
+  /**
+   * The last visible dialog decides. When that dialog does not trap focus, nobody
+   * takes the Tab, including a trapping dialog underneath it.
+   */
+  private isTopmostOpenDialog(): boolean {
+    for (let i = MJDialogComponent.openDialogs.length - 1; i >= 0; i--) {
+      const dialog = MJDialogComponent.openDialogs[i];
+      if (!dialog._visible) continue;
+      return dialog === this && dialog.TrapFocus;
+    }
+    return false;
+  }
+
+  private scheduleInitialFocus(): void {
+    this.initialFocusPending = true;
+    // The Visible setter runs before `@if` inserts `.mj-dialog-container`.
+    Promise.resolve().then(() => {
+      if (!this.initialFocusPending) return;
+      this.initialFocusPending = false;
+      this.focusInitial();
+    });
+  }
+
+  private cancelPendingInitialFocus(): void {
+    this.initialFocusPending = false;
+  }
+
+  private focusInitial(): void {
+    if (!this._visible || !this.AutoFocus) return;
+    const container = this.containerElement();
+    if (!container) return;
+    this.initialFocusTarget(container).focus();
+  }
+
+  private initialFocusTarget(container: HTMLElement): HTMLElement {
+    const marked = this.firstEnabled(container.querySelectorAll<HTMLElement>('[data-autofocus]'));
+    if (marked) return marked;
+
+    const field = this.firstEnabled(container.querySelectorAll<HTMLElement>(
+      '.mj-dialog-body input, .mj-dialog-body select, .mj-dialog-body textarea',
+    ));
+    if (field) return field;
+
+    const button = this.firstEnabled(
+      container.querySelectorAll<HTMLElement>('.mj-dialog-body button, .mj-dialog-actions button'),
+      true,
+    );
+    if (button) return button;
+
+    return container;
+  }
+
+  /** First element that can take focus. The ✕ is skipped only for the button fallback. */
+  private firstEnabled(nodes: NodeListOf<HTMLElement>, skipClose = false): HTMLElement | null {
+    for (const el of Array.from(nodes)) {
+      if (skipClose && el.classList.contains('mj-dialog-close')) continue;
+      if (this.isDisabled(el)) continue;
+      if (el instanceof HTMLInputElement && el.type === 'hidden') continue;
+      return el;
+    }
+    return null;
+  }
+
+  private restoreFocus(): void {
+    const target = this.previouslyFocused;
+    this.previouslyFocused = null;
+    if (!this.RestoreFocus) return;
+    // The trigger is outside the dialog. An element inside this host is about to be removed.
+    if (target && target !== document.body && document.contains(target) && !this.host.nativeElement.contains(target)) {
+      target.focus();
+      return;
+    }
+    this.focusDocumentBody();
+  }
+
+  /** `document.body.focus()` is a no-op unless body is a focusable area; blur lands on body. */
+  private focusDocumentBody(): void {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active !== document.body) {
+      active.blur();
+    }
+    if (document.activeElement !== document.body) {
+      document.body.focus();
+    }
+  }
+
+  private containerElement(): HTMLElement | null {
+    const found = this.host.nativeElement.querySelector('.mj-dialog-container');
+    return found instanceof HTMLElement ? found : null;
+  }
+
+  private tabStops(container: HTMLElement): HTMLElement[] {
+    return Array.from(container.querySelectorAll<HTMLElement>(MJDialogComponent.TAB_STOP_SELECTOR)).filter((el) =>
+      this.isTabStop(el),
+    );
+  }
+
+  /** Real controls only. `tabindex="-1"` (including the container) is the fallback, not a stop. */
+  private isTabStop(el: HTMLElement): boolean {
+    if (el.getAttribute('tabindex') === '-1') return false;
+    if (this.isDisabled(el)) return false;
+    if (el instanceof HTMLInputElement && el.type === 'hidden') return false;
+    if (!this.isVisibleStop(el)) return false;
+    return true;
+  }
+
+  /**
+   * display:none and [hidden] hide the whole subtree. visibility is inherited, and a child
+   * can set visible again, so that check is only on the element itself.
+   */
+  private isVisibleStop(el: HTMLElement): boolean {
+    if (getComputedStyle(el).visibility === 'hidden') return false;
+    let current: HTMLElement | null = el;
+    while (current) {
+      if (current.hasAttribute('hidden')) return false;
+      if (getComputedStyle(current).display === 'none') return false;
+      current = current.parentElement;
+    }
+    return true;
+  }
+
+  private isDisabled(el: HTMLElement): boolean {
+    if (
+      el instanceof HTMLButtonElement ||
+      el instanceof HTMLInputElement ||
+      el instanceof HTMLSelectElement ||
+      el instanceof HTMLTextAreaElement ||
+      el instanceof HTMLFieldSetElement ||
+      el instanceof HTMLOptGroupElement ||
+      el instanceof HTMLOptionElement
+    ) {
+      return el.disabled;
+    }
+    return el.hasAttribute('disabled');
   }
 }
 
