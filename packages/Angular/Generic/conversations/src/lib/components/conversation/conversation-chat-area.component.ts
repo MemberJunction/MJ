@@ -1061,14 +1061,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         ?? null;
   }
 
+  private _cachedOwnerAgentKey?: string;
+  private _cachedOwnerAgent: { ID: string; Name: string; IsConversationManager: boolean } | null = null;
+
   /**
    * Current conversation owner agent for the header `.with-chip` and composer
    * placeholder: continuity (last non-Sage reply not preceded by a newer
    * `@Sage` user message) -> pinned/default agent -> conversation manager.
+   * Memoized by message count and active routing inputs so template evaluation
+   * does not scan `messages` on every change-detection cycle.
    */
   public get CurrentOwnerAgent(): { ID: string; Name: string; IsConversationManager: boolean } | null {
     const managerId = this.conversationManagerAgent?.ID ?? null;
     const rows = this.DisplayMessages?.length ? this.DisplayMessages : this.messages ?? [];
+    const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
+    const defaultId = this.Conversation?.DefaultAgentID ?? this.DefaultAgentId ?? null;
+    const floorMs = this.AgentHistoryFrom ? new Date(this.AgentHistoryFrom).getTime() : '';
+    const allowedKey = this.AllowedAgentIDs ? this.AllowedAgentIDs.join(',') : '';
+    const cacheKey = `${rows.length}|${lastRow?.ID ?? ''}|${lastRow?.AgentID ?? ''}|${defaultId ?? ''}|${managerId ?? ''}|${floorMs}|${allowedKey}`;
+    if (this._cachedOwnerAgentKey === cacheKey) {
+      return this._cachedOwnerAgent ?? null;
+    }
+
     const continuity = FindContinuityAgentMessage(
       rows,
       managerId,
@@ -1081,24 +1095,26 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (continuity?.AgentID && this.isOwnerAgentAllowed(continuity.AgentID)) {
       targetId = continuity.AgentID;
     } else {
-      const fallbackId =
-        this.Conversation?.DefaultAgentID
-        ?? this.DefaultAgentId
-        ?? managerId;
+      const fallbackId = defaultId ?? managerId;
       if (fallbackId && this.isOwnerAgentAllowed(fallbackId)) {
         targetId = fallbackId;
       }
     }
     if (!targetId) {
+      this._cachedOwnerAgentKey = cacheKey;
+      this._cachedOwnerAgent = null;
       return null;
     }
     const meta = this.resolveHandoffAgentMeta(targetId);
     const isManager = managerId ? UUIDsEqual(targetId, managerId) : false;
-    return {
+    const owner = {
       ID: targetId,
       Name: meta?.Name || (isManager ? (this.conversationManagerAgent?.Name || 'Sage') : 'Agent'),
       IsConversationManager: isManager,
     };
+    this._cachedOwnerAgentKey = cacheKey;
+    this._cachedOwnerAgent = owner;
+    return owner;
   }
 
   public get CurrentOwnerAgentName(): string {
@@ -4462,8 +4478,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     // Where the viewport goes: a fresh send follows — an in-place update of a message that
-    // is already on screen must not re-run the send path's scroll.
-    this.rebuildHandoffsMap();
+    // is already on screen must not re-run the send path's scroll or rebuild the handoffs map.
+    if (existingIndex < 0) {
+      this.rebuildHandoffsMap();
+    }
     this.followTranscript(existingIndex >= 0 ? 'update' : 'new', message);
 
     // Force change detection — zone.js 0.15 no longer patches graphql-ws WebSocket callbacks,
@@ -4650,13 +4668,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (event.agentRun) {
       // Directly update map with fresh data from progress (no database query needed)
       // Don't create new Map - message-list component needs to keep the same reference
+      const previousRun = this.AgentRunsByDetailId.get(event.conversationDetailId);
       this.AgentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
 
       // Also update ConversationEngine's cache for other consumers
       if (event.conversationId) {
         ConversationEngine.Instance.SetAgentRunForDetail(event.conversationId, event.conversationDetailId, event.agentRun);
       }
-      this.rebuildHandoffsMap();
+      if (!previousRun || !UUIDsEqual(previousRun.ID, event.agentRun.ID)) {
+        this.rebuildHandoffsMap();
+      }
     }
     else {
       // no agent run, should have agentRunId

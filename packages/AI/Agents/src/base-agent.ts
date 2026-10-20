@@ -1454,19 +1454,20 @@ export class BaseAgent {
 
     /**
      * Substitutes `${media:<refId>}` placeholders in a string with the actual
-     * data URI (`data:<mime>;base64,<bytes>`) of the matching intercepted media item.
+     * data URI (`data:<mime>;base64,<bytes>`) or stored `fileId` (for `fileId`-only
+     * media items) of the matching intercepted media item.
      *
      * Used for payload / actionable-command resolution at the terminal step, where the
-     * LLM wants to embed image (or other media) data inline at a specific position in
-     * its structured output rather than as a trailing attachment card. The string
-     * variant of placeholder resolution; recursive walker lives in
-     * {@link resolveMediaPlaceholdersInPayload}.
+     * LLM wants to embed image (or other media) data or a stored file ID inline at a
+     * specific position in its structured output rather than only as a trailing
+     * attachment card. The string variant of placeholder resolution; recursive walker
+     * lives in {@link resolveMediaPlaceholdersInPayload}.
      *
      * This function only does substitution — it has no persistence side effects.
      *
      * @param text - The string that may contain media placeholders
-     * @returns String with placeholders resolved to actual data URIs (or the original
-     *          placeholder if the refId is unknown — defensive, shouldn't happen)
+     * @returns String with placeholders resolved to data URIs or stored file IDs (or the
+     *          original placeholder if the refId is unknown — defensive, shouldn't happen)
      * @private
      * @since 3.1.0
      */
@@ -17929,6 +17930,7 @@ The context is now within limits. Please retry your request with the recovered c
             EnvironmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
             ConversationDetailID: params.conversationDetailId ?? null,
             AgentRunID: this._agentRun?.ID ?? null,
+            ParentAgentHierarchy: this._agentHierarchy.length > 0 ? [...this._agentHierarchy] : undefined,
             // If THIS run was itself started by a finished graph, the graph it emits inherits that
             // depth + 1. Without this the chain restarts at zero on every hop and
             // MAX_REINVOKE_DEPTH never fires — a graph reinvoking an agent that emits a graph would

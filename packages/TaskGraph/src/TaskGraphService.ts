@@ -82,6 +82,12 @@ export type TaskGraphSubmitContext = {
     /** The agent run that emitted this graph, for provenance and `reinvoke` routing. */
     AgentRunID?: string | null;
     /**
+     * Root-first ancestor agent hierarchy (`[...parentAgentHierarchy, submittingAgentName]`) of the
+     * run that emitted this graph, persisted on the parent row so dispatched tasks inherit the
+     * hierarchy directly without walking ancestor runs in a loop.
+     */
+    ParentAgentHierarchy?: string[];
+    /**
      * How many continuation hops produced this graph. A graph submitted by an agent that was itself
      * re-invoked by a finished graph carries its parent's depth + 1.
      */
@@ -117,6 +123,12 @@ export type TaskGraphParentMetadata = {
      */
     failureSemantics?: 'block' | 'edges';
     submittedByAgentRunID: string | null;
+    /**
+     * Root-first ancestor agent hierarchy (`[...parentAgentHierarchy, submittingAgentName]`) of the
+     * submitting run, persisted so dispatched tasks inherit the hierarchy directly without walking
+     * ancestor runs in a loop.
+     */
+    parentAgentHierarchy?: string[];
     /**
      * Who the graph belongs to.
      *
@@ -200,6 +212,12 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
     try {
         const parsed = JSON.parse(raw) as Partial<TaskGraphParentMetadata>;
         if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_PARENT_METADATA };
+        const parentAgentHierarchy = Array.isArray(parsed.parentAgentHierarchy)
+            ? parsed.parentAgentHierarchy
+                .filter((name): name is string => typeof name === 'string')
+                .map((name) => name.trim())
+                .filter((name) => name.length > 0)
+            : undefined;
         return {
             ...DEFAULT_PARENT_METADATA,
             ...parsed,
@@ -215,6 +233,9 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
             // arbitrary string arriving from a hand edit should read as "unknown", not be echoed.
             continuationDeliveredAs: DELIVERY_OUTCOMES.has(parsed.continuationDeliveredAs as string)
                 ? parsed.continuationDeliveredAs
+                : undefined,
+            parentAgentHierarchy: parentAgentHierarchy && parentAgentHierarchy.length > 0
+                ? parentAgentHierarchy
                 : undefined,
         };
     } catch {
@@ -233,15 +254,23 @@ export function BuildTaskGraphParentInputPayload(args: {
     failureSemantics: NonNullable<TaskGraphParentMetadata['failureSemantics']>;
     submittedByAgentRunID: string | null;
     submittedByUserID: string | null;
+    parentAgentHierarchy?: string[];
     invocation?: { data?: unknown; context?: unknown } | null;
     startPaused?: boolean;
 }): Record<string, unknown> {
+    const parentAgentHierarchy = Array.isArray(args.parentAgentHierarchy)
+        ? args.parentAgentHierarchy
+            .filter((name): name is string => typeof name === 'string')
+            .map((name) => name.trim())
+            .filter((name) => name.length > 0)
+        : [];
     return {
         continuation: args.continuation,
         reinvokeDepth: args.reinvokeDepth,
         failureSemantics: args.failureSemantics,
         submittedByAgentRunID: args.submittedByAgentRunID,
         submittedByUserID: args.submittedByUserID,
+        ...(parentAgentHierarchy.length > 0 ? { parentAgentHierarchy } : {}),
         ...(args.invocation
             ? { invocation: { data: args.invocation.data, context: args.invocation.context } }
             : {}),
@@ -1648,6 +1677,7 @@ export class TaskGraphService {
             failureSemantics: spec.failureSemantics ?? 'block',
             submittedByAgentRunID: context.AgentRunID ?? null,
             submittedByUserID: context.ContextUser?.ID ?? null,
+            parentAgentHierarchy: context.ParentAgentHierarchy,
             invocation: sanitized.Envelope
                 ? { data: sanitized.Envelope.Data, context: sanitized.Envelope.Context }
                 : null,

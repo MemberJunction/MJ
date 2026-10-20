@@ -335,6 +335,8 @@ async function runDomChecksSafely(
 export interface RunRenderJobOptions extends RunJobCommonOptions {
     /** If true, skips re-running `RunLintGate` (used when the HTTP server pre-checks before streaming). */
     SkipLintGate?: boolean;
+    /** Optional pre-staged bundle directory; when provided, `RunRenderJob` reuses it and leaves cleanup to the caller. */
+    StagedRootDir?: string;
 }
 
 /**
@@ -366,15 +368,17 @@ export async function RunRenderJob(
     });
 
     const startMs = Date.now();
-    const staged = await StageRenderBundle(req.Bundle, {
-        TempRoot: options?.TempRoot,
-        Geometry: {
-            Width: req.Width,
-            Height: req.Height,
-            Fps: req.Fps,
-            DurationSeconds: req.DurationSeconds,
-        },
-    });
+    const staged = options?.StagedRootDir
+        ? { RootDir: options.StagedRootDir, Cleanup: async () => undefined }
+        : await StageRenderBundle(req.Bundle, {
+              TempRoot: options?.TempRoot,
+              Geometry: {
+                  Width: req.Width,
+                  Height: req.Height,
+                  Fps: req.Fps,
+                  DurationSeconds: req.DurationSeconds,
+              },
+          });
     try {
         if (!options?.SkipLintGate) {
             const check = await RunLintGate(req.Bundle, staged.RootDir, backend);

@@ -226,4 +226,15 @@ describe('BuildTaskGraphParentInputPayload — start-paused is written with the 
         const bag = BuildTaskGraphParentInputPayload(base);
         expect(bag.invocation).toBeUndefined();
     });
+
+    it('carries parentAgentHierarchy on the parent task payload and round-trips it via ParseTaskGraphParentMetadata (VS-QA-3 #9)', () => {
+        const bag = BuildTaskGraphParentInputPayload({
+            ...base,
+            parentAgentHierarchy: ['A', 'B', 'C'],
+        });
+        expect(bag.parentAgentHierarchy).toEqual(['A', 'B', 'C']);
+        const parsed = ParseTaskGraphParentMetadata(JSON.stringify(bag));
+        expect(parsed.parentAgentHierarchy).toEqual(['A', 'B', 'C']);
+    });
 });
+

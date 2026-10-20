@@ -438,8 +438,7 @@ describe('RunAIAgentResolver — FollowHandoffs & PubSub ordering', () => {
             ConversationDetailID: 'detail-sage',
             Message: 'Here is my analysis.',
             Steps: [],
-            // Simulate a GetAll() snapshot that captured the initial Message before recordRefusedHandoffOnSource mutated sageRun.Message
-            GetAll: () => ({ ID: 'run-sage', ConversationDetailID: 'detail-sage', Agent: 'Sage', Message: 'Here is my analysis.' }),
+            GetAll: () => ({ ID: 'run-sage', ConversationDetailID: 'detail-sage', Agent: 'Sage', Message: sageRun.Message }),
         };
         const handoffPayload = {
             targetAgentId: 'agent-director',

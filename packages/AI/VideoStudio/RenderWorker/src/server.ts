@@ -341,6 +341,7 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
         let timeoutTimer: NodeJS.Timeout | undefined;
         let heartbeatTimer: NodeJS.Timeout | undefined;
         let acquired = false;
+        let preStage: Awaited<ReturnType<typeof StageRenderBundle>> | undefined;
         try {
             await semaphore.Acquire(controller.signal);
             acquired = true;
@@ -351,7 +352,7 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
             }, preLintTimeoutMs);
             timeoutTimer.unref();
 
-            const preStage = await StageRenderBundle(body.Bundle, {
+            preStage = await StageRenderBundle(body.Bundle, {
                 TempRoot: tempRoot,
                 Geometry: {
                     Width: body.Width,
@@ -360,23 +361,19 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
                     DurationSeconds: body.DurationSeconds,
                 },
             });
-            try {
-                if (controller.signal.aborted) {
-                    throw new RenderWorkerError('Cancelled', 'Render job was cancelled.');
-                }
-                const check = await RunLintGate(body.Bundle, preStage.RootDir, backend);
-                if (controller.signal.aborted) {
-                    throw new RenderWorkerError('Cancelled', 'Render job was cancelled.');
-                }
-                if (check.BlockRender) {
-                    throw new RenderWorkerError(
-                        'LintBlocked',
-                        'Composition failed pre-render lint checks.',
-                        check.Issues,
-                    );
-                }
-            } finally {
-                await preStage.Cleanup();
+            if (controller.signal.aborted) {
+                throw new RenderWorkerError('Cancelled', 'Render job was cancelled.');
+            }
+            const check = await RunLintGate(body.Bundle, preStage.RootDir, backend);
+            if (controller.signal.aborted) {
+                throw new RenderWorkerError('Cancelled', 'Render job was cancelled.');
+            }
+            if (check.BlockRender) {
+                throw new RenderWorkerError(
+                    'LintBlocked',
+                    'Composition failed pre-render lint checks.',
+                    check.Issues,
+                );
             }
 
             clearTimeout(timeoutTimer);
@@ -412,7 +409,7 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
                         writeEvent({ Type: 'Progress', Progress: progress });
                     },
                     controller.signal,
-                    { SkipLintGate: true, TempRoot: tempRoot },
+                    { SkipLintGate: true, TempRoot: tempRoot, StagedRootDir: preStage.RootDir },
                 );
 
                 const videoId = storeVideo(renderResult.Video);
@@ -454,6 +451,9 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
             }
             if (timeoutTimer !== undefined) {
                 clearTimeout(timeoutTimer);
+            }
+            if (preStage !== undefined) {
+                await preStage.Cleanup();
             }
             req.removeListener('aborted', onDisconnect);
             res.removeListener('close', onDisconnect);

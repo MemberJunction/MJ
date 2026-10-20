@@ -190,12 +190,8 @@ export class RunAIAgentResolver extends ResolverBase {
 
         // Safely extract agent run data using GetAll() for proper serialization
         if (result.agentRun && typeof result.agentRun.GetAll === 'function') {
-            // Use GetAll() to get the full serialized object including extended properties,
-            // preserving any in-memory Message update (such as a refused handoff notice).
-            sanitized.agentRun = {
-                ...result.agentRun.GetAll(),
-                ...(result.agentRun.Message !== undefined ? { Message: result.agentRun.Message } : {}),
-            };
+            // Use GetAll() to get the full serialized object including extended properties
+            sanitized.agentRun = result.agentRun.GetAll();
         }
         else {
             // shouldn't ever get here

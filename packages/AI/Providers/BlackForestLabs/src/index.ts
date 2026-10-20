@@ -518,8 +518,8 @@ export class FLUXImageGenerator extends BaseImageGenerator {
 
     /**
      * Poll for task completion using BFL's returned `polling_url` (or `${this._baseUrl}/get_result?id=${id}`
-     * when `polling_url` is omitted). Only an `https://` URL whose hostname ends in `.bfl.ai` is polled.
-     * The signal aborts the poll in flight and the wait between polls.
+     * when `polling_url` is omitted). Only an `https://` URL whose hostname ends in `.bfl.ai` or matches the
+     * configured `_baseUrl` origin is polled. The signal aborts the poll in flight and the wait between polls.
      */
     private async pollForResult(
         task: { id: string; polling_url?: string },
@@ -558,7 +558,7 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     /**
      * Validate and resolve the polling URL for a submitted task. Falls back to
      * `${this._baseUrl}/get_result?id=${id}` only when `polling_url` is missing.
-     * Any non-`https:` or non-`.bfl.ai` URL throws without sending the API key.
+     * Any non-`https:` URL or host outside `.bfl.ai` and the configured `_baseUrl` origin throws without sending the API key.
      */
     private resolvePollingUrl(task: { id: string; polling_url?: string }): string {
         const candidate = task.polling_url ?? `${this._baseUrl}/get_result?id=${task.id}`;

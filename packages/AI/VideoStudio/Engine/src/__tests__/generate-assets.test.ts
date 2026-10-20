@@ -25,6 +25,7 @@ import {
     ValidateVideoGenerationSpec,
     type VideoGenerationSpec,
 } from '@memberjunction/video-studio-core';
+import { RequestRegeneration } from '../gates.js';
 import {
     GenerateRequestedAssets,
     type GenerateRequestedAssetsContext,
@@ -1623,6 +1624,7 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
             AllowGeneratedVideo: true,
             AllowSyntheticPeople: false,
             MaxGenerationCostPerRun: 10,
+            AvoidSubjects: [],
         });
         vi.spyOn(AIEngine.Instance, 'ModelCosts', 'get').mockReturnValue([
             {
@@ -1714,6 +1716,69 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
         expect(imgPass.Spec.Assets.Generate![0].Cost).toBeCloseTo(9, 5);
         expect(imgPass.Spec.Assets.Generate![1].Status).toBe('Blocked');
         expect(imgPass.Spec.Assets.Generate![1].BlockedReason).toContain('SpendCapReached');
+    });
+
+    it('12. Spend cap counts regenerated assets (cap $10, a $9 asset is generated then RequestRegeneration removes it from Approved, and the next $9 call is refused)', async () => {
+        vi.spyOn(BrandKitEngine.Instance, 'GetEffectiveGenerationPolicy').mockReturnValue({
+            AllowGeneratedImages: true,
+            AllowGeneratedVideo: true,
+            AllowSyntheticPeople: false,
+            MaxGenerationCostPerRun: 10,
+            AvoidSubjects: [],
+        });
+        vi.spyOn(AIEngine.Instance, 'ModelCosts', 'get').mockReturnValue([
+            {
+                ID: 'cost-imagen-per-img-9',
+                ModelID: 'model-imagen-4',
+                VendorID: 'vendor-google',
+                Status: 'Active',
+                ProcessingType: 'Realtime',
+                UnitTypeID: UNIT_TYPE_PER_IMAGE_ID,
+                UnitType: 'Per Image',
+                InputPricePerUnit: 0,
+                OutputPricePerUnit: 9, // $9.00 per image
+                Currency: 'USD',
+            } as unknown as MJAIModelCostEntity,
+        ]);
+
+        const spec = makeFixtureSpec();
+        spec.Assets.Generate = [
+            {
+                Key: 'gen-ill',
+                Kind: 'Image',
+                Purpose: 'Card illustration',
+                Prompt: 'Abstract geometric illustration',
+                ReferenceKeys: [],
+            },
+        ];
+
+        const pass1Runners = createFakeRunners({ imageCost: 9 });
+        const pass1 = await GenerateRequestedAssets(spec, {
+            ContextUser: mockUser,
+            ImageRunner: pass1Runners.imageRunner,
+            VideoRunner: pass1Runners.videoRunner,
+        });
+
+        expect(pass1Runners.imageCalls).toHaveLength(1);
+        expect(pass1.Spec.Assets.Generate![0].Status).toBe('Generated');
+        expect(SumRecordedGenerationCost(pass1.Spec)).toBeCloseTo(9, 5);
+
+        const regen = RequestRegeneration(pass1.Spec, 'gen-ill', 2);
+        expect(regen.Allowed).toBe(true);
+        expect(regen.Spec.Assets?.Approved?.some((a) => a.Key === 'gen-ill')).toBe(false);
+        expect(regen.Spec.Assets?.Generate?.[0].Cost).toBeCloseTo(9, 5);
+        expect(SumRecordedGenerationCost(regen.Spec)).toBeCloseTo(9, 5);
+
+        const pass2Runners = createFakeRunners({ imageCost: 9 });
+        const pass2 = await GenerateRequestedAssets(regen.Spec as VideoGenerationSpec, {
+            ContextUser: mockUser,
+            ImageRunner: pass2Runners.imageRunner,
+            VideoRunner: pass2Runners.videoRunner,
+        });
+
+        expect(pass2Runners.imageCalls).toHaveLength(0);
+        expect(pass2.Spec.Assets.Generate![0].Status).toBe('Blocked');
+        expect(pass2.Spec.Assets.Generate![0].BlockedReason).toContain('SpendCapReached');
     });
 });
 

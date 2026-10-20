@@ -205,8 +205,7 @@ describe('VS-CON-7: TaskGraphAgentRunner preset resolution', () => {
     });
 });
 
-describe('VS-INV-2b: TaskGraphAgentRunner parentAgentHierarchy reconstruction', () => {
-    const RUN_A_ID = '11111111-1111-4111-8111-111111111111';
+describe('VS-INV-2b / VS-QA-3 #9: TaskGraphAgentRunner parentAgentHierarchy from submitted task', () => {
     const RUN_B_ID = '22222222-2222-4222-8222-222222222222';
     const RUN_C_ID = '33333333-3333-4333-8333-333333333333';
 
@@ -220,17 +219,26 @@ describe('VS-INV-2b: TaskGraphAgentRunner parentAgentHierarchy reconstruction', 
         });
     });
 
-    it('reconstructs root-first parentAgentHierarchy for a three-level chain (A -> B -> submitting run C)', async () => {
-        mockRunView
-            .mockResolvedValueOnce({
-                Success: true,
-                Results: [{ ID: RUN_B_ID, ParentRunID: RUN_A_ID, Agent: 'B' }],
-            })
-            .mockResolvedValueOnce({
-                Success: true,
-                Results: [{ ID: RUN_A_ID, ParentRunID: null, Agent: 'A' }],
-            });
+    it('reads root-first ParentAgentHierarchy carried from the submitted task without running RunView in a loop (VS-QA-3 #9)', async () => {
+        const runner = new TaskGraphAgentRunner();
+        const params = makeParams(
+            {
+                SubmittingAgentRunID: RUN_C_ID,
+                ParentAgentHierarchy: ['A', 'B', 'C'],
+            },
+            'parent-cfg-1',
+            { ID: RUN_C_ID, Agent: 'C', ParentRunID: RUN_B_ID },
+        );
 
+        const result = await runner.RunAgentForTask(params);
+
+        expect(result.Success).toBe(true);
+        expect(mockRunView).not.toHaveBeenCalled();
+        expect(mockRunAgent).toHaveBeenCalledTimes(1);
+        expect(mockRunAgent.mock.calls[0][0].parentAgentHierarchy).toEqual(['A', 'B', 'C']);
+    });
+
+    it('falls back to the loaded parentRun agent name when ParentAgentHierarchy is omitted, with zero RunView calls', async () => {
         const runner = new TaskGraphAgentRunner();
         const params = makeParams(
             { SubmittingAgentRunID: RUN_C_ID },
@@ -241,32 +249,12 @@ describe('VS-INV-2b: TaskGraphAgentRunner parentAgentHierarchy reconstruction', 
         const result = await runner.RunAgentForTask(params);
 
         expect(result.Success).toBe(true);
-        expect(mockRunView).toHaveBeenCalledTimes(2);
-        expect(mockRunView).toHaveBeenNthCalledWith(
-            1,
-            {
-                EntityName: 'MJ: AI Agent Runs',
-                ExtraFilter: `ID='${RUN_B_ID}'`,
-                Fields: ['ID', 'ParentRunID', 'Agent'],
-                ResultType: 'simple',
-            },
-            params.ContextUser,
-        );
-        expect(mockRunView).toHaveBeenNthCalledWith(
-            2,
-            {
-                EntityName: 'MJ: AI Agent Runs',
-                ExtraFilter: `ID='${RUN_A_ID}'`,
-                Fields: ['ID', 'ParentRunID', 'Agent'],
-                ResultType: 'simple',
-            },
-            params.ContextUser,
-        );
+        expect(mockRunView).not.toHaveBeenCalled();
         expect(mockRunAgent).toHaveBeenCalledTimes(1);
-        expect(mockRunAgent.mock.calls[0][0].parentAgentHierarchy).toEqual(['A', 'B', 'C']);
+        expect(mockRunAgent.mock.calls[0][0].parentAgentHierarchy).toEqual(['C']);
     });
 
-    it('passes undefined parentAgentHierarchy and performs no RunView reads when there is no parentRun', async () => {
+    it('passes undefined parentAgentHierarchy and performs no RunView reads when there is no parentRun and no ParentAgentHierarchy', async () => {
         const runner = new TaskGraphAgentRunner();
         const result = await runner.RunAgentForTask(
             makeParams({ SubmittingAgentRunID: undefined }),
@@ -276,79 +264,6 @@ describe('VS-INV-2b: TaskGraphAgentRunner parentAgentHierarchy reconstruction', 
         expect(mockRunView).not.toHaveBeenCalled();
         expect(mockRunAgent).toHaveBeenCalledTimes(1);
         expect(mockRunAgent.mock.calls[0][0].parentAgentHierarchy).toBeUndefined();
-    });
-
-    it('fails soft on a read failure mid-walk: passes partial list, logs one LogError, and does not throw', async () => {
-        mockRunView
-            .mockResolvedValueOnce({
-                Success: true,
-                Results: [{ ID: RUN_B_ID, ParentRunID: RUN_A_ID, Agent: 'B' }],
-            })
-            .mockResolvedValueOnce({
-                Success: false,
-                ErrorMessage: 'Transient database read failure',
-                Results: [],
-            });
-
-        const runner = new TaskGraphAgentRunner();
-        const result = await runner.RunAgentForTask(
-            makeParams(
-                { SubmittingAgentRunID: RUN_C_ID },
-                'parent-cfg-1',
-                { ID: RUN_C_ID, Agent: 'C', ParentRunID: RUN_B_ID },
-            ),
-        );
-
-        expect(result.Success).toBe(true);
-        expect(mockRunView).toHaveBeenCalledTimes(2);
-        expect(mockLogError).toHaveBeenCalledTimes(1);
-        expect(mockLogError.mock.calls[0][0]).toContain('Transient database read failure');
-        expect(mockRunAgent).toHaveBeenCalledTimes(1);
-        expect(mockRunAgent.mock.calls[0][0].parentAgentHierarchy).toEqual(['B', 'C']);
-    });
-
-    it('stops walking after 25 hops on a 30-deep ancestor chain', async () => {
-        // Build 30 ancestor runs above the submitting run: hop i (1..30) has ID and points to hop i+1.
-        const makeHopUuid = (hopIndex: number): string =>
-            `00000000-0000-4000-8000-${String(hopIndex).padStart(12, '0')}`;
-
-        mockRunView.mockImplementation(async (rvParams: { ExtraFilter: string }) => {
-            const match = /^ID='([^']+)'$/.exec(rvParams.ExtraFilter);
-            const currentId = match?.[1] ?? '';
-            const currentHop = Number.parseInt(currentId.slice(-12), 10);
-            const nextParentId = currentHop < 30 ? makeHopUuid(currentHop + 1) : null;
-            return {
-                Success: true,
-                Results: [
-                    {
-                        ID: currentId,
-                        ParentRunID: nextParentId,
-                        Agent: `Ancestor-${currentHop}`,
-                    },
-                ],
-            };
-        });
-
-        const runner = new TaskGraphAgentRunner();
-        const result = await runner.RunAgentForTask(
-            makeParams(
-                { SubmittingAgentRunID: RUN_C_ID },
-                'parent-cfg-1',
-                {
-                    ID: RUN_C_ID,
-                    Agent: 'SubmittingAgent',
-                    ParentRunID: makeHopUuid(1),
-                },
-            ),
-        );
-
-        expect(result.Success).toBe(true);
-        expect(mockRunView).toHaveBeenCalledTimes(25);
-        const passedHierarchy: string[] = mockRunAgent.mock.calls[0][0].parentAgentHierarchy;
-        expect(passedHierarchy).toHaveLength(26);
-        expect(passedHierarchy[0]).toBe('Ancestor-25');
-        expect(passedHierarchy[24]).toBe('Ancestor-1');
-        expect(passedHierarchy[25]).toBe('SubmittingAgent');
     });
 });
 

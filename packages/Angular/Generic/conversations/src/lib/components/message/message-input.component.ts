@@ -1248,36 +1248,60 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     return this.PickerTargetAgentId;
   }
 
+  private _cachedRouteAgentKey?: string;
+  private _cachedRouteAgent: { ID: string; Name: string; IsConversationManager: boolean } | null = null;
+
   /**
    * Agent that will receive the next turn based on an explicit `@agent` draft chip
    * or continuity / default routing ({@link PickerTargetAgentId}).
+   * Memoized by message count and routing inputs so template evaluation does not
+   * scan `ConversationHistory` on every change-detection cycle.
    */
   public get CurrentRouteAgent(): { ID: string; Name: string; IsConversationManager: boolean } | null {
-    const targetId = this.PickerTargetAgentId;
+    if (this.mentionedAgentId === undefined) {
+      const chips = this.InputBox?.getMentionChipsData() || [];
+      this.mentionedAgentId = chips.find(chip => chip.type === 'agent')?.id ?? null;
+    }
+    const history = this.ConversationHistory ?? [];
+    const lastRow = history.length > 0 ? history[history.length - 1] : null;
     const manager = this.ConverationManagerAgent;
+    const floorMs = this.AgentHistoryFrom ? new Date(this.AgentHistoryFrom).getTime() : '';
+    const allowedKey = this.AllowedAgentIDs ? this.AllowedAgentIDs.join(',') : '';
+    const cacheKey = `${history.length}|${lastRow?.ID ?? ''}|${lastRow?.AgentID ?? ''}|${this.mentionedAgentId ?? ''}|${this.ConversationDefaultAgentId ?? ''}|${this.DefaultAgentId ?? ''}|${manager?.ID ?? ''}|${floorMs}|${allowedKey}`;
+    if (this._cachedRouteAgentKey === cacheKey) {
+      return this._cachedRouteAgent ?? null;
+    }
+
+    const targetId = this.PickerTargetAgentId;
+    let resolved: { ID: string; Name: string; IsConversationManager: boolean } | null = null;
     if (!targetId) {
       if (manager?.ID) {
-        return { ID: manager.ID, Name: manager.Name || 'Sage', IsConversationManager: true };
+        resolved = { ID: manager.ID, Name: manager.Name || 'Sage', IsConversationManager: true };
       }
-      return null;
+    } else if (manager?.ID && UUIDsEqual(targetId, manager.ID)) {
+      resolved = { ID: manager.ID, Name: manager.Name || 'Sage', IsConversationManager: true };
+    } else {
+      const found = AIEngineBase.Instance.ReadableAgents?.find(a => UUIDsEqual(a.ID, targetId));
+      if (found) {
+        resolved = { ID: found.ID, Name: found.Name || 'Agent', IsConversationManager: false };
+      } else {
+        const chips = this.InputBox?.getMentionChipsData() || [];
+        const chipMatch = chips.find(c => c.type === 'agent' && UUIDsEqual(c.id, targetId));
+        if (chipMatch) {
+          resolved = { ID: targetId, Name: chipMatch.name || 'Agent', IsConversationManager: false };
+        } else {
+          const lastReply = this.findLastNonSageReply();
+          if (lastReply?.AgentID && UUIDsEqual(lastReply.AgentID, targetId)) {
+            resolved = { ID: targetId, Name: lastReply.Agent || 'Agent', IsConversationManager: false };
+          } else {
+            resolved = { ID: targetId, Name: 'Agent', IsConversationManager: false };
+          }
+        }
+      }
     }
-    if (manager?.ID && UUIDsEqual(targetId, manager.ID)) {
-      return { ID: manager.ID, Name: manager.Name || 'Sage', IsConversationManager: true };
-    }
-    const found = AIEngineBase.Instance.ReadableAgents?.find(a => UUIDsEqual(a.ID, targetId));
-    if (found) {
-      return { ID: found.ID, Name: found.Name || 'Agent', IsConversationManager: false };
-    }
-    const chips = this.InputBox?.getMentionChipsData() || [];
-    const chipMatch = chips.find(c => c.type === 'agent' && UUIDsEqual(c.id, targetId));
-    if (chipMatch) {
-      return { ID: targetId, Name: chipMatch.name || 'Agent', IsConversationManager: false };
-    }
-    const lastReply = this.findLastNonSageReply();
-    if (lastReply?.AgentID && UUIDsEqual(lastReply.AgentID, targetId)) {
-      return { ID: targetId, Name: lastReply.Agent || 'Agent', IsConversationManager: false };
-    }
-    return { ID: targetId, Name: 'Agent', IsConversationManager: false };
+    this._cachedRouteAgentKey = cacheKey;
+    this._cachedRouteAgent = resolved;
+    return resolved;
   }
 
   public get CurrentRouteAgentName(): string {
@@ -2671,6 +2695,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     await this.processMessageThroughAgent(messageDetail, mentionResult, branchId);
   }
 
+  private _cachedContinuityReplyKey?: string;
+  private _cachedContinuityReply: MJConversationDetailEntity | null = null;
+
   /**
    * The newest reply from an agent other than the conversation manager — among the replies a
    * turn may read, so from {@link AgentHistoryFrom} onward when it's set. Resets to null when
@@ -2678,14 +2705,26 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * received a handback from another agent.
    */
   private findLastNonSageReply(): MJConversationDetailEntity | null {
-    return FindContinuityAgentMessage(
-      this.ConversationHistory,
-      this.ConverationManagerAgent?.ID ?? null,
+    const history = this.ConversationHistory ?? [];
+    const lastRow = history.length > 0 ? history[history.length - 1] : null;
+    const managerId = this.ConverationManagerAgent?.ID ?? null;
+    const floorMs = this.AgentHistoryFrom ? new Date(this.AgentHistoryFrom).getTime() : '';
+    const cacheKey = `${history.length}|${lastRow?.ID ?? ''}|${lastRow?.AgentID ?? ''}|${managerId ?? ''}|${floorMs}`;
+    if (this._cachedContinuityReplyKey === cacheKey) {
+      return this._cachedContinuityReply ?? null;
+    }
+
+    const reply = FindContinuityAgentMessage(
+      history,
+      managerId,
       {
         conversationManagerName: this.ConverationManagerAgent?.Name ?? 'Sage',
         isWithinFloor: msg => this.isWithinHistoryFloor(msg),
       }
     );
+    this._cachedContinuityReplyKey = cacheKey;
+    this._cachedContinuityReply = reply;
+    return reply;
   }
 
   /**
@@ -3565,7 +3604,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     let previousPayload: Record<string, unknown> | null = null;
     let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
-    let previousConfigurationId: string | undefined = undefined;
 
     // Use targetArtifactVersionId if specified (from intent check).
     // Resolved by ID against the database, not against artifactsByDetailId: the intent check
@@ -3586,17 +3624,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       }
     }
 
-    // Extract configuration preset from the User message that @mentioned this agent
-    // Uses the shared helper method in the agent service
-    previousConfigurationId = await this.agentService.FindConfigurationPresetForAgent(conversationId, agentId, branchId);
-
-    // Fall back to resolving a preset for the continued agent via ResolveConversationAgentPreset.
+    // Resolve a preset for the continued agent via ResolveConversationAgentPreset (which checks
+    // @mention pins first, then user settings, then the agent's default preset).
     // The header mode-picker selection (this.AgentConfigurationPresetId) is used only when it
     // belongs to this agent (preset.AgentID === agentId); otherwise the agent's own default
     // preset is resolved so a pre-handoff picker selection from another agent never leaks.
-    if (!previousConfigurationId) {
-      previousConfigurationId = await this.resolveContinuationPresetForAgent(conversationId, agentId, branchId);
-    }
+    const previousConfigurationId = await this.resolveContinuationPresetForAgent(conversationId, agentId, branchId);
 
     // Fall back to searching through all agent messages for an artifact
     // This ensures payload continuity even after clarifying exchanges without artifacts

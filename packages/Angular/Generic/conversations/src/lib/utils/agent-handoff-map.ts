@@ -8,7 +8,13 @@ import {
   MJAIAgentRunEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { CleanAndParseJSON, IndexByUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import {
+  CleanAndParseJSON,
+  EscapeSQLString,
+  IndexByUUID,
+  NormalizeUUID,
+  UUIDsEqual,
+} from '@memberjunction/global';
 import {
   AgentHandoffParticipant,
   AgentHandoffStatus,
@@ -82,7 +88,7 @@ export async function LoadHandoffStepsForRuns(
   }
   try {
     const rv = RunView.FromMetadataProvider(provider);
-    const quotedIds = uniqueIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+    const quotedIds = uniqueIds.map(id => `'${EscapeSQLString(id)}'`).join(',');
     const result = await rv.RunView<HandoffRunStepRow>({
       EntityName: 'MJ: AI Agent Run Steps',
       ExtraFilter: `StepType = 'Handoff' AND AgentRunID IN (${quotedIds})`,

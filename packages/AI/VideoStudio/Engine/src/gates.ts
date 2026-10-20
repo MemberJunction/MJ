@@ -1206,9 +1206,24 @@ export function RequestRegeneration(
     }
 
     const stillKey = `${trimmedKey}-still`;
+    let removedCost = 0;
+    for (const a of approved) {
+        if (a?.Key === trimmedKey || (a?.Key === stillKey && a.Provenance === 'Generated')) {
+            const c = a?.Generation?.Cost;
+            if (typeof c === 'number' && Number.isFinite(c) && c > 0) {
+                removedCost += c;
+            }
+        }
+    }
     cloned.Assets!.Approved = approved.filter(
         (a) => a?.Key !== trimmedKey && !(a?.Key === stillKey && a.Provenance === 'Generated'),
     );
+    if (removedCost > 0) {
+        request.Cost =
+            (typeof request.Cost === 'number' && Number.isFinite(request.Cost) && request.Cost >= 0
+                ? request.Cost
+                : 0) + removedCost;
+    }
     request.Status = 'Pending';
     delete request.BlockedReason;
     request.RegenerationCount = currentCount + 1;

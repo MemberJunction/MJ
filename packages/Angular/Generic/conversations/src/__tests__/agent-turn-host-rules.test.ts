@@ -86,6 +86,7 @@ interface Harness {
     sent: FakeDetail[];
     processMessage: Fn;
     invokeSubAgent: Fn;
+    findPreset: Fn;
     findLatestOutput: Fn;
     nameConversation: Fn;
     addTask: Fn;
@@ -111,6 +112,7 @@ function buildHarness(): Harness {
 
     const processMessage = vi.fn(async () => chatResult('run-manager'));
     const invokeSubAgent = vi.fn(async () => chatResult('run-agent'));
+    const findPreset = vi.fn(async () => undefined);
     const findLatestOutput = vi.fn(async () => null);
     const addTask = vi.fn(() => 'task-1');
 
@@ -157,7 +159,7 @@ function buildHarness(): Harness {
         agentService: {
             ProcessMessage: processMessage,
             invokeSubAgent,
-            FindConfigurationPresetForAgent: vi.fn(async () => undefined),
+            FindConfigurationPresetForAgent: findPreset,
             FindLatestAgentOutputVersion: findLatestOutput,
         },
         activeTasks: {
@@ -176,7 +178,7 @@ function buildHarness(): Harness {
     }).routeMessage.bind(component);
 
     return {
-        component, created, before, after, sent, processMessage, invokeSubAgent, findLatestOutput,
+        component, created, before, after, sent, processMessage, invokeSubAgent, findPreset, findLatestOutput,
         nameConversation, addTask, hostRows,
         set: (values) => Object.assign(fields, values),
         route: (message, mentions = NO_MENTIONS, isFirstMessage = false) => routeMessage(message, mentions, isFirstMessage),
@@ -416,6 +418,22 @@ describe('MessageInputComponent — host rules for an agent turn', () => {
             await h.route(userMessage('continue with research'));
 
             expect(h.invokeSubAgent.mock.calls[0][10]).toBe('preset-research-fast');
+        });
+
+        it('resolves the continuation preset via ResolveConversationAgentPreset without also calling FindConfigurationPresetForAgent', async () => {
+            const researchPreset = { ID: 'preset-research', AgentID: RESEARCH.ID, AIConfigurationID: 'cfg-research', Status: 'Active', IsDefault: true };
+            vi.spyOn(AIEngineBase.Instance, 'AgentConfigurations', 'get').mockReturnValue([researchPreset] as never);
+            vi.spyOn(AIEngineBase.Instance, 'GetDefaultAgentConfigurationPreset').mockReturnValue(researchPreset as never);
+            vi.spyOn(AIEngineBase.Instance, 'GetAgentConfigurationPresets').mockReturnValue([researchPreset] as never);
+
+            h.set({
+                ConversationHistory: [aiReply(RESEARCH.ID)],
+            });
+
+            await h.route(userMessage('continue with research'));
+
+            expect(h.findPreset).not.toHaveBeenCalled();
+            expect(h.invokeSubAgent.mock.calls[0][10]).toBe('preset-research');
         });
     });
 

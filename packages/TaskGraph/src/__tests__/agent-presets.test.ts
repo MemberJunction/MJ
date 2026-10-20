@@ -206,7 +206,11 @@ describe('VS-CON-7: TaskGraph Agent node presets', () => {
             );
 
             const internals = dispatcher as unknown as {
-                graphContext: () => Promise<{ Depth: number; SubmittingAgentRunID: string | null }>;
+                graphContext: () => Promise<{
+                    Depth: number;
+                    SubmittingAgentRunID: string | null;
+                    ParentAgentHierarchy?: string[];
+                }>;
                 runAgentNode: (
                     task: MJTaskEntity,
                     provider: IMetadataProvider,
@@ -217,6 +221,7 @@ describe('VS-CON-7: TaskGraph Agent node presets', () => {
             vi.spyOn(internals, 'graphContext').mockResolvedValue({
                 Depth: 1,
                 SubmittingAgentRunID: 'parent-run-1',
+                ParentAgentHierarchy: ['RootAgent', 'ParentAgent'],
             });
 
             const task = {
@@ -241,6 +246,7 @@ describe('VS-CON-7: TaskGraph Agent node presets', () => {
             const passedParams: TaskAgentRunParams = runAgentForTask.mock.calls[0][0];
             expect(passedParams.ConfigurationPresetName).toBe('High');
             expect(passedParams.SubmittingAgentRunID).toBe('parent-run-1');
+            expect(passedParams.ParentAgentHierarchy).toEqual(['RootAgent', 'ParentAgent']);
         });
     });
 });

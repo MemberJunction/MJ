@@ -225,11 +225,13 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
     this.cdr.markForCheck();
   }
 
+  private static readonly POSTER_EXPIRY_MARGIN_MS = 60_000;
+
   private isCachedPosterExpired(): boolean {
     if (this._cachedPosterExpiresAtMs == null) {
       return false;
     }
-    return Date.now() >= this._cachedPosterExpiresAtMs;
+    return Date.now() >= this._cachedPosterExpiresAtMs - MJStorageMediaPlayerComponent.POSTER_EXPIRY_MARGIN_MS;
   }
 
   /**

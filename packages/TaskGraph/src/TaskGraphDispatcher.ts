@@ -271,6 +271,7 @@ type TaskBodyOutcome = {
 type GraphContext = {
     Depth: number;
     SubmittingAgentRunID: string | null;
+    ParentAgentHierarchy?: string[];
     /**
      * The submitting invocation's `data` / `context` — an input mapping's roots of the same names,
      * as in the in-run walker (R3-3). Empty when the graph was submitted without one.
@@ -1822,6 +1823,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // The graph's own row carries the run that submitted it and the invocation it was
                 // submitted with. One load answers all three, which is why they are resolved together.
                 SubmittingAgentRunID: parent.AgentRunID,
+                ParentAgentHierarchy: meta.parentAgentHierarchy,
                 Invocation: { data: meta.invocation?.data, context: meta.invocation?.context },
             };
         } catch (e) {
@@ -3691,6 +3693,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 DependencyOutputs: dependencyOutputs,
                 ContinuationDepth: graphContext.Depth,
                 SubmittingAgentRunID: graphContext.SubmittingAgentRunID,
+                ...(graphContext.ParentAgentHierarchy ? { ParentAgentHierarchy: graphContext.ParentAgentHierarchy } : {}),
                 Provider: provider,
                 ContextUser: this.contextUser,
             }), agentInput);
@@ -3850,6 +3853,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             DependencyOutputs: dependencyOutputs,
             ContinuationDepth: context.Depth,
             SubmittingAgentRunID: context.SubmittingAgentRunID,
+            ...(context.ParentAgentHierarchy ? { ParentAgentHierarchy: context.ParentAgentHierarchy } : {}),
             ...(presetName ? { ConfigurationPresetName: presetName } : {}),
             Provider: provider,
             ContextUser: this.contextUser,

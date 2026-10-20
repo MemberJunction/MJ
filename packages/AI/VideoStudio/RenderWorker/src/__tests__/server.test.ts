@@ -702,5 +702,45 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
         expect(events2.some((e) => e.Type === 'Result')).toBe(true);
         expect(checkRes.status).toBe(200);
     });
+
+    it('stages the bundle once in /render and reuses the same staged folder for RunLintGate and RunRenderJob (VS-QA-3 #11)', async () => {
+        const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-vs-single-stage-'));
+        try {
+            const seenDirs: string[] = [];
+            const backend = new FakeRenderBackend({ StepDelayMs: 1 });
+            const origLint = backend.Lint.bind(backend);
+            const origRender = backend.Render.bind(backend);
+            backend.Lint = async (rootDir, entryFile) => {
+                seenDirs.push(rootDir);
+                return origLint(rootDir, entryFile);
+            };
+            backend.Render = async (job, onProgress, signal) => {
+                seenDirs.push(job.RootDir);
+                return origRender(job, onProgress, signal);
+            };
+
+            const server = CreateRenderWorkerServer({
+                Backend: backend,
+                TempRoot: tempRoot,
+            });
+            serversToClose.push(server);
+            const port = await server.Listen(0);
+
+            const res = await fetch(`http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Render}`, {
+                method: 'POST',
+                body: JSON.stringify(createValidRenderRequest()),
+            });
+            expect(res.status).toBe(200);
+            const events = await parseNdjsonStream(res);
+            expect(events.some((e) => e.Type === 'Result')).toBe(true);
+
+            expect(seenDirs).toHaveLength(2);
+            expect(seenDirs[0]).toBe(seenDirs[1]);
+            expect(await fs.readdir(tempRoot)).toEqual([]);
+        } finally {
+            await fs.rm(tempRoot, { recursive: true, force: true });
+        }
+    });
 });
+
 

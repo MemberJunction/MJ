@@ -1,5 +1,5 @@
 import '@angular/compiler';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { MJConversationDetailEntity, MJAIAgentConfigurationEntity } from '@memberjunction/core-entities';
@@ -8,6 +8,7 @@ import {
   BuildHandoffsByDetailId,
   DeriveHandoffStatus,
   FindHandoffTargetDetail,
+  LoadHandoffStepsForRuns,
   LookupHandoffByDetailId,
   ResolveHandedOffFromForMessage,
   type HandoffRunStepRow,
@@ -19,6 +20,8 @@ import {
   type MessageHandoffInfo,
 } from '../lib/components/message/agent-handoff-card.component';
 import { MessageItemComponent } from '../lib/components/message/message-item.component';
+import { ConversationChatAreaComponent } from '../lib/components/conversation/conversation-chat-area.component';
+import { MessageInputComponent } from '../lib/components/message/message-input.component';
 
 const AGENTS = [
   { ID: '11111111-1111-4111-8111-111111111111', Name: 'Sage', IconClass: 'fa-solid fa-sparkles', LogoURL: null },
@@ -489,4 +492,154 @@ describe('MessageItemComponent handoff integration & prefers-reduced-motion CSS'
     expect(sparkRuleMatch).not.toBeNull();
     expect(sparkRuleMatch?.[1]).toContain('animation: none');
   });
+
+  it('LoadHandoffStepsForRuns uses EscapeSQLString (stripping null bytes and escaping quotes) rather than inline quote regex', async () => {
+    let capturedFilter = '';
+    const fakeProvider = {
+      RunView: async (params: { ExtraFilter?: string }) => {
+        capturedFilter = params.ExtraFilter ?? '';
+        return { Success: true, Results: [] };
+      },
+    };
+    await LoadHandoffStepsForRuns(
+      fakeProvider as unknown as Parameters<typeof LoadHandoffStepsForRuns>[0],
+      ["run\0'1"],
+    );
+    expect(capturedFilter).toBe("StepType = 'Handoff' AND AgentRunID IN ('run''1')");
+
+    const mapSrc = readFileSync(resolve(__dirname, '../lib/utils/agent-handoff-map.ts'), 'utf8');
+    expect(mapSrc).toContain('EscapeSQLString');
+    expect(mapSrc).not.toContain(".replace(/'/g");
+  });
+
+  it('OnMessageSent rebuilds HandoffsByDetailId only when a new message is added, not on in-place progress updates (VS-QA-3 #10)', async () => {
+    const rebuildHandoffsMap = vi.fn();
+    const component = Object.create(ConversationChatAreaComponent.prototype) as ConversationChatAreaComponent;
+    const msg1 = detail({
+      ID: '11111111-1111-4111-8111-000000000001',
+      ConversationID: 'conv-1',
+      Status: 'In-Progress',
+      Message: '⏳ Starting...',
+    });
+
+    Object.assign(component as unknown as Record<string, unknown>, {
+      ConversationId: 'conv-1',
+      messages: [],
+      InProgressMessageIds: [],
+      initialDraftSnapshots: new Map(),
+      draftStore: { ClearDraft: vi.fn() },
+      windowStore: { ApplyLocalDetail: vi.fn() },
+      streamingService: { GetRecentCompletion: vi.fn(() => undefined) },
+      cdr: { detectChanges: vi.fn() },
+      nameForkFromFirstSend: vi.fn(),
+      acceptRowForOpenView: () => true,
+      isActiveConversation: (id: string) => id === 'conv-1',
+      ensureCurrentUserInAvatarMap: vi.fn(),
+      resetComponentState: vi.fn(),
+      loadAttachmentsForMessage: vi.fn(async () => undefined),
+      followTranscript: vi.fn(),
+      rebuildHandoffsMap,
+    });
+
+    await component.OnMessageSent(msg1);
+    expect(rebuildHandoffsMap).toHaveBeenCalledTimes(1);
+
+    const updatedMsg1 = detail({
+      ID: '11111111-1111-4111-8111-000000000001',
+      ConversationID: 'conv-1',
+      Status: 'In-Progress',
+      Message: '⏳ Step 2...',
+    });
+    await component.OnMessageSent(updatedMsg1);
+    expect(rebuildHandoffsMap).toHaveBeenCalledTimes(1);
+  });
+
+  it('memoizes CurrentOwnerAgent and CurrentRouteAgent by message count (VS-QA-3 #10)', () => {
+    const resolveHandoffAgentMeta = vi.fn((id: string) => ({
+      ID: id,
+      Name: 'Research Agent',
+      IconClass: null,
+      LogoURL: null,
+    }));
+    const chatArea = Object.create(ConversationChatAreaComponent.prototype) as ConversationChatAreaComponent;
+    const messages: MJConversationDetailEntity[] = [
+      detail({
+        ID: '11111111-1111-4111-8111-000000000001',
+        Role: 'AI',
+        AgentID: '22222222-2222-4222-8222-222222222222',
+        Agent: 'Research Agent',
+        __mj_CreatedAt: new Date('2026-10-19T12:00:00Z'),
+      }),
+    ];
+    Object.assign(chatArea as unknown as Record<string, unknown>, {
+      conversationManagerAgent: { ID: '11111111-1111-4111-8111-111111111111', Name: 'Sage' },
+      messages,
+      AgentHistoryFrom: null,
+      Conversation: null,
+      DefaultAgentId: null,
+      AllowedAgentIDs: null,
+      isOwnerAgentAllowed: () => true,
+      resolveHandoffAgentMeta,
+    });
+    Object.defineProperty(chatArea, 'DisplayMessages', { get: () => [] });
+
+    expect(chatArea.CurrentOwnerAgent?.Name).toBe('Research Agent');
+    expect(chatArea.CurrentOwnerAgent?.Name).toBe('Research Agent');
+    expect(chatArea.CurrentOwnerAgentName).toBe('Research Agent');
+    expect(resolveHandoffAgentMeta).toHaveBeenCalledTimes(1);
+
+    // Adding a new @Sage user message changes message count and invalidates the memo
+    messages.push(
+      detail({
+        ID: '11111111-1111-4111-8111-000000000002',
+        Role: 'User',
+        Message: '@Sage help',
+        __mj_CreatedAt: new Date('2026-10-19T12:01:00Z'),
+      }),
+    );
+    expect(chatArea.CurrentOwnerAgent?.IsConversationManager).toBe(true);
+    expect(resolveHandoffAgentMeta).toHaveBeenCalledTimes(2);
+
+    // MessageInputComponent.CurrentRouteAgent memoization by message count
+    const history: MJConversationDetailEntity[] = [
+      detail({
+        ID: '11111111-1111-4111-8111-000000000001',
+        Role: 'AI',
+        AgentID: '22222222-2222-4222-8222-222222222222',
+        Agent: 'Research Agent',
+        __mj_CreatedAt: new Date('2026-10-19T12:00:00Z'),
+      }),
+    ];
+    const messageInput = Object.create(MessageInputComponent.prototype) as MessageInputComponent;
+    const isWithinHistoryFloor = vi.fn(() => true);
+    Object.assign(messageInput as unknown as Record<string, unknown>, {
+      ConversationHistory: history,
+      converationManagerAgent: { ID: '11111111-1111-4111-8111-111111111111', Name: 'Sage' },
+      conversationDefaultAgentId: null,
+      defaultAgentId: null,
+      allowedAgentIDs: null,
+      mentionedAgentId: null,
+      inputBox: { getMentionChipsData: () => [] },
+      isWithinHistoryFloor,
+    });
+
+    expect(messageInput.CurrentRouteAgent?.Name).toBe('Research Agent');
+    expect(messageInput.CurrentRouteAgent?.Name).toBe('Research Agent');
+    expect(messageInput.CurrentRouteAgentName).toBe('Research Agent');
+    expect(isWithinHistoryFloor).toHaveBeenCalledTimes(1);
+
+    history.push(
+      detail({
+        ID: '11111111-1111-4111-8111-000000000002',
+        Role: 'User',
+        Message: '@Sage help',
+        __mj_CreatedAt: new Date('2026-10-19T12:01:00Z'),
+      }),
+    );
+    expect(messageInput.CurrentRouteAgent?.IsConversationManager).toBe(true);
+    expect(messageInput.CurrentRouteAgent?.IsConversationManager).toBe(true);
+    expect(isWithinHistoryFloor).toHaveBeenCalledTimes(2);
+  });
 });
+
+

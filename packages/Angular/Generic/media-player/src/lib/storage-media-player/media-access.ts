@@ -6,9 +6,7 @@ import {
 } from '@memberjunction/graphql-dataprovider';
 
 /** Shape of the `CreateMediaAccessToken` server mutation result (one file). */
-export interface CreateMediaAccessTokenResult extends CreateMediaAccessTokenClientResult {
-  Token?: string | null;
-}
+export type CreateMediaAccessTokenResult = CreateMediaAccessTokenClientResult;
 
 /** Mints an authenticated streaming-URL token for one file id via `GraphQLFileStorageClient.CreateMediaAccessToken`. */
 export function MintMediaAccessUrl(
