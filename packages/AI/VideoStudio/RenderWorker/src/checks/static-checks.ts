@@ -446,6 +446,22 @@ function isWordBoundaryChar(ch: string | undefined): boolean {
     );
 }
 
+function toAsciiLowerCase(s: string): string {
+    return s.replace(/[A-Z]/g, (c) => c.toLowerCase());
+}
+
+function isHtmlCloseTagDelimiter(ch: string | undefined): boolean {
+    return (
+        ch === ' ' ||
+        ch === '\t' ||
+        ch === '\n' ||
+        ch === '\f' ||
+        ch === '\r' ||
+        ch === '/' ||
+        ch === '>'
+    );
+}
+
 function findClosingTagEnd(
     html: string,
     lowerHtml: string,
@@ -460,7 +476,7 @@ function findClosingTagEnd(
             return -1;
         }
         const afterName = idx + needle.length;
-        if (afterName < html.length && !isWordBoundaryChar(html[afterName])) {
+        if (afterName < html.length && isHtmlCloseTagDelimiter(html[afterName])) {
             const gtIdx = html.indexOf('>', afterName);
             if (gtIdx === -1) {
                 return -1;
@@ -481,7 +497,7 @@ interface HtmlTagBlockSpan {
 
 function findHtmlTagBlocks(html: string, tagLower: 'script' | 'style'): HtmlTagBlockSpan[] {
     const blocks: HtmlTagBlockSpan[] = [];
-    const lowerHtml = html.toLowerCase();
+    const lowerHtml = toAsciiLowerCase(html);
     const openNeedle = `<${tagLower}`;
     const closeNeedle = `</${tagLower}`;
     let pos = 0;
@@ -509,7 +525,7 @@ function findHtmlTagBlocks(html: string, tagLower: 'script' | 'style'): HtmlTagB
                 return blocks;
             }
             const afterCloseName = closeIdx + closeNeedle.length;
-            if (afterCloseName >= html.length || isWordBoundaryChar(html[afterCloseName])) {
+            if (afterCloseName >= html.length || !isHtmlCloseTagDelimiter(html[afterCloseName])) {
                 closeSearch = afterCloseName;
                 continue;
             }
@@ -554,9 +570,10 @@ function blankOutHtmlTagBlocks(html: string, tagLower: 'script' | 'style'): stri
 
 function scanHtmlTokens(html: string): HtmlTokenSpan[] {
     const tokens: HtmlTokenSpan[] = [];
-    const lowerHtml = html.toLowerCase();
+    const lowerHtml = toAsciiLowerCase(html);
     let scanPos = 0;
     let noMoreCommentClose = false;
+    let noMoreCdataClose = false;
     let noMoreScriptClose = false;
     let noMoreStyleClose = false;
 
@@ -583,24 +600,71 @@ function scanHtmlTokens(html: string): HtmlTokenSpan[] {
                 }
                 noMoreCommentClose = true;
             }
-            const gtIdx = html.indexOf('>', openIdx + 2);
-            if (gtIdx === -1) {
-                break;
-            }
-            const matchEnd = gtIdx + 1;
-            tokens.push({
-                matchStart: openIdx,
-                matchEnd,
-                fullToken: html.slice(openIdx, matchEnd),
-                tagName: '',
-                attrText: '',
-            });
-            scanPos = matchEnd;
+            scanPos = openIdx + 1;
             continue;
         }
 
-        if (html.startsWith('<!', openIdx)) {
-            const gtIdx = html.indexOf('>', openIdx + 2);
+        if (lowerHtml.startsWith('<script', openIdx) && !isWordBoundaryChar(html[openIdx + 7])) {
+            const gtIdx = html.indexOf('>', openIdx + 7);
+            if (gtIdx !== -1 && !noMoreScriptClose) {
+                const closeEnd = findClosingTagEnd(html, lowerHtml, 'script', gtIdx + 1);
+                if (closeEnd !== -1) {
+                    tokens.push({
+                        matchStart: openIdx,
+                        matchEnd: closeEnd,
+                        fullToken: html.slice(openIdx, closeEnd),
+                        tagName: '',
+                        attrText: '',
+                    });
+                    scanPos = closeEnd;
+                    continue;
+                }
+                noMoreScriptClose = true;
+            }
+        }
+
+        if (lowerHtml.startsWith('<style', openIdx) && !isWordBoundaryChar(html[openIdx + 6])) {
+            const gtIdx = html.indexOf('>', openIdx + 6);
+            if (gtIdx !== -1 && !noMoreStyleClose) {
+                const closeEnd = findClosingTagEnd(html, lowerHtml, 'style', gtIdx + 1);
+                if (closeEnd !== -1) {
+                    tokens.push({
+                        matchStart: openIdx,
+                        matchEnd: closeEnd,
+                        fullToken: html.slice(openIdx, closeEnd),
+                        tagName: '',
+                        attrText: '',
+                    });
+                    scanPos = closeEnd;
+                    continue;
+                }
+                noMoreStyleClose = true;
+            }
+        }
+
+        if (lowerHtml.startsWith('<![cdata[', openIdx)) {
+            if (!noMoreCdataClose) {
+                const cdataClose = html.indexOf(']]>', openIdx + 9);
+                if (cdataClose !== -1) {
+                    const matchEnd = cdataClose + 3;
+                    tokens.push({
+                        matchStart: openIdx,
+                        matchEnd,
+                        fullToken: html.slice(openIdx, matchEnd),
+                        tagName: '',
+                        attrText: '',
+                    });
+                    scanPos = matchEnd;
+                    continue;
+                }
+                noMoreCdataClose = true;
+            }
+            scanPos = openIdx + 1;
+            continue;
+        }
+
+        if (lowerHtml.startsWith('<!doctype', openIdx)) {
+            const gtIdx = html.indexOf('>', openIdx + 9);
             if (gtIdx === -1) {
                 break;
             }
@@ -623,14 +687,18 @@ function scanHtmlTokens(html: string): HtmlTokenSpan[] {
             continue;
         }
 
-        let nameEnd = nameStart + 1;
-        while (nameEnd < html.length && isTagNameContinuationChar(html[nameEnd])) {
-            nameEnd++;
+        let maxNameEnd = nameStart + 1;
+        while (maxNameEnd < html.length && isTagNameContinuationChar(html[maxNameEnd])) {
+            maxNameEnd++;
         }
-        while (nameEnd > nameStart + 1 && (html[nameEnd - 1] === ':' || html[nameEnd - 1] === '-')) {
+        let nameEnd = maxNameEnd;
+        while (
+            nameEnd > nameStart &&
+            isWordBoundaryChar(html[nameEnd - 1]) === isWordBoundaryChar(html[nameEnd])
+        ) {
             nameEnd--;
         }
-        if (nameEnd < html.length && isWordBoundaryChar(html[nameEnd])) {
+        if (nameEnd === nameStart) {
             scanPos = openIdx + 1;
             continue;
         }
@@ -643,38 +711,6 @@ function scanHtmlTokens(html: string): HtmlTokenSpan[] {
         const rawTagName = lowerHtml.slice(nameStart, nameEnd);
         const attrText = html.slice(nameEnd, gtIdx);
         const openTagEnd = gtIdx + 1;
-
-        if (!isClosing && rawTagName === 'script' && !noMoreScriptClose) {
-            const closeEnd = findClosingTagEnd(html, lowerHtml, 'script', openTagEnd);
-            if (closeEnd !== -1) {
-                tokens.push({
-                    matchStart: openIdx,
-                    matchEnd: closeEnd,
-                    fullToken: html.slice(openIdx, closeEnd),
-                    tagName: '',
-                    attrText: '',
-                });
-                scanPos = closeEnd;
-                continue;
-            }
-            noMoreScriptClose = true;
-        }
-
-        if (!isClosing && rawTagName === 'style' && !noMoreStyleClose) {
-            const closeEnd = findClosingTagEnd(html, lowerHtml, 'style', openTagEnd);
-            if (closeEnd !== -1) {
-                tokens.push({
-                    matchStart: openIdx,
-                    matchEnd: closeEnd,
-                    fullToken: html.slice(openIdx, closeEnd),
-                    tagName: '',
-                    attrText: '',
-                });
-                scanPos = closeEnd;
-                continue;
-            }
-            noMoreStyleClose = true;
-        }
 
         tokens.push({
             matchStart: openIdx,

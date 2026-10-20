@@ -260,8 +260,31 @@ export interface CompositionGeometryMatchParams {
     DurationSeconds?: number;
 }
 
-const COMPOSITION_OPEN_TAG_NAME_REGEX = /^<[a-z0-9-]+\b/i;
 const COMPOSITION_ID_ATTR_REGEX = /\bdata-composition-id\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>"']+)/i;
+
+function isCompositionTagNameChar(ch: string | undefined): boolean {
+    if (ch === undefined) {
+        return false;
+    }
+    return (
+        (ch >= 'a' && ch <= 'z') ||
+        (ch >= 'A' && ch <= 'Z') ||
+        (ch >= '0' && ch <= '9') ||
+        ch === '-'
+    );
+}
+
+function isCompositionWordChar(ch: string | undefined): boolean {
+    if (ch === undefined) {
+        return false;
+    }
+    return (
+        (ch >= 'a' && ch <= 'z') ||
+        (ch >= 'A' && ch <= 'Z') ||
+        (ch >= '0' && ch <= '9') ||
+        ch === '_'
+    );
+}
 
 function findCompositionOpeningTag(html: string): string | null {
     let cursor = 0;
@@ -270,18 +293,27 @@ function findCompositionOpeningTag(html: string): string | null {
         if (openIdx === -1) {
             return null;
         }
-        const closeIdx = html.indexOf('>', openIdx + 1);
+        let maxNameEnd = openIdx + 1;
+        while (maxNameEnd < html.length && isCompositionTagNameChar(html[maxNameEnd])) {
+            maxNameEnd++;
+        }
+        let minPrefixEnd = -1;
+        for (let k = openIdx + 2; k <= maxNameEnd; k++) {
+            if (isCompositionWordChar(html[k - 1]) !== isCompositionWordChar(html[k])) {
+                minPrefixEnd = k;
+                break;
+            }
+        }
+        if (minPrefixEnd === -1) {
+            cursor = maxNameEnd;
+            continue;
+        }
+        const closeIdx = html.indexOf('>', minPrefixEnd);
         if (closeIdx === -1) {
             return null;
         }
-        const nextOpen = html.indexOf('<', openIdx + 1);
-        if (nextOpen !== -1 && nextOpen < closeIdx) {
-            cursor = nextOpen;
-            continue;
-        }
-        const tag = html.slice(openIdx, closeIdx + 1);
-        if (COMPOSITION_OPEN_TAG_NAME_REGEX.test(tag) && COMPOSITION_ID_ATTR_REGEX.test(tag)) {
-            return tag;
+        if (COMPOSITION_ID_ATTR_REGEX.test(html.slice(minPrefixEnd, closeIdx))) {
+            return html.slice(openIdx, closeIdx + 1);
         }
         cursor = closeIdx + 1;
     }

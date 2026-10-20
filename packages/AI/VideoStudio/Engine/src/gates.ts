@@ -1058,13 +1058,13 @@ export function ReadApprovalDecision(text: string | null | undefined): 'Approve'
     return /^approve/i.test(stripped) ? 'Approve' : 'Reject';
 }
 
-function isAsciiWhitespace(ch: string | undefined): boolean {
-    return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\f' || ch === '\v';
+function toAsciiLowerCase(text: string): string {
+    return text.replace(/[A-Z]/g, (c) => c.toLowerCase());
 }
 
 function findLiteralFormBlocks(text: string): Array<{ start: number; end: number; jsonBody: string }> {
     const blocks: Array<{ start: number; end: number; jsonBody: string }> = [];
-    const lower = text.toLowerCase();
+    const lower = toAsciiLowerCase(text);
     let searchFrom = 0;
     while (searchFrom < text.length) {
         const idx = lower.indexOf('@form:', searchFrom);
@@ -1072,7 +1072,7 @@ function findLiteralFormBlocks(text: string): Array<{ start: number; end: number
             break;
         }
         let braceStart = idx + 6;
-        while (braceStart < text.length && isAsciiWhitespace(text[braceStart])) {
+        while (braceStart < text.length && /\s/.test(text[braceStart]!)) {
             braceStart++;
         }
         if (braceStart >= text.length || text[braceStart] !== '{') {

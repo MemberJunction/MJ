@@ -272,7 +272,7 @@ describe('bundle validation and staging', () => {
         }
     });
 
-    it('scans composition opening tags in linear time (< 200 ms) on 50,000 ! characters without closing >', async () => {
+    it('scans composition opening tags in linear time (< 200 ms) on 50,000 ! without > and 200,000 < before >, and preserves < inside quoted attributes', async () => {
         const { ResolveCompositionDuration, ResolveCompositionFps } = await import('../bundle.js');
         const attackHtml = `<div data-composition-id=${'!'.repeat(50_000)}x`;
         const bundle = createValidBundle({
@@ -284,7 +284,26 @@ describe('bundle validation and staging', () => {
         expect(ResolveCompositionFps(bundle, 30)).toBe(30);
         expect(ResolveCompositionDuration(bundle, 5)).toBe(5);
         const elapsedMs = performance.now() - start;
-
         expect(elapsedMs).toBeLessThan(200);
+
+        const ltFloodBundle = createValidBundle({
+            Files: [{ Path: 'index.html', Content: '<'.repeat(200_000) + '>' }],
+        });
+        const ltStart = performance.now();
+        ValidateCompositionGeometryMatch(ltFloodBundle, { Width: 1920, Height: 1080, DurationSeconds: 2 });
+        expect(ResolveCompositionFps(ltFloodBundle, 30)).toBe(30);
+        expect(ResolveCompositionDuration(ltFloodBundle, 5)).toBe(5);
+        expect(performance.now() - ltStart).toBeLessThan(200);
+
+        const quotedLtBundle = createValidBundle({
+            Files: [
+                {
+                    Path: 'index.html',
+                    Content:
+                        '<div data-composition-id="main" data-label="a<b" data-width="1920"><div class="clip" data-duration="10"></div></div>',
+                },
+            ],
+        });
+        expect(ResolveCompositionDuration(quotedLtBundle, 5)).toBe(5);
     });
 });

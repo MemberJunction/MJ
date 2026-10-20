@@ -348,17 +348,40 @@ describe('lint-gate static and HyperFrames lint checks', () => {
         }
     });
 
-    it('scans inline <script> blocks closed with </script >, </SCRIPT>, or </script foo> and scans 50,000 repeated \\" in under 200 ms', async () => {
+    it('scans inline <script> and <style> blocks with U+0130 (İ) prefix, recognizes </script >, </SCRIPT>, </script foo>, </style >, ignores </script-x>, </script!>, </style-x>, and scans 50,000 repeated \\" in under 200 ms', async () => {
         const { ScanAuthoredFilesForLintIssues } = await import('../lint-gate.js');
 
         for (const closeTag of ['</script >', '</SCRIPT>', '</script foo>']) {
             const bundle = makeBundleWithEntryContent(
-                `<!doctype html><html><body><script>fetch("https://evil.test");${closeTag}</body></html>`,
+                `<!doctype html><html><body><p>İ</p><script>fetch("https://evil.test");${closeTag}</body></html>`,
             );
             const issues = ScanAuthoredFilesForLintIssues(bundle);
             expect(issues.some((i) => i.Code === MJ_NETWORK_API_CODE)).toBe(true);
             expect(issues.some((i) => i.Code === MJ_NON_BUNDLE_URL_CODE)).toBe(true);
         }
+
+        const styleWithI = makeBundleWithEntryContent(
+            '<!doctype html><html><head><title>İ</title><style>@import url("https://evil.test/a.css");</style ></head><body></body></html>',
+        );
+        expect(ScanAuthoredFilesForLintIssues(styleWithI).some((i) => i.Code === MJ_NON_BUNDLE_URL_CODE)).toBe(
+            true,
+        );
+
+        for (const fakeClose of ['</script-x>', '</script!>']) {
+            const bundle = makeBundleWithEntryContent(
+                `<!doctype html><html><body><script>/*${fakeClose}*/fetch("https://evil.test");</script></body></html>`,
+            );
+            const issues = ScanAuthoredFilesForLintIssues(bundle);
+            expect(issues.some((i) => i.Code === MJ_NETWORK_API_CODE)).toBe(true);
+            expect(issues.some((i) => i.Code === MJ_NON_BUNDLE_URL_CODE)).toBe(true);
+        }
+
+        const fakeStyleClose = makeBundleWithEntryContent(
+            '<!doctype html><html><head><style>/*</style-x>*/@import url("https://evil.test/a.css");</style></head><body></body></html>',
+        );
+        expect(ScanAuthoredFilesForLintIssues(fakeStyleClose).some((i) => i.Code === MJ_NON_BUNDLE_URL_CODE)).toBe(
+            true,
+        );
 
         const attackJs = '"\\' + '\\"'.repeat(50_000);
         const attackBundle = makeBundleWithEntryContent('<!doctype html><html><body></body></html>', [

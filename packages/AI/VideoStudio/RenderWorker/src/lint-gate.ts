@@ -164,12 +164,28 @@ function isWordBoundaryChar(ch: string | undefined): boolean {
     );
 }
 
+function toAsciiLowerCase(s: string): string {
+    return s.replace(/[A-Z]/g, (c) => c.toLowerCase());
+}
+
+function isHtmlCloseTagDelimiter(ch: string | undefined): boolean {
+    return (
+        ch === ' ' ||
+        ch === '\t' ||
+        ch === '\n' ||
+        ch === '\f' ||
+        ch === '\r' ||
+        ch === '/' ||
+        ch === '>'
+    );
+}
+
 function findHtmlTagBlocks(
     html: string,
     tagLower: 'script' | 'style',
 ): Array<{ fullStart: number; body: string }> {
     const blocks: Array<{ fullStart: number; body: string }> = [];
-    const lowerHtml = html.toLowerCase();
+    const lowerHtml = toAsciiLowerCase(html);
     const openNeedle = `<${tagLower}`;
     const closeNeedle = `</${tagLower}`;
     let pos = 0;
@@ -197,7 +213,7 @@ function findHtmlTagBlocks(
                 return blocks;
             }
             const afterCloseName = closeIdx + closeNeedle.length;
-            if (afterCloseName >= html.length || isWordBoundaryChar(html[afterCloseName])) {
+            if (afterCloseName >= html.length || !isHtmlCloseTagDelimiter(html[afterCloseName])) {
                 closeSearch = afterCloseName;
                 continue;
             }
@@ -356,10 +372,6 @@ function extractJsStringLiterals(js: string): Array<{ value: string; index: numb
     let i = 0;
     while (i < js.length) {
         const ch = js[i]!;
-        if (ch === '\\') {
-            i += 2;
-            continue;
-        }
         if ((ch === '"' || ch === "'" || ch === '`') && i >= failedUntil[ch]!) {
             const quote = ch;
             const startIdx = i;
@@ -368,6 +380,16 @@ function extractJsStringLiterals(js: string): Array<{ value: string; index: numb
             while (j < js.length) {
                 const c = js[j]!;
                 if (c === '\\') {
+                    if (j + 1 >= js.length) {
+                        break;
+                    }
+                    const nextCh = js[j + 1]!;
+                    if (
+                        quote !== '`' &&
+                        (nextCh === '\n' || nextCh === '\r' || nextCh === '\u2028' || nextCh === '\u2029')
+                    ) {
+                        break;
+                    }
                     j += 2;
                     continue;
                 }
@@ -375,9 +397,6 @@ function extractJsStringLiterals(js: string): Array<{ value: string; index: numb
                     literals.push({ value: js.slice(startIdx + 1, j), index: startIdx });
                     i = j + 1;
                     closed = true;
-                    break;
-                }
-                if (quote !== '`' && (c === '\r' || c === '\n')) {
                     break;
                 }
                 j++;

@@ -713,7 +713,7 @@ describe('VideoStudio gates', () => {
             expect(afterRound2.Assets?.Generate?.[0]?.RegenerationCount).toBe(1);
         });
 
-        it('parses ReadApprovalDecision on 50,000 repeated @form:{{ tokens in under 200 ms', () => {
+        it('parses ReadApprovalDecision on 50,000 repeated @form:{{ tokens in under 200 ms and preserves U+0130 / Unicode whitespace semantics', () => {
             const attack = '@form:{{'.repeat(50_000);
             const start = performance.now();
             const decision = ReadApprovalDecision(attack);
@@ -721,6 +721,11 @@ describe('VideoStudio gates', () => {
 
             expect(decision).toBe('Reject');
             expect(elapsedMs).toBeLessThan(200);
+
+            expect(ReadApprovalDecision('Approve İstanbul cut\n@form:{"decision":"reject"}')).toBe('Reject');
+            expect(ReadApprovalDecision('Reject İstanbul cut\n@form:{"decision":"approve"}')).toBe('Approve');
+            expect(ReadApprovalDecision('approve\n@form:\u00A0{"decision":"reject"}')).toBe('Reject');
+            expect(ReadApprovalDecision('reject\n@form:\u3000{"decision":"approve"}')).toBe('Approve');
         });
     });
 });

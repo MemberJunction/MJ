@@ -244,7 +244,7 @@ describe('RunStaticChecks', () => {
             expect(issues.filter((i) => i.Code === MJ_UNBOUND_LITERAL_SOURCE_CODE)).toEqual([]);
         });
 
-        it('recognizes </script >, </SCRIPT>, </script foo>, and </style > closing tags and does not double-unescape &amp;lt; or &amp;minus;', () => {
+        it('recognizes </script >, </SCRIPT>, </script foo>, and </style > closing tags, ignores </script-x>, </script!>, </style-x>, handles U+0130 (İ) and <my-el_x>/<script-x>, and does not double-unescape &amp;minus;5', () => {
             const bundle = makeBundle({
                 Files: [
                     {
@@ -252,27 +252,34 @@ describe('RunStaticChecks', () => {
                         Content: [
                             '<!doctype html>',
                             '<html><head>',
-                            '<style>.a { width: 100px; background: url("missing.png"); }</style >',
+                            '<title>İzmir</title>',
+                            '<style>/*</style-x>*/.a { width: 100px; background: url("missing.png"); }</style >',
                             '</head><body>',
-                            '<script>var hidden1 = 999; setTimeout(function() {}, 10);</script >',
+                            '<h1>İstanbul</h1>',
+                            '<span data-mj-bound>999</span>',
+                            '<my-el_x data-mj-bound>42</my-el_x>',
+                            '<script-x>var a = 5;</script>',
+                            '<script>/*</script-x></script!>*/var hidden1 = 999; setTimeout(function() {}, 0);</script >',
                             '<script>var hidden2 = 888;</SCRIPT>',
                             '<script>var hidden3 = 777;</script foo>',
-                            '<p>&amp;lt;tag&amp;gt; and &amp;minus;not-a-minus-sign</p>',
+                            '<p>&amp;lt;tag&amp;gt; and &amp;minus;5</p>',
                             '</body></html>',
                         ].join('\n'),
                     },
                 ],
             });
 
-            const issues = RunStaticChecks(bundle);
+            const issues = RunStaticChecks(bundle, {
+                AllowedDataLiterals: ['5'],
+            });
             // CSS missing.png inside <style>...</style > and setTimeout inside <script>...</script > are detected,
-            // while numbers 999, 888, 777 inside scripts are not treated as HTML text literals.
+            // while numbers inside scripts/bound elements and &amp;minus;5 (allowed '5', not double-unescaped to '−5') pass.
             expect(issues.some((i) => i.Code === MJ_MISSING_ASSET_CODE)).toBe(true);
             expect(issues.some((i) => i.Code === MJ_NONDETERMINISTIC_API_CODE)).toBe(true);
             expect(issues.filter((i) => i.Code === MJ_UNBOUND_LITERAL_SOURCE_CODE)).toEqual([]);
         });
 
-        it('completes in under 200 ms on 50,000 repeated <!--, 50,000 ! in IsAllowedNumericLiteral, and 50,000 repeated a/* in JS', async () => {
+        it('completes in under 200 ms on 50,000 repeated <!--, x + 50,000 ! + x in IsAllowedNumericLiteral, and 50,000 repeated a/* in JS', async () => {
             const { IsAllowedNumericLiteral } = await import('../checks/static-checks.js');
 
             const commentAttackBundle = makeBundle({
@@ -282,7 +289,7 @@ describe('RunStaticChecks', () => {
             expect(RunStaticChecks(commentAttackBundle)).toEqual([]);
             expect(performance.now() - t0).toBeLessThan(200);
 
-            const bangToken = '!'.repeat(50_000) + 'x';
+            const bangToken = 'x' + '!'.repeat(50_000) + 'x';
             const allowed = new Set(['42']);
             const t1 = performance.now();
             expect(IsAllowedNumericLiteral(bangToken, allowed)).toBe(false);
