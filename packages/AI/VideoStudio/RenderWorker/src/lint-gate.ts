@@ -384,10 +384,7 @@ function extractJsStringLiterals(js: string): Array<{ value: string; index: numb
                         break;
                     }
                     const nextCh = js[j + 1]!;
-                    if (
-                        quote !== '`' &&
-                        (nextCh === '\n' || nextCh === '\r' || nextCh === '\u2028' || nextCh === '\u2029')
-                    ) {
+                    if (nextCh === '\n' || nextCh === '\r' || nextCh === '\u2028' || nextCh === '\u2029') {
                         break;
                     }
                     j += 2;
@@ -397,6 +394,9 @@ function extractJsStringLiterals(js: string): Array<{ value: string; index: numb
                     literals.push({ value: js.slice(startIdx + 1, j), index: startIdx });
                     i = j + 1;
                     closed = true;
+                    break;
+                }
+                if (quote !== '`' && (c === '\r' || c === '\n')) {
                     break;
                 }
                 j++;

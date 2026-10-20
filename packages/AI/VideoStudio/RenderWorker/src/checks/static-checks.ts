@@ -573,7 +573,7 @@ function scanHtmlTokens(html: string): HtmlTokenSpan[] {
     const lowerHtml = toAsciiLowerCase(html);
     let scanPos = 0;
     let noMoreCommentClose = false;
-    let noMoreCdataClose = false;
+    let noMoreBangGt = false;
     let noMoreScriptClose = false;
     let noMoreStyleClose = false;
 
@@ -583,25 +583,21 @@ function scanHtmlTokens(html: string): HtmlTokenSpan[] {
             break;
         }
 
-        if (html.startsWith('<!--', openIdx)) {
-            if (!noMoreCommentClose) {
-                const commentClose = html.indexOf('-->', openIdx + 4);
-                if (commentClose !== -1) {
-                    const matchEnd = commentClose + 3;
-                    tokens.push({
-                        matchStart: openIdx,
-                        matchEnd,
-                        fullToken: html.slice(openIdx, matchEnd),
-                        tagName: '',
-                        attrText: '',
-                    });
-                    scanPos = matchEnd;
-                    continue;
-                }
-                noMoreCommentClose = true;
+        if (html.startsWith('<!--', openIdx) && !noMoreCommentClose) {
+            const commentClose = html.indexOf('-->', openIdx + 4);
+            if (commentClose !== -1) {
+                const matchEnd = commentClose + 3;
+                tokens.push({
+                    matchStart: openIdx,
+                    matchEnd,
+                    fullToken: html.slice(openIdx, matchEnd),
+                    tagName: '',
+                    attrText: '',
+                });
+                scanPos = matchEnd;
+                continue;
             }
-            scanPos = openIdx + 1;
-            continue;
+            noMoreCommentClose = true;
         }
 
         if (lowerHtml.startsWith('<script', openIdx) && !isWordBoundaryChar(html[openIdx + 7])) {
@@ -642,11 +638,11 @@ function scanHtmlTokens(html: string): HtmlTokenSpan[] {
             }
         }
 
-        if (lowerHtml.startsWith('<![cdata[', openIdx)) {
-            if (!noMoreCdataClose) {
-                const cdataClose = html.indexOf(']]>', openIdx + 9);
-                if (cdataClose !== -1) {
-                    const matchEnd = cdataClose + 3;
+        if (html.startsWith('<!', openIdx)) {
+            if (!noMoreBangGt) {
+                const gtIdx = html.indexOf('>', openIdx + 2);
+                if (gtIdx !== -1) {
+                    const matchEnd = gtIdx + 1;
                     tokens.push({
                         matchStart: openIdx,
                         matchEnd,
@@ -657,26 +653,9 @@ function scanHtmlTokens(html: string): HtmlTokenSpan[] {
                     scanPos = matchEnd;
                     continue;
                 }
-                noMoreCdataClose = true;
+                noMoreBangGt = true;
             }
             scanPos = openIdx + 1;
-            continue;
-        }
-
-        if (lowerHtml.startsWith('<!doctype', openIdx)) {
-            const gtIdx = html.indexOf('>', openIdx + 9);
-            if (gtIdx === -1) {
-                break;
-            }
-            const matchEnd = gtIdx + 1;
-            tokens.push({
-                matchStart: openIdx,
-                matchEnd,
-                fullToken: html.slice(openIdx, matchEnd),
-                tagName: '',
-                attrText: '',
-            });
-            scanPos = matchEnd;
             continue;
         }
 

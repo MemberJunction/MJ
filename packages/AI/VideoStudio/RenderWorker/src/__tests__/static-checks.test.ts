@@ -258,7 +258,7 @@ describe('RunStaticChecks', () => {
                             '<h1>İstanbul</h1>',
                             '<span data-mj-bound>999</span>',
                             '<my-el_x data-mj-bound>42</my-el_x>',
-                            '<script-x>var a = 5;</script>',
+                            '<script-x>var a = 6;</script>',
                             '<script>/*</script-x></script!>*/var hidden1 = 999; setTimeout(function() {}, 0);</script >',
                             '<script>var hidden2 = 888;</SCRIPT>',
                             '<script>var hidden3 = 777;</script foo>',
@@ -277,6 +277,16 @@ describe('RunStaticChecks', () => {
             expect(issues.some((i) => i.Code === MJ_MISSING_ASSET_CODE)).toBe(true);
             expect(issues.some((i) => i.Code === MJ_NONDETERMINISTIC_API_CODE)).toBe(true);
             expect(issues.filter((i) => i.Code === MJ_UNBOUND_LITERAL_SOURCE_CODE)).toEqual([]);
+
+            const unboundFor = (html: string): string[] =>
+                RunStaticChecks(makeBundle({ Files: [{ Path: 'index.html', Content: html }] }))
+                    .filter((i) => i.Code === MJ_UNBOUND_LITERAL_SOURCE_CODE)
+                    .map((i) => i.Message);
+
+            expect(unboundFor('<p>a</p><!-- note 5 >')).toEqual([]);
+            expect(unboundFor('<!--<span data-mj-bound>7')).toEqual([expect.stringContaining('"7"')]);
+            expect(unboundFor('<!foo 5>')).toEqual([]);
+            expect(unboundFor('<![CDATA[ 1 > 0 ]]>')).toEqual([expect.stringContaining('"0"')]);
         });
 
         it('completes in under 200 ms on 50,000 repeated <!--, x + 50,000 ! + x in IsAllowedNumericLiteral, and 50,000 repeated a/* in JS', async () => {

@@ -383,6 +383,19 @@ describe('lint-gate static and HyperFrames lint checks', () => {
             true,
         );
 
+        const commentApostropheBundle = makeBundleWithEntryContent(
+            '<!doctype html><html><body></body></html>',
+            [{ Path: 'app.js', Content: "// don't do this\nconst u = 'https://evil.test/x.png';" }],
+        );
+        const commentIssues = ScanAuthoredFilesForLintIssues(commentApostropheBundle);
+        expect(commentIssues).toEqual([
+            expect.objectContaining({
+                Code: MJ_NON_BUNDLE_URL_CODE,
+                File: 'app.js',
+                Line: 2,
+            }),
+        ]);
+
         const attackJs = '"\\' + '\\"'.repeat(50_000);
         const attackBundle = makeBundleWithEntryContent('<!doctype html><html><body></body></html>', [
             { Path: 'attack.js', Content: attackJs },
