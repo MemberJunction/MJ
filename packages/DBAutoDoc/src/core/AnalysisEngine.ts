@@ -815,7 +815,7 @@ export class AnalysisEngine {
    * Persist enum/value-list verdicts from LLM response onto ColumnDefinition.
    * Keeps the highest-confidence verdict across multiple iterations.
    */
-  private persistEnumVerdicts(
+  protected persistEnumVerdicts(
     table: TableDefinition,
     columnDescriptions: ColumnDescriptionPromptResult[] | undefined,
     modelUsed: string
@@ -834,11 +834,16 @@ export class AnalysisEngine {
       // If sanitization drops all values below 2, skip the verdict
       if (sanitizedValues.length < 2 && vl.isEnum) continue;
 
+      // The prompt asks for a verdict only on enum candidates; enforce that here, and keep only
+      // values observed in the column, so a verdict on a non-candidate or an invented value is dropped.
+      const keptValues = this.enumCandidateGate.FilterVerdictValues(column, table.rowCount, sanitizedValues);
+      if (keptValues === null && vl.isEnum) continue;
+
       const newVerdict: ValueListVerdict = {
         isEnum: vl.isEnum,
         type: vl.type,
         confidence: vl.confidence,
-        values: sanitizedValues,
+        values: keptValues ?? sanitizedValues,
         reasoning: vl.reasoning,
         source: 'llm',
         cardinalityAtDecision: column.statistics
