@@ -147,11 +147,18 @@ class NumericInputStubComponent extends ValueAccessorStub {
     @Input() Format = '';
 }
 
+/** Stand-in for <mj-loading> (shown while the contents load is in flight). */
+@Component({ standalone: true, selector: 'mj-loading', template: '' })
+class LoadingStubComponent {
+    @Input() text = '';
+    @Input() size = '';
+}
+
 const notify = { CreateSimpleNotification: vi.fn() };
 
 function createEditor(provider: IMetadataProvider): ComponentFixture<TemplateEditorComponent> {
     TestBed.configureTestingModule({
-        imports: [FormsModule, CodeEditorStubComponent, DropdownStubComponent, NumericInputStubComponent],
+        imports: [FormsModule, CodeEditorStubComponent, DropdownStubComponent, NumericInputStubComponent, LoadingStubComponent],
         declarations: [TemplateEditorComponent],
         providers: [
             { provide: MJNotificationService, useValue: notify },
@@ -305,5 +312,125 @@ describe('TemplateEditorComponent — content ownership (MJ#4754)', () => {
         expect(saveSpy).toHaveBeenCalledTimes(1);
         expect(untouched.Save).not.toHaveBeenCalled();
         expect(notify.CreateSimpleNotification).not.toHaveBeenCalledWith(expect.anything(), 'error', expect.anything());
+    });
+});
+
+/** A RunView double whose FIRST call is held open until the test settles it. */
+function holdFirstRunView(later: () => Promise<RunViewResult>) {
+    let settle: (r: RunViewResult) => void = () => undefined;
+    let call = 0;
+    const runView = () => {
+        call++;
+        return call === 1 ? new Promise<RunViewResult>((resolve) => { settle = resolve; }) : later();
+    };
+    return { runView, settle: (r: RunViewResult) => settle(r) };
+}
+
+describe('TemplateEditorComponent — the contents load state is explicit (MJ#4763 review)', () => {
+    beforeEach(() => {
+        notify.CreateSimpleNotification.mockReset();
+        vi.spyOn(TemplateEngineBase.Instance, 'TemplateContentTypes', 'get').mockReturnValue([
+            { ID: TYPE_TEXT, Name: 'Text' },
+            { ID: TYPE_HTML, Name: 'HTML' },
+        ] as unknown as MJTemplateContentTypeEntity[]);
+    });
+
+    it('does not report the failure of a load that a newer, successful load overtook', async () => {
+        const held = holdFirstRunView(async () => viewResult([makeContent('fresh')]));
+        const { provider } = makeProvider({ runView: held.runView });
+        const editor = createEditor(provider).componentInstance;
+        editor.Template = makeTemplate();
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        const overtaken = editor.LoadTemplateContents();
+        await editor.LoadTemplateContents();
+        held.settle(viewResult([], false));
+        await overtaken;
+
+        expect(editor.TemplateContents.map((c) => c.ID)).toEqual(['fresh']);
+        expect(notify.CreateSimpleNotification).not.toHaveBeenCalledWith(expect.anything(), 'error', expect.anything());
+    });
+
+    it('shows a loading state, not the "no content" state, while the load is in flight', async () => {
+        const held = holdFirstRunView(async () => viewResult([]));
+        const { provider } = makeProvider({ runView: held.runView });
+        const fixture = createEditor(provider);
+        fixture.componentInstance.config = { allowEdit: true };
+        fixture.componentRef.setInput('template', makeTemplate());
+        fixture.detectChanges(false);
+        await flush();
+        rerender(fixture);
+
+        expect(query(fixture, 'mj-loading')).not.toBeNull();
+        expect(query(fixture, '.no-content-state')).toBeNull();
+
+        held.settle(viewResult([makeContent('c1')]));
+        await flush();
+        rerender(fixture);
+        expect(query(fixture, 'mj-loading')).toBeNull();
+    });
+
+    it('refuses to add a version while a load is in flight, so the landing load cannot drop it', async () => {
+        const { provider } = makeProvider({ runView: async () => viewResult([makeContent('c1')]) });
+        const editor = createEditor(provider).componentInstance;
+        editor.config = { allowEdit: true };
+        editor.Template = makeTemplate();
+        await editor.LoadTemplateContents();
+
+        const held = holdFirstRunView(async () => viewResult([makeContent('c1')]));
+        (provider as unknown as { RunView: (p: RunViewParams) => Promise<RunViewResult> }).RunView = held.runView;
+        const reload = editor.LoadTemplateContents();
+        await editor.AddNewTemplateContent();
+        expect(editor.IsAddingNewContent).toBe(false);
+
+        held.settle(viewResult([makeContent('c1')]));
+        await reload;
+        await editor.AddNewTemplateContent();
+
+        expect(editor.TemplateContents.map((c) => c.ID)).toEqual(['c1', '']);
+        expect(editor.IsAddingNewContent).toBe(true);
+    });
+
+    it('tells the host that the rows it holds are gone when a reload FAILS', async () => {
+        // Hosts mirror the rows from ContentChange (the Templates form's badges and Run guard read
+        // that mirror); a failed reload that stays silent leaves them on the discarded rows (R1).
+        let fail = false;
+        const { provider } = makeProvider({ runView: async () => (fail ? viewResult([], false) : viewResult([makeContent('c1'), makeContent('c2')])) });
+        const editor = createEditor(provider).componentInstance;
+        editor.Template = makeTemplate();
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        await editor.LoadTemplateContents();
+        const emitted = capture(editor.ContentChange);
+
+        fail = true;
+        await editor.RefreshAndDiscardChanges();
+
+        expect(editor.ContentsLoadState).toBe('failed');
+        expect(emitted).toEqual([[]]);
+    });
+
+    it('shows an error state with a retry after a FAILED read, never the "no content / create first" state', async () => {
+        let fail = true;
+        const { provider, runViewCalls } = makeProvider({ runView: async () => (fail ? viewResult([], false) : viewResult([makeContent('c1')])) });
+        const fixture = createEditor(provider);
+        fixture.componentInstance.config = { allowEdit: true };
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        fixture.componentRef.setInput('template', makeTemplate());
+        fixture.detectChanges(false);
+        await flush();
+        rerender(fixture);
+
+        expect(query(fixture, '.no-content-state')).toBeNull();
+        const retry = query(fixture, '.contents-load-failed button');
+        expect(retry, 'an error state with a retry control is rendered').not.toBeNull();
+
+        fail = false;
+        (retry as HTMLButtonElement).click();
+        await flush();
+        rerender(fixture);
+
+        expect(runViewCalls.filter((p) => p.EntityName === 'MJ: Template Contents')).toHaveLength(2);
+        expect(query(fixture, '.contents-load-failed')).toBeNull();
+        expect(queryAll(fixture, '.tab-label')).toHaveLength(1);
     });
 });

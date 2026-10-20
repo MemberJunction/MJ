@@ -208,6 +208,13 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
     private loadGeneration = 0;
     /** The Template the most recent load was started for; lets ngOnInit skip a duplicate load. */
     private loadStartedFor: MJTemplateEntity | null = null;
+    /**
+     * Where the bound Template's contents are. `TemplateContents` is only the user's real data in
+     * 'loaded': while 'loading' it is a placeholder the landing load replaces, and after 'failed' it
+     * is empty because the read failed, not because the template has no content. The template and
+     * every writer of `TemplateContents` key on this rather than on the array's length.
+     */
+    public ContentsLoadState: 'idle' | 'loading' | 'loaded' | 'failed' = 'idle';
     private elementRef = inject(ElementRef);
 
     constructor(private notificationService: MJNotificationService, private confirmService: MJConfirmService) {
@@ -255,6 +262,7 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
                 await this.LoadTemplateContents();
             } else {
                 // Template cleared, reset state
+                this.ContentsLoadState = 'idle';
                 this.TemplateContents = [];
                 this.SelectedContentIndex = 0;
                 this.IsAddingNewContent = false;
@@ -343,6 +351,7 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
         }
         const generation = ++this.loadGeneration;
         this.loadStartedFor = template;
+        this.ContentsLoadState = 'loading';
         this.TemplateContents = [];
         this.SelectedContentIndex = 0;
         this.IsAddingNewContent = false;
@@ -351,13 +360,21 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
 
         const loaded = await this.fetchTemplateContents(template);
         if (generation !== this.loadGeneration) {
-            return; // superseded by a newer load
+            return; // superseded by a newer load: its outcome, failure included, is not the user's
+        }
+        if ('failure' in loaded) {
+            // No default row and no empty state over a failed read: either would invite the user to
+            // create a row over contents we simply could not see. The template shows a retry instead.
+            this.reportLoadFailure(template, loaded.failure);
+            this.ContentsLoadState = 'failed';
+            // Hosts mirror the rows from ContentChange; tell them the rows they hold are gone.
+            this.ContentChange.emit(this.TemplateContents);
+            return;
         }
         // A saved template with no rows (or a new template) gets one default row, so the
-        // single-content case needs no "add" click. A FAILED read gets none: that would invite the
-        // user to save a fabricated row over contents we simply could not see.
-        let contents = loaded ?? [];
-        if (loaded && loaded.length === 0) {
+        // single-content case needs no "add" click.
+        let contents = loaded.rows;
+        if (contents.length === 0) {
             const defaultContent = await this.buildDefaultTemplateContent(template);
             if (generation !== this.loadGeneration) {
                 return;
@@ -365,17 +382,24 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
             contents = [defaultContent];
         }
         this.TemplateContents = contents;
+        this.ContentsLoadState = 'loaded';
         this.syncEditorValue();
         this.ContentChange.emit(this.TemplateContents);
     }
 
+    private reportLoadFailure(template: MJTemplateEntity, failure: string): void {
+        console.error(`Failed to load template contents for template ${template.ID}: ${failure}`);
+        this.notificationService.CreateSimpleNotification(`Failed to load template contents: ${failure}`, 'error', 5000);
+    }
+
     /**
-     * Reads the saved contents of a template. Returns [] for a template that is not saved yet, and
-     * null (after reporting it) when the read fails.
+     * Reads the saved contents of a template: no rows for a template that is not saved yet, and the
+     * failure message when the read fails. It does not report the failure: only the caller knows
+     * whether this read is still the one the screen is waiting for.
      */
-    private async fetchTemplateContents(template: MJTemplateEntity): Promise<MJTemplateContentEntity[] | null> {
+    private async fetchTemplateContents(template: MJTemplateEntity): Promise<{ rows: MJTemplateContentEntity[] } | { failure: string }> {
         if (!template.IsSaved || !template.ID) {
-            return [];
+            return { rows: [] };
         }
         let failure: string;
         try {
@@ -387,15 +411,13 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
                 ResultType: 'entity_object'
             });
             if (result.Success) {
-                return result.Results;
+                return { rows: result.Results };
             }
             failure = result.ErrorMessage || 'unknown error';
         } catch (error) {
             failure = error instanceof Error ? error.message : String(error);
         }
-        console.error(`Failed to load template contents for template ${template.ID}: ${failure}`);
-        this.notificationService.CreateSimpleNotification(`Failed to load template contents: ${failure}`, 'error', 5000);
-        return null;
+        return { failure };
     }
 
     /** @deprecated Use {@link LoadTemplateContents}. */
@@ -499,9 +521,16 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
     }
 
     async AddNewTemplateContent() {
-        if (!this.config.allowEdit) return;
-        
-        this.NewTemplateContent = await this._metadata.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
+        // While a load is in flight (or after it failed) TemplateContents is a placeholder: a row
+        // pushed onto it would vanish when the load lands. Re-checked after the await below.
+        if (!this.config.allowEdit || this.ContentsLoadState !== 'loaded') return;
+        const generation = this.loadGeneration;
+
+        const newContent = await this._metadata.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
+        if (this.ContentsLoadState !== 'loaded' || generation !== this.loadGeneration) {
+            return;
+        }
+        this.NewTemplateContent = newContent;
         this.NewTemplateContent.TemplateID = this.Template!.ID;
         this.NewTemplateContent.Priority = this.TemplateContents.length + 1;
         this.NewTemplateContent.IsActive = true;

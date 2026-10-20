@@ -1,5 +1,18 @@
 @if (template) {
   <div class="template-editor" style="height: 100%; display: flex; flex-direction: column;">
+    @if (ContentsLoadState === 'loading') {
+      <mj-loading text="Loading template contents..." size="medium"></mj-loading>
+    } @else if (ContentsLoadState === 'failed') {
+      <!-- The read failed: the template's contents are unknown, so neither "no content" nor "create" -->
+      <div class="contents-load-failed">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <h5>Template contents could not be loaded</h5>
+        <p>Nothing is shown so nothing can be saved over contents that were not read.</p>
+        <button type="button" mjButton variant="secondary" size="sm" (click)="RefreshAndDiscardChanges()">
+          <i class="fa-solid fa-rotate-right"></i> Retry
+        </button>
+      </div>
+    } @else {
     <!-- Content Versions List/Tabs -->
     @if (templateContents.length > 0) {
       <div class="content-versions-tabs">
@@ -308,6 +321,7 @@
           </button>
         }
       </div>
+    }
     }
   </div>
 }

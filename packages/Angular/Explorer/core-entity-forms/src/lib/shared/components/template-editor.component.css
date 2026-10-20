@@ -545,8 +545,9 @@
     border-radius: 3px;
 }
 
-/* No content state */
-.no-content-state {
+/* No content state, and the failed-read state that must not look like it */
+.no-content-state,
+.contents-load-failed {
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -559,19 +560,31 @@
     text-align: center;
 }
 
-.no-content-state i {
+.no-content-state i,
+.contents-load-failed i {
     font-size: 48px;
     margin-bottom: 16px;
     color: var(--mj-text-muted);
     opacity: 0.6;
 }
 
-.no-content-state h5 {
+.no-content-state h5,
+.contents-load-failed h5 {
     color: var(--mj-text-secondary);
     margin-bottom: 8px;
 }
 
-.no-content-state p {
+.no-content-state p,
+.contents-load-failed p {
     color: var(--mj-text-muted);
     margin-bottom: 20px;
+}
+
+.contents-load-failed {
+    border-color: var(--mj-status-error);
+}
+
+.contents-load-failed i {
+    color: var(--mj-status-error);
+    opacity: 1;
 }
