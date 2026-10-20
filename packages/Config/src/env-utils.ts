@@ -35,7 +35,7 @@
  * parseBooleanEnv('');
  * ```
  */
-export function parseBooleanEnv(value: string | undefined | null): boolean {
+export function ParseBooleanEnv(value: string | undefined | null): boolean {
   if (!value) {
     return false;
   }
@@ -44,4 +44,9 @@ export function parseBooleanEnv(value: string | undefined | null): boolean {
   const truthyValues = ['true', '1', 'yes', 'y', 'on', 't'];
 
   return truthyValues.includes(normalized);
+}
+
+/** @deprecated Use {@link ParseBooleanEnv}. */
+export function parseBooleanEnv(value: string | undefined | null): boolean {
+  return ParseBooleanEnv(value);
 }

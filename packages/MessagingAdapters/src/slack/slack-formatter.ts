@@ -13,7 +13,7 @@
  * @see https://api.slack.com/reference/block-kit
  */
 
-import { splitMarkdownIntoSections, convertToSlackMrkdwn, splitTextIntoChunks } from '../base/message-formatter.js';
+import { SplitMarkdownIntoSections, ConvertToSlackMrkdwn, SplitTextIntoChunks } from '../base/message-formatter.js';
 
 /** Maximum character length for a single Slack text element. */
 const SLACK_TEXT_BLOCK_MAX_LENGTH = 3000;
@@ -42,9 +42,9 @@ const SLACK_HEADER_MAX_LENGTH = 150;
  * // ]
  * ```
  */
-export function markdownToBlocks(markdown: string): Record<string, unknown>[] {
+export function MarkdownToBlocks(markdown: string): Record<string, unknown>[] {
     const blocks: Record<string, unknown>[] = [];
-    const sections = splitMarkdownIntoSections(markdown);
+    const sections = SplitMarkdownIntoSections(markdown);
 
     for (const section of sections) {
         switch (section.Type) {
@@ -69,6 +69,11 @@ export function markdownToBlocks(markdown: string): Record<string, unknown>[] {
     }
 
     return blocks;
+}
+
+/** @deprecated Use {@link MarkdownToBlocks}. */
+export function markdownToBlocks(markdown: string): Record<string, unknown>[] {
+    return MarkdownToBlocks(markdown);
 }
 
 /**
@@ -100,7 +105,7 @@ function createCodeBlocks(code: string): Record<string, unknown>[] {
     }
 
     // Split long code blocks
-    const chunks = splitTextIntoChunks(code, SLACK_TEXT_BLOCK_MAX_LENGTH - 10); // Account for backtick wrapping
+    const chunks = SplitTextIntoChunks(code, SLACK_TEXT_BLOCK_MAX_LENGTH - 10); // Account for backtick wrapping
     return chunks.map(chunk => ({
         type: 'section',
         text: { type: 'mrkdwn', text: '```\n' + chunk + '\n```' }
@@ -112,7 +117,7 @@ function createCodeBlocks(code: string): Record<string, unknown>[] {
  * Converts Markdown formatting to Slack mrkdwn and splits if too long.
  */
 function createTextBlocks(text: string): Record<string, unknown>[] {
-    const mrkdwn = convertToSlackMrkdwn(text);
+    const mrkdwn = ConvertToSlackMrkdwn(text);
 
     if (mrkdwn.length <= SLACK_TEXT_BLOCK_MAX_LENGTH) {
         return [{
@@ -122,7 +127,7 @@ function createTextBlocks(text: string): Record<string, unknown>[] {
     }
 
     // Split long text blocks
-    const chunks = splitTextIntoChunks(mrkdwn, SLACK_TEXT_BLOCK_MAX_LENGTH);
+    const chunks = SplitTextIntoChunks(mrkdwn, SLACK_TEXT_BLOCK_MAX_LENGTH);
     return chunks.map(chunk => ({
         type: 'section',
         text: { type: 'mrkdwn', text: chunk }

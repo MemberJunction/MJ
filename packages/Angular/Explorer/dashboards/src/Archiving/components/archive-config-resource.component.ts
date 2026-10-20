@@ -27,7 +27,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ArchiveConfigAdminComponent } from '@memberjunction/ng-archive-manager';
 import { AgentToolResult } from '../../shared/agent-tool-validation';
 import {
-    buildArchiveConfigAgentContext,
+    BuildArchiveConfigAgentContext,
     ArchiveConfigAgentContextInput,
     ARCHIVE_NAME_LIST_CAP,
 } from '../archive-agent-context';
@@ -101,7 +101,7 @@ export class ArchiveConfigResourceComponent extends BaseResourceComponent implem
             ArchivedEntityNames: this.archivedEntityNames,
             IsLoading: this.configAdmin?.IsLoading ?? false,
         };
-        this.navigationService.SetAgentContext(this, buildArchiveConfigAgentContext(input));
+        this.navigationService.SetAgentContext(this, BuildArchiveConfigAgentContext(input));
     }
 
     /**

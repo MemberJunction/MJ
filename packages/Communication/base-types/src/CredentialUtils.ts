@@ -81,7 +81,7 @@ export interface ProviderCredentialsBase {
  * );
  * ```
  */
-export function resolveCredentialValue<T>(
+export function ResolveCredentialValue<T>(
     requestValue: T | undefined,
     envValue: T | undefined,
     disableFallback: boolean
@@ -97,6 +97,15 @@ export function resolveCredentialValue<T>(
     }
 
     return undefined;
+}
+
+/** @deprecated Use {@link ResolveCredentialValue}. */
+export function resolveCredentialValue<T>(
+    requestValue: T | undefined,
+    envValue: T | undefined,
+    disableFallback: boolean
+): T | undefined {
+    return ResolveCredentialValue(requestValue, envValue, disableFallback);
 }
 
 /**
@@ -118,7 +127,7 @@ export function resolveCredentialValue<T>(
  * // Throws: "Missing required credentials for SendGrid: apiKey. Provide in request or set environment variables."
  * ```
  */
-export function validateRequiredCredentials(
+export function ValidateRequiredCredentials(
     resolved: Record<string, unknown>,
     requiredFields: string[],
     providerName: string
@@ -133,6 +142,15 @@ export function validateRequiredCredentials(
             `Provide in request or set environment variables.`
         );
     }
+}
+
+/** @deprecated Use {@link ValidateRequiredCredentials}. */
+export function validateRequiredCredentials(
+    resolved: Record<string, unknown>,
+    requiredFields: string[],
+    providerName: string
+): void {
+    return ValidateRequiredCredentials(resolved, requiredFields, providerName);
 }
 
 /**
@@ -182,7 +200,7 @@ export interface CredentialResolutionResult<T extends Record<string, unknown>> {
  * console.log(result.fieldSources); // { tenantId: 'request', clientId: 'environment', ... }
  * ```
  */
-export function resolveCredentials<T extends Record<string, unknown>>(
+export function ResolveCredentials<T extends Record<string, unknown>>(
     requestCredentials: Partial<T> | undefined,
     envCredentials: Partial<T>,
     fieldNames: (keyof T)[],
@@ -221,4 +239,14 @@ export function resolveCredentials<T extends Record<string, unknown>>(
         source,
         fieldSources: fieldSources as Record<keyof T, 'request' | 'environment'>
     };
+}
+
+/** @deprecated Use {@link ResolveCredentials}. */
+export function resolveCredentials<T extends Record<string, unknown>>(
+    requestCredentials: Partial<T> | undefined,
+    envCredentials: Partial<T>,
+    fieldNames: (keyof T)[],
+    disableFallback: boolean
+): CredentialResolutionResult<Partial<T>> {
+    return ResolveCredentials(requestCredentials, envCredentials, fieldNames, disableFallback);
 }

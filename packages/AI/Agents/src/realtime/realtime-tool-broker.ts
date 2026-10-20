@@ -121,11 +121,11 @@ export function BuildTourGuidanceClause(): string {
  */
 export interface RealtimeColleague {
     /** The colleague agent's display name, used to address it in `invoke-target-agent` and in narration. */
-    name: string;
+    name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Short description of what the colleague does — helps the model decide when to delegate. */
-    description?: string;
+    description?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** How to narrate a handoff to THIS colleague (per-target override already resolved). */
-    disclosure: RealtimeDisclosurePolicy;
+    disclosure: RealtimeDisclosurePolicy;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

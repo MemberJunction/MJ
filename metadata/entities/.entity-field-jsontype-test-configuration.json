@@ -27,6 +27,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tests&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:38.403Z",
+            "checksum": "349c6b438e2f81c2d01c62bd1feca2f19059c0365bd7aca3bf98d1ec348da87b"
           }
         }
       ]

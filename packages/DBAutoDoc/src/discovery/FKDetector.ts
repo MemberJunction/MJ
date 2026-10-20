@@ -22,7 +22,7 @@ export class FKDetector {
    * A column is FK-eligible if it has a key-compatible data type and values look like keys.
    * This list constrains what the LLM is allowed to recommend as FKs.
    */
-  public getFKEligibleColumns(schemaName: string, tableName: string): string[] {
+  public GetFKEligibleColumns(schemaName: string, tableName: string): string[] {
     if (!this.statsCache) return [];
     const tableStats = this.statsCache.getTableStats(schemaName, tableName);
     if (!tableStats) return [];
@@ -31,10 +31,15 @@ export class FKDetector {
       .map(col => col.columnName);
   }
 
+  /** @deprecated Use {@link GetFKEligibleColumns}. */
+  public getFKEligibleColumns(schemaName: string, tableName: string): string[] {
+    return this.GetFKEligibleColumns(schemaName, tableName);
+  }
+
   /**
    * Detect foreign key candidates for a table
    */
-  public async detectFKCandidates(
+  public async DetectFKCandidates(
     schemas: SchemaDefinition[],
     sourceSchema: string,
     sourceTable: TableDefinition,
@@ -157,6 +162,17 @@ export class FKDetector {
 
     // Sort by confidence descending
     return candidates.sort((a, b) => b.confidence - a.confidence);
+  }
+
+  /** @deprecated Use {@link DetectFKCandidates}. */
+  public async detectFKCandidates(
+    schemas: SchemaDefinition[],
+    sourceSchema: string,
+    sourceTable: TableDefinition,
+    discoveredPKs: PKCandidate[],
+    iteration: number
+  ): Promise<FKCandidate[]> {
+    return this.DetectFKCandidates(schemas, sourceSchema, sourceTable, discoveredPKs, iteration);
   }
 
   /**

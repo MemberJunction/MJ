@@ -27,13 +27,13 @@ vi.mock('@memberjunction/generic-database-provider', () => ({
     resolveDbPlatformFromEnv: vi.fn().mockReturnValue(undefined),
 }));
 
-import { RunCommandsBase, formatCommandFailureDetail } from '../Misc/runCommand';
+import { RunCommandsBase, FormatCommandFailureDetail } from '../Misc/runCommand';
 import type { CommandExecutionResult } from '../Misc/runCommand';
 
 describe('formatCommandFailureDetail', () => {
     it('keeps the last lines of a long diagnostic', () => {
         const lines = Array.from({ length: 80 }, (_, i) => `line ${i + 1}`);
-        const detail = formatCommandFailureDetail({
+        const detail = FormatCommandFailureDetail({
             output: lines.join('\n'),
             error: 'Process exited with code 2',
             success: false,
@@ -141,7 +141,7 @@ describe('RunCommandsBase', () => {
             expect(result.success).toBe(false);
             expect(result.error).toMatch(/exited with code 2/i);
             expect(result.output).toMatch(/error TS2307/i);
-            expect(formatCommandFailureDetail(result)).toMatch(/error TS2307/i);
+            expect(FormatCommandFailureDetail(result)).toMatch(/error TS2307/i);
         });
 
         it('keeps running later commands after a non-zero exit', async () => {
@@ -190,6 +190,22 @@ describe('RunCommandsBase', () => {
             });
             expect(result.success).toBe(true);
             expect(result.elapsedTime).toBeGreaterThanOrEqual(250);
+        });
+
+        it('clears the timeout timer when the command finishes before the timeout', async () => {
+            // Regression: the timer used to survive a normal exit, then fire later,
+            // log "TIMED OUT" and tree-kill a dead (possibly recycled) PID.
+            const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
+            const result = await runner.runCommand({
+                command: 'true',
+                args: [],
+                workingDirectory: '/tmp',
+                when: 'test',
+                timeout: 60000,
+            });
+            expect(result.success).toBe(true);
+            expect(clearSpy).toHaveBeenCalled();
+            clearSpy.mockRestore();
         });
 
         it('still fails a non-daemon command that times out', async () => {

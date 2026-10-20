@@ -91,7 +91,7 @@ console.log(multimodal.vector.length); // 1536
 
 ## Class Registration
 
-- `CohereReranker` -- Registered as `CohereLLM` via `@RegisterClass(BaseReranker, 'CohereLLM')`.
+- `CohereReranker` -- Registered as `CohereReranker`, the driver class on the Cohere reranker model-vendor rows, and as `CohereLLM`. Its legacy environment-variable key is `AI_VENDOR_API_KEY__COHERERERANKER`.
 - `CohereEmbedding` -- Registered via `@RegisterClass(BaseEmbeddings, 'CohereEmbedding')`.
 
 ## Dependencies

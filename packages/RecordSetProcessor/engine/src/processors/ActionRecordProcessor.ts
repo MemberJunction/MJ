@@ -22,23 +22,33 @@ export class ActionRecordProcessor implements IRecordProcessor {
      * @param inputMapping - Optional mapping config resolved against `{ record, recordId, entityId }`
      *   to build the action's input params (e.g. `{ "CustomerID": "record.ID", "Tier": "record.Tier" }`).
      */
-    constructor(private readonly actionID: string, private readonly inputMapping?: unknown) {}
+    constructor(private readonly actionID: string, private readonly inputMapping?: Record<string, string>) {}
 
     /** Named sources exposed to the input mapping for a record. */
-    public static buildSources(record: RecordRef): Record<string, unknown> {
+    public static BuildSources(record: RecordRef): Record<string, unknown> {
         return { record: record.Record ?? {}, recordId: record.RecordID, entityId: record.EntityID };
     }
 
+    /** @deprecated Use {@link BuildSources}. */
+    public static buildSources(record: RecordRef): Record<string, unknown> {
+        return this.BuildSources(record);
+    }
+
     /** Resolves the input mapping into Action input params. */
-    public static buildActionParams(inputMapping: unknown, record: RecordRef): ActionParam[] {
+    public static BuildActionParams(inputMapping: Record<string, string> | undefined, record: RecordRef): ActionParam[] {
         const mapped = inputMapping
             ? resolveValueMapping<Record<string, unknown>>(inputMapping, ActionRecordProcessor.buildSources(record))
             : {};
         return Object.entries(mapped).map(([Name, Value]) => ({ Name, Value, Type: 'Input' as const }));
     }
 
+    /** @deprecated Use {@link BuildActionParams}. */
+    public static buildActionParams(inputMapping: Record<string, string> | undefined, record: RecordRef): ActionParam[] {
+        return this.BuildActionParams(inputMapping, record);
+    }
+
     /** Collects an action's output params into a plain payload object. */
-    public static extractOutputs(params?: ActionParam[]): Record<string, unknown> {
+    public static ExtractOutputs(params?: ActionParam[]): Record<string, unknown> {
         const out: Record<string, unknown> = {};
         for (const p of params ?? []) {
             if (p.Type === 'Output' || p.Type === 'Both') {
@@ -46,6 +56,11 @@ export class ActionRecordProcessor implements IRecordProcessor {
             }
         }
         return out;
+    }
+
+    /** @deprecated Use {@link ExtractOutputs}. */
+    public static extractOutputs(params?: ActionParam[]): Record<string, unknown> {
+        return this.ExtractOutputs(params);
     }
 
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {

@@ -63,18 +63,18 @@ export class IntegrationActionExecutor extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // 1. Parse config
-            const config = this.ParseConfig(params);
+            const config = this.parseConfig(params);
 
             // 2. Resolve connector
-            const connector = await this.ResolveConnector(config.IntegrationName, params);
+            const connector = await this.resolveConnector(config.IntegrationName, params);
 
             // 3. Resolve CompanyIntegration
-            const companyIntegration = await this.ResolveCompanyIntegration(
+            const companyIntegration = await this.resolveCompanyIntegration(
                 config.IntegrationName, params
             );
 
             // 4. Dispatch to verb handler
-            const result = await this.DispatchVerb(
+            const result = await this.dispatchVerb(
                 config, connector, companyIntegration, params
             );
 
@@ -103,16 +103,16 @@ export class IntegrationActionExecutor extends BaseAction {
      *      three values are read (case-insensitive) from the ActionParams. This lets a
      *      single generic action do CRUD on ANY object without pre-generation.
      */
-    private ParseConfig(params: RunActionParams): IntegrationActionConfig {
+    private parseConfig(params: RunActionParams): IntegrationActionConfig {
         const configJson = params.Action?.Config_;
         if (configJson && configJson.trim().length > 0) {
-            return this.ParseConfigFromJson(configJson);
+            return this.parseConfigFromJson(configJson);
         }
-        return this.ParseConfigFromParams(params);
+        return this.parseConfigFromParams(params);
     }
 
     /** Parse + validate the JSON stored in Action.Config_ (pre-generated actions). */
-    private ParseConfigFromJson(configJson: string): IntegrationActionConfig {
+    private parseConfigFromJson(configJson: string): IntegrationActionConfig {
         const parsed = JSON.parse(configJson) as Record<string, unknown>;
         const integrationName = parsed['IntegrationName'] as string | undefined;
         const objectName = parsed['ObjectName'] as string | undefined;
@@ -134,10 +134,10 @@ export class IntegrationActionExecutor extends BaseAction {
      * still references Action.Config_ so existing pre-generated callers get a
      * familiar diagnostic when nothing at all was provided.
      */
-    private ParseConfigFromParams(params: RunActionParams): IntegrationActionConfig {
-        const integrationName = this.GetParamValue(params.Params, 'IntegrationName');
-        const objectName = this.GetParamValue(params.Params, 'ObjectName');
-        const verb = this.GetParamValue(params.Params, 'Verb') as IntegrationActionVerb | null;
+    private parseConfigFromParams(params: RunActionParams): IntegrationActionConfig {
+        const integrationName = this.getParamValue(params.Params, 'IntegrationName');
+        const objectName = this.getParamValue(params.Params, 'ObjectName');
+        const verb = this.getParamValue(params.Params, 'Verb') as IntegrationActionVerb | null;
 
         if (!integrationName || !objectName || !verb) {
             throw new Error(
@@ -151,15 +151,15 @@ export class IntegrationActionExecutor extends BaseAction {
 
     // ─── Connector Resolution ────────────────────────────────────────
 
-    private async ResolveConnector(
+    private async resolveConnector(
         integrationName: string,
         params: RunActionParams
     ): Promise<BaseIntegrationConnector> {
-        const integration = await this.LoadIntegrationEntity(integrationName, params);
+        const integration = await this.loadIntegrationEntity(integrationName, params);
         return ConnectorFactory.Resolve(integration);
     }
 
-    private async LoadIntegrationEntity(
+    private async loadIntegrationEntity(
         integrationName: string,
         params: RunActionParams
     ): Promise<MJIntegrationEntity> {
@@ -180,14 +180,14 @@ export class IntegrationActionExecutor extends BaseAction {
 
     // ─── CompanyIntegration Resolution ───────────────────────────────
 
-    private async ResolveCompanyIntegration(
+    private async resolveCompanyIntegration(
         integrationName: string,
         params: RunActionParams
     ): Promise<MJCompanyIntegrationEntity> {
         // Check if CompanyIntegrationID was passed as an ActionParam
-        const ciIdParam = this.GetParamValue(params.Params, 'CompanyIntegrationID');
+        const ciIdParam = this.getParamValue(params.Params, 'CompanyIntegrationID');
         if (ciIdParam) {
-            return this.LoadCompanyIntegrationByID(ciIdParam, params);
+            return this.loadCompanyIntegrationByID(ciIdParam, params);
         }
 
         // Otherwise look up the first active CompanyIntegration for this integration name
@@ -209,7 +209,7 @@ export class IntegrationActionExecutor extends BaseAction {
         return result.Results[0];
     }
 
-    private async LoadCompanyIntegrationByID(
+    private async loadCompanyIntegrationByID(
         id: string,
         params: RunActionParams
     ): Promise<MJCompanyIntegrationEntity> {
@@ -226,7 +226,7 @@ export class IntegrationActionExecutor extends BaseAction {
 
     // ─── Verb Dispatch ───────────────────────────────────────────────
 
-    private async DispatchVerb(
+    private async dispatchVerb(
         config: IntegrationActionConfig,
         connector: BaseIntegrationConnector,
         companyIntegration: MJCompanyIntegrationEntity,
@@ -234,19 +234,19 @@ export class IntegrationActionExecutor extends BaseAction {
     ): Promise<ActionResultSimple> {
         switch (config.Verb) {
             case 'Get':
-                return this.HandleGet(config, connector, companyIntegration, params);
+                return this.handleGet(config, connector, companyIntegration, params);
             case 'Create':
-                return this.HandleCreate(config, connector, companyIntegration, params);
+                return this.handleCreate(config, connector, companyIntegration, params);
             case 'Update':
-                return this.HandleUpdate(config, connector, companyIntegration, params);
+                return this.handleUpdate(config, connector, companyIntegration, params);
             case 'Upsert':
-                return this.HandleUpsert(config, connector, companyIntegration, params);
+                return this.handleUpsert(config, connector, companyIntegration, params);
             case 'Delete':
-                return this.HandleDelete(config, connector, companyIntegration, params);
+                return this.handleDelete(config, connector, companyIntegration, params);
             case 'Search':
-                return this.HandleSearch(config, connector, companyIntegration, params);
+                return this.handleSearch(config, connector, companyIntegration, params);
             case 'List':
-                return this.HandleList(config, connector, companyIntegration, params);
+                return this.handleList(config, connector, companyIntegration, params);
             default:
                 throw new Error(`Unsupported verb: ${config.Verb}`);
         }
@@ -254,13 +254,13 @@ export class IntegrationActionExecutor extends BaseAction {
 
     // ─── Get ─────────────────────────────────────────────────────────
 
-    private async HandleGet(
+    private async handleGet(
         config: IntegrationActionConfig,
         connector: BaseIntegrationConnector,
         companyIntegration: MJCompanyIntegrationEntity,
         params: RunActionParams
     ): Promise<ActionResultSimple> {
-        const externalID = this.GetRequiredParam(params.Params, 'ExternalID');
+        const externalID = this.getRequiredParam(params.Params, 'ExternalID');
 
         const ctx: GetRecordContext = {
             CompanyIntegration: companyIntegration,
@@ -271,27 +271,27 @@ export class IntegrationActionExecutor extends BaseAction {
 
         const record = await connector.GetRecord(ctx);
         if (!record) {
-            return this.BuildResult(false, 'NOT_FOUND', `Record ${externalID} not found`, params.Params);
+            return this.buildResult(false, 'NOT_FOUND', `Record ${externalID} not found`, params.Params);
         }
 
-        this.SetOutputParam(params.Params, 'Record', record.Fields);
-        this.SetOutputParam(params.Params, 'ExternalID', record.ExternalID);
-        return this.BuildResult(true, 'SUCCESS', `Retrieved ${config.ObjectName} ${externalID}`, params.Params);
+        this.setOutputParam(params.Params, 'Record', record.Fields);
+        this.setOutputParam(params.Params, 'ExternalID', record.ExternalID);
+        return this.buildResult(true, 'SUCCESS', `Retrieved ${config.ObjectName} ${externalID}`, params.Params);
     }
 
     // ─── Create ──────────────────────────────────────────────────────
 
-    private async HandleCreate(
+    private async handleCreate(
         config: IntegrationActionConfig,
         connector: BaseIntegrationConnector,
         companyIntegration: MJCompanyIntegrationEntity,
         params: RunActionParams
     ): Promise<ActionResultSimple> {
         if (!connector.SupportsCreate) {
-            return this.BuildResult(false, 'NOT_SUPPORTED', `Create not supported for ${config.IntegrationName}`, params.Params);
+            return this.buildResult(false, 'NOT_SUPPORTED', `Create not supported for ${config.IntegrationName}`, params.Params);
         }
 
-        const attributes = this.CollectInputAttributes(params.Params);
+        const attributes = this.collectInputAttributes(params.Params);
         const ctx: CreateRecordContext = {
             CompanyIntegration: companyIntegration,
             ObjectName: config.ObjectName,
@@ -300,23 +300,23 @@ export class IntegrationActionExecutor extends BaseAction {
         };
 
         const result = await connector.CreateRecord(ctx);
-        return this.CRUDResultToActionResult(result, 'Create', config.ObjectName, params.Params);
+        return this.cRUDResultToActionResult(result, 'Create', config.ObjectName, params.Params);
     }
 
     // ─── Update ──────────────────────────────────────────────────────
 
-    private async HandleUpdate(
+    private async handleUpdate(
         config: IntegrationActionConfig,
         connector: BaseIntegrationConnector,
         companyIntegration: MJCompanyIntegrationEntity,
         params: RunActionParams
     ): Promise<ActionResultSimple> {
         if (!connector.SupportsUpdate) {
-            return this.BuildResult(false, 'NOT_SUPPORTED', `Update not supported for ${config.IntegrationName}`, params.Params);
+            return this.buildResult(false, 'NOT_SUPPORTED', `Update not supported for ${config.IntegrationName}`, params.Params);
         }
 
-        const externalID = this.GetRequiredParam(params.Params, 'ExternalID');
-        const attributes = this.CollectInputAttributes(params.Params);
+        const externalID = this.getRequiredParam(params.Params, 'ExternalID');
+        const attributes = this.collectInputAttributes(params.Params);
         const ctx: UpdateRecordContext = {
             CompanyIntegration: companyIntegration,
             ObjectName: config.ObjectName,
@@ -326,23 +326,23 @@ export class IntegrationActionExecutor extends BaseAction {
         };
 
         const result = await connector.UpdateRecord(ctx);
-        return this.CRUDResultToActionResult(result, 'Update', config.ObjectName, params.Params);
+        return this.cRUDResultToActionResult(result, 'Update', config.ObjectName, params.Params);
     }
 
     // ─── Upsert ──────────────────────────────────────────────────────
 
-    private async HandleUpsert(
+    private async handleUpsert(
         config: IntegrationActionConfig,
         connector: BaseIntegrationConnector,
         companyIntegration: MJCompanyIntegrationEntity,
         params: RunActionParams
     ): Promise<ActionResultSimple> {
         if (!connector.SupportsUpsert) {
-            return this.BuildResult(false, 'NOT_SUPPORTED', `Upsert not supported for ${config.IntegrationName}`, params.Params);
+            return this.buildResult(false, 'NOT_SUPPORTED', `Upsert not supported for ${config.IntegrationName}`, params.Params);
         }
 
-        const attributes = this.CollectInputAttributes(params.Params);
-        const idProperty = this.GetParamValue(params.Params, 'IDProperty');
+        const attributes = this.collectInputAttributes(params.Params);
+        const idProperty = this.getParamValue(params.Params, 'IDProperty');
         const ctx: UpsertRecordContext = {
             CompanyIntegration: companyIntegration,
             ObjectName: config.ObjectName,
@@ -352,22 +352,22 @@ export class IntegrationActionExecutor extends BaseAction {
         };
 
         const result = await connector.Upsert(ctx);
-        return this.CRUDResultToActionResult(result, 'Upsert', config.ObjectName, params.Params);
+        return this.cRUDResultToActionResult(result, 'Upsert', config.ObjectName, params.Params);
     }
 
     // ─── Delete ──────────────────────────────────────────────────────
 
-    private async HandleDelete(
+    private async handleDelete(
         config: IntegrationActionConfig,
         connector: BaseIntegrationConnector,
         companyIntegration: MJCompanyIntegrationEntity,
         params: RunActionParams
     ): Promise<ActionResultSimple> {
         if (!connector.SupportsDelete) {
-            return this.BuildResult(false, 'NOT_SUPPORTED', `Delete not supported for ${config.IntegrationName}`, params.Params);
+            return this.buildResult(false, 'NOT_SUPPORTED', `Delete not supported for ${config.IntegrationName}`, params.Params);
         }
 
-        const externalID = this.GetRequiredParam(params.Params, 'ExternalID');
+        const externalID = this.getRequiredParam(params.Params, 'ExternalID');
         const ctx: DeleteRecordContext = {
             CompanyIntegration: companyIntegration,
             ObjectName: config.ObjectName,
@@ -376,25 +376,25 @@ export class IntegrationActionExecutor extends BaseAction {
         };
 
         const result = await connector.DeleteRecord(ctx);
-        return this.CRUDResultToActionResult(result, 'Delete', config.ObjectName, params.Params);
+        return this.cRUDResultToActionResult(result, 'Delete', config.ObjectName, params.Params);
     }
 
     // ─── Search ──────────────────────────────────────────────────────
 
-    private async HandleSearch(
+    private async handleSearch(
         config: IntegrationActionConfig,
         connector: BaseIntegrationConnector,
         companyIntegration: MJCompanyIntegrationEntity,
         params: RunActionParams
     ): Promise<ActionResultSimple> {
         if (!connector.SupportsSearch) {
-            return this.BuildResult(false, 'NOT_SUPPORTED', `Search not supported for ${config.IntegrationName}`, params.Params);
+            return this.buildResult(false, 'NOT_SUPPORTED', `Search not supported for ${config.IntegrationName}`, params.Params);
         }
 
-        const filters = this.CollectInputAttributes(params.Params) as Record<string, string>;
-        const pageSize = this.GetOptionalNumericParam(params.Params, 'PageSize');
-        const page = this.GetOptionalNumericParam(params.Params, 'Page');
-        const sort = this.GetParamValue(params.Params, 'Sort');
+        const filters = this.collectInputAttributes(params.Params) as Record<string, string>;
+        const pageSize = this.getOptionalNumericParam(params.Params, 'PageSize');
+        const page = this.getOptionalNumericParam(params.Params, 'Page');
+        const sort = this.getParamValue(params.Params, 'Sort');
 
         const ctx: SearchContext = {
             CompanyIntegration: companyIntegration,
@@ -407,11 +407,11 @@ export class IntegrationActionExecutor extends BaseAction {
         };
 
         const result: SearchResult = await connector.SearchRecords(ctx);
-        this.SetOutputParam(params.Params, 'Records', result.Records.map(r => r.Fields));
-        this.SetOutputParam(params.Params, 'TotalCount', result.TotalCount);
-        this.SetOutputParam(params.Params, 'HasMore', result.HasMore);
+        this.setOutputParam(params.Params, 'Records', result.Records.map(r => r.Fields));
+        this.setOutputParam(params.Params, 'TotalCount', result.TotalCount);
+        this.setOutputParam(params.Params, 'HasMore', result.HasMore);
 
-        return this.BuildResult(
+        return this.buildResult(
             true, 'SUCCESS',
             `Found ${result.TotalCount} ${config.ObjectName} record(s)`,
             params.Params
@@ -420,19 +420,19 @@ export class IntegrationActionExecutor extends BaseAction {
 
     // ─── List ────────────────────────────────────────────────────────
 
-    private async HandleList(
+    private async handleList(
         config: IntegrationActionConfig,
         connector: BaseIntegrationConnector,
         companyIntegration: MJCompanyIntegrationEntity,
         params: RunActionParams
     ): Promise<ActionResultSimple> {
         if (!connector.SupportsListing) {
-            return this.BuildResult(false, 'NOT_SUPPORTED', `List not supported for ${config.IntegrationName}`, params.Params);
+            return this.buildResult(false, 'NOT_SUPPORTED', `List not supported for ${config.IntegrationName}`, params.Params);
         }
 
-        const pageSize = this.GetOptionalNumericParam(params.Params, 'PageSize');
-        const cursor = this.GetParamValue(params.Params, 'Cursor');
-        const sort = this.GetParamValue(params.Params, 'Sort');
+        const pageSize = this.getOptionalNumericParam(params.Params, 'PageSize');
+        const cursor = this.getParamValue(params.Params, 'Cursor');
+        const sort = this.getParamValue(params.Params, 'Sort');
 
         const ctx: ListContext = {
             CompanyIntegration: companyIntegration,
@@ -444,14 +444,14 @@ export class IntegrationActionExecutor extends BaseAction {
         };
 
         const result: ListResult = await connector.ListRecords(ctx);
-        this.SetOutputParam(params.Params, 'Records', result.Records.map(r => r.Fields));
-        this.SetOutputParam(params.Params, 'HasMore', result.HasMore);
-        this.SetOutputParam(params.Params, 'NextCursor', result.NextCursor);
+        this.setOutputParam(params.Params, 'Records', result.Records.map(r => r.Fields));
+        this.setOutputParam(params.Params, 'HasMore', result.HasMore);
+        this.setOutputParam(params.Params, 'NextCursor', result.NextCursor);
         if (result.TotalCount != null) {
-            this.SetOutputParam(params.Params, 'TotalCount', result.TotalCount);
+            this.setOutputParam(params.Params, 'TotalCount', result.TotalCount);
         }
 
-        return this.BuildResult(
+        return this.buildResult(
             true, 'SUCCESS',
             `Listed ${result.Records.length} ${config.ObjectName} record(s)`,
             params.Params
@@ -461,7 +461,7 @@ export class IntegrationActionExecutor extends BaseAction {
     // ─── Parameter Helpers ───────────────────────────────────────────
 
     /** Gets a parameter value by name (case-insensitive). Returns null if not found. */
-    private GetParamValue(actionParams: ActionParam[], name: string): string | null {
+    private getParamValue(actionParams: ActionParam[], name: string): string | null {
         const param = actionParams.find(
             p => p.Name.trim().toLowerCase() === name.toLowerCase() && p.Type !== 'Output'
         );
@@ -470,8 +470,8 @@ export class IntegrationActionExecutor extends BaseAction {
     }
 
     /** Gets a required parameter, throwing if not found. */
-    private GetRequiredParam(actionParams: ActionParam[], name: string): string {
-        const value = this.GetParamValue(actionParams, name);
+    private getRequiredParam(actionParams: ActionParam[], name: string): string {
+        const value = this.getParamValue(actionParams, name);
         if (!value) {
             throw new Error(`Required parameter "${name}" is missing`);
         }
@@ -479,8 +479,8 @@ export class IntegrationActionExecutor extends BaseAction {
     }
 
     /** Gets an optional numeric parameter. */
-    private GetOptionalNumericParam(actionParams: ActionParam[], name: string): number | undefined {
-        const value = this.GetParamValue(actionParams, name);
+    private getOptionalNumericParam(actionParams: ActionParam[], name: string): number | undefined {
+        const value = this.getParamValue(actionParams, name);
         if (!value) return undefined;
         const parsed = Number(value);
         return isNaN(parsed) ? undefined : parsed;
@@ -490,7 +490,7 @@ export class IntegrationActionExecutor extends BaseAction {
      * Collects all Input parameters (excluding system params like ExternalID, CompanyIntegrationID,
      * PageSize, Page, Cursor, Sort, IDProperty) into a key-value object suitable for CRUD Attributes.
      */
-    private CollectInputAttributes(actionParams: ActionParam[]): Record<string, unknown> {
+    private collectInputAttributes(actionParams: ActionParam[]): Record<string, unknown> {
         const systemParams = new Set([
             'externalid', 'companyintegrationid', 'pagesize', 'page', 'cursor', 'sort', 'idproperty',
             // Generic catch-all routing params — never treated as record attributes.
@@ -510,7 +510,7 @@ export class IntegrationActionExecutor extends BaseAction {
     }
 
     /** Sets (or creates) an output parameter. */
-    private SetOutputParam(actionParams: ActionParam[], name: string, value: unknown): void {
+    private setOutputParam(actionParams: ActionParam[], name: string, value: unknown): void {
         const existing = actionParams.find(
             p => p.Name.trim().toLowerCase() === name.toLowerCase() && p.Type === 'Output'
         );
@@ -523,7 +523,7 @@ export class IntegrationActionExecutor extends BaseAction {
 
     // ─── Result Builders ─────────────────────────────────────────────
 
-    private BuildResult(
+    private buildResult(
         success: boolean,
         resultCode: string,
         message: string,
@@ -537,7 +537,7 @@ export class IntegrationActionExecutor extends BaseAction {
         } as ActionResultSimple;
     }
 
-    private CRUDResultToActionResult(
+    private cRUDResultToActionResult(
         result: CRUDResult,
         operation: string,
         objectName: string,
@@ -545,16 +545,16 @@ export class IntegrationActionExecutor extends BaseAction {
     ): ActionResultSimple {
         if (result.Success) {
             if (result.ExternalID) {
-                this.SetOutputParam(actionParams, 'ExternalID', result.ExternalID);
+                this.setOutputParam(actionParams, 'ExternalID', result.ExternalID);
             }
-            return this.BuildResult(
+            return this.buildResult(
                 true, 'SUCCESS',
                 `${operation} ${objectName} succeeded${result.ExternalID ? ` (ID: ${result.ExternalID})` : ''}`,
                 actionParams
             );
         }
 
-        return this.BuildResult(
+        return this.buildResult(
             false,
             `${operation.toUpperCase()}_FAILED`,
             result.ErrorMessage ?? `${operation} ${objectName} failed (HTTP ${result.StatusCode})`,

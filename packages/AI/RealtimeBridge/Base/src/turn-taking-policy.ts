@@ -162,6 +162,167 @@ export class AlwaysAddressedMatcher implements IAddressedMatcher {
 }
 
 /**
+ * How a session decides it was ADDRESSED.
+ *
+ * - `Regex`: the agent's own names/aliases matched against the diarized transcript
+ *   ({@link RegexAddressedMatcher}). Works for every model; the fallback.
+ * - `ModelSide`: the model's OWN judgement ({@link ModelSideAddressedMatcher}) — only meaningful for a
+ *   full-duplex model that hears the room continuously and can decide for itself whether it was spoken to.
+ * - `Auto`: `ModelSide` when the session's model is full-duplex, otherwise `Regex`. The default.
+ */
+export type TurnAddressingMode = 'Auto' | 'ModelSide' | 'Regex';
+
+/** A resolved (never `Auto`) addressing mode. */
+export type ResolvedTurnAddressingMode = Exclude<TurnAddressingMode, 'Auto'>;
+
+/**
+ * Resolves a requested addressing mode against what the session's model can do. `Auto` (and an omitted
+ * request) picks `ModelSide` only when the model is full-duplex; an explicit `ModelSide` request on a model
+ * that cannot do it degrades to `Regex` rather than leaving the agent permanently unable to be addressed.
+ *
+ * @param requested The configured mode, or `undefined` for the default (`Auto`).
+ * @param modelSideSupported Whether the session's model reports full-duplex capability.
+ * @returns The mode to build the matcher for.
+ */
+export function ResolveAddressingMode(requested: TurnAddressingMode | undefined, modelSideSupported: boolean): ResolvedTurnAddressingMode {
+    if (!modelSideSupported) {
+        return 'Regex';
+    }
+    return requested === 'Regex' ? 'Regex' : 'ModelSide';
+}
+
+/** How long (ms) a model-side "I am addressed" signal stays valid for the segment it was raised against. */
+export const MODEL_ADDRESSED_SIGNAL_WINDOW_MS = 4000;
+
+/**
+ * Addressed-matcher driven by the MODEL's own judgement rather than a name pattern.
+ *
+ * A full-duplex model listens continuously and knows whether a sentence was meant for it; a regex cannot
+ * ("what does the room think?", a nickname, an indirect request). The model raises its judgement through the
+ * host tool `i_am_addressed` (see `turn-taking-tools.ts`), or implicitly by starting to speak; the engine
+ * relays either to {@link ModelSideAddressedMatcher.NoteModelAddressed}. {@link ModelSideAddressedMatcher.IsAddressed}
+ * then answers for the next evaluated human segment.
+ *
+ * The signal is a **one-shot latch with a freshness window**: it is consumed by the first matching read, and
+ * it expires after {@link MODEL_ADDRESSED_SIGNAL_WINDOW_MS}, so a stale signal can never address the agent
+ * for a later, unrelated segment. Agent-spoken segments are never addressed (no self-trigger loops).
+ */
+export class ModelSideAddressedMatcher implements IAddressedMatcher {
+    private readonly windowMs: number;
+    private readonly now: () => number;
+    private signalledAtMs: number | null = null;
+
+    /**
+     * @param windowMs Signal freshness window. Defaults to {@link MODEL_ADDRESSED_SIGNAL_WINDOW_MS}.
+     * @param now Injected clock (epoch ms). Defaults to `Date.now`.
+     */
+    constructor(windowMs: number = MODEL_ADDRESSED_SIGNAL_WINDOW_MS, now: () => number = Date.now) {
+        this.windowMs = windowMs;
+        this.now = now;
+    }
+
+    /**
+     * Records that the model judged itself addressed.
+     *
+     * @param atMs When it signalled (epoch ms). Defaults to the injected clock's now.
+     */
+    public NoteModelAddressed(atMs: number = this.now()): void {
+        this.signalledAtMs = atMs;
+    }
+
+    /** Whether an unconsumed, unexpired model signal is pending (does not consume it). */
+    public get HasPendingSignal(): boolean {
+        return this.signalledAtMs !== null && this.now() - this.signalledAtMs <= this.windowMs;
+    }
+
+    /** @inheritdoc */
+    public IsAddressed(segment: TurnTranscriptSegment): boolean {
+        if (segment.IsAgent === true || !this.HasPendingSignal) {
+            return false;
+        }
+        this.signalledAtMs = null; // consume — one signal addresses one segment
+        return true;
+    }
+}
+
+/**
+ * The matcher selected for a session, plus the model-side handle when that mode is in effect (the engine
+ * feeds it the model's signals).
+ */
+export interface BuiltAddressedMatcher {
+    /** The matcher to give {@link TurnTakingPolicyConfig.Matcher}. */
+    Matcher: IAddressedMatcher;
+    /** The resolved mode actually in effect. */
+    Mode: ResolvedTurnAddressingMode;
+    /** Present only for `ModelSide` — the engine relays the model's `i_am_addressed` signal to it. */
+    ModelSide?: ModelSideAddressedMatcher;
+}
+
+/**
+ * Builds the addressed-matcher for a session from its configured addressing mode and the agent's names.
+ *
+ * @param names The agent's names/aliases (the `Regex` fallback's patterns).
+ * @param requested The configured addressing mode; `undefined` means `Auto`.
+ * @param modelSideSupported Whether the session's model is full-duplex ({@link ResolveAddressingMode}).
+ * @param now Injected clock for the model-side freshness window.
+ * @returns The matcher and the mode in effect.
+ */
+export function BuildAddressedMatcher(
+    names: string[],
+    requested: TurnAddressingMode | undefined,
+    modelSideSupported: boolean,
+    now: () => number = Date.now,
+): BuiltAddressedMatcher {
+    const mode = ResolveAddressingMode(requested, modelSideSupported);
+    if (mode === 'ModelSide') {
+        const modelSide = new ModelSideAddressedMatcher(MODEL_ADDRESSED_SIGNAL_WINDOW_MS, now);
+        return { Matcher: modelSide, Mode: mode, ModelSide: modelSide };
+    }
+    return { Matcher: new RegexAddressedMatcher(names), Mode: mode };
+}
+
+/**
+ * A backchannel is a short acknowledgement ("mm-hm", "right", "got it") that signals listening, not a bid
+ * for the floor. These bounds define "short": an utterance at or under BOTH is a backchannel.
+ */
+export const BACKCHANNEL_MAX_DURATION_MS = 1500;
+
+/** Max words in a backchannel. See {@link BACKCHANNEL_MAX_DURATION_MS}. */
+export const BACKCHANNEL_MAX_WORDS = 3;
+
+/** The measurable shape of an utterance, as far as it is known. At least one field must be present to classify. */
+export interface UtteranceShape {
+    /** Spoken duration (ms), when known (e.g. measured from the audio burst). */
+    DurationMs?: number;
+    /** The transcript, when known. */
+    Text?: string;
+}
+
+/**
+ * Whether an utterance is a backchannel: short in time AND in words, and not a question (a question asks for
+ * a reply, so it is a bid for the floor however brief). Unknown dimensions are not held against it, but with
+ * neither dimension known the utterance cannot be classified and is treated as a full turn.
+ *
+ * @param utterance What is known about the utterance.
+ * @returns `true` for a backchannel (never takes or interrupts the floor), `false` for a full turn.
+ */
+export function IsBackchannel(utterance: UtteranceShape): boolean {
+    const text = utterance.Text?.trim() ?? '';
+    const hasText = text.length > 0;
+    const hasDuration = typeof utterance.DurationMs === 'number';
+    if (!hasDuration && !hasText) {
+        return false;
+    }
+    if (hasDuration && (utterance.DurationMs as number) > BACKCHANNEL_MAX_DURATION_MS) {
+        return false;
+    }
+    if (hasText && (text.includes('?') || text.split(/\s+/).length > BACKCHANNEL_MAX_WORDS)) {
+        return false;
+    }
+    return true;
+}
+
+/**
  * Configuration for a {@link TurnTakingPolicy} instance.
  */
 export interface TurnTakingPolicyConfig {

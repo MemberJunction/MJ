@@ -36,25 +36,40 @@
         </span>
       }
 
-      <!-- Edit (owner's completed user messages) — opens the inline editor; the server
-           sets OriginalMessageChanged when the text actually changes on save -->
-      @if (allowMessageEdit && isUserMessage && isConversationOwner && !isEditing && messageStatus === 'Complete') {
-        <span class="message-edit-icon" (click)="onEditClick()" title="Edit message">
-          <i class="fas fa-pen"></i>
-        </span>
-      }
-
       <!-- Time pill - shows for AI messages in all states (in-progress, active, complete, failed) -->
       @if (!isUserMessage && timePillText) {
         <span
           class="time-pill"
           [class.in-progress]="isInProgressAIMessage"
-          [class.active]="!isInProgressAIMessage && isAgentRunActive"
-          [class.complete]="!isInProgressAIMessage && !isAgentRunActive && messageStatus === 'Complete'"
-          [class.failed]="messageStatus === 'Error'">
-          <i class="fas fa-clock"></i>
+          [class.active]="!isInProgressAIMessage && (isAgentRunActive || HasActiveWorkflowTasks)"
+          [class.complete]="!isInProgressAIMessage && !isAgentRunActive && !HasActiveWorkflowTasks && messageStatus === 'Complete' && !IsStoppedRun"
+          [class.stopped]="IsStoppedRun && messageStatus !== 'Error'"
+          [class.failed]="messageStatus === 'Error'"
+          [class.checking]="LivenessState === 'checking'"
+          [class.stalled]="LivenessState === 'stalled'"
+          [title]="LivenessState === 'stalled' ? 'No progress reported for several minutes' : (LivenessState === 'checking' ? 'No recent progress — re-checking' : '')">
+          <i class="fas" [ngClass]="LivenessState !== 'live' ? 'fa-exclamation-triangle' : (IsStoppedRun ? 'fa-stop' : 'fa-clock')"></i>
           {{ timePillText }}
+          @if (LivenessState === 'checking') {
+            <span class="liveness-label">checking…</span>
+          } @else if (LivenessState === 'stalled') {
+            <span class="liveness-label">no response</span>
+          }
         </span>
+      }
+
+      <!-- Stop control for an in-flight agent reply. Marks the run Cancelled; the owning
+           server process aborts the in-flight step and finalizes the run as stopped. -->
+      @if (CanStopRun) {
+        <button
+          type="button"
+          class="stop-run-pill"
+          [disabled]="IsStopping"
+          (click)="OnStopClick()"
+          [title]="IsStopping ? 'Stopping the run…' : 'Stop this run'">
+          <i class="fas" [ngClass]="IsStopping ? 'fa-circle-notch fa-spin' : 'fa-stop'"></i>
+          {{ IsStopping ? 'Stopping…' : 'Stop' }}
+        </button>
       }
 
       <!-- Test feedback icon (appears for test runs only) -->
@@ -64,6 +79,39 @@
           (click)="onTestFeedbackClick()"
           title="Provide Test Feedback">
           <i class="fas fa-flask"></i>
+        </span>
+      }
+
+      <!-- Action group, always visible, styled like the gear: Edit and Fork from here on a user message,
+           Regenerate on an older answer (the last answer carries it in its footer). Labeled on the latest
+           turn, icons elsewhere. -->
+      @if (ShowsActionGroup) {
+        <span class="message-action-group" [class.labeled]="IsLatestTurn" role="group" aria-label="Message actions">
+          @if (CanEdit) {
+            <button type="button" class="message-header-action message-action-edit"
+                    (click)="OnEditClick()" title="Edit message" aria-label="Edit message">
+              <i class="fa-solid fa-pen" aria-hidden="true"></i>
+              @if (IsLatestTurn) {
+                <span>Edit</span>
+              }
+            </button>
+          }
+          @if (CanStartFork) {
+            <button type="button" class="message-header-action message-action-fork"
+                    (click)="OnForkClick($event)" title="Fork from here" aria-label="Fork from here">
+              <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
+              @if (IsLatestTurn) {
+                <span class="action-label-long">Fork from here</span>
+                <span class="action-label-short">Fork</span>
+              }
+            </button>
+          }
+          @if (ShowsHeaderRegenerate) {
+            <button type="button" class="message-header-action message-action-regenerate"
+                    (click)="OnRegenerateClick()" [title]="RegenerateTitle" [attr.aria-label]="RegenerateTitle">
+              <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+            </button>
+          }
         </span>
       }
 
@@ -87,12 +135,43 @@
 
     <div class="message-body">
       @if (!isEditing) {
+        @if (OriginatingWorkflowTask) {
+          <button
+            type="button"
+            class="workflow-continuation-banner"
+            (click)="ScrollToOriginatingWorkflow($event)"
+            title="Scroll to originating workflow card and step artifacts">
+            <span class="continuation-banner-left">
+              <i class="fa-solid fa-diagram-project continuation-banner-icon" aria-hidden="true"></i>
+              <span class="continuation-banner-label">Completed workflow</span>
+              <span class="continuation-banner-sep">·</span>
+              <span class="continuation-banner-name">{{ OriginatingWorkflowTask.Name }}</span>
+            </span>
+            <span class="continuation-banner-jump">
+              <span>View workflow</span>
+              <i class="fa-solid fa-arrow-up-long" aria-hidden="true"></i>
+            </span>
+          </button>
+        }
         <div class="message-text">
           <mj-markdown [data]="displayMessage" [enableCollapsibleHeadings]="true"></mj-markdown>
           @if (isMessageEdited) {
             <span class="edited-badge">(edited)</span>
           }
         </div>
+
+        <!-- A stopped reply: what the run kept, and the way to pick it up again. Any message
+             resumes the stopped run; the Continue control just sends one that says so. -->
+        @if (StoppedLineText) {
+          <div class="stopped-line"><i class="fa-solid fa-stop" aria-hidden="true"></i>{{ StoppedLineText }}</div>
+        }
+        @if (CanContinueStoppedRun) {
+          <div class="stopped-actions">
+            <button mjButton Variant="outline" Size="sm" type="button" class="continue-run" (click)="OnContinueClick()" title="Continue where you left off">
+              <i class="fa-solid fa-play" aria-hidden="true"></i> Continue
+            </button>
+          </div>
+        }
 
         <!-- messageExtra slot — per-message additive decoration projected by the
              consumer via `mjChatSlot="messageExtra"`. Renders after the message
@@ -137,16 +216,227 @@
           </div>
         }
 
-        <!-- Artifact Message Cards — one per distinct artifact on this message -->
-        @for (a of displayArtifacts; track a.artifact.ID) {
-          <div class="artifact-wrapper" [class.system-artifact]="a.artifact.Visibility === 'System Only'">
-            <mj-artifact-message-card
-              [artifactId]="a.artifact.ID"
-              [artifact]="a.artifact"
-              [artifactVersion]="a.version"
-              [currentUser]="currentUser"
-              (actionPerformed)="onArtifactActionPerformed($event)">
-            </mj-artifact-message-card>
+        <!-- Inline Workflow Execution Card — visible directly in the message body whenever workflow steps exist -->
+        @if (WorkflowSteps.length > 0) {
+          <div class="workflow-execution-card" [class]="'workflow-status-' + WorkflowStatus.toLowerCase()">
+            <div class="workflow-card-header"
+                 [class.is-collapsible]="WorkflowStatus !== 'Running'"
+                 (click)="ToggleWorkflowStepsExpanded($event)">
+              <div class="workflow-header-left">
+                <div class="workflow-status-icon">
+                  @if (WorkflowStatus === 'Running') {
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                  } @else if (WorkflowStatus === 'Complete') {
+                    <i class="fa-solid fa-circle-check"></i>
+                  } @else if (WorkflowStatus === 'Failed') {
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                  } @else {
+                    <i class="fa-solid fa-ban"></i>
+                  }
+                </div>
+                <div class="workflow-title-group">
+                  <div class="workflow-title-row">
+                    <span class="workflow-title">{{ WorkflowTitle }}</span>
+                    <span class="workflow-badge" [class]="'badge-' + WorkflowStatus.toLowerCase()">
+                      @if (WorkflowStatus === 'Running') {
+                        Running
+                      } @else if (WorkflowStatus === 'Complete') {
+                        Completed
+                      } @else {
+                        {{ WorkflowStatus }}
+                      }
+                    </span>
+                  </div>
+                  <div class="workflow-subtitle">
+                    <span>{{ WorkflowCompletedStepCount }} of {{ WorkflowSteps.length }} {{ WorkflowSteps.length === 1 ? 'step' : 'steps' }} complete</span>
+                    @if (WorkflowSkippedStepCount > 0) {
+                      <span class="workflow-dot">·</span>
+                      <span class="workflow-skipped-count">{{ WorkflowSkippedStepCount }} skipped (conditional)</span>
+                    }
+                    <span class="workflow-dot">·</span>
+                    <span>{{ WorkflowProgressPercent }}%</span>
+                  </div>
+                </div>
+              </div>
+              <div class="workflow-header-right">
+                @if (WorkflowParentTaskID) {
+                  <button type="button"
+                          class="workflow-graph-btn"
+                          (click)="OpenTaskGraphPanel($event)"
+                          title="View visual task graph in side panel">
+                    <i class="fa-solid fa-diagram-project" aria-hidden="true"></i>
+                    <span>Task Graph</span>
+                  </button>
+                }
+                <span class="workflow-duration-pill" title="Workflow execution time">
+                  <i class="fa-regular fa-clock"></i>
+                  <span>{{ WorkflowDurationDisplay }}</span>
+                </span>
+                @if (WorkflowStatus !== 'Running') {
+                  <button type="button"
+                          class="workflow-collapse-btn"
+                          (click)="ToggleWorkflowStepsExpanded($event)"
+                          [attr.aria-expanded]="IsWorkflowStepsExpanded"
+                          [title]="IsWorkflowStepsExpanded ? 'Collapse workflow steps' : 'Expand workflow steps'">
+                    <span class="workflow-collapse-label">{{ IsWorkflowStepsExpanded ? 'Collapse' : 'Expand' }}</span>
+                    <i class="fa-solid fa-chevron-down workflow-collapse-chevron" [class.rotated]="IsWorkflowStepsExpanded" aria-hidden="true"></i>
+                  </button>
+                }
+              </div>
+            </div>
+
+            <div class="workflow-progress-track" role="progressbar"
+                 [attr.aria-valuenow]="WorkflowProgressPercent" aria-valuemin="0" aria-valuemax="100">
+              <div class="workflow-progress-fill"
+                   [class.is-running]="WorkflowStatus === 'Running'"
+                   [style.width.%]="WorkflowProgressPercent"></div>
+            </div>
+
+            @if (WorkflowStatus === 'Running' || IsWorkflowStepsExpanded) {
+              <div class="workflow-steps-pipeline">
+                @for (step of WorkflowSteps; track step.ID; let idx = $index; let isLast = $last) {
+                  <div class="workflow-step-item"
+                       [class]="'step-status-' + (step.Status || 'Pending').toLowerCase().replace(' ', '-')"
+                       [class.is-expanded]="IsWorkflowStepExpanded(step.ID)">
+                    <div class="workflow-step-rail">
+                      <div class="workflow-step-node">
+                        @if (step.Status === 'In Progress') {
+                          <i class="fa-solid fa-spinner fa-spin"></i>
+                        } @else if (step.Status === 'Complete') {
+                          <i class="fa-solid fa-check"></i>
+                        } @else if (step.Status === 'Failed') {
+                          <i class="fa-solid fa-xmark"></i>
+                        } @else if (step.Status === 'Skipped') {
+                          <i class="fa-solid fa-forward-step" title="Skipped (conditional prerequisite not met)"></i>
+                        } @else if (step.Status === 'Cancelled') {
+                          <i class="fa-solid fa-ban"></i>
+                        } @else {
+                          <span class="step-index-num">{{ idx + 1 }}</span>
+                        }
+                      </div>
+                      @if (!isLast) {
+                        <div class="workflow-step-connector" [class.is-complete]="step.Status === 'Complete'"></div>
+                      }
+                    </div>
+
+                    <div class="workflow-step-content" (click)="ToggleWorkflowStepExpand(step.ID)">
+                      <div class="workflow-step-main-row">
+                        <div class="workflow-step-identity">
+                          <span class="workflow-step-name">{{ step.Name }}</span>
+                          @if (step.Agent) {
+                            <span class="workflow-step-agent-chip">
+                              <i class="fa-solid fa-robot"></i>
+                              <span>{{ step.Agent }}</span>
+                            </span>
+                          }
+                        </div>
+                        <div class="workflow-step-meta">
+                          @if (FormatWorkflowStepDuration(step); as stepDur) {
+                            <span class="workflow-step-duration" [class.is-skipped]="step.Status === 'Skipped'">{{ stepDur }}</span>
+                          }
+                          @if (step.AgentRunID) {
+                            <button type="button"
+                                    class="workflow-step-run-btn"
+                                    (click)="OpenWorkflowStepAgentRun(step, $event)"
+                                    title="Open AI Agent Run record">
+                              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            </button>
+                          }
+                          @if (GetWorkflowStepSummary(step)) {
+                            <i class="fa-solid fa-chevron-down workflow-step-chevron"
+                               [class.rotated]="IsWorkflowStepExpanded(step.ID)"></i>
+                          }
+                        </div>
+                      </div>
+
+                      @if (IsWorkflowStepExpanded(step.ID) && GetWorkflowStepSummary(step); as summaryText) {
+                        <div class="workflow-step-details">
+                          {{ summaryText }}
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Artifact Message Cards — single card when 1, or Supporting Artifacts grid + Final Artifact when > 1 -->
+        @if (displayArtifacts.length === 1) {
+          @for (a of displayArtifacts; track a.artifact.ID) {
+            <div class="artifact-wrapper" [class.system-artifact]="a.artifact.Visibility === 'System Only'">
+              <mj-artifact-message-card
+                [artifactId]="a.artifact.ID"
+                [artifact]="a.artifact"
+                [artifactVersion]="a.version"
+                [currentUser]="currentUser"
+                (actionPerformed)="onArtifactActionPerformed($event)">
+              </mj-artifact-message-card>
+            </div>
+          }
+        } @else if (displayArtifacts.length > 1) {
+          <div class="multi-artifact-showcase">
+            <div class="multi-artifact-supporting-section" [class.is-collapsed]="!IsSupportingArtifactsExpanded">
+              <button
+                type="button"
+                class="supporting-artifacts-header"
+                (click)="ToggleSupportingArtifacts($event)"
+                [attr.aria-expanded]="IsSupportingArtifactsExpanded">
+                <span class="supporting-header-left">
+                  <i class="fa-solid fa-layer-group supporting-header-icon" aria-hidden="true"></i>
+                  <span class="supporting-header-title">Supporting Artifacts</span>
+                  <span class="supporting-header-count">{{ SupportingArtifacts.length }}</span>
+                  @if (!IsSupportingArtifactsExpanded) {
+                    <span class="supporting-collapsed-preview">
+                      @for (a of SupportingArtifacts; track a.artifact.ID; let stepIdx = $index) {
+                        <span class="supporting-preview-pill">#{{ stepIdx + 1 }} {{ a.version?.Name || a.artifact.Name }}</span>
+                      }
+                    </span>
+                  }
+                </span>
+                <span class="supporting-header-right">
+                  <span class="supporting-toggle-hint">{{ IsSupportingArtifactsExpanded ? 'Collapse' : 'Expand' }}</span>
+                  <i class="fa-solid fa-chevron-down supporting-chevron" [class.rotated]="IsSupportingArtifactsExpanded" aria-hidden="true"></i>
+                </span>
+              </button>
+
+              @if (IsSupportingArtifactsExpanded) {
+                <div class="supporting-artifacts-grid">
+                  @for (a of SupportingArtifacts; track a.artifact.ID; let stepIdx = $index) {
+                    <div class="artifact-wrapper supporting-artifact-cell" [class.system-artifact]="a.artifact.Visibility === 'System Only'">
+                      <span class="supporting-step-badge" [title]="'Supporting artifact #' + (stepIdx + 1)">#{{ stepIdx + 1 }}</span>
+                      <mj-artifact-message-card
+                        [artifactId]="a.artifact.ID"
+                        [artifact]="a.artifact"
+                        [artifactVersion]="a.version"
+                        [currentUser]="currentUser"
+                        (actionPerformed)="onArtifactActionPerformed($event)">
+                      </mj-artifact-message-card>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+
+            @if (PrimaryArtifact; as primary) {
+              <div class="multi-artifact-primary-section">
+                <div class="primary-artifact-header">
+                  <i class="fa-solid fa-star primary-header-icon" aria-hidden="true"></i>
+                  <span class="primary-header-title">Final Artifact</span>
+                  <span class="primary-step-badge">#{{ displayArtifacts.length }}</span>
+                </div>
+                <div class="artifact-wrapper primary-artifact-card" [class.system-artifact]="primary.artifact.Visibility === 'System Only'">
+                  <mj-artifact-message-card
+                    [artifactId]="primary.artifact.ID"
+                    [artifact]="primary.artifact"
+                    [artifactVersion]="primary.version"
+                    [currentUser]="currentUser"
+                    (actionPerformed)="onArtifactActionPerformed($event)">
+                  </mj-artifact-message-card>
+                </div>
+              </div>
+            }
           </div>
         }
 
@@ -162,7 +452,7 @@
         }
 
         <!-- Agent Response Form (shown only for last message by owner) -->
-        @if (isLastMessageInConversation && isConversationOwner && responseForm) {
+        @if (!ReadOnly && isLastMessageInConversation && isConversationOwner && responseForm) {
           <mj-dynamic-form
             [FormDefinition]="responseForm"
             [Disabled]="isProcessing"
@@ -171,7 +461,7 @@
         }
 
         <!-- Actionable Commands (shown only for last message by owner) -->
-        @if (isLastMessageInConversation && isConversationOwner && actionableCommands.length > 0) {
+        @if (!ReadOnly && isLastMessageInConversation && isConversationOwner && actionableCommands.length > 0) {
           <mj-actionable-commands
             [commands]="actionableCommands"
             [disabled]="isProcessing"
@@ -191,52 +481,101 @@
             rows="4"
           placeholder="Edit your message..."></textarea>
           <div class="edit-actions">
-            <button class="edit-action-btn save" (click)="saveEdit()">
-              <i class="fas fa-check"></i>
-              Save
+            <button mjButton Variant="primary" Size="sm" (click)="SaveEdit()">
+              <i [class]="EditSaveIcon" aria-hidden="true"></i>
+              {{ EditSaveLabel }}
             </button>
-            <button class="edit-action-btn cancel" (click)="cancelEditing()">
-              <i class="fas fa-times"></i>
+            <button mjButton Variant="secondary" Size="sm" (click)="CancelEditing()">
+              <i class="fas fa-times" aria-hidden="true"></i>
               Cancel
             </button>
+            @if (EditNote) {
+              <span class="edit-note">{{ EditNote }}</span>
+            }
           </div>
-          <div class="edit-hint">
-            Press Enter to save, Shift+Enter for new line, Escape to cancel
-          </div>
+          <div class="edit-hint">{{ EditHint }}</div>
         </div>
       }
     </div>
 
-    <!-- Message Footer: only rendered on the last message.
+    @if (ForkChips.length > 0 && !isEditing) {
+      <div class="message-fork-chips">
+        @for (chip of ForkChips; track chip.Kind + (chip.BranchID ?? '')) {
+          @if (chip.Kind === 'Original') {
+            <button mjButton Variant="flat" Size="sm" class="fork-chip" data-kind="Original"
+                    (click)="OnForkChipClick(chip, $event)"
+                    [attr.aria-label]="ChipAriaLabel(chip)">
+              <i [class]="'fork-chip-icon ' + ChipIcon(chip)" aria-hidden="true"></i>
+              <span class="fork-chip-name">{{ chip.DisplayName }}</span>
+              <span class="fork-chip-time">· original</span>
+            </button>
+          } @else {
+            <button mjButton Variant="flat" Size="sm" class="fork-chip" [attr.data-kind]="chip.Kind"
+                    (click)="OnForkChipClick(chip, $event)"
+                    [attr.aria-label]="ChipAriaLabel(chip)">
+              <i [class]="'fork-chip-icon ' + ChipIcon(chip)" aria-hidden="true"></i>
+              @if (chip.Avatars.length > 0) {
+                <span class="fork-chip-avatars" aria-hidden="true">
+                  @for (avatar of chip.Avatars; track avatar.Kind + avatar.ID) {
+                    <span class="fork-chip-avatar" [title]="avatar.Label">
+                      @if (avatar.ImageURL) {
+                        <img [src]="avatar.ImageURL" alt="" />
+                      } @else if (avatar.IconClass) {
+                        <i [class]="avatar.IconClass"></i>
+                      } @else {
+                        {{ avatar.Initials }}
+                      }
+                    </span>
+                  }
+                </span>
+              }
+              <span class="fork-chip-messages">{{ chip.MessageLabel }}</span>
+              <span class="fork-chip-name">{{ chip.DisplayName }}</span>
+              <span class="fork-chip-time">· {{ chip.ActivityLabel }}</span>
+            </button>
+          }
+        }
+      </div>
+    }
+
+    <!-- Message Footer: only rendered on the last message, and hidden while any message of the view is edited.
          Non-last messages have no footer — pin/delete/rating live in the gear panel. -->
-    @if (!isEditing && isLastMessage && (isConversationOwner || (isAIMessage && messageStatus === 'Complete'))) {
+    @if (ShowsFooter) {
       <div class="message-footer">
         @if (allowMessageDelete && isConversationOwner) {
           <button class="action-bar-btn danger inline-delete" (click)="onDeleteClick()" title="Delete this message and all messages below it">
             <i class="fas fa-trash"></i>
           </button>
         }
-        @if (isAIMessage && messageStatus === 'Complete') {
+        @if (isAIMessage && (messageStatus === 'Complete' || ShowsFooterRegenerate)) {
           <div class="ai-message-actions">
-            <!-- Thumbs visible inline only on the latest AI message, left of pin -->
-            @if (showMessageRating) {
-              <mj-conversation-message-rating
-                [conversationDetailId]="message.ID"
-                [currentUser]="currentUser"
-                [ratingEntityName]="message.EntityInfo.Name || 'MJ: Conversation Details'"
-                [ratingsData]="ratings"
-                [canEdit]="isConversationOwner">
-              </mj-conversation-message-rating>
-            }
-            @if (allowPinning) {
-              <button
-                class="action-bar-btn pin-btn"
-                [class.pinned]="message.IsPinned"
-                (click)="PinMessage()"
-                [title]="message.IsPinned ? 'Unpin message' : 'Pin message'"
-                type="button">
-                <i class="fas fa-thumbtack"></i>
+            @if (ShowsFooterRegenerate) {
+              <button class="action-bar-btn labeled regenerate-btn" type="button" (click)="OnRegenerateClick()" [title]="RegenerateTitle">
+                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                <span>Regenerate</span>
               </button>
+            }
+            @if (messageStatus === 'Complete') {
+              <!-- Rating sits between Regenerate and Pin on the latest AI message -->
+              @if (showMessageRating) {
+                <mj-conversation-message-rating
+                  [conversationDetailId]="message.ID"
+                  [currentUser]="currentUser"
+                  [ratingEntityName]="message.EntityInfo.Name || 'MJ: Conversation Details'"
+                  [ratingsData]="ratings"
+                  [canEdit]="isConversationOwner && !ReadOnly">
+                </mj-conversation-message-rating>
+              }
+              @if (allowPinning) {
+                <button
+                  class="action-bar-btn pin-btn"
+                  [class.pinned]="message.IsPinned"
+                  (click)="PinMessage()"
+                  [title]="message.IsPinned ? 'Unpin message' : 'Pin message'"
+                  type="button">
+                  <i class="fas fa-thumbtack"></i>
+                </button>
+              }
             }
           </div>
         }
@@ -328,7 +667,7 @@
                       [conversationDetailId]="message.ID"
                       [currentUser]="currentUser"
                       [ratingsData]="ratings"
-                      [canEdit]="isConversationOwner">
+                      [canEdit]="isConversationOwner && !ReadOnly">
                     </mj-conversation-message-rating>
                   }
                   @if (allowPinning) {
@@ -356,14 +695,14 @@
           }
 
           <!-- Tasks Section -->
-          @if (detailTasks.length > 0) {
+          @if (WorkflowSteps.length > 0) {
             <div class="agent-details-tasks">
               <div class="tasks-section-header">
                 <i class="fas fa-tasks"></i>
-                <span>Associated Tasks ({{ detailTasks.length }})</span>
+                <span>Associated Tasks ({{ WorkflowSteps.length }})</span>
               </div>
               <div class="tasks-list">
-                @for (task of detailTasks; track task) {
+                @for (task of WorkflowSteps; track task.ID) {
                   <mj-task-widget
                     [task]="task"
                     [compact]="false"
@@ -378,19 +717,6 @@
         </div>
       }
     </div>
-
-    <!-- Rating component moved to message footer (lines 113-134) -->
-
-    <!-- Removed message-actions hover panel - actions now in gear icon dropdown -->
-    <!-- Retry button kept for critical error recovery on failed messages -->
-    @if (messageStatus === 'Error' && isAIMessage && !isProcessing && !isEditing) {
-      <div class="message-actions">
-        <button class="message-action-btn retry-btn" (click)="onRetryClick()" title="Retry">
-          <i class="fas fa-redo"></i>
-          Retry
-        </button>
-      </div>
-    }
 
     <!-- Reaction Buttons -->
     @if (showReactions && !isProcessing && !isInProgressAIMessage && !isEditing) {
@@ -407,3 +733,11 @@
     }
   </div>
 </div>
+<!-- Fork marker: a separate element under the row, outside its rail and fade -->
+@if (ForkMarkerText) {
+  <div class="fork-marker" role="note">
+    <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
+    <span class="fork-marker-text">{{ ForkMarkerText }}</span>
+    <span class="fork-marker-line" aria-hidden="true"></span>
+  </div>
+}

@@ -2,8 +2,8 @@ import { Command } from '@oclif/core';
 import { existsSync } from 'node:fs';
 import {
   GEN_FORMS_SCRIPT,
-  requireMonorepoRoot,
-  spawnInherit,
+  RequireMonorepoRoot,
+  SpawnInherit,
 } from '../../../lib/regression/docker-helpers.js';
 
 export default class TestRegressionGenForms extends Command {
@@ -14,12 +14,12 @@ export default class TestRegressionGenForms extends Command {
   static examples = ['<%= config.bin %> <%= command.id %>'];
 
   async run(): Promise<void> {
-    requireMonorepoRoot();
+    RequireMonorepoRoot();
     if (!existsSync(GEN_FORMS_SCRIPT)) {
       this.error(`✗ ${GEN_FORMS_SCRIPT} not found. Verify the docker/regression/ directory is intact.`);
     }
 
-    const code = await spawnInherit('bash', [GEN_FORMS_SCRIPT]);
+    const code = await SpawnInherit('bash', [GEN_FORMS_SCRIPT]);
     if (code !== 0) this.exit(code);
   }
 }

@@ -1,7 +1,7 @@
 import { FieldTransformEngine } from '@memberjunction/global';
-import { computeUnmappedFields } from './CustomOverflow.js';
+import { ComputeUnmappedFields } from './CustomOverflow.js';
 import { StripExcludedFields } from './SyncDirectives.js';
-import { flattenRecord, hasNestedObject } from './RecordFlatten.js';
+import { FlattenRecord, HasNestedObject } from './RecordFlatten.js';
 import type { ICompanyIntegrationFieldMap } from './entity-types.js';
 import type { ExternalRecord, MappedRecord } from './types.js';
 import type { TransformStep } from './transforms.js';
@@ -42,13 +42,13 @@ export class FieldMappingEngine {
     ): MappedRecord[] {
         const activeMaps = fieldMaps.filter(fm => fm.Status === 'Active');
         const excluded = excludedSourceNames ?? EMPTY_EXCLUSIONS;
-        return records.map(record => this.MapSingleRecord(record, activeMaps, entityName, excluded));
+        return records.map(record => this.mapSingleRecord(record, activeMaps, entityName, excluded));
     }
 
     /**
      * Maps a single external record through all active field mappings.
      */
-    private MapSingleRecord(
+    private mapSingleRecord(
         record: ExternalRecord,
         fieldMaps: ICompanyIntegrationFieldMap[],
         entityName: string,
@@ -71,8 +71,8 @@ export class FieldMappingEngine {
         // per-occurrence / per-version key → duplicate rows. Discovery flattens identically, so
         // the field maps reference the flattened scalar names. A record with no nested objects
         // passes through unchanged — every flat-record connector is a no-op here.
-        const ext: ExternalRecord = hasNestedObject(record.Fields)
-            ? { ...record, Fields: flattenRecord(record.Fields) }
+        const ext: ExternalRecord = HasNestedObject(record.Fields)
+            ? { ...record, Fields: FlattenRecord(record.Fields) }
             : record;
 
         const mappedFields: Record<string, unknown> = {};
@@ -80,7 +80,7 @@ export class FieldMappingEngine {
 
         for (const fieldMap of fieldMaps) {
             mappedSourceNames.add(fieldMap.SourceFieldName);
-            const value = this.ApplyFieldMapping(ext, fieldMap);
+            const value = this.applyFieldMapping(ext, fieldMap);
             if (value !== undefined) {
                 mappedFields[fieldMap.DestinationFieldName] = value;
             }
@@ -90,7 +90,7 @@ export class FieldMappingEngine {
         // the result is empty (and discarded by the writer) in the common all-mapped case,
         // so this adds no measurable cost to a customs-free sync. The engine parks any extras
         // in the __mj_integration_CustomOverflow system column — see {@link CustomOverflow}.
-        const unmappedFields = computeUnmappedFields(ext.Fields, mappedSourceNames);
+        const unmappedFields = ComputeUnmappedFields(ext.Fields, mappedSourceNames);
 
         return {
             ExternalRecord: ext,
@@ -105,12 +105,12 @@ export class FieldMappingEngine {
      * Applies a single field mapping, including the full transform pipeline (delegated to the shared
      * {@link FieldTransformEngine}). Returns undefined if the field should be skipped (OnError: Skip).
      */
-    private ApplyFieldMapping(
+    private applyFieldMapping(
         record: ExternalRecord,
         fieldMap: ICompanyIntegrationFieldMap
     ): unknown {
         const value: unknown = record.Fields[fieldMap.SourceFieldName];
-        const pipeline = this.ParseTransformPipeline(fieldMap.TransformPipeline);
+        const pipeline = this.parseTransformPipeline(fieldMap.TransformPipeline);
         const result = this.transformEngine.ExecutePipeline(value, record.Fields, pipeline);
         return result.Skipped ? undefined : result.Value;
     }
@@ -118,7 +118,7 @@ export class FieldMappingEngine {
     /**
      * Parses the JSON transform pipeline string into typed TransformStep objects.
      */
-    private ParseTransformPipeline(pipelineJson: string | null): TransformStep[] {
+    private parseTransformPipeline(pipelineJson: string | null): TransformStep[] {
         if (!pipelineJson || pipelineJson.trim() === '') return [];
 
         try {

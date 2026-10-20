@@ -1,6 +1,6 @@
 export * from './constants';
 export * from './types';
-export { parseAndValidateJournalEntryLines, journalEntryBalanceError, totalDebits } from './journal-entry';
+export { ParseAndValidateJournalEntryLines, parseAndValidateJournalEntryLines, JournalEntryBalanceError, journalEntryBalanceError, TotalDebits, totalDebits } from './journal-entry';
 
 export * from './base/base-accounting-action';
 export * from './verbs/verb-dispatcher';

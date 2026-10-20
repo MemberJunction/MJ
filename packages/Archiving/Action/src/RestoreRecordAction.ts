@@ -15,7 +15,7 @@ import { ArchiveEngine } from '@memberjunction/archiving-engine';
 @RegisterClass(BaseAction, 'Restore Archived Record')
 export class RestoreRecordAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const detailId = this.GetParamValue(params, 'archiverundetailid');
+        const detailId = this.getParamValue(params, 'archiverundetailid');
         if (!detailId) {
             return {
                 Success: false,
@@ -57,7 +57,7 @@ export class RestoreRecordAction extends BaseAction {
     /**
      * Extracts a parameter value by name (case-insensitive) from the action params.
      */
-    private GetParamValue(params: RunActionParams, name: string): string | undefined {
+    private getParamValue(params: RunActionParams, name: string): string | undefined {
         const lowerName = name.toLowerCase();
         const param = params.Params.find(p => p.Name.toLowerCase() === lowerName);
         return param?.Value != null ? String(param.Value) : undefined;

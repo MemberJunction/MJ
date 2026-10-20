@@ -1,0 +1,56 @@
+[
+  {
+    "fields": {
+      "Name": "Integration Test Avatar Locked",
+      "FirstName": "Integration Test",
+      "LastName": "Avatar Locked",
+      "Email": "it-avatar-locked@integration.test",
+      "Type": "User",
+      "IsActive": true,
+      "LinkedRecordType": "None"
+    },
+    "relatedEntities": {
+      "MJ: User Roles": [
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration Test: Avatar Self-Service"
+          },
+          "primaryKey": {
+            "ID": "788A1BF8-8551-4CE1-AF5C-3FFE43680922"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9DA80863-824A-4363-96CD-2BDC77C45ABD"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Integration Test Avatar Editor",
+      "FirstName": "Integration Test",
+      "LastName": "Avatar Editor",
+      "Email": "it-avatar-editor@integration.test",
+      "Type": "User",
+      "IsActive": true,
+      "LinkedRecordType": "None"
+    },
+    "relatedEntities": {
+      "MJ: User Roles": [
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration Test: Avatar User Editor"
+          },
+          "primaryKey": {
+            "ID": "12013108-F640-4E28-88E8-05E700ACC783"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "53035EAE-DD20-46E1-8305-124E85506BF5"
+    }
+  }
+]

@@ -22,7 +22,7 @@
  * type at the boundary, which is where the compiler can still check the shape.
  */
 import type { ChatMessage, ChatTool, ChatToolCall, ChatToolChoice } from './chat.types';
-import { getToolResultBlocks } from './chat.types';
+import { GetToolResultBlocks } from './chat.types';
 
 /** A tool declaration in the OpenAI-compatible request body. */
 export interface OpenAICompatibleToolDeclaration {
@@ -92,7 +92,7 @@ export interface RawOpenAICompatibleToolCall {
 }
 
 /** Maps MJ tool declarations onto the request's `tools` array. */
-export function buildOpenAICompatibleTools(tools: ChatTool[]): OpenAICompatibleToolDeclaration[] {
+export function BuildOpenAICompatibleTools(tools: ChatTool[]): OpenAICompatibleToolDeclaration[] {
     return tools.map((tool) => ({
         type: 'function' as const,
         function: {
@@ -103,11 +103,21 @@ export function buildOpenAICompatibleTools(tools: ChatTool[]): OpenAICompatibleT
     }));
 }
 
+/** @deprecated Use {@link BuildOpenAICompatibleTools}. */
+export function buildOpenAICompatibleTools(tools: ChatTool[]): OpenAICompatibleToolDeclaration[] {
+    return BuildOpenAICompatibleTools(tools);
+}
+
 /** Maps the neutral {@link ChatToolChoice} onto the provider's `tool_choice`. */
-export function buildOpenAICompatibleToolChoice(choice: ChatToolChoice): OpenAICompatibleToolChoice {
+export function BuildOpenAICompatibleToolChoice(choice: ChatToolChoice): OpenAICompatibleToolChoice {
     return typeof choice === 'string'
         ? choice
         : { type: 'function' as const, function: { name: choice.name } };
+}
+
+/** @deprecated Use {@link BuildOpenAICompatibleToolChoice}. */
+export function buildOpenAICompatibleToolChoice(choice: ChatToolChoice): OpenAICompatibleToolChoice {
+    return BuildOpenAICompatibleToolChoice(choice);
 }
 
 /**
@@ -116,7 +126,7 @@ export function buildOpenAICompatibleToolChoice(choice: ChatToolChoice): OpenAIC
  * Round-tripping matters: without the assistant's `tool_calls`, the `tool` messages answering them
  * are orphaned and the provider rejects the conversation.
  */
-export function buildOpenAICompatibleToolCalls(toolCalls: ChatToolCall[]): OpenAICompatibleToolCall[] {
+export function BuildOpenAICompatibleToolCalls(toolCalls: ChatToolCall[]): OpenAICompatibleToolCall[] {
     return toolCalls.map((call) => ({
         id: call.id,
         type: 'function' as const,
@@ -127,17 +137,22 @@ export function buildOpenAICompatibleToolCalls(toolCalls: ChatToolCall[]): OpenA
     }));
 }
 
+/** @deprecated Use {@link BuildOpenAICompatibleToolCalls}. */
+export function buildOpenAICompatibleToolCalls(toolCalls: ChatToolCall[]): OpenAICompatibleToolCall[] {
+    return BuildOpenAICompatibleToolCalls(toolCalls);
+}
+
 /**
  * Expands one MJ `tool`-role message into the provider's per-result `tool` messages.
  *
  * Returns an empty array — and warns — for a tool turn carrying no result blocks, rather than
  * emitting a malformed message the provider would reject with an opaque error.
  */
-export function buildOpenAICompatibleToolResults(
+export function BuildOpenAICompatibleToolResults(
     message: ChatMessage,
     providerName: string
 ): OpenAICompatibleToolResultMessage[] {
-    const blocks = getToolResultBlocks(message.content);
+    const blocks = GetToolResultBlocks(message.content);
     if (blocks.length === 0) {
         console.warn(`${providerName}: a tool-role message carried no tool_result blocks; skipping it.`);
         return [];
@@ -151,6 +166,14 @@ export function buildOpenAICompatibleToolResults(
     }));
 }
 
+/** @deprecated Use {@link BuildOpenAICompatibleToolResults}. */
+export function buildOpenAICompatibleToolResults(
+    message: ChatMessage,
+    providerName: string
+): OpenAICompatibleToolResultMessage[] {
+    return BuildOpenAICompatibleToolResults(message, providerName);
+}
+
 /**
  * Normalizes raw response tool calls into {@link ChatToolCall}s with PARSED arguments.
  *
@@ -162,7 +185,7 @@ export function buildOpenAICompatibleToolResults(
  * @param providerName Used only in the warning, so a log line names the provider
  * @returns Normalized calls, or `undefined` when the model called nothing
  */
-export function extractOpenAICompatibleToolCalls(
+export function ExtractOpenAICompatibleToolCalls(
     toolCalls: RawOpenAICompatibleToolCall[] | undefined | null,
     providerName: string
 ): ChatToolCall[] | undefined {
@@ -191,4 +214,12 @@ export function extractOpenAICompatibleToolCalls(
         calls.push({ id: call.id ?? '', name, arguments: parsedArguments });
     }
     return calls.length > 0 ? calls : undefined;
+}
+
+/** @deprecated Use {@link ExtractOpenAICompatibleToolCalls}. */
+export function extractOpenAICompatibleToolCalls(
+    toolCalls: RawOpenAICompatibleToolCall[] | undefined | null,
+    providerName: string
+): ChatToolCall[] | undefined {
+    return ExtractOpenAICompatibleToolCalls(toolCalls, providerName);
 }

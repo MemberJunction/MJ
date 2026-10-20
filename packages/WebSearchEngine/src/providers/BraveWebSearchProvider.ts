@@ -13,7 +13,7 @@ import {
     WebSearchParams,
     WebSearchProviderResponse,
 } from '../types';
-import { classifyHttpFailure, failure } from './httpFailure';
+import { ClassifyHttpFailure, Failure } from './httpFailure';
 
 interface BraveAPIWebResult {
     title?: string;
@@ -78,7 +78,7 @@ export class BraveWebSearchProvider extends BaseWebSearchProvider {
         // returns confident results for a different question. Permanent — no other provider
         // will accept it either.
         if (params.Query.length > BraveWebSearchProvider.MAX_QUERY_CHARS) {
-            return failure(
+            return Failure(
                 'permanent',
                 `Query is ${params.Query.length} characters; Brave's limit is ${BraveWebSearchProvider.MAX_QUERY_CHARS}.`,
             );
@@ -86,7 +86,7 @@ export class BraveWebSearchProvider extends BaseWebSearchProvider {
 
         const q = this.applyDomainFilters(params);
         if (q.length > BraveWebSearchProvider.MAX_QUERY_CHARS) {
-            return failure(
+            return Failure(
                 'permanent',
                 `Query plus domain filters is ${q.length} characters; Brave's limit is ${BraveWebSearchProvider.MAX_QUERY_CHARS}.`,
             );
@@ -121,7 +121,7 @@ export class BraveWebSearchProvider extends BaseWebSearchProvider {
             });
 
             if (!response.Data) {
-                return failure('transient', 'Empty response from Brave Search.');
+                return Failure('transient', 'Empty response from Brave Search.');
             }
 
             return {
@@ -129,7 +129,7 @@ export class BraveWebSearchProvider extends BaseWebSearchProvider {
                 Hits: (response.Data.web?.results ?? []).map((item) => this.toHit(item)),
             };
         } catch (e) {
-            return classifyHttpFailure(e, 'Brave');
+            return ClassifyHttpFailure(e, 'Brave');
         }
     }
 

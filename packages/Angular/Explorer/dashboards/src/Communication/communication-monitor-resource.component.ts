@@ -506,22 +506,76 @@ interface HourlyBucket {
 })
 export class CommunicationMonitorResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
     public isLoading = false;
-    public stats = {
+    public Stats = {
         totalSent: 0,
         deliveryRate: 0,
         pending: 0,
         failed: 0
     };
-    public recentLogs: MJCommunicationLogEntity[] = [];
-    public chartData: HourlyBucket[] = [];
-    public chartConfig = {
+
+    /** @deprecated Use {@link Stats}. */
+    public get stats() {
+      return this.Stats;
+    }
+    /** @deprecated Use {@link Stats}. */
+    public set stats(value) {
+      this.Stats = value;
+    }
+    public RecentLogs: MJCommunicationLogEntity[] = [];
+
+    /** @deprecated Use {@link RecentLogs}. */
+    public get recentLogs(): MJCommunicationLogEntity[] {
+      return this.RecentLogs;
+    }
+    /** @deprecated Use {@link RecentLogs}. */
+    public set recentLogs(value: MJCommunicationLogEntity[]) {
+      this.RecentLogs = value;
+    }
+    public ChartData: HourlyBucket[] = [];
+
+    /** @deprecated Use {@link ChartData}. */
+    public get chartData(): HourlyBucket[] {
+      return this.ChartData;
+    }
+    /** @deprecated Use {@link ChartData}. */
+    public set chartData(value: HourlyBucket[]) {
+      this.ChartData = value;
+    }
+    public ChartConfig = {
         useDualAxis: false,
         showGrid: true,
         showTooltip: true,
         colors: ['#4f6bed', '#cf222e']
     };
-    public providerHealth: ProviderHealth[] = [];
-    public channelBreakdown: ChannelBreakdown[] = [];
+
+    /** @deprecated Use {@link ChartConfig}. */
+    public get chartConfig() {
+      return this.ChartConfig;
+    }
+    /** @deprecated Use {@link ChartConfig}. */
+    public set chartConfig(value) {
+      this.ChartConfig = value;
+    }
+    public ProviderHealth: ProviderHealth[] = [];
+
+    /** @deprecated Use {@link ProviderHealth}. */
+    public get providerHealth(): ProviderHealth[] {
+      return this.ProviderHealth;
+    }
+    /** @deprecated Use {@link ProviderHealth}. */
+    public set providerHealth(value: ProviderHealth[]) {
+      this.ProviderHealth = value;
+    }
+    public ChannelBreakdown: ChannelBreakdown[] = [];
+
+    /** @deprecated Use {@link ChannelBreakdown}. */
+    public get channelBreakdown(): ChannelBreakdown[] {
+      return this.ChannelBreakdown;
+    }
+    /** @deprecated Use {@link ChannelBreakdown}. */
+    public set channelBreakdown(value: ChannelBreakdown[]) {
+      this.ChannelBreakdown = value;
+    }
 
     constructor(private cdr: ChangeDetectorRef) {
         super();
@@ -582,25 +636,25 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
                 })
             ]);
 
-            if (totalResult.Success) this.stats.totalSent = totalResult.TotalRowCount;
-            if (failedResult.Success) this.stats.failed = failedResult.TotalRowCount;
-            if (pendingResult.Success) this.stats.pending = pendingResult.TotalRowCount;
+            if (totalResult.Success) this.Stats.totalSent = totalResult.TotalRowCount;
+            if (failedResult.Success) this.Stats.failed = failedResult.TotalRowCount;
+            if (pendingResult.Success) this.Stats.pending = pendingResult.TotalRowCount;
 
-            this.stats.deliveryRate = this.stats.totalSent > 0
-                ? parseFloat(((this.stats.totalSent - this.stats.failed) / this.stats.totalSent * 100).toFixed(1))
+            this.Stats.deliveryRate = this.Stats.totalSent > 0
+                ? parseFloat(((this.Stats.totalSent - this.Stats.failed) / this.Stats.totalSent * 100).toFixed(1))
                 : 100;
 
             if (recentResult.Success) {
-                this.recentLogs = recentResult.Results;
+                this.RecentLogs = recentResult.Results;
             }
 
             if (allLogsResult.Success) {
-                this.chartData = this.processTrendData(allLogsResult.Results, yesterday);
-                this.channelBreakdown = this.buildChannelBreakdown(allLogsResult.Results);
+                this.ChartData = this.processTrendData(allLogsResult.Results, yesterday);
+                this.ChannelBreakdown = this.buildChannelBreakdown(allLogsResult.Results);
             }
 
             if (providersResult.Success && allLogsResult.Success) {
-                this.providerHealth = this.buildProviderHealth(providersResult.Results, allLogsResult.Results);
+                this.ProviderHealth = this.buildProviderHealth(providersResult.Results, allLogsResult.Results);
             }
 
         } catch (error) {
@@ -611,25 +665,40 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
         }
     }
 
-    public getActivityIconClass(log: MJCommunicationLogEntity): string {
+    public GetActivityIconClass(log: MJCommunicationLogEntity): string {
         if (log.Status === 'Failed') return 'error';
         const type = (log.CommunicationProviderMessageType || '').toLowerCase();
         if (type.includes('sms')) return 'sms';
         return 'email';
     }
 
-    public getActivityIcon(log: MJCommunicationLogEntity): string {
+    /** @deprecated Use {@link GetActivityIconClass}. */
+    public getActivityIconClass(log: MJCommunicationLogEntity): string {
+      return this.GetActivityIconClass(log);
+    }
+
+    public GetActivityIcon(log: MJCommunicationLogEntity): string {
         if (log.Direction === 'Receiving') return 'fa-solid fa-arrow-down';
         const type = (log.CommunicationProviderMessageType || '').toLowerCase();
         if (type.includes('sms')) return 'fa-solid fa-comment-sms';
         return 'fa-solid fa-envelope';
     }
 
-    public getHealthClass(rate: number): string {
+    /** @deprecated Use {@link GetActivityIcon}. */
+    public getActivityIcon(log: MJCommunicationLogEntity): string {
+      return this.GetActivityIcon(log);
+    }
+
+    public GetHealthClass(rate: number): string {
         if (rate >= 98) return 'excellent';
         if (rate >= 95) return 'good';
         if (rate >= 85) return 'warning';
         return 'critical';
+    }
+
+    /** @deprecated Use {@link GetHealthClass}. */
+    public getHealthClass(rate: number): string {
+      return this.GetHealthClass(rate);
     }
 
     private processTrendData(logs: MJCommunicationLogEntity[], startTime: Date): HourlyBucket[] {

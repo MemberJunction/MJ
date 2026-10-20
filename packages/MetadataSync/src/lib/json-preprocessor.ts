@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { METADATA_KEYWORDS, extractKeywordValue } from '../constants/metadata-keywords';
+import { METADATA_KEYWORDS, ExtractKeywordValue } from '../constants/metadata-keywords';
 
 /**
  * Include directive configuration
@@ -22,10 +22,15 @@ export class JsonPreprocessor {
    * @param filePath - Path to the JSON file to process
    * @returns The processed JSON data with all includes resolved
    */
-  async processFile(filePath: string): Promise<any> {
+  async ProcessFile(filePath: string): Promise<any> {
     this.visitedPaths.clear();
     const fileContent = await fs.readJson(filePath);
     return this.processIncludesInternal(fileContent, filePath);
+  }
+
+  /** @deprecated Use {@link ProcessFile}. */
+  async processFile(filePath: string): Promise<any> {
+    return this.ProcessFile(filePath);
   }
 
   /**
@@ -147,7 +152,7 @@ export class JsonPreprocessor {
         // Regular property - process recursively and handle @file references
         if (typeof value === 'string' && value.startsWith(METADATA_KEYWORDS.FILE)) {
           // Process @file reference
-          const filePath = extractKeywordValue(value) as string;
+          const filePath = ExtractKeywordValue(value) as string;
           const resolvedPath = this.resolvePath(filePath, currentFilePath);
           result[key] = await this.loadFileContent(resolvedPath);
         } else if (value && typeof value === 'object') {
@@ -260,8 +265,13 @@ export class JsonPreprocessor {
    * @param filePath - The file path (for resolving relative includes)
    * @returns Processed data with includes resolved
    */
-  async processJsonData(data: any, filePath: string): Promise<any> {
+  async ProcessJsonData(data: any, filePath: string): Promise<any> {
     this.visitedPaths.clear();
     return this.processIncludesInternal(data, filePath);
+  }
+
+  /** @deprecated Use {@link ProcessJsonData}. */
+  async processJsonData(data: any, filePath: string): Promise<any> {
+    return this.ProcessJsonData(data, filePath);
   }
 }

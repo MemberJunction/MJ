@@ -34,12 +34,17 @@ import { Directive, Input, TemplateRef } from '@angular/core';
  * ADDITIVE — it renders the projected template inside the DEFAULT header's
  * action strip, after the stock buttons. Projecting `header` suppresses
  * `headerActions` (the replacement owns the whole header, actions included).
+ *
+ * `composerExtra` is ADDITIVE too: host UI rendered directly above the composer (a
+ * "who will see this" line, a visibility toggle, a note about which agents answer here),
+ * wherever the chat area shows one — the new-conversation composer included.
  */
 export type MJChatSlotName =
     | 'emptyState'
     | 'agentPresence'
     | 'header'
     | 'headerActions'
+    | 'composerExtra'
     | 'messageExtra'
     | 'demonstrationSurface'
     | 'messageRenderer';

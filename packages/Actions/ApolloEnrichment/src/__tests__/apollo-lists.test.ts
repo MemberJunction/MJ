@@ -14,6 +14,8 @@
  * Nothing here may reach api.apollo.io. A real call would spend credits on the
  * read side and mutate a real account's lists on the write side, with no undo.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // The only BaseAction behaviour these tests need is that Run() delegates to
@@ -73,13 +75,13 @@ vi.mock('@memberjunction/core', () => ({
 process.env.APOLLO_API_KEY = 'env-key';
 
 const { ApolloRESTClient } = await import('../lists/ApolloRESTClient.js');
-const { extractApolloKey } = await import('../lists/credentials.js');
+const { ExtractApolloKey } = await import('../lists/credentials.js');
 const {
-    getParam,
-    getParamRaw,
-    parseOptionalBooleanParam,
-    parseOptionalIntegerParam,
-    parseStringArrayParam,
+    GetParam,
+    GetParamRaw,
+    ParseOptionalBooleanParam,
+    ParseOptionalIntegerParam,
+    ParseStringArrayParam,
 } = await import('../lists/params.js');
 const { ApolloGetListsAction, ApolloCreateListAction } = await import('../lists/ApolloListActions.js');
 const { ApolloGetListAccountsAction, ApolloGetListContactsAction, ApolloSearchPeopleAction } = await import(
@@ -424,6 +426,21 @@ describe('ApolloRESTClient searches', () => {
         expect((await c.searchPeople({ titles: ['CEO'] })).people[0].organizationId).toBeNull();
     });
 
+    it('A-15: parses the 2026 api_search shape — top-level total_entries, obfuscated people, no pagination envelope', async () => {
+        const fixture = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/api-search.redacted.json', import.meta.url)), 'utf8')) as { body: unknown };
+        const { c } = client([{ body: fixture.body }]);
+        const page = await c.searchPeople({ titles: ['Policy Analyst'] }, { perPage: 25 });
+        expect(page.pagination).toEqual({ page: 1, perPage: 25, totalEntries: 8, totalPages: 1 });
+        expect(page.people).toHaveLength(1);
+        expect(page.people[0]).toMatchObject({ id: 'pdl-fixture-9', lastName: '', lastNameObfuscated: 'De***n', title: 'Policy Analyst', hasEmail: true, organizationName: 'Leonine Public Affairs', linkedinUrl: '' });
+    });
+
+    it('5.8: maps locations and keywords onto person_locations and q_keywords, and accepts a search with only them', async () => {
+        const { c, calls } = client([{ body: { total_entries: 0, people: [] } }]);
+        await c.searchPeople({ locations: ['Boston, Massachusetts, United States'], keywords: 'public policy' });
+        expect(calls[0].body).toEqual({ page: 1, per_page: 100, person_locations: ['Boston, Massachusetts, United States'], q_keywords: 'public policy' });
+    });
+
     it('rejects a search response that is not an object', async () => {
         const { c } = client([{ body: LABELS_BODY }, { body: [] }]);
         await expect(c.searchAccounts({})).rejects.toThrow(/unexpected response shape/);
@@ -642,55 +659,55 @@ describe('ApolloRESTClient moves', () => {
 
 describe('param parsing', () => {
     const withParams = (list: Array<{ Name: string; Value: unknown }>) =>
-        ({ Params: list } as unknown as Parameters<typeof getParam>[0]);
+        ({ Params: list } as unknown as Parameters<typeof GetParam>[0]);
 
     it('finds a param case-insensitively and trims it', () => {
-        expect(getParam(withParams([{ Name: 'listname', Value: '  Cold  ' }]), 'ListName')).toBe('Cold');
+        expect(GetParam(withParams([{ Name: 'listname', Value: '  Cold  ' }]), 'ListName')).toBe('Cold');
     });
 
     it('treats whitespace as absent, so a required check catches a blank list name', () => {
-        expect(getParam(withParams([{ Name: 'ListName', Value: '   ' }]), 'ListName')).toBeNull();
-        expect(getParam(withParams([]), 'ListName')).toBeNull();
+        expect(GetParam(withParams([{ Name: 'ListName', Value: '   ' }]), 'ListName')).toBeNull();
+        expect(GetParam(withParams([]), 'ListName')).toBeNull();
     });
 
     it('returns a raw value untouched, for the array/JSON/CSV parsers', () => {
-        expect(getParamRaw(withParams([{ Name: 'Titles', Value: ['CEO'] }]), 'Titles')).toEqual(['CEO']);
+        expect(GetParamRaw(withParams([{ Name: 'Titles', Value: ['CEO'] }]), 'Titles')).toEqual(['CEO']);
     });
 
     it('accepts a list as an array, a JSON string, or a comma-separated string', () => {
-        expect(parseStringArrayParam(['CEO', 'CTO'], 'Titles').value).toEqual(['CEO', 'CTO']);
-        expect(parseStringArrayParam('["CEO","CTO"]', 'Titles').value).toEqual(['CEO', 'CTO']);
-        expect(parseStringArrayParam(' owner , founder ', 'Seniorities').value).toEqual(['owner', 'founder']);
+        expect(ParseStringArrayParam(['CEO', 'CTO'], 'Titles').value).toEqual(['CEO', 'CTO']);
+        expect(ParseStringArrayParam('["CEO","CTO"]', 'Titles').value).toEqual(['CEO', 'CTO']);
+        expect(ParseStringArrayParam(' owner , founder ', 'Seniorities').value).toEqual(['owner', 'founder']);
     });
 
     it('treats an absent or empty list as unsupplied rather than as an empty filter', () => {
         for (const raw of [null, undefined, '', '  ,  ', []]) {
-            expect(parseStringArrayParam(raw, 'Titles')).toEqual({ value: undefined, error: null });
+            expect(ParseStringArrayParam(raw, 'Titles')).toEqual({ value: undefined, error: null });
         }
     });
 
     it('reports a malformed JSON array instead of silently dropping the filter', () => {
-        expect(parseStringArrayParam('["CEO"', 'Titles').error).toMatch(/unparseable/);
-        expect(parseStringArrayParam([1, 2], 'Titles').error).toMatch(/JSON array of strings/);
+        expect(ParseStringArrayParam('["CEO"', 'Titles').error).toMatch(/unparseable/);
+        expect(ParseStringArrayParam([1, 2], 'Titles').error).toMatch(/JSON array of strings/);
     });
 
     it('parses an integer from a number or a numeric string, and enforces the range', () => {
-        expect(parseOptionalIntegerParam(5, 'Page', { min: 1, max: 500 }).value).toBe(5);
-        expect(parseOptionalIntegerParam(' 5 ', 'Page').value).toBe(5);
-        expect(parseOptionalIntegerParam(0, 'Page', { min: 1 }).error).toMatch(/>= 1/);
-        expect(parseOptionalIntegerParam(501, 'Page', { max: 500 }).error).toMatch(/<= 500/);
+        expect(ParseOptionalIntegerParam(5, 'Page', { min: 1, max: 500 }).value).toBe(5);
+        expect(ParseOptionalIntegerParam(' 5 ', 'Page').value).toBe(5);
+        expect(ParseOptionalIntegerParam(0, 'Page', { min: 1 }).error).toMatch(/>= 1/);
+        expect(ParseOptionalIntegerParam(501, 'Page', { max: 500 }).error).toMatch(/<= 500/);
     });
 
     it('rejects a fractional page rather than rounding it into a plausible wrong answer', () => {
-        expect(parseOptionalIntegerParam(1.5, 'Page').error).toMatch(/must be an integer/);
-        expect(parseOptionalIntegerParam('abc', 'Page').error).toMatch(/must be an integer/);
+        expect(ParseOptionalIntegerParam(1.5, 'Page').error).toMatch(/must be an integer/);
+        expect(ParseOptionalIntegerParam('abc', 'Page').error).toMatch(/must be an integer/);
     });
 
     it("does not treat the string 'false' as true", () => {
-        expect(parseOptionalBooleanParam('false', 'Verify').value).toBe(false);
-        expect(parseOptionalBooleanParam('TRUE', 'Verify').value).toBe(true);
-        expect(parseOptionalBooleanParam(false, 'Verify').value).toBe(false);
-        expect(parseOptionalBooleanParam('yes', 'Verify').error).toMatch(/must be a boolean/);
+        expect(ParseOptionalBooleanParam('false', 'Verify').value).toBe(false);
+        expect(ParseOptionalBooleanParam('TRUE', 'Verify').value).toBe(true);
+        expect(ParseOptionalBooleanParam(false, 'Verify').value).toBe(false);
+        expect(ParseOptionalBooleanParam('yes', 'Verify').error).toMatch(/must be a boolean/);
     });
 });
 
@@ -699,24 +716,24 @@ describe('param parsing', () => {
 describe('credential parsing', () => {
     it('accepts the key under any of the casings a hand-authored credential uses', () => {
         for (const key of ['apiKey', 'APIKey', 'api_key', 'ApiKey', 'masterApiKey']) {
-            expect(extractApolloKey(JSON.stringify({ [key]: 'k-1' }), 'Apollo')).toBe('k-1');
+            expect(ExtractApolloKey(JSON.stringify({ [key]: 'k-1' }), 'Apollo')).toBe('k-1');
         }
     });
 
     it('trims the key and treats a blank one as absent', () => {
-        expect(extractApolloKey(JSON.stringify({ apiKey: '  k-1 ' }), 'Apollo')).toBe('k-1');
-        expect(extractApolloKey(JSON.stringify({ apiKey: '   ' }), 'Apollo')).toBeNull();
-        expect(extractApolloKey('', 'Apollo')).toBeNull();
-        expect(extractApolloKey(null, 'Apollo')).toBeNull();
+        expect(ExtractApolloKey(JSON.stringify({ apiKey: '  k-1 ' }), 'Apollo')).toBe('k-1');
+        expect(ExtractApolloKey(JSON.stringify({ apiKey: '   ' }), 'Apollo')).toBeNull();
+        expect(ExtractApolloKey('', 'Apollo')).toBeNull();
+        expect(ExtractApolloKey(null, 'Apollo')).toBeNull();
     });
 
     it('throws on a broken Values payload rather than falling through to another workspace key', () => {
-        expect(() => extractApolloKey('{not json', 'Apollo')).toThrow(/not valid JSON/);
-        expect(() => extractApolloKey('"a string"', 'Apollo')).toThrow(/must be a JSON object/);
+        expect(() => ExtractApolloKey('{not json', 'Apollo')).toThrow(/not valid JSON/);
+        expect(() => ExtractApolloKey('"a string"', 'Apollo')).toThrow(/must be a JSON object/);
     });
 
     it('reports no key when the payload holds something unrelated', () => {
-        expect(extractApolloKey(JSON.stringify({ token: 'k-1' }), 'Apollo')).toBeNull();
+        expect(ExtractApolloKey(JSON.stringify({ token: 'k-1' }), 'Apollo')).toBeNull();
     });
 });
 
@@ -937,7 +954,7 @@ describe('ApolloGetListContactsAction', () => {
 describe('ApolloSearchPeopleAction', () => {
     const page: ApolloPeoplePage = {
         people: [
-            { id: 'p-1', firstName: 'A', lastName: 'B', name: 'A B', title: 'VP', linkedinUrl: '', organizationId: 'org-1', organizationName: 'Acme' },
+            { id: 'p-1', firstName: 'A', lastName: 'B', lastNameObfuscated: '', name: 'A B', title: 'VP', linkedinUrl: '', hasEmail: null, organizationId: 'org-1', organizationName: 'Acme' },
         ],
         pagination: { page: 1, perPage: 100, totalEntries: 1, totalPages: 1 },
     };
@@ -958,6 +975,21 @@ describe('ApolloSearchPeopleAction', () => {
             fakeClient({ searchPeople }),
         );
         expect(searchPeople).toHaveBeenCalledWith({ titles: ['VP of Marketing', 'CMO'], seniorities: ['vp'] }, {});
+    });
+
+    it('accepts a search scoped only by Locations and Keywords, and passes them through', async () => {
+        const searchPeople = vi.fn(async () => page);
+        const { result } = await run(ApolloSearchPeopleAction, { Locations: '["Boston, Massachusetts, United States"]', Keywords: 'policy' }, fakeClient({ searchPeople }));
+        expect(result.Success).toBe(true);
+        expect(searchPeople).toHaveBeenCalledWith({ locations: ['Boston, Massachusetts, United States'], keywords: 'policy' }, {});
+    });
+
+    it('A-14: reports Count as the page size and TotalEntries as the total', async () => {
+        const big: ApolloPeoplePage = { ...page, pagination: { page: 1, perPage: 10, totalEntries: 1240, totalPages: 124 } };
+        const { result, params } = await run(ApolloSearchPeopleAction, { Titles: 'CEO' }, fakeClient({ searchPeople: async () => big }));
+        expect(result.Success).toBe(true);
+        expect(output(params, 'Count')).toBe(1);
+        expect(output(params, 'TotalEntries')).toBe(1240);
     });
 
     it('says in the message that emails are not part of this answer', async () => {

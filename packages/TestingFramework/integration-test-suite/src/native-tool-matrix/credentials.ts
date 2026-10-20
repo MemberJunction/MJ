@@ -45,7 +45,7 @@ export const AUTH_FAILURE_MARKERS: readonly string[] = [
  * only where a status code actually appears — at a word boundary — while the phrase markers match
  * anywhere, since they are unambiguous on their own.
  */
-export function isAuthFailure(message: string | null | undefined): boolean {
+export function IsAuthFailure(message: string | null | undefined): boolean {
     if (!message) {
         return false;
     }
@@ -54,4 +54,9 @@ export function isAuthFailure(message: string | null | undefined): boolean {
         /^\d+$/.test(marker)
             ? new RegExp(`(^|[^\\d])${marker}([^\\d]|$)`).test(lowered)
             : lowered.includes(marker));
+}
+
+/** @deprecated Use {@link IsAuthFailure}. */
+export function isAuthFailure(message: string | null | undefined): boolean {
+    return IsAuthFailure(message);
 }

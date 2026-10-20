@@ -452,11 +452,11 @@ describe('AdditionalSchemaInfoGenerator', () => {
       });
 
       // With threshold below candidate confidence — should include
-      const low = JSON.parse(generator.generate(state, { confidenceThreshold: 30 }));
+      const low = JSON.parse(generator.generate(state, { ConfidenceThreshold: 30 }));
       expect(low.dbo[0].ForeignKeys).toHaveLength(1);
 
       // With threshold above candidate confidence — should exclude (only Schemas remains)
-      const high = JSON.parse(generator.generate(state, { confidenceThreshold: 50 }));
+      const high = JSON.parse(generator.generate(state, { ConfidenceThreshold: 50 }));
       expect(high.dbo).toBeUndefined();
       expect(high.Schemas).toBeDefined();
     });
@@ -583,10 +583,10 @@ describe('AdditionalSchemaInfoGenerator', () => {
         }
       });
 
-      const all = JSON.parse(generator.generate(state, { confirmedOnly: false }));
+      const all = JSON.parse(generator.generate(state, { ConfirmedOnly: false }));
       expect(all.dbo[0].ForeignKeys).toHaveLength(2);
 
-      const confirmed = JSON.parse(generator.generate(state, { confirmedOnly: true }));
+      const confirmed = JSON.parse(generator.generate(state, { ConfirmedOnly: true }));
       expect(confirmed.dbo[0].ForeignKeys).toHaveLength(1);
       expect(confirmed.dbo[0].ForeignKeys[0].RelatedTable).toBe('Customers');
     });
@@ -620,7 +620,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
       expect(withIntrospected.dbo[0].ForeignKeys).toHaveLength(1);
 
       // discoveredOnly: excludes introspected (no discoveries → only Schemas key)
-      const discovered = JSON.parse(generator.generate(state, { discoveredOnly: true }));
+      const discovered = JSON.parse(generator.generate(state, { DiscoveredOnly: true }));
       expect(discovered.dbo).toBeUndefined();
       expect(discovered.Schemas).toBeDefined();
     });
@@ -677,7 +677,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
         }
       });
 
-      const result = JSON.parse(generator.generate(state, { discoveredOnly: true }));
+      const result = JSON.parse(generator.generate(state, { DiscoveredOnly: true }));
 
       // Should NOT include the hard PK (ID)
       expect(result.dbo[0].PrimaryKey).toBeUndefined();
@@ -704,7 +704,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
         ])]
       });
 
-      const result = JSON.parse(generator.generate(state, { approvedOnly: true }));
+      const result = JSON.parse(generator.generate(state, { ApprovedOnly: true }));
       expect(result.dbo).toHaveLength(1);
       expect(result.dbo[0].TableName).toBe('Users');
     });
@@ -1003,7 +1003,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
       });
 
       // Lower threshold to 60%
-      const result = JSON.parse(generator.generate(state, { valueListConfidenceThreshold: 60 }));
+      const result = JSON.parse(generator.generate(state, { ValueListConfidenceThreshold: 60 }));
       expect(result.dbo).toHaveLength(1);
       expect(result.dbo[0].Fields).toHaveLength(1);
       expect(result.dbo[0].Fields[0].ValueListType).toBe('ListOrUserEntry');
@@ -1061,7 +1061,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
         ])],
       });
 
-      const result = JSON.parse(generator.generate(state, { excludeValueLists: true }));
+      const result = JSON.parse(generator.generate(state, { ExcludeValueLists: true }));
       // No PK/FK and Fields excluded → table not emitted
       expect(result.dbo).toBeUndefined();
     });
@@ -1138,7 +1138,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
       });
 
       // confirmedOnly: only user-approved columns should emit Fields
-      const result = JSON.parse(generator.generate(state, { confirmedOnly: true }));
+      const result = JSON.parse(generator.generate(state, { ConfirmedOnly: true }));
       expect(result.dbo[0].Fields).toHaveLength(1);
       expect(result.dbo[0].Fields[0].FieldName).toBe('Status');
     });

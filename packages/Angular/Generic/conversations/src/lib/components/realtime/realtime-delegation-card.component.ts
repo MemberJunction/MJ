@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MJAccordionModule } from '@memberjunction/ng-ui-components';
 import { RealtimeDelegationCardVM, FriendlyStepLabel } from './realtime-session-state';
-import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 
 /**
  * Renders a single delegation in the live session thread:
@@ -30,7 +30,7 @@ import { ParsedDelegationArtifact } from '../../services/delegation-result-parse
 })
 export class RealtimeDelegationCardComponent {
   /** Maximum characters of the result shown in the collapsed done chip. */
-  private static readonly PreviewMaxChars = 120;
+  private static readonly previewMaxChars = 120;
 
   /** The delegation card view-model to render (immutable — replaced on every update). */
   @Input({ required: true }) Card!: RealtimeDelegationCardVM;
@@ -115,7 +115,7 @@ export class RealtimeDelegationCardComponent {
   /** One-line, ~120-char preview of the result for the collapsed chip. */
   public get ResultPreview(): string {
     const oneLine = this.ResultText.replace(/\s+/g, ' ').trim();
-    const max = RealtimeDelegationCardComponent.PreviewMaxChars;
+    const max = RealtimeDelegationCardComponent.previewMaxChars;
     return oneLine.length > max ? `${oneLine.slice(0, max).trimEnd()}…` : oneLine;
   }
 

@@ -121,7 +121,7 @@ export interface IDriftDetector {
    * @param context the model + its binding + observed counts (read-only)
    * @returns drift verdict + a plain-language explanation
    */
-  detectDrift(context: DriftContext): Promise<DriftResult> | DriftResult;
+  detectDrift(context: DriftContext): Promise<DriftResult> | DriftResult;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Read-only inputs handed to an {@link IDriftDetector}. */
@@ -161,7 +161,7 @@ export interface IRowCounter {
    * @param contextUser request user — required server-side for isolation/audit
    * @param provider optional provider for multi-provider correctness
    */
-  countRows(
+  countRows(  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     entityName: string,
     extraFilter?: string,
     contextUser?: UserInfo,
@@ -180,7 +180,7 @@ export interface IMaintenanceLoader {
    *
    * @returns the binding, or `null` when not found
    */
-  loadBinding(
+  loadBinding(  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     bindingId: string,
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
@@ -192,7 +192,7 @@ export interface IMaintenanceLoader {
    *
    * @param mode the binding mode to filter on (omit for ALL bindings)
    */
-  loadBindings(
+  loadBindings(  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     mode?: MaintenanceBindingMode,
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
@@ -203,7 +203,7 @@ export interface IMaintenanceLoader {
    *
    * @returns the model, or `null` when not found
    */
-  loadModel(
+  loadModel(  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     modelId: string,
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
@@ -226,7 +226,7 @@ export interface IRescoreRunner {
    * @param request which model/entity to score + the context
    * @returns the number of rows scored (and failures, for monitoring)
    */
-  rescore(request: RescoreRequest): Promise<RescoreResult>;
+  rescore(request: RescoreRequest): Promise<RescoreResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Input to {@link IRescoreRunner.rescore}. */

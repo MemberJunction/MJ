@@ -140,7 +140,7 @@ const ADAPTERS = new Map<string, ASTDialectAdapter>([
  * a developer error (a dialect was added to sql-dialect without a matching
  * adapter here).
  */
-export function getASTDialectAdapter(dialect: SQLParserDialect): ASTDialectAdapter {
+export function GetASTDialectAdapter(dialect: SQLParserDialect): ASTDialectAdapter {
     const adapter = ADAPTERS.get(dialect.ParserDialect);
     if (!adapter) {
         throw new Error(
@@ -149,4 +149,9 @@ export function getASTDialectAdapter(dialect: SQLParserDialect): ASTDialectAdapt
         );
     }
     return adapter;
+}
+
+/** @deprecated Use {@link GetASTDialectAdapter}. */
+export function getASTDialectAdapter(dialect: SQLParserDialect): ASTDialectAdapter {
+    return GetASTDialectAdapter(dialect);
 }

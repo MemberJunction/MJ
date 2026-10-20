@@ -39,8 +39,13 @@ export const AGENT_CONTEXT_RECORD_LIST_CAP = 25;
  * @param name - a (possibly prefixed) entity Name, e.g. "MJ: ML Models"
  * @returns the name without the "MJ: " prefix, e.g. "ML Models"
  */
-export function stripMJPrefix(name: string): string {
+export function StripMJPrefix(name: string): string {
     return name.startsWith(MJ_ENTITY_NAME_PREFIX) ? name.slice(MJ_ENTITY_NAME_PREFIX.length) : name;
+}
+
+/** @deprecated Use {@link StripMJPrefix}. */
+export function stripMJPrefix(name: string): string {
+    return StripMJPrefix(name);
 }
 
 /**
@@ -53,11 +58,16 @@ export function stripMJPrefix(name: string): string {
  * @param displayName - the entity's DisplayName, if any (takes precedence, used verbatim)
  * @returns the user-facing display label
  */
-export function entityDisplayName(name: string, displayName?: string | null): string {
+export function EntityDisplayName(name: string, displayName?: string | null): string {
     if (displayName) {
         return displayName;
     }
-    return stripMJPrefix(name);
+    return StripMJPrefix(name);
+}
+
+/** @deprecated Use {@link EntityDisplayName}. */
+export function entityDisplayName(name: string, displayName?: string | null): string {
+    return EntityDisplayName(name, displayName);
 }
 
 /**
@@ -85,7 +95,7 @@ export interface EntityNameCandidate {
  * @param candidates - the entities available in this explorer
  * @returns the matched candidate, or null on a miss
  */
-export function resolveEntityByName<T extends EntityNameCandidate>(input: string, candidates: readonly T[]): T | null {
+export function ResolveEntityByName<T extends EntityNameCandidate>(input: string, candidates: readonly T[]): T | null {
     const needle = input.trim().toLowerCase();
     if (!needle) {
         return null;
@@ -96,19 +106,24 @@ export function resolveEntityByName<T extends EntityNameCandidate>(input: string
         return byName;
     }
     // 2. display name (DisplayName, else prefix-stripped Name)
-    const byDisplay = candidates.find(c => entityDisplayName(c.Name, c.DisplayName).toLowerCase() === needle);
+    const byDisplay = candidates.find(c => EntityDisplayName(c.Name, c.DisplayName).toLowerCase() === needle);
     if (byDisplay) {
         return byDisplay;
     }
     // 3. display name ignoring the "MJ: " prefix (covers an input that itself carries the prefix)
-    const strippedNeedle = stripMJPrefix(input.trim()).toLowerCase();
+    const strippedNeedle = StripMJPrefix(input.trim()).toLowerCase();
     if (strippedNeedle !== needle) {
-        const byStripped = candidates.find(c => entityDisplayName(c.Name, c.DisplayName).toLowerCase() === strippedNeedle);
+        const byStripped = candidates.find(c => EntityDisplayName(c.Name, c.DisplayName).toLowerCase() === strippedNeedle);
         if (byStripped) {
             return byStripped;
         }
     }
     return null;
+}
+
+/** @deprecated Use {@link ResolveEntityByName}. */
+export function resolveEntityByName<T extends EntityNameCandidate>(input: string, candidates: readonly T[]): T | null {
+    return ResolveEntityByName(input, candidates);
 }
 
 /**
@@ -134,14 +149,14 @@ export const AGENT_CONTEXT_APP_GROUP_CAP = 25;
  * display value). Exactly one is honored; `position` takes precedence when both are given.
  */
 export interface RecordSelectionRequest {
-    position?: 'first' | 'last' | number;
-    name?: string;
+    position?: 'first' | 'last' | number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    name?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /** Outcome of {@link resolveRecordSelection}: a 0-based index into the loaded records, or an error. */
 export type RecordSelectionResult =
-    | { ok: true; index: number }
-    | { ok: false; error: string };
+    | { Ok: true; Index: number }
+    | { Ok: false; Error: string };
 
 /**
  * Resolve an agent record-selection request against the display values of the records
@@ -158,9 +173,9 @@ export type RecordSelectionResult =
  * @param request - the agent's selection request
  * @returns the resolved 0-based index, or a clear error message
  */
-export function resolveRecordSelection(recordNames: readonly string[], request: RecordSelectionRequest): RecordSelectionResult {
+export function ResolveRecordSelection(recordNames: readonly string[], request: RecordSelectionRequest): RecordSelectionResult {
     if (recordNames.length === 0) {
-        return { ok: false, error: 'No records are currently loaded in the view to select from.' };
+        return { Ok: false, Error: 'No records are currently loaded in the view to select from.' };
     }
 
     if (request.position !== undefined && request.position !== null) {
@@ -172,22 +187,27 @@ export function resolveRecordSelection(recordNames: readonly string[], request: 
         return resolveRecordByName(recordNames, name);
     }
 
-    return { ok: false, error: 'Provide either a position ("first", "last", or a 1-based index) or a record name to select.' };
+    return { Ok: false, Error: 'Provide either a position ("first", "last", or a 1-based index) or a record name to select.' };
+}
+
+/** @deprecated Use {@link ResolveRecordSelection}. */
+export function resolveRecordSelection(recordNames: readonly string[], request: RecordSelectionRequest): RecordSelectionResult {
+    return ResolveRecordSelection(recordNames, request);
 }
 
 /** Resolve a 'first' | 'last' | 1-based-index position to a 0-based index. */
 function resolveRecordByPosition(recordNames: readonly string[], position: 'first' | 'last' | number): RecordSelectionResult {
     const count = recordNames.length;
     if (position === 'first') {
-        return { ok: true, index: 0 };
+        return { Ok: true, Index: 0 };
     }
     if (position === 'last') {
-        return { ok: true, index: count - 1 };
+        return { Ok: true, Index: count - 1 };
     }
     if (typeof position === 'number' && Number.isInteger(position) && position >= 1 && position <= count) {
-        return { ok: true, index: position - 1 };
+        return { Ok: true, Index: position - 1 };
     }
-    return { ok: false, error: `Position "${String(position)}" is out of range. There ${count === 1 ? 'is 1 record' : `are ${count} records`} loaded (use 1-${count}, "first", or "last").` };
+    return { Ok: false, Error: `Position "${String(position)}" is out of range. There ${count === 1 ? 'is 1 record' : `are ${count} records`} loaded (use 1-${count}, "first", or "last").` };
 }
 
 /** Resolve a record by an exact (then contains) case-insensitive display-value match. */
@@ -195,14 +215,14 @@ function resolveRecordByName(recordNames: readonly string[], name: string): Reco
     const needle = name.toLowerCase();
     const exact = recordNames.findIndex(n => n.toLowerCase() === needle);
     if (exact >= 0) {
-        return { ok: true, index: exact };
+        return { Ok: true, Index: exact };
     }
     const contains = recordNames.findIndex(n => n.toLowerCase().includes(needle));
     if (contains >= 0) {
-        return { ok: true, index: contains };
+        return { Ok: true, Index: contains };
     }
     const sample = recordNames.slice(0, 5).join(', ');
-    return { ok: false, error: `No loaded record matches "${name}". Loaded records include: ${sample}.` };
+    return { Ok: false, Error: `No loaded record matches "${name}". Loaded records include: ${sample}.` };
 }
 
 /**
@@ -232,8 +252,13 @@ function capNames(names: readonly string[]): string[] {
  * @param mode - candidate mode string (may be anything the agent passes)
  * @returns true when `mode` is one of grid | cards | timeline | map
  */
-export function isValidViewMode(mode: unknown): mode is DataExplorerViewMode {
+export function IsValidViewMode(mode: unknown): mode is DataExplorerViewMode {
     return typeof mode === 'string' && (VALID_VIEW_MODES as readonly string[]).includes(mode);
+}
+
+/** @deprecated Use {@link IsValidViewMode}. */
+export function isValidViewMode(mode: unknown): mode is DataExplorerViewMode {
+    return IsValidViewMode(mode);
 }
 
 /**
@@ -243,8 +268,13 @@ export function isValidViewMode(mode: unknown): mode is DataExplorerViewMode {
  * @param mode - candidate mode string (may be anything the agent passes)
  * @returns true when `mode` is one of 'all' | 'favorites'
  */
-export function isValidEntityBrowserMode(mode: unknown): mode is 'all' | 'favorites' {
+export function IsValidEntityBrowserMode(mode: unknown): mode is 'all' | 'favorites' {
     return typeof mode === 'string' && (VALID_ENTITY_BROWSER_MODES as readonly string[]).includes(mode);
+}
+
+/** @deprecated Use {@link IsValidEntityBrowserMode}. */
+export function isValidEntityBrowserMode(mode: unknown): mode is 'all' | 'favorites' {
+    return IsValidEntityBrowserMode(mode);
 }
 
 /**
@@ -397,7 +427,7 @@ function buildRecordBrowsingContext(input: DataExplorerAgentContextInput): Recor
     // non-positive count yields 1 page.
     context['PageSize'] = input.PageSize;
     context['CurrentPage'] = input.CurrentPage ?? 1;
-    context['TotalPages'] = input.TotalPages ?? computeTotalPages(input.FilteredRecordCount, input.PageSize);
+    context['TotalPages'] = input.TotalPages ?? ComputeTotalPages(input.FilteredRecordCount, input.PageSize);
 
     // Sort — only surfaced when the grid is actually sorted by a column.
     if (input.SortColumn) {
@@ -470,11 +500,16 @@ function buildEntityBrowsingContext(input: DataExplorerAgentContextInput): Recor
  * Derive the total page count from a record count and page size.
  * Guards against a non-positive page size (returns 1 page) and rounds up.
  */
-export function computeTotalPages(recordCount: number, pageSize: number): number {
+export function ComputeTotalPages(recordCount: number, pageSize: number): number {
     if (!Number.isFinite(pageSize) || pageSize <= 0 || recordCount <= 0) {
         return 1;
     }
     return Math.ceil(recordCount / pageSize);
+}
+
+/** @deprecated Use {@link ComputeTotalPages}. */
+export function computeTotalPages(recordCount: number, pageSize: number): number {
+    return ComputeTotalPages(recordCount, pageSize);
 }
 
 /**
@@ -494,9 +529,14 @@ export function computeTotalPages(recordCount: number, pageSize: number): number
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildDataExplorerAgentContext(input: DataExplorerAgentContextInput): Record<string, unknown> {
+export function BuildDataExplorerAgentContext(input: DataExplorerAgentContextInput): Record<string, unknown> {
     if (input.SelectedEntityName) {
         return buildRecordBrowsingContext(input);
     }
     return buildEntityBrowsingContext(input);
+}
+
+/** @deprecated Use {@link BuildDataExplorerAgentContext}. */
+export function buildDataExplorerAgentContext(input: DataExplorerAgentContextInput): Record<string, unknown> {
+    return BuildDataExplorerAgentContext(input);
 }

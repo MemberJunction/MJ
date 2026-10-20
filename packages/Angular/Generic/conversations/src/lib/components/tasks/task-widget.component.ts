@@ -349,24 +349,88 @@ import { MJTaskEntity } from '@memberjunction/core-entities';
   `]
 })
 export class TaskWidgetComponent {
-  @Input() task!: MJTaskEntity;
-  @Input() clickable: boolean = false;
-  @Input() compact: boolean = false;
-  @Input() showProgress: boolean = true;
-  @Input() showDuration: boolean = true;
-  @Output() taskClick = new EventEmitter<MJTaskEntity>();
+  @Input() Task!: MJTaskEntity;
 
-  get isActive(): boolean {
-    return this.task.Status === 'In Progress';
+  /** @deprecated Use {@link Task}. */
+  @Input() set task(value: MJTaskEntity) {
+    this.Task = value;
+  }
+  /** @deprecated Use {@link Task}. */
+  get task(): MJTaskEntity {
+    return this.Task;
+  }
+  @Input() Clickable: boolean = false;
+
+  /** @deprecated Use {@link Clickable}. */
+  @Input() set clickable(value: boolean) {
+    this.Clickable = value;
+  }
+  /** @deprecated Use {@link Clickable}. */
+  get clickable(): boolean {
+    return this.Clickable;
+  }
+  @Input() Compact: boolean = false;
+
+  /** @deprecated Use {@link Compact}. */
+  @Input() set compact(value: boolean) {
+    this.Compact = value;
+  }
+  /** @deprecated Use {@link Compact}. */
+  get compact(): boolean {
+    return this.Compact;
+  }
+  @Input() ShowProgress: boolean = true;
+
+  /** @deprecated Use {@link ShowProgress}. */
+  @Input() set showProgress(value: boolean) {
+    this.ShowProgress = value;
+  }
+  /** @deprecated Use {@link ShowProgress}. */
+  get showProgress(): boolean {
+    return this.ShowProgress;
+  }
+  @Input() ShowDuration: boolean = true;
+
+  /** @deprecated Use {@link ShowDuration}. */
+  @Input() set showDuration(value: boolean) {
+    this.ShowDuration = value;
+  }
+  /** @deprecated Use {@link ShowDuration}. */
+  get showDuration(): boolean {
+    return this.ShowDuration;
+  }
+  @Output() TaskClick = new EventEmitter<MJTaskEntity>();
+
+  /**
+   * @deprecated Use {@link TaskClick}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (taskClick) keeps working. Must stay AFTER TaskClick: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() taskClick = this.TaskClick;
+
+  get IsActive(): boolean {
+    return this.Task.Status === 'In Progress';
   }
 
-  onTaskClick(): void {
-    if (this.clickable) {
-      this.taskClick.emit(this.task);
+  /** @deprecated Use {@link IsActive}. */
+  get isActive(): boolean {
+    return this.IsActive;
+  }
+
+  OnTaskClick(): void {
+    if (this.Clickable) {
+      this.TaskClick.emit(this.Task);
     }
   }
 
-  formatDate(date: Date | null): string {
+  /** @deprecated Use {@link OnTaskClick}. */
+  onTaskClick(): void {
+    return this.OnTaskClick();
+  }
+
+  FormatDate(date: Date | null): string {
     if (!date) return '';
 
     const now = new Date();
@@ -395,12 +459,22 @@ export class TaskWidgetComponent {
     return taskDate.toLocaleDateString();
   }
 
-  isOverdue(dueDate: Date | null): boolean {
+  /** @deprecated Use {@link FormatDate}. */
+  formatDate(date: Date | null): string {
+    return this.FormatDate(date);
+  }
+
+  IsOverdue(dueDate: Date | null): boolean {
     if (!dueDate) return false;
     return new Date(dueDate).getTime() < Date.now();
   }
 
-  getDuration(start: Date | null, end: Date | null): string {
+  /** @deprecated Use {@link IsOverdue}. */
+  isOverdue(dueDate: Date | null): boolean {
+    return this.IsOverdue(dueDate);
+  }
+
+  GetDuration(start: Date | null, end: Date | null): string {
     if (!start || !end) return '';
 
     const diffMs = new Date(end).getTime() - new Date(start).getTime();
@@ -427,7 +501,12 @@ export class TaskWidgetComponent {
     return remainingHours > 0 ? `${diffDays}d ${remainingHours}h` : `${diffDays}d`;
   }
 
-  getElapsedTime(start: Date | null): string {
+  /** @deprecated Use {@link GetDuration}. */
+  getDuration(start: Date | null, end: Date | null): string {
+    return this.GetDuration(start, end);
+  }
+
+  GetElapsedTime(start: Date | null): string {
     if (!start) return '';
 
     const diffMs = Date.now() - new Date(start).getTime();
@@ -447,5 +526,10 @@ export class TaskWidgetComponent {
     const diffHours = Math.floor(diffMins / 60);
     const remainingMins = diffMins % 60;
     return `${diffHours}:${remainingMins.toString().padStart(2, '0')}`;
+  }
+
+  /** @deprecated Use {@link GetElapsedTime}. */
+  getElapsedTime(start: Date | null): string {
+    return this.GetElapsedTime(start);
   }
 }

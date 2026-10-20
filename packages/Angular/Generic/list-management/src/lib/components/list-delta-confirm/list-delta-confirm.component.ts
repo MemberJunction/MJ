@@ -40,7 +40,7 @@ export class ListDeltaConfirmComponent {
       this._visible = value;
       // Reset the acknowledgement when re-opening so a previous session's
       // confirmation doesn't carry over to a new delta.
-      if (value) this.dropAcknowledged = false;
+      if (value) this.DropAcknowledged = false;
     }
   }
   private _visible = false;
@@ -73,38 +73,77 @@ export class ListDeltaConfirmComponent {
   @Output() Cancel = new EventEmitter<void>();
 
   /** Local UI state for the acknowledgement checkbox in drop-warning mode. */
-  public dropAcknowledged = false;
+  public DropAcknowledged = false;
 
-  public get hasDrops(): boolean {
+  /** @deprecated Use {@link DropAcknowledged}. */
+  public get dropAcknowledged() {
+    return this.DropAcknowledged;
+  }
+  /** @deprecated Use {@link DropAcknowledged}. */
+  public set dropAcknowledged(value) {
+    this.DropAcknowledged = value;
+  }
+
+  public get HasDrops(): boolean {
     return (this.Delta?.Counts.Remove ?? 0) > 0;
   }
 
-  public get canConfirm(): boolean {
-    if (!this.Delta) return false;
-    if (!this.hasDrops) return true;
-    return this.dropAcknowledged;
+  /** @deprecated Use {@link HasDrops}. */
+  public get hasDrops(): boolean {
+    return this.HasDrops;
   }
 
-  public get previewAdds(): string[] {
+  public get CanConfirm(): boolean {
+    if (!this.Delta) return false;
+    if (!this.HasDrops) return true;
+    return this.DropAcknowledged;
+  }
+
+  /** @deprecated Use {@link CanConfirm}. */
+  public get canConfirm(): boolean {
+    return this.CanConfirm;
+  }
+
+  public get PreviewAdds(): string[] {
     return this.Delta?.ToAdd.slice(0, this.PreviewLimit) ?? [];
   }
 
-  public get previewRemoves(): string[] {
+  /** @deprecated Use {@link PreviewAdds}. */
+  public get previewAdds(): string[] {
+    return this.PreviewAdds;
+  }
+
+  public get PreviewRemoves(): string[] {
     return this.Delta?.ToRemove.slice(0, this.PreviewLimit) ?? [];
   }
 
-  public get confirmButtonLabel(): string {
+  /** @deprecated Use {@link PreviewRemoves}. */
+  public get previewRemoves(): string[] {
+    return this.PreviewRemoves;
+  }
+
+  public get ConfirmButtonLabel(): string {
     if (!this.Delta) return 'Confirm';
-    if (this.hasDrops) return `Confirm Removal & Update`;
+    if (this.HasDrops) return `Confirm Removal & Update`;
     return `Confirm (Add ${this.Delta.Counts.Add})`;
   }
 
-  public get targetDisplayName(): string {
+  /** @deprecated Use {@link ConfirmButtonLabel}. */
+  public get confirmButtonLabel(): string {
+    return this.ConfirmButtonLabel;
+  }
+
+  public get TargetDisplayName(): string {
     return this.TargetListName ?? 'this list';
   }
 
+  /** @deprecated Use {@link TargetDisplayName}. */
+  public get targetDisplayName(): string {
+    return this.TargetDisplayName;
+  }
+
   public OnConfirm(): void {
-    if (!this.canConfirm || !this.Delta) return;
+    if (!this.CanConfirm || !this.Delta) return;
     this.Confirm.emit(this.Delta.DeltaToken);
   }
 
@@ -113,6 +152,6 @@ export class ListDeltaConfirmComponent {
   }
 
   public OnAcknowledgementToggle(value: boolean): void {
-    this.dropAcknowledged = value;
+    this.DropAcknowledged = value;
   }
 }

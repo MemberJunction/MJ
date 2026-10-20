@@ -13,19 +13,19 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 type ApplyHost = {
-    ApplyRecords: (...args: unknown[]) => Promise<void>;
+    applyRecords: (...args: unknown[]) => Promise<void>;
 };
 
 /** Drives the real ApplyRecords with ApplySingleRecord stubbed, on the transaction-free path. */
 function makeHost(apply: (rec: { id: number }) => Promise<void>) {
     const host = Object.create(IntegrationEngine.prototype) as unknown as ApplyHost & Record<string, unknown>;
     Object.assign(host, {
-        ApplySingleRecord: async (record: { id: number }) => apply(record),
+        applySingleRecord: async (record: { id: number }) => apply(record),
         // Unrelated collaborator for these tests: they exercise how the batch is WALKED, not what
         // the batch knows about its destination rows beforehand.
-        PrefetchContentHashes: async () => undefined,
-        TouchLastReconciledAt: async () => undefined,
-        FlushRecordMaps: async () => undefined,
+        prefetchContentHashes: async () => undefined,
+        touchLastReconciledAt: async () => undefined,
+        flushRecordMaps: async () => undefined,
         runWriteExclusive: async (fn: () => Promise<void>) => fn(),
         getSyncConcurrency: () => 1,
     });
@@ -38,7 +38,7 @@ const result = () => ({ RecordsProcessed: 0, RecordsCreated: 0, RecordsUpdated: 
 
 /** ApplyRecords(records, ci, entityMap, result, user, logger, useTransaction=false, concurrency) */
 const run = (host: ApplyHost, recs: unknown[], res: unknown, concurrency: number) =>
-    host.ApplyRecords(recs, { ID: 'CI' }, { ID: 'EM', ExternalObjectName: 'Obj' }, res, { ID: 'U' }, undefined, false, concurrency);
+    host.applyRecords(recs, { ID: 'CI' }, { ID: 'EM', ExternalObjectName: 'Obj' }, res, { ID: 'U' }, undefined, false, concurrency);
 
 describe('ApplyRecords — transaction-free path honours concurrency', () => {
     it('runs up to `concurrency` records at once instead of one at a time', async () => {
@@ -132,7 +132,7 @@ describe('wiring', () => {
     });
 
     it('passes the requested concurrency at both call sites', () => {
-        const calls = source.match(/this\.ApplyRecords\([^;]*\);/g) ?? [];
+        const calls = source.match(/this\.applyRecords\([^;]*\);/g) ?? [];
         expect(calls.length).toBeGreaterThanOrEqual(2);
         for (const c of calls) expect(c).toMatch(/getSyncConcurrency\(config\)\);\s*$/);
     });

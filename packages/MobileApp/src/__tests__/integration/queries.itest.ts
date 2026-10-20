@@ -1,22 +1,22 @@
 /**
  * Integration: saved queries (RunQuery) against the live backend.
  *
- * loadQueries() reads approved queries from metadata; if any exist, runQuery()
+ * LoadQueries() reads approved queries from metadata; if any exist, runQuery()
  * executes the first one and we assert a clean result (success with columns/rows,
  * or a clean empty result). We do not assume a specific query is seeded.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { initLiveProvider, hasToken } from './setup-live';
-import { loadQueries, runQuery } from '@/data/services/explorer';
+import { LoadQueries, runQuery } from '@/data/services/explorer';
 
 describe.skipIf(!hasToken())('integration: queries', () => {
     beforeAll(async () => {
         await initLiveProvider();
     });
 
-    it('loadQueries returns the runnable (approved) queries as a sorted list', () => {
-        const queries = loadQueries();
+    it('LoadQueries returns the runnable (approved) queries as a sorted list', () => {
+        const queries = LoadQueries();
         expect(Array.isArray(queries)).toBe(true);
         // Shape check on whatever is present.
         for (const q of queries) {
@@ -28,7 +28,7 @@ describe.skipIf(!hasToken())('integration: queries', () => {
     });
 
     it('runQuery on the first approved query returns a clean result', async () => {
-        const queries = loadQueries();
+        const queries = LoadQueries();
         if (queries.length === 0) {
             // No approved queries seeded — nothing to run, but the API must not throw.
             expect(queries.length).toBe(0);
@@ -41,13 +41,13 @@ describe.skipIf(!hasToken())('integration: queries', () => {
         expect(typeof result.success).toBe('boolean');
 
         if (result.success) {
-            expect(Array.isArray(result.columns)).toBe(true);
-            expect(Array.isArray(result.rows)).toBe(true);
-            expect(result.rowCount).toBeGreaterThanOrEqual(0);
+            expect(Array.isArray(result.Columns)).toBe(true);
+            expect(Array.isArray(result.Rows)).toBe(true);
+            expect(result.RowCount).toBeGreaterThanOrEqual(0);
             // Columns are derived from the first row; consistency check.
-            if (result.rows.length > 0) {
-                expect(result.columns.length).toBeGreaterThan(0);
-                expect(Object.keys(result.rows[0])).toEqual(result.columns);
+            if (result.Rows.length > 0) {
+                expect(result.Columns.length).toBeGreaterThan(0);
+                expect(Object.keys(result.Rows[0])).toEqual(result.Columns);
             }
         } else {
             // A failure must carry an error message (e.g. required parameters).

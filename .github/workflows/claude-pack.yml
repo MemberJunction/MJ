@@ -27,6 +27,10 @@ on:
       - 'scripts/verify-bundle-smoke.mjs'
       - '.github/workflows/claude-pack.yml'
 
+# Least-privilege token: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   verify-dist-fresh:
     name: Verify dist is up to date

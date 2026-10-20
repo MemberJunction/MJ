@@ -2,8 +2,8 @@
  * ObjectCacheEntry is used for the array within the ObjectCache class
  */
 export class ObjectCacheEntry<T = any> {
-    key: string
-    object: T
+    key: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    object: T  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     constructor (key: string, object: T) {
         this.key = key
@@ -16,14 +16,17 @@ export class ObjectCacheEntry<T = any> {
  * Do not attempt to directly instantiate this class, instead use the static Instance property of the MJGlobal class to get the instance of the ObjectCache for your application within that instance of MJGlobal.
  */
 export class ObjectCache {
-    // our internal array is an array of ObjectCacheEntry objects
-    private _entries: ObjectCacheEntry[] = []; //starts off empty
+    private _entries = new Map<string, ObjectCacheEntry>();
+
+    private normalizeKey(key: string): string {
+        return key.trim().toLowerCase();
+    }
 
     /**
      * Remove all entries from the object cache
      */
     public Clear() {
-        this._entries = []; // set to a blank
+        this._entries.clear();
     }
 
     /**
@@ -32,15 +35,11 @@ export class ObjectCache {
      * @param object 
      */
     public Add<T>(key: string, object: T) {
-        // make sure that if we have the key already we throw an exception
-        const idx = this._entries.findIndex((i: ObjectCacheEntry) => i.key.trim().toLowerCase() === key.trim().toLowerCase())
-        if (idx >= 0) {
+        const normalizedKey = this.normalizeKey(key);
+        if (this._entries.has(normalizedKey)) {
             throw new Error(`An object with the key ${key} already exists in the cache. Remove it first before adding a new one.`);
         }
-        else {
-            const entry = new ObjectCacheEntry<T>(key, object);
-            this._entries.push(entry);    
-        }
+        this._entries.set(normalizedKey, new ObjectCacheEntry<T>(key, object));
     }
 
     /**
@@ -49,8 +48,8 @@ export class ObjectCache {
      * @param object 
      */
     public Replace<T>(key: string, object: T) {
-        this.Remove(key); // remove the existing one if it exists
-        this.Add(key, object); // add the new one
+        const normalizedKey = this.normalizeKey(key);
+        this._entries.set(normalizedKey, new ObjectCacheEntry<T>(key, object));
     }
 
     /**
@@ -58,12 +57,7 @@ export class ObjectCache {
      * @param key 
      */
     public Remove(key: string) {
-        // first, see if we get a match for the index
-        const idx = this._entries.findIndex((i: ObjectCacheEntry) => i.key.trim().toLowerCase() === key.trim().toLowerCase())
-        if (idx >= 0) {
-            // now remove it
-            this._entries.splice(idx, 1);
-        }
+        this._entries.delete(this.normalizeKey(key));
     }
 
     /**
@@ -72,10 +66,9 @@ export class ObjectCache {
      * @returns 
      */
     public Find<T>(key: string): T | null {
-        // first, see if we get a match for the index
-        const idx = this._entries.findIndex((i: ObjectCacheEntry) => i.key.trim().toLowerCase() === key.trim().toLowerCase())
-        if (idx >= 0) {
-            return this._entries[idx].object as T;
+        const entry = this._entries.get(this.normalizeKey(key));
+        if (entry !== undefined) {
+            return entry.object as T;
         }
         return null;
     }

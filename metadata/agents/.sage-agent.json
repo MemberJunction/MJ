@@ -36,6 +36,10 @@
       },
       "TypeConfiguration": {
         "realtime": {
+          "video": {
+            "enabled": true,
+            "avatarId": "Ben"
+          },
           "directActions": {
             "enabled": true,
             "timeoutMs": 8000,
@@ -202,8 +206,8 @@
             "ID": "02862A6E-5AAB-4DE2-B16D-8553145F668C"
           },
           "sync": {
-            "lastModified": "2026-03-26T22:05:22.838Z",
-            "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+            "lastModified": "2026-09-21T02:45:37.122Z",
+            "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
           }
         },
         {
@@ -496,7 +500,8 @@
             "ID": "84CC71B1-14DA-4341-A301-D7781EDFE6E3"
           },
           "deleteRecord": {
-            "delete": true
+            "delete": true,
+            "deletedAt": "2026-09-22T18:53:11.631Z"
           }
         }
       ],
@@ -615,6 +620,8 @@
             "ModelSelectionMode": "Agent",
             "ArtifactCreationMode": "Never",
             "ExposeAsAction": false,
+            "MessageMode": "Latest",
+            "MaxMessages": 10,
             "AgentTypePromptParams": {
               "includeForEachDocs": false,
               "includeWhileDocs": false,
@@ -712,6 +719,8 @@
             "ExposeAsAction": false,
             "DriverClass": "FormBuilderAgent",
             "IconClass": "fa-solid fa-pen-ruler",
+            "MessageMode": "Latest",
+            "MaxMessages": 10,
             "AgentTypePromptParams": {
               "includeForEachDocs": false,
               "includeWhileDocs": false,
@@ -735,6 +744,8 @@
                   "ExposeAsAction": false,
                   "DriverClass": "FormBuilderDesignerAgent",
                   "IconClass": "fa-solid fa-drafting-compass",
+                  "MessageMode": "Latest",
+                  "MaxMessages": 10,
                   "PayloadDownstreamPaths": [
                     "*"
                   ],
@@ -950,14 +961,36 @@
             "checksum": "167c748e117490d99585d05fea6b73b34d3281c1543e03d8e78ef01c37246ef6"
           }
         }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Assistant reply",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Sage"
+            }
+          },
+          "primaryKey": {
+            "ID": "40A4B461-4123-4B7E-8209-99AA50D9F29A"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:55.598Z",
+            "checksum": "da9b39d28e84d56d51a18c8e0400e5949f71ddb98d302ee95323f672984ba5bd"
+          }
+        }
       ]
     },
     "primaryKey": {
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-09-12T15:03:57.464Z",
-      "checksum": "252dfb1129350a6c8d92f89a579b56e283ddfd318dc859ec5c32e9a0df928b5f"
+      "lastModified": "2026-10-18T13:09:46.268Z",
+      "checksum": "cbe4237db70e69afbd5c52b260d8773f8cf73b9148bc70fcfa55d525671b74d5"
     }
   }
 ]

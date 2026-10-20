@@ -20,8 +20,9 @@ import { RunView, LogError, LogStatus, type UserInfo, type IMetadataProvider } f
 import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import { DOMINANCE_THRESHOLD_DEFAULT, type FeatureImportance, type LeakageGuard } from '@memberjunction/predictive-studio-core';
 
-import { detectSingleFeatureDominance } from '../feature-assembly/leakage-guard';
+import { DetectSingleFeatureDominance } from '../feature-assembly/leakage-guard';
 import { ModelScoringActionGenerator } from './model-scoring-action-generator';
+import { ModelHasTrainedArtifact, ModelNeedsTrainingMessage } from '../scoring/model-readiness';
 import type {
   IModelPromotionGate,
   PromoteModelRequest,
@@ -133,7 +134,7 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
   ): Promise<{ flagged: boolean; topFeature?: string; topShare?: number }> {
     const importance = this.parseJson<FeatureImportance>(model.FeatureImportance, {});
     const threshold = await this.resolveThreshold(model.PipelineID, contextUser, provider);
-    const dominance = detectSingleFeatureDominance(importance, threshold);
+    const dominance = DetectSingleFeatureDominance(importance, threshold);
     return { flagged: dominance.Dominant, topFeature: dominance.TopFeature, topShare: dominance.TopShare };
   }
 
@@ -202,6 +203,13 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
     const allowed = ProductionModelPromotionGate.ALLOWED_TRANSITIONS[currentStatus] ?? [];
     if (!allowed.includes(targetStatus)) {
       return { kind: 'invalid-transition', currentStatus, targetStatus };
+    }
+    // A model with no trained artifact can't score anything, so it must never reach
+    // Published — refuse with the plain "needs training" message instead of letting it
+    // look deployable and then fail every record at run time. Checked after the
+    // lifecycle rule, so an illegal jump is still reported as an invalid transition.
+    if (targetStatus === 'Published' && !ModelHasTrainedArtifact(model)) {
+      return { kind: 'needs-training', message: ModelNeedsTrainingMessage(model.ID) };
     }
     model.Status = targetStatus;
     const saved = await model.Save();

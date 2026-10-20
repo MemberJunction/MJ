@@ -96,11 +96,48 @@ scope, show/hide columns, all persisted per user).
 Key inputs: `[Record]` (required), `FieldName`, `[EditMode]`, `Type`
 (`textbox|textarea|number|datepicker|checkbox|select|autocomplete|code`),
 `LinkType` (`Email|URL|Record|None`), `[ShowLabel]`, `DisplayNameOverride`,
-`[PossibleValuesOverride]`, FK tuning (`[FKHighlightMatches]`, `[FKDropdownMaxWidth]`),
+`[PossibleValuesOverride]`, FK tuning (`[FKHighlightMatches]`, `[FKDropdownMaxWidth]`,
+`[FKExtraFilter]`, `[FKOrderBy]`, `[FKMaxRows]`, `[FKLookupOptions]`),
 `[Provider]`. Outputs: `(ValueChange)`, `(Navigate)`.
 
 > The control infers the input type, possible-values list, FK relationship, and validation
 > from `Record.EntityInfo` — you usually only set `[Record]` + `FieldName` + `[EditMode]`.
+
+### Choosing what a foreign key offers
+
+By default a foreign key offers rows of the related entity matching what the user types on the
+column they chose, prefix matches first, scoped by the field's `RelatedEntityFilter` /
+`RelatedEntityOrderBy` metadata, with the user's recent picks first. `[FKExtraFilter]` and
+`[FKOrderBy]` override the metadata for one instance of the form; `[FKLookupOptions]="{ SearchMode:
+'hybrid' }"` ranks through the platform search API instead.
+
+When the right population cannot be expressed as a filter — "organizations we actually sell
+to, most recently active first" — register a lookup strategy instead. The field keeps owning
+the dropdown, keyboard handling, the pinned selection and the create-new footer; the strategy
+owns only the rows, and may group them, give each a second line and chips, offer a scope
+toggle, and veto a pick.
+
+```ts
+import { FKLookupStrategy, type FKLookupContext, type FKLookupGroup } from '@memberjunction/ng-base-forms';
+import { RegisterClass } from '@memberjunction/global';
+
+// '<RelatedEntity>' covers every FK pointing at it; '<HostEntity>.<FieldName>' wins over that.
+@RegisterClass(FKLookupStrategy, 'Organizations')
+export class PartyLookupStrategy extends FKLookupStrategy {
+  override ScopeLabels(): { primary: string; all: string } {
+    return { primary: 'Customers', all: 'All organizations' };
+  }
+
+  async Lookup(context: FKLookupContext): Promise<FKLookupGroup[]> {
+    // context carries the host Record, the FK EntityFieldInfo, the related EntityInfo, the
+    // provider, the query, the scope, MaxRows, and whatever [FKLookupOptions] supplied.
+    return [{ Key: 'customers', Label: 'Customers', Rows: [] }];
+  }
+}
+```
+
+A registered strategy always runs, including for related entities a `BaseEngine` holds in
+memory — the in-process cache would otherwise silently reinstate the unscoped answer.
 
 ---
 

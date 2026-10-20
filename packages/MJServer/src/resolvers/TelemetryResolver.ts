@@ -13,58 +13,58 @@ import {
 @ObjectType()
 export class MemorySnapshotGQL {
     @Field(() => Float)
-    heapUsed: number;
+    heapUsed: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float)
-    heapTotal: number;
+    heapTotal: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float)
-    timestamp: number;
+    timestamp: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class TelemetryEventGQL {
     @Field(() => String)
-    id: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String)
-    category: string;
+    category: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String)
-    operation: string;
+    operation: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String)
-    fingerprint: string;
+    fingerprint: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float)
-    startTime: number;
+    startTime: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float, { nullable: true })
-    endTime?: number;
+    endTime?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float, { nullable: true })
-    elapsedMs?: number;
+    elapsedMs?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String, { nullable: true })
-    userId?: string;
+    userId?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String)
-    params: string; // JSON stringified
+    params: string; // JSON stringified — case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => [String], { nullable: true })
-    tags?: string[];
+    tags?: string[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String, { nullable: true })
-    stackTrace?: string;
+    stackTrace?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => MemorySnapshotGQL, { nullable: true })
-    memoryBefore?: MemorySnapshotGQL;
+    memoryBefore?: MemorySnapshotGQL;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => MemorySnapshotGQL, { nullable: true })
-    memoryAfter?: MemorySnapshotGQL;
+    memoryAfter?: MemorySnapshotGQL;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String, { nullable: true })
-    parentEventId?: string;
+    parentEventId?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 // ============================================================================
@@ -74,52 +74,52 @@ export class TelemetryEventGQL {
 @ObjectType()
 export class CallerLocationGQL {
     @Field(() => String)
-    location: string;
+    location: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int)
-    count: number;
+    count: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class TelemetryPatternGQL {
     @Field(() => String)
-    fingerprint: string;
+    fingerprint: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String)
-    category: string;
+    category: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String)
-    operation: string;
+    operation: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String)
-    sampleParams: string; // JSON stringified
+    sampleParams: string; // JSON stringified — case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int)
-    count: number;
+    count: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float)
-    totalElapsedMs: number;
+    totalElapsedMs: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float)
-    avgElapsedMs: number;
+    avgElapsedMs: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float)
-    minElapsedMs: number;
+    minElapsedMs: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float)
-    maxElapsedMs: number;
+    maxElapsedMs: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => [CallerLocationGQL])
-    callerLocations: CallerLocationGQL[];
+    callerLocations: CallerLocationGQL[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float)
-    firstSeen: number;
+    firstSeen: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float)
-    lastSeen: number;
+    lastSeen: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float)
-    windowStartTime: number;
+    windowStartTime: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 // ============================================================================
@@ -129,37 +129,37 @@ export class TelemetryPatternGQL {
 @ObjectType()
 export class TelemetryInsightGQL {
     @Field(() => String)
-    id: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String)
-    severity: string;
+    severity: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String)
-    analyzerName: string;
+    analyzerName: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String)
-    category: string;
+    category: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String)
-    title: string;
+    title: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String)
-    message: string;
+    message: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String)
-    suggestion: string;
+    suggestion: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => [String])
-    relatedEventIds: string[];
+    relatedEventIds: string[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String, { nullable: true })
-    entityName?: string;
+    entityName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String, { nullable: true })
-    metadata?: string; // JSON stringified
+    metadata?: string; // JSON stringified — case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float)
-    timestamp: number;
+    timestamp: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 // ============================================================================
@@ -169,31 +169,31 @@ export class TelemetryInsightGQL {
 @ObjectType()
 export class CategoryStatsGQL {
     @Field(() => String)
-    category: string;
+    category: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int)
-    events: number;
+    events: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float)
-    avgMs: number;
+    avgMs: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class TelemetryStatsGQL {
     @Field(() => Int)
-    totalEvents: number;
+    totalEvents: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int)
-    totalPatterns: number;
+    totalPatterns: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int)
-    totalInsights: number;
+    totalInsights: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int)
-    activeEvents: number;
+    activeEvents: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => [CategoryStatsGQL])
-    byCategory: CategoryStatsGQL[];
+    byCategory: CategoryStatsGQL[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 // ============================================================================
@@ -203,64 +203,64 @@ export class TelemetryStatsGQL {
 @ObjectType()
 export class CategoryOverrideGQL {
     @Field(() => String)
-    category: string;
+    category: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Boolean)
-    enabled: boolean;
+    enabled: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String, { nullable: true })
-    level?: string;
+    level?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class AutoTrimSettingsGQL {
     @Field(() => Boolean)
-    enabled: boolean;
+    enabled: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int, { nullable: true })
-    maxEvents?: number;
+    maxEvents?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int, { nullable: true })
-    maxAgeMs?: number;
+    maxAgeMs?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class DuplicateDetectionSettingsGQL {
     @Field(() => Boolean)
-    enabled: boolean;
+    enabled: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int)
-    windowMs: number;
+    windowMs: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class AnalyzerSettingsGQL {
     @Field(() => Boolean)
-    enabled: boolean;
+    enabled: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int)
-    dedupeWindowMs: number;
+    dedupeWindowMs: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class TelemetrySettingsGQL {
     @Field(() => Boolean)
-    enabled: boolean;
+    enabled: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String)
-    level: string;
+    level: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => [CategoryOverrideGQL])
-    categoryOverrides: CategoryOverrideGQL[];
+    categoryOverrides: CategoryOverrideGQL[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => AutoTrimSettingsGQL)
-    autoTrim: AutoTrimSettingsGQL;
+    autoTrim: AutoTrimSettingsGQL;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => DuplicateDetectionSettingsGQL)
-    duplicateDetection: DuplicateDetectionSettingsGQL;
+    duplicateDetection: DuplicateDetectionSettingsGQL;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => AnalyzerSettingsGQL)
-    analyzers: AnalyzerSettingsGQL;
+    analyzers: AnalyzerSettingsGQL;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 // ============================================================================
@@ -270,46 +270,46 @@ export class TelemetrySettingsGQL {
 @InputType()
 export class TelemetryEventFilterInput {
     @Field(() => String, { nullable: true })
-    category?: string;
+    category?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String, { nullable: true })
-    operation?: string;
+    operation?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float, { nullable: true })
-    minElapsedMs?: number;
+    minElapsedMs?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Float, { nullable: true })
-    since?: number;
+    since?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int, { nullable: true })
-    limit?: number;
+    limit?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @InputType()
 export class TelemetryPatternFilterInput {
     @Field(() => String, { nullable: true })
-    category?: string;
+    category?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int, { nullable: true })
-    minCount?: number;
+    minCount?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String, { nullable: true })
-    sortBy?: string;
+    sortBy?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @InputType()
 export class TelemetryInsightFilterInput {
     @Field(() => String, { nullable: true })
-    severity?: string;
+    severity?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String, { nullable: true })
-    category?: string;
+    category?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String, { nullable: true })
-    entityName?: string;
+    entityName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int, { nullable: true })
-    limit?: number;
+    limit?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 // ============================================================================

@@ -47,7 +47,8 @@ const PRESENCE_MS = 4200;
  *    (`Whiteboard_AddNote` … see `WHITEBOARD_TOOL_DEFINITIONS`) with the violet pop-in,
  *    toast and presence-cursor garnish, returning the result JSON for the tool round-trip;
  *  - `AgentUndo` fires when the user clicks Undo on the agent-action toast;
- *  - `FocusModeChange` asks the shell to collapse/restore the call rail ("Focus board").
+ *  - `FocusModeChange` asks the host to move the board to the stage or back to its tab ("Move to stage").
+ *    A host with no stage hides the control with `[ShowFocusToggle]="false"`.
  *
  * Extensibility (before/after events): the host mirrors the engine's cancelable
  * BEFORE / AFTER mutation pairs as outputs (`ItemAdding`/`ItemAdded`,
@@ -78,6 +79,13 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   @Input() BoardTitle = 'Whiteboard';
   /** Persistence chip text (e.g. "Saved to session · v14"). */
   @Input() SavedLabel = 'Saved to session';
+  /**
+   * Whether the header renders the Focus toggle ("Move to stage" / "Back to tab"). It only emits
+   * {@link FocusModeChange}; a host composing the board into its own chrome (a lesson's content
+   * seat, a full-surface room) has nothing to collapse and would otherwise ship a dead button.
+   * {@link SetOnStage} and {@link FocusMode} keep working with the toggle hidden.
+   */
+  @Input() ShowFocusToggle = true;
   /**
    * Opt back in to DOCUMENT-WIDE keyboard shortcuts.
    *
@@ -161,7 +169,7 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   @Output() SceneDelta = new EventEmitter<string>();
   /** The user clicked Undo on the agent-action toast (the undo itself already applied). */
   @Output() AgentUndo = new EventEmitter<void>();
-  /** Focus-board toggle — the session shell collapses/restores the call rail. */
+  /** "Move to stage" / "Back to tab": asks the host to put the board on the stage (`true`) or back on its tab. */
   @Output() FocusModeChange = new EventEmitter<boolean>();
   /** Emitted when the user picks "Save to artifacts" — the channel plugin persists via its host context. */
   @Output() SaveToArtifactsRequested = new EventEmitter<void>();
@@ -357,8 +365,7 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
     this.SeesOpen = !this.SeesOpen;
   }
 
-  @HostListener('document:click')
-  public CloseSees(): void {
+  private closeSees(): void {
     if (this.SeesOpen) {
       this.SeesOpen = false;
     }
@@ -369,6 +376,14 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
     this.FocusModeChange.emit(this.FocusMode);
   }
 
+  /** The host reports whether the board is on the stage, however it got there, so the header offers the way back. */
+  public SetOnStage(onStage: boolean): void {
+    if (onStage !== this.FocusMode) {
+      this.FocusMode = onStage;
+      this.cdr.markForCheck();
+    }
+  }
+
   // ────────────────────────────────────────────── export menu
 
   public ToggleExport(event: Event): void {
@@ -376,11 +391,25 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
     this.ExportOpen = !this.ExportOpen;
   }
 
-  @HostListener('document:click')
-  public CloseExport(): void {
+  private closeExport(): void {
     if (this.ExportOpen) {
       this.ExportOpen = false;
     }
+  }
+
+  /**
+   * The component's ONLY `document:click` listener — dismisses every open popover.
+   *
+   * ⚠️ Do NOT add a second `@HostListener('document:click')` here. Angular keys host
+   * listeners by event name, so a second declaration for the same event silently
+   * replaces the first (no build error, no warning). That had already happened:
+   * `closeSees` and `closeExport` each declared one, so only the latter registered
+   * and the Sees dropdown never closed on an outside click.
+   */
+  @HostListener('document:click')
+  public CloseOpenPopovers(): void {
+    this.closeSees();
+    this.closeExport();
   }
 
   /** Download the board as one self-contained HTML document. */

@@ -17,25 +17,25 @@ export interface BusinessPredictionInput extends TrustModelInput {
   /** The plain-language title (the pipeline goal the agent set, or the model display name). */
   name: string;
   /** When the model was last trained/updated, for a "last run" hint. */
-  updatedAt?: Date | null;
+  UpdatedAt?: Date | null;
 }
 
 /** One card in the business Predictions catalog. */
 export interface BusinessPredictionCard {
-  modelId: string;
+  modelId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Plain-language title shown on the card. */
-  title: string;
+  title: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The full trust verdict (grade, plain one-liner, the canAct gate). */
-  trust: TrustVerdict;
+  trust: TrustVerdict;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether a business user can open/operate this prediction (= trust.canAct). */
-  canOpen: boolean;
+  canOpen: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** When not openable, the plain reason ("Needs an analyst — not reliable yet"); else null. */
-  blockedReason: string | null;
-  updatedAt: Date | null;
+  blockedReason: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  updatedAt: Date | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Map a published model into a business catalog card, applying the trust gate. */
-export function toBusinessPredictionCard(input: BusinessPredictionInput): BusinessPredictionCard {
+export function ToBusinessPredictionCard(input: BusinessPredictionInput): BusinessPredictionCard {
   const trust = deriveTrustVerdict(input);
   return {
     modelId: input.modelId,
@@ -47,13 +47,23 @@ export function toBusinessPredictionCard(input: BusinessPredictionInput): Busine
       : trust.unknown
         ? 'Not measured yet — an analyst needs to validate it.'
         : 'Needs an analyst — not reliable enough to use yet.',
-    updatedAt: input.updatedAt ?? null,
+    updatedAt: input.UpdatedAt ?? null,
   };
+}
+
+/** @deprecated Use {@link ToBusinessPredictionCard}. */
+export function toBusinessPredictionCard(input: BusinessPredictionInput): BusinessPredictionCard {
+  return ToBusinessPredictionCard(input);
 }
 
 const GRADE_ORDER: Record<TrustVerdict['grade'], number> = { Excellent: 0, Good: 1, Fair: 2, Poor: 3 };
 
 /** Build the business catalog from published models, most-trustworthy first (Poor/blocked sinks to the bottom). */
+export function BuildBusinessCatalog(inputs: BusinessPredictionInput[]): BusinessPredictionCard[] {
+  return inputs.map(ToBusinessPredictionCard).sort((a, b) => GRADE_ORDER[a.trust.grade] - GRADE_ORDER[b.trust.grade]);
+}
+
+/** @deprecated Use {@link BuildBusinessCatalog}. */
 export function buildBusinessCatalog(inputs: BusinessPredictionInput[]): BusinessPredictionCard[] {
-  return inputs.map(toBusinessPredictionCard).sort((a, b) => GRADE_ORDER[a.trust.grade] - GRADE_ORDER[b.trust.grade]);
+  return BuildBusinessCatalog(inputs);
 }

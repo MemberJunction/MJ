@@ -19,6 +19,11 @@ export type MJConfig = Record<string, any>;
 /**
  * Type guard to check if a value is a valid configuration object
  */
-export function isValidConfig(value: unknown): value is MJConfig {
+export function IsValidConfig(value: unknown): value is MJConfig {
   return typeof value === 'object' && value !== null;
+}
+
+/** @deprecated Use {@link IsValidConfig}. */
+export function isValidConfig(value: unknown): value is MJConfig {
+  return IsValidConfig(value);
 }

@@ -57,25 +57,25 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
             {
                 Type: 'entity',
                 EntityName: 'MJ: MCP Servers',
-                PropertyName: '_Servers',
+                PropertyName: '_servers',
                 CacheLocal: true
             },
             {
                 Type: 'entity',
                 EntityName: 'MJ: MCP Server Connections',
-                PropertyName: '_Connections',
+                PropertyName: '_connections',
                 CacheLocal: true
             },
             {
                 Type: 'entity',
                 EntityName: 'MJ: MCP Server Tools',
-                PropertyName: '_Tools',
+                PropertyName: '_tools',
                 CacheLocal: true
             },
             {
                 Type: 'entity',
                 EntityName: 'MJ: MCP Tool Favorites',
-                PropertyName: '_Favorites',
+                PropertyName: '_favorites',
                 CacheLocal: true
             }
         ];
@@ -94,10 +94,10 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
     // Private Storage
     // ========================================
 
-    private _Servers: MJMCPServerEntity[] = [];
-    private _Connections: MJMCPServerConnectionEntity[] = [];
-    private _Tools: MJMCPServerToolEntity[] = [];
-    private _Favorites: MJMCPToolFavoriteEntity[] = [];
+    private _servers: MJMCPServerEntity[] = [];
+    private _connections: MJMCPServerConnectionEntity[] = [];
+    private _tools: MJMCPServerToolEntity[] = [];
+    private _favorites: MJMCPToolFavoriteEntity[] = [];
 
     // ========================================
     // Public Getters
@@ -107,21 +107,21 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * Gets all cached MCP servers
      */
     public get Servers(): MJMCPServerEntity[] {
-        return this.GetConfigData<MJMCPServerEntity>('_Servers');
+        return this.GetConfigData<MJMCPServerEntity>('_servers');
     }
 
     /**
      * Gets all cached MCP server connections
      */
     public get Connections(): MJMCPServerConnectionEntity[] {
-        return this.GetConfigData<MJMCPServerConnectionEntity>('_Connections');
+        return this.GetConfigData<MJMCPServerConnectionEntity>('_connections');
     }
 
     /**
      * Gets all cached MCP server tools
      */
     public get Tools(): MJMCPServerToolEntity[] {
-        return this.GetConfigData<MJMCPServerToolEntity>('_Tools');
+        return this.GetConfigData<MJMCPServerToolEntity>('_tools');
     }
 
     /**
@@ -129,7 +129,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * For current-user-only access, use {@link GetFavoritesByUser}.
      */
     public get Favorites(): MJMCPToolFavoriteEntity[] {
-        return this.GetConfigData<MJMCPToolFavoriteEntity>('_Favorites');
+        return this.GetConfigData<MJMCPToolFavoriteEntity>('_favorites');
     }
 
     /**
@@ -138,7 +138,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @param userId - The user ID
      */
     public GetFavoritesByUser(userId: string): MJMCPToolFavoriteEntity[] {
-        return this._Favorites.filter(f => UUIDsEqual(f.UserID, userId));
+        return this._favorites.filter(f => UUIDsEqual(f.UserID, userId));
     }
 
     /**
@@ -148,7 +148,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @param toolId - The MCP server tool ID
      */
     public GetFavoriteByUserAndTool(userId: string, toolId: string): MJMCPToolFavoriteEntity | undefined {
-        return this._Favorites.find(f => UUIDsEqual(f.UserID, userId) && UUIDsEqual(f.MCPServerToolID, toolId));
+        return this._favorites.find(f => UUIDsEqual(f.UserID, userId) && UUIDsEqual(f.MCPServerToolID, toolId));
     }
 
     // ========================================
@@ -162,7 +162,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns The server entity or undefined if not found
      */
     public GetServerById(serverId: string): MJMCPServerEntity | undefined {
-        return this._Servers.find(s => UUIDsEqual(s.ID, serverId));
+        return this._servers.find(s => UUIDsEqual(s.ID, serverId));
     }
 
     /**
@@ -172,7 +172,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns The connection entity or undefined if not found
      */
     public GetConnectionById(connectionId: string): MJMCPServerConnectionEntity | undefined {
-        return this._Connections.find(c => UUIDsEqual(c.ID, connectionId));
+        return this._connections.find(c => UUIDsEqual(c.ID, connectionId));
     }
 
     /**
@@ -182,7 +182,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns The tool entity or undefined if not found
      */
     public GetToolById(toolId: string): MJMCPServerToolEntity | undefined {
-        return this._Tools.find(t => UUIDsEqual(t.ID, toolId));
+        return this._tools.find(t => UUIDsEqual(t.ID, toolId));
     }
 
     /**
@@ -192,7 +192,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns Array of connections for the server
      */
     public GetConnectionsByServer(serverId: string): MJMCPServerConnectionEntity[] {
-        return this._Connections.filter(c => UUIDsEqual(c.MCPServerID, serverId));
+        return this._connections.filter(c => UUIDsEqual(c.MCPServerID, serverId));
     }
 
     /**
@@ -202,7 +202,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns Array of tools for the server
      */
     public GetToolsByServer(serverId: string): MJMCPServerToolEntity[] {
-        return this._Tools.filter(t => UUIDsEqual(t.MCPServerID, serverId));
+        return this._tools.filter(t => UUIDsEqual(t.MCPServerID, serverId));
     }
 
     /**
@@ -211,7 +211,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns Array of servers with Status = 'Active'
      */
     public get ActiveServers(): MJMCPServerEntity[] {
-        return this.GetConfigData<MJMCPServerEntity>('_Servers').filter(s => s.Status === 'Active');
+        return this.GetConfigData<MJMCPServerEntity>('_servers').filter(s => s.Status === 'Active');
     }
 
     /**
@@ -220,7 +220,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns Array of connections with Status = 'Active'
      */
     public get ActiveConnections(): MJMCPServerConnectionEntity[] {
-        return this.GetConfigData<MJMCPServerConnectionEntity>('_Connections').filter(c => c.Status === 'Active');
+        return this.GetConfigData<MJMCPServerConnectionEntity>('_connections').filter(c => c.Status === 'Active');
     }
 
     /**
@@ -229,7 +229,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns Array of tools with Status = 'Active'
      */
     public get ActiveTools(): MJMCPServerToolEntity[] {
-        return this.GetConfigData<MJMCPServerToolEntity>('_Tools').filter(t => t.Status === 'Active');
+        return this.GetConfigData<MJMCPServerToolEntity>('_tools').filter(t => t.Status === 'Active');
     }
 
     /**
@@ -239,7 +239,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns Array of active connections for the server
      */
     public GetActiveConnectionsByServer(serverId: string): MJMCPServerConnectionEntity[] {
-        return this._Connections.filter(c => UUIDsEqual(c.MCPServerID, serverId) && c.Status === 'Active');
+        return this._connections.filter(c => UUIDsEqual(c.MCPServerID, serverId) && c.Status === 'Active');
     }
 
     /**
@@ -249,7 +249,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns Array of active tools for the server
      */
     public GetActiveToolsByServer(serverId: string): MJMCPServerToolEntity[] {
-        return this._Tools.filter(t => UUIDsEqual(t.MCPServerID, serverId) && t.Status === 'Active');
+        return this._tools.filter(t => UUIDsEqual(t.MCPServerID, serverId) && t.Status === 'Active');
     }
 
     /**

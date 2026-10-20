@@ -32,7 +32,7 @@ import { PanelConfig } from '../models/dashboard-types';
               [Message]="ErrorMessage"
               Size="compact">
               @if (rawUrl) {
-                <a actions [href]="rawUrl" target="_blank" class="open-link">
+                <a actions [href]="rawUrl" target="_blank" rel="noopener noreferrer" class="open-link">
                   <i class="fa-solid fa-up-right-from-square"></i>
                   Open in new window
                 </a>
@@ -46,7 +46,7 @@ import { PanelConfig } from '../models/dashboard-types';
               class="part-placeholder"
               Icon="fa-solid fa-globe"
               Title="No URL Configured"
-              Message="Click the configure button to set a URL for this part."
+              Message="Use Edit part to set a URL."
               Size="compact" />
           }
         
@@ -133,7 +133,7 @@ import { PanelConfig } from '../models/dashboard-types';
           @if (!IsLoading && !ErrorMessage && SafeUrl && showFallbackLink) {
             <div class="iframe-fallback">
               <span>If the content doesn't load:</span>
-              <a [href]="rawUrl" target="_blank">
+              <a [href]="rawUrl" target="_blank" rel="noopener noreferrer">
                 <i class="fa-solid fa-external-link-alt"></i>
                 Open in new window
               </a>
@@ -228,13 +228,58 @@ import { PanelConfig } from '../models/dashboard-types';
     `]
 })
 export class WebURLPartComponent extends BaseDashboardPart implements AfterViewInit {
-    @ViewChild('iframe') iframeRef!: ElementRef<HTMLIFrameElement>;
+    @ViewChild('iframe') IframeRef!: ElementRef<HTMLIFrameElement>;
+
+    /** @deprecated Use {@link IframeRef}. */
+    get iframeRef(): ElementRef<HTMLIFrameElement> {
+      return this.IframeRef;
+    }
+    /** @deprecated Use {@link IframeRef}. */
+    set iframeRef(value: ElementRef<HTMLIFrameElement>) {
+      this.IframeRef = value;
+    }
 
     public SafeUrl: SafeResourceUrl | null = null;
-    public rawUrl: string = '';
-    public sandboxMode: 'standard' | 'strict' | 'permissive' = 'standard';
-    public allowFullscreen: boolean = true;
-    public showFallbackLink: boolean = false; // Hidden by default, shown if content might be blocked
+    public RawUrl: string = '';
+
+    /** @deprecated Use {@link RawUrl}. */
+    public get rawUrl(): string {
+      return this.RawUrl;
+    }
+    /** @deprecated Use {@link RawUrl}. */
+    public set rawUrl(value: string) {
+      this.RawUrl = value;
+    }
+    public SandboxMode: 'standard' | 'strict' | 'permissive' = 'standard';
+
+    /** @deprecated Use {@link SandboxMode}. */
+    public get sandboxMode(): 'standard' | 'strict' | 'permissive' {
+      return this.SandboxMode;
+    }
+    /** @deprecated Use {@link SandboxMode}. */
+    public set sandboxMode(value: 'standard' | 'strict' | 'permissive') {
+      this.SandboxMode = value;
+    }
+    public AllowFullscreen: boolean = true;
+
+    /** @deprecated Use {@link AllowFullscreen}. */
+    public get allowFullscreen(): boolean {
+      return this.AllowFullscreen;
+    }
+    /** @deprecated Use {@link AllowFullscreen}. */
+    public set allowFullscreen(value: boolean) {
+      this.AllowFullscreen = value;
+    }
+    public ShowFallbackLink: boolean = false;
+
+    /** @deprecated Use {@link ShowFallbackLink}. */
+    public get showFallbackLink(): boolean {
+      return this.ShowFallbackLink;
+    }
+    /** @deprecated Use {@link ShowFallbackLink}. */
+    public set showFallbackLink(value: boolean) {
+      this.ShowFallbackLink = value;
+    } // Hidden by default, shown if content might be blocked
 
     private sanitizer: DomSanitizer;
     private loadCheckTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -252,6 +297,14 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
         }
     }
 
+    protected override cleanup(): void {
+        if (this.loadCheckTimeout) {
+            clearTimeout(this.loadCheckTimeout);
+            this.loadCheckTimeout = null;
+        }
+        super.cleanup();
+    }
+
     public async loadContent(): Promise<void> {
         const config = this.getConfig<PanelConfig>();
         const url = config?.['url'] as string | undefined;
@@ -264,12 +317,23 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
 
         // Reset state
         this.iframeLoaded = false;
-        this.showFallbackLink = false;
+        this.ShowFallbackLink = false;
+        this.ErrorMessage = null;
 
         if (!url) {
             this.SafeUrl = null;
-            this.rawUrl = '';
+            this.RawUrl = '';
             this.cdr.detectChanges();
+            return;
+        }
+
+        // SECURITY: only http(s) URLs may be embedded. bypassSecurityTrustResourceUrl disables
+        // Angular's sanitizer, so without this check a stored javascript: (or other scheme) URL
+        // in a shared dashboard panel would execute in every viewer's browser.
+        if (!this.isEmbeddableUrl(url)) {
+            this.SafeUrl = null;
+            this.RawUrl = '';
+            this.setError('Only http:// and https:// URLs can be embedded.');
             return;
         }
 
@@ -277,16 +341,16 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
 
         try {
             // Store raw URL for fallback link
-            this.rawUrl = url;
+            this.RawUrl = url;
 
             // Sanitize and set URL for iframe src binding
             this.SafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
 
             // Set sandbox mode (used by template to select correct iframe)
-            this.sandboxMode = (config?.['sandboxMode'] as 'standard' | 'strict' | 'permissive') || 'standard';
+            this.SandboxMode = (config?.['sandboxMode'] as 'standard' | 'strict' | 'permissive') || 'standard';
 
             // Set fullscreen permission
-            this.allowFullscreen = (config?.['allowFullscreen'] as boolean) ?? true;
+            this.AllowFullscreen = (config?.['allowFullscreen'] as boolean) ?? true;
 
             this.setLoading(false);
 
@@ -303,13 +367,26 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
     }
 
     /**
+     * True when the URL parses and uses a scheme that is safe to hand to
+     * bypassSecurityTrustResourceUrl for iframe embedding (http/https only).
+     */
+    private isEmbeddableUrl(url: string): boolean {
+        try {
+            const parsed = new URL(url);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+            return false;
+        }
+    }
+
+    /**
      * Check if the iframe content might be blocked.
      * Called after a timeout - if the iframe load event hasn't fired, show the fallback link.
      */
     private checkIfBlocked(): void {
         // If the load event hasn't fired after the timeout, content might be blocked
         if (!this.iframeLoaded) {
-            this.showFallbackLink = true;
+            this.ShowFallbackLink = true;
             this.cdr.detectChanges();
         }
         // If iframeLoaded is true, content loaded successfully - keep fallback hidden
@@ -318,7 +395,7 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
     /**
      * Handle iframe load event
      */
-    public onIframeLoad(): void {
+    public OnIframeLoad(): void {
         // Mark that the load event fired
         this.iframeLoaded = true;
 
@@ -334,11 +411,21 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link OnIframeLoad}. */
+    public onIframeLoad(): void {
+      return this.OnIframeLoad();
+    }
+
     /**
      * Handle iframe error event
      */
-    public onIframeError(_event: Event): void {
+    public OnIframeError(_event: Event): void {
         // This may fire for some load failures, but not for X-Frame-Options
         this.setError('This site cannot be embedded. It may block iframe embedding for security reasons.');
+    }
+
+    /** @deprecated Use {@link OnIframeError}. */
+    public onIframeError(_event: Event): void {
+      return this.OnIframeError(_event);
     }
 }

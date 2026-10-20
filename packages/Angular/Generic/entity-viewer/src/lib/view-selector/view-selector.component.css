@@ -367,7 +367,12 @@
   margin-top: 2px;
 }
 
-.vs-card:hover .vs-card-actions {
+/* :focus-within matters as much as :hover — these buttons (Duplicate, Configure,
+   Open in Tab) were reachable ONLY by pointer. A keyboard user could tab into them
+   and see nothing at opacity 0, and anything driving the page without a hover
+   (assistive tech, automation) could not reach them at all. */
+.vs-card:hover .vs-card-actions,
+.vs-card:focus-within .vs-card-actions {
   opacity: 1;
 }
 

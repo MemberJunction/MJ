@@ -25,27 +25,108 @@ export class MentionDropdownComponent implements OnInit, OnDestroy {
   private _suggestions: MentionSuggestion[] = [];
 
   @Input()
-  set suggestions(value: MentionSuggestion[]) {
+  set Suggestions(value: MentionSuggestion[]) {
     this._suggestions = value;
     // Always reset selection to first item when suggestions change
     // so there's never a state where nothing is selected
-    this.selectedIndex = 0;
+    this.SelectedIndex = 0;
   }
-  get suggestions(): MentionSuggestion[] {
+  get Suggestions(): MentionSuggestion[] {
     return this._suggestions;
   }
 
-  @Input() position: { top: number; left: number } = { top: 0, left: 0 };
-  @Input() visible: boolean = false;
+  /** @deprecated Use {@link Suggestions}. */
+  get suggestions(): MentionSuggestion[] {
+    return this.Suggestions;
+  }
+  /** @deprecated Use {@link Suggestions}. */
+  @Input() set suggestions(value: MentionSuggestion[]) {
+    this.Suggestions = value;
+  }
+
+  @Input() Position: { top: number; left: number } = { top: 0, left: 0 };
+
+  /** @deprecated Use {@link Position}. */
+  @Input() set position(value: { top: number; left: number }) {
+    this.Position = value;
+  }
+  /** @deprecated Use {@link Position}. */
+  get position(): { top: number; left: number } {
+    return this.Position;
+  }
+  @Input() Visible: boolean = false;
+
+  /** @deprecated Use {@link Visible}. */
+  @Input() set visible(value: boolean) {
+    this.Visible = value;
+  }
+  /** @deprecated Use {@link Visible}. */
+  get visible(): boolean {
+    return this.Visible;
+  }
   /** Right-align against the anchor (button-opened triggers). Composes with showAbove in CSS. */
-  @Input() alignRight = false;
-  @Input() showAbove: boolean = false; // Controls whether dropdown grows upward
-  @Input() useFixedPositioning: boolean = false; // Use fixed positioning to escape parent containers
+  @Input() AlignRight = false;
 
-  @Output() suggestionSelected = new EventEmitter<MentionSuggestion>();
-  @Output() closed = new EventEmitter<void>();
+  /** @deprecated Use {@link AlignRight}. */
+  @Input() set alignRight(value: MentionDropdownComponent['AlignRight']) {
+    this.AlignRight = value;
+  }
+  /** @deprecated Use {@link AlignRight}. */
+  get alignRight(): MentionDropdownComponent['AlignRight'] {
+    return this.AlignRight;
+  }
+  @Input() ShowAbove: boolean = false;
 
-  public selectedIndex: number = 0;
+  /** @deprecated Use {@link ShowAbove}. */
+  @Input() set showAbove(value: boolean) {
+    this.ShowAbove = value;
+  }
+  /** @deprecated Use {@link ShowAbove}. */
+  get showAbove(): boolean {
+    return this.ShowAbove;
+  } // Controls whether dropdown grows upward
+  @Input() UseFixedPositioning: boolean = false;
+
+  /** @deprecated Use {@link UseFixedPositioning}. */
+  @Input() set useFixedPositioning(value: boolean) {
+    this.UseFixedPositioning = value;
+  }
+  /** @deprecated Use {@link UseFixedPositioning}. */
+  get useFixedPositioning(): boolean {
+    return this.UseFixedPositioning;
+  } // Use fixed positioning to escape parent containers
+
+  @Output() SuggestionSelected = new EventEmitter<MentionSuggestion>();
+
+  /**
+   * @deprecated Use {@link SuggestionSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (suggestionSelected) keeps working. Must stay AFTER SuggestionSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() suggestionSelected = this.SuggestionSelected;
+  @Output() Closed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Closed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closed) keeps working. Must stay AFTER Closed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() closed = this.Closed;
+
+  public SelectedIndex: number = 0;
+
+  /** @deprecated Use {@link SelectedIndex}. */
+  public get selectedIndex(): number {
+    return this.SelectedIndex;
+  }
+  /** @deprecated Use {@link SelectedIndex}. */
+  public set selectedIndex(value: number) {
+    this.SelectedIndex = value;
+  }
 
   constructor() {}
 
@@ -58,7 +139,7 @@ export class MentionDropdownComponent implements OnInit, OnDestroy {
    */
   @HostListener('document:keydown', ['$event'])
   handleKeyDown(event: KeyboardEvent): void {
-    if (!this.visible) return;
+    if (!this.Visible) return;
     // Escape is handled before the emptiness guard. A button-opened dropdown stays open on an empty
     // result set, and in that state every key below was dead — leaving the button press or a click
     // away as the only exits, neither of which a user has reason to guess.
@@ -67,24 +148,24 @@ export class MentionDropdownComponent implements OnInit, OnDestroy {
       this.close();
       return;
     }
-    if (this.suggestions.length === 0) return;
+    if (this.Suggestions.length === 0) return;
 
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
-        this.selectedIndex = Math.min(this.selectedIndex + 1, this.suggestions.length - 1);
+        this.SelectedIndex = Math.min(this.SelectedIndex + 1, this.Suggestions.length - 1);
         this.scrollToSelected();
         break;
       case 'ArrowUp':
         event.preventDefault();
-        this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
+        this.SelectedIndex = Math.max(this.SelectedIndex - 1, 0);
         this.scrollToSelected();
         break;
       case 'Enter':
       case 'Tab':
         event.preventDefault();
-        if (this.suggestions[this.selectedIndex]) {
-          this.selectSuggestion(this.suggestions[this.selectedIndex]);
+        if (this.Suggestions[this.SelectedIndex]) {
+          this.SelectSuggestion(this.Suggestions[this.SelectedIndex]);
         }
         break;
       case 'Escape':
@@ -97,15 +178,20 @@ export class MentionDropdownComponent implements OnInit, OnDestroy {
   /**
    * Select a suggestion
    */
+  SelectSuggestion(suggestion: MentionSuggestion): void {
+    this.SuggestionSelected.emit(suggestion);
+  }
+
+  /** @deprecated Use {@link SelectSuggestion}. */
   selectSuggestion(suggestion: MentionSuggestion): void {
-    this.suggestionSelected.emit(suggestion);
+    return this.SelectSuggestion(suggestion);
   }
 
   /**
    * close the dropdown
    */
   close(): void {
-    this.closed.emit();
+    this.Closed.emit();
   }
 
   /**
@@ -123,8 +209,13 @@ export class MentionDropdownComponent implements OnInit, OnDestroy {
   /**
    * Track by function for ngFor
    */
-  trackBySuggestion(index: number, item: MentionSuggestion): string {
+  TrackBySuggestion(index: number, item: MentionSuggestion): string {
     return item.id;
+  }
+
+  /** @deprecated Use {@link TrackBySuggestion}. */
+  trackBySuggestion(index: number, item: MentionSuggestion): string {
+    return this.TrackBySuggestion(index, item);
   }
 
   /**
@@ -132,7 +223,7 @@ export class MentionDropdownComponent implements OnInit, OnDestroy {
    * Font Awesome icons start with 'fa-' (e.g., 'fa-solid fa-robot')
    * Custom icons use their own prefix (e.g., 'mj-icon-skip', 'acme-icon-custom')
    */
-  getIconClasses(iconClass: string): string | string[] {
+  GetIconClasses(iconClass: string): string | string[] {
     if (!iconClass) {
       return 'fa-solid fa-robot'; // Default fallback
     }
@@ -149,5 +240,10 @@ export class MentionDropdownComponent implements OnInit, OnDestroy {
 
     // For custom icons (mj-icon-*, acme-icon-*, etc.), use as-is
     return iconClass;
+  }
+
+  /** @deprecated Use {@link GetIconClasses}. */
+  getIconClasses(iconClass: string): string | string[] {
+    return this.GetIconClasses(iconClass);
   }
 }

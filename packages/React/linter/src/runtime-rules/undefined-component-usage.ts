@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -26,7 +26,7 @@ export class UndefinedComponentUsageRule extends BaseLintRule {
     const componentsUsedInJSX = new Set<string>();
     let hasComponentsProp = false;
 
-    traverse(ast, {
+    Traverse(ast, {
       // First, find what's destructured from the components prop
       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
         if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init)) {

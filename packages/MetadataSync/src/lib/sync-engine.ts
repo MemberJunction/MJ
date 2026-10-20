@@ -17,15 +17,18 @@ import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provi
 import { GetDialect, IsDateSQLType, IsUuidSQLType } from '@memberjunction/sql-dialect';
 import { EntityConfig, FolderConfig } from '../config';
 import { JsonPreprocessor } from './json-preprocessor';
-import { describeMissingEntitySubclass } from './entity-subclass-guard';
+import { DescribeMissingEntitySubclass } from './entity-subclass-guard';
 import { BatchContextIndex, BatchContextStub } from './batch-context-index';
 import { SyncMetadataEngine } from './sync-metadata-engine';
+import { ParseEnvReference, OptionalEnvMissingError, EnvVariableNotSetError } from './env-reference';
+import { EnvDisplayMask, EnvSourceLabel, MIN_MASKED_VALUE_LENGTH } from './env-display';
+import { LOOKUP_OPTIONAL_MESSAGE, ParseLookupCreateFields, SplitLookupReference } from './lookup-reference';
 import {
   METADATA_KEYWORDS,
   METADATA_KEYWORD_PREFIXES,
-  isMetadataKeyword,
-  isNonKeywordAtSymbol,
-  extractKeywordValue
+  IsMetadataKeyword,
+  IsNonKeywordAtSymbol,
+  ExtractKeywordValue
 } from '../constants/metadata-keywords';
 
 /** Accepted types for the batchContext parameter (indexed or plain Map). */
@@ -40,11 +43,11 @@ export class DeferrableLookupError extends Error {
   /** The entity name being looked up */
   public readonly entityName: string;
   /** The lookup fields and values that failed */
-  public readonly lookupFields: Array<{fieldName: string, fieldValue: string}>;
+  public readonly lookupFields: Array<{fieldName: string, fieldValue: string}>;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
   /** The original lookup string value */
-  public readonly originalValue: string;
+  public readonly originalValue: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
   /** The field name where this lookup was used */
-  public readonly targetFieldName?: string;
+  public readonly targetFieldName?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   constructor(
     message: string,
@@ -70,9 +73,9 @@ export class DeferrableLookupError extends Error {
  */
 export interface NestedSyncResolution {
   /** The original @lookup expression */
-  expression: string;
+  expression: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The resolved value (typically a GUID) */
-  resolved: string;
+  resolved: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -80,15 +83,15 @@ export interface NestedSyncResolution {
  */
 export interface SyncNote {
   /** Type of resolution: 'lookup' for @lookup references, 'parent' for @parent references */
-  type: 'lookup' | 'parent';
+  type: 'lookup' | 'parent';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The field path where this resolution occurred (e.g., "primaryKey.ID" or "fields.CategoryID") */
-  field: string;
+  field: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The original expression before resolution (e.g., "@lookup:Entities.Name=Test") */
-  expression: string;
+  expression: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The resolved value (e.g., a GUID) */
-  resolved: string;
+  resolved: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** For lookup resolutions with nested @lookup expressions, tracks each nested resolution */
-  nested?: NestedSyncResolution[];
+  nested?: NestedSyncResolution[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -96,9 +99,11 @@ export interface SyncNote {
  */
 export interface SyncResolutionCollector {
   /** Array of collected sync notes */
-  notes: SyncNote[];
+  notes: SyncNote[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Current field path prefix (e.g., "fields" or "primaryKey") */
-  fieldPrefix: string;
+  fieldPrefix: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** Field name → names of the variables whose values went into that field. Filled only when present. */
+  EnvFields?: Map<string, Set<string>>;
 }
 
 /**
@@ -155,9 +160,18 @@ export class SyncEngine {
   private metadata: Metadata;
   private contextUser: UserInfo;
   private syncMetadataEngine: SyncMetadataEngine | null = null;
+  /** Names of every environment variable this engine resolved, kept for the engine's lifetime and never cleared. Never holds values. */
+  public readonly ResolvedEnvVariables = new Set<string>();
+  /** Runs right before a `@lookup:…?create` lookup saves the record it creates, with the env-sourced fields of that record. */
+  public BeforeLookupCreateSave: ((entity: BaseEntity, envFields: ReadonlyMap<string, ReadonlySet<string>>) => void) | null = null;
 
-  public setMetadataEngine(engine: SyncMetadataEngine): void {
+  public SetMetadataEngine(engine: SyncMetadataEngine): void {
     this.syncMetadataEngine = engine;
+  }
+
+  /** @deprecated Use {@link SetMetadataEngine}. */
+  public setMetadataEngine(engine: SyncMetadataEngine): void {
+    return this.SetMetadataEngine(engine);
   }
 
   /**
@@ -176,8 +190,13 @@ export class SyncEngine {
     }
   }
 
-  public getMetadataEngine(): SyncMetadataEngine | null {
+  public GetMetadataEngine(): SyncMetadataEngine | null {
     return this.syncMetadataEngine;
+  }
+
+  /** @deprecated Use {@link GetMetadataEngine}. */
+  public getMetadataEngine(): SyncMetadataEngine | null {
+    return this.GetMetadataEngine();
   }
 
   /**
@@ -189,8 +208,13 @@ export class SyncEngine {
    * keeps callers from reaching for `Metadata.Provider` directly and makes
    * it obvious which provider the sync is bound to.
    */
-  public getProvider(): IMetadataProvider {
+  public GetProvider(): IMetadataProvider {
     return Metadata.Provider; // global-provider-ok: CLI single-process; see class doc
+  }
+
+  /** @deprecated Use {@link GetProvider}. */
+  public getProvider(): IMetadataProvider {
+    return this.GetProvider();
   }
 
   /**
@@ -206,9 +230,14 @@ export class SyncEngine {
    * Initializes the sync engine by refreshing metadata cache
    * @returns Promise that resolves when initialization is complete
    */
-  async initialize(): Promise<void> {
+  async Initialize(): Promise<void> {
     // Currently no initialization needed as metadata is managed globally
     // Keeping this method for backward compatibility and future use
+  }
+
+  /** @deprecated Use {@link Initialize}. */
+  async initialize(): Promise<void> {
+    return this.Initialize();
   }
   
   /**
@@ -225,6 +254,7 @@ export class SyncEngine {
    * - `@url:address` - Fetches content from a URL
    * - `@lookup:Entity.Field=Value` - Looks up an entity ID by field value
    * - `@env:VARIABLE` - Reads an environment variable
+   * - `@env:VARIABLE?optional` - Like `@env:`, but a missing variable throws {@link OptionalEnvMissingError} so the caller can leave the field out
    *
    * @param value - The field value to process
    * @param baseDir - Base directory for resolving relative file paths
@@ -255,7 +285,7 @@ export class SyncEngine {
    * // collector.notes will contain the resolution info
    * ```
    */
-  async processFieldValue(
+  async ProcessFieldValue(
     value: any,
     baseDir: string,
     parentRecord?: BaseEntity | BatchContextStub | null,
@@ -278,7 +308,20 @@ export class SyncEngine {
       // Check if it's an array or a plain object (not a Date, etc.)
       if (Array.isArray(value) || value.constructor === Object) {
         // First recursively process any @lookup, @file, @parent references inside the object
-        const processedValue = await this.processJsonFieldValues(value, baseDir, parentRecord, rootRecord, depth, batchContext, recordProvider, ownerRecord);
+        const envCollector = this.envOnlyCollector(resolutionCollector);
+        const processedValue = await this.processJsonFieldValues(
+          value,
+          baseDir,
+          parentRecord,
+          rootRecord,
+          depth,
+          batchContext,
+          recordProvider,
+          ownerRecord,
+          envCollector,
+          fieldName
+        );
+        this.mergeEnvFields(resolutionCollector, envCollector);
         // Then convert to pretty-printed JSON string for inline metadata objects
         // Objects from @file references will be handled by BaseEntity during save
         return JSON.stringify(processedValue, null, 2);
@@ -292,7 +335,7 @@ export class SyncEngine {
     
     // If string starts with @ but isn't one of our known reference types, return as-is
     // This handles cases like npm package names (@mui/material, @angular/core, etc.)
-    if (isNonKeywordAtSymbol(value)) {
+    if (IsNonKeywordAtSymbol(value)) {
       return value; // Not a MetadataSync reference, just a string that happens to start with @
     }
 
@@ -301,13 +344,14 @@ export class SyncEngine {
       if (!ownerRecord) {
         throw new Error(`@owner reference used but no owner record available: ${value}`);
       }
-      const ownerFieldName = extractKeywordValue(value) || '';
+      const ownerFieldName = ExtractKeywordValue(value) || '';
       const resolvedValue = ownerRecord.Get(ownerFieldName);
 
       if (resolvedValue === undefined) {
         const ownerName = (ownerRecord as { EntityInfo?: { Name?: string } }).EntityInfo?.Name || 'unknown';
         throw new Error(`@owner:${ownerFieldName} resolved to undefined on owner ${ownerName}. Field does not exist or has undefined value.`);
       }
+      const sourceVariables = this.recordCopiedEnvValue(resolvedValue, resolutionCollector, fieldName);
 
       // Track the resolution if collector is provided
       if (resolutionCollector && fieldName) {
@@ -315,7 +359,7 @@ export class SyncEngine {
           type: 'parent',
           field: `${resolutionCollector.fieldPrefix}.${fieldName}`,
           expression: value,
-          resolved: String(resolvedValue)
+          resolved: sourceVariables.length > 0 ? EnvSourceLabel(sourceVariables) : String(resolvedValue)
         });
       }
 
@@ -327,8 +371,9 @@ export class SyncEngine {
       if (!parentRecord) {
         throw new Error(`@parent reference used but no parent record available: ${value}`);
       }
-      const parentFieldName = extractKeywordValue(value) || '';
+      const parentFieldName = ExtractKeywordValue(value) || '';
       const resolvedValue = parentRecord.Get(parentFieldName);
+      const sourceVariables = this.recordCopiedEnvValue(resolvedValue, resolutionCollector, fieldName);
 
       // Track the resolution if collector is provided
       if (resolutionCollector && fieldName) {
@@ -336,7 +381,7 @@ export class SyncEngine {
           type: 'parent',
           field: `${resolutionCollector.fieldPrefix}.${fieldName}`,
           expression: value,
-          resolved: String(resolvedValue)
+          resolved: sourceVariables.length > 0 ? EnvSourceLabel(sourceVariables) : String(resolvedValue)
         });
       }
 
@@ -348,13 +393,13 @@ export class SyncEngine {
       if (!rootRecord) {
         throw new Error(`@root reference used but no root record available: ${value}`);
       }
-      const fieldName = extractKeywordValue(value) || '';
+      const fieldName = ExtractKeywordValue(value) || '';
       return rootRecord.Get(fieldName);
     }
 
     // Check for @file: reference
     if (value.startsWith(METADATA_KEYWORDS.FILE)) {
-      const filePath = extractKeywordValue(value) as string;
+      const filePath = ExtractKeywordValue(value) as string;
       const fullPath = path.resolve(baseDir, filePath);
       
       if (await fs.pathExists(fullPath)) {
@@ -379,7 +424,20 @@ export class SyncEngine {
             
             // Now recursively process any @file references within the JSON
             const fileDir = path.dirname(fullPath);
-            processedJson = await this.processJsonFieldValues(processedJson, fileDir, parentRecord, rootRecord, depth + 1, batchContext, recordProvider);
+            const envCollector = this.envOnlyCollector(resolutionCollector);
+            processedJson = await this.processJsonFieldValues(
+              processedJson,
+              fileDir,
+              parentRecord,
+              rootRecord,
+              depth + 1,
+              batchContext,
+              recordProvider,
+              undefined,
+              envCollector,
+              fieldName
+            );
+            this.mergeEnvFields(resolutionCollector, envCollector);
             
             // Return the processed JSON object directly without stringifying
             // Let BaseEntity handle serialization when saving to database
@@ -404,7 +462,7 @@ export class SyncEngine {
     
     // Check for @url: reference
     if (value.startsWith(METADATA_KEYWORDS.URL)) {
-      const url = extractKeywordValue(value) as string;
+      const url = ExtractKeywordValue(value) as string;
       
       try {
         // A developer-authored `@url:` reference in a local metadata file — it may legitimately
@@ -418,27 +476,22 @@ export class SyncEngine {
     
     // Check for @lookup: reference
     if (value.startsWith(METADATA_KEYWORDS.LOOKUP)) {
-      const lookupStr = extractKeywordValue(value) as string;
+      const lookupStr = ExtractKeywordValue(value) as string;
 
       // Parse lookup with optional flags: ?create, ?allowDefer
       // Format: EntityName.Field1=Value1&Field2=Value2?create&allowDefer&OtherField=Value
-      const entityMatch = lookupStr.match(/^([^.]+)\./);
-      if (!entityMatch) {
+      const split = SplitLookupReference(lookupStr);
+      if (!split) {
         throw new Error(`Invalid lookup format: ${value}`);
       }
-
-      const entityName = entityMatch[1];
-      const remaining = lookupStr.substring(entityName.length + 1);
-
-      // Split into lookup part and flags part
-      const questionMarkIndex = remaining.indexOf('?');
-      const lookupPart = questionMarkIndex >= 0 ? remaining.substring(0, questionMarkIndex) : remaining;
-      const flagsPart = questionMarkIndex >= 0 ? remaining.substring(questionMarkIndex + 1) : '';
-
-      // Parse flags from the query string portion
-      const flags = new Set(flagsPart.split('&').map(f => f.split('=')[0].toLowerCase()));
-      const hasCreate = flags.has('create');
-      const allowDefer = flags.has('allowdefer');
+      if (split.UnknownBareFlags.includes('optional')) {
+        throw new Error(`Invalid @lookup reference: ${value}. ${LOOKUP_OPTIONAL_MESSAGE}`);
+      }
+      const entityName = split.EntityName;
+      const lookupPart = split.CriteriaText;
+      const flagsPart = split.FlagsText;
+      const hasCreate = split.FlagNames.has('create');
+      const allowDefer = split.FlagNames.has('allowdefer');
 
       // Parse all lookup fields (can be multiple with &)
       const lookupFields: Array<{fieldName: string, fieldValue: string}> = [];
@@ -446,6 +499,8 @@ export class SyncEngine {
 
       // Collector for nested resolutions within this lookup
       const nestedResolutions: NestedSyncResolution[] = [];
+      // Criteria and create fields whose values came from @env:, for the lookup messages
+      const lookupEnvFields = new Map<string, Set<string>>();
 
       for (const pair of lookupPairs) {
         const fieldMatch = pair.match(/^(.+?)=(.+)$/);
@@ -456,9 +511,9 @@ export class SyncEngine {
         const rawFieldValue = fieldValue.trim();
 
         // Recursively process the field value to resolve any nested @ commands
-        // Create a temporary collector to capture nested resolutions
-        const nestedCollector: SyncResolutionCollector = { notes: [], fieldPrefix: '' };
-        const processedValue = await this.processFieldValue(
+        // Create a temporary collector to capture nested resolutions and env-sourced criteria
+        const nestedCollector: SyncResolutionCollector = { notes: [], fieldPrefix: '', EnvFields: new Map() };
+        const processedValue = await this.ProcessFieldValue(
           rawFieldValue,
           baseDir,
           parentRecord,
@@ -470,11 +525,13 @@ export class SyncEngine {
           recordProvider
         );
 
+        const criteriaVariables = this.addLookupEnvField(lookupEnvFields, lookupFieldName.trim(), nestedCollector);
+
         // If the raw value was a lookup expression that got resolved, track it as nested
         if (rawFieldValue.startsWith(METADATA_KEYWORDS.LOOKUP) && rawFieldValue !== processedValue) {
           nestedResolutions.push({
             expression: rawFieldValue,
-            resolved: String(processedValue)
+            resolved: criteriaVariables ? EnvSourceLabel(criteriaVariables) : String(processedValue)
           });
         }
 
@@ -489,32 +546,26 @@ export class SyncEngine {
       // These are key=value pairs after the flags (e.g., ?create&Description=Some%20Value)
       let createFields: Record<string, any> = {};
       if (hasCreate && flagsPart) {
-        const flagPairs = flagsPart.split('&');
-        for (const pair of flagPairs) {
-          // Skip known flags
-          if (pair.toLowerCase() === 'create' || pair.toLowerCase() === 'allowdefer') {
-            continue;
-          }
-          const [key, val] = pair.split('=');
-          if (key && val) {
-            const decodedVal = decodeURIComponent(val);
-            // Recursively process the field value to resolve any nested @ commands
-            createFields[key] = await this.processFieldValue(
-              decodedVal,
-              baseDir,
-              parentRecord,
-              rootRecord,
-              depth + 1,
-              batchContext,
-              undefined,
-              undefined,
-              recordProvider
-            );
-          }
+        for (const createField of ParseLookupCreateFields(flagsPart)) {
+          // Recursively process the field value to resolve any nested @ commands
+          const createCollector: SyncResolutionCollector = { notes: [], fieldPrefix: '', EnvFields: new Map() };
+          createFields[createField.Name] = await this.ProcessFieldValue(
+            createField.Value,
+            baseDir,
+            parentRecord,
+            rootRecord,
+            depth + 1,
+            batchContext,
+            createCollector,
+            createField.Name,
+            recordProvider
+          );
+          this.addLookupEnvField(lookupEnvFields, createField.Name, createCollector);
         }
       }
 
-      const resolvedValue = await this.resolveLookup(entityName, lookupFields, hasCreate, createFields, batchContext, allowDefer, value, recordProvider);
+      const resolvedValue = await this.ResolveLookup(entityName, lookupFields, hasCreate, createFields, batchContext, allowDefer, value, recordProvider, lookupEnvFields);
+      const sourceVariables = this.recordCopiedEnvValue(resolvedValue, resolutionCollector, fieldName);
 
       // Track the resolution if collector is provided
       if (resolutionCollector && fieldName) {
@@ -522,7 +573,7 @@ export class SyncEngine {
           type: 'lookup',
           field: `${resolutionCollector.fieldPrefix}.${fieldName}`,
           expression: value,
-          resolved: String(resolvedValue)
+          resolved: sourceVariables.length > 0 ? EnvSourceLabel(sourceVariables) : String(resolvedValue)
         };
 
         // Include nested resolutions if any were captured
@@ -538,17 +589,44 @@ export class SyncEngine {
     
     // Check for @env: reference
     if (value.startsWith(METADATA_KEYWORDS.ENV)) {
-      const envVar = extractKeywordValue(value) as string;
-      const envValue = process.env[envVar];
-      
-      if (envValue === undefined) {
-        throw new Error(`Environment variable not found: ${envVar}`);
+      const reference = ParseEnvReference(value);
+      if (!reference) {
+        throw new Error(`Invalid @env reference: ${value}`);
       }
-      
+      const envValue = process.env[reference.VariableName];
+      if (envValue === undefined) {
+        if (reference.Optional) {
+          throw new OptionalEnvMissingError(reference.VariableName);
+        }
+        const field = resolutionCollector?.fieldPrefix && fieldName ? `${resolutionCollector.fieldPrefix}.${fieldName}` : fieldName;
+        throw new EnvVariableNotSetError(reference.VariableName, field);
+      }
+      this.ResolvedEnvVariables.add(reference.VariableName);
+      if (resolutionCollector?.EnvFields && fieldName) {
+        const variables = resolutionCollector.EnvFields.get(fieldName) ?? new Set<string>();
+        variables.add(reference.VariableName);
+        resolutionCollector.EnvFields.set(fieldName, variables);
+      }
       return envValue;
     }
     
     return value;
+  }
+
+  /** @deprecated Use {@link ProcessFieldValue}. */
+  async processFieldValue(
+    value: any,
+    baseDir: string,
+    parentRecord?: BaseEntity | BatchContextStub | null,
+    rootRecord?: BaseEntity | BatchContextStub | null,
+    depth: number = 0,
+    batchContext?: BatchContext,
+    resolutionCollector?: SyncResolutionCollector,
+    fieldName?: string,
+    recordProvider?: IMetadataProvider,
+    ownerRecord?: BaseEntity | BatchContextStub | null
+  ): Promise<any> {
+    return this.ProcessFieldValue(value, baseDir, parentRecord, rootRecord, depth, batchContext, resolutionCollector, fieldName, recordProvider, ownerRecord);
   }
   
   /**
@@ -606,7 +684,7 @@ export class SyncEngine {
     return `${encodeURIComponent(entityName.toLowerCase())}|${parts.join('&')}`;
   }
 
-  async resolveLookup(
+  async ResolveLookup(
     entityName: string,
     lookupFields: Array<{fieldName: string, fieldValue: string}>,
     autoCreate: boolean = false,
@@ -614,8 +692,11 @@ export class SyncEngine {
     batchContext?: BatchContext,
     allowDefer: boolean = false,
     originalValue?: string,
-    recordProvider?: IMetadataProvider
+    recordProvider?: IMetadataProvider,
+    envFields?: ReadonlyMap<string, ReadonlySet<string>>
   ): Promise<string> {
+    // Criteria and create fields whose values came from @env: print as labels
+    const envMask = new EnvDisplayMask(envFields);
     const lookupCacheKey = this.buildLookupCacheKey(entityName, lookupFields);
     if (this.syncMetadataEngine) {
       const cachedId = this.syncMetadataEngine.getCachedLookup(lookupCacheKey);
@@ -773,7 +854,7 @@ export class SyncEngine {
     // If not found and auto-create is enabled, create the record
     if (autoCreate) {
       // Same silent-fallback hazard as PushService (issue #4199), on the lookup auto-create path.
-      const subclassWarning = describeMissingEntitySubclass(entityName);
+      const subclassWarning = DescribeMissingEntitySubclass(entityName);
       if (subclassWarning) {
         this.warn(subclassWarning);
       }
@@ -809,19 +890,21 @@ export class SyncEngine {
       }
       
       // Save the new record (new records are always dirty)
-      const filterDesc = lookupFields.map(({fieldName, fieldValue}) => `${fieldName}='${fieldValue}'`).join(' AND ');
-      console.log(`📝 Auto-creating ${entityName} record where ${filterDesc}`);
+      console.log(`📝 Auto-creating ${entityName} record where ${this.describeLookupFilter(lookupFields, envMask)}`);
+      if (envFields) {
+        this.BeforeLookupCreateSave?.(newEntity, envFields);
+      }
       const saved = await newEntity.Save();
       if (!saved) {
         const message = newEntity.LatestResult?.Message;
         if (message) {
-          throw new Error(`Failed to auto-create ${entityName}: ${message}`);
+          throw new Error(`Failed to auto-create ${entityName}: ${envMask.MaskText(message)}`);
         }
         
         const errors = newEntity.LatestResult?.Errors?.map(err => 
           typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
         )?.join(', ') || 'Unknown error';
-        throw new Error(`Failed to auto-create ${entityName}: ${errors}`);
+        throw new Error(`Failed to auto-create ${entityName}: ${envMask.MaskText(errors)}`);
       }
       
       // Return the new ID
@@ -837,7 +920,7 @@ export class SyncEngine {
     }
     
     const filterDesc = lookupFields.map(({fieldName, fieldValue}) => `${fieldName}='${fieldValue}'`).join(' AND ');
-    const errorMessage = `Lookup failed: No record found in '${entityName}' where ${filterDesc}`;
+    const errorMessage = `Lookup failed: No record found in '${entityName}' where ${this.describeLookupFilter(lookupFields, envMask)}`;
 
     // If allowDefer is true, throw DeferrableLookupError so caller can queue for retry
     if (allowDefer) {
@@ -852,6 +935,52 @@ export class SyncEngine {
     throw new Error(errorMessage);
   }
 
+  /** `Field='value' AND …` for messages; env-sourced criteria print as `Field=<from @env:VAR>`. */
+  private describeLookupFilter(
+    lookupFields: Array<{fieldName: string, fieldValue: string}>,
+    envMask: EnvDisplayMask
+  ): string {
+    return lookupFields
+      .map(({ fieldName, fieldValue }) => `${fieldName}=${envMask.NewValue(fieldName, `'${fieldValue}'`)}`)
+      .join(' AND ');
+  }
+
+  /**
+   * Adds the variable names a lookup criterion or create field recorded in its scratch collector to the
+   * lookup's map. `@env:` values and `@parent:`/`@lookup:` results equal to an env value are recorded.
+   * @returns The field's variable names in the lookup's map, or undefined when it is not env-sourced
+   */
+  private addLookupEnvField(
+    lookupEnvFields: Map<string, Set<string>>,
+    lookupFieldName: string,
+    scratch: SyncResolutionCollector
+  ): Set<string> | undefined {
+    const recorded = new Set<string>();
+    scratch.EnvFields?.forEach(names => names.forEach(name => recorded.add(name)));
+    if (recorded.size === 0) {
+      return undefined;
+    }
+    const merged = lookupEnvFields.get(lookupFieldName) ?? new Set<string>();
+    recorded.forEach(name => merged.add(name));
+    lookupEnvFields.set(lookupFieldName, merged);
+    return merged;
+  }
+
+  /** @deprecated Use {@link ResolveLookup}. */
+  async resolveLookup(
+    entityName: string,
+    lookupFields: Array<{fieldName: string, fieldValue: string}>,
+    autoCreate: boolean = false,
+    createFields: Record<string, any> = {},
+    batchContext?: BatchContext,
+    allowDefer: boolean = false,
+    originalValue?: string,
+    recordProvider?: IMetadataProvider,
+    envFields?: ReadonlyMap<string, ReadonlySet<string>>
+  ): Promise<string> {
+    return this.ResolveLookup(entityName, lookupFields, autoCreate, createFields, batchContext, allowDefer, originalValue, recordProvider, envFields);
+  }
+
   /**
    * Build cascading defaults for a file path and process field values
    * 
@@ -861,18 +990,22 @@ export class SyncEngine {
    * 
    * @param filePath - Path to the file being processed
    * @param entityConfig - Entity configuration containing base defaults
+   * @param resolutionCollector - Optional collector; when it has an `EnvFields` map, env-sourced defaults are recorded in it (no notes are added)
+   * @param skippedOptional - Optional map; receives field → variable for each default left out because its `?optional` variable is not set
    * @returns Processed defaults with all references resolved
    * @throws Error if any default value processing fails
    */
-  async buildDefaults(filePath: string, entityConfig: EntityConfig): Promise<Record<string, any>> {
-    const parts = path.dirname(filePath).split(path.sep);
-    let defaults: Record<string, any> = { ...entityConfig.defaults };
+  async BuildDefaults(
+    filePath: string,
+    entityConfig: EntityConfig,
+    resolutionCollector?: SyncResolutionCollector,
+    skippedOptional?: Map<string, string>
+  ): Promise<Record<string, unknown>> {
+    let defaults: Record<string, unknown> = { ...entityConfig.defaults };
     
-    // Walk up the directory tree building defaults
-    let currentPath = '';
-    for (const part of parts) {
-      currentPath = path.join(currentPath, part);
-      const folderConfig = await this.loadFolderConfig(currentPath);
+    // Folder defaults from the sync root down to the file's folder; deeper folders win
+    for (const dir of await this.folderChainFor(path.dirname(path.resolve(filePath)))) {
+      const folderConfig = await this.loadFolderConfig(dir);
       
       if (folderConfig?.defaults) {
         defaults = { ...defaults, ...folderConfig.defaults };
@@ -880,18 +1013,142 @@ export class SyncEngine {
     }
     
     // Process all default values (lookups, file references, etc.)
-    const processedDefaults: Record<string, any> = {};
+    const processedDefaults: Record<string, unknown> = {};
     const baseDir = path.dirname(filePath);
     
     for (const [field, value] of Object.entries(defaults)) {
       try {
-        processedDefaults[field] = await this.processFieldValue(value, baseDir, null, null, 0);
+        const envCollector = this.envOnlyCollector(resolutionCollector);
+        processedDefaults[field] = await this.ProcessFieldValue(value, baseDir, null, null, 0, undefined, envCollector, field);
+        this.mergeEnvFields(resolutionCollector, envCollector);
       } catch (error) {
+        // A default whose optional variable is not set is left out
+        if (error instanceof OptionalEnvMissingError) {
+          skippedOptional?.set(field, error.VariableName);
+          continue;
+        }
         throw new Error(`Failed to process default for field '${field}': ${error}`);
       }
     }
     
     return processedDefaults;
+  }
+
+  /** @deprecated Use {@link BuildDefaults}. */
+  async buildDefaults(
+    filePath: string,
+    entityConfig: EntityConfig,
+    resolutionCollector?: SyncResolutionCollector,
+    skippedOptional?: Map<string, string>
+  ): Promise<Record<string, unknown>> {
+    return this.BuildDefaults(filePath, entityConfig, resolutionCollector, skippedOptional);
+  }
+
+  /**
+   * The folders from the sync root (the nearest folder at or above `startDir` whose
+   * `.mj-sync.json` has no `entity`) down to `startDir`. Without a sync root, the chain
+   * starts at the file system root.
+   * The walk passes through folders without a `.mj-sync.json`, because record sub-folders have none (unlike `FindSyncRootDir`, which finds the settings root).
+   */
+  private async folderChainFor(startDir: string): Promise<string[]> {
+    const chain: string[] = [];
+    let current = startDir;
+    for (;;) {
+      chain.push(current);
+      if (await this.isSyncRoot(current)) {
+        break;
+      }
+      const parent = path.dirname(current);
+      if (parent === current) {
+        break;
+      }
+      current = parent;
+    }
+    return chain.reverse();
+  }
+
+  /** True when `dir` has a readable `.mj-sync.json` with no (or an empty) `entity`. */
+  private async isSyncRoot(dir: string): Promise<boolean> {
+    const configPath = path.join(dir, '.mj-sync.json');
+    if (!(await fs.pathExists(configPath))) {
+      return false;
+    }
+    try {
+      const config: unknown = await fs.readJson(configPath);
+      if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+        return false;
+      }
+      return !('entity' in config) || !config.entity;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * A scratch collector that records `@env:` fields into its own map and drops notes, or undefined when the
+   * caller's collector has no map. {@link mergeEnvFields} copies its map into the caller's map on success.
+   */
+  private envOnlyCollector(resolutionCollector?: SyncResolutionCollector): SyncResolutionCollector | undefined {
+    if (!resolutionCollector?.EnvFields) {
+      return undefined;
+    }
+    return { notes: [], fieldPrefix: resolutionCollector.fieldPrefix, EnvFields: new Map() };
+  }
+
+  /** Adds the variable names of a scratch collector to the caller's `EnvFields` map. */
+  private mergeEnvFields(target?: SyncResolutionCollector, scratch?: SyncResolutionCollector): void {
+    if (!target?.EnvFields || !scratch?.EnvFields) {
+      return;
+    }
+    for (const [field, variables] of scratch.EnvFields) {
+      const merged = target.EnvFields.get(field) ?? new Set<string>();
+      variables.forEach(variable => merged.add(variable));
+      target.EnvFields.set(field, merged);
+    }
+  }
+
+  /**
+   * Finds the resolved variables whose current value is in a value copied by `@parent:` or `@owner:`, or returned by `@lookup:`
+   * (trimmed, case-insensitive): the whole value, or for values of 6 or more characters any part of it,
+   * plain or JSON-escaped. Records them under `fieldName` when the collector has an `EnvFields` map.
+   * @returns The matching variable names, sorted
+   */
+  private recordCopiedEnvValue(copiedValue: unknown, resolutionCollector?: SyncResolutionCollector, fieldName?: string): string[] {
+    if (copiedValue === null || copiedValue === undefined) {
+      return [];
+    }
+    const copied = (typeof copiedValue === 'object' ? JSON.stringify(copiedValue) : String(copiedValue)).trim().toLowerCase();
+    if (copied === '') {
+      return [];
+    }
+    const names: string[] = [];
+    for (const name of this.ResolvedEnvVariables) {
+      const envValue = process.env[name];
+      if (envValue === undefined || envValue.trim() === '') {
+        continue;
+      }
+      if (this.holdsCopiedEnvValue(copied, envValue.trim().toLowerCase())) {
+        names.push(name);
+      }
+    }
+    names.sort();
+    if (names.length > 0 && resolutionCollector?.EnvFields && fieldName) {
+      const variables = resolutionCollector.EnvFields.get(fieldName) ?? new Set<string>();
+      names.forEach(name => variables.add(name));
+      resolutionCollector.EnvFields.set(fieldName, variables);
+    }
+    return names;
+  }
+
+  /** True when the copied text is the variable value, or holds a value of at least `MIN_MASKED_VALUE_LENGTH` characters. */
+  private holdsCopiedEnvValue(copied: string, envValue: string): boolean {
+    if (copied === envValue) {
+      return true;
+    }
+    if (envValue.length < MIN_MASKED_VALUE_LENGTH) {
+      return false;
+    }
+    return copied.includes(envValue) || copied.includes(JSON.stringify(envValue).slice(1, -1));
   }
   
   /**
@@ -915,7 +1172,35 @@ export class SyncEngine {
     
     return null;
   }
-  
+
+  /**
+   * Builds the payload a record's `sync.checksum` is calculated over. Pull and push must
+   * both use this, or the first push after a pull sees a checksum mismatch on every
+   * record (#4530).
+   *
+   * A record with no composition axes hashes its bare fields object; one with any
+   * non-empty collections, embeds or extension hashes `{ fields, ...axes }`. Empty axes
+   * are omitted, matching what pull writes to disk.
+   */
+  static BuildRecordChecksumPayload(
+    fields: Record<string, unknown>,
+    collections?: RecordData['collections'],
+    embeds?: RecordData['embeds'],
+    extension?: RecordData['extension']
+  ): Record<string, unknown> {
+    const hasCollections = !!collections && Object.keys(collections).length > 0;
+    const hasEmbeds = !!embeds && Object.keys(embeds).length > 0;
+    const hasExtension = !!extension && Object.keys(extension).length > 0;
+    if (!hasCollections && !hasEmbeds && !hasExtension) {
+      return fields;
+    }
+    const payload: Record<string, unknown> = { fields };
+    if (hasCollections) payload.collections = collections;
+    if (hasEmbeds) payload.embeds = embeds;
+    if (hasExtension) payload.extension = extension;
+    return payload;
+  }
+
   /**
    * Calculate SHA256 checksum for data
    * 
@@ -936,12 +1221,17 @@ export class SyncEngine {
    * // Returns consistent hash for same data structure
    * ```
    */
-  calculateChecksum(data: any): string {
+  CalculateChecksum(data: any): string {
     const hash = crypto.createHash('sha256');
     // Use a replacer function to ensure consistent key ordering for deterministic checksums
     const sortedJson = JSON.stringify(data, this.sortedReplacer, 2);
     hash.update(sortedJson);
     return hash.digest('hex');
+  }
+
+  /** @deprecated Use {@link CalculateChecksum}. */
+  calculateChecksum(data: any): string {
+    return this.CalculateChecksum(data);
   }
 
   /**
@@ -972,9 +1262,14 @@ export class SyncEngine {
    * @param entityDir - Directory for resolving relative file paths
    * @returns Promise resolving to checksum string
    */
-  async calculateChecksumWithFileContent(data: any, entityDir: string): Promise<string> {
+  async CalculateChecksumWithFileContent(data: any, entityDir: string): Promise<string> {
     const processedData = await this.resolveFileReferencesForChecksum(data, entityDir);
-    return this.calculateChecksum(processedData);
+    return this.CalculateChecksum(processedData);
+  }
+
+  /** @deprecated Use {@link CalculateChecksumWithFileContent}. */
+  async calculateChecksumWithFileContent(data: any, entityDir: string): Promise<string> {
+    return this.CalculateChecksumWithFileContent(data, entityDir);
   }
 
   /**
@@ -1003,7 +1298,7 @@ export class SyncEngine {
       if (typeof value === 'string' && value.startsWith(METADATA_KEYWORDS.FILE)) {
         // Process @file reference and include actual content
         try {
-          const filePath = extractKeywordValue(value) as string;
+          const filePath = ExtractKeywordValue(value) as string;
           const fullPath = path.isAbsolute(filePath) ? filePath : path.join(entityDir, filePath);
           
           if (await fs.pathExists(fullPath)) {
@@ -1083,8 +1378,13 @@ export class SyncEngine {
    * }
    * ```
    */
-  getEntityInfo(entityName: string): EntityInfo | null {
+  GetEntityInfo(entityName: string): EntityInfo | null {
     return this.metadata.EntityByName(entityName);
+  }
+
+  /** @deprecated Use {@link GetEntityInfo}. */
+  getEntityInfo(entityName: string): EntityInfo | null {
+    return this.GetEntityInfo(entityName);
   }
   
   /**
@@ -1105,7 +1405,7 @@ export class SyncEngine {
    * await entity.Save();
    * ```
    */
-  async createEntityObject(entityName: string, recordProvider?: IMetadataProvider): Promise<BaseEntity> {
+  async CreateEntityObject(entityName: string, recordProvider?: IMetadataProvider): Promise<BaseEntity> {
     const entity = recordProvider
       ? await recordProvider.GetEntityObject(entityName, this.contextUser)
       : await this.metadata.GetEntityObject(entityName, this.contextUser);
@@ -1113,6 +1413,11 @@ export class SyncEngine {
       throw new Error(`Failed to create entity object for: ${entityName}`);
     }
     return entity;
+  }
+
+  /** @deprecated Use {@link CreateEntityObject}. */
+  async createEntityObject(entityName: string, recordProvider?: IMetadataProvider): Promise<BaseEntity> {
+    return this.CreateEntityObject(entityName, recordProvider);
   }
   
   /**
@@ -1138,8 +1443,8 @@ export class SyncEngine {
    * });
    * ```
    */
-  async loadEntity(entityName: string, primaryKey: Record<string, any>, recordProvider?: IMetadataProvider): Promise<BaseEntity | null> {
-    const entityInfo = this.getEntityInfo(entityName);
+  async LoadEntity(entityName: string, primaryKey: Record<string, any>, recordProvider?: IMetadataProvider): Promise<BaseEntity | null> {
+    const entityInfo = this.GetEntityInfo(entityName);
     
     if (!entityInfo) {
       throw new Error(`Entity not found: ${entityName}`);
@@ -1157,9 +1462,32 @@ export class SyncEngine {
         }
         return cached;
       }
-      return null;
+      // A cache miss is NOT proof the row is absent. The preload cache learns about rows saved
+      // during this push only through BaseEngine's save-event bus, and inside an open transaction
+      // that mutation is deferred to commit (rollback-safe engine caches) — and the default push is
+      // one transaction. So a record created earlier in this same push (e.g. by another directory)
+      // is missing here until commit. Confirm against the database on the push's own provider,
+      // which shares the transaction and sees its uncommitted rows. Don't cache the hit: a delegated
+      // slot is a donor engine's live array, and an uncommitted row placed there would outlive a
+      // rollback. The deferred event mutation populates the cache once the transaction commits.
+      return this.loadFromDatabase(entityName, entityInfo, primaryKey, recordProvider, false);
     }
-    
+
+    return this.loadFromDatabase(entityName, entityInfo, primaryKey, recordProvider, true);
+  }
+
+  /**
+   * Loads a record by primary key straight from the database, using the record's provider when one
+   * is passed so the read joins that provider's transaction. Returns `null` when no row exists.
+   * `cacheResult` controls whether a hit is added to the preload cache.
+   */
+  private async loadFromDatabase(
+    entityName: string,
+    entityInfo: EntityInfo,
+    primaryKey: Record<string, unknown>,
+    recordProvider: IMetadataProvider | undefined,
+    cacheResult: boolean
+  ): Promise<BaseEntity | null> {
     // First, check if the record exists using RunView to avoid "Error in BaseEntity.Load" messages
     // when records don't exist (which is a normal scenario during sync operations).
     // Use the graph provider when one is passed so an update does not replace a
@@ -1195,16 +1523,21 @@ export class SyncEngine {
     }
     
     // Record exists, now load it properly through the entity
-    const entity = await this.createEntityObject(entityName, recordProvider);
+    const entity = await this.CreateEntityObject(entityName, recordProvider);
     const compositeKey = new CompositeKey();
     compositeKey.LoadFromSimpleObject(primaryKey);
     const loaded = await entity.InnerLoad(compositeKey);
     
     const loadedEntity = loaded ? entity : null;
-    if (loadedEntity && this.syncMetadataEngine) {
+    if (loadedEntity && cacheResult && this.syncMetadataEngine) {
       this.syncMetadataEngine.addEntityToCache(entityName, loadedEntity);
     }
     return loadedEntity;
+  }
+
+  /** @deprecated Use {@link LoadEntity}. */
+  async loadEntity(entityName: string, primaryKey: Record<string, any>, recordProvider?: IMetadataProvider): Promise<BaseEntity | null> {
+    return this.LoadEntity(entityName, primaryKey, recordProvider);
   }
   
   /**
@@ -1316,7 +1649,9 @@ export class SyncEngine {
     depth: number = 0,
     batchContext?: BatchContext,
     recordProvider?: IMetadataProvider,
-    ownerRecord?: BaseEntity | BatchContextStub | null
+    ownerRecord?: BaseEntity | BatchContextStub | null,
+    envCollector?: SyncResolutionCollector,
+    envFieldName?: string
   ): Promise<any> {
     // Handle null and undefined
     if (obj === null || obj === undefined) {
@@ -1325,8 +1660,8 @@ export class SyncEngine {
 
     // Handle top-level strings (important for array elements that are strings with @ syntax)
     if (typeof obj === 'string') {
-      if (isMetadataKeyword(obj)) {
-        return this.processFieldValue(obj, baseDir, parentRecord, rootRecord, depth, batchContext, undefined, undefined, recordProvider, ownerRecord);
+      if (IsMetadataKeyword(obj)) {
+        return this.ProcessFieldValue(obj, baseDir, parentRecord, rootRecord, depth, batchContext, envCollector, envFieldName, recordProvider, ownerRecord);
       }
       return obj;
     }
@@ -1335,7 +1670,7 @@ export class SyncEngine {
     if (Array.isArray(obj)) {
       return Promise.all(
         obj.map(item => 
-          this.processJsonFieldValues(item, baseDir, parentRecord, rootRecord, depth, batchContext, recordProvider, ownerRecord)
+          this.processJsonFieldValues(item, baseDir, parentRecord, rootRecord, depth, batchContext, recordProvider, ownerRecord, envCollector, envFieldName)
         )
       );
     }
@@ -1348,14 +1683,14 @@ export class SyncEngine {
         if (typeof value === 'string') {
           // Check if this looks like a reference that needs processing
           // Only process known reference types, ignore other @ strings (like npm packages)
-          if (isMetadataKeyword(value)) {
-            result[key] = await this.processFieldValue(value, baseDir, parentRecord, rootRecord, depth, batchContext, undefined, undefined, recordProvider, ownerRecord);
+          if (IsMetadataKeyword(value)) {
+            result[key] = await this.ProcessFieldValue(value, baseDir, parentRecord, rootRecord, depth, batchContext, envCollector, envFieldName, recordProvider, ownerRecord);
           } else {
             result[key] = value;
           }
         } else if (typeof value === 'object') {
           // Recursively process nested objects
-          result[key] = await this.processJsonFieldValues(value, baseDir, parentRecord, rootRecord, depth, batchContext, recordProvider, ownerRecord);
+          result[key] = await this.processJsonFieldValues(value, baseDir, parentRecord, rootRecord, depth, batchContext, recordProvider, ownerRecord, envCollector, envFieldName);
         } else {
           // Keep primitive values as-is
           result[key] = value;

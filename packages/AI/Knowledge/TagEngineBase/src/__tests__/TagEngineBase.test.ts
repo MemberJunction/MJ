@@ -88,7 +88,7 @@ function makeFakeTag(id: string, name: string, parentID: string | null = null, d
 }
 
 function injectTags(engine: TagEngineBase, tags: FakeTag[]): void {
-    (engine as unknown as { _Tags: FakeTag[] })._Tags = tags;
+    (engine as unknown as { _tags: FakeTag[] })._tags = tags;
 }
 
 // ============================================================================

@@ -16,7 +16,7 @@ import { ArchiveRunResult } from '@memberjunction/archiving-engine';
 export class RunAllActiveArchivesAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const configIds = await this.LoadActiveConfigurationIds(params);
+            const configIds = await this.loadActiveConfigurationIds(params);
             if (configIds.length === 0) {
                 return {
                     Success: true,
@@ -27,8 +27,8 @@ export class RunAllActiveArchivesAction extends BaseAction {
 
             LogStatus(`RunAllActiveArchives: Found ${configIds.length} active configuration(s). Starting execution...`);
 
-            const results = await this.ExecuteAllConfigurations(configIds, params);
-            return this.BuildSummaryResult(results);
+            const results = await this.executeAllConfigurations(configIds, params);
+            return this.buildSummaryResult(results);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             LogError(`RunAllActiveArchives failed: ${message}`);
@@ -43,7 +43,7 @@ export class RunAllActiveArchivesAction extends BaseAction {
     /**
      * Queries the database for all active ArchiveConfiguration IDs.
      */
-    private async LoadActiveConfigurationIds(params: RunActionParams): Promise<string[]> {
+    private async loadActiveConfigurationIds(params: RunActionParams): Promise<string[]> {
         const rv = new RunView();
         const result = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: Archive Configurations',
@@ -63,7 +63,7 @@ export class RunAllActiveArchivesAction extends BaseAction {
      * Executes all configurations sequentially. Sequential execution prevents
      * overwhelming the storage backend and database with concurrent archive runs.
      */
-    private async ExecuteAllConfigurations(
+    private async executeAllConfigurations(
         configIds: string[],
         params: RunActionParams
     ): Promise<ConfigRunOutcome[]> {
@@ -99,7 +99,7 @@ export class RunAllActiveArchivesAction extends BaseAction {
     /**
      * Aggregates individual run results into a single ActionResultSimple.
      */
-    private BuildSummaryResult(outcomes: ConfigRunOutcome[]): ActionResultSimple {
+    private buildSummaryResult(outcomes: ConfigRunOutcome[]): ActionResultSimple {
         const succeeded = outcomes.filter(o => o.Result.Success).length;
         const failed = outcomes.length - succeeded;
         const totalArchived = outcomes.reduce((sum, o) => sum + o.Result.ArchivedRecords, 0);
@@ -111,12 +111,13 @@ export class RunAllActiveArchivesAction extends BaseAction {
 
         const lines = outcomes.map(o => {
             const status = o.Result.Success ? 'OK' : 'FAILED';
-            return `  [${status}] ${o.ConfigId}: archived=${o.Result.ArchivedRecords}, failed=${o.Result.FailedRecords}${o.Result.ErrorMessage ? `, error=${o.Result.ErrorMessage}` : ''}`;
+            const label = o.Result.StorageMode === 'Purge' ? 'purged' : 'archived';
+            return `  [${status}] ${o.ConfigId}: ${label}=${o.Result.ArchivedRecords}, failed=${o.Result.FailedRecords}${o.Result.ErrorMessage ? `, error=${o.Result.ErrorMessage}` : ''}`;
         });
 
         const message =
             `Ran ${outcomes.length} configuration(s): ${succeeded} succeeded, ${failed} failed. ` +
-            `Total archived: ${totalArchived}, total failed: ${totalFailed}, total bytes: ${totalBytes}\n` +
+            `Total ${this.totalRecordsLabel(outcomes)}: ${totalArchived}, total failed: ${totalFailed}, total bytes: ${totalBytes}\n` +
             lines.join('\n');
 
         return {
@@ -124,6 +125,18 @@ export class RunAllActiveArchivesAction extends BaseAction {
             ResultCode: resultCode,
             Message: message,
         };
+    }
+
+    /**
+     * Returns the word for the summed record count: 'purged' when every run is a Purge,
+     * 'records' when Purge and Store runs are mixed, else 'archived'.
+     */
+    private totalRecordsLabel(outcomes: ConfigRunOutcome[]): string {
+        const purgeCount = outcomes.filter(o => o.Result.StorageMode === 'Purge').length;
+        if (purgeCount === 0) {
+            return 'archived';
+        }
+        return purgeCount === outcomes.length ? 'purged' : 'records';
     }
 }
 

@@ -4,7 +4,10 @@
  */
 
 import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, ColumnDefinition, ValueListVerdict } from '../types/state.js';
-import { ensureArray } from "../utils/ensureArray.js";
+import { EnsureArray } from "../utils/ensureArray.js";
+import type { BaseAutoDocDriver } from "../drivers/BaseAutoDocDriver.js";
+import { CheckPKProposal } from "./PKProposalGate.js";
+import { BuildIndexHints, FormatIndexHint, IsUniquelyIndexed } from "../utils/index-hints.js";
 import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext, EnumCandidateContext } from '../types/analysis.js';
 import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
 import {
@@ -40,7 +43,9 @@ export class AnalysisEngine {
     private promptEngine: PromptEngine,
     private stateManager: StateManager,
     private iterationTracker: IterationTracker,
-    onProgress?: (message: string, data?: Record<string, unknown>) => void
+    onProgress?: (message: string, data?: Record<string, unknown>) => void,
+    /** Database access for checks the LLM's proposals must pass (composite PK uniqueness). Optional: without it, composite PK proposals are rejected. */
+    private driver?: BaseAutoDocDriver
   ) {
     this.onProgress = onProgress || (() => {});
     this.backpropagationEngine = new BackpropagationEngine(
@@ -74,17 +79,22 @@ export class AnalysisEngine {
   /**
    * Initialize timing for guardrails and set current run
    */
-  public startAnalysis(run: AnalysisRun): void {
+  public StartAnalysis(run: AnalysisRun): void {
     this.startTime = Date.now();
     this.currentRun = run;
     this.guardrailsManager.startPhase('analysis');
+  }
+
+  /** @deprecated Use {@link StartAnalysis}. */
+  public startAnalysis(run: AnalysisRun): void {
+    return this.StartAnalysis(run);
   }
 
   /**
    * Lock interim ground truth: FKs with confidence ≥ threshold become immutable.
    * Call this AFTER the iterative analysis completes but BEFORE the pruning pass.
    */
-  public lockInterimGroundTruth(
+  public LockInterimGroundTruth(
     state: DatabaseDocumentation,
     confidenceThreshold: number = 90
   ): { locked: number; unlocked: number } {
@@ -108,10 +118,18 @@ export class AnalysisEngine {
     return { locked, unlocked };
   }
 
+  /** @deprecated Use {@link LockInterimGroundTruth}. */
+  public lockInterimGroundTruth(
+    state: DatabaseDocumentation,
+    confidenceThreshold: number = 90
+  ): { locked: number; unlocked: number } {
+    return this.LockInterimGroundTruth(state, confidenceThreshold);
+  }
+
   /**
    * Lock high-confidence PK candidates as interim ground truth.
    */
-  public lockInterimPKGroundTruth(
+  public LockInterimPKGroundTruth(
     state: DatabaseDocumentation,
     confidenceThreshold: number = 90
   ): { locked: number; unlocked: number } {
@@ -135,10 +153,18 @@ export class AnalysisEngine {
     return { locked, unlocked };
   }
 
+  /** @deprecated Use {@link LockInterimPKGroundTruth}. */
+  public lockInterimPKGroundTruth(
+    state: DatabaseDocumentation,
+    confidenceThreshold: number = 90
+  ): { locked: number; unlocked: number } {
+    return this.LockInterimPKGroundTruth(state, confidenceThreshold);
+  }
+
   /**
    * Two-pass PK pruning using a potentially stronger model.
    */
-  public async prunePrimaryKeys(
+  public async PrunePrimaryKeys(
     state: DatabaseDocumentation,
     run: AnalysisRun
   ): Promise<{ removed: number; kept: number }> {
@@ -177,7 +203,7 @@ export class AnalysisEngine {
       const [schemaName, tableName] = tableKey.split('.');
       const table = this.stateManager.findTable(state, schemaName, tableName);
       const candidates = tablePKs.map(pk => ({ columns: pk.columnNames, confidence: pk.confidence, locked: pk.status === 'confirmed' }));
-      const context = { sourceSchema: schemaName, sourceTable: tableName, tableDescription: table?.description || '', allTables, candidates, seedContext: state.seedContext ?? this.config.seedContext };
+      const context = { sourceSchema: schemaName, sourceTable: tableName, tableDescription: table?.description || '', allTables, candidates, existingIndexes: this.indexHintLines(table), seedContext: state.seedContext ?? this.config.seedContext };
 
       const result = await this.promptEngine.executePrompt<import('../types/prompts.js').PKPruningProposal[]>(
         'pk-pruning-table', context,
@@ -186,7 +212,7 @@ export class AnalysisEngine {
 
       if (!result.success || !result.result) { console.log(`[AnalysisEngine] PK pruning failed for ${tableKey}: ${result.errorMessage}`); continue; }
 
-      try { for (const proposal of ensureArray(result.result, "PK pruning per-table")) {
+      try { for (const proposal of EnsureArray(result.result, "PK pruning per-table")) {
         if (proposal.action === 'remove' && proposal.index >= 1 && proposal.index <= tablePKs.length) {
           const pk = tablePKs[proposal.index - 1];
           if (pk.status === 'confirmed') { console.log(`[AnalysisEngine] BLOCKED removal of locked PK: ${tableKey} [${pk.columnNames.join(', ')}]`); continue; }
@@ -209,7 +235,7 @@ export class AnalysisEngine {
 
     let removed = 0;
     if (holisticResult.success && holisticResult.result) {
-      for (const decision of ensureArray(holisticResult.result, "holistic pruning")) {
+      for (const decision of EnsureArray(holisticResult.result, "holistic pruning")) {
         if (decision.action === 'remove' && decision.index >= 1 && decision.index <= allProposals.length) {
           const proposal = allProposals[decision.index - 1];
           proposal.pk.status = 'rejected';
@@ -230,13 +256,21 @@ export class AnalysisEngine {
     return { removed, kept };
   }
 
+  /** @deprecated Use {@link PrunePrimaryKeys}. */
+  public async prunePrimaryKeys(
+    state: DatabaseDocumentation,
+    run: AnalysisRun
+  ): Promise<{ removed: number; kept: number }> {
+    return this.PrunePrimaryKeys(state, run);
+  }
+
     /**
    * Two-pass FK pruning using a potentially stronger model.
    * Pass 1: Per-table — evaluate each table's unlocked FKs, propose removals.
    * Pass 2: Holistic — review all proposed removals at once for final decision.
    * Locked FKs (interim ground truth) are never touched.
    */
-  public async pruneForeignKeys(
+  public async PruneForeignKeys(
     state: DatabaseDocumentation,
     run: AnalysisRun
   ): Promise<{ removed: number; kept: number }> {
@@ -306,7 +340,8 @@ export class AnalysisEngine {
         targetTable: fk.targetTable,
         targetColumn: fk.targetColumn,
         confidence: fk.confidence,
-        locked: fk.status === 'confirmed'
+        locked: fk.status === 'confirmed',
+        targetUniquelyIndexed: IsUniquelyIndexed(this.stateManager.findTable(state, fk.targetSchema, fk.targetTable), fk.targetColumn)
       }));
 
       const context = {
@@ -315,6 +350,7 @@ export class AnalysisEngine {
         tableDescription: table?.description || '',
         allTables,
         candidates,
+        existingIndexes: this.indexHintLines(table),
         seedContext: state.seedContext ?? this.config.seedContext
       };
 
@@ -335,7 +371,7 @@ export class AnalysisEngine {
         continue;
       }
 
-      try { for (const proposal of ensureArray(result.result, "FK pruning per-table")) {
+      try { for (const proposal of EnsureArray(result.result, "FK pruning per-table")) {
         if (proposal.action === 'remove' && proposal.index >= 1 && proposal.index <= tableFKs.length) {
           const fk = tableFKs[proposal.index - 1];
           if (fk.status === 'confirmed') {
@@ -399,7 +435,7 @@ export class AnalysisEngine {
 
     let removed = 0;
     if (holisticResult.success && holisticResult.result) {
-      for (const decision of ensureArray(holisticResult.result, "holistic pruning")) {
+      for (const decision of EnsureArray(holisticResult.result, "holistic pruning")) {
         if (decision.action === 'remove' && decision.index >= 1 && decision.index <= allProposals.length) {
           const proposal = allProposals[decision.index - 1];
           proposal.fk.status = 'rejected';
@@ -427,10 +463,18 @@ export class AnalysisEngine {
     return { removed, kept };
   }
 
+  /** @deprecated Use {@link PruneForeignKeys}. */
+  public async pruneForeignKeys(
+    state: DatabaseDocumentation,
+    run: AnalysisRun
+  ): Promise<{ removed: number; kept: number }> {
+    return this.PruneForeignKeys(state, run);
+  }
+
   /**
    * Process a single dependency level
    */
-  public async processLevel(
+  public async ProcessLevel(
     state: DatabaseDocumentation,
     run: AnalysisRun,
     level: number,
@@ -465,6 +509,16 @@ export class AnalysisEngine {
     run.levelsProcessed = Math.max(run.levelsProcessed, level + 1);
 
     return { triggers, guardrailExceeded: false };
+  }
+
+  /** @deprecated Use {@link ProcessLevel}. */
+  public async processLevel(
+    state: DatabaseDocumentation,
+    run: AnalysisRun,
+    level: number,
+    tables: TableNode[]
+  ): Promise<{ triggers: BackpropagationTrigger[]; guardrailExceeded: boolean }> {
+    return this.ProcessLevel(state, run, level, tables);
   }
 
   /**
@@ -589,7 +643,7 @@ export class AnalysisEngine {
 
       // Process PK proposal from LLM — verify eligibility deterministically
       if (state.phases.keyDetection && result.result.primaryKey) {
-        this.processPKInsightFromLLM(
+        await this.processPKInsightFromLLM(
           state,
           tableNode.schema,
           tableNode.table,
@@ -716,8 +770,15 @@ export class AnalysisEngine {
       allTables,
       groundTruth: groundTruthContext,
       fkCandidateStats,
-      enumCandidates: enumCandidates.length > 0 ? enumCandidates : undefined
+      enumCandidates: enumCandidates.length > 0 ? enumCandidates : undefined,
+      existingIndexes: this.indexHintLines(table)
     };
+  }
+
+  /** The table's existing indexes as prompt lines, or undefined when there are none to show. */
+  private indexHintLines(table: TableDefinition | undefined): string[] | undefined {
+    const lines = BuildIndexHints(table).map(FormatIndexHint);
+    return lines.length > 0 ? lines : undefined;
   }
 
   /**
@@ -923,7 +984,7 @@ export class AnalysisEngine {
    * Perform dependency-level sanity check
    * Checks consistency across tables at the same dependency level
    */
-  public async performDependencyLevelSanityCheck(
+  public async PerformDependencyLevelSanityCheck(
     state: DatabaseDocumentation,
     run: AnalysisRun,
     level: number,
@@ -1000,11 +1061,21 @@ export class AnalysisEngine {
     }
   }
 
+  /** @deprecated Use {@link PerformDependencyLevelSanityCheck}. */
+  public async performDependencyLevelSanityCheck(
+    state: DatabaseDocumentation,
+    run: AnalysisRun,
+    level: number,
+    tables: TableNode[]
+  ): Promise<boolean> {
+    return this.PerformDependencyLevelSanityCheck(state, run, level, tables);
+  }
+
   /**
    * Perform schema-level sanity check
    * Holistic review after entire schema is analyzed
    */
-  public async performSchemaLevelSanityCheck(
+  public async PerformSchemaLevelSanityCheck(
     state: DatabaseDocumentation,
     run: AnalysisRun,
     schema: SchemaDefinition
@@ -1101,11 +1172,20 @@ export class AnalysisEngine {
     }
   }
 
+  /** @deprecated Use {@link PerformSchemaLevelSanityCheck}. */
+  public async performSchemaLevelSanityCheck(
+    state: DatabaseDocumentation,
+    run: AnalysisRun,
+    schema: SchemaDefinition
+  ): Promise<boolean> {
+    return this.PerformSchemaLevelSanityCheck(state, run, schema);
+  }
+
   /**
    * Perform cross-schema sanity check
    * Validates consistency across all schemas
    */
-  public async performCrossSchemaSanityCheck(
+  public async PerformCrossSchemaSanityCheck(
     state: DatabaseDocumentation,
     run: AnalysisRun
   ): Promise<boolean> {
@@ -1187,10 +1267,18 @@ export class AnalysisEngine {
     }
   }
 
+  /** @deprecated Use {@link PerformCrossSchemaSanityCheck}. */
+  public async performCrossSchemaSanityCheck(
+    state: DatabaseDocumentation,
+    run: AnalysisRun
+  ): Promise<boolean> {
+    return this.PerformCrossSchemaSanityCheck(state, run);
+  }
+
   /**
    * Check convergence
    */
-  public checkConvergence(state: DatabaseDocumentation, run: AnalysisRun): boolean {
+  public CheckConvergence(state: DatabaseDocumentation, run: AnalysisRun): boolean {
     const result = this.convergenceDetector.hasConverged(state, run);
 
     if (result.converged) {
@@ -1201,10 +1289,15 @@ export class AnalysisEngine {
     return false;
   }
 
+  /** @deprecated Use {@link CheckConvergence}. */
+  public checkConvergence(state: DatabaseDocumentation, run: AnalysisRun): boolean {
+    return this.CheckConvergence(state, run);
+  }
+
   /**
    * Execute backpropagation
    */
-  public async executeBackpropagation(
+  public async ExecuteBackpropagation(
     state: DatabaseDocumentation,
     run: AnalysisRun,
     triggers: BackpropagationTrigger[]
@@ -1218,6 +1311,15 @@ export class AnalysisEngine {
     }
 
     await this.backpropagationEngine.execute(state, run, triggers);
+  }
+
+  /** @deprecated Use {@link ExecuteBackpropagation}. */
+  public async executeBackpropagation(
+    state: DatabaseDocumentation,
+    run: AnalysisRun,
+    triggers: BackpropagationTrigger[]
+  ): Promise<void> {
+    return this.ExecuteBackpropagation(state, run, triggers);
   }
 
 
@@ -1253,16 +1355,17 @@ export class AnalysisEngine {
   }
 
   /**
-   * Process PK proposal from LLM. The LLM can propose a PK, but ALL proposed columns
-   * must pass deterministic eligibility: zero nulls, zero blanks, 100% unique values.
-   * If any column fails, the entire proposal is rejected.
+   * Process PK proposal from LLM. The LLM can propose a PK, but it must pass deterministic
+   * eligibility: every column exists and has no nulls, and the key is unique — a single column
+   * by its own statistics, a composite key as a combination (checked in the database).
+   * If any check fails, the entire proposal is rejected.
    */
-  private processPKInsightFromLLM(
+  private async processPKInsightFromLLM(
     state: DatabaseDocumentation,
     schemaName: string,
     tableName: string,
     pkProposal: import('../types/prompts.js').PrimaryKeyPromptResult
-  ): void {
+  ): Promise<void> {
     const discoveryPhase = state.phases.keyDetection;
     if (!discoveryPhase || !pkProposal || !pkProposal.columns || pkProposal.columns.length === 0) return;
 
@@ -1316,52 +1419,30 @@ export class AnalysisEngine {
       return;
     }
 
-    // New PK proposal — verify ALL columns are PK-eligible deterministically
+    // New PK proposal — verify it deterministically
     const table = this.stateManager.findTable(state, schemaName, tableName);
     if (!table) return;
-
-    for (const colName of columns) {
-      const column = table.columns.find(c => c.name.toLowerCase() === colName.toLowerCase());
-      if (!column) {
-        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName} — column "${colName}" not found`);
-        return;
-      }
-
-      // Check PK eligibility from stats
-      const stats = column.statistics;
-      if (!stats) {
-        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName}.${colName} — no statistics available`);
-        return;
-      }
-
-      // Safety: prefer pre-computed uniquenessRatio if available (totalRows can be 0 due to field naming bug)
-      const uniqueness = stats.uniquenessRatio != null && stats.uniquenessRatio > 0
-        ? stats.uniquenessRatio
-        : (stats.totalRows > 0 ? stats.distinctCount / stats.totalRows : 0);
-      const hasNulls = (stats.nullCount || 0) > 0;
-
-      if (hasNulls) {
-        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName}.${colName} — has ${stats.nullCount} nulls`);
-        return;
-      }
-
-      if (uniqueness < 1.0) {
-        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName}.${colName} — uniqueness ${(uniqueness * 100).toFixed(1)}% (must be 100%)`);
-        return;
-      }
+    const sampleSize = this.config.analysis.relationshipDiscovery?.sampling?.maxRowsPerTable ?? 1000;
+    const driver = this.driver;
+    const verdict = await CheckPKProposal(table, columns,
+      driver ? (cols) => driver.checkColumnCombinationUniqueness(schemaName, tableName, cols, sampleSize) : undefined);
+    if (!verdict.Eligible) {
+      console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName} ${verdict.Reason}`);
+      return;
     }
+    const pkColumns = verdict.Columns ?? columns;
 
     // All columns pass — create new PK candidate
     const newPK: import('../types/discovery.js').PKCandidate = {
       schemaName,
       tableName,
-      columnNames: columns,
+      columnNames: pkColumns,
       confidence,
       evidence: {
         uniqueness: 1.0,
         nullCount: 0,
         totalRows: table.rowCount || 0,
-        dataPattern: columns.length > 1 ? 'composite' : 'unknown',
+        dataPattern: pkColumns.length > 1 ? 'composite' : 'unknown',
         namingScore: 0.5,
         dataTypeScore: 0.8,
         warnings: ['Created from LLM proposal — passed deterministic eligibility']
@@ -1374,12 +1455,12 @@ export class AnalysisEngine {
     discoveryPhase.discovered.primaryKeys.push(newPK);
 
     // Update column flags
-    for (const colName of columns) {
+    for (const colName of pkColumns) {
       const column = this.findColumnInState(state, schemaName, tableName, colName);
       if (column) column.isPrimaryKey = true;
     }
 
-    console.log(`[AnalysisEngine] Created PK from LLM: ${schemaName}.${tableName} (${columns.join(', ')}) confidence: ${confidence}`);
+    console.log(`[AnalysisEngine] Created PK from LLM: ${schemaName}.${tableName} (${pkColumns.join(', ')}) confidence: ${confidence}`);
   }
 
   /**

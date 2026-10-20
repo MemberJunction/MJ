@@ -74,6 +74,20 @@ export interface SqlLoggingOptions {
    * Note: If filterPatterns is empty/undefined, all SQL is logged regardless of filterType.
    */
   filterType?: 'include' | 'exclude';
+  /**
+   * Optional rewrite of each logged text before the session reads it: the statement, its simple-SQL
+   * fallback, the description and the `-- Parameters:` line. It runs before the verbose prints, the
+   * filters, the Flyway escape and the pretty-print, so text it removes never reaches the log file
+   * or the console.
+   *
+   * It covers only this session's file and verbose prints, plus the provider's shared verbose
+   * `Query to log:` print. Other sessions and other output paths do not use it.
+   *
+   * If it throws, the error is caught: the session writes the fixed line
+   * `-- Statement not logged: TransformStatement failed` in place of the statement and the SQL
+   * call goes on as normal.
+   */
+  TransformStatement?: (sql: string) => string;
 }
 
 /**
@@ -81,15 +95,15 @@ export interface SqlLoggingOptions {
  */
 export interface SqlLoggingSession {
   /** Unique session ID */
-  readonly id: string;
+  readonly id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** File path where SQL is being logged */
-  readonly filePath: string;
+  readonly filePath: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Session start time */
-  readonly startTime: Date;
+  readonly startTime: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Number of statements logged so far */
-  readonly statementCount: number;
+  readonly statementCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Configuration options for this session */
-  readonly options: SqlLoggingOptions;
+  readonly options: SqlLoggingOptions;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Dispose method to stop logging and clean up resources */
   dispose(): Promise<void>;
 }

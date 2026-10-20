@@ -25,8 +25,44 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
   styleUrls: ['./settings-card.component.css']
 })
 export class SettingsCardComponent {
-  @Input() title = '';
-  @Input() icon = '';
-  @Input() expanded = false;
-  @Output() toggle = new EventEmitter<void>();
+  @Input() Title = '';
+
+  /** @deprecated Use {@link Title}. */
+  @Input() set title(value: SettingsCardComponent['Title']) {
+    this.Title = value;
+  }
+  /** @deprecated Use {@link Title}. */
+  get title(): SettingsCardComponent['Title'] {
+    return this.Title;
+  }
+  @Input() Icon = '';
+
+  /** @deprecated Use {@link Icon}. */
+  @Input() set icon(value: SettingsCardComponent['Icon']) {
+    this.Icon = value;
+  }
+  /** @deprecated Use {@link Icon}. */
+  get icon(): SettingsCardComponent['Icon'] {
+    return this.Icon;
+  }
+  @Input() Expanded = false;
+
+  /** @deprecated Use {@link Expanded}. */
+  @Input() set expanded(value: SettingsCardComponent['Expanded']) {
+    this.Expanded = value;
+  }
+  /** @deprecated Use {@link Expanded}. */
+  get expanded(): SettingsCardComponent['Expanded'] {
+    return this.Expanded;
+  }
+  @Output() Toggle = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Toggle}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (toggle) keeps working. Must stay AFTER Toggle: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() toggle = this.Toggle;
 }

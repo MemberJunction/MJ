@@ -3,8 +3,8 @@ import type { IMetadataProvider, UserInfo, RunViewResult, RunViewParams } from '
 
 import { MetadataEntityFactory } from '../../training/seams';
 import {
-  resolveActiveFileStorageProviderId,
-  buildArtifactStore,
+  ResolveActiveFileStorageProviderId,
+  BuildArtifactStore,
   MJFilesArtifactStore,
 } from '../../training/artifact-store';
 
@@ -42,7 +42,7 @@ function makeSpyProvider(rows: Array<{ ID: string }>): {
 describe('resolveActiveFileStorageProviderId', () => {
   it('returns the first active provider id when one exists', async () => {
     const { provider, calls } = makeSpyProvider([{ ID: 'PROVIDER-1' }]);
-    const id = await resolveActiveFileStorageProviderId({ Email: 'u@x' } as UserInfo, provider);
+    const id = await ResolveActiveFileStorageProviderId({ Email: 'u@x' } as UserInfo, provider);
 
     expect(id).toBe('PROVIDER-1');
     expect(calls).toHaveLength(1);
@@ -52,19 +52,19 @@ describe('resolveActiveFileStorageProviderId', () => {
 
   it('returns null when no active provider exists', async () => {
     const { provider } = makeSpyProvider([]);
-    const id = await resolveActiveFileStorageProviderId({ Email: 'u@x' } as UserInfo, provider);
+    const id = await ResolveActiveFileStorageProviderId({ Email: 'u@x' } as UserInfo, provider);
     expect(id).toBeNull();
   });
 });
 
 describe('buildArtifactStore', () => {
   it('builds an MJFilesArtifactStore (real File row + local bytes) when a provider id is present', () => {
-    const store = buildArtifactStore('PROVIDER-1', new MetadataEntityFactory());
+    const store = BuildArtifactStore('PROVIDER-1', new MetadataEntityFactory());
     expect(store).toBeInstanceOf(MJFilesArtifactStore);
   });
 
   it('still builds an MJFilesArtifactStore when no provider id is present (save will fail loudly without one)', () => {
-    const store = buildArtifactStore(null, new MetadataEntityFactory());
+    const store = BuildArtifactStore(null, new MetadataEntityFactory());
     expect(store).toBeInstanceOf(MJFilesArtifactStore);
   });
 });

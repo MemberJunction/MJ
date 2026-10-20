@@ -8,7 +8,7 @@ Element.prototype.scrollIntoView = vi.fn();
 import { renderComponentFixture, query, queryAll, text, capture, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { EntityCardsComponent } from './entity-cards.component';
 import type { CardTemplate } from '../types';
-import { buildPkString } from '../utils/record.util';
+import { BuildPkString } from '../utils/record.util';
 
 /**
  * DOM coverage for <mj-entity-cards> — the card view of an entity's records (~9×). When `records` is
@@ -62,7 +62,7 @@ describe('EntityCardsComponent (DOM)', () => {
   });
 
   it('marks only the card matching selectedRecordId as selected', () => {
-    const key2 = buildPkString(RECORDS[1], ENTITY);
+    const key2 = BuildPkString(RECORDS[1], ENTITY);
     const cards = cardEls(render({ selectedRecordId: key2 }));
     expect(cards[0].classList.contains('selected')).toBe(false);
     expect(cards[1].classList.contains('selected')).toBe(true);
@@ -91,5 +91,15 @@ describe('EntityCardsComponent (DOM)', () => {
     const f = render({ records: [] });
     expect(query(f, '.data-card')).toBeNull();
     expect(query(f, 'mj-empty-state')).not.toBeNull();
+  });
+
+  // Pinned because a broken template expression still type-checks and would pass the presence check above.
+  it('names the entity in the empty-state title', () => {
+    const named = { ...ENTITY, DisplayNamePlural: 'Accounts' } as unknown as EntityInfo;
+    expect(text(render({ records: [], entity: named }), '.stub-empty-title')).toBe('No Accounts to display');
+  });
+
+  it('falls back to the generic empty-state title when no entity is set', () => {
+    expect(text(render({ records: [], entity: null }), '.stub-empty-title')).toBe('No records to display');
   });
 });

@@ -315,11 +315,47 @@ interface AgentProcess extends AgentWithStatus {
   `]
 })
 export class AgentProcessPanelComponent implements OnInit, OnDestroy {
-  @Input() conversationId?: string;
-  @Input() currentUser!: UserInfo;
+  @Input() ConversationId?: string;
 
-  public activeProcesses: AgentProcess[] = [];
-  public isMinimized: boolean = false;
+  /** @deprecated Use {@link ConversationId}. */
+  @Input() set conversationId(value: string | undefined) {
+    this.ConversationId = value;
+  }
+  /** @deprecated Use {@link ConversationId}. */
+  get conversationId(): string | undefined {
+    return this.ConversationId;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+
+  public ActiveProcesses: AgentProcess[] = [];
+
+  /** @deprecated Use {@link ActiveProcesses}. */
+  public get activeProcesses(): AgentProcess[] {
+    return this.ActiveProcesses;
+  }
+  /** @deprecated Use {@link ActiveProcesses}. */
+  public set activeProcesses(value: AgentProcess[]) {
+    this.ActiveProcesses = value;
+  }
+  public IsMinimized: boolean = false;
+
+  /** @deprecated Use {@link IsMinimized}. */
+  public get isMinimized(): boolean {
+    return this.IsMinimized;
+  }
+  /** @deprecated Use {@link IsMinimized}. */
+  public set isMinimized(value: boolean) {
+    this.IsMinimized = value;
+  }
 
   private subscription?: Subscription;
 
@@ -330,15 +366,15 @@ export class AgentProcessPanelComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     // Start polling for active agents
-    this.agentStateService.startPolling(this.currentUser, this.conversationId);
+    this.agentStateService.startPolling(this.CurrentUser, this.ConversationId);
 
     // Subscribe to active agents
     this.subscription = this.agentStateService
-      .getActiveAgents(this.conversationId)
+      .getActiveAgents(this.ConversationId)
       .subscribe(agents => {
         // Preserve expanded state for existing processes
-        this.activeProcesses = agents.map(agent => {
-          const existing = this.activeProcesses.find(p => UUIDsEqual(p.run.ID, agent.run.ID));
+        this.ActiveProcesses = agents.map(agent => {
+          const existing = this.ActiveProcesses.find(p => UUIDsEqual(p.run.ID, agent.run.ID));
           return {
             ...agent,
             expanded: existing ? existing.expanded : false
@@ -352,11 +388,16 @@ export class AgentProcessPanelComponent implements OnInit, OnDestroy {
     // Note: We don't stop polling here as other components may be using the service
   }
 
-  toggleProcess(process: AgentProcess): void {
+  ToggleProcess(process: AgentProcess): void {
     process.expanded = !process.expanded;
   }
 
-  getStatusText(status: AgentStatus): string {
+  /** @deprecated Use {@link ToggleProcess}. */
+  toggleProcess(process: AgentProcess): void {
+    return this.ToggleProcess(process);
+  }
+
+  GetStatusText(status: AgentStatus): string {
     switch (status) {
       case 'acknowledging': return 'Acknowledging';
       case 'working': return 'Working';
@@ -367,7 +408,12 @@ export class AgentProcessPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  getElapsedTime(run: MJAIAgentRunEntity): string | null {
+  /** @deprecated Use {@link GetStatusText}. */
+  getStatusText(status: AgentStatus): string {
+    return this.GetStatusText(status);
+  }
+
+  GetElapsedTime(run: MJAIAgentRunEntity): string | null {
     if (!run.StartedAt) return null;
 
     const start = new Date(run.StartedAt).getTime();
@@ -387,7 +433,12 @@ export class AgentProcessPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  async onCancelProcess(process: AgentProcess): Promise<void> {
+  /** @deprecated Use {@link GetElapsedTime}. */
+  getElapsedTime(run: MJAIAgentRunEntity): string | null {
+    return this.GetElapsedTime(run);
+  }
+
+  async OnCancelProcess(process: AgentProcess): Promise<void> {
     const confirmed = await this.dialogService.confirm({
       title: 'Cancel Agent',
       message: `Cancel agent "${process.run.Agent || 'Agent'}"?`,
@@ -408,8 +459,18 @@ export class AgentProcessPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  onViewDetails(process: AgentProcess): void {
+  /** @deprecated Use {@link OnCancelProcess}. */
+  async onCancelProcess(process: AgentProcess): Promise<void> {
+    return this.OnCancelProcess(process);
+  }
+
+  OnViewDetails(process: AgentProcess): void {
     // TODO: Navigate to agent run details page or open modal
     console.log('View agent run details:', process.run.ID);
+  }
+
+  /** @deprecated Use {@link OnViewDetails}. */
+  onViewDetails(process: AgentProcess): void {
+    return this.OnViewDetails(process);
   }
 }

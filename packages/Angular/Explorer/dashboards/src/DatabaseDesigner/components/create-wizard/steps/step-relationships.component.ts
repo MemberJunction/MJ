@@ -115,12 +115,21 @@ export class StepRelationshipsComponent {
 
     // ─── Row state ─────────────────────────────────────────────────────────────
 
-    public rows: FkRowState[] = [];
+    public Rows: FkRowState[] = [];
+
+    /** @deprecated Use {@link Rows}. */
+    public get rows(): FkRowState[] {
+        return this.Rows;
+    }
+    /** @deprecated Use {@link Rows}. */
+    public set rows(value: FkRowState[]) {
+        this.Rows = value;
+    }
 
     // ─── Cascade handlers ──────────────────────────────────────────────────────
 
     public OnSchemaChange(rowIndex: number, schema: string): void {
-        this.rows = this.rows.map(r =>
+        this.Rows = this.Rows.map(r =>
             r.rowIndex === rowIndex
                 ? { ...r, ReferencedSchema: schema, ReferencedTable: '', ReferencedColumn: DEFAULT_PK_COLUMN, selectedEntityId: '', referencedColumnType: undefined }
                 : r
@@ -130,7 +139,7 @@ export class StepRelationshipsComponent {
 
     public OnTableChange(rowIndex: number, entityId: string): void {
         if (!entityId) {
-            this.rows = this.rows.map(r =>
+            this.Rows = this.Rows.map(r =>
                 r.rowIndex === rowIndex
                     ? { ...r, ReferencedTable: '', ReferencedColumn: DEFAULT_PK_COLUMN, selectedEntityId: '', referencedColumnType: undefined }
                     : r
@@ -139,7 +148,7 @@ export class StepRelationshipsComponent {
             return;
         }
         const entity = new Metadata().Entities.find(e => UUIDsEqual(e.ID, entityId)); // global-provider-ok: client-side Angular component, single provider
-        this.rows = this.rows.map(r => {
+        this.Rows = this.Rows.map(r => {
             if (r.rowIndex !== rowIndex) return r;
             // Auto-name the source FK column if the user hasn't chosen one — the
             // wizard state service will materialize this as a real UUID column.
@@ -180,7 +189,7 @@ export class StepRelationshipsComponent {
             ? this.findMatchingSourceColumn(targetType)
             : undefined;
 
-        this.rows = this.rows.map(r => {
+        this.Rows = this.Rows.map(r => {
             if (r.rowIndex !== rowIndex) return r;
             return {
                 ...r,
@@ -194,14 +203,14 @@ export class StepRelationshipsComponent {
     }
 
     public OnSourceColumnChange(rowIndex: number, column: string): void {
-        this.rows = this.rows.map(r =>
+        this.Rows = this.Rows.map(r =>
             r.rowIndex === rowIndex ? { ...r, ColumnName: column } : r
         );
         this.emit();
     }
 
     public OnFkTypeChange(rowIndex: number, isSoft: boolean): void {
-        this.rows = this.rows.map(r =>
+        this.Rows = this.Rows.map(r =>
             r.rowIndex === rowIndex ? { ...r, IsSoft: isSoft } : r
         );
         this.emit();
@@ -220,18 +229,18 @@ export class StepRelationshipsComponent {
         // bug fixed in 8e52898ec6 — when every existing column is already
         // wired up, we fall through to OnTableChange's auto-naming
         // (mints a unique "<TargetTable>ID" once the user picks a table).
-        const usedColumns = new Set(this.rows.map(r => r.ColumnName).filter(Boolean));
+        const usedColumns = new Set(this.Rows.map(r => r.ColumnName).filter(Boolean));
         const firstFreeColumn = this.AllColumns.find(c => !usedColumns.has(c.Name))?.Name ?? '';
 
-        this.rows = [
-            ...this.rows,
+        this.Rows = [
+            ...this.Rows,
             {
                 ColumnName: firstFreeColumn,
                 ReferencedSchema: defaultSchema,
                 ReferencedTable: '',
                 ReferencedColumn: DEFAULT_PK_COLUMN,
                 IsSoft: true,
-                rowIndex: this.rows.length,
+                rowIndex: this.Rows.length,
                 selectedEntityId: '',
             },
         ];
@@ -239,7 +248,7 @@ export class StepRelationshipsComponent {
     }
 
     public DeleteRow(index: number): void {
-        this.rows = this.rows
+        this.Rows = this.Rows
             .filter(r => r.rowIndex !== index)
             .map((r, i) => ({ ...r, rowIndex: i }));
         this.emit();
@@ -248,7 +257,7 @@ export class StepRelationshipsComponent {
     // ─── Restore from InitialForeignKeys (when navigating back) ───────────────
 
     public InitFromForeignKeys(fks: ForeignKeySpec[]): void {
-        this.rows = fks.map((fk, index) => this.buildRowState(fk, index));
+        this.Rows = fks.map((fk, index) => this.buildRowState(fk, index));
         this.cdr.markForCheck();
     }
 
@@ -284,7 +293,7 @@ export class StepRelationshipsComponent {
     // ─── Emit ──────────────────────────────────────────────────────────────────
 
     private emit(): void {
-        const fks: ForeignKeySpec[] = this.rows.map(row => ({
+        const fks: ForeignKeySpec[] = this.Rows.map(row => ({
             ColumnName: row.ColumnName,
             ReferencedSchema: row.ReferencedSchema,
             ReferencedTable: row.ReferencedTable,

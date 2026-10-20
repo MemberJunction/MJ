@@ -2,7 +2,7 @@
 <div class="template-selector-dialog">
   <!-- Header -->
   <div class="dialog-header">
-    <h3>{{ config.title }}</h3>
+    <h3>{{ config.Title }}</h3>
     <div class="header-actions">
       <button
         mjButton
@@ -62,7 +62,7 @@
         >
           <!-- Selection Checkbox -->
           <div class="selection-indicator">
-            @if (config.multiSelect) {
+            @if (config.MultiSelect) {
               <input
                 type="checkbox"
                 [checked]="isTemplateSelected(template)"
@@ -134,7 +134,7 @@
   <!-- Dialog Actions -->
   <div class="dialog-actions">
     <div class="action-buttons">
-      @if (config.showCreateNew) {
+      @if (config.ShowCreateNew) {
         <button
           mjButton
           variant="outline"

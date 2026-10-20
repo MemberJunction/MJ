@@ -10,7 +10,7 @@ import { MJTestEntity, MJTestEntity_IReplayScript, MJTestEntity_ITestConfigurati
 import { ScriptsFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
 import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
-import { summarizeScriptDrift, ScriptDrift } from '../utils/script-drift';
+import { SummarizeScriptDrift, ScriptDrift } from '../utils/script-drift';
 import chalk from 'chalk';
 
 /** A test whose recorded script differs from the one replay is using. */
@@ -31,7 +31,7 @@ interface PendingEntry {
  * would silently rewrite the suite's scripts and stay green.
  */
 export class ScriptsCommand {
-    async execute(flags: ScriptsFlags, contextUser?: UserInfo): Promise<void> {
+    async Execute(flags: ScriptsFlags, contextUser?: UserInfo): Promise<void> {
         try {
             await initializeMJProvider();
             if (!contextUser) {
@@ -91,6 +91,11 @@ export class ScriptsCommand {
         }
     }
 
+    /** @deprecated Use {@link Execute}. */
+    async execute(flags: ScriptsFlags, contextUser?: UserInfo): Promise<void> {
+        return this.Execute(flags, contextUser);
+    }
+
     /** Every test matching a name-or-ID filter, regardless of pending state. */
     private findTests(engine: TestEngine, testFilter: string): MJTestEntity[] {
         return engine.Tests.filter(t => t.Name === testFilter || UUIDsEqual(t.ID, testFilter));
@@ -118,7 +123,7 @@ export class ScriptsCommand {
                 config,
                 pending,
                 current: config.ReplayScript,
-                drift: summarizeScriptDrift(config.ReplayScript, pending),
+                drift: SummarizeScriptDrift(config.ReplayScript, pending),
             });
         }
         return entries;
@@ -128,14 +133,14 @@ export class ScriptsCommand {
     private report(entries: PendingEntry[]): void {
         console.log(chalk.bold(`\nPending replay scripts (${entries.length}):\n`));
         for (const e of entries) {
-            const heading = e.drift.meaningfulDrift > 0 ? chalk.yellow(e.test.Name) : chalk.cyan(e.test.Name);
+            const heading = e.drift.MeaningfulDrift > 0 ? chalk.yellow(e.test.Name) : chalk.cyan(e.test.Name);
             console.log(`  ${heading}`);
-            console.log(chalk.gray(`    ${e.drift.summary}`));
-            for (const change of e.drift.changes.slice(0, 8)) {
+            console.log(chalk.gray(`    ${e.drift.Summary}`));
+            for (const change of e.drift.Changes.slice(0, 8)) {
                 console.log(chalk.gray(`      step ${change.index + 1}: ${change.kind} — ${change.detail}`));
             }
-            if (e.drift.changes.length > 8) {
-                console.log(chalk.gray(`      … and ${e.drift.changes.length - 8} more`));
+            if (e.drift.Changes.length > 8) {
+                console.log(chalk.gray(`      … and ${e.drift.Changes.length - 8} more`));
             }
         }
         console.log(chalk.gray('\n  Promote with --promote (add --test "<name>" to pick one), or drop with --discard.\n'));

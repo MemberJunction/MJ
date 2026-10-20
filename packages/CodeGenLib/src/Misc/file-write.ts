@@ -15,7 +15,7 @@ import { EmitStats } from './emit-stats';
  *
  * @returns true when the file was created or rewritten
  */
-export function writeFileIfChanged(filePath: string, newContent: string): boolean {
+export function WriteFileIfChanged(filePath: string, newContent: string): boolean {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -30,4 +30,9 @@ export function writeFileIfChanged(filePath: string, newContent: string): boolea
   fs.writeFileSync(filePath, newContent);
   EmitStats.RecordFileWrite(true);
   return true;
+}
+
+/** @deprecated Use {@link WriteFileIfChanged}. */
+export function writeFileIfChanged(filePath: string, newContent: string): boolean {
+  return WriteFileIfChanged(filePath, newContent);
 }

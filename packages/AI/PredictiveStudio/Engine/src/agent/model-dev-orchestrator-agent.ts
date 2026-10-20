@@ -35,7 +35,7 @@ const BUILD_MESSAGE = 'The plan is approved — build the pipeline, train it, an
  *   deterministic retry. Without a stamp (e.g. the builder was LLM-routed), we stay conservative and
  *   fall back to LLM-driven routing.
  */
-export function shouldForceBuild(payload: BuildDecisionState | undefined, lastUserText: string | null, userMessageCount?: number): boolean {
+export function ShouldForceBuild(payload: BuildDecisionState | undefined, lastUserText: string | null, userMessageCount?: number): boolean {
   const t = (lastUserText ?? '').toLowerCase();
   const buildIntent = t.includes('build it') || t.includes('create it') || t.includes('build the prediction') || t.includes('build_now');
   if (payload?.BuildResult) {
@@ -45,6 +45,11 @@ export function shouldForceBuild(payload: BuildDecisionState | undefined, lastUs
   }
   if (payload?.Approved === true) return true;
   return buildIntent;
+}
+
+/** @deprecated Use {@link ShouldForceBuild}. */
+export function shouldForceBuild(payload: BuildDecisionState | undefined, lastUserText: string | null, userMessageCount?: number): boolean {
+  return ShouldForceBuild(payload, lastUserText, userMessageCount);
 }
 
 @RegisterClass(BaseAgent, 'PredictiveStudioModelDevAgent')
@@ -61,7 +66,7 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
   ): Promise<BaseAgentNextStep<P>> {
     const payload = currentPayload as PredictiveStudioBuilderPayload | undefined;
     const userMessageCount = this.userMessageCount(params);
-    if (shouldForceBuild(payload, this.lastUserMessageText(params), userMessageCount)) {
+    if (ShouldForceBuild(payload, this.lastUserMessageText(params), userMessageCount)) {
       // Stamp the user-message count so a FAILED build can distinguish the stale triggering message
       // (no re-force → no loop) from a fresh retry request (deterministic rebuild). The builder spreads
       // the incoming payload into its result, so the stamp survives the round trip.

@@ -278,8 +278,13 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
     }
 
     /** For unit tests: swap the provider map with a caller-supplied one. */
-    public _SetProvidersForTesting(providers: Map<string, PermissionProviderBase>): void {
+    public SetProvidersForTesting(providers: Map<string, PermissionProviderBase>): void {
         this._providers = providers;
+    }
+
+    /** @deprecated Use {@link SetProvidersForTesting}. */
+    public _SetProvidersForTesting(providers: Map<string, PermissionProviderBase>): void {
+        return this.SetProvidersForTesting(providers);
     }
 
     /**

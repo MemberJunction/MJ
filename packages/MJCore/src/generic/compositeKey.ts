@@ -645,7 +645,7 @@ export class CompositeKey extends FieldValueCollection {
 
         const parsed = new CompositeKey();
         parsed.LoadFromConcatenatedString(recordID, fieldDelimiter, valueDelimiter);
-        CompositeKey.ValidateAgainstPrimaryKeys(entity, parsed, recordID);
+        CompositeKey.validateAgainstPrimaryKeys(entity, parsed, recordID);
         return parsed;
     }
 
@@ -691,7 +691,7 @@ export class CompositeKey extends FieldValueCollection {
      * primary key columns, once each. Order is not required - a stored key written before a column
      * reorder is still valid, since the field names travel with the value.
      */
-    private static ValidateAgainstPrimaryKeys(entity: EntityInfo, parsed: CompositeKey, recordID: string): void {
+    private static validateAgainstPrimaryKeys(entity: EntityInfo, parsed: CompositeKey, recordID: string): void {
         const primaryKeys = entity.PrimaryKeys;
         const expected = primaryKeys.map((pk) => pk.Name);
 

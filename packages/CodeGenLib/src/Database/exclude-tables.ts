@@ -24,7 +24,7 @@ export type ExcludeTableEntry = {
  * into the `{ schema, table }` pair the SQL filter already understands. Wildcards
  * (`%`) are preserved; they are not expanded here.
  */
-export function parseExcludeTableEntry(entry: string | ExcludeTableEntry): ExcludeTableEntry {
+export function ParseExcludeTableEntry(entry: string | ExcludeTableEntry): ExcludeTableEntry {
   if (typeof entry !== 'string') {
     return { schema: entry.schema, table: entry.table };
   }
@@ -40,4 +40,9 @@ export function parseExcludeTableEntry(entry: string | ExcludeTableEntry): Exclu
     };
   }
   return { schema: '%', table: trimmed };
+}
+
+/** @deprecated Use {@link ParseExcludeTableEntry}. */
+export function parseExcludeTableEntry(entry: string | ExcludeTableEntry): ExcludeTableEntry {
+  return ParseExcludeTableEntry(entry);
 }

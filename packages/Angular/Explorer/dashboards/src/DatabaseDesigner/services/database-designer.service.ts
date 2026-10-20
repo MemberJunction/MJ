@@ -49,13 +49,13 @@ const ACTION_NAMES = {
 // ─── Options ──────────────────────────────────────────────────────────────────
 
 export interface CreateEntityOptions {
-    skipGitCommit?: boolean;
-    skipRestart?: boolean;
+    SkipGitCommit?: boolean;
+    SkipRestart?: boolean;
 }
 
 export interface ModifyEntityOptions extends CreateEntityOptions {
     /** ID of the existing entity being modified. */
-    existingEntityId: string;
+    ExistingEntityId: string;
 }
 
 // ─── Service ─────────────────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ export class DatabaseDesignerService {
      * Create a new MemberJunction entity from a `EntityTableSpec`.
      * Calls the `Create Entity` action on the server which runs the full RSU pipeline.
      */
-    public async createEntity(
+    public async CreateEntity(
         tableSpec: EntityTableSpec,
         options: CreateEntityOptions = {}
     ): Promise<EntityPipelineResult> {
@@ -134,11 +134,19 @@ export class DatabaseDesignerService {
         }
     }
 
+    /** @deprecated Use {@link CreateEntity}. */
+    public async createEntity(
+        tableSpec: EntityTableSpec,
+        options: CreateEntityOptions = {}
+    ): Promise<EntityPipelineResult> {
+        return this.CreateEntity(tableSpec, options);
+    }
+
     /**
      * Modify an existing MemberJunction entity.
      * Calls the `Modify Entity` action on the server.
      */
-    public async modifyEntity(
+    public async ModifyEntity(
         tableSpec: EntityTableSpec,
         options: ModifyEntityOptions
     ): Promise<EntityPipelineResult> {
@@ -146,13 +154,21 @@ export class DatabaseDesignerService {
             const actionId = await this.resolveActionId(ACTION_NAMES.MODIFY_ENTITY);
             const params: ActionParam[] = [
                 ...this.buildPipelineParams(tableSpec, options),
-                { Name: 'ExistingEntityID', Type: 'Input', Value: options.existingEntityId },
+                { Name: 'ExistingEntityID', Type: 'Input', Value: options.ExistingEntityId },
             ];
             const result = await this.getActionClient().RunAction(actionId, params);
             return this.extractPipelineResult(result);
         } catch (err) {
             return { Success: false, ErrorMessage: this.errorMessage(err) };
         }
+    }
+
+    /** @deprecated Use {@link ModifyEntity}. */
+    public async modifyEntity(
+        tableSpec: EntityTableSpec,
+        options: ModifyEntityOptions
+    ): Promise<EntityPipelineResult> {
+        return this.ModifyEntity(tableSpec, options);
     }
 
     /**
@@ -163,7 +179,7 @@ export class DatabaseDesignerService {
      * because the action itself succeeded — validation failure is a business outcome, not
      * an infrastructure error.
      */
-    public async validateEntitySchema(
+    public async ValidateEntitySchema(
         tableSpec: EntityTableSpec,
         modificationType: 'create' | 'alter' = 'create'
     ): Promise<ClientValidationResult> {
@@ -189,11 +205,19 @@ export class DatabaseDesignerService {
         }
     }
 
+    /** @deprecated Use {@link ValidateEntitySchema}. */
+    public async validateEntitySchema(
+        tableSpec: EntityTableSpec,
+        modificationType: 'create' | 'alter' = 'create'
+    ): Promise<ClientValidationResult> {
+        return this.ValidateEntitySchema(tableSpec, modificationType);
+    }
+
     /**
      * Load detailed metadata for an existing entity.
      * Used by the entity list slide panel and the modify wizard entry point.
      */
-    public async describeEntity(entityId: string): Promise<EntityDescribeResult> {
+    public async DescribeEntity(entityId: string): Promise<EntityDescribeResult> {
         try {
             const actionId = await this.resolveActionId(ACTION_NAMES.DESCRIBE_ENTITY);
             const params: ActionParam[] = [
@@ -223,16 +247,21 @@ export class DatabaseDesignerService {
         }
     }
 
+    /** @deprecated Use {@link DescribeEntity}. */
+    public async describeEntity(entityId: string): Promise<EntityDescribeResult> {
+        return this.DescribeEntity(entityId);
+    }
+
     // ─── Private helpers ──────────────────────────────────────────────────
 
     private buildPipelineParams(tableSpec: EntityTableSpec, options: CreateEntityOptions): ActionParam[] {
         const params: ActionParam[] = [
             { Name: 'TableDefinition', Type: 'Input', Value: tableSpec },
         ];
-        if (options.skipGitCommit) {
+        if (options.SkipGitCommit) {
             params.push({ Name: 'SkipGitCommit', Type: 'Input', Value: 'true' });
         }
-        if (options.skipRestart) {
+        if (options.SkipRestart) {
             params.push({ Name: 'SkipRestart', Type: 'Input', Value: 'true' });
         }
         return params;

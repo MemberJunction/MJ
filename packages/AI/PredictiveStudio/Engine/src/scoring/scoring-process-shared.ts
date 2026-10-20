@@ -20,7 +20,7 @@
 
 import { LogError, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import type { MJRecordProcessEntity, MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
-import { upsertScoringBinding, type ScoringBindingMode } from './scoring-binding';
+import { UpsertScoringBinding, type ScoringBindingMode } from './scoring-binding';
 import { MetadataEntityFactory } from '../training/seams';
 
 /**
@@ -57,7 +57,7 @@ export interface ScoringScope {
 export const ML_MODEL_WORK_TYPE = 'ML Model';
 
 /** Set the `ScopeType` + corresponding scope field from the (validated, single-selector) scope. */
-export function applyScope(rp: MJRecordProcessEntity, scope: ScoringScope): void {
+export function ApplyScope(rp: MJRecordProcessEntity, scope: ScoringScope): void {
   if (scope.all === true) {
     // Whole entity ("score everyone") — a Filter with an explicit all-rows predicate.
     rp.ScopeType = 'Filter';
@@ -75,9 +75,19 @@ export function applyScope(rp: MJRecordProcessEntity, scope: ScoringScope): void
   }
 }
 
+/** @deprecated Use {@link ApplyScope}. */
+export function applyScope(rp: MJRecordProcessEntity, scope: ScoringScope): void {
+  return ApplyScope(rp, scope);
+}
+
 /** The prediction result-ref the write-back maps into the column: `$.class` for a label, else `$.score`. */
-export function outputRef(valueKind: ScoringValueKind | undefined): string {
+export function OutputRef(valueKind: ScoringValueKind | undefined): string {
   return valueKind === 'class' ? '$.class' : '$.score';
+}
+
+/** @deprecated Use {@link OutputRef}. */
+export function outputRef(valueKind: ScoringValueKind | undefined): string {
+  return OutputRef(valueKind);
 }
 
 /**
@@ -85,16 +95,26 @@ export function outputRef(valueKind: ScoringValueKind | undefined): string {
  * `MJ: ML Models` id to score with and the target-entity primary-key field (default
  * `'ID'`). The `'ML Model'` work-type reads this at run time to load + apply the model.
  */
-export function modelConfiguration(modelId: string, primaryKeyField: string | undefined): string {
+export function ModelConfiguration(modelId: string, primaryKeyField: string | undefined): string {
   return JSON.stringify({ modelId, primaryKeyField: primaryKeyField ?? 'ID' });
+}
+
+/** @deprecated Use {@link ModelConfiguration}. */
+export function modelConfiguration(modelId: string, primaryKeyField: string | undefined): string {
+  return ModelConfiguration(modelId, primaryKeyField);
 }
 
 /**
  * Serialize the write-back `OutputMapping` JSON mapping the (non-empty) `outputField`
  * to the prediction result-ref for `valueKind`. Only called in write-back mode.
  */
+export function WriteBackOutputMapping(outputField: string, valueKind: ScoringValueKind | undefined): string {
+  return JSON.stringify({ fields: { [outputField]: OutputRef(valueKind) } });
+}
+
+/** @deprecated Use {@link WriteBackOutputMapping}. */
 export function writeBackOutputMapping(outputField: string, valueKind: ScoringValueKind | undefined): string {
-  return JSON.stringify({ fields: { [outputField]: outputRef(valueKind) } });
+  return WriteBackOutputMapping(outputField, valueKind);
 }
 
 /**
@@ -121,7 +141,7 @@ export function writeBackOutputMapping(outputField: string, valueKind: ScoringVa
  * @param contextUser request user — required server-side for isolation/audit
  * @param contextLabel a short helper name used to prefix the contextual log on failure
  */
-export async function createScoringBinding(
+export async function CreateScoringBinding(
   modelId: string,
   outputField: string,
   recordProcessId: string,
@@ -132,7 +152,7 @@ export async function createScoringBinding(
   contextLabel: string,
 ): Promise<MJMLModelScoringBindingEntity> {
   try {
-    return await upsertScoringBinding(
+    return await UpsertScoringBinding(
       {
         mlModelId: modelId,
         recordProcessId,
@@ -154,27 +174,46 @@ export async function createScoringBinding(
   }
 }
 
+/** @deprecated Use {@link CreateScoringBinding}. */
+export async function createScoringBinding(
+  modelId: string,
+  outputField: string,
+  recordProcessId: string,
+  entityID: string,
+  mode: ScoringBindingMode,
+  provider: IMetadataProvider,
+  contextUser: UserInfo | undefined,
+  contextLabel: string,
+): Promise<MJMLModelScoringBindingEntity> {
+  return CreateScoringBinding(modelId, outputField, recordProcessId, entityID, mode, provider, contextUser, contextLabel);
+}
+
 /**
  * Count how many of the mutually-exclusive scope selectors are populated — the basis
  * for the exactly-one-selector validation both helpers enforce.
  */
-export function countScopeSelectors(scope: ScoringScope | undefined): number {
+export function CountScopeSelectors(scope: ScoringScope | undefined): number {
   if (!scope) {
     return 0;
   }
   let count = 0;
-  if (isNonEmpty(scope.filter)) count++;
-  if (isNonEmpty(scope.viewId)) count++;
-  if (isNonEmpty(scope.listId)) count++;
+  if (IsNonEmpty(scope.filter)) count++;
+  if (IsNonEmpty(scope.viewId)) count++;
+  if (IsNonEmpty(scope.listId)) count++;
   if (scope.all === true) count++;
   return count;
+}
+
+/** @deprecated Use {@link CountScopeSelectors}. */
+export function countScopeSelectors(scope: ScoringScope | undefined): number {
+  return CountScopeSelectors(scope);
 }
 
 /**
  * Resolve the target entity's id from its name, throwing when the entity is unknown.
  * `contextLabel` prefixes the error so the failing helper is identifiable.
  */
-export function resolveTargetEntityID(
+export function ResolveTargetEntityID(
   targetEntityName: string,
   provider: IMetadataProvider,
   contextLabel: string,
@@ -186,7 +225,21 @@ export function resolveTargetEntityID(
   return entity.ID;
 }
 
+/** @deprecated Use {@link ResolveTargetEntityID}. */
+export function resolveTargetEntityID(
+  targetEntityName: string,
+  provider: IMetadataProvider,
+  contextLabel: string,
+): string {
+  return ResolveTargetEntityID(targetEntityName, provider, contextLabel);
+}
+
 /** Whether a value is a non-empty (trimmed) string. */
-export function isNonEmpty(value: string | undefined | null): value is string {
+export function IsNonEmpty(value: string | undefined | null): value is string {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+/** @deprecated Use {@link IsNonEmpty}. */
+export function isNonEmpty(value: string | undefined | null): value is string {
+  return IsNonEmpty(value);
 }

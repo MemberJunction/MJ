@@ -4,14 +4,21 @@ import { CohereClient } from 'cohere-ai';
 
 /**
  * Cohere implementation of the BaseReranker class.
- * Uses Cohere's Rerank API for semantic document reranking.
+ * Uses Cohere's Rerank API for semantic document reranking. A request's `CancellationToken` is
+ * handed to the SDK as its `abortSignal`, so cancelling it tears the HTTP request down.
  *
  * Supported models:
  * - rerank-v3.5: Latest English reranker with best accuracy
  * - rerank-multilingual-v3.0: Supports 100+ languages
  *
+ * Driver class:
+ * Registered as both `CohereReranker` (the name the Cohere reranker models' model-vendor rows carry, and
+ * so the one `AIRerankerRunner` and `RerankerService` resolve) and `CohereLLM`.
+ *
  * API Key:
- * Set via environment variable: AI_VENDOR_API_KEY__COHERELLM
+ * The legacy environment-variable fallback is named after the model-vendor row's driver class:
+ * AI_VENDOR_API_KEY__COHERERERANKER for the shipped Cohere reranker models. A Cohere credential
+ * binding takes precedence over it.
  *
  * Usage:
  * ```typescript
@@ -32,6 +39,10 @@ import { CohereClient } from 'cohere-ai';
  * });
  * ```
  */
+// 'CohereReranker' is the DriverClass on every Cohere reranker model-vendor row; without it the
+// ClassFactory falls back to a bare BaseReranker and every rerank fails. 'CohereLLM' is kept for
+// callers that resolved it by that name.
+@RegisterClass(BaseReranker, 'CohereReranker')
 @RegisterClass(BaseReranker, 'CohereLLM')
 export class CohereReranker extends BaseReranker {
     private _client: CohereClient;
@@ -77,14 +88,15 @@ Find memory notes that would help respond appropriately to this message.`;
             allDocs: params.documents.map((d, i) => `[${i}] ${d.text.substring(0, 80)}...`)
         }, null, 2));
 
-        // Call Cohere's rerank endpoint with enhanced query
+        // Call Cohere's rerank endpoint with enhanced query. The caller's signal tears the request
+        // down; BaseReranker.Rerank reports the abort as a cancellation.
         const response = await this._client.rerank({
             model: this._modelName,
             query: enhancedQuery,
             documents: params.documents.map(d => d.text),
             topN: params.topK || params.documents.length,
             returnDocuments: false // We track documents ourselves to preserve metadata
-        });
+        }, { abortSignal: params.CancellationToken });
 
         // DEBUG: Log response
         console.log('CohereReranker RESPONSE:', JSON.stringify({
@@ -115,7 +127,12 @@ Find memory notes that would help respond appropriately to this message.`;
  * Factory function to create a CohereReranker with default model.
  * Convenience function for simple usage.
  */
-export function createCohereReranker(apiKey: string, modelName?: string): CohereReranker {
+export function CreateCohereReranker(apiKey: string, modelName?: string): CohereReranker {
     return new CohereReranker(apiKey, modelName);
+}
+
+/** @deprecated Use {@link CreateCohereReranker}. */
+export function createCohereReranker(apiKey: string, modelName?: string): CohereReranker {
+    return CreateCohereReranker(apiKey, modelName);
 }
 

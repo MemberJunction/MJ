@@ -7,7 +7,7 @@
  */
 import { ActionResult } from '@memberjunction/actions-base';
 import { PipeValue, PipelineInvocable, PipelineStepResult } from '../pipeline.types';
-import { structureActionResult } from './serialize';
+import { StructureActionResult } from './serialize';
 
 /** Runs one already-resolved Action with the given params and returns its full result. */
 export type PipelineActionRunner = (params: Record<string, unknown>) => Promise<ActionResult>;
@@ -29,7 +29,7 @@ export class ActionInvocable implements PipelineInvocable {
             if (!result.Success) {
                 return { output: null, success: false, error: result.Message ?? `Action "${this.toolName}" failed.`, logRef };
             }
-            return { output: structureActionResult(result), success: true, logRef };
+            return { output: StructureActionResult(result), success: true, logRef };
         } catch (e) {
             return { output: null, success: false, error: (e as Error).message, logRef: { providerKind: 'Action' } };
         }

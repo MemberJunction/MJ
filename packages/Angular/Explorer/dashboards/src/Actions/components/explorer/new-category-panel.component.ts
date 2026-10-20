@@ -87,15 +87,25 @@ export class NewCategoryPanelComponent extends BaseAngularComponent implements O
     this.IsSaving = false;
   }
 
-  public onClose(): void {
+  public OnClose(): void {
     this.StateService.closeNewCategoryPanel();
     this.Close.emit();
   }
 
-  public onBackdropClick(event: MouseEvent): void {
+  /** @deprecated Use {@link OnClose}. */
+  public onClose(): void {
+    return this.OnClose();
+  }
+
+  public OnBackdropClick(event: MouseEvent): void {
     if ((event.target as HTMLElement).classList.contains('panel-backdrop')) {
-      this.onClose();
+      this.OnClose();
     }
+  }
+
+  /** @deprecated Use {@link OnBackdropClick}. */
+  public onBackdropClick(event: MouseEvent): void {
+    return this.OnBackdropClick(event);
   }
 
   public validate(): boolean {
@@ -121,7 +131,7 @@ export class NewCategoryPanelComponent extends BaseAngularComponent implements O
     return Object.keys(this.Errors).length === 0;
   }
 
-  public async onSave(): Promise<void> {
+  public async OnSave(): Promise<void> {
     if (!this.validate()) {
       this.cdr.markForCheck();
       return;
@@ -155,7 +165,12 @@ export class NewCategoryPanelComponent extends BaseAngularComponent implements O
     }
   }
 
-  public getParentOptions(): Array<{ text: string; value: string | null }> {
+  /** @deprecated Use {@link OnSave}. */
+  public async onSave(): Promise<void> {
+    return this.OnSave();
+  }
+
+  public GetParentOptions(): Array<{ text: string; value: string | null }> {
     const options: Array<{ text: string; value: string | null }> = [
       { text: '(No Parent - Root Category)', value: null }
     ];
@@ -173,6 +188,11 @@ export class NewCategoryPanelComponent extends BaseAngularComponent implements O
     });
 
     return options;
+  }
+
+  /** @deprecated Use {@link GetParentOptions}. */
+  public getParentOptions(): Array<{ text: string; value: string | null }> {
+    return this.GetParentOptions();
   }
 
   private getCategoryPath(category: MJActionCategoryEntity): string {

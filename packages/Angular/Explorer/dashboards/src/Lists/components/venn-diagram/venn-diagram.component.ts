@@ -213,21 +213,120 @@ export interface VennRegionClickEvent {
   `]
 })
 export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy {
-  @ViewChild('vennContainer') containerRef!: ElementRef<HTMLDivElement>;
-  @ViewChild('vennSvg') svgRef!: ElementRef<SVGSVGElement>;
+  @ViewChild('vennContainer') ContainerRef!: ElementRef<HTMLDivElement>;
 
-  @Input() data: VennData | null = null;
-  @Input() selectedRegion: VennIntersection | null = null;
+  /** @deprecated Use {@link ContainerRef}. */
+  get containerRef(): ElementRef<HTMLDivElement> {
+    return this.ContainerRef;
+  }
+  /** @deprecated Use {@link ContainerRef}. */
+  set containerRef(value: ElementRef<HTMLDivElement>) {
+    this.ContainerRef = value;
+  }
+  @ViewChild('vennSvg') SvgRef!: ElementRef<SVGSVGElement>;
 
-  @Output() regionClick = new EventEmitter<VennRegionClickEvent>();
-  @Output() regionHover = new EventEmitter<VennIntersection | null>();
+  /** @deprecated Use {@link SvgRef}. */
+  get svgRef(): ElementRef<SVGSVGElement> {
+    return this.SvgRef;
+  }
+  /** @deprecated Use {@link SvgRef}. */
+  set svgRef(value: ElementRef<SVGSVGElement>) {
+    this.SvgRef = value;
+  }
+
+  @Input() Data: VennData | null = null;
+
+  /** @deprecated Use {@link Data}. */
+  @Input() set data(value: VennData | null) {
+    this.Data = value;
+  }
+  /** @deprecated Use {@link Data}. */
+  get data(): VennData | null {
+    return this.Data;
+  }
+  @Input() SelectedRegion: VennIntersection | null = null;
+
+  /** @deprecated Use {@link SelectedRegion}. */
+  @Input() set selectedRegion(value: VennIntersection | null) {
+    this.SelectedRegion = value;
+  }
+  /** @deprecated Use {@link SelectedRegion}. */
+  get selectedRegion(): VennIntersection | null {
+    return this.SelectedRegion;
+  }
+
+  @Output() RegionClick = new EventEmitter<VennRegionClickEvent>();
+
+  /**
+   * @deprecated Use {@link RegionClick}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (regionClick) keeps working. Must stay AFTER RegionClick: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() regionClick = this.RegionClick;
+  @Output() RegionHover = new EventEmitter<VennIntersection | null>();
+
+  /**
+   * @deprecated Use {@link RegionHover}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (regionHover) keeps working. Must stay AFTER RegionHover: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() regionHover = this.RegionHover;
 
   // Tooltip state
-  tooltipVisible = false;
-  tooltipX = 0;
-  tooltipY = 0;
-  tooltipTitle = '';
-  tooltipCount = 0;
+  TooltipVisible = false;
+
+  /** @deprecated Use {@link TooltipVisible}. */
+  get tooltipVisible() {
+    return this.TooltipVisible;
+  }
+  /** @deprecated Use {@link TooltipVisible}. */
+  set tooltipVisible(value) {
+    this.TooltipVisible = value;
+  }
+  TooltipX = 0;
+
+  /** @deprecated Use {@link TooltipX}. */
+  get tooltipX() {
+    return this.TooltipX;
+  }
+  /** @deprecated Use {@link TooltipX}. */
+  set tooltipX(value) {
+    this.TooltipX = value;
+  }
+  TooltipY = 0;
+
+  /** @deprecated Use {@link TooltipY}. */
+  get tooltipY() {
+    return this.TooltipY;
+  }
+  /** @deprecated Use {@link TooltipY}. */
+  set tooltipY(value) {
+    this.TooltipY = value;
+  }
+  TooltipTitle = '';
+
+  /** @deprecated Use {@link TooltipTitle}. */
+  get tooltipTitle() {
+    return this.TooltipTitle;
+  }
+  /** @deprecated Use {@link TooltipTitle}. */
+  set tooltipTitle(value) {
+    this.TooltipTitle = value;
+  }
+  TooltipCount = 0;
+
+  /** @deprecated Use {@link TooltipCount}. */
+  get tooltipCount() {
+    return this.TooltipCount;
+  }
+  /** @deprecated Use {@link TooltipCount}. */
+  set tooltipCount(value) {
+    this.TooltipCount = value;
+  }
 
   // Track if hovering an intersection label (to suppress circle tooltips)
   private isHoveringIntersectionLabel = false;
@@ -275,33 +374,33 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
   }
 
   private initializeSvg(): void {
-    if (!this.svgRef) return;
+    if (!this.SvgRef) return;
 
-    this.svg = d3.select(this.svgRef.nativeElement);
+    this.svg = d3.select(this.SvgRef.nativeElement);
     this.updateDimensions();
   }
 
   private setupResizeObserver(): void {
-    if (!this.containerRef) return;
+    if (!this.ContainerRef) return;
 
     this.resizeObserver = new ResizeObserver(() => {
       this.updateDimensions();
       this.render();
     });
 
-    this.resizeObserver.observe(this.containerRef.nativeElement);
+    this.resizeObserver.observe(this.ContainerRef.nativeElement);
   }
 
   private updateDimensions(): void {
-    if (!this.containerRef) return;
+    if (!this.ContainerRef) return;
 
-    const rect = this.containerRef.nativeElement.getBoundingClientRect();
+    const rect = this.ContainerRef.nativeElement.getBoundingClientRect();
     this.width = rect.width;
     this.height = rect.height;
   }
 
   private render(): void {
-    if (!this.svg || !this.data || this.data.sets.length === 0) {
+    if (!this.svg || !this.Data || this.Data.sets.length === 0) {
       if (this.svg) {
         this.svg.selectAll('*').remove();
       }
@@ -322,7 +421,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
       .attr('transform', `translate(${margin.left}, ${margin.top})`);
 
     // Render based on number of sets
-    const sets = this.data.sets;
+    const sets = this.Data.sets;
 
     if (sets.length === 1) {
       this.renderSingleSet(g, sets[0], drawWidth, drawHeight);
@@ -389,7 +488,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
     // as 0. Math: as fraction of (r1+r2)/2, scale by share of records
     // common to both sets vs. the smaller set's size. Clamped so even
     // big intersections don't make one circle swallow the other.
-    const intersectionSize = this.data?.intersections.find(
+    const intersectionSize = this.Data?.intersections.find(
       i => i.setIds.length === 2 && i.setIds.includes(sets[0].listId) && i.setIds.includes(sets[1].listId)
     )?.size ?? 0;
     const smallerSize = Math.min(sets[0].size, sets[1].size);
@@ -420,15 +519,15 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
     }
 
     // Find intersection data
-    const intersection = this.data?.intersections.find(
+    const intersection = this.Data?.intersections.find(
       i => i.setIds.length === 2 && i.setIds.includes(sets[0].listId) && i.setIds.includes(sets[1].listId)
     );
 
     // Draw intersection labels
-    const leftOnlyIntersection = this.data?.intersections.find(
+    const leftOnlyIntersection = this.Data?.intersections.find(
       i => i.setIds.length === 1 && i.setIds[0] === sets[0].listId
     );
-    const rightOnlyIntersection = this.data?.intersections.find(
+    const rightOnlyIntersection = this.Data?.intersections.find(
       i => i.setIds.length === 1 && i.setIds[0] === sets[1].listId
     );
 
@@ -495,7 +594,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
         // Set flag to suppress circle tooltips and prevent their mousemove from calling detectChanges
         this.isHoveringIntersectionLabel = true;
         // Hide any existing tooltip immediately without triggering detectChanges
-        this.tooltipVisible = false;
+        this.TooltipVisible = false;
         // Show the label's tooltip
         this.showLabelTooltip(event, intersection);
       })
@@ -507,7 +606,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
       .on('mouseleave', (event: MouseEvent) => {
         event.stopPropagation();
         this.isHoveringIntersectionLabel = false;
-        this.tooltipVisible = false;
+        this.TooltipVisible = false;
         this.cdr.detectChanges();
       })
       .on('click', (event: MouseEvent) => {
@@ -520,9 +619,9 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
    * Check if a region is currently selected
    */
   private isRegionSelected(intersection: VennIntersection): boolean {
-    if (!this.selectedRegion) return false;
-    return this.selectedRegion.setIds.length === intersection.setIds.length &&
-           this.selectedRegion.setIds.every(id => intersection.setIds.includes(id));
+    if (!this.SelectedRegion) return false;
+    return this.SelectedRegion.setIds.length === intersection.setIds.length &&
+           this.SelectedRegion.setIds.every(id => intersection.setIds.includes(id));
   }
 
   /**
@@ -623,7 +722,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
     }
 
     // Draw clickable intersection labels
-    for (const intersection of this.data?.intersections || []) {
+    for (const intersection of this.Data?.intersections || []) {
       const labelPos = this.getIntersectionLabelPosition(intersection, positions, cx, cy, avgRadius);
       if (labelPos && intersection.size > 0) {
         this.addClickableLabel(g, labelPos.x, labelPos.y, intersection);
@@ -724,7 +823,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
 
     // Draw clickable intersection labels
     // For 4 sets, we need to calculate positions for all 15 regions
-    for (const intersection of this.data?.intersections || []) {
+    for (const intersection of this.Data?.intersections || []) {
       const labelPos = this.getFourSetIntersectionPosition(intersection, positions, cx, cy, baseSize);
       if (labelPos && intersection.size > 0) {
         this.addClickableLabel(g, labelPos.x, labelPos.y, intersection);
@@ -857,9 +956,9 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
   }
 
   private showTooltip(event: MouseEvent, title: string, count: number): void {
-    this.tooltipTitle = title;
-    this.tooltipCount = count;
-    this.tooltipVisible = true;
+    this.TooltipTitle = title;
+    this.TooltipCount = count;
+    this.TooltipVisible = true;
     this.moveTooltip(event);
     this.cdr.detectChanges();
   }
@@ -870,12 +969,12 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
       return;
     }
 
-    const container = this.containerRef?.nativeElement;
+    const container = this.ContainerRef?.nativeElement;
     if (!container) return;
 
     const rect = container.getBoundingClientRect();
-    this.tooltipX = event.clientX - rect.left + 10;
-    this.tooltipY = event.clientY - rect.top - 30;
+    this.TooltipX = event.clientX - rect.left + 10;
+    this.TooltipY = event.clientY - rect.top - 30;
     this.cdr.detectChanges();
   }
 
@@ -885,17 +984,17 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
   private showLabelTooltip(event: MouseEvent, intersection: VennIntersection): void {
     // Build the tooltip title from the intersection
     const setNames = intersection.setIds.map(id => {
-      const set = this.data?.sets.find(s => s.listId === id);
+      const set = this.Data?.sets.find(s => s.listId === id);
       return set?.listName || 'Unknown';
     });
 
     if (intersection.setIds.length === 1) {
-      this.tooltipTitle = `Only in ${setNames[0]}`;
+      this.TooltipTitle = `Only in ${setNames[0]}`;
     } else {
-      this.tooltipTitle = setNames.join(' ∩ ');
+      this.TooltipTitle = setNames.join(' ∩ ');
     }
-    this.tooltipCount = intersection.size;
-    this.tooltipVisible = true;
+    this.TooltipCount = intersection.size;
+    this.TooltipVisible = true;
     this.moveLabelTooltipPosition(event);
     this.cdr.detectChanges();
   }
@@ -904,12 +1003,12 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
    * Update tooltip position for label without triggering extra change detection
    */
   private moveLabelTooltipPosition(event: MouseEvent): void {
-    const container = this.containerRef?.nativeElement;
+    const container = this.ContainerRef?.nativeElement;
     if (!container) return;
 
     const rect = container.getBoundingClientRect();
-    this.tooltipX = event.clientX - rect.left + 10;
-    this.tooltipY = event.clientY - rect.top - 30;
+    this.TooltipX = event.clientX - rect.left + 10;
+    this.TooltipY = event.clientY - rect.top - 30;
     // Don't call detectChanges here - we call it once in showLabelTooltip
     // and the Angular zone will handle the position updates
   }
@@ -919,18 +1018,18 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
     if (this.isHoveringIntersectionLabel) {
       return;
     }
-    this.tooltipVisible = false;
+    this.TooltipVisible = false;
     this.cdr.detectChanges();
   }
 
   private onCircleClick(set: VennSet): void {
     // Find the "only in this set" intersection
-    const intersection = this.data?.intersections.find(
+    const intersection = this.Data?.intersections.find(
       i => i.setIds.length === 1 && i.setIds[0] === set.listId
     );
 
     if (intersection) {
-      this.regionClick.emit({
+      this.RegionClick.emit({
         intersection,
         recordIds: intersection.recordIds
       });
@@ -938,7 +1037,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
   }
 
   private onIntersectionClick(intersection: VennIntersection): void {
-    this.regionClick.emit({
+    this.RegionClick.emit({
       intersection,
       recordIds: intersection.recordIds
     });

@@ -92,7 +92,7 @@ export class IntegrationProgressEmitter {
     }
 
     /** Emit a generic event. */
-    public emit(
+    public Emit(
         eventType: IntegrationProgressEventType,
         partial: Partial<Omit<IntegrationProgressEvent, 'ts' | 'seq' | 'eventType'>> = {}
     ): void {
@@ -140,90 +140,183 @@ export class IntegrationProgressEmitter {
         this.writeChain = this.writeChain.then(() => fs.appendFile(this.progressPath, line, 'utf-8'));
     }
 
+    /** @deprecated Use {@link Emit}. */
+    public emit(
+        eventType: IntegrationProgressEventType,
+        partial: Partial<Omit<IntegrationProgressEvent, 'ts' | 'seq' | 'eventType'>> = {}
+    ): void {
+        return this.Emit(eventType, partial);
+    }
+
     /** Convenience helpers — sugared `emit()` for the common cases. */
+    public RunStart(message?: string): void {
+        this.Emit('run.start', { message, level: 'info' });
+    }
+
+    /** @deprecated Use {@link RunStart}. */
     public runStart(message?: string): void {
-        this.emit('run.start', { message, level: 'info' });
+        return this.RunStart(message);
     }
+    public StageStart(stage: string, message?: string): void {
+        this.Emit('stage.start', { stage, message, level: 'info' });
+    }
+
+    /** @deprecated Use {@link StageStart}. */
     public stageStart(stage: string, message?: string): void {
-        this.emit('stage.start', { stage, message, level: 'info' });
+        return this.StageStart(stage, message);
     }
+    public StageComplete(stage: string, counts?: IntegrationProgressEvent['counts']): void {
+        this.Emit('stage.complete', { stage, counts, level: 'info' });
+    }
+
+    /** @deprecated Use {@link StageComplete}. */
     public stageComplete(stage: string, counts?: IntegrationProgressEvent['counts']): void {
-        this.emit('stage.complete', { stage, counts, level: 'info' });
+        return this.StageComplete(stage, counts);
     }
+    public StageError(stage: string, message: string, data?: Record<string, unknown>): void {
+        this.Emit('stage.error', { stage, message, level: 'error', data });
+    }
+
+    /** @deprecated Use {@link StageError}. */
     public stageError(stage: string, message: string, data?: Record<string, unknown>): void {
-        this.emit('stage.error', { stage, message, level: 'error', data });
+        return this.StageError(stage, message, data);
     }
     /**
      * Emit a non-fatal warning. Carries a structured {stage, code, message, data}
      * payload that the reader aggregates into the run result's `warnings[]` rollup.
      * Unlike `stageError`, a warning never fails the run.
      */
-    public warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
-        this.emit('warning', {
+    public Warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
+        this.Emit('warning', {
             stage,
             message,
             level: 'warn',
             data: { code, ...(data ?? {}) },
         });
     }
+
+    /** @deprecated Use {@link Warning}. */
+    public warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
+        return this.Warning(stage, code, message, data);
+    }
+    public Heartbeat(stage: string, message: string, counts?: IntegrationProgressEvent['counts']): void {
+        this.Emit('progress.heartbeat', { stage, message, counts, level: 'info' });
+    }
+
+    /** @deprecated Use {@link Heartbeat}. */
     public heartbeat(stage: string, message: string, counts?: IntegrationProgressEvent['counts']): void {
-        this.emit('progress.heartbeat', { stage, message, counts, level: 'info' });
+        return this.Heartbeat(stage, message, counts);
     }
     /**
      * Write a resumable checkpoint. resumableState should carry enough subsystem-
      * specific data for the originating service to resume from this point.
      */
-    public checkpoint(stage: string, resumableState: Record<string, unknown>): void {
-        this.emit('checkpoint', { stage, resumableState, level: 'debug' });
+    public Checkpoint(stage: string, resumableState: Record<string, unknown>): void {
+        this.Emit('checkpoint', { stage, resumableState, level: 'debug' });
     }
 
-    public externalCallStart(url: string, method: string, data?: Record<string, unknown>): void {
-        this.emit('external.call.start', { data: { url, method, ...(data ?? {}) }, level: 'debug' });
+    /** @deprecated Use {@link Checkpoint}. */
+    public checkpoint(stage: string, resumableState: Record<string, unknown>): void {
+        return this.Checkpoint(stage, resumableState);
     }
-    public externalCallComplete(url: string, method: string, status: number, durationMs: number): void {
-        this.emit('external.call.complete', {
+
+    public ExternalCallStart(url: string, method: string, data?: Record<string, unknown>): void {
+        this.Emit('external.call.start', { data: { url, method, ...(data ?? {}) }, level: 'debug' });
+    }
+
+    /** @deprecated Use {@link ExternalCallStart}. */
+    public externalCallStart(url: string, method: string, data?: Record<string, unknown>): void {
+        return this.ExternalCallStart(url, method, data);
+    }
+    public ExternalCallComplete(url: string, method: string, status: number, durationMs: number): void {
+        this.Emit('external.call.complete', {
             data: { url, method, status, durationMs },
             level: status >= 400 ? 'warn' : 'debug',
         });
     }
 
+    /** @deprecated Use {@link ExternalCallComplete}. */
+    public externalCallComplete(url: string, method: string, status: number, durationMs: number): void {
+        return this.ExternalCallComplete(url, method, status, durationMs);
+    }
+
+    public ObjectAdded(objectName: string, source: 'Declared' | 'Discovered' | 'Custom'): void {
+        this.Emit('discovery.object.added', { data: { objectName, source }, level: 'info' });
+    }
+
+    /** @deprecated Use {@link ObjectAdded}. */
     public objectAdded(objectName: string, source: 'Declared' | 'Discovered' | 'Custom'): void {
-        this.emit('discovery.object.added', { data: { objectName, source }, level: 'info' });
+        return this.ObjectAdded(objectName, source);
     }
+    public FieldAdded(objectName: string, fieldName: string, source: 'Declared' | 'Discovered' | 'Custom'): void {
+        this.Emit('discovery.field.added', { data: { objectName, fieldName, source }, level: 'debug' });
+    }
+
+    /** @deprecated Use {@link FieldAdded}. */
     public fieldAdded(objectName: string, fieldName: string, source: 'Declared' | 'Discovered' | 'Custom'): void {
-        this.emit('discovery.field.added', { data: { objectName, fieldName, source }, level: 'debug' });
+        return this.FieldAdded(objectName, fieldName, source);
     }
+    public PkClassifierInvoked(objectName: string): void {
+        this.Emit('pk.classifier.invoked', { data: { objectName }, level: 'info' });
+    }
+
+    /** @deprecated Use {@link PkClassifierInvoked}. */
     public pkClassifierInvoked(objectName: string): void {
-        this.emit('pk.classifier.invoked', { data: { objectName }, level: 'info' });
+        return this.PkClassifierInvoked(objectName);
     }
+    public PkClassifierResult(objectName: string, verdict: Record<string, unknown>): void {
+        this.Emit('pk.classifier.result', { data: { objectName, ...verdict }, level: 'info' });
+    }
+
+    /** @deprecated Use {@link PkClassifierResult}. */
     public pkClassifierResult(objectName: string, verdict: Record<string, unknown>): void {
-        this.emit('pk.classifier.result', { data: { objectName, ...verdict }, level: 'info' });
+        return this.PkClassifierResult(objectName, verdict);
     }
+    public EntityGenerated(objectName: string, mjEntityName: string): void {
+        this.Emit('entity.generated', { data: { objectName, mjEntityName }, level: 'info' });
+    }
+
+    /** @deprecated Use {@link EntityGenerated}. */
     public entityGenerated(objectName: string, mjEntityName: string): void {
-        this.emit('entity.generated', { data: { objectName, mjEntityName }, level: 'info' });
+        return this.EntityGenerated(objectName, mjEntityName);
     }
+    public EntitySkippedNoPK(objectName: string): void {
+        this.Emit('entity.skipped-no-pk', { data: { objectName }, level: 'warn' });
+    }
+
+    /** @deprecated Use {@link EntitySkippedNoPK}. */
     public entitySkippedNoPK(objectName: string): void {
-        this.emit('entity.skipped-no-pk', { data: { objectName }, level: 'warn' });
+        return this.EntitySkippedNoPK(objectName);
     }
 
     /** Terminate the run as success. */
-    public async complete(message?: string): Promise<void> {
+    public async Complete(message?: string): Promise<void> {
         if (this.terminated) return;
-        this.emit('run.complete', { message, level: 'info' });
+        this.Emit('run.complete', { message, level: 'info' });
         await this.writeTerminal({
             success: true,
             exitReason: 'completed',
         });
     }
 
+    /** @deprecated Use {@link Complete}. */
+    public async complete(message?: string): Promise<void> {
+        return this.Complete(message);
+    }
+
     /** Terminate the run as failure. */
-    public async fail(message: string, code?: string): Promise<void> {
+    public async Fail(message: string, code?: string): Promise<void> {
         if (this.terminated) return;
-        this.emit('run.fail', { message, level: 'error', data: code ? { code } : undefined });
+        this.Emit('run.fail', { message, level: 'error', data: code ? { code } : undefined });
         await this.writeTerminal({
             success: false,
             exitReason: code === 'budget-exhausted' ? 'budget-exhausted' : 'failed',
         });
+    }
+
+    /** @deprecated Use {@link Fail}. */
+    public async fail(message: string, code?: string): Promise<void> {
+        return this.Fail(message, code);
     }
 
     /**
@@ -232,18 +325,28 @@ export class IntegrationProgressEmitter {
      * finished — the persisted CompanyIntegrationRun has no 'Cancelled' status, so the artifact's
      * ExitReason is the GQL-visible signal that the run was stopped early (partial state is still durable).
      */
-    public async cancel(message?: string): Promise<void> {
+    public async Cancel(message?: string): Promise<void> {
         if (this.terminated) return;
-        this.emit('run.cancel', { message: message ?? 'Sync cancelled by user', level: 'warn' });
+        this.Emit('run.cancel', { message: message ?? 'Sync cancelled by user', level: 'warn' });
         await this.writeTerminal({
             success: false,
             exitReason: 'aborted',
         });
     }
 
+    /** @deprecated Use {@link Cancel}. */
+    public async cancel(message?: string): Promise<void> {
+        return this.Cancel(message);
+    }
+
     /** Await all pending writes. */
-    public async flush(): Promise<void> {
+    public async Flush(): Promise<void> {
         await this.writeChain;
+    }
+
+    /** @deprecated Use {@link Flush}. */
+    public async flush(): Promise<void> {
+        return this.Flush();
     }
 
     // ── Internals ──────────────────────────────────────────────────────
@@ -324,9 +427,14 @@ export class IntegrationProgressEmitter {
         }
     }
 
-    public static newRunID(prefix?: string): string {
+    public static NewRunID(prefix?: string): string {
         const hi = Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0');
         const lo = Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0');
         return `${prefix ?? 'run'}-${Date.now()}-${hi}${lo}`;
+    }
+
+    /** @deprecated Use {@link NewRunID}. */
+    public static newRunID(prefix?: string): string {
+        return this.NewRunID(prefix);
     }
 }

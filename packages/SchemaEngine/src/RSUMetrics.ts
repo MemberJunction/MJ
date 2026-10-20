@@ -73,8 +73,8 @@ export class RSUMetrics extends BaseSingleton<RSUMetrics> {
         const successful = this.runs.filter(r => r.Success).length;
         const durations = this.runs.map(r => r.DurationMs).sort((a, b) => a - b);
 
-        const mostCommonErrorStep = this.FindMostCommonErrorStep();
-        const stepAverageDurations = this.ComputeStepAverages();
+        const mostCommonErrorStep = this.findMostCommonErrorStep();
+        const stepAverageDurations = this.computeStepAverages();
 
         return {
             TotalRuns: total,
@@ -90,7 +90,7 @@ export class RSUMetrics extends BaseSingleton<RSUMetrics> {
         };
     }
 
-    private FindMostCommonErrorStep(): string | null {
+    private findMostCommonErrorStep(): string | null {
         const counts = new Map<string, number>();
         for (const run of this.runs) {
             if (run.ErrorStep) {
@@ -108,7 +108,7 @@ export class RSUMetrics extends BaseSingleton<RSUMetrics> {
         return best;
     }
 
-    private ComputeStepAverages(): Record<string, number> {
+    private computeStepAverages(): Record<string, number> {
         const totals = new Map<string, { sum: number; count: number }>();
         for (const run of this.runs) {
             for (const [step, duration] of Object.entries(run.StepDurations)) {

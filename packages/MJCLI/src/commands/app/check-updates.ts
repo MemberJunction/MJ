@@ -2,9 +2,9 @@ import { Command } from '@oclif/core';
 import { ListInstalledApps, GetLatestVersion } from '@memberjunction/open-app-engine';
 import ora from 'ora-classic';
 import chalk from 'chalk';
-import { buildContextUser, buildGitHubOptions } from '../../utils/open-app-context.js';
+import { BuildContextUser, BuildGitHubOptions } from '../../utils/open-app-context.js';
 import { CheckAppsForUpdates, FormatUpdateCheckReport, type UpdateCheckLine } from '../../utils/update-check.js';
-import { getValidatedConfig } from '../../config.js';
+import { GetValidatedConfig } from '../../config.js';
 
 /**
  * CLI command: `mj app check-updates`.
@@ -23,9 +23,9 @@ export default class AppCheckUpdates extends Command {
     const spinner = ora('Checking for updates...').start();
 
     try {
-      const config = getValidatedConfig();
+      const config = GetValidatedConfig();
 
-      const contextUser = await buildContextUser();
+      const contextUser = await BuildContextUser();
       const apps = await ListInstalledApps(contextUser);
 
       if (apps.length === 0) {
@@ -36,7 +36,7 @@ export default class AppCheckUpdates extends Command {
       // Same options `mj app install` / `upgrade` use, so a repo reachable there is reachable here.
       // A bare `{ Token }` dropped the per-repo TokenMap, and every private repo whose token lives
       // there reported "up to date" forever.
-      const githubOptions = buildGitHubOptions(config);
+      const githubOptions = BuildGitHubOptions(config);
       const report = await CheckAppsForUpdates(apps, (repoUrl, subpath) =>
         GetLatestVersion(repoUrl, githubOptions, subpath)
       );

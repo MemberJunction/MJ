@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { QuickBooksBaseAction } from '../quickbooks-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../../../constants';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, ErpPluginKey } from '../../../constants';
 import { Dimension, DimensionValue } from '../../../types';
 
 /**
@@ -11,7 +11,7 @@ import { Dimension, DimensionValue } from '../../../types';
  * may be an empty values array if the company does not use that list or the
  * query is not available.
  */
-@RegisterClass(BaseAction, erpPluginKey(ACCOUNTING_VERBS.GetDimensions, ERP_INTEGRATION.QuickBooksOnline))
+@RegisterClass(BaseAction, ErpPluginKey(ACCOUNTING_VERBS.GetDimensions, ERP_INTEGRATION.QuickBooksOnline))
 export class GetQuickBooksDimensionsAction extends QuickBooksBaseAction {
 
     public get Description(): string {

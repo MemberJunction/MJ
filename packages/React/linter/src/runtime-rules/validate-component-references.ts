@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -45,7 +45,7 @@ export class ValidateComponentReferencesRule extends BaseLintRule {
     const referencedComponents = new Set<string>();
 
     // First pass: collect all variable declarations and destructuring
-    traverse(ast, {
+    Traverse(ast, {
       // Track variable declarations (const x = ...)
       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
         if (t.isIdentifier(path.node.id)) {
@@ -115,7 +115,7 @@ export class ValidateComponentReferencesRule extends BaseLintRule {
     });
 
     // Second pass: check component usage
-    traverse(ast, {
+    Traverse(ast, {
       // Look for React.createElement calls
       CallExpression(path: NodePath<t.CallExpression>) {
         const callee = path.node.callee;

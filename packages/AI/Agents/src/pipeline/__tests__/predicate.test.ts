@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { parsePredicate, evaluatePredicate } from '../predicate';
+import { ParsePredicate, EvaluatePredicate } from '../predicate';
 
 function match(el: unknown, src: string): boolean {
-    return evaluatePredicate(parsePredicate(src), el as never);
+    return EvaluatePredicate(ParsePredicate(src), el as never);
 }
 
 describe('predicate', () => {
@@ -43,8 +43,8 @@ describe('predicate', () => {
         expect(match(row, 'DueDate < today')).toBe(true);
     });
     it('throws on malformed predicate', () => {
-        expect(() => parsePredicate('Balance >')).toThrow();
-        expect(() => parsePredicate('Balance 5')).toThrow(/operator/);
+        expect(() => ParsePredicate('Balance >')).toThrow();
+        expect(() => ParsePredicate('Balance 5')).toThrow(/operator/);
     });
 
     describe('matches ReDoS guard', () => {

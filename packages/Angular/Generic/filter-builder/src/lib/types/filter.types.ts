@@ -153,13 +153,13 @@ export interface FilterBuilderConfig {
  */
 export interface QuickFilterDefinition {
   /** Unique identifier for the quick filter */
-  id: string;
+  id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Display label */
-  label: string;
+  label: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Optional icon class (Font Awesome) */
-  icon?: string;
+  icon?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The filter to apply when clicked */
-  filter: CompositeFilterDescriptor;
+  filter: CompositeFilterDescriptor;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -167,9 +167,9 @@ export interface QuickFilterDefinition {
  */
 export interface FilterChangeEvent {
   /** The current filter state */
-  filter: CompositeFilterDescriptor;
+  filter: CompositeFilterDescriptor;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether the filter is valid (all required values filled) */
-  isValid: boolean;
+  isValid: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

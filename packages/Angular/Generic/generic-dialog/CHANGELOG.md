@@ -1,5 +1,44 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [490cd8d]
+- Updated dependencies [5e1e343]
+- Updated dependencies [e7b2ebc]
+- Updated dependencies [e0cf9ed]
+  - @memberjunction/ng-ui-components@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [60bd774]
+  - @memberjunction/ng-ui-components@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [369e229]
+  - @memberjunction/ng-ui-components@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [80905a1]
+- Updated dependencies [920bef8]
+  - @memberjunction/ng-ui-components@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Patch Changes

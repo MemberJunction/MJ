@@ -6,9 +6,9 @@
 
 /** What the browser should be handed: the bytes (or text), its MIME type, and a filename. */
 export interface VersionDownload {
-  data: BlobPart;
-  mimeType: string;
-  fileName: string;
+  Data: BlobPart;
+  MimeType: string;
+  FileName: string;
 }
 
 /**
@@ -29,7 +29,7 @@ export interface VersionDownload {
  * @param versionNumber  used only in the fallback name
  * @param mimeType       the version's `MimeType`, used when the content is not a data URI
  */
-export function buildVersionDownload(
+export function BuildVersionDownload(
   content: string,
   fileName: string | null | undefined,
   artifactName: string | null | undefined,
@@ -54,10 +54,10 @@ export function buildVersionDownload(
         bytes[i] = binary.charCodeAt(i);
       }
       return {
-        data: bytes,
-        mimeType: uriMimeType,
+        Data: bytes,
+        MimeType: uriMimeType,
         // The stored FileName already carries the correct extension; only fall back when absent.
-        fileName: fileName?.trim() || `${artifactName ?? 'artifact'}_v${versionNumber ?? 1}`,
+        FileName: fileName?.trim() || `${artifactName ?? 'artifact'}_v${versionNumber ?? 1}`,
       };
     }
     // Fall through to the text path below: a click that hands over the stored bytes beats one
@@ -66,8 +66,19 @@ export function buildVersionDownload(
 
   // Text content — unchanged from the original behaviour, but honour a real filename when present.
   return {
-    data: content,
-    mimeType: mimeType?.trim() || 'text/plain',
-    fileName: fileName?.trim() || `${artifactName ?? 'artifact'}_v${versionNumber ?? 1}.txt`,
+    Data: content,
+    MimeType: mimeType?.trim() || 'text/plain',
+    FileName: fileName?.trim() || `${artifactName ?? 'artifact'}_v${versionNumber ?? 1}.txt`,
   };
+}
+
+/** @deprecated Use {@link BuildVersionDownload}. */
+export function buildVersionDownload(
+  content: string,
+  fileName: string | null | undefined,
+  artifactName: string | null | undefined,
+  versionNumber: number | null | undefined,
+  mimeType?: string | null
+): VersionDownload {
+  return BuildVersionDownload(content, fileName, artifactName, versionNumber, mimeType);
 }

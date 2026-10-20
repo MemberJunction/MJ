@@ -1,6 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import { confirm, checkbox } from '@inquirer/prompts';
-import { NonInteractiveError, resolveOrPrompt, withNonInteractiveHandling } from '../../lib/interactive-guard.js';
+import { NonInteractiveError, resolveOrPrompt, WithNonInteractiveHandling } from '../../lib/interactive-guard.js';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import * as path from 'path';
@@ -33,7 +33,7 @@ export default class FileReset extends Command {
     const { flags } = await this.parse(FileReset);
     const spinner = ora();
 
-    await withNonInteractiveHandling(this, async () => {
+    await WithNonInteractiveHandling(this, async () => {
       try {
         // Load configuration
         spinner.start('Loading configuration');

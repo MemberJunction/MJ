@@ -18,8 +18,8 @@ import { RunComputerUseParams } from '../types/params.js';
 import { StepRecord, JudgeVerdict } from '../types/judge.js';
 import type { InteractiveElement } from '../types/browser.js';
 import type { CheckpointLatch } from './verdict.js';
-import { summarizeOlderSteps, DEFAULT_MAX_VERBATIM_STEPS } from './perception.js';
-import { distillActionError } from './step-control.js';
+import { SummarizeOlderSteps, DEFAULT_MAX_VERBATIM_STEPS } from './perception.js';
+import { DistillActionError } from './step-control.js';
 
 export class RunContext {
     /** Immutable reference to the original run parameters */
@@ -149,7 +149,7 @@ export class RunContext {
             return this.StepHistory.map(step => this.formatStepSummary(step)).join('\n');
         }
         const splitAt = total - DEFAULT_MAX_VERBATIM_STEPS;
-        const digest = summarizeOlderSteps(this.StepHistory.slice(0, splitAt));
+        const digest = SummarizeOlderSteps(this.StepHistory.slice(0, splitAt));
         const recent = this.StepHistory.slice(splitAt).map(step => this.formatStepSummary(step));
         return [digest, ...recent].join('\n');
     }
@@ -172,7 +172,7 @@ export class RunContext {
             // Distilled, not raw: a Playwright call log dumped verbatim buries the
             // only actionable fact (something covered the target) in ~15 lines.
             const results = step.ActionResults
-                .map(r => r.Success ? 'OK' : `FAIL: ${distillActionError(r.Error)}`)
+                .map(r => r.Success ? 'OK' : `FAIL: ${DistillActionError(r.Error)}`)
                 .join(', ');
             parts.push(`Actions: [${actions}] → [${results}]`);
         }

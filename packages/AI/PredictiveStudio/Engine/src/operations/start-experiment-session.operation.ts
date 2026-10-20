@@ -34,7 +34,7 @@ import {
 
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
 import type { ExperimentRunOptions, ExperimentSessionResult } from '../experiment/types';
-import { runExperimentSessionViaOrchestrator } from './delegation';
+import { RunExperimentSessionViaOrchestrator } from './delegation';
 
 /**
  * Server implementation of `PredictiveStudio.StartExperimentSession`. Extends the
@@ -60,7 +60,7 @@ export class PredictiveStudioStartExperimentSessionServerOperation extends Predi
       Message: `Starting experiment session for goal: ${plan.Goal}`,
     });
 
-    const result = await runExperimentSessionViaOrchestrator(
+    const result = await RunExperimentSessionViaOrchestrator(
       plan,
       this.buildOptions(input),
       provider,

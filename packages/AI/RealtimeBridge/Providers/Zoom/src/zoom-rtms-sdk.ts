@@ -135,13 +135,18 @@ export interface ZoomRtmsSdkConfig {
  * bridge can forward. A `Uint8Array` view is copied so a downstream consumer never sees bytes outside
  * its window or a recycled SDK buffer.
  */
-export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+export function ToArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
     if (data instanceof ArrayBuffer) {
         return data;
     }
     const copy = new Uint8Array(data.byteLength);
     copy.set(data);
     return copy.buffer;
+}
+
+/** @deprecated Use {@link ToArrayBuffer}. */
+export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+    return ToArrayBuffer(data);
 }
 
 /**
@@ -207,7 +212,7 @@ function resolveParticipantId(metadata: RtmsMediaMetadata | undefined): string {
  * @param metadata The metadata (4-arg form), carrying the diarization label.
  * @returns The diarized inbound audio frame.
  */
-export function mapRtmsAudioFrame(
+export function MapRtmsAudioFrame(
     data: Uint8Array | ArrayBuffer,
     sizeOrTimestamp?: number,
     timestampOrMetadata?: number | RtmsMediaMetadata,
@@ -215,11 +220,21 @@ export function mapRtmsAudioFrame(
 ): ZoomAudioFrame {
     const meta = resolveMetadata(timestampOrMetadata, metadata);
     return {
-        Pcm: toArrayBuffer(data),
+        Pcm: ToArrayBuffer(data),
         ParticipantId: resolveParticipantId(meta),
         DisplayName: meta?.userName,
         TimestampMs: resolveTimestampMs(sizeOrTimestamp, timestampOrMetadata),
     };
+}
+
+/** @deprecated Use {@link MapRtmsAudioFrame}. */
+export function mapRtmsAudioFrame(
+    data: Uint8Array | ArrayBuffer,
+    sizeOrTimestamp?: number,
+    timestampOrMetadata?: number | RtmsMediaMetadata,
+    metadata?: RtmsMediaMetadata,
+): ZoomAudioFrame {
+    return MapRtmsAudioFrame(data, sizeOrTimestamp, timestampOrMetadata, metadata);
 }
 
 /**
@@ -258,7 +273,7 @@ function isRtmsModule(value: unknown): value is RtmsModule {
  *
  * VERIFY against @zoom/rtms: the `.default` interop shape (`import rtms from '@zoom/rtms'`).
  */
-export const defaultRtmsLoader: RtmsModuleLoader = async (): Promise<RtmsModule> => {
+export const DefaultRtmsLoader: RtmsModuleLoader = async (): Promise<RtmsModule> => {
     try {
         // The optional dep ships no types we depend on here (the ambient declaration types it as
         // `unknown`); narrow the resolved value structurally through RtmsModule at this boundary,
@@ -278,6 +293,9 @@ export const defaultRtmsLoader: RtmsModuleLoader = async (): Promise<RtmsModule>
         );
     }
 };
+
+/** @deprecated Use {@link DefaultRtmsLoader}. */
+export const defaultRtmsLoader: RtmsModuleLoader = DefaultRtmsLoader;
 
 /**
  * A **real** {@link IZoomMeetingSdk} over Zoom RTMS (`@zoom/rtms`).
@@ -329,7 +347,7 @@ export class ZoomRtmsMeetingSdk implements IZoomMeetingSdk {
      * @param config Resolved credentials + the per-session RTMS connection params (from the webhook).
      * @param loadModule The `@zoom/rtms` loader (defaults to the lazy optional-dependency loader).
      */
-    constructor(config: ZoomRtmsSdkConfig, loadModule: RtmsModuleLoader = defaultRtmsLoader) {
+    constructor(config: ZoomRtmsSdkConfig, loadModule: RtmsModuleLoader = DefaultRtmsLoader) {
         this.config = config;
         this.loadModule = loadModule;
     }
@@ -495,7 +513,7 @@ export class ZoomRtmsMeetingSdk implements IZoomMeetingSdk {
         timestampOrMetadata?: number | RtmsMediaMetadata,
         metadata?: RtmsMediaMetadata,
     ): void {
-        const frame = mapRtmsAudioFrame(data, sizeOrTimestamp, timestampOrMetadata, metadata);
+        const frame = MapRtmsAudioFrame(data, sizeOrTimestamp, timestampOrMetadata, metadata);
         this.observeParticipant(frame.ParticipantId, frame.DisplayName);
         this.audioHandler?.(frame);
     }
@@ -558,9 +576,9 @@ export class ZoomRtmsMeetingSdk implements IZoomMeetingSdk {
  * @returns A factory `(config) => ZoomRtmsMeetingSdk`.
  */
 export function BindZoomRtms(
-    loadModule: RtmsModuleLoader = defaultRtmsLoader,
+    loadModule: RtmsModuleLoader = DefaultRtmsLoader,
 ): (config?: Record<string, unknown>) => ZoomRtmsMeetingSdk {
-    return (config?: Record<string, unknown>) => new ZoomRtmsMeetingSdk(readRtmsConfig(config), loadModule);
+    return (config?: Record<string, unknown>) => new ZoomRtmsMeetingSdk(ReadRtmsConfig(config), loadModule);
 }
 
 /**
@@ -569,13 +587,18 @@ export function BindZoomRtms(
  * so a malformed webhook payload yields `undefined` (and {@link ZoomRtmsMeetingSdk.join} then throws a
  * precise error) rather than a half-formed connection.
  */
-export function readRtmsConfig(config?: Record<string, unknown>): ZoomRtmsSdkConfig {
+export function ReadRtmsConfig(config?: Record<string, unknown>): ZoomRtmsSdkConfig {
     const cfg = config ?? {};
     return {
         ClientId: readString(cfg.ClientId),
         ClientSecret: readString(cfg.ClientSecret),
         Connection: readConnection(cfg.Connection),
     };
+}
+
+/** @deprecated Use {@link ReadRtmsConfig}. */
+export function readRtmsConfig(config?: Record<string, unknown>): ZoomRtmsSdkConfig {
+    return ReadRtmsConfig(config);
 }
 
 /** Reads a value as a non-empty string, or `undefined`. */

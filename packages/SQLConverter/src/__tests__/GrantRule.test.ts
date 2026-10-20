@@ -1,17 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { GrantRule } from '../rules/GrantRule.js';
-import { createConversionContext } from '../rules/types.js';
+import { CreateConversionContext } from '../rules/types.js';
 import type { ConversionContext } from '../rules/types.js';
 
 const rule = new GrantRule();
 
 function convert(sql: string, context?: ConversionContext): string {
-  const ctx = context ?? createConversionContext('tsql', 'postgres');
+  const ctx = context ?? CreateConversionContext('tsql', 'postgres');
   return rule.PostProcess!(sql, sql, ctx);
 }
 
 function contextWithFunctions(...names: string[]): ConversionContext {
-  const ctx = createConversionContext('tsql', 'postgres');
+  const ctx = CreateConversionContext('tsql', 'postgres');
   for (const name of names) {
     ctx.CreatedFunctions.add(name);
   }
@@ -19,7 +19,7 @@ function contextWithFunctions(...names: string[]): ConversionContext {
 }
 
 function contextWithViews(...names: string[]): ConversionContext {
-  const ctx = createConversionContext('tsql', 'postgres');
+  const ctx = CreateConversionContext('tsql', 'postgres');
   for (const name of names) {
     ctx.CreatedViews.add(name);
   }
@@ -81,7 +81,7 @@ describe('GrantRule', () => {
       // that target sprocs defined in the baseline or an earlier migration. Previously
       // we skipped these grants, silently dropping permissions. Now we emit them and let
       // PG fail loudly at apply time if the sproc genuinely doesn't exist.
-      const ctx = createConversionContext('tsql', 'postgres');
+      const ctx = CreateConversionContext('tsql', 'postgres');
       const sql = 'GRANT EXECUTE ON [__mj].[spDefinedEarlier] TO [cdp_Developer]';
       const result = convert(sql, ctx);
       expect(result).not.toContain('-- SKIPPED');
@@ -111,7 +111,7 @@ describe('GrantRule', () => {
       // Same rationale as the function case: views typically live in the baseline
       // and are referenced by grants in later migrations. Skipping silently dropped
       // permissions; now we emit and let PG fail loudly if the view is missing.
-      const ctx = createConversionContext('tsql', 'postgres');
+      const ctx = CreateConversionContext('tsql', 'postgres');
       const sql = 'GRANT SELECT ON [__mj].[vwActiveUsers] TO [cdp_Developer]';
       const result = convert(sql, ctx);
       expect(result).not.toContain('-- SKIPPED');
@@ -127,7 +127,7 @@ describe('GrantRule', () => {
     });
 
     it('should not skip GRANT on non-view table even without CreatedViews', () => {
-      const ctx = createConversionContext('tsql', 'postgres');
+      const ctx = CreateConversionContext('tsql', 'postgres');
       // "Users" doesn't start with "vw" so it shouldn't be checked against CreatedViews
       const sql = 'GRANT SELECT ON [__mj].[Users] TO [cdp_Developer]';
       const result = convert(sql, ctx);

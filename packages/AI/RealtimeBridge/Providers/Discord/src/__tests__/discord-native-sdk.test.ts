@@ -14,12 +14,12 @@ import { describe, it, expect, vi } from 'vitest';
 import {
     DiscordNativeMeetingSdk,
     BindDiscordNative,
-    readNativeConfig,
-    mapNativeAudioFrame,
-    mapNativeMember,
-    mapNativeRole,
-    toArrayBuffer,
-    defaultNativeLoader,
+    ReadNativeConfig,
+    MapNativeAudioFrame,
+    MapNativeMember,
+    MapNativeRole,
+    ToArrayBuffer,
+    DefaultNativeLoader,
     NativeMeetingModule,
     NativeVoiceClient,
     NativeVoiceAudioFrame,
@@ -104,23 +104,23 @@ const cfg = { NativeModuleSpecifier: '@acme/discord-native-addon', BotToken: 'to
 
 describe('DiscordNativeMeetingSdk — pure mappings', () => {
     it('mapNativeRole normalizes host/owner/admin → Host, moderator → CoHost, else Participant', () => {
-        expect(mapNativeRole('host')).toBe('Host');
-        expect(mapNativeRole('owner')).toBe('Host');
-        expect(mapNativeRole('admin')).toBe('Host');
-        expect(mapNativeRole('moderator')).toBe('CoHost');
-        expect(mapNativeRole('co-host')).toBe('CoHost');
-        expect(mapNativeRole('member')).toBe('Participant');
-        expect(mapNativeRole(undefined)).toBe('Participant');
+        expect(MapNativeRole('host')).toBe('Host');
+        expect(MapNativeRole('owner')).toBe('Host');
+        expect(MapNativeRole('admin')).toBe('Host');
+        expect(MapNativeRole('moderator')).toBe('CoHost');
+        expect(MapNativeRole('co-host')).toBe('CoHost');
+        expect(MapNativeRole('member')).toBe('Participant');
+        expect(MapNativeRole(undefined)).toBe('Participant');
     });
 
     it('mapNativeMember coerces numeric ids and maps role + self flag', () => {
-        const m: DiscordMember = mapNativeMember({ userId: 42, displayName: 'Dana', role: 'owner', isSelf: true });
+        const m: DiscordMember = MapNativeMember({ userId: 42, displayName: 'Dana', role: 'owner', isSelf: true });
         expect(m).toEqual({ UserId: '42', DisplayName: 'Dana', Role: 'Host', IsSelf: true });
     });
 
     it('mapNativeAudioFrame copies PCM, resolves label, defaults timestamp', () => {
         const view = new Uint8Array([1, 2, 3]);
-        const frame: DiscordAudioFrame = mapNativeAudioFrame({ data: view, userId: 7, displayName: 'Lee', timestampMs: 99 });
+        const frame: DiscordAudioFrame = MapNativeAudioFrame({ data: view, userId: 7, displayName: 'Lee', timestampMs: 99 });
         expect(frame.UserId).toBe('7');
         expect(frame.DisplayName).toBe('Lee');
         expect(frame.TimestampMs).toBe(99);
@@ -130,14 +130,14 @@ describe('DiscordNativeMeetingSdk — pure mappings', () => {
     it('toArrayBuffer copies a Uint8Array view (not aliasing the underlying buffer window)', () => {
         const backing = new Uint8Array([9, 8, 7, 6]).buffer;
         const view = new Uint8Array(backing, 1, 2); // [8,7]
-        const out = toArrayBuffer(view);
+        const out = ToArrayBuffer(view);
         expect(out.byteLength).toBe(2);
         expect(new Uint8Array(out)).toEqual(new Uint8Array([8, 7]));
     });
 
     it('toArrayBuffer copies a standalone ArrayBuffer (no aliasing)', () => {
         const src = new Uint8Array([4, 5]).buffer;
-        const out = toArrayBuffer(src);
+        const out = ToArrayBuffer(src);
         expect(out).not.toBe(src);
         expect(new Uint8Array(out)).toEqual(new Uint8Array([4, 5]));
     });
@@ -146,7 +146,7 @@ describe('DiscordNativeMeetingSdk — pure mappings', () => {
 describe('DiscordNativeMeetingSdk — join + two-way audio', () => {
     it('joinVoiceChannel() loads the addon, joins with the resolved token, and returns bot/channel ids', async () => {
         const client = new FakeNativeClient();
-        const sdk = new DiscordNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new DiscordNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const result = await sdk.joinVoiceChannel(baseArgs);
         expect(result).toEqual({ BotUserId: 'bot-1', VoiceChannelId: '987654321' });
         expect(client.joined?.botToken).toBe('tok-123');
@@ -156,7 +156,7 @@ describe('DiscordNativeMeetingSdk — join + two-way audio', () => {
 
     it('sendAudioFrame forwards the agent voice to the native audio-player send path', async () => {
         const client = new FakeNativeClient();
-        const sdk = new DiscordNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new DiscordNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.joinVoiceChannel(baseArgs);
         const pcm = new Uint8Array([5, 5, 5]).buffer;
         sdk.sendAudioFrame(pcm);
@@ -165,13 +165,13 @@ describe('DiscordNativeMeetingSdk — join + two-way audio', () => {
     });
 
     it('sendAudioFrame before join is a safe no-op (no throw)', () => {
-        const sdk = new DiscordNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
+        const sdk = new DiscordNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
         expect(() => sdk.sendAudioFrame(new ArrayBuffer(2))).not.toThrow();
     });
 
     it('inbound native audio is mapped to a diarized DiscordAudioFrame and delivered to the handler', async () => {
         const client = new FakeNativeClient();
-        const sdk = new DiscordNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new DiscordNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const heard: DiscordAudioFrame[] = [];
         sdk.onAudioFrame((f) => heard.push(f));
         await sdk.joinVoiceChannel(baseArgs);
@@ -185,7 +185,7 @@ describe('DiscordNativeMeetingSdk — join + two-way audio', () => {
 describe('DiscordNativeMeetingSdk — roster, signals, member controls', () => {
     it('member join/leave events map and reach the handlers', async () => {
         const client = new FakeNativeClient();
-        const sdk = new DiscordNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new DiscordNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const joined: DiscordMember[] = [];
         const left: string[] = [];
         sdk.onMemberJoin((m) => joined.push(m));
@@ -202,19 +202,19 @@ describe('DiscordNativeMeetingSdk — roster, signals, member controls', () => {
     it('getMembers maps the native roster', async () => {
         const client = new FakeNativeClient();
         client.roster = [{ userId: 1, displayName: 'Owner', role: 'owner', isSelf: false }];
-        const sdk = new DiscordNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new DiscordNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.joinVoiceChannel(baseArgs);
         expect(await sdk.getMembers()).toEqual([{ UserId: '1', DisplayName: 'Owner', Role: 'Host', IsSelf: false }]);
     });
 
     it('getMembers before join returns an empty roster', async () => {
-        const sdk = new DiscordNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
+        const sdk = new DiscordNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
         expect(await sdk.getMembers()).toEqual([]);
     });
 
     it('postChatMessage + muteMember reach the native client (real member controls)', async () => {
         const client = new FakeNativeClient();
-        const sdk = new DiscordNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new DiscordNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.joinVoiceChannel(baseArgs);
         await sdk.postChatMessage('hello');
         await sdk.muteMember('11');
@@ -224,7 +224,7 @@ describe('DiscordNativeMeetingSdk — roster, signals, member controls', () => {
 
     it('disconnect fires the handler; leaveVoiceChannel() releases the client', async () => {
         const client = new FakeNativeClient();
-        const sdk = new DiscordNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new DiscordNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const dropped = vi.fn();
         sdk.onDisconnect(dropped);
         await sdk.joinVoiceChannel(baseArgs);
@@ -237,7 +237,7 @@ describe('DiscordNativeMeetingSdk — roster, signals, member controls', () => {
 
 describe('DiscordNativeMeetingSdk — config + errors', () => {
     it('readNativeConfig extracts typed fields and ignores wrong types', () => {
-        const out = readNativeConfig({
+        const out = ReadNativeConfig({
             BotToken: 'tok',
             ApplicationId: 'app',
             BotDisplayName: 'Bot',
@@ -257,19 +257,19 @@ describe('DiscordNativeMeetingSdk — config + errors', () => {
     });
 
     it('readNativeConfig drops non-finite / non-string values', () => {
-        const out = readNativeConfig({ SampleRate: NaN, Channels: 'two', BotToken: 42 });
+        const out = ReadNativeConfig({ SampleRate: NaN, Channels: 'two', BotToken: 42 });
         expect(out.SampleRate).toBeUndefined();
         expect(out.Channels).toBeUndefined();
         expect(out.BotToken).toBeUndefined();
     });
 
     it('joinVoiceChannel() throws an actionable error when no NativeModuleSpecifier is configured', async () => {
-        const sdk = new DiscordNativeMeetingSdk(readNativeConfig({}), async () => fakeModule(new FakeNativeClient()));
+        const sdk = new DiscordNativeMeetingSdk(ReadNativeConfig({}), async () => fakeModule(new FakeNativeClient()));
         await expect(sdk.joinVoiceChannel(baseArgs)).rejects.toThrow(/NativeModuleSpecifier/);
     });
 
     it('defaultNativeLoader throws an actionable error when the addon specifier cannot be resolved', async () => {
-        await expect(defaultNativeLoader('@nonexistent/discord-native-addon-xyz')).rejects.toThrow(
+        await expect(DefaultNativeLoader('@nonexistent/discord-native-addon-xyz')).rejects.toThrow(
             /could not load the native Discord voice addon/,
         );
     });

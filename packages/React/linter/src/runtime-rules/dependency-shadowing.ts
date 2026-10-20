@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -41,7 +41,7 @@ export class DependencyShadowingRule extends BaseLintRule {
     // Find the main component function
     let mainComponentPath: NodePath<t.FunctionDeclaration> | null = null;
 
-    traverse(ast, {
+    Traverse(ast, {
       FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
         // Check if this is the main component function
         if (path.parent === ast.program && path.node.id && path.node.id.name === componentName) {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach } from 'vitest';
 import { Metadata, RunView } from '@memberjunction/core';
 import type { IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
-import { createFakeProvider, FakeProviderOptions } from './fake-provider.js';
+import { CreateFakeProvider, FakeProviderOptions } from './fake-provider.js';
 
 /**
  * Install a fake GLOBAL provider for DOM specs of data-bound components that load through the
@@ -33,7 +33,7 @@ import { createFakeProvider, FakeProviderOptions } from './fake-provider.js';
  *   });
  * });
  */
-export function useFakeGlobalProvider<T = unknown>(): (options?: FakeProviderOptions<T>) => IMetadataProvider {
+export function UseFakeGlobalProvider<T = unknown>(): (options?: FakeProviderOptions<T>) => IMetadataProvider {
   let priorRunView: IRunViewProvider | undefined;
   let priorMetadata: IMetadataProvider | undefined;
 
@@ -47,7 +47,7 @@ export function useFakeGlobalProvider<T = unknown>(): (options?: FakeProviderOpt
   });
 
   return (options: FakeProviderOptions<T> = {}) => {
-    const fake = createFakeProvider<T>(options);
+    const fake = CreateFakeProvider<T>(options);
     // createFakeProvider returns IMetadataProvider; at runtime it also implements the
     // IRunViewProvider surface (RunView/RunViews) — the same justified seam that
     // RunView.FromMetadataProvider relies on (`provider as unknown as IRunViewProvider`).
@@ -55,6 +55,11 @@ export function useFakeGlobalProvider<T = unknown>(): (options?: FakeProviderOpt
     Metadata.Provider = fake; // global-provider-ok: test helper installs the fake as the global provider for the duration of a test
     return fake;
   };
+}
+
+/** @deprecated Use {@link UseFakeGlobalProvider}. */
+export function useFakeGlobalProvider<T = unknown>(): (options?: FakeProviderOptions<T>) => IMetadataProvider {
+  return UseFakeGlobalProvider();
 }
 
 /** Read a getter that may throw (e.g. before any global store exists) without failing the spec. */

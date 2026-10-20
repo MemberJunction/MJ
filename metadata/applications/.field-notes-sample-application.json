@@ -1,0 +1,36 @@
+{
+  "fields": {
+    "Name": "Field Notes (Sample)",
+    "Description": "Worked example of an application hosted inside the MJ mobile app. Not installed for new users by default — grant it through MJ: User Applications to try it. See guides/MOBILE_APP_HOSTING_GUIDE.md.",
+    "Icon": "fa-solid fa-note-sticky",
+    "DefaultForNewUser": false,
+    "DefaultSequence": 9000,
+    "Color": "#1a8a5f",
+    "DefaultNavItems": [
+      {
+        "Label": "Notes",
+        "Icon": "fa-solid fa-note-sticky",
+        "ResourceType": "Custom",
+        "DriverClass": "FieldNotesResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Reports",
+        "Icon": "fa-solid fa-chart-line",
+        "ResourceType": "Custom",
+        "DriverClass": "FieldNotesReportsResource",
+        "isDefault": false
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "D4DF5208-17B7-4254-A740-D2653BB0D2CA"
+  },
+  "sync": {
+    "lastModified": "2026-09-14T00:43:03.879Z",
+    "checksum": "c74afe102b98b54d57c4f6421ffa68c4a762f702217bddbb27714c5b8a077a3b"
+  }
+}

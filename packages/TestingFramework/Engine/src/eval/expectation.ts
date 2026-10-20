@@ -11,7 +11,7 @@
  * FRAMEWORK-FREE (test plan §2.1) — imports nothing from the testing engine.
  */
 import type { DecisionKind, ObservedDecision } from './decision';
-import { matchParams, type ParamExpectation, type ParamMatchResult } from './matchers';
+import { MatchParams, type ParamExpectation, type ParamMatchResult } from './matchers';
 
 /** One action a correct answer invokes, with the checks that make the invocation usable. */
 export interface ExpectedAction {
@@ -133,7 +133,7 @@ function scoreActions(expectation: DecisionExpectation, observed: ObservedDecisi
             })));
             continue;
         }
-        paramResults.push(...matchParams(expected.params, match.params).map((r) => ({ ...r, param: `${expected.name}.${r.param}` })));
+        paramResults.push(...MatchParams(expected.params, match.params).map((r) => ({ ...r, param: `${expected.name}.${r.param}` })));
     }
     for (const failure of paramResults.filter((r) => !r.passed)) {
         messages.push(`param ${failure.param}: ${failure.detail}`);
@@ -160,7 +160,7 @@ function scorePayload(expectation: DecisionExpectation, observed: ObservedDecisi
     const matchers = expectation.payload ?? [];
     const messages: string[] = [];
     const flat = Object.fromEntries(matchers.map((m) => [m.param, getPath(observed.payloadChange, m.param)]));
-    const paramResults = matchers.length === 0 ? [] : matchParams(matchers, flat).map((r) => ({ ...r, param: `payload ${r.param}` }));
+    const paramResults = matchers.length === 0 ? [] : MatchParams(matchers, flat).map((r) => ({ ...r, param: `payload ${r.param}` }));
     for (const failure of paramResults.filter((r) => !r.passed)) {
         messages.push(`${failure.param}: ${failure.detail}`);
     }
@@ -171,7 +171,7 @@ function scorePayload(expectation: DecisionExpectation, observed: ObservedDecisi
     return { paramResults, messages, forbidden };
 }
 
-export function evaluateDecision(expectation: DecisionExpectation, observed: ObservedDecision): DecisionEvaluation {
+export function EvaluateDecision(expectation: DecisionExpectation, observed: ObservedDecision): DecisionEvaluation {
     const messages: string[] = [];
 
     // A payloadChange expectation is met by a mixed turn too (action + payload write, spec §2.1).
@@ -210,7 +210,7 @@ export function evaluateDecision(expectation: DecisionExpectation, observed: Obs
 
     let messageMatch = true;
     if (expectation.message) {
-        const result = matchParams([{ param: 'message', matcher: expectation.message }], { message: observed.message });
+        const result = MatchParams([{ param: 'message', matcher: expectation.message }], { message: observed.message });
         messageMatch = result[0].passed;
         if (!messageMatch) {
             messages.push(`message: ${result[0].detail}`);
@@ -251,4 +251,9 @@ export function evaluateDecision(expectation: DecisionExpectation, observed: Obs
         score: applicable.reduce((a, b) => a + b, 0) / applicable.length,
         messages
     };
+}
+
+/** @deprecated Use {@link EvaluateDecision}. */
+export function evaluateDecision(expectation: DecisionExpectation, observed: ObservedDecision): DecisionEvaluation {
+    return EvaluateDecision(expectation, observed);
 }

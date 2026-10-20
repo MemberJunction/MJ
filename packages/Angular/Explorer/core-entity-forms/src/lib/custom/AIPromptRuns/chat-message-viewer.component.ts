@@ -17,10 +17,46 @@ interface MessageDisplay {
 export class ChatMessageViewerComponent implements OnInit, OnChanges {
     @Input() messages: ChatMessage[] = [];
     
-    public displayMessages: MessageDisplay[] = [];
-    public showSystem = true;
-    public showUser = true;
-    public showAssistant = true;
+    public DisplayMessages: MessageDisplay[] = [];
+
+    /** @deprecated Use {@link DisplayMessages}. */
+    public get displayMessages(): MessageDisplay[] {
+      return this.DisplayMessages;
+    }
+    /** @deprecated Use {@link DisplayMessages}. */
+    public set displayMessages(value: MessageDisplay[]) {
+      this.DisplayMessages = value;
+    }
+    public ShowSystem = true;
+
+    /** @deprecated Use {@link ShowSystem}. */
+    public get showSystem() {
+      return this.ShowSystem;
+    }
+    /** @deprecated Use {@link ShowSystem}. */
+    public set showSystem(value) {
+      this.ShowSystem = value;
+    }
+    public ShowUser = true;
+
+    /** @deprecated Use {@link ShowUser}. */
+    public get showUser() {
+      return this.ShowUser;
+    }
+    /** @deprecated Use {@link ShowUser}. */
+    public set showUser(value) {
+      this.ShowUser = value;
+    }
+    public ShowAssistant = true;
+
+    /** @deprecated Use {@link ShowAssistant}. */
+    public get showAssistant() {
+      return this.ShowAssistant;
+    }
+    /** @deprecated Use {@link ShowAssistant}. */
+    public set showAssistant(value) {
+      this.ShowAssistant = value;
+    }
     
     // Full-screen overlay state
     public FullScreenContent: string | null = null;
@@ -39,7 +75,7 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
     }
     
     private processMessages() {
-        this.displayMessages = this.messages.map((msg, index) => ({
+        this.DisplayMessages = this.messages.map((msg, index) => ({
             message: msg,
             visible: this.isMessageVisible(msg),
             expanded: true,
@@ -50,23 +86,23 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
     private isMessageVisible(message: ChatMessage): boolean {
         switch (message.role) {
             case 'system':
-                return this.showSystem;
+                return this.ShowSystem;
             case 'user':
-                return this.showUser;
+                return this.ShowUser;
             case 'assistant':
-                return this.showAssistant;
+                return this.ShowAssistant;
             default:
                 return true;
         }
     }
     
     public onFilterChange() {
-        this.displayMessages.forEach(dm => {
+        this.DisplayMessages.forEach(dm => {
             dm.visible = this.isMessageVisible(dm.message);
         });
     }
     
-    public getRoleIcon(role: string): string {
+    public GetRoleIcon(role: string): string {
         switch (role) {
             case 'system':
                 return 'fa-cog';
@@ -78,8 +114,13 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
                 return 'fa-comment';
         }
     }
+
+    /** @deprecated Use {@link GetRoleIcon}. */
+    public getRoleIcon(role: string): string {
+      return this.GetRoleIcon(role);
+    }
     
-    public getRoleColor(role: string): string {
+    public GetRoleColor(role: string): string {
         switch (role) {
             case 'system':
                 return '#2563eb'; // blue
@@ -91,16 +132,31 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
                 return '#6b7280'; // gray
         }
     }
+
+    /** @deprecated Use {@link GetRoleColor}. */
+    public getRoleColor(role: string): string {
+      return this.GetRoleColor(role);
+    }
     
-    public getRoleLabel(role: string): string {
+    public GetRoleLabel(role: string): string {
         return role.charAt(0).toUpperCase() + role.slice(1);
     }
-    
-    public toggleMessage(index: number) {
-        this.displayMessages[index].expanded = !this.displayMessages[index].expanded;
+
+    /** @deprecated Use {@link GetRoleLabel}. */
+    public getRoleLabel(role: string): string {
+      return this.GetRoleLabel(role);
     }
     
-    public getContentString(content: ChatMessageContent): string {
+    public ToggleMessage(index: number) {
+        this.DisplayMessages[index].expanded = !this.DisplayMessages[index].expanded;
+    }
+
+    /** @deprecated Use {@link ToggleMessage}. */
+    public toggleMessage(index: number) {
+      return this.ToggleMessage(index);
+    }
+    
+    public GetContentString(content: ChatMessageContent): string {
         if (typeof content === 'string') {
             return content;
         } else {
@@ -115,9 +171,14 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
             }
         }
     }
+
+    /** @deprecated Use {@link GetContentString}. */
+    public getContentString(content: ChatMessageContent): string {
+      return this.GetContentString(content);
+    }
     
-    public getContentLanguage(content: ChatMessageContent): string {
-        const text = this.getContentString(content);
+    public GetContentLanguage(content: ChatMessageContent): string {
+        const text = this.GetContentString(content);
         
         // Try to detect language based on content
         if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
@@ -132,8 +193,13 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
         
         return 'markdown'; // default to markdown for formatting
     }
+
+    /** @deprecated Use {@link GetContentLanguage}. */
+    public getContentLanguage(content: ChatMessageContent): string {
+      return this.GetContentLanguage(content);
+    }
     
-    public getContentBlockIcon(type: string): string {
+    public GetContentBlockIcon(type: string): string {
         switch (type) {
             case 'image_url':
                 return 'fa-image';
@@ -147,12 +213,22 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
                 return 'fa-paperclip';
         }
     }
-    
-    public isStringContent(content: ChatMessageContent): boolean {
-        return typeof content === 'string';
+
+    /** @deprecated Use {@link GetContentBlockIcon}. */
+    public getContentBlockIcon(type: string): string {
+      return this.GetContentBlockIcon(type);
     }
     
-    public getContentJSON(content: ChatMessageContent): string {
+    public IsStringContent(content: ChatMessageContent): boolean {
+        return typeof content === 'string';
+    }
+
+    /** @deprecated Use {@link IsStringContent}. */
+    public isStringContent(content: ChatMessageContent): boolean {
+      return this.IsStringContent(content);
+    }
+    
+    public GetContentJSON(content: ChatMessageContent): string {
         if (typeof content === 'string') {
             return content; // Shouldn't happen but just in case
         }
@@ -190,8 +266,13 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
             return JSON.stringify(content, null, 2);
         }
     }
+
+    /** @deprecated Use {@link GetContentJSON}. */
+    public getContentJSON(content: ChatMessageContent): string {
+      return this.GetContentJSON(content);
+    }
     
-    public getContentStats(content: ChatMessageContent): { chars: number; words: number; approxTokens: number } {
+    public GetContentStats(content: ChatMessageContent): { chars: number; words: number; approxTokens: number } {
         let totalChars = 0;
         let totalWords = 0;
         
@@ -228,21 +309,31 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
         const approxTokens = Math.round(totalWords * 1.25); // Average 1.25 tokens per word
         return { chars: totalChars, words: totalWords, approxTokens };
     }
+
+    /** @deprecated Use {@link GetContentStats}. */
+    public getContentStats(content: ChatMessageContent): { chars: number; words: number; approxTokens: number } {
+      return this.GetContentStats(content);
+    }
     
-    public copyMessageContent(content: ChatMessageContent) {
-        const text = this.getContentString(content);
+    public CopyMessageContent(content: ChatMessageContent) {
+        const text = this.GetContentString(content);
         navigator.clipboard.writeText(text).then(() => {
             console.log('Message content copied to clipboard');
         }).catch(err => {
             console.error('Failed to copy message:', err);
         });
     }
+
+    /** @deprecated Use {@link CopyMessageContent}. */
+    public copyMessageContent(content: ChatMessageContent) {
+      return this.CopyMessageContent(content);
+    }
     
     /**
      * Get content parts for multi-part content display
      * Returns an array of {id, key, value, language, expanded} objects for each content part
      */
-    public getContentParts(content: ChatMessageContent, messageIndex: number): Array<{id: string, key: string, value: string, language: string, expanded: boolean}> {
+    public GetContentParts(content: ChatMessageContent, messageIndex: number): Array<{id: string, key: string, value: string, language: string, expanded: boolean}> {
         if (typeof content === 'string') {
             const id = `msg-${messageIndex}-part-content`;
             return [{
@@ -292,6 +383,11 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
         
         return parts;
     }
+
+    /** @deprecated Use {@link GetContentParts}. */
+    public getContentParts(content: ChatMessageContent, messageIndex: number): Array<{id: string, key: string, value: string, language: string, expanded: boolean}> {
+      return this.GetContentParts(content, messageIndex);
+    }
     
     /**
      * Detect language based on key name and content
@@ -309,7 +405,7 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
         if (keyLower.includes('yaml') || keyLower.includes('yml')) return 'yaml';
         
         // Fall back to content detection
-        return this.getContentLanguage({text: value} as any);
+        return this.GetContentLanguage({text: value} as any);
     }
     
     /**
@@ -327,7 +423,7 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
     /**
      * Check if content has multiple parts (for non-string content)
      */
-    public hasMultipleParts(content: ChatMessageContent): boolean {
+    public HasMultipleParts(content: ChatMessageContent): boolean {
         if (typeof content === 'string') return false;
         
         const contentAny = content as any;
@@ -341,6 +437,11 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
         });
         
         return nonEmptyKeys.length > 1;
+    }
+
+    /** @deprecated Use {@link HasMultipleParts}. */
+    public hasMultipleParts(content: ChatMessageContent): boolean {
+      return this.HasMultipleParts(content);
     }
     
     /**
@@ -357,35 +458,55 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
     /**
      * Toggle the expanded state of a content part
      */
-    public toggleContentPart(partId: string): void {
+    public ToggleContentPart(partId: string): void {
         const currentState = this.contentPartStates.get(partId) || false;
         this.contentPartStates.set(partId, !currentState);
+    }
+
+    /** @deprecated Use {@link ToggleContentPart}. */
+    public toggleContentPart(partId: string): void {
+      return this.ToggleContentPart(partId);
     }
 
     /**
      * Open the full-screen overlay with the given content
      */
-    public openFullScreen(content: string, language: string, title: string): void {
+    public OpenFullScreen(content: string, language: string, title: string): void {
         this.FullScreenContent = content;
         this.FullScreenLanguage = language;
         this.FullScreenTitle = title;
     }
 
+    /** @deprecated Use {@link OpenFullScreen}. */
+    public openFullScreen(content: string, language: string, title: string): void {
+      return this.OpenFullScreen(content, language, title);
+    }
+
     /**
      * Close the full-screen overlay
      */
-    public closeFullScreen(): void {
+    public CloseFullScreen(): void {
         this.FullScreenContent = null;
+    }
+
+    /** @deprecated Use {@link CloseFullScreen}. */
+    public closeFullScreen(): void {
+      return this.CloseFullScreen();
     }
 
     /**
      * Copy text to clipboard
      */
-    public copyToClipboard(text: string): void {
+    public CopyToClipboard(text: string): void {
         navigator.clipboard.writeText(text).then(() => {
             console.log('Content copied to clipboard');
         }).catch(err => {
             console.error('Failed to copy:', err);
         });
+    }
+
+    /** @deprecated Use {@link CopyToClipboard}. */
+    public copyToClipboard(text: string): void {
+      return this.CopyToClipboard(text);
     }
 }

@@ -18,7 +18,7 @@ import {
   StorageListResult,
   StorageObjectMetadata,
 } from '../generic/FileStorageBase';
-import { getProviderConfig } from '../config';
+import { GetProviderConfig } from '../config';
 
 import { StorageProviderConfig } from '../generic/FileStorageBase';
 
@@ -34,8 +34,24 @@ interface GoogleDriveConfig extends StorageProviderConfig {
   clientSecret?: string;
   /** OAuth2 Refresh Token (never expires) */
   refreshToken?: string;
+  /**
+   * Service-account key FILE path (#3847). The constructor always accepted this from env
+   * (`STORAGE_GDRIVE_KEY_FILE`); a database `MJ: Credentials` record could not carry it because
+   * `initialize()` read only the OAuth2 fields — so attaching a credential record to a
+   * service-account deployment threw away a working client and threw.
+   */
+  keyFile?: string;
+  /** Service-account credentials JSON (object or string), mirroring `STORAGE_GDRIVE_CREDENTIALS_JSON`. */
+  credentialsJSON?: string | ServiceAccountCredentials;
   /** Optional root folder ID to restrict operations */
   rootFolderID?: string;
+  /**
+   * Shared Drive id (#3847). Service accounts have NO personal storage quota — Google's own 403
+   * says to use a Shared Drive — so without this, service-account auth could never upload at all.
+   * When set it also becomes the default navigation root, since a Shared Drive's id doubles as
+   * its root folder id. Spelled `driveID` like `rootFolderID`, `clientID` and SharePoint's `driveID`.
+   */
+  driveID?: string;
 }
 
 /**
@@ -93,7 +109,7 @@ interface GoogleApiErrorShape {
  * @returns A human-readable cause, e.g.
  *   `code 403 — Service Accounts do not have storage quota... — storageQuotaExceeded: ...`.
  */
-export function describeGoogleApiError(error: unknown): string {
+export function DescribeGoogleApiError(error: unknown): string {
   if (error === null || typeof error !== 'object') {
     return String(error);
   }
@@ -129,6 +145,11 @@ export function describeGoogleApiError(error: unknown): string {
   return parts.length > 0 ? parts.join(' — ') : String(error);
 }
 
+/** @deprecated Use {@link DescribeGoogleApiError}. */
+export function describeGoogleApiError(error: unknown): string {
+  return DescribeGoogleApiError(error);
+}
+
 /**
  * Google Drive implementation of the FileStorageBase interface.
  *
@@ -140,11 +161,14 @@ export function describeGoogleApiError(error: unknown): string {
  * folders and files with hierarchical paths, which makes some operations more natural
  * while others (like pre-authenticated upload URLs) are not directly supported.
  *
- * It requires one of the following environment variables to be set:
+ * It authenticates with one of the following, from environment variables or a credential record:
  * - STORAGE_GDRIVE_KEY_FILE: Path to a service account key file with Drive permissions
  * - STORAGE_GDRIVE_CREDENTIALS_JSON: A JSON object containing service account credentials
+ * - STORAGE_GOOGLE_DRIVE_CLIENT_ID, _CLIENT_SECRET and _REFRESH_TOKEN: OAuth2
  *
  * Optionally, you can set:
+ * - STORAGE_GDRIVE_DRIVE_ID: Shared Drive ID. Required for a service account to upload, since a
+ *   service account has no storage quota of its own; also becomes the default root.
  * - STORAGE_GDRIVE_ROOT_FOLDER_ID: ID of a folder to use as the root (for isolation)
  *
  * @example
@@ -173,6 +197,9 @@ export class GoogleDriveFileStorage extends FileStorageBase {
   /** Optional root folder ID to restrict operations to a specific folder */
   private _rootFolderId?: string;
 
+  /** Shared Drive id (#3847) — where a service account can actually write. */
+  private _driveId?: string;
+
   /** OAuth2 credentials for configuration checking */
   private _clientID?: string;
   private _clientSecret?: string;
@@ -185,11 +212,27 @@ export class GoogleDriveFileStorage extends FileStorageBase {
    * key file or credentials provided directly in environment variables.
    * Throws an error if neither authentication method is properly configured.
    */
+  /**
+   * Builds the Drive client with `supportsAllDrives` / `includeItemsFromAllDrives` as DEFAULT
+   * request params (#3847). googleapis applies client-level params to every request, which is what
+   * makes Shared Drive support hold across all 25 call sites in this driver instead of being a
+   * per-call flag somebody forgets on the next one; endpoints that ignore a param ignore it.
+   * Without these, a service account cannot touch a Shared Drive — and Google's quota model means
+   * a Shared Drive is the only place a service account CAN write.
+   */
+  private buildDrive(auth: InstanceType<typeof google.auth.GoogleAuth> | InstanceType<typeof google.auth.JWT> | InstanceType<typeof google.auth.OAuth2>): drive_v3.Drive {
+    return google.drive({
+      version: 'v3',
+      auth,
+      params: { supportsAllDrives: true, includeItemsFromAllDrives: true },
+    });
+  }
+
   constructor() {
     super();
 
     // Try to get config from centralized configuration
-    const config = getProviderConfig('googleDrive');
+    const config = GetProviderConfig('googleDrive');
 
     // Get credentials from config or environment
     const keyFile = config?.keyFile || env.get('STORAGE_GDRIVE_KEY_FILE').asString();
@@ -207,7 +250,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
         keyFile,
         scopes: ['https://www.googleapis.com/auth/drive'],
       });
-      this._drive = google.drive({ version: 'v3', auth });
+      this._drive = this.buildDrive(auth);
     } else if (credentials) {
       // Method 2: Using credentials directly (service account)
       const creds: ServiceAccountCredentials = typeof credentials === 'string' ? JSON.parse(credentials) : credentials;
@@ -216,22 +259,26 @@ export class GoogleDriveFileStorage extends FileStorageBase {
         key: creds.private_key,
         scopes: ['https://www.googleapis.com/auth/drive'],
       });
-      this._drive = google.drive({ version: 'v3', auth });
+      this._drive = this.buildDrive(auth);
     } else if (this._clientID && this._clientSecret && this._refreshToken) {
       // Method 3: Using OAuth2 with refresh token
       const auth = new google.auth.OAuth2(this._clientID, this._clientSecret, redirectURI);
       auth.setCredentials({ refresh_token: this._refreshToken });
-      this._drive = google.drive({ version: 'v3', auth });
+      this._drive = this.buildDrive(auth);
     }
     // If no credentials found, _drive will be undefined and initialize() must be called
 
-    // Optionally set a root folder ID to restrict operations
-    this._rootFolderId = config?.rootFolderID || env.get('STORAGE_GDRIVE_ROOT_FOLDER_ID').asString();
+    // Optionally set a root folder ID to restrict operations. A configured Shared Drive id is the
+    // default root — a Shared Drive's id doubles as its root folder id (#3847).
+    this._driveId = config?.driveID || env.get('STORAGE_GDRIVE_DRIVE_ID').asString();
+    this._rootFolderId = config?.rootFolderID || env.get('STORAGE_GDRIVE_ROOT_FOLDER_ID').asString() || this._driveId;
   }
 
   /**
    * Checks if Google Drive provider is properly configured.
-   * Returns true if all required OAuth credentials are present.
+   * Returns true when a Drive client exists (service account via key file or credentials JSON, or
+   * OAuth2) or all OAuth2 credentials are present. Search indexing and content autotagging skip an
+   * account that reports false, so a working service-account client must count (#3847).
    * Logs detailed error messages if configuration is incomplete.
    */
   public get IsConfigured(): boolean {
@@ -239,7 +286,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
     const hasClientSecret = !!this._clientSecret;
     const hasRefreshToken = !!this._refreshToken;
 
-    const isConfigured = hasClientID && hasClientSecret && hasRefreshToken;
+    const isConfigured = !!this._drive || (hasClientID && hasClientSecret && hasRefreshToken);
 
     if (!isConfigured) {
       const missing: string[] = [];
@@ -250,7 +297,9 @@ export class GoogleDriveFileStorage extends FileStorageBase {
       console.error(
         `❌ Google Drive provider not configured. Missing: ${missing.join(', ')}\n\n` +
         `Configuration Options:\n\n` +
-        `Option 1: Environment Variables\n` +
+        `Service account: set STORAGE_GDRIVE_KEY_FILE or STORAGE_GDRIVE_CREDENTIALS_JSON, plus\n` +
+        `STORAGE_GDRIVE_DRIVE_ID for a Shared Drive (a service account has no storage of its own).\n\n` +
+        `Option 1: Environment Variables (OAuth2)\n` +
         `  export STORAGE_GDRIVE_CLIENT_ID="..."\n` +
         `  export STORAGE_GDRIVE_CLIENT_SECRET="..."\n` +
         `  export STORAGE_GDRIVE_REFRESH_TOKEN="..."\n` +
@@ -306,20 +355,62 @@ export class GoogleDriveFileStorage extends FileStorageBase {
     this._clientSecret = config.clientSecret || this._clientSecret;
     this._refreshToken = config.refreshToken || this._refreshToken;
 
-    // Update root folder ID if provided
+    // Update root folder ID / Shared Drive if provided. A credential record's location replaces the
+    // server-wide one from env: a record naming Shared Drive B must navigate B even when
+    // STORAGE_GDRIVE_DRIVE_ID or STORAGE_GDRIVE_ROOT_FOLDER_ID points somewhere else, since a root
+    // folder in drive A means nothing in drive B. An explicit rootFolderID in the record still wins.
+    if (config.driveID) {
+      this._driveId = config.driveID;
+    }
     if (config.rootFolderID) {
       this._rootFolderId = config.rootFolderID;
+    } else if (config.driveID) {
+      this._rootFolderId = config.driveID;
     }
 
-    // Reinitialize the Google Drive client with new OAuth2 credentials
+    // Reinitialize the client, mirroring the constructor's THREE auth methods (#3847). Before
+    // this, only OAuth2 fields were read here, so a database credential carrying service-account
+    // material threw — and it threw even when the constructor had already built a working client
+    // from env, meaning attaching a credential record BROKE a working driver.
+    if (config.keyFile) {
+      const auth = new google.auth.GoogleAuth({
+        keyFile: config.keyFile,
+        scopes: ['https://www.googleapis.com/auth/drive'],
+      });
+      this._drive = this.buildDrive(auth);
+      return;
+    }
+    if (config.credentialsJSON) {
+      const creds: ServiceAccountCredentials =
+        typeof config.credentialsJSON === 'string' ? JSON.parse(config.credentialsJSON) : config.credentialsJSON;
+      const auth = new google.auth.JWT({
+        email: creds.client_email,
+        key: creds.private_key,
+        scopes: ['https://www.googleapis.com/auth/drive'],
+      });
+      this._drive = this.buildDrive(auth);
+      return;
+    }
     if (this._clientID && this._clientSecret && this._refreshToken) {
       const redirectURI = 'urn:ietf:wg:oauth:2.0:oob';
       const auth = new google.auth.OAuth2(this._clientID, this._clientSecret, redirectURI);
       auth.setCredentials({ refresh_token: this._refreshToken });
-      this._drive = google.drive({ version: 'v3', auth });
-    } else {
-      throw new Error('Google Drive storage requires clientID, clientSecret, and refreshToken to be set');
+      this._drive = this.buildDrive(auth);
+      return;
     }
+    // No usable credential in the record. If the constructor already built a client (env
+    // key-file / credentials-JSON), KEEP IT — a credential record that adds only a root folder or
+    // account name must not un-configure a working driver. Throw only when there is nothing at all.
+    if (!this._drive) {
+      throw new Error(
+        'Google Drive storage requires one of: keyFile, credentialsJSON, or clientID+clientSecret+refreshToken.'
+      );
+    }
+    console.warn(
+      `Google Drive account "${config.accountName ?? config.accountId ?? 'unnamed'}": the credential carries no keyFile, ` +
+      `credentialsJSON or clientID+clientSecret+refreshToken, so it uses the server's Google Drive client from ` +
+      `environment configuration. If the record was meant to authenticate on its own, check its key names.`
+    );
   }
 
   /**
@@ -700,7 +791,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
       return true;
     } catch (error) {
-      LogError(`GoogleDriveFileStorage.MoveObject failed ('${oldObjectName}' -> '${newObjectName}'): ${describeGoogleApiError(error)}`);
+      LogError(`GoogleDriveFileStorage.MoveObject failed ('${oldObjectName}' -> '${newObjectName}'): ${DescribeGoogleApiError(error)}`);
       return false;
     }
   }
@@ -749,7 +840,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
         return true;
       }
 
-      LogError(`GoogleDriveFileStorage.DeleteObject failed for '${objectName}': ${describeGoogleApiError(error)}`);
+      LogError(`GoogleDriveFileStorage.DeleteObject failed for '${objectName}': ${DescribeGoogleApiError(error)}`);
       return false;
     }
   }
@@ -831,7 +922,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
       console.log('[GoogleDriveFileStorage] Returning:', { objectCount: objects.length, prefixCount: prefixes.length });
       return { objects, prefixes };
     } catch (error) {
-      LogError(`GoogleDriveFileStorage.ListObjects failed for prefix '${prefix}': ${describeGoogleApiError(error)}`);
+      LogError(`GoogleDriveFileStorage.ListObjects failed for prefix '${prefix}': ${DescribeGoogleApiError(error)}`);
       return { objects: [], prefixes: [] };
     }
   }
@@ -886,7 +977,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
       return true;
     } catch (error) {
-      LogError(`GoogleDriveFileStorage.CreateDirectory failed for '${directoryPath}': ${describeGoogleApiError(error)}`);
+      LogError(`GoogleDriveFileStorage.CreateDirectory failed for '${directoryPath}': ${DescribeGoogleApiError(error)}`);
       return false;
     }
   }
@@ -944,7 +1035,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
       return true;
     } catch (error) {
-      LogError(`GoogleDriveFileStorage.DeleteDirectory failed for '${directoryPath}' (recursive: ${recursive}): ${describeGoogleApiError(error)}`);
+      LogError(`GoogleDriveFileStorage.DeleteDirectory failed for '${directoryPath}' (recursive: ${recursive}): ${DescribeGoogleApiError(error)}`);
       return false;
     }
   }
@@ -1012,7 +1103,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
       return this._fileToMetadata(file, parentPath);
     } catch (error) {
-      const cause = describeGoogleApiError(error);
+      const cause = DescribeGoogleApiError(error);
       LogError(`GoogleDriveFileStorage.GetObjectMetadata failed for '${params.objectId || params.fullPath}': ${cause}`);
       throw new Error(`Object not found: ${params.objectId || params.fullPath}. ${cause}`);
     }
@@ -1115,7 +1206,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
       return Buffer.from(response.data as ArrayBuffer);
     } catch (error) {
-      const cause = describeGoogleApiError(error);
+      const cause = DescribeGoogleApiError(error);
       LogError(`GoogleDriveFileStorage.GetObject failed for '${params.objectId || params.fullPath}': ${cause}`);
       throw new Error(`Failed to get object: ${params.objectId || params.fullPath}. ${cause}`);
     }
@@ -1207,7 +1298,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
       return result;
     } catch (error) {
-      const cause = describeGoogleApiError(error);
+      const cause = DescribeGoogleApiError(error);
       LogError(`GoogleDriveFileStorage.GetObjectStream failed for '${params.objectId || params.fullPath}': ${cause}`);
       throw new Error(`Failed to stream object: ${params.objectId || params.fullPath}. ${cause}`);
     }
@@ -1265,12 +1356,15 @@ export class GoogleDriveFileStorage extends FileStorageBase {
         // File doesn't exist, will create new
       }
 
+      // googleapis requires media.body to be a STREAM — handed the raw Buffer it dies inside
+      // files.create with `part.body.pipe is not a function`, AFTER auth and folder creation
+      // succeeded, which is why every symptom read as bad storage configuration (#3847).
       if (existingFileId) {
         // Update existing file
         await this._drive.files.update({
           fileId: existingFileId,
           media: {
-            body: data,
+            body: Readable.from(data),
             mimeType: effectiveContentType,
           },
         });
@@ -1282,7 +1376,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
             parents: [parentId],
           },
           media: {
-            body: data,
+            body: Readable.from(data),
             mimeType: effectiveContentType,
           },
           fields: 'id',
@@ -1291,7 +1385,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
       return true;
     } catch (error) {
-      LogError(`GoogleDriveFileStorage.PutObject failed for '${objectName}': ${describeGoogleApiError(error)}`);
+      LogError(`GoogleDriveFileStorage.PutObject failed for '${objectName}': ${DescribeGoogleApiError(error)}`);
       return false;
     }
   }
@@ -1350,7 +1444,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
       return true;
     } catch (error) {
       LogError(
-        `GoogleDriveFileStorage.CopyObject failed ('${sourceObjectName}' -> '${destinationObjectName}'): ${describeGoogleApiError(error)}`,
+        `GoogleDriveFileStorage.CopyObject failed ('${sourceObjectName}' -> '${destinationObjectName}'): ${DescribeGoogleApiError(error)}`,
       );
       return false;
     }
@@ -1570,7 +1664,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
         nextPageToken: response.data.nextPageToken || undefined,
       };
     } catch (error) {
-      const cause = describeGoogleApiError(error);
+      const cause = DescribeGoogleApiError(error);
       LogError(`GoogleDriveFileStorage.SearchFiles failed for query '${query}': ${cause}`);
       throw new Error(`Google Drive search failed: ${cause}`);
     }

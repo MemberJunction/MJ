@@ -21,7 +21,7 @@ export class ExportEngine {
    * @param options Export options including format, columns, sampling, etc.
    * @returns Export result with buffer and metadata
    */
-  static async export(
+  static async Export(
     data: ExportData,
     options: Partial<ExportOptions> = {}
   ): Promise<ExportResult> {
@@ -29,24 +29,48 @@ export class ExportEngine {
     return exporter.export(data);
   }
 
+  /** @deprecated Use {@link Export}. */
+  static async export(
+    data: ExportData,
+    options: Partial<ExportOptions> = {}
+  ): Promise<ExportResult> {
+    return this.Export(data, options);
+  }
+
   /**
    * Export to Excel format (single sheet)
    */
+  static async ToExcel(
+    data: ExportData,
+    options: Omit<Partial<ExportOptions>, 'format'> = {}
+  ): Promise<ExportResult> {
+    return this.Export(data, { ...options, format: 'excel' });
+  }
+
+  /** @deprecated Use {@link ToExcel}. */
   static async toExcel(
     data: ExportData,
     options: Omit<Partial<ExportOptions>, 'format'> = {}
   ): Promise<ExportResult> {
-    return this.export(data, { ...options, format: 'excel' });
+    return this.ToExcel(data, options);
   }
 
   /**
    * Export to CSV format
    */
+  static async ToCSV(
+    data: ExportData,
+    options: Omit<Partial<ExportOptions>, 'format'> = {}
+  ): Promise<ExportResult> {
+    return this.Export(data, { ...options, format: 'csv' });
+  }
+
+  /** @deprecated Use {@link ToCSV}. */
   static async toCSV(
     data: ExportData,
     options: Omit<Partial<ExportOptions>, 'format'> = {}
   ): Promise<ExportResult> {
-    return this.export(data, { ...options, format: 'csv' });
+    return this.ToCSV(data, options);
   }
 
   /**
@@ -56,7 +80,7 @@ export class ExportEngine {
     data: ExportData,
     options: Omit<Partial<ExportOptions>, 'format'> = {}
   ): Promise<ExportResult> {
-    return this.export(data, { ...options, format: 'json' });
+    return this.Export(data, { ...options, format: 'json' });
   }
 
   /**
@@ -84,7 +108,7 @@ export class ExportEngine {
    * });
    * ```
    */
-  static async toExcelMultiSheet(
+  static async ToExcelMultiSheet(
     sheets: SheetDefinition[],
     options: {
       fileName?: string;
@@ -109,6 +133,20 @@ export class ExportEngine {
     return exporter.export([]);
   }
 
+  /** @deprecated Use {@link ToExcelMultiSheet}. */
+  static async toExcelMultiSheet(
+    sheets: SheetDefinition[],
+    options: {
+      fileName?: string;
+      metadata?: WorkbookMetadata;
+      defaultDateFormat?: string;
+      defaultNumberFormat?: string;
+      calcOnSave?: boolean;
+    } = {}
+  ): Promise<ExportResult> {
+    return this.ToExcelMultiSheet(sheets, options);
+  }
+
   /**
    * Create an exporter instance asynchronously (supports all formats including Excel)
    */
@@ -131,7 +169,7 @@ export class ExportEngine {
    * Create an exporter instance for the specified format (sync - csv/json only)
    * For Excel format, use CreateExporterAsync() instead.
    */
-  static createExporter(format: ExportFormat, options: Partial<ExportOptions> = {}): BaseExporter {
+  static CreateExporter(format: ExportFormat, options: Partial<ExportOptions> = {}): BaseExporter {
     switch (format) {
       case 'excel':
         throw new Error('Excel export requires async initialization. Use CreateExporterAsync() instead.');
@@ -144,56 +182,91 @@ export class ExportEngine {
     }
   }
 
+  /** @deprecated Use {@link CreateExporter}. */
+  static createExporter(format: ExportFormat, options: Partial<ExportOptions> = {}): BaseExporter {
+    return this.CreateExporter(format, options);
+  }
+
   /**
    * Get supported export formats
    */
-  static getSupportedFormats(): ExportFormat[] {
+  static GetSupportedFormats(): ExportFormat[] {
     return ['excel', 'csv', 'json'];
+  }
+
+  /** @deprecated Use {@link GetSupportedFormats}. */
+  static getSupportedFormats(): ExportFormat[] {
+    return this.GetSupportedFormats();
   }
 
   /**
    * Get MIME type for a format
    */
-  static getMimeType(format: ExportFormat): string {
+  static GetMimeType(format: ExportFormat): string {
     if (format === 'excel') return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    const exporter = this.createExporter(format);
+    const exporter = this.CreateExporter(format);
     return exporter.getMimeType();
+  }
+
+  /** @deprecated Use {@link GetMimeType}. */
+  static getMimeType(format: ExportFormat): string {
+    return this.GetMimeType(format);
   }
 
   /**
    * Get file extension for a format
    */
-  static getFileExtension(format: ExportFormat): string {
+  static GetFileExtension(format: ExportFormat): string {
     if (format === 'excel') return 'xlsx';
-    const exporter = this.createExporter(format);
+    const exporter = this.CreateExporter(format);
     return exporter.getFileExtension();
+  }
+
+  /** @deprecated Use {@link GetFileExtension}. */
+  static getFileExtension(format: ExportFormat): string {
+    return this.GetFileExtension(format);
   }
 
   /**
    * Check if a format supports multi-sheet export
    */
-  static supportsMultiSheet(format: ExportFormat): boolean {
+  static SupportsMultiSheet(format: ExportFormat): boolean {
     return format === 'excel';
+  }
+
+  /** @deprecated Use {@link SupportsMultiSheet}. */
+  static supportsMultiSheet(format: ExportFormat): boolean {
+    return this.SupportsMultiSheet(format);
   }
 
   /**
    * Check if a format supports formulas
    */
-  static supportsFormulas(format: ExportFormat): boolean {
+  static SupportsFormulas(format: ExportFormat): boolean {
     return format === 'excel';
+  }
+
+  /** @deprecated Use {@link SupportsFormulas}. */
+  static supportsFormulas(format: ExportFormat): boolean {
+    return this.SupportsFormulas(format);
   }
 
   /**
    * Check if a format supports styling
    */
-  static supportsStyling(format: ExportFormat): boolean {
+  static SupportsStyling(format: ExportFormat): boolean {
     return format === 'excel';
+  }
+
+  /** @deprecated Use {@link SupportsStyling}. */
+  static supportsStyling(format: ExportFormat): boolean {
+    return this.SupportsStyling(format);
   }
 
   /**
    * Get format capabilities
    */
-  static getFormatCapabilities(format: ExportFormat): {
+  static GetFormatCapabilities(format: ExportFormat): {
     multiSheet: boolean;
     formulas: boolean;
     styling: boolean;
@@ -223,5 +296,18 @@ export class ExportEngine {
       conditionalFormatting: false,
       protection: false
     };
+  }
+
+  /** @deprecated Use {@link GetFormatCapabilities}. */
+  static getFormatCapabilities(format: ExportFormat): {
+    multiSheet: boolean;
+    formulas: boolean;
+    styling: boolean;
+    images: boolean;
+    dataValidation: boolean;
+    conditionalFormatting: boolean;
+    protection: boolean;
+  } {
+    return this.GetFormatCapabilities(format);
   }
 }

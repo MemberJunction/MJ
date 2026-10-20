@@ -1,5 +1,5 @@
 import { Command, Flags, Args } from '@oclif/core';
-import { TEST_FORMAT_FLAG, TEST_FORMAT_MAP, resolveLegacyFormat } from '../../lib/format-compat.js';
+import { TEST_FORMAT_FLAG, TEST_FORMAT_MAP, ResolveLegacyFormat } from '../../lib/format-compat.js';
 
 export default class TestSuite extends Command {
   static description = 'Execute a test suite';
@@ -47,6 +47,9 @@ export default class TestSuite extends Command {
       description: 'Maximum number of parallel workers (default 4)',
       default: 4,
     }),
+    rubric: Flags.string({
+      description: 'Rubric override for every test: name or id, optionally @version',
+    }),
     'flaky-check': Flags.integer({
       description: 'Run each test N times to detect flakiness (variance > 0.3 or mixed pass/fail = flaky). Recommended: 3 or 5',
     }),
@@ -75,11 +78,11 @@ export default class TestSuite extends Command {
       const suiteCommand = new SuiteCommand();
       await suiteCommand.execute(args.suiteId, {
         name: flags.name,
-        format: resolveLegacyFormat({
-          format: flags.format,
-          legacy: 'console' as const,
-          legacyDefault: 'console' as const,
-          map: TEST_FORMAT_MAP,
+        format: ResolveLegacyFormat({
+          Format: flags.format,
+          Legacy: 'console' as const,
+          LegacyDefault: 'console' as const,
+          Map: TEST_FORMAT_MAP,
         }),
         output: flags.output,
         verbose: flags.verbose,
@@ -87,6 +90,7 @@ export default class TestSuite extends Command {
         parallel: flags.parallel,
         maxParallel: flags['max-parallel'],
         flakyCheck: flags['flaky-check'],
+        rubric: flags.rubric,
         oraclesModule: flags['oracles-module'],
         checksModule: flags['checks-module'],
       });

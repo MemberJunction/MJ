@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { AdvancedGeneration, isPlausibleEntityName } from '../Misc/advanced_generation';
+import { AdvancedGeneration, IsPlausibleEntityName } from '../Misc/advanced_generation';
 
 /**
  * The AI entity-name path must never hand a non-name to the INSERT.
@@ -44,16 +44,16 @@ describe('isPlausibleEntityName', () => {
         ['entityName', false],
         ['!!!', false]
     ])('%j → %s', (candidate, plausible) => {
-        expect(isPlausibleEntityName(candidate)).toBe(plausible);
+        expect(IsPlausibleEntityName(candidate)).toBe(plausible);
     });
 
     it('rejects non-strings and names wider than the column', () => {
-        expect(isPlausibleEntityName(-1)).toBe(false);
-        expect(isPlausibleEntityName(null)).toBe(false);
-        expect(isPlausibleEntityName(undefined)).toBe(false);
-        expect(isPlausibleEntityName({ entityName: 'Attendees' })).toBe(false);
-        expect(isPlausibleEntityName('A'.repeat(256))).toBe(false);
-        expect(isPlausibleEntityName('A'.repeat(255))).toBe(true);
+        expect(IsPlausibleEntityName(-1)).toBe(false);
+        expect(IsPlausibleEntityName(null)).toBe(false);
+        expect(IsPlausibleEntityName(undefined)).toBe(false);
+        expect(IsPlausibleEntityName({ entityName: 'Attendees' })).toBe(false);
+        expect(IsPlausibleEntityName('A'.repeat(256))).toBe(false);
+        expect(IsPlausibleEntityName('A'.repeat(255))).toBe(true);
     });
 });
 

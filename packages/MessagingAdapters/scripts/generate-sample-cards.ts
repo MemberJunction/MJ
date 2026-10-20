@@ -14,7 +14,7 @@ import sql from 'mssql';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { buildRichAdaptiveCard, buildErrorCard } from '../src/teams/teams-card-builder.js';
+import { BuildRichAdaptiveCard, BuildErrorCard } from '../src/teams/teams-card-builder.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUTPUT_DIR = path.join(__dirname, 'sample-cards');
@@ -148,7 +148,7 @@ async function main(): Promise<void> {
         };
 
         // Generate the rich card
-        const card = buildRichAdaptiveCard(
+        const card = BuildRichAdaptiveCard(
             mockResult as never,
             agent as never,
             responseText,
@@ -174,7 +174,7 @@ async function main(): Promise<void> {
     }
 
     // Generate one error card sample
-    const errorCard = buildErrorCard('Agent execution failed: timeout after 60 seconds');
+    const errorCard = BuildErrorCard('Agent execution failed: timeout after 60 seconds');
     const errorPath = path.join(OUTPUT_DIR, 'error-card-sample.json');
     fs.writeFileSync(errorPath, JSON.stringify(errorCard, null, 2));
     console.log(`  Error card sample saved: ${errorPath}\n`);

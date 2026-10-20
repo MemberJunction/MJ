@@ -359,8 +359,13 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * Alias for {@link Count}, so the collection reads like a collection in the places people expect
      * `length`. Both go through {@link Items}, so both trigger a lazy fill and see a live cache view.
      */
-    public get length(): number {
+    public get Length(): number {
         return this.Count;
+    }
+
+    /** @deprecated Use {@link Length}. */
+    public get length(): number {
+        return this.Length;
     }
 
     /**

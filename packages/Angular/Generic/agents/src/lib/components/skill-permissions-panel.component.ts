@@ -101,8 +101,13 @@ export class SkillPermissionsPanelComponent implements OnInit {
     // List interactions
     // =========================================================================
 
-    public trackById(_index: number, row: SkillPermissionRow): string {
+    public TrackById(_index: number, row: SkillPermissionRow): string {
         return row.ID;
+    }
+
+    /** @deprecated Use {@link TrackById}. */
+    public trackById(_index: number, row: SkillPermissionRow): string {
+      return this.TrackById(_index, row);
     }
 
     public OnAddNew(): void {

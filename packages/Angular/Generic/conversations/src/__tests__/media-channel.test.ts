@@ -4,7 +4,7 @@ import '@angular/compiler';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/components/realtime/channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient, RealtimeChannelContext } from '@memberjunction/realtime-runtime';
 import { LoadRealtimeMediaChannel, RealtimeMediaChannel } from '../lib/components/realtime/media/media-channel';
 import { MediaChannelState, MediaItem } from '../lib/components/realtime/media/media-channel-state';
 import { MEDIA_TOOL_NAMES } from '../lib/components/realtime/media/media-channel-tools';

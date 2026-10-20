@@ -14,8 +14,8 @@
 
 /** Serializable storage snapshot returned by {@link captureStorageInPage}. */
 export interface StorageSnapshot {
-    localStorage: { name: string; value: string }[];
-    databases: {
+    localStorage: { name: string; value: string }[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    databases: {  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
         Name: string;
         Version: number;
         Stores: { Name: string; KeyPath: string | string[] | null; AutoIncrement: boolean; Records: { Key?: unknown; Value: unknown }[] }[];
@@ -28,7 +28,7 @@ export interface StorageSnapshot {
  * self-contained; references only browser globals. Closes over each IDBRequest
  * (rather than reading `event.target`) so the DOM types stay precise.
  */
-export function captureStorageInPage(): Promise<StorageSnapshot> {
+export function CaptureStorageInPage(): Promise<StorageSnapshot> {
     const snap: StorageSnapshot = { localStorage: [], databases: [] };
     try {
         for (let i = 0; i < localStorage.length; i++) {
@@ -89,13 +89,18 @@ export function captureStorageInPage(): Promise<StorageSnapshot> {
     })();
 }
 
+/** @deprecated Use {@link CaptureStorageInPage}. */
+export function captureStorageInPage(): Promise<StorageSnapshot> {
+    return CaptureStorageInPage();
+}
+
 /**
  * In-page (BROWSER context): restore a {@link StorageSnapshot} into fresh
  * storage BEFORE app scripts run. Cold-boot-safe by contract — any
  * per-database failure DELETES that database so the app cold-boots it clean,
  * never a half-populated (corrupt) cache. Fully self-contained.
  */
-export function restoreStorageInPage(snap: StorageSnapshot): void {
+export function RestoreStorageInPage(snap: StorageSnapshot): void {
     for (const { name, value } of snap.localStorage) {
         try { localStorage.setItem(name, value); } catch { /* skip */ }
     }
@@ -131,4 +136,9 @@ export function restoreStorageInPage(snap: StorageSnapshot): void {
             };
         } catch { /* skip database */ }
     }
+}
+
+/** @deprecated Use {@link RestoreStorageInPage}. */
+export function restoreStorageInPage(snap: StorageSnapshot): void {
+    return RestoreStorageInPage(snap);
 }

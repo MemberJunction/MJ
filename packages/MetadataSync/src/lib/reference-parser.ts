@@ -9,11 +9,14 @@
  * drive this code, not re-declared copies of its regexes.
  *
  * NOTE: this is the *validation-side* parser. The push-side runtime resolution
- * in `sync-engine.ts` (`processFieldValue`) has its own parsing that
- * additionally understands `@url:` and the `?allowDefer` flag.
+ * in `sync-engine.ts` (`ProcessFieldValue`) also understands `@url:`. Both sides
+ * split `@lookup:` with `SplitLookupReference` and read `@env:` with
+ * {@link ENV_REFERENCE_PATTERN}.
  */
 
 import { METADATA_KEYWORDS } from '../constants/metadata-keywords';
+import { ENV_REFERENCE_PATTERN } from './env-reference';
+import { ParseLookupCreateFields, SplitLookupReference } from './lookup-reference';
 import type { ParsedReference, ReferenceType } from '../types/validation';
 
 /**
@@ -28,7 +31,7 @@ const REFERENCE_PATTERNS: ReadonlyArray<readonly [ReferenceType, RegExp]> = [
   [METADATA_KEYWORDS.PARENT, /^@parent:(.+)$/],
   [METADATA_KEYWORDS.ROOT, /^@root:(.+)$/],
   [METADATA_KEYWORDS.OWNER, /^@owner:(.+)$/],
-  [METADATA_KEYWORDS.ENV, /^@env:(.+)$/],
+  [METADATA_KEYWORDS.ENV, ENV_REFERENCE_PATTERN],
 ];
 
 /**
@@ -38,7 +41,7 @@ const REFERENCE_PATTERNS: ReadonlyArray<readonly [ReferenceType, RegExp]> = [
  * @returns The parsed reference, or `null` when the string is not a
  *          recognized reference (including bare prefixes like `"@file:"`)
  */
-export function parseMetadataReference(reference: string): ParsedReference | null {
+export function ParseMetadataReference(reference: string): ParsedReference | null {
   for (const [type, pattern] of REFERENCE_PATTERNS) {
     const match = reference.match(pattern);
     if (!match) {
@@ -54,33 +57,41 @@ export function parseMetadataReference(reference: string): ParsedReference | nul
   return null;
 }
 
+/** @deprecated Use {@link ParseMetadataReference}. */
+export function parseMetadataReference(reference: string): ParsedReference | null {
+  return ParseMetadataReference(reference);
+}
+
 /**
- * Parses the portion of a `@lookup:` reference after the entity name.
- *
- * Handles single-field (`Name=X`) and multi-field (`Name=X&Status=Y`)
- * criteria, the `?create` flag, and `?create&Field=Value` additional
- * creation fields (values URI-decoded).
+ * Parses the portion of a `@lookup:` reference after the entity name, split the way push splits it:
+ * criteria before the first `?`, flags after it. Handles single-field (`Name=X`) and multi-field
+ * (`Name=X&Status=Y`) criteria, the `create` flag, and `create&Field=Value` creation fields.
  */
 function parseLookupReference(entity: string, remaining: string): ParsedReference {
-  // Check if this has ?create syntax
-  const hasCreate = remaining.includes('?create');
-  const lookupPart = hasCreate ? remaining.split('?')[0] : remaining;
+  const split = SplitLookupReference(`${entity}.${remaining}`);
+  const criteriaText = split ? split.CriteriaText : remaining;
+  const flagsText = split ? split.FlagsText : '';
+  const hasCreate = split ? split.FlagNames.has('create') : false;
 
   // Parse all lookup fields (can be multiple with &)
-  const fields = parseLookupCriteria(lookupPart);
+  const fields = parseLookupCriteria(criteriaText);
 
   // For backward compatibility, use the first field as primary
   const primaryField = fields.length > 0 ? fields[0] : { field: '', value: '' };
 
-  return {
+  const parsed: ParsedReference = {
     type: METADATA_KEYWORDS.LOOKUP,
     value: primaryField.value,
     entity,
     field: primaryField.field,
     fields, // Include all fields for validation
     createIfMissing: hasCreate,
-    additionalFields: parseCreateFields(remaining, hasCreate),
+    additionalFields: parseCreateFields(flagsText, hasCreate),
   };
+  if (split && split.UnknownBareFlags.length > 0) {
+    parsed.UnknownFlags = split.UnknownBareFlags;
+  }
+  return parsed;
 }
 
 /**
@@ -101,22 +112,14 @@ function parseLookupCriteria(lookupPart: string): Array<{ field: string; value: 
   return fields;
 }
 
-/**
- * Parses additional creation fields following `?create&` (e.g.
- * `?create&Description=Auto%20created`). Values are URI-decoded.
- */
-function parseCreateFields(remaining: string, hasCreate: boolean): Record<string, string> {
+/** The creation fields after the `create` flag (e.g. `create&Description=Auto%20created`). Values are URI-decoded. */
+function parseCreateFields(flagsText: string, hasCreate: boolean): Record<string, string> {
   const additionalFields: Record<string, string> = {};
-
-  if (hasCreate && remaining.includes('?create&')) {
-    const createPart = remaining.split('?create&')[1];
-    for (const pair of createPart.split('&')) {
-      const [key, val] = pair.split('=');
-      if (key && val) {
-        additionalFields[key] = decodeURIComponent(val);
-      }
-    }
+  if (!hasCreate) {
+    return additionalFields;
   }
-
+  for (const { Name, Value } of ParseLookupCreateFields(flagsText)) {
+    additionalFields[Name] = Value;
+  }
   return additionalFields;
 }

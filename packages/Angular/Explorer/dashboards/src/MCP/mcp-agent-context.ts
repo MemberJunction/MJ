@@ -58,16 +58,26 @@ export const MCP_AGENT_CONTEXT_NAME_LIST_CAP = 25;
  * client tool tolerant of arbitrary agent input — only the four known tabs are
  * accepted.
  */
-export function isValidMCPTab(tab: unknown): tab is MCPDashboardTab {
+export function IsValidMCPTab(tab: unknown): tab is MCPDashboardTab {
     return typeof tab === 'string' && (MCP_TABS as readonly string[]).includes(tab);
+}
+
+/** @deprecated Use {@link IsValidMCPTab}. */
+export function isValidMCPTab(tab: unknown): tab is MCPDashboardTab {
+    return IsValidMCPTab(tab);
 }
 
 /**
  * Type-guard / validator for a tools-view-mode string. Keeps the
  * `SetToolsViewMode` client tool tolerant of arbitrary agent input.
  */
-export function isValidToolsViewMode(mode: unknown): mode is ToolsViewMode {
+export function IsValidToolsViewMode(mode: unknown): mode is ToolsViewMode {
     return typeof mode === 'string' && (MCP_TOOLS_VIEW_MODES as readonly string[]).includes(mode);
+}
+
+/** @deprecated Use {@link IsValidToolsViewMode}. */
+export function isValidToolsViewMode(mode: unknown): mode is ToolsViewMode {
+    return IsValidToolsViewMode(mode);
 }
 
 /**
@@ -77,8 +87,13 @@ export function isValidToolsViewMode(mode: unknown): mode is ToolsViewMode {
  * @param names - the full list of names (the caller owns de-duplication / ordering)
  * @returns the first N names; a new array (never mutates the input)
  */
-export function capMCPNames(names: readonly string[]): string[] {
+export function CapMCPNames(names: readonly string[]): string[] {
     return names.slice(0, MCP_AGENT_CONTEXT_NAME_LIST_CAP);
+}
+
+/** @deprecated Use {@link CapMCPNames}. */
+export function capMCPNames(names: readonly string[]): string[] {
+    return CapMCPNames(names);
 }
 
 /**
@@ -105,7 +120,7 @@ export interface MCPNamedItem {
  * @param input - whatever the agent passed (an ID or a display name)
  * @param candidates - the items available on this surface
  */
-export function resolveMCPItem<T extends MCPNamedItem>(input: string, candidates: readonly T[]): T | null {
+export function ResolveMCPItem<T extends MCPNamedItem>(input: string, candidates: readonly T[]): T | null {
     const needle = (input ?? '').trim().toLowerCase();
     if (!needle) {
         return null;
@@ -121,6 +136,11 @@ export function resolveMCPItem<T extends MCPNamedItem>(input: string, candidates
     return candidates.find(c => c.Name.toLowerCase().includes(needle)) ?? null;
 }
 
+/** @deprecated Use {@link ResolveMCPItem}. */
+export function resolveMCPItem<T extends MCPNamedItem>(input: string, candidates: readonly T[]): T | null {
+    return ResolveMCPItem(input, candidates);
+}
+
 /**
  * Build a tolerant "not found" error message that samples a few of the available
  * names, so the agent can correct itself. Pure + deterministic.
@@ -129,9 +149,14 @@ export function resolveMCPItem<T extends MCPNamedItem>(input: string, candidates
  * @param candidates - the available items (their names are sampled)
  * @param noun - the kind of thing (e.g. "server", "tool") for the message
  */
-export function buildMCPNotFoundError(input: string, candidates: readonly MCPNamedItem[], noun: string): string {
+export function BuildMCPNotFoundError(input: string, candidates: readonly MCPNamedItem[], noun: string): string {
     const sample = candidates.slice(0, 6).map(c => c.Name).join(', ');
     return `No ${noun} matching "${input}" is available. Available ${noun}s include: ${sample || '(none)'}.`;
+}
+
+/** @deprecated Use {@link BuildMCPNotFoundError}. */
+export function buildMCPNotFoundError(input: string, candidates: readonly MCPNamedItem[], noun: string): string {
+    return BuildMCPNotFoundError(input, candidates, noun);
 }
 
 // ============================================================================
@@ -177,7 +202,7 @@ export interface MCPAgentContextInput {
  * @param input - the component's current top-level state snapshot (counts + nav state only)
  * @returns a flat, secret-free key-value object
  */
-export function buildMCPAgentContext(input: MCPAgentContextInput): Record<string, unknown> {
+export function BuildMCPAgentContext(input: MCPAgentContextInput): Record<string, unknown> {
     return {
         ActiveTab: input.ActiveTab,
         ServerCount: input.ServerCount,
@@ -189,6 +214,11 @@ export function buildMCPAgentContext(input: MCPAgentContextInput): Record<string
         CurrentSearchTerm: input.CurrentSearchTerm,
         ToolsViewMode: input.ToolsViewMode,
     };
+}
+
+/** @deprecated Use {@link BuildMCPAgentContext}. */
+export function buildMCPAgentContext(input: MCPAgentContextInput): Record<string, unknown> {
+    return BuildMCPAgentContext(input);
 }
 
 // ============================================================================
@@ -208,7 +238,7 @@ function withBoundedNames(
     if (names.length === 0) {
         return target;
     }
-    target[key] = capMCPNames(names);
+    target[key] = CapMCPNames(names);
     if (names.length > MCP_AGENT_CONTEXT_NAME_LIST_CAP) {
         target[`${key}Count`] = names.length;
     }
@@ -234,7 +264,7 @@ export interface MCPServersContextInput {
 }
 
 /** Build the Servers-tab deep context slice. */
-export function buildMCPServersContext(input: MCPServersContextInput): Record<string, unknown> {
+export function BuildMCPServersContext(input: MCPServersContextInput): Record<string, unknown> {
     const ctx: Record<string, unknown> = {
         Surface: 'servers',
         ServerCount: input.ServerCount,
@@ -245,6 +275,11 @@ export function buildMCPServersContext(input: MCPServersContextInput): Record<st
         SelectedServerName: input.SelectedServerName,
     };
     return withBoundedNames(ctx, 'VisibleServerNames', input.VisibleServerNames);
+}
+
+/** @deprecated Use {@link BuildMCPServersContext}. */
+export function buildMCPServersContext(input: MCPServersContextInput): Record<string, unknown> {
+    return BuildMCPServersContext(input);
 }
 
 /** Component-supplied snapshot for the Connections-tab deep context. */
@@ -264,7 +299,7 @@ export interface MCPConnectionsContextInput {
 }
 
 /** Build the Connections-tab deep context slice. */
-export function buildMCPConnectionsContext(input: MCPConnectionsContextInput): Record<string, unknown> {
+export function BuildMCPConnectionsContext(input: MCPConnectionsContextInput): Record<string, unknown> {
     const ctx: Record<string, unknown> = {
         Surface: 'connections',
         ConnectionCount: input.ConnectionCount,
@@ -274,6 +309,11 @@ export function buildMCPConnectionsContext(input: MCPConnectionsContextInput): R
         SelectedConnectionName: input.SelectedConnectionName,
     };
     return withBoundedNames(ctx, 'VisibleConnectionNames', input.VisibleConnectionNames);
+}
+
+/** @deprecated Use {@link BuildMCPConnectionsContext}. */
+export function buildMCPConnectionsContext(input: MCPConnectionsContextInput): Record<string, unknown> {
+    return BuildMCPConnectionsContext(input);
 }
 
 /** Component-supplied snapshot for the Tools-tab deep context. */
@@ -311,7 +351,7 @@ export interface MCPToolsContextInput {
 }
 
 /** Build the Tools-tab deep context slice. */
-export function buildMCPToolsContext(input: MCPToolsContextInput): Record<string, unknown> {
+export function BuildMCPToolsContext(input: MCPToolsContextInput): Record<string, unknown> {
     const ctx: Record<string, unknown> = {
         Surface: 'tools',
         ToolCount: input.ToolCount,
@@ -331,6 +371,11 @@ export function buildMCPToolsContext(input: MCPToolsContextInput): Record<string
     withBoundedNames(ctx, 'AvailableServerNames', input.AvailableServerNames);
     withBoundedNames(ctx, 'AvailableCategoryNames', input.AvailableCategoryNames);
     return ctx;
+}
+
+/** @deprecated Use {@link BuildMCPToolsContext}. */
+export function buildMCPToolsContext(input: MCPToolsContextInput): Record<string, unknown> {
+    return BuildMCPToolsContext(input);
 }
 
 /** Component-supplied snapshot for the Logs-tab deep context. */
@@ -362,7 +407,7 @@ export interface MCPLogsContextInput {
 }
 
 /** Build the Logs-tab deep context slice. */
-export function buildMCPLogsContext(input: MCPLogsContextInput): Record<string, unknown> {
+export function BuildMCPLogsContext(input: MCPLogsContextInput): Record<string, unknown> {
     const ctx: Record<string, unknown> = {
         Surface: 'logs',
         ExecutionCount: input.ExecutionCount,
@@ -376,6 +421,11 @@ export function buildMCPLogsContext(input: MCPLogsContextInput): Record<string, 
         DetailPanelOpen: input.DetailPanelOpen,
     };
     return withBoundedNames(ctx, 'VisibleLogLabels', input.VisibleLogLabels);
+}
+
+/** @deprecated Use {@link BuildMCPLogsContext}. */
+export function buildMCPLogsContext(input: MCPLogsContextInput): Record<string, unknown> {
+    return BuildMCPLogsContext(input);
 }
 
 /**
@@ -398,22 +448,32 @@ export type MCPTabContextInput =
  * @param tab - the active tab's deep snapshot (discriminated by `Tab`)
  * @returns a flat, secret-free key-value object suitable for `SetAgentContext`
  */
-export function buildMCPAgentContextFull(top: MCPAgentContextInput, tab: MCPTabContextInput): Record<string, unknown> {
-    const base = buildMCPAgentContext(top);
-    const deep = buildMCPTabContext(tab);
+export function BuildMCPAgentContextFull(top: MCPAgentContextInput, tab: MCPTabContextInput): Record<string, unknown> {
+    const base = BuildMCPAgentContext(top);
+    const deep = BuildMCPTabContext(tab);
     return { ...base, ...deep };
 }
 
+/** @deprecated Use {@link BuildMCPAgentContextFull}. */
+export function buildMCPAgentContextFull(top: MCPAgentContextInput, tab: MCPTabContextInput): Record<string, unknown> {
+    return BuildMCPAgentContextFull(top, tab);
+}
+
 /** Build just the deep per-tab slice for the active tab. */
-export function buildMCPTabContext(tab: MCPTabContextInput): Record<string, unknown> {
+export function BuildMCPTabContext(tab: MCPTabContextInput): Record<string, unknown> {
     switch (tab.Tab) {
         case 'servers':
-            return buildMCPServersContext(tab.Data);
+            return BuildMCPServersContext(tab.Data);
         case 'connections':
-            return buildMCPConnectionsContext(tab.Data);
+            return BuildMCPConnectionsContext(tab.Data);
         case 'tools':
-            return buildMCPToolsContext(tab.Data);
+            return BuildMCPToolsContext(tab.Data);
         case 'logs':
-            return buildMCPLogsContext(tab.Data);
+            return BuildMCPLogsContext(tab.Data);
     }
+}
+
+/** @deprecated Use {@link BuildMCPTabContext}. */
+export function buildMCPTabContext(tab: MCPTabContextInput): Record<string, unknown> {
+    return BuildMCPTabContext(tab);
 }

@@ -133,7 +133,7 @@ interface WorkItem {
 }
 
 /** Registers the post-sync custom-column promotion hook on the IntegrationEngine singleton. */
-export function registerIntegrationCustomColumnPromoter(): void {
+export function RegisterIntegrationCustomColumnPromoter(): void {
     IntegrationEngine.Instance.SetPostSyncSchemaPromotionCallback(async (ctx) => {
         const user = ctx.ContextUser as UserInfo;
         const provider = ctx.Provider as IMetadataProvider | undefined;
@@ -162,6 +162,11 @@ export function registerIntegrationCustomColumnPromoter(): void {
     // Verbose-only: this is a boot-time registration confirmation, not operator-actionable at
     // standard level. Routes through the global verbose gate (set from the server's telemetry.level).
     LogStatusEx({ message: '[CustomColumnPromoter] Registered post-sync custom-column promotion hook (auto-promote opt-in, default OFF).', verboseOnly: true });
+}
+
+/** @deprecated Use {@link RegisterIntegrationCustomColumnPromoter}. */
+export function registerIntegrationCustomColumnPromoter(): void {
+    return RegisterIntegrationCustomColumnPromoter();
 }
 
 /** Reads the per-connection `autoPromoteCustomColumns` flag (default false = capture-only, on-demand promotion). */

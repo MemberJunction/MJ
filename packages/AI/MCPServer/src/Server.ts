@@ -14,7 +14,7 @@
  */
 
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView, RunQuery, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { CountByUUID, IndexByUUID, UUIDsEqual } from "@memberjunction/global";
 import { setupSQLServerClient, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
 import { UserCache } from "@memberjunction/generic-database-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -24,11 +24,11 @@ import { randomUUID } from 'crypto';
 import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
 import { z } from "zod";
-import { initConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
+import { InitConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
 import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
-import { loadAgentManagementTools } from './tools/agentManagementTools.js';
+import { LoadAgentManagementTools } from './tools/agentManagementTools.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, ResolvePayloadAtStart, ResolvePayloadAtEnd } from "@memberjunction/ai-core-plus";
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { AIEngine } from "@memberjunction/aiengine";
@@ -50,28 +50,28 @@ import {
     ProtectedResourceMetadata,
 } from './auth/types.js';
 import {
-    getAuthMode,
-    getResourceIdentifier,
-    isOAuthEnabled,
-    validateOAuthConfig,
-    logAuthConfig,
+    GetAuthMode,
+    GetResourceIdentifier,
+    IsOAuthEnabled,
+    ValidateOAuthConfig,
+    LogAuthConfig,
 } from './auth/OAuthConfig.js';
 import {
     authenticateRequest as oauthAuthenticateRequest,
-    toSessionContext,
-    sendAuthErrorResponse,
+    ToSessionContext,
+    SendAuthErrorResponse,
     AuthGateConfig,
 } from './auth/AuthGate.js';
 import {
-    buildProtectedResourceMetadata,
-    extractAuthorizationServers,
+    BuildProtectedResourceMetadata,
+    ExtractAuthorizationServers,
 } from './auth/ProtectedResourceMetadata.js';
-import { hasAuthProviders, setProxyTokenConfig } from './auth/TokenValidator.js';
-import { send401Response } from './auth/WWWAuthenticate.js';
+import { HasAuthProviders, SetProxyTokenConfig } from './auth/TokenValidator.js';
+import { Send401Response } from './auth/WWWAuthenticate.js';
 // OAuth Proxy imports
-import { createOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
+import { CreateOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
 import type { OAuthProxyConfig } from './auth/OAuthProxyTypes.js';
-import { resolveUpstreamOAuthEndpoints } from './auth/UpstreamEndpoints.js';
+import { ResolveUpstreamOAuthEndpoints } from './auth/UpstreamEndpoints.js';
 
 
 /*******************************************************************************
@@ -394,7 +394,7 @@ async function authenticateRequest(request: Request | http.IncomingMessage): Pro
         throw new Error(error?.message || 'Authentication failed');
     }
 
-    return toSessionContext(result);
+    return ToSessionContext(result);
 }
 
 /**
@@ -695,7 +695,7 @@ function shouldIncludeTool(toolName: string, filterOptions: ToolFilterOptions): 
  * truncateText("Hello World", 5) // { value: "Hel...[4 chars]...ld", truncated: true }
  * truncateText("Hi", 100) // { value: "Hi", truncated: false }
  */
-export function truncateText(text: string | null | undefined, maxChars: number): { value: string; truncated: boolean } {
+export function TruncateText(text: string | null | undefined, maxChars: number): { value: string; truncated: boolean } {
     if (!text) {
         return { value: '', truncated: false };
     }
@@ -714,6 +714,11 @@ export function truncateText(text: string | null | undefined, maxChars: number):
         text.substring(text.length - endChars);
 
     return { value: truncated, truncated: true };
+}
+
+/** @deprecated Use {@link TruncateText}. */
+export function truncateText(text: string | null | undefined, maxChars: number): { value: string; truncated: boolean } {
+    return TruncateText(text, maxChars);
 }
 
 /*******************************************************************************
@@ -848,7 +853,7 @@ async function registerAllTools(
     await loadEntityTools(addToolWithFilter);
     await loadActionTools(addToolWithFilter, systemUser, sessionContext);
     await loadAgentTools(addToolWithFilter, systemUser, sessionContext);
-    await loadAgentManagementTools(
+    await LoadAgentManagementTools(
         addToolWithFilter,
         systemUser,
         sessionContext,
@@ -919,7 +924,7 @@ async function loadOpenAppServerPackages(): Promise<void> {
  *   customToolProviders: [myCustomProvider]
  * });
  */
-export async function initializeServer(optionsOrFilterOptions: MCPServerOptions | ToolFilterOptions = {}): Promise<void> {
+export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions | ToolFilterOptions = {}): Promise<void> {
     try {
         // Support both MCPServerOptions and legacy ToolFilterOptions parameter
         const options: MCPServerOptions = isToolFilterOptions(optionsOrFilterOptions)
@@ -927,7 +932,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             : optionsOrFilterOptions;
 
         // Initialize configuration (loads .env and mj.config.cjs)
-        _config = await initConfig();
+        _config = await InitConfig();
         await loadOpenAppServerPackages();
         mcpServerPort = _config.mcpServerSettings?.port || 3100;
 
@@ -975,14 +980,14 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
         };
 
         // Validate OAuth configuration if OAuth is enabled
-        const authMode = getAuthMode();
+        const authMode = GetAuthMode();
         let effectiveAuthMode = authMode;
         let configuredProviderNames: string[] = [];
 
         if (authMode === 'oauth' || authMode === 'both') {
             // Check if auth providers are configured
-            const providersConfigured = await hasAuthProviders();
-            const validationResult = validateOAuthConfig(providersConfigured);
+            const providersConfigured = await HasAuthProviders();
+            const validationResult = ValidateOAuthConfig(providersConfigured);
 
             if (validationResult.errors.length > 0) {
                 console.error(`[Auth] OAuth configuration errors: ${validationResult.errors.join('; ')}`);
@@ -1011,7 +1016,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
         }
 
         // Log auth configuration
-        logAuthConfig(effectiveAuthMode, configuredProviderNames);
+        LogAuthConfig(effectiveAuthMode, configuredProviderNames);
 
         // Create Express app for SSE transport
         const app = express();
@@ -1051,7 +1056,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
         const oauthProxyEnabled = _config.mcpServerSettings?.auth?.proxy?.enabled ?? false;
         let oauthProxyBaseUrl: string | undefined;
 
-        if (isOAuthEnabled() && oauthProxyEnabled) {
+        if (IsOAuthEnabled() && oauthProxyEnabled) {
             try {
                 // Get the upstream provider configuration
                 const factory = AuthProviderFactory.Instance;
@@ -1070,7 +1075,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                         console.error(`[OAuth Proxy] Upstream provider '${upstreamProviderName}' not found`);
                     } else {
                         // Build OAuth proxy configuration
-                        oauthProxyBaseUrl = getResourceIdentifier();
+                        oauthProxyBaseUrl = GetResourceIdentifier();
 
                         // Derive the upstream OAuth endpoints from the provider's issuer.
                         // Cast to access provider properties (IAuthProvider interface)
@@ -1081,7 +1086,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                             clientId?: string;
                             domain?: string;
                         };
-                        const { flavor, authorizationEndpoint, tokenEndpoint } = resolveUpstreamOAuthEndpoints(provider);
+                        const { flavor, authorizationEndpoint, tokenEndpoint } = ResolveUpstreamOAuthEndpoints(provider);
 
                         // Build scopes for upstream - use standard OIDC scopes only
                         // Note: We don't include api://.../.default because that would cause
@@ -1145,7 +1150,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                         };
 
                         // Create and mount OAuth proxy router
-                        const oauthProxyRouter = createOAuthProxyRouter(proxyConfig);
+                        const oauthProxyRouter = CreateOAuthProxyRouter(proxyConfig);
                         app.use(oauthProxyRouter);
 
                         console.log(`[OAuth Proxy] Enabled with upstream provider: ${provider.name}`);
@@ -1155,7 +1160,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                         if (jwtConfig) {
                             console.log(`[OAuth Proxy] JWT signing enabled (issuer: ${jwtConfig.issuer})`);
                             // Configure TokenValidator to accept proxy-signed JWTs
-                            setProxyTokenConfig({
+                            SetProxyTokenConfig({
                                 signingSecret: jwtConfig.signingSecret,
                                 issuer: jwtConfig.issuer,
                                 audience: oauthProxyBaseUrl,
@@ -1175,14 +1180,14 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
         // =====================================================================
         // This endpoint allows MCP clients to discover how to authenticate.
         // It's required by the MCP Authorization specification when OAuth is enabled.
-        if (isOAuthEnabled()) {
+        if (IsOAuthEnabled()) {
             app.get('/.well-known/oauth-protected-resource', async (_req: Request, res: Response) => {
                 try {
                     const factory = AuthProviderFactory.Instance;
                     const providers = factory.getAllProviders();
 
                     // Extract issuer URLs from configured auth providers
-                    const authorizationServers = extractAuthorizationServers(
+                    const authorizationServers = ExtractAuthorizationServers(
                         providers.map((p: { issuer: string }) => ({ issuer: p.issuer }))
                     );
 
@@ -1190,7 +1195,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                         console.warn('[OAuth] No authorization servers configured - metadata endpoint returning empty list');
                     }
 
-                    const metadata: ProtectedResourceMetadata = buildProtectedResourceMetadata({
+                    const metadata: ProtectedResourceMetadata = BuildProtectedResourceMetadata({
                         authorizationServers,
                         resourceName: 'MemberJunction MCP Server',
                         providers, // Pass providers for automatic scope generation
@@ -1216,11 +1221,11 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             // Authenticate the request with full result for proper error handling
             const authResult = await authenticateRequestWithResult(req);
             if (!authResult.authenticated) {
-                sendAuthErrorResponse(res, authResult);
+                SendAuthErrorResponse(res, authResult);
                 return;
             }
 
-            const sessionContext = toSessionContext(authResult);
+            const sessionContext = ToSessionContext(authResult);
 
             try {
                 // Create a new MCP server for this connection
@@ -1302,8 +1307,8 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             if (!transport) {
                 // Session expired or invalid - client needs to re-authenticate
                 // When OAuth is enabled, include WWW-Authenticate header to guide client
-                if (isOAuthEnabled()) {
-                    send401Response(res, 'Session expired or invalid. Please re-authenticate via /mcp/sse endpoint.', {
+                if (IsOAuthEnabled()) {
+                    Send401Response(res, 'Session expired or invalid. Please re-authenticate via /mcp/sse endpoint.', {
                         errorDescription: 'Session not found - establish a new authenticated session'
                     });
                 } else {
@@ -1388,11 +1393,11 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             // We need to authenticate and create a new transport
             const authResult = await authenticateRequestWithResult(req);
             if (!authResult.authenticated) {
-                sendAuthErrorResponse(res, authResult);
+                SendAuthErrorResponse(res, authResult);
                 return;
             }
 
-            const sessionContext = toSessionContext(authResult);
+            const sessionContext = ToSessionContext(authResult);
 
             try {
                 // Create a new MCP server for this session
@@ -1452,7 +1457,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             console.log(`Streamable HTTP endpoint: http://localhost:${mcpServerPort}/mcp`);
 
             // Log OAuth-specific endpoints if enabled
-            if (isOAuthEnabled()) {
+            if (IsOAuthEnabled()) {
                 console.log(`Protected Resource Metadata: http://localhost:${mcpServerPort}/.well-known/oauth-protected-resource`);
             }
         });
@@ -1460,6 +1465,11 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
     } catch (error) {
         console.error("Failed to initialize MCP server:", error);
     }
+}
+
+/** @deprecated Use {@link InitializeServer}. */
+export async function initializeServer(optionsOrFilterOptions: MCPServerOptions | ToolFilterOptions = {}): Promise<void> {
+    return InitializeServer(optionsOrFilterOptions);
 }
 
 /*******************************************************************************
@@ -1504,6 +1514,7 @@ async function loadActionTools(
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     const actions = await discoverActions(props.pattern as string || '*', props.category as string | undefined, sessionUser);
+                    const paramCounts = CountByUUID(actionEngine.ActionParams, (p: MJActionParamEntity) => p.ActionID);
                     return JSON.stringify(actions.map(action => ({
                         id: action.ID,
                         name: action.Name,
@@ -1512,7 +1523,7 @@ async function loadActionTools(
                         categoryId: action.CategoryID,
                         type: action.Type,
                         status: action.Status,
-                        paramCount: actionEngine.ActionParams.filter((p: MJActionParamEntity) => UUIDsEqual(p.ActionID, action.ID)).length
+                        paramCount: paramCounts.Get(action.ID) ?? 0
                     })));
                 }
             });
@@ -2188,8 +2199,8 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             }
 
             const step = steps[stepNumber - 1];
-            const inputData = truncateText(step.InputData, props.maxChars as number);
-            const outputData = truncateText(step.OutputData, props.maxChars as number);
+            const inputData = TruncateText(step.InputData, props.maxChars as number);
+            const outputData = TruncateText(step.OutputData, props.maxChars as number);
 
             const detail = {
                 stepNumber: step.StepNumber,
@@ -2250,7 +2261,13 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             }
 
             const step = steps[stepNumber - 1];
-            const stepData = step.GetAll();
+            // A step can store its start or end payload as a pointer to an earlier step's end; export the resolved payloads.
+            const stepsById = IndexByUUID(steps);
+            const stepData: Record<string, unknown> = {
+                ...step.GetAll(),
+                PayloadAtStart: ResolvePayloadAtStart(step, stepsById),
+                PayloadAtEnd: ResolvePayloadAtEnd(step, stepsById),
+            };
 
             // Determine output file path
             const runIdShort = (props.runId as string).substring(0, 8);
@@ -3281,10 +3298,10 @@ function getMatchingEntitiesForTool(allEntities: EntityInfo[], tool: EntityToolC
  * // List only Get_* tools
  * await listAvailableTools({ includePatterns: ['Get_*'] });
  */
-export async function listAvailableTools(filterOptions: ToolFilterOptions = {}): Promise<void> {
+export async function ListAvailableTools(filterOptions: ToolFilterOptions = {}): Promise<void> {
     try {
         // Initialize configuration (loads .env and mj.config.cjs)
-        _config = await initConfig();
+        _config = await InitConfig();
         await loadOpenAppServerPackages();
 
         if (!_config.mcpServerSettings?.enableMCPServer) {
@@ -3383,6 +3400,11 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}):
     } catch (error) {
         console.error("Failed to list tools:", error);
     }
+}
+
+/** @deprecated Use {@link ListAvailableTools}. */
+export async function listAvailableTools(filterOptions: ToolFilterOptions = {}): Promise<void> {
+    return ListAvailableTools(filterOptions);
 }
 
 /**

@@ -38,7 +38,7 @@ import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { PackageManagerCommands, type PackageManagerType } from '../models/PackageManager.js';
-import { classifyTurboFailures } from '../util/turboOutput.js';
+import { ClassifyTurboFailures } from '../util/turboOutput.js';
 
 /**
  * Input context for the codegen phase.
@@ -425,7 +425,9 @@ export class CodeGenPhase {
    * Verify that codegen produced the expected artifacts.
    *
    * Two-tier check:
-   * - **Critical**: `node_modules/mj_generatedentities` must exist (MJAPI can't start without it).
+   * - **Critical**: `mj_generatedentities` must be resolvable by MJAPI (it can't start without it): the
+   *   repo-root `node_modules` under npm hoisting, or `apps/MJAPI/node_modules` under pnpm, which links
+   *   workspace packages into each dependent and never populates the root (MemberJunction/MJ#4599, #4707).
    * - **Secondary**: `packages/GeneratedEntities` is expected but absence is only a warning.
    *
    * @param dir - Repo root directory.
@@ -441,18 +443,31 @@ export class CodeGenPhase {
     // `./generated/entity_subclasses.js` unconditionally, so a run that prints "complete"
     // without writing that file leaves MJAPI unable to start (MemberJunction/MJ#4477).
     // Secondary: packages/GeneratedEntities is expected but its absence is a warning, not a blocker.
-    const criticalPath = path.join(dir, 'node_modules', 'mj_generatedentities');
+    // npm hoists workspace packages to the repo root; pnpm (the installer default) links them into each
+    // dependent's own node_modules and never creates the root entry (MemberJunction/MJ#4599, #4707).
+    // Same two locations resolveCli() already checks for the CLI.
+    const criticalCandidates = [
+      path.join(dir, 'node_modules', 'mj_generatedentities'),
+      path.join(dir, 'apps', 'MJAPI', 'node_modules', 'mj_generatedentities'),
+    ];
     const barrelPath = path.join(dir, 'packages', 'GeneratedEntities', 'src', 'generated', 'entity_subclasses.ts');
     const secondaryPath = path.join(dir, 'packages', 'GeneratedEntities');
 
-    const criticalExists = await this.fileSystem.DirectoryExists(criticalPath);
+    let criticalFoundAt: string | undefined;
+    for (const candidate of criticalCandidates) {
+      if (await this.fileSystem.DirectoryExists(candidate)) {
+        criticalFoundAt = candidate;
+        break;
+      }
+    }
+    const criticalExists = criticalFoundAt !== undefined;
     const barrelExists = await this.fileSystem.FileExists(barrelPath);
     const secondaryExists = await this.fileSystem.DirectoryExists(secondaryPath);
 
     emitter.Emit('log', {
       Type: 'log',
       Level: 'verbose',
-      Message: `[codegen] mj_generatedentities package: ${criticalExists ? 'found' : 'NOT found'}`,
+      Message: `[codegen] mj_generatedentities package: ${criticalFoundAt ? `found (${path.relative(dir, criticalFoundAt)})` : 'NOT found'}`,
     });
 
     emitter.Emit('log', {
@@ -476,7 +491,7 @@ export class CodeGenPhase {
     }
 
     const missingCritical: string[] = [];
-    if (!criticalExists) missingCritical.push('node_modules/mj_generatedentities');
+    if (!criticalExists) missingCritical.push('mj_generatedentities (checked node_modules/ and apps/MJAPI/node_modules/)');
     if (!barrelExists) missingCritical.push('packages/GeneratedEntities/src/generated/entity_subclasses.ts');
 
     return {
@@ -574,7 +589,7 @@ export class CodeGenPhase {
     // Codegen itself only needs server-side packages (not Angular forms).
     // turbo writes its summary to stdout, so both streams go to the classifier.
     const combinedOutput = result.Stdout + '\n' + result.Stderr;
-    const verdict = classifyTurboFailures(combinedOutput, CodeGenPhase.CODEGEN_MANAGED_PACKAGES);
+    const verdict = ClassifyTurboFailures(combinedOutput, CodeGenPhase.CODEGEN_MANAGED_PACKAGES);
 
     if (verdict.ToleratedOnly) {
       const failList = verdict.FailedPackages.join(', ');

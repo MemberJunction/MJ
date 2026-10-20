@@ -16,7 +16,7 @@
  *   END $$;
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, convertCommonFunctions, removeNPrefix, castBooleanInsertValues, convertBooleanLiteralComparisons, StripComments } from './ExpressionHelpers.js';
+import { ConvertIdentifiers, RemoveCollate, ConvertCommonFunctions, RemoveNPrefix, CastBooleanInsertValues, ConvertBooleanLiteralComparisons, StripComments } from './ExpressionHelpers.js';
 
 /** One migration placeholder — `${mjSchema}`, `${flyway:defaultSchema}` — as it appears in source SQL. */
 const PLACEHOLDER = /\$\{[\w:.-]+\}/;
@@ -59,23 +59,23 @@ export class ConditionalDDLRule implements IConversionRule {
     let result = sql;
 
     // Convert identifiers: [schema].[table] → schema."table"
-    result = convertIdentifiers(result);
+    result = ConvertIdentifiers(result);
 
     // Convert SQL Server types to PG types
     result = this.convertTypes(result);
 
     // Remove COLLATE clauses
-    result = removeCollate(result);
+    result = RemoveCollate(result);
 
     // Fix INFORMATION_SCHEMA casing (PG requires lowercase)
     result = this.fixInformationSchema(result);
 
     // Remove N prefix from string literals
-    result = removeNPrefix(result);
+    result = RemoveNPrefix(result);
 
     // Convert common SQL Server functions BEFORE PascalCase quoting
     // (prevents GETUTCDATE from being quoted as "GETUTCDATE" before conversion to NOW())
-    result = convertCommonFunctions(result);
+    result = ConvertCommonFunctions(result);
 
     // Try guarded constraint drop → PG-native DROP CONSTRAINT IF EXISTS
     const dropConstraintResult = this.tryConvertGuardedDropConstraint(result);
@@ -105,10 +105,10 @@ export class ConditionalDDLRule implements IConversionRule {
     // CodeGen wraps its metadata INSERTs in IF-NOT-EXISTS guards, so the INSERT
     // lands inside the DO block above and never passes through InsertRule. Cast
     // its BIT (0/1) literals to PG boolean here using the same shared helper.
-    result = castBooleanInsertValues(result, context.TableColumns);
+    result = CastBooleanInsertValues(result, context.TableColumns);
     // Also fold any `"BoolCol" = 0/1` comparisons (e.g. inside the IF guard or an
     // UPDATE body) to FALSE/TRUE.
-    result = convertBooleanLiteralComparisons(result, context.TableColumns);
+    result = ConvertBooleanLiteralComparisons(result, context.TableColumns);
 
     return result + '\n';
   }

@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { createHmac } from 'node:crypto';
 import {
-    verifyTwilioSignature,
-    computeTwilioSignature,
-    buildInboundVoiceTwiML,
-    resolveInboundCall,
+    VerifyTwilioSignature,
+    ComputeTwilioSignature,
+    BuildInboundVoiceTwiML,
+    IsMachineAnsweredBy,
+    IsTerminalTwilioCallStatus,
+    ResolveInboundCall,
 } from '../twilio-ingress';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -37,33 +39,33 @@ function referenceSignature(authToken: string, url: string, params: Record<strin
 
 describe('verifyTwilioSignature', () => {
     it('computeTwilioSignature matches an independent reference derivation', () => {
-        expect(computeTwilioSignature(AUTH_TOKEN, URL, PARAMS)).toBe(referenceSignature(AUTH_TOKEN, URL, PARAMS));
+        expect(ComputeTwilioSignature(AUTH_TOKEN, URL, PARAMS)).toBe(referenceSignature(AUTH_TOKEN, URL, PARAMS));
     });
 
     it('accepts a valid signature', () => {
-        const sig = computeTwilioSignature(AUTH_TOKEN, URL, PARAMS);
-        expect(verifyTwilioSignature(AUTH_TOKEN, sig, URL, PARAMS)).toBe(true);
+        const sig = ComputeTwilioSignature(AUTH_TOKEN, URL, PARAMS);
+        expect(VerifyTwilioSignature(AUTH_TOKEN, sig, URL, PARAMS)).toBe(true);
     });
 
     it('rejects a tampered param (signature no longer matches)', () => {
-        const sig = computeTwilioSignature(AUTH_TOKEN, URL, PARAMS);
+        const sig = ComputeTwilioSignature(AUTH_TOKEN, URL, PARAMS);
         const tampered = { ...PARAMS, To: '+19998887777' };
-        expect(verifyTwilioSignature(AUTH_TOKEN, sig, URL, tampered)).toBe(false);
+        expect(VerifyTwilioSignature(AUTH_TOKEN, sig, URL, tampered)).toBe(false);
     });
 
     it('rejects a tampered URL', () => {
-        const sig = computeTwilioSignature(AUTH_TOKEN, URL, PARAMS);
-        expect(verifyTwilioSignature(AUTH_TOKEN, sig, URL + '&evil=1', PARAMS)).toBe(false);
+        const sig = ComputeTwilioSignature(AUTH_TOKEN, URL, PARAMS);
+        expect(VerifyTwilioSignature(AUTH_TOKEN, sig, URL + '&evil=1', PARAMS)).toBe(false);
     });
 
     it('rejects when the auth token is wrong', () => {
-        const sig = computeTwilioSignature(AUTH_TOKEN, URL, PARAMS);
-        expect(verifyTwilioSignature('wrong-token', sig, URL, PARAMS)).toBe(false);
+        const sig = ComputeTwilioSignature(AUTH_TOKEN, URL, PARAMS);
+        expect(VerifyTwilioSignature('wrong-token', sig, URL, PARAMS)).toBe(false);
     });
 
     it('rejects a missing/empty signature header', () => {
-        expect(verifyTwilioSignature(AUTH_TOKEN, undefined, URL, PARAMS)).toBe(false);
-        expect(verifyTwilioSignature(AUTH_TOKEN, '', URL, PARAMS)).toBe(false);
+        expect(VerifyTwilioSignature(AUTH_TOKEN, undefined, URL, PARAMS)).toBe(false);
+        expect(VerifyTwilioSignature(AUTH_TOKEN, '', URL, PARAMS)).toBe(false);
     });
 
     it('is order-independent (params sorted by key before concat)', () => {
@@ -74,22 +76,49 @@ describe('verifyTwilioSignature', () => {
             Digits: PARAMS.Digits,
             Caller: PARAMS.Caller,
         };
-        const sig = computeTwilioSignature(AUTH_TOKEN, URL, PARAMS);
-        expect(verifyTwilioSignature(AUTH_TOKEN, sig, URL, reordered)).toBe(true);
+        const sig = ComputeTwilioSignature(AUTH_TOKEN, URL, PARAMS);
+        expect(VerifyTwilioSignature(AUTH_TOKEN, sig, URL, reordered)).toBe(true);
     });
 });
 
 describe('buildInboundVoiceTwiML', () => {
     it('connects the inbound call to the media WSS endpoint', () => {
-        const twiml = buildInboundVoiceTwiML('wss://api.example/telephony/twilio/media');
+        const twiml = BuildInboundVoiceTwiML('wss://api.example/telephony/twilio/media');
         expect(twiml).toContain('<Connect>');
         expect(twiml).toContain('<Stream url="wss://api.example/telephony/twilio/media" />');
     });
 });
 
+describe('BuildInboundVoiceTwiML with parameters', () => {
+    it('carries the per-call token as a <Parameter> inside <Stream>', () => {
+        const twiml = BuildInboundVoiceTwiML('wss://api.example/telephony/twilio/media', { mjToken: 'tok123' });
+        expect(twiml).toContain('<Stream url="wss://api.example/telephony/twilio/media"><Parameter name="mjToken" value="tok123"/></Stream>');
+    });
+});
+
+describe('IsTerminalTwilioCallStatus', () => {
+    it.each(['completed', 'busy', 'failed', 'no-answer', 'canceled', ' Completed '])('treats %s as terminal', (s) => {
+        expect(IsTerminalTwilioCallStatus(s)).toBe(true);
+    });
+
+    it.each(['queued', 'initiated', 'ringing', 'in-progress', 'brand-new-status', '', undefined])('does not treat %j as terminal', (s) => {
+        expect(IsTerminalTwilioCallStatus(s)).toBe(false);
+    });
+});
+
+describe('IsMachineAnsweredBy', () => {
+    it.each(['machine_start', 'machine_end_beep', 'machine_end_silence', 'machine_end_other', 'fax', ' Machine_Start '])('treats %s as a machine', (v) => {
+        expect(IsMachineAnsweredBy(v)).toBe(true);
+    });
+
+    it.each(['human', 'unknown', '', undefined])('does not treat %j as a machine (never hang up on a possible human)', (v) => {
+        expect(IsMachineAnsweredBy(v)).toBe(false);
+    });
+});
+
 describe('resolveInboundCall', () => {
     it('maps Twilio webhook params to { callSid, from, to }', () => {
-        const resolved = resolveInboundCall({
+        const resolved = ResolveInboundCall({
             CallSid: 'CA-inbound-9',
             From: '+14158675309',
             To: '+18005551212',
@@ -99,7 +128,7 @@ describe('resolveInboundCall', () => {
     });
 
     it('throws when a required param is missing', () => {
-        expect(() => resolveInboundCall({ From: '+1', To: '+2' })).toThrow(/CallSid/);
-        expect(() => resolveInboundCall({ CallSid: 'CA1', To: '+2' })).toThrow(/missing a required param/);
+        expect(() => ResolveInboundCall({ From: '+1', To: '+2' })).toThrow(/CallSid/);
+        expect(() => ResolveInboundCall({ CallSid: 'CA1', To: '+2' })).toThrow(/missing a required param/);
     });
 });

@@ -90,7 +90,7 @@ export class DefaultAgentResolver {
      * });
      * ```
      */
-    public async resolve(options: DefaultAgentResolveOptions = {}): Promise<MJAIAgentEntityExtended> {
+    public async Resolve(options: DefaultAgentResolveOptions = {}): Promise<MJAIAgentEntityExtended> {
         const { explicitAgentId, applicationId, contextUser, provider } = options;
 
         // Lazy-config the engines we depend on. Both `Config(false, ...)` calls are
@@ -137,7 +137,7 @@ export class DefaultAgentResolver {
         }
 
         // Step 5: code-const fallback. Find the agent named `Sage` and return it.
-        const fallback = AIEngineBase.Instance.Agents.find(
+        const fallback = AIEngineBase.Instance.ReadableAgents.find(
             (a) => a.Name === DefaultAgentResolver.FALLBACK_AGENT_NAME
         );
         if (fallback) return fallback;
@@ -151,6 +151,11 @@ export class DefaultAgentResolver {
                 `(5) code-const fallback agent name = "${DefaultAgentResolver.FALLBACK_AGENT_NAME}". ` +
                 `Configure Application.AgentSettings, the Application Setting, or seed the fallback agent.`
         );
+    }
+
+    /** @deprecated Use {@link Resolve}. */
+    public async resolve(options: DefaultAgentResolveOptions = {}): Promise<MJAIAgentEntityExtended> {
+        return this.Resolve(options);
     }
 
     /**
@@ -213,6 +218,6 @@ export class DefaultAgentResolver {
      * SQL Server / Postgres (case differences would silently miss).
      */
     private findAgentById(id: string): MJAIAgentEntityExtended | undefined {
-        return AIEngineBase.Instance.Agents.find((a) => UUIDsEqual(a.ID, id));
+        return AIEngineBase.Instance.ReadableAgents.find((a) => UUIDsEqual(a.ID, id));
     }
 }

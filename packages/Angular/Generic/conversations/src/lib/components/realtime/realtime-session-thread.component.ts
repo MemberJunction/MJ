@@ -7,7 +7,7 @@ import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { Subscription } from 'rxjs';
 import { RealtimeSessionState, RealtimeThreadItem } from './realtime-session-state';
 import { RealtimeDelegationCardComponent } from './realtime-delegation-card.component';
-import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 
 /**
  * The unified, chronological live thread for the call overlay: caption bubbles

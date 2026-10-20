@@ -1,11 +1,13 @@
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseRealtimeBridge,
+    BridgeAvatarFailure,
     BridgeConnectResult,
     BridgeDisconnectReason,
     BridgeMediaFrame,
     BridgeMediaTrackKind,
     BridgeParticipantInfo,
+    BridgeVideoSourceEnd,
     RealtimeBridgeContext,
     IBridgeMeetingControlsEventSource,
     BridgeMeetingParticipant,
@@ -101,6 +103,15 @@ export class LoopbackBridge extends BaseRealtimeBridge {
     /** The roster-change handler registered via {@link OnParticipantChange}. */
     private participantHandler?: (participants: BridgeParticipantInfo[]) => void;
 
+    /** The ended-video-source handler registered via {@link OnVideoSourceEnded}. */
+    private videoSourceEndedHandler?: (source: BridgeVideoSourceEnd) => void;
+
+    /** The lost-avatar handler registered via {@link OnAvatarUnavailable}. */
+    private avatarUnavailableHandler?: (reason: BridgeAvatarFailure) => void;
+
+    /** The context the engine passed to the last {@link Connect}, for assertions in tests (`null` before). */
+    public ConnectContext: RealtimeBridgeContext | null = null;
+
     /**
      * Every frame the engine sent outbound, in order — a capture sink for assertions in tests.
      * The frames are ALSO echoed back inbound; this array is the durable record of what was sent.
@@ -160,6 +171,7 @@ export class LoopbackBridge extends BaseRealtimeBridge {
      */
     public async Connect(ctx: RealtimeBridgeContext): Promise<BridgeConnectResult> {
         this.applyContext(ctx);
+        this.ConnectContext = ctx;
         this.connected = true;
         // Surface the initial roster so participant tracking has something to upsert.
         this.participantHandler?.([LoopbackBridge.AGENT_PARTICIPANT]);
@@ -178,6 +190,8 @@ export class LoopbackBridge extends BaseRealtimeBridge {
         this.connected = false;
         this.mediaHandler = undefined;
         this.participantHandler = undefined;
+        this.videoSourceEndedHandler = undefined;
+        this.avatarUnavailableHandler = undefined;
     }
 
     /**
@@ -208,6 +222,24 @@ export class LoopbackBridge extends BaseRealtimeBridge {
      */
     public OnMedia(handler: (frame: BridgeMediaFrame) => void): void {
         this.mediaHandler = handler;
+    }
+
+    /**
+     * Registers the ended-video-source handler. {@link EmitVideoSourceEnded} lets a test drive it.
+     *
+     * @param handler Invoked with each source that ended.
+     */
+    public override OnVideoSourceEnded(handler: (source: BridgeVideoSourceEnd) => void): void {
+        this.videoSourceEndedHandler = handler;
+    }
+
+    /**
+     * Registers the lost-avatar handler. {@link EmitAvatarUnavailable} lets a test drive it.
+     *
+     * @param handler Invoked when the endpoint can no longer show the agent's avatar.
+     */
+    public override OnAvatarUnavailable(handler: (reason: BridgeAvatarFailure) => void): void {
+        this.avatarUnavailableHandler = handler;
     }
 
     /**
@@ -256,6 +288,26 @@ export class LoopbackBridge extends BaseRealtimeBridge {
      */
     public EmitParticipants(participants: BridgeParticipantInfo[]): void {
         this.participantHandler?.(participants);
+    }
+
+    /**
+     * Reports that an inbound camera or screen source ended, delivering it to the registered
+     * {@link OnVideoSourceEnded} handler. Lets a test exercise the engine's note to the model.
+     *
+     * @param source The source that ended.
+     */
+    public EmitVideoSourceEnded(source: BridgeVideoSourceEnd): void {
+        this.videoSourceEndedHandler?.(source);
+    }
+
+    /**
+     * Reports that the endpoint can no longer show the agent's avatar, delivering it to the registered
+     * {@link OnAvatarUnavailable} handler. Lets a test exercise the engine's audio-only replacement.
+     *
+     * @param reason Why the avatar can no longer be shown.
+     */
+    public EmitAvatarUnavailable(reason: BridgeAvatarFailure): void {
+        this.avatarUnavailableHandler?.(reason);
     }
 
     /** Whether the loopback is currently "connected" (after {@link Connect}, before {@link Disconnect}). */

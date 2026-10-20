@@ -4,13 +4,13 @@ import { MJPermissionDomainEntity, PermissionEngine, ResourceData } from '@membe
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 
-import { PermissionsUserOption, loadPermissionsUsers, parseAuditFilterParams } from './permissions-shared';
+import { PermissionsUserOption, LoadPermissionsUsers, ParseAuditFilterParams } from './permissions-shared';
 import {
-    buildAuditLogAgentContext,
-    buildPermissionsNotFoundError,
-    resolvePermissionsCandidate,
+    BuildAuditLogAgentContext,
+    BuildPermissionsNotFoundError,
+    ResolvePermissionsCandidate,
 } from './permissions-agent-context';
-import { validateStringParam } from '../shared/agent-tool-validation';
+import { ValidateStringParam } from '../shared/agent-tool-validation';
 
 /**
  * Audit Log resource — one of three tabs in the Permissions admin application.
@@ -53,7 +53,7 @@ export class PermissionsAuditLogResourceComponent extends BaseResourceComponent 
         super.ngOnInit();
         this.Domains = PermissionEngine.Instance.Domains;
         try {
-            this.Users = await loadPermissionsUsers();
+            this.Users = await LoadPermissionsUsers();
         } catch (e) {
             this.ErrorMessage = `Error loading users: ${e instanceof Error ? e.message : String(e)}`;
         }
@@ -92,7 +92,7 @@ export class PermissionsAuditLogResourceComponent extends BaseResourceComponent 
         const userFilterName = this.UserFilter
             ? this.Users.find((u) => UUIDsEqual(u.ID, this.UserFilter))?.Name ?? null
             : null;
-        const context = buildAuditLogAgentContext({
+        const context = BuildAuditLogAgentContext({
             DomainFilter: this.DomainFilter,
             UserFilter: this.UserFilter,
             UserFilterName: userFilterName,
@@ -158,7 +158,7 @@ export class PermissionsAuditLogResourceComponent extends BaseResourceComponent 
     }
 
     private handleSearchEntriesTool(params: Record<string, unknown>): { Success: boolean; Data?: unknown; ErrorMessage?: string } {
-        const q = validateStringParam(params?.['query'], 'query');
+        const q = ValidateStringParam(params?.['query'], 'query');
         if (!q.ok) return q.result;
         const needle = q.value.trim().toLowerCase();
         if (!needle) {
@@ -189,7 +189,7 @@ export class PermissionsAuditLogResourceComponent extends BaseResourceComponent 
     private async handleRunQueryTool(
         params: Record<string, unknown>
     ): Promise<{ Success: boolean; Data?: unknown; ErrorMessage?: string }> {
-        const parsed = parseAuditFilterParams(params);
+        const parsed = ParseAuditFilterParams(params);
         if (!parsed.ok) {
             return { Success: false, ErrorMessage: parsed.error };
         }
@@ -197,14 +197,14 @@ export class PermissionsAuditLogResourceComponent extends BaseResourceComponent 
         // Resolve domain (name or ID) tolerantly.
         let resolvedDomain = '';
         if (parsed.value.DomainName) {
-            const domainMatch = resolvePermissionsCandidate(
+            const domainMatch = ResolvePermissionsCandidate(
                 parsed.value.DomainName,
                 this.Domains.map((d) => ({ ID: d.ID, Name: d.Name }))
             );
             if (!domainMatch) {
                 return {
                     Success: false,
-                    ErrorMessage: buildPermissionsNotFoundError(
+                    ErrorMessage: BuildPermissionsNotFoundError(
                         parsed.value.DomainName,
                         'permission domain',
                         this.Domains.map((d) => ({ ID: d.ID, Name: d.Name }))
@@ -221,7 +221,7 @@ export class PermissionsAuditLogResourceComponent extends BaseResourceComponent 
             if (!userMatch) {
                 return {
                     Success: false,
-                    ErrorMessage: buildPermissionsNotFoundError(
+                    ErrorMessage: BuildPermissionsNotFoundError(
                         parsed.value.ChangedByUserID,
                         'user',
                         this.Users.map((u) => ({ ID: u.ID, Name: u.Name }))
@@ -249,7 +249,7 @@ export class PermissionsAuditLogResourceComponent extends BaseResourceComponent 
     private resolveAuditUserRef(input: string): PermissionsUserOption | null {
         const needle = (input ?? '').trim().toLowerCase();
         if (!needle) return null;
-        const byCandidate = resolvePermissionsCandidate(input, this.Users.map((u) => ({ ID: u.ID, Name: u.Name })));
+        const byCandidate = ResolvePermissionsCandidate(input, this.Users.map((u) => ({ ID: u.ID, Name: u.Name })));
         if (byCandidate) {
             return this.Users.find((u) => UUIDsEqual(u.ID, byCandidate.ID)) ?? null;
         }

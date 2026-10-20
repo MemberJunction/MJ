@@ -1,20 +1,23 @@
 import {
-  Component, EventEmitter, Input, Output, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, inject
+  AfterViewChecked, Component, ElementRef, EventEmitter, Input, Output, OnInit, OnDestroy, ChangeDetectorRef,
+  QueryList, ViewChild, ViewChildren, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { MediaMoveMenuComponent, type MediaMoveRequest, type MediaStagePlacement } from '@memberjunction/ng-realtime-media';
+import { MEDIA_PLACEMENTS } from '@memberjunction/ai-realtime-client/media';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { Subscription } from 'rxjs';
 import { UserInfo } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { RealtimeSessionState } from './realtime-session-state';
 import { RealtimeActivityRailComponent } from './realtime-activity-rail.component';
-import { RealtimeChannelPaneComponent } from './channels/realtime-channel-pane.component';
 import { ChannelOnboardingPanelComponent } from './channels/channel-onboarding-panel.component';
-import { ChannelOnboardingDetails } from './channels/base-realtime-channel-client';
+import { ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import {
   RealtimeSurfaceTabsModel, RealtimeSurfaceTab, RealtimeChannelTabRegistration
 } from './realtime-surface-tabs.model';
-import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 
 /**
  * User-settings key (NOT localStorage — see `UserInfoEngine`) under which the per-user "which
@@ -24,14 +27,35 @@ import { ParsedDelegationArtifact } from '../../services/delegation-result-parse
  */
 const CHANNEL_ONBOARDING_SEEN_SETTING_KEY = 'mj.realtimeChannels.onboardingSeen.v1';
 
+/** How a channel's tab says where its surface went. */
+const AWAY_TEXT: Readonly<Record<MediaStagePlacement, string>> = {
+  stage: 'on the stage',
+  pip: 'in picture-in-picture',
+  tab: 'here',
+  hidden: 'hidden',
+};
+const AWAY_ICON: Readonly<Record<MediaStagePlacement, string>> = {
+  stage: 'fa-solid fa-expand',
+  pip: 'fa-regular fa-window-restore',
+  tab: 'fa-solid fa-table-columns',
+  hidden: 'fa-solid fa-eye-slash',
+};
+
+/** Where the active channel tab's surface shows: the tab's key and the element its pane keeps for the surface. */
+export interface RealtimeChannelSlot {
+  Key: string;
+  Element: HTMLElement;
+}
+
 /**
  * The call overlay's TABBED SURFACE PANEL (the right panel) — decluttered redesign:
  *
  *  - **Channel tabs** (LEFT cluster) — one per channel that has come into play. The whiteboard
  *    tabs immediately at session start; every other channel tabs only once the agent first
- *    USES it. Each carries a distinct accent color + its plugin icon. The pane creates the
- *    plugin's surface component dynamically (via `mj-realtime-channel-pane`); a placeholder
- *    shows the "coming online…" state until a plugin/template is supplied.
+ *    USES it. Each carries a distinct accent color + its plugin icon. A plugin's surface lives
+ *    on the overlay's stage, which lays it over the pane's slot while the tab is active
+ *    ({@link ChannelSlotChange}); a placeholder shows the "coming online…" state until a
+ *    plugin/template is supplied.
  *  - **Activity** (RIGHT-aligned, pinned LAST) — gated: appears only once ≥1 agent run has
  *    occurred (or in review mode). Hosts {@link RealtimeActivityRailComponent}, which now also
  *    renders inline artifact previews and a split-pane artifact viewer. Styled distinctly from
@@ -41,8 +65,9 @@ const CHANNEL_ONBOARDING_SEEN_SETTING_KEY = 'mj.realtimeChannels.onboardingSeen.
  * Artifacts NO LONGER get their own tab — they live inside the Activity tab (cleaner than a
  * row of per-artifact tabs).
  *
- * Panes are kept ALIVE while hidden (CSS `display:none`) so switching tabs never reloads a
- * channel surface or resets the rail. The whole panel collapses to a slim strip via the chevron.
+ * Panes are kept ALIVE while hidden (CSS `display:none`) so switching tabs never resets the rail;
+ * channel surfaces are on the overlay's stage, so switching tabs or collapsing the panel never
+ * reloads them either. The whole panel collapses to a slim strip via the chevron.
  *
  * SIZING IS EXTERNAL: the overlay shell hosts this panel in a fixed-width flex item and owns
  * the width. This panel just fills it and REPORTS the layout signals the shell sizes from:
@@ -53,15 +78,15 @@ const CHANNEL_ONBOARDING_SEEN_SETTING_KEY = 'mj.realtimeChannels.onboardingSeen.
   standalone: true,
   selector: 'mj-realtime-surface-tabs',
   imports: [
-    CommonModule, ArtifactsModule, RealtimeActivityRailComponent, RealtimeChannelPaneComponent,
-    ChannelOnboardingPanelComponent
+    CommonModule, ArtifactsModule, RealtimeActivityRailComponent, ChannelOnboardingPanelComponent,
+    MediaMoveMenuComponent, MJButtonDirective
   ],
   templateUrl: './realtime-surface-tabs.component.html',
   styleUrl: './realtime-surface-tabs.component.css'
 })
-export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
+export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy, AfterViewChecked {
   /** How long a just-revealed channel tab keeps its flash highlight. */
-  private static readonly FlashDurationMs = 1400;
+  private static readonly flashDurationMs = 1400;
 
   /** Shared live-session state, owned by the overlay shell (feeds the Activity rail). */
   @Input({ required: true }) State!: RealtimeSessionState;
@@ -70,9 +95,9 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   @Input() DevMode = false;
 
   /**
-   * FILL presentation: the panel stretches to the overlay's full width (the board-focus
-   * layout, where the main call column is hidden and a channel surface owns the screen).
-   * Bound by the overlay shell; overrides the normal / wide width tiers.
+   * FILL presentation: the panel stretches to its host's full width with no left border,
+   * overriding the normal / wide width tiers. The overlay no longer binds it: in focus mode
+   * the focused channel's surface fills the overlay's stage instead.
    */
   @Input() Fill = false;
 
@@ -122,14 +147,61 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
    */
   @Output() WideChanged = new EventEmitter<boolean>();
 
+  /**
+   * The channel whose tab the user is looking at changed (`null` when a non-channel tab, such as Activity, is active).
+   * Lets the session show the model the surface the user is on when it can only watch one.
+   */
+  @Output() ActiveChannelChange = new EventEmitter<string | null>();
+
+  /**
+   * The active channel tab's slot changed: the element its pane keeps for the channel's surface, or `null` while no
+   * channel tab is showing (another tab is active, or the panel is collapsed). The overlay's stage lays the surface
+   * over this element.
+   */
+  @Output() ChannelSlotChange = new EventEmitter<RealtimeChannelSlot | null>();
+
+  /**
+   * Where each channel's surface is placed, by channel key (a channel not listed is on its tab). A channel whose
+   * surface is elsewhere shows where in its pane, with "Bring it here" when its channel allows the tab.
+   */
+  @Input() SurfacePlacements: ReadonlyMap<string, MediaStagePlacement> = new Map();
+
+  /** Where each channel lets the user move its surface, by channel key (a channel not listed allows anywhere). */
+  @Input() AllowedPlacements: ReadonlyMap<string, readonly MediaStagePlacement[]> = new Map();
+
+  /** The user asked to move a channel's surface (from "Move to…" or "Bring it here"). */
+  @Output() MoveRequested = new EventEmitter<MediaMoveRequest>();
+
+  /** The user asked to put every surface back where its channel places it. */
+  @Output() ResetLayoutRequested = new EventEmitter<void>();
+
   /** The panel's tab state (add / focus / dedupe / flash) — see the model for the rules. */
   public readonly Model = new RealtimeSurfaceTabsModel();
 
-  /** Whether the panel is collapsed to its slim strip. */
-  public Collapsed = false;
+  /**
+   * Whether the panel is collapsed to its slim strip. The chevron toggles it, a reveal expands it, and the panel reports
+   * each such change through {@link CollapsedChange}. A host may bind it, so that a panel it creates again starts as the
+   * user left the one before (the call overlay does when only the call's width hid the panel, #5433). A value the host
+   * sets is not reported back.
+   */
+  @Input()
+  set Collapsed(value: boolean) {
+    this.collapsed = value;
+    this.syncWide();
+  }
+  get Collapsed(): boolean {
+    return this.collapsed;
+  }
+  private collapsed = false;
 
   /** The embedded Activity rail (owns the inline artifact previews + the split-pane viewer). */
   @ViewChild(RealtimeActivityRailComponent) private activityRail?: RealtimeActivityRailComponent;
+
+  /** The slots of the plugin channel panes, one per tab. */
+  @ViewChildren('channelSlot') private channelSlots?: QueryList<ElementRef<HTMLElement>>;
+
+  /** The slot last reported through {@link ChannelSlotChange}. */
+  private reportedSlot: RealtimeChannelSlot | null = null;
 
   private flashTimer: ReturnType<typeof setTimeout> | null = null;
   private subs: Subscription[] = [];
@@ -161,6 +233,10 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
     );
   }
 
+  ngAfterViewChecked(): void {
+    this.reportChannelSlot();
+  }
+
   ngOnDestroy(): void {
     for (const s of this.subs) {
       s.unsubscribe();
@@ -172,6 +248,44 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Reports the active channel tab's slot when it differs from the one last reported. */
+  private reportChannelSlot(): void {
+    const slot = this.activeChannelSlot();
+    if (slot?.Key === this.reportedSlot?.Key && slot?.Element === this.reportedSlot?.Element) {
+      return;
+    }
+    this.reportedSlot = slot;
+    // The view was just checked and the overlay binds the slot, so it hears about it in a fresh turn.
+    queueMicrotask(() => this.ChannelSlotChange.emit(slot));
+  }
+
+  /** The active tab's slot: present while that tab is a plugin channel and the panel is expanded. */
+  private activeChannelSlot(): RealtimeChannelSlot | null {
+    const key = this.Model.ActiveKey;
+    const slot = this.channelSlots?.find(s => s.nativeElement.dataset['channelKey'] === key);
+    return slot ? { Key: key, Element: slot.nativeElement } : null;
+  }
+
+  /** Where a channel's surface is placed. */
+  public PlacementOf(key: string): MediaStagePlacement {
+    return this.SurfacePlacements.get(key) ?? 'tab';
+  }
+
+  /** Where a channel lets the user move its surface. */
+  public AllowedOf(key: string): readonly MediaStagePlacement[] {
+    return this.AllowedPlacements.get(key) ?? MEDIA_PLACEMENTS;
+  }
+
+  /** Where a moved channel's surface is, as its tab says it: "on the stage", "in picture-in-picture", "hidden". */
+  public AwayText(key: string): string {
+    return AWAY_TEXT[this.PlacementOf(key)];
+  }
+
+  /** The icon for where a moved channel's surface is. */
+  public AwayIcon(key: string): string {
+    return AWAY_ICON[this.PlacementOf(key)];
+  }
+
   /** Toggle the panel between expanded and slim-collapsed. */
   public ToggleCollapsed(): void {
     this.setCollapsed(!this.Collapsed);
@@ -179,8 +293,8 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
 
   /** Collapse-state transitions funnel through here so the shell always hears about them. */
   private setCollapsed(value: boolean): void {
-    if (this.Collapsed !== value) {
-      this.Collapsed = value;
+    if (this.collapsed !== value) {
+      this.collapsed = value;
       this.CollapsedChange.emit(value);
       this.syncWide();
     }
@@ -284,10 +398,23 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
 
   /** On model changes: schedule the flash clear, report a wide-tier flip, re-render. */
   private onModelChanged(): void {
+    this.emitActiveChannelIfChanged();
     this.scheduleFlashClear();
     this.syncWide();
     this.evaluateOnboarding();
     this.cdr.markForCheck();
+  }
+
+  /** The channel key last reported through {@link ActiveChannelChange}. */
+  private lastReportedChannel: string | null = null;
+
+  /** Reports the focused channel when it differs from the last one reported. */
+  private emitActiveChannelIfChanged(): void {
+    const key = this.Model.ActiveChannelKey;
+    if (key !== this.lastReportedChannel) {
+      this.lastReportedChannel = key;
+      this.ActiveChannelChange.emit(key);
+    }
   }
 
   /**
@@ -300,7 +427,7 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
     const tab = this.ActiveTab;
     const plugin = tab.Kind === 'channel' ? tab.Data?.Plugin ?? null : null;
     const details = plugin?.GetOnboardingDetails() ?? null;
-    if (!plugin || !details || this.HasSeenOnboarding(plugin.ChannelName)) {
+    if (!plugin || !details || this.hasSeenOnboarding(plugin.ChannelName)) {
       this.onboardingChannelName = null;
       this.OnboardingContent = null;
       return;
@@ -324,7 +451,7 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   }
 
   /** Reads the per-user seen-map and reports whether this channel's intro has been dismissed. */
-  private HasSeenOnboarding(channelName: string): boolean {
+  private hasSeenOnboarding(channelName: string): boolean {
     return this.readOnboardingSeen()[channelName] === true;
   }
 
@@ -377,6 +504,6 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
     this.flashTimer = setTimeout(() => {
       this.flashTimer = null;
       this.Model.ClearFlash();
-    }, RealtimeSurfaceTabsComponent.FlashDurationMs);
+    }, RealtimeSurfaceTabsComponent.flashDurationMs);
   }
 }

@@ -90,6 +90,22 @@ drivers already read (`AUTH0_DOMAIN`, `WORKOS_CLIENTID`, …), which covers Auth
 with no per-driver code. A driver that reads different keys (MSAL uses unprefixed `CLIENT_ID` /
 `CLIENT_AUTHORITY`) supplies a static `EnvironmentFromCatalog(info)` and maps the row itself.
 
+## The published sign-in page
+
+`GET /auth/login-screen` (beside `/auth/providers`, also before login) serves the default theme's
+sign-in page as published in Login Studio, its logo variants and its brand seeds. `LoginScreenLoader`
+fetches it once per page load and `<mj-login-region>` draws its blocks; `<mj-explorer-app>` does both.
+Start the fetch next to the catalog preload so the first paint is already designed:
+
+```typescript
+await Promise.all([
+  AuthProviderCatalog.Preload(environment.GRAPHQL_URI),
+  LoginScreenLoader.Load(environment.GRAPHQL_URI),
+]);
+```
+
+Like `Preload`, `Load` never rejects; anything unusable resolves to `null` and the stock login screen.
+
 ## Installation
 
 ```bash

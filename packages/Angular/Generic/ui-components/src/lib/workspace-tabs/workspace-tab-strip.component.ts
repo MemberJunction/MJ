@@ -4,7 +4,7 @@ import { CdkDropList, CdkDrag, CdkDragDrop } from '@angular/cdk/drag-drop';
 import { MJWorkspaceTab } from './workspace-tabs.types';
 import { MJWorkspaceTipDirective } from './workspace-tip.directive';
 import { MJTabListDirective, MJTabListRequest } from '../tabs/tab-list.directive';
-import { warnIfTabChromeMissing } from '../tabs/tab-chrome-guard';
+import { WarnIfTabChromeMissing } from '../tabs/tab-chrome-guard';
 
 /** A drag-reorder request from the strip: move the tab at `previousIndex` to `currentIndex`. */
 export interface MJTabReorder {
@@ -102,7 +102,7 @@ export class MJWorkspaceTabStripComponent implements AfterViewInit {
   private readonly elementRef = inject(ElementRef);
 
   ngAfterViewInit(): void {
-    warnIfTabChromeMissing(this.elementRef.nativeElement);
+    WarnIfTabChromeMissing(this.elementRef.nativeElement);
   }
 
   @Input() Tabs: MJWorkspaceTab[] = [];
@@ -134,42 +134,67 @@ export class MJWorkspaceTabStripComponent implements AfterViewInit {
   @Output() TabReordered = new EventEmitter<MJTabReorder>();
 
   /** CDK drop — emit the reorder intent; the host applies it to the store (the strip stays dumb). */
-  public onDrop(event: CdkDragDrop<MJWorkspaceTab[]>): void {
+  public OnDrop(event: CdkDragDrop<MJWorkspaceTab[]>): void {
     if (event.previousIndex !== event.currentIndex) {
       this.TabReordered.emit({ previousIndex: event.previousIndex, currentIndex: event.currentIndex });
     }
+  }
+
+  /** @deprecated Use {@link OnDrop}. */
+  public onDrop(event: CdkDragDrop<MJWorkspaceTab[]>): void {
+    return this.OnDrop(event);
   }
 
   /**
    * The tab's accessible name. The dirty dot and the rejected colour/icon are the only signals for
    * those states, and neither survives being read aloud — so they are spelled out here instead.
    */
-  public tabAccessibleName(tab: MJWorkspaceTab): string {
+  public TabAccessibleName(tab: MJWorkspaceTab): string {
     const parts = [tab.Label];
     if (tab.Status === 'rejected') parts.push('(rejected)');
     if (tab.Dirty) parts.push('(unsaved changes)');
     return parts.join(' ');
   }
 
+  /** @deprecated Use {@link TabAccessibleName}. */
+  public tabAccessibleName(tab: MJWorkspaceTab): string {
+    return this.TabAccessibleName(tab);
+  }
+
   /** Keyboard arrow/Home/End/Enter from `mjTabList` — map the position back onto our id. */
-  public onActivateRequested(request: MJTabListRequest): void {
+  public OnActivateRequested(request: MJTabListRequest): void {
     const tab = this.Tabs[request.Index];
     if (tab) {
       this.TabSelected.emit(tab.Id);
     }
   }
 
+  /** @deprecated Use {@link OnActivateRequested}. */
+  public onActivateRequested(request: MJTabListRequest): void {
+    return this.OnActivateRequested(request);
+  }
+
   /** Delete/Backspace on a focused tab — the APG close gesture for a closeable tab. */
-  public onCloseRequested(request: MJTabListRequest): void {
+  public OnCloseRequested(request: MJTabListRequest): void {
     const tab = this.Tabs[request.Index];
     if (tab) {
       this.TabClosed.emit(tab.Id);
     }
   }
 
+  /** @deprecated Use {@link OnCloseRequested}. */
+  public onCloseRequested(request: MJTabListRequest): void {
+    return this.OnCloseRequested(request);
+  }
+
   /** The close button sits inside the tab, so its click would otherwise also select the tab. */
-  public onCloseClick(event: MouseEvent, id: string): void {
+  public OnCloseClick(event: MouseEvent, id: string): void {
     event.stopPropagation();
     this.TabClosed.emit(id);
+  }
+
+  /** @deprecated Use {@link OnCloseClick}. */
+  public onCloseClick(event: MouseEvent, id: string): void {
+    return this.OnCloseClick(event, id);
   }
 }

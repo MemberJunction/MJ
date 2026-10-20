@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
     PushAbortedError,
-    describeRollbackOutcome,
-    describeCommittedWrites,
-    describeCommitFailure,
+    DescribeRollbackOutcome,
+    DescribeCommittedWrites,
+    DescribeCommitFailure,
     type CommittedWrite,
 } from '../lib/push-outcome';
 
@@ -16,12 +16,12 @@ const writes: CommittedWrite[] = [
 
 describe('describeRollbackOutcome', () => {
     it('says nothing was saved only when the rollback worked and nothing committed elsewhere', () => {
-        const lines = describeRollbackOutcome(true, [], cwd);
+        const lines = DescribeRollbackOutcome(true, [], cwd);
         expect(lines).toEqual(['✓ Database transaction rolled back successfully. Nothing from this push was saved.']);
     });
 
     it('never says "rolled back successfully" when records were committed outside the transaction', () => {
-        const lines = describeRollbackOutcome(true, writes, cwd);
+        const lines = DescribeRollbackOutcome(true, writes, cwd);
         expect(lines.join('\n')).not.toMatch(/rolled back successfully/);
         expect(lines[0]).toMatch(/3 created or updated records in directories using isolated transactions were already committed/);
         expect(lines).toContain('   meta/a/.vendors.json: 2 committed');
@@ -29,7 +29,7 @@ describe('describeRollbackOutcome', () => {
     });
 
     it('reports a failed rollback, with any committed records', () => {
-        const lines = describeRollbackOutcome(false, writes.slice(0, 1), cwd);
+        const lines = DescribeRollbackOutcome(false, writes.slice(0, 1), cwd);
         expect(lines[0]).toMatch(/rollback failed/);
         expect(lines).toContain('   meta/a/.vendors.json: 1 committed');
     });
@@ -37,7 +37,7 @@ describe('describeRollbackOutcome', () => {
 
 describe('describeCommittedWrites', () => {
     it('groups records by file, in first-seen order', () => {
-        expect(describeCommittedWrites(writes, cwd)).toEqual([
+        expect(DescribeCommittedWrites(writes, cwd)).toEqual([
             '   meta/a/.vendors.json: 2 committed',
             '      updated MJ: AI Vendors at MJ: AI Vendors[0]',
             '      created MJ: AI Vendors at MJ: AI Vendors[1]',
@@ -49,14 +49,14 @@ describe('describeCommittedWrites', () => {
 
 describe('describeCommitFailure', () => {
     it('explains deferred foreign keys on PostgreSQL', () => {
-        const text = describeCommitFailure(new Error('violates foreign key constraint'), 'postgresql');
+        const text = DescribeCommitFailure(new Error('violates foreign key constraint'), 'postgresql');
         expect(text).toMatch(/rejected the commit/);
         expect(text).toMatch(/violates foreign key constraint/);
         expect(text).toMatch(/not tied to a single record/);
     });
 
     it('does not mention deferred constraints on SQL Server', () => {
-        expect(describeCommitFailure(new Error('boom'), 'sqlserver')).not.toMatch(/PostgreSQL/);
+        expect(DescribeCommitFailure(new Error('boom'), 'sqlserver')).not.toMatch(/PostgreSQL/);
     });
 });
 

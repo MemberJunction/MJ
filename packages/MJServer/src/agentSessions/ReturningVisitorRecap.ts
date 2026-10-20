@@ -23,6 +23,7 @@
  */
 
 import { RunView, UserInfo, LogError, LogStatus, type IMetadataProvider } from '@memberjunction/core';
+import { ConversationEngine } from '@memberjunction/core-entities';
 import type { MJConversationEntity, MJConversationDetailEntity, MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
@@ -52,7 +53,7 @@ const MAX_TRANSCRIPT_TURNS = 60;
  *   `ExpiresAt` that many days out (the Memory Manager's decay phase reaps expired notes). Omit/0
  *   for no expiry (system default retention applies).
  */
-export async function writeReturningVisitorRecap(
+export async function WriteReturningVisitorRecap(
   conversationId: string | null | undefined,
   agentId: string | null | undefined,
   contextUser: UserInfo,
@@ -101,6 +102,17 @@ export async function writeReturningVisitorRecap(
   }
 }
 
+/** @deprecated Use {@link WriteReturningVisitorRecap}. */
+export async function writeReturningVisitorRecap(
+  conversationId: string | null | undefined,
+  agentId: string | null | undefined,
+  contextUser: UserInfo,
+  provider: IMetadataProvider,
+  retentionDays?: number | null,
+): Promise<void> {
+  return WriteReturningVisitorRecap(conversationId, agentId, contextUser, provider, retentionDays);
+}
+
 /** The polymorphic scope a recap note is filed under. */
 interface RecapScope {
   entityId: string;
@@ -141,14 +153,17 @@ async function recapAlreadyExists(conversationId: string, contextUser: UserInfo)
   return result.Success && (result.Results?.length ?? 0) > 0;
 }
 
-/** Builds a compact transcript string from the conversation's most-recent detail turns. */
+/**
+ * Builds a compact transcript string from the most recent detail turns in Main that no rerun replaced
+ * (a returning visitor's widget conversation has no forks). Returns undefined when there are none.
+ */
 async function loadTranscript(conversationId: string, contextUser: UserInfo): Promise<string | undefined> {
   const rv = new RunView();
   const result = await rv.RunView<MJConversationDetailEntity>(
     {
       EntityName: CONVERSATION_DETAILS_ENTITY,
-      ExtraFilter: `ConversationID = '${conversationId}'`,
-      OrderBy: '__mj_CreatedAt DESC',
+      ExtraFilter: ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(ConversationEngine.TrunkScope(conversationId))),
+      OrderBy: 'Sequence DESC',
       MaxRows: MAX_TRANSCRIPT_TURNS,
       ResultType: 'entity_object',
     },

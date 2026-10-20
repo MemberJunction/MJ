@@ -5,7 +5,7 @@ import { GetGlobalObjectStore } from '@memberjunction/global';
  * Reset ALL MJ singletons by clearing their entries from the global object store.
  * Call this in beforeEach() to ensure clean test isolation.
  */
-export function resetMJSingletons(): void {
+export function ResetMJSingletons(): void {
   const store = GetGlobalObjectStore();
   if (store) {
     const indexableStore = store as Record<string, unknown>;
@@ -16,17 +16,32 @@ export function resetMJSingletons(): void {
   }
 }
 
+/** @deprecated Use {@link ResetMJSingletons}. */
+export function resetMJSingletons(): void {
+  return ResetMJSingletons();
+}
+
 /**
  * Reset just the ClassFactory registrations without destroying the MJGlobal singleton.
  * Lighter weight than resetMJSingletons - use when you only need a clean ClassFactory.
  */
-export function resetClassFactory(): void {
+export function ResetClassFactory(): void {
   MJGlobal.Instance.Reset();
+}
+
+/** @deprecated Use {@link ResetClassFactory}. */
+export function resetClassFactory(): void {
+  return ResetClassFactory();
 }
 
 /**
  * Clear the global ObjectCache.
  */
-export function resetObjectCache(): void {
+export function ResetObjectCache(): void {
   MJGlobal.Instance.ObjectCache.Clear();
+}
+
+/** @deprecated Use {@link ResetObjectCache}. */
+export function resetObjectCache(): void {
+  return ResetObjectCache();
 }

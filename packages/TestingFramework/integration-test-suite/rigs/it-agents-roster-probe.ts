@@ -16,7 +16,7 @@
  */
 import { RunView } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
-import { bootstrapAI } from './lib/ai-bootstrap';
+import { BootstrapAI } from './lib/ai-bootstrap';
 
 const eq = (a?: string | null, b?: string | null) => (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
 
@@ -97,7 +97,7 @@ const LADDER: Array<[string, string, number]> = [
 ];
 
 async function main(): Promise<void> {
-    const ctx = await bootstrapAI();
+    const ctx = await BootstrapAI();
     const ai = AIEngine.Instance;
     const summary: string[] = [];
 

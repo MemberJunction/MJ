@@ -50,19 +50,19 @@
           </div>
         </div>
       }
-      <!-- Search Knowledge Hub Action -->
-      @if (SearchQuery.trim().length > 0) {
+      <!-- Search Everything Action (only when the host has search turned on) -->
+      @if (HasSearchAction) {
         <div class="results-section-divider">
-          <span class="section-label">Knowledge Search</span>
+          <span class="section-label">Search</span>
         </div>
         <div
           class="result-item result-item-action"
           [class.selected]="FilteredApps.length === SelectedIndex"
           (click)="SearchKnowledgeHub()"
           role="option">
-          <i class="fa-solid fa-brain result-icon result-icon-knowledge" aria-hidden="true"></i>
+          <i class="fa-solid fa-magnifying-glass result-icon result-icon-knowledge" aria-hidden="true"></i>
           <div class="result-info">
-            <div class="result-name">Search Knowledge Hub</div>
+            <div class="result-name">Search everything</div>
             <div class="result-description">Search "{{ SearchQuery }}" across entities, documents, and content</div>
           </div>
           <kbd class="result-kbd">Enter</kbd>
@@ -75,7 +75,7 @@
           Size="compact"
           Icon="fa-solid fa-magnifying-glass"
           Title="No applications found"
-          Message="Try a different search term or search the Knowledge Hub"
+          [Message]="NoResultsMessage"
           role="status"
           aria-live="polite" />
       }

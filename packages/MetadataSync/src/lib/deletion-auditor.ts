@@ -7,6 +7,8 @@ import {
 import { DatabaseReference, DatabaseReferenceScanner } from './database-reference-scanner';
 import { EntityForeignKeyHelper } from './entity-foreign-key-helper';
 import { SyncEngine } from './sync-engine';
+import { ParseEnvReference } from './env-reference';
+import { METADATA_KEYWORDS } from '../constants/metadata-keywords';
 /**
  * Complete audit result for deletion operations
  */
@@ -65,7 +67,7 @@ export class DeletionAuditor {
      * @param deleteDbOnly If true, includes database-only references in the deletion levels
      * @returns Complete deletion audit
      */
-    async auditDeletions(allRecords: FlattenedRecord[], deleteDbOnly: boolean = false): Promise<DeletionAudit> {
+    async AuditDeletions(allRecords: FlattenedRecord[], deleteDbOnly: boolean = false): Promise<DeletionAudit> {
         // Step 1: Identify records explicitly marked for deletion
         const explicitDeletes = this.findExplicitDeletes(allRecords);
 
@@ -157,6 +159,11 @@ export class DeletionAuditor {
             circularDependencies,
             orphanedReferences
         };
+    }
+
+    /** @deprecated Use {@link AuditDeletions}. */
+    async auditDeletions(allRecords: FlattenedRecord[], deleteDbOnly: boolean = false): Promise<DeletionAudit> {
+        return this.AuditDeletions(allRecords, deleteDbOnly);
     }
 
     /**
@@ -267,7 +274,7 @@ export class DeletionAuditor {
     ): Promise<void> {
         const recordByKey = new Map<string, FlattenedRecord>();
         for (const record of records) {
-            const value = record.record.primaryKey?.[pkField] ?? record.record.fields?.[pkField];
+            const value = auditKeyValue(record.record.primaryKey?.[pkField] ?? record.record.fields?.[pkField]);
             if (value == null) {
                 // Cannot determine the key — assume it still exists (safe: avoids skipping a real delete).
                 existingRecords.push(record);
@@ -325,11 +332,14 @@ export class DeletionAuditor {
     ): Promise<void> {
         const syncEngine = new SyncEngine(this.contextUser);
         for (const record of records) {
+            const key = auditKey(record.record.primaryKey || {});
+            if (!key) {
+                // A key variable that cannot be resolved: assume the record exists, so push reports it
+                existingRecords.push(record);
+                continue;
+            }
             try {
-                const existingEntity = await syncEngine.loadEntity(
-                    record.entityName,
-                    record.record.primaryKey || {}
-                );
+                const existingEntity = await syncEngine.loadEntity(record.entityName, key);
                 if (existingEntity) {
                     existingRecords.push(record);
                 } else {
@@ -509,16 +519,51 @@ export class DeletionAuditor {
     /**
      * Check if deletion audit has blocking issues
      */
-    isValid(audit: DeletionAudit): boolean {
+    IsValid(audit: DeletionAudit): boolean {
         return audit.orphanedReferences.length === 0 &&
                audit.circularDependencies.length === 0;
+    }
+
+    /** @deprecated Use {@link IsValid}. */
+    isValid(audit: DeletionAudit): boolean {
+        return this.IsValid(audit);
     }
 
     /**
      * Check if deletion audit requires user confirmation
      * (due to implicit deletes)
      */
-    requiresConfirmation(audit: DeletionAudit): boolean {
+    RequiresConfirmation(audit: DeletionAudit): boolean {
         return audit.implicitDeletes.size > 0;
     }
+
+    /** @deprecated Use {@link RequiresConfirmation}. */
+    requiresConfirmation(audit: DeletionAudit): boolean {
+        return this.RequiresConfirmation(audit);
+    }
+}
+
+/**
+ * A key value as the database holds it: an `@env:` reference is replaced by its variable's value.
+ * Undefined when the reference is malformed or its variable is not set.
+ */
+function auditKeyValue(value: unknown): unknown {
+    if (typeof value !== 'string' || !value.startsWith(METADATA_KEYWORDS.ENV)) {
+        return value;
+    }
+    const reference = ParseEnvReference(value);
+    return reference ? process.env[reference.VariableName] : undefined;
+}
+
+/** The key with each `@env:` value resolved; null when one cannot be resolved. */
+function auditKey(primaryKey: Record<string, unknown>): Record<string, unknown> | null {
+    const key: Record<string, unknown> = {};
+    for (const [field, value] of Object.entries(primaryKey)) {
+        const resolved = auditKeyValue(value);
+        if (resolved === undefined) {
+            return null;
+        }
+        key[field] = resolved;
+    }
+    return key;
 }

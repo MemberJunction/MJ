@@ -67,7 +67,7 @@ export class ComponentManager {
   /**
    * Main entry point - intelligently handles all component operations
    */
-  async loadComponent(
+  async LoadComponent(
     spec: ComponentSpec,
     options: LoadOptions = {}
   ): Promise<LoadResult> {
@@ -117,6 +117,14 @@ export class ComponentManager {
     } finally {
       this.loadingPromises.delete(componentKey);
     }
+  }
+
+  /** @deprecated Use {@link LoadComponent}. */
+  async loadComponent(
+    spec: ComponentSpec,
+    options: LoadOptions = {}
+  ): Promise<LoadResult> {
+    return this.LoadComponent(spec, options);
   }
   
   /**
@@ -295,7 +303,7 @@ export class ComponentManager {
   /**
    * Load a complete hierarchy efficiently
    */
-  async loadHierarchy(
+  async LoadHierarchy(
     rootSpec: ComponentSpec,
     options: LoadOptions = {}
   ): Promise<HierarchyResult> {
@@ -381,6 +389,14 @@ export class ComponentManager {
       };
     }
   }
+
+  /** @deprecated Use {@link LoadHierarchy}. */
+  async loadHierarchy(
+    rootSpec: ComponentSpec,
+    options: LoadOptions = {}
+  ): Promise<HierarchyResult> {
+    return this.LoadHierarchy(rootSpec, options);
+  }
   
   /**
    * Recursively load a component and its dependencies
@@ -409,7 +425,7 @@ export class ComponentManager {
     visited.add(componentKey);
     
     // Load this component
-    const result = await this.loadComponent(spec, options);
+    const result = await this.LoadComponent(spec, options);
     
     if (result.success && result.component) {
       loaded.push(spec.name);
@@ -476,7 +492,7 @@ export class ComponentManager {
     
     for (let i = 0; i < dependencies.length; i += batchSize) {
       const batch = dependencies.slice(i, i + batchSize);
-      const batchPromises = batch.map(dep => this.loadComponent(dep, options));
+      const batchPromises = batch.map(dep => this.LoadComponent(dep, options));
       const batchResults = await Promise.all(batchPromises);
       results.push(...batchResults);
     }
@@ -807,17 +823,22 @@ export class ComponentManager {
   /**
    * Clear all caches
    */
-  clearCache(): void {
+  ClearCache(): void {
     this.fetchCache.clear();
     this.registryNotifications.clear();
     this.loadingPromises.clear();
     this.log('All caches cleared');
   }
+
+  /** @deprecated Use {@link ClearCache}. */
+  clearCache(): void {
+    return this.ClearCache();
+  }
   
   /**
    * Get cache statistics
    */
-  getCacheStats(): {
+  GetCacheStats(): {
     fetchCacheSize: number;
     notificationsCount: number;
     loadingCount: number;
@@ -827,6 +848,15 @@ export class ComponentManager {
       notificationsCount: this.registryNotifications.size,
       loadingCount: this.loadingPromises.size
     };
+  }
+
+  /** @deprecated Use {@link GetCacheStats}. */
+  getCacheStats(): {
+    fetchCacheSize: number;
+    notificationsCount: number;
+    loadingCount: number;
+  } {
+    return this.GetCacheStats();
   }
   
   /**

@@ -42,6 +42,22 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return { ...actual, LogError: vi.fn(), LogStatus: vi.fn() };
 });
 
+vi.mock('@memberjunction/ai-prompts', () => ({
+    AIEmbeddingRunner: class {
+        async RunEmbedding(params: { Texts: string[] }) {
+            return {
+                Success: true,
+                Vectors: (params.Texts || []).map(() => [0.1, 0.2]),
+                PromptRunID: 'pr-mock',
+                TokensUsed: 10,
+                Cost: 0,
+                ErrorMessage: null,
+                ExecutionTimeMs: 1,
+            };
+        }
+    },
+}));
+
 vi.mock('@memberjunction/ai', () => ({
     BaseEmbeddings: vi.fn(),
     GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
@@ -66,7 +82,6 @@ vi.mock('@memberjunction/core-entities', () => ({
             EntityDocuments: [],
             VectorIndexes: [],
             GetEntityDocumentByID: vi.fn().mockReturnValue(undefined),
-            GetVectorIndexByID: vi.fn().mockReturnValue(undefined),
         },
     },
 }));
@@ -92,14 +107,23 @@ vi.mock('@memberjunction/ai-vectors', () => ({
     },
 }));
 
-vi.mock('@memberjunction/ai-vector-sync', () => ({
+vi.mock('@memberjunction/ai-vector-sync', async (importOriginal) => ({
     EntityDocumentTemplateParser: { CreateInstance: vi.fn() },
     EntityVectorSyncer: class { CurrentUser = null; },
     VectorizeEntityParams: class {},
+    CombineExtraFilters: (await importOriginal<typeof import('@memberjunction/ai-vector-sync')>()).CombineExtraFilters,
 }));
 
 vi.mock('@memberjunction/aiengine', () => ({
-    AIEngine: { Instance: { Models: [], VectorDatabases: [] } },
+    AIEngine: {
+        Instance: {
+            Models: [],
+            VectorDatabases: [],
+            GetVectorIndexByID: vi.fn().mockReturnValue(undefined),
+            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+            GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
+        },
+    },
 }));
 
 vi.mock('@memberjunction/ai-core-plus', () => ({

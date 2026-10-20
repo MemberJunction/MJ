@@ -7,7 +7,7 @@ import type { RecordProcessScopeOverride } from '@memberjunction/core-entities';
 import type { EntityActionUXContext } from './runtime-ux-context';
 
 /** Builds the run scope from the grid/list context the host assembled. */
-export function buildRecordProcessScope(context: EntityActionUXContext): RecordProcessScopeOverride {
+export function BuildRecordProcessScope(context: EntityActionUXContext): RecordProcessScopeOverride {
     switch (context.ScopeKind) {
         case 'view':
             return { Kind: 'view', ViewID: context.ViewID ?? '' };
@@ -21,10 +21,20 @@ export function buildRecordProcessScope(context: EntityActionUXContext): RecordP
     }
 }
 
+/** @deprecated Use {@link BuildRecordProcessScope}. */
+export function buildRecordProcessScope(context: EntityActionUXContext): RecordProcessScopeOverride {
+    return BuildRecordProcessScope(context);
+}
+
 /** Renders an arbitrary value for the diff/preview table. */
-export function displayValue(value: unknown): string {
+export function DisplayValue(value: unknown): string {
     if (value === null || value === undefined || value === '') return '(empty)';
     if (value instanceof Date) return value.toLocaleString();
     if (typeof value === 'object') return JSON.stringify(value);
     return String(value);
+}
+
+/** @deprecated Use {@link DisplayValue}. */
+export function displayValue(value: unknown): string {
+    return DisplayValue(value);
 }

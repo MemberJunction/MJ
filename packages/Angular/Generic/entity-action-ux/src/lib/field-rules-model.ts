@@ -25,7 +25,7 @@ export interface RuleDraft {
 }
 
 /** A fresh, empty draft (static source, no target). */
-export function blankRuleDraft(): RuleDraft {
+export function BlankRuleDraft(): RuleDraft {
     return {
         TargetField: '', SourceKind: 'static', StaticValue: '', SourceField: '', Formula: '',
         LookupEntity: '', LookupMatchField: '', LookupMatchValueField: '', LookupReturnField: '',
@@ -33,8 +33,13 @@ export function blankRuleDraft(): RuleDraft {
     };
 }
 
+/** @deprecated Use {@link BlankRuleDraft}. */
+export function blankRuleDraft(): RuleDraft {
+    return BlankRuleDraft();
+}
+
 /** Maps a draft to the engine's discriminated {@link FieldRuleValueSource}. */
-export function draftToSource(d: RuleDraft): FieldRuleValueSource {
+export function DraftToSource(d: RuleDraft): FieldRuleValueSource {
     switch (d.SourceKind) {
         case 'field':
             return { Kind: 'field', Field: d.SourceField };
@@ -58,22 +63,32 @@ export function draftToSource(d: RuleDraft): FieldRuleValueSource {
     }
 }
 
+/** @deprecated Use {@link DraftToSource}. */
+export function draftToSource(d: RuleDraft): FieldRuleValueSource {
+    return DraftToSource(d);
+}
+
 /** Builds a {@link FieldRuleSet} from drafts, dropping any with no target field. */
-export function draftsToRuleSet(drafts: RuleDraft[]): FieldRuleSet {
+export function DraftsToRuleSet(drafts: RuleDraft[]): FieldRuleSet {
     return {
         Rules: drafts
             .filter((d) => d.TargetField)
             .map((d): FieldRule => ({
                 TargetField: d.TargetField,
-                Source: draftToSource(d),
+                Source: DraftToSource(d),
                 ...(d.Condition ? { Condition: d.Condition } : {}),
             })),
     };
 }
 
+/** @deprecated Use {@link DraftsToRuleSet}. */
+export function draftsToRuleSet(drafts: RuleDraft[]): FieldRuleSet {
+    return DraftsToRuleSet(drafts);
+}
+
 /** Inflates an engine rule back into an editable draft (inverse of {@link draftToSource}). */
-export function ruleToDraft(rule: FieldRule): RuleDraft {
-    const d = blankRuleDraft();
+export function RuleToDraft(rule: FieldRule): RuleDraft {
+    const d = BlankRuleDraft();
     d.TargetField = rule.TargetField;
     d.Condition = rule.Condition ?? '';
     const s = rule.Source;
@@ -100,4 +115,9 @@ export function ruleToDraft(rule: FieldRule): RuleDraft {
             break;
     }
     return d;
+}
+
+/** @deprecated Use {@link RuleToDraft}. */
+export function ruleToDraft(rule: FieldRule): RuleDraft {
+    return RuleToDraft(rule);
 }

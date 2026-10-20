@@ -8,7 +8,7 @@
 import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { UserInfo, LogStatus } from '@memberjunction/core';
-import { extractErrorMessage } from '../utils/error-handlers';
+import { ExtractErrorMessage } from '../utils/error-handlers';
 import {
   GeneratedQuery,
   EntityMetadataForPrompt,
@@ -16,7 +16,7 @@ import {
 } from '../data/schema';
 import { PROMPT_SQL_QUERY_FIXER } from '../prompts/PromptNames';
 import { QueryGenConfig } from '../cli/config';
-import { executePromptWithOverrides } from '../utils/prompt-helpers';
+import { ExecutePromptWithOverrides } from '../utils/prompt-helpers';
 
 /**
  * QueryFixer class
@@ -38,7 +38,7 @@ export class QueryFixer {
    * @param businessQuestion - Original business question for context
    * @returns Corrected SQL query with updated metadata
    */
-  async fixQuery(
+  async FixQuery(
     query: GeneratedQuery,
     errorMessage: string,
     entityMetadata: EntityMetadataForPrompt[],
@@ -71,8 +71,18 @@ export class QueryFixer {
 
       return fixedQuery;
     } catch (error: unknown) {
-      throw new Error(extractErrorMessage(error, 'QueryFixer.fixQuery'));
+      throw new Error(ExtractErrorMessage(error, 'QueryFixer.fixQuery'));
     }
+  }
+
+  /** @deprecated Use {@link FixQuery}. */
+  async fixQuery(
+    query: GeneratedQuery,
+    errorMessage: string,
+    entityMetadata: EntityMetadataForPrompt[],
+    businessQuestion: BusinessQuestion
+  ): Promise<GeneratedQuery> {
+    return this.FixQuery(query, errorMessage, entityMetadata, businessQuestion);
   }
 
   /**
@@ -107,7 +117,7 @@ export class QueryFixer {
     }
   ): Promise<GeneratedQuery> {
     // The SQL Query Fixer template returns { newSQL, reasoning }
-    const result = await executePromptWithOverrides<{
+    const result = await ExecutePromptWithOverrides<{
       newSQL: string;
       reasoning: string;
     }>(prompt, promptData, this.contextUser, this.config);

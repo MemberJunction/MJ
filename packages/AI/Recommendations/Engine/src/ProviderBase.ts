@@ -6,15 +6,15 @@ import { RecommendationRequest, RecommendationResult } from './generic/types';
  * Base class for all recommendation providers
  */
 export abstract class RecommendationProviderBase {
-  private _ContextUser: UserInfo;
+  private _contextUser: UserInfo;
   private _provider: IMetadataProvider | null = null;
 
   public constructor(ContextUser: UserInfo) {
-    this._ContextUser = ContextUser;
+    this._contextUser = ContextUser;
   }
 
   public get ContextUser(): UserInfo {
-    return this._ContextUser;
+    return this._contextUser;
   }
 
   /**

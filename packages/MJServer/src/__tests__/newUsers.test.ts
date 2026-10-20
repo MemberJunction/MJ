@@ -30,6 +30,8 @@ const {
     mockBeginTransaction,
     mockCommitTransaction,
     mockRollbackTransaction,
+    mockGlobalProviderCalls,
+    mockCreateIsolatedProvider,
     mockGetDefaultApplicationsForNewUser,
     mockRolesArray,
     mockApplicationsArray,
@@ -69,6 +71,10 @@ const {
         mockBeginTransaction: vi.fn(),
         mockCommitTransaction: vi.fn(),
         mockRollbackTransaction: vi.fn(),
+        // Every call new-user creation makes on the SHARED Metadata.Provider. Must stay empty: a
+        // transaction there nests into every concurrent request's (see CreateIsolatedProvider).
+        mockGlobalProviderCalls: [] as string[],
+        mockCreateIsolatedProvider: vi.fn(),
         mockGetDefaultApplicationsForNewUser: vi.fn(),
         mockRolesArray: [] as Array<{ ID: string; Name: string }>,
         mockApplicationsArray: [] as Array<{ ID: string; Name: string }>,
@@ -78,6 +84,9 @@ const {
 // ─── Module mocks ───────────────────────────────────────────────────────────
 
 vi.mock('../config.js', () => ({ configInfo: mockConfig }));
+
+// The provider new-user creation must use: its own instance, so its transaction is its own.
+vi.mock('../isolatedProvider.js', () => ({ CreateIsolatedProvider: mockCreateIsolatedProvider }));
 
 vi.mock('@memberjunction/generic-database-provider', () => {
     const instance = {
@@ -89,6 +98,18 @@ vi.mock('@memberjunction/generic-database-provider', () => {
         },
         Refresh: mockRefresh,
         GetSystemUser: vi.fn(),
+        /**
+         * The real cache falls back to a database read on a miss. The stub answers from
+         * the same array `Users` exposes, so these tests still describe the cache's behaviour.
+         */
+        FindUser: vi.fn(async ({ Email }: { Email?: string }) =>
+            mockCacheUsers.find((u: UserInfo) => {
+                if (!u.Email || u.Email.trim() === '') {
+                    console.error(`SYSTEM METADATA ISSUE: User ${u.ID} has no email address`);
+                    return false;
+                }
+                return u.Email.toLowerCase().trim() === (Email ?? '').toLowerCase().trim();
+            })),
     };
     return {
         UserCache: class MockUserCache {
@@ -104,10 +125,11 @@ vi.mock('@memberjunction/generic-database-provider', () => {
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
-    const provider = {
-        BeginTransaction: mockBeginTransaction,
-        CommitTransaction: mockCommitTransaction,
-        RollbackTransaction: mockRollbackTransaction,
+    // The shared global provider: records any use instead of doing anything.
+    const globalProvider = {
+        BeginTransaction: async () => { mockGlobalProviderCalls.push('BeginTransaction'); },
+        CommitTransaction: async () => { mockGlobalProviderCalls.push('CommitTransaction'); },
+        RollbackTransaction: async () => { mockGlobalProviderCalls.push('RollbackTransaction'); },
         Dialect: { BooleanLiteral: (value: boolean) => (value ? '1' : '0') },
     };
     class MockMetadata {
@@ -118,9 +140,10 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
             return mockApplicationsArray;
         }
         public GetEntityObject(entityName: string, contextUser?: UserInfo): Promise<unknown> {
+            mockGlobalProviderCalls.push(`GetEntityObject:${entityName}`);
             return mockGetEntityObject(entityName, contextUser);
         }
-        static Provider = provider;
+        static Provider = globalProvider;
     }
     class MockUserInfo {
         constructor(_provider: unknown, initData: Record<string, unknown>) {
@@ -128,6 +151,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
         }
     }
     class MockRunView {
+        public static FromMetadataProvider(_provider: unknown): MockRunView {
+            return new MockRunView();
+        }
         public RunView(params: unknown, contextUser?: UserInfo): Promise<unknown> {
             return mockRunViewFn(params, contextUser);
         }
@@ -168,7 +194,8 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     };
 });
 
-vi.mock('../auth/initializeProviders.js', () => ({ initializeAuthProviders: vi.fn() }));
+vi.mock('../auth/initializeProviders.js', () => ({ InitializeAuthProviders: vi.fn(),
+    get initializeAuthProviders() { return this.InitializeAuthProviders; } }));
 
 vi.mock('@memberjunction/auth-providers', () => ({
     AuthProviderFactory: {
@@ -195,7 +222,7 @@ vi.mock('@memberjunction/api-keys', () => ({
 
 // ─── Import after mocks ─────────────────────────────────────────────────────
 import { NewUserBase } from '../auth/newUsers.js';
-import { verifyUserRecord } from '../auth/index.js';
+import { VerifyUserRecord } from '../auth/index.js';
 
 // ─── Mock-entity plumbing ───────────────────────────────────────────────────
 
@@ -294,6 +321,21 @@ beforeEach(() => {
     });
     mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
     mockGetDefaultApplicationsForNewUser.mockReturnValue([]);
+
+    mockGlobalProviderCalls.length = 0;
+    mockCreateIsolatedProvider.mockImplementation(async () => ({
+        BeginTransaction: mockBeginTransaction,
+        CommitTransaction: mockCommitTransaction,
+        RollbackTransaction: mockRollbackTransaction,
+        Dialect: { BooleanLiteral: (value: boolean) => (value ? '1' : '0') },
+        get Roles() {
+            return mockRolesArray;
+        },
+        get Applications() {
+            return mockApplicationsArray;
+        },
+        GetEntityObject: (entityName: string, contextUser?: UserInfo) => mockGetEntityObject(entityName, contextUser),
+    }));
 });
 
 // ─── NewUserBase.createNewUser ──────────────────────────────────────────────
@@ -301,6 +343,34 @@ beforeEach(() => {
 describe('NewUserBase.createNewUser', () => {
     const create = (first = 'Ada', last = 'Lovelace', email = 'ada@example.com') =>
         new NewUserBase().createNewUser(first, last, email);
+
+    describe('provider isolation', () => {
+        it('runs the whole provisioning on its own provider, never the shared Metadata.Provider', async () => {
+            mockConfig.userHandling.CreateUserApplicationRecords = true;
+            mockConfig.userHandling.UserApplications = ['CRM'];
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ EntityID: 'ent-1', Entity: 'Accounts' }] });
+
+            const user = await create();
+
+            expect(user).toBeTruthy();
+            expect(mockCreateIsolatedProvider).toHaveBeenCalledTimes(1);
+            expect(mockBeginTransaction).toHaveBeenCalledTimes(1);
+            expect(mockCommitTransaction).toHaveBeenCalledTimes(1);
+            // User, role, application and application-entity records all came from the isolated one.
+            expect(getEntityObjectCalls.map((c) => c.entityName)).toEqual([
+                'MJ: Users', 'MJ: User Roles', 'MJ: User Applications', 'MJ: User Application Entities',
+            ]);
+            expect(mockGlobalProviderCalls).toEqual([]);
+        });
+
+        it('rolls back on the isolated provider too, never the shared one', async () => {
+            saveBehavior['MJ: Users'] = () => false;
+
+            expect(await create()).toBeNull();
+            expect(mockRollbackTransaction).toHaveBeenCalledTimes(1);
+            expect(mockGlobalProviderCalls).toEqual([]);
+        });
+    });
 
     describe('context-user resolution', () => {
         it('uses the configured contextUserForNewUserCreation for every entity it creates', async () => {
@@ -557,7 +627,7 @@ describe('verifyUserRecord', () => {
     }
 
     it('returns undefined when no email is supplied', async () => {
-        const user = await verifyUserRecord(undefined, 'A', 'B');
+        const user = await VerifyUserRecord(undefined, 'A', 'B');
 
         expect(user).toBeUndefined();
         expect(mockGetEntityObject).not.toHaveBeenCalled();
@@ -566,7 +636,7 @@ describe('verifyUserRecord', () => {
     it('returns the cached user, matching email case-insensitively and trimmed', async () => {
         addCacheUser('someone@example.com');
 
-        const user = await verifyUserRecord('  SomeOne@Example.COM  ', 'A', 'B');
+        const user = await VerifyUserRecord('  SomeOne@Example.COM  ', 'A', 'B');
 
         expect(user).toBeDefined();
         expect((user as unknown as { Email: string }).Email).toBe('someone@example.com');
@@ -577,7 +647,7 @@ describe('verifyUserRecord', () => {
         mockCacheUsers.push({ ID: 'broken-1', Name: 'Broken', Email: '  ', Type: 'User' });
         const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-        const user = await verifyUserRecord('missing@example.com', undefined, undefined);
+        const user = await VerifyUserRecord('missing@example.com', undefined, undefined);
 
         expect(user).toBeUndefined();
         expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('broken-1'));
@@ -587,15 +657,15 @@ describe('verifyUserRecord', () => {
         it('does NOT create a user when autoCreateNewUsers is false', async () => {
             mockConfig.userHandling.autoCreateNewUsers = false;
 
-            const user = await verifyUserRecord('new@example.com', 'New', 'User');
+            const user = await VerifyUserRecord('new@example.com', 'New', 'User');
 
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
         it('does NOT create a user when firstName or lastName is missing', async () => {
-            const missingFirst = await verifyUserRecord('new@example.com', undefined, 'User');
-            const missingLast = await verifyUserRecord('new@example.com', 'New', undefined);
+            const missingFirst = await VerifyUserRecord('new@example.com', undefined, 'User');
+            const missingLast = await VerifyUserRecord('new@example.com', 'New', undefined);
 
             expect(missingFirst).toBeUndefined();
             expect(missingLast).toBeUndefined();
@@ -605,7 +675,7 @@ describe('verifyUserRecord', () => {
         it('creates the user when enabled and domains are unrestricted, stamping config roles onto the returned UserInfo', async () => {
             mockConfig.userHandling.newUserRoles = ['UI', 'Developer'];
 
-            const user = await verifyUserRecord('new@example.com', 'New', 'User');
+            const user = await VerifyUserRecord('new@example.com', 'New', 'User');
 
             expect(user).toBeDefined();
             const stamped = user as unknown as { Email: string; UserRoles: Array<{ Role: string; RoleID: string; UserID: string }> };
@@ -621,7 +691,7 @@ describe('verifyUserRecord', () => {
         it('returns undefined when the underlying createNewUser fails', async () => {
             saveBehavior['MJ: Users'] = () => false;
 
-            const user = await verifyUserRecord('new@example.com', 'New', 'User');
+            const user = await VerifyUserRecord('new@example.com', 'New', 'User');
 
             expect(user).toBeUndefined();
             // The cache is no longer empty at rest (it holds the configured context user), so
@@ -637,35 +707,35 @@ describe('verifyUserRecord', () => {
         });
 
         it('creates the user when the email domain is authorized', async () => {
-            const user = await verifyUserRecord('new@example.com', 'New', 'User');
+            const user = await VerifyUserRecord('new@example.com', 'New', 'User');
 
             expect(user).toBeDefined();
             expect(entitiesOf('MJ: Users')).toHaveLength(1);
         });
 
         it('does NOT create when the email domain is not authorized', async () => {
-            const user = await verifyUserRecord('new@evil.com', 'New', 'User');
+            const user = await VerifyUserRecord('new@evil.com', 'New', 'User');
 
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
         it('creates when restricted and no request Origin is supplied, if the email domain is authorized', async () => {
-            const user = await verifyUserRecord('new@example.com', 'New', 'User', undefined);
+            const user = await VerifyUserRecord('new@example.com', 'New', 'User', undefined);
 
             expect(user).toBeDefined();
             expect(entitiesOf('MJ: Users')).toHaveLength(1);
         });
 
         it('does NOT create when a forged Origin is authorized but the email domain is not', async () => {
-            const user = await verifyUserRecord('new@evil.com', 'New', 'User', 'example.com');
+            const user = await VerifyUserRecord('new@evil.com', 'New', 'User', 'example.com');
 
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
         it('matches email domains case-insensitively', async () => {
-            const user = await verifyUserRecord('new@EXAMPLE.COM', 'New', 'User');
+            const user = await VerifyUserRecord('new@EXAMPLE.COM', 'New', 'User');
 
             expect(user).toBeDefined();
         });
@@ -673,7 +743,7 @@ describe('verifyUserRecord', () => {
         it('supports wildcard patterns for email subdomains', async () => {
             mockConfig.userHandling.newUserAuthorizedDomains = ['*.example.com'];
 
-            const user = await verifyUserRecord('new@mail.example.com', 'New', 'User');
+            const user = await VerifyUserRecord('new@mail.example.com', 'New', 'User');
 
             expect(user).toBeDefined();
         });
@@ -681,7 +751,7 @@ describe('verifyUserRecord', () => {
         it('does NOT match the apex against "*.example.com" (pattern is matched in full)', async () => {
             mockConfig.userHandling.newUserAuthorizedDomains = ['*.example.com'];
 
-            const user = await verifyUserRecord('new@example.com', 'New', 'User');
+            const user = await VerifyUserRecord('new@example.com', 'New', 'User');
 
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
@@ -690,27 +760,27 @@ describe('verifyUserRecord', () => {
         it('rejects prefix confusion: "*.example.com" does not match "evilexample.com" (dot is escaped)', async () => {
             mockConfig.userHandling.newUserAuthorizedDomains = ['*.example.com'];
 
-            const user = await verifyUserRecord('new@evilexample.com', 'New', 'User');
+            const user = await VerifyUserRecord('new@evilexample.com', 'New', 'User');
 
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
         it('rejects suffix confusion: the pattern is anchored, so "example.com.evil.com" is not authorized', async () => {
-            const user = await verifyUserRecord('new@example.com.evil.com', 'New', 'User');
+            const user = await VerifyUserRecord('new@example.com.evil.com', 'New', 'User');
 
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
         it('rejects "evilexample.com" against the plain "example.com" pattern (anchored at both ends)', async () => {
-            const user = await verifyUserRecord('x@evilexample.com', 'New', 'User');
+            const user = await VerifyUserRecord('x@evilexample.com', 'New', 'User');
 
             expect(user).toBeUndefined();
         });
 
         it('does NOT create when the identity has no email domain (username-only IdP)', async () => {
-            const user = await verifyUserRecord('bare-username', 'New', 'User');
+            const user = await VerifyUserRecord('bare-username', 'New', 'User');
 
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
@@ -727,7 +797,7 @@ describe('verifyUserRecord', () => {
             });
             const dataSource = {} as unknown as import('mssql').ConnectionPool;
 
-            const user = await verifyUserRecord('late@example.com', undefined, undefined, undefined, dataSource);
+            const user = await VerifyUserRecord('late@example.com', undefined, undefined, undefined, dataSource);
 
             expect(user).toBeDefined();
             expect((user as unknown as { Email: string }).Email).toBe('late@example.com');
@@ -739,7 +809,7 @@ describe('verifyUserRecord', () => {
             mockConfig.userHandling.updateCacheWhenNotFound = true;
             const dataSource = {} as unknown as import('mssql').ConnectionPool;
 
-            const user = await verifyUserRecord('never@example.com', undefined, undefined, undefined, dataSource);
+            const user = await VerifyUserRecord('never@example.com', undefined, undefined, undefined, dataSource);
 
             expect(user).toBeUndefined();
             expect(mockRefresh).toHaveBeenCalledTimes(1);

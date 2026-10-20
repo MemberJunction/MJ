@@ -9,7 +9,7 @@ import {
   AfterDataLoadEventArgs,
   AfterSearchEventArgs
 } from '../lib/events/tree-events';
-import { createDefaultTreeNode } from '../lib/models/tree-types';
+import { CreateDefaultTreeNode } from '../lib/models/tree-types';
 
 const mockTree = {} as never;
 
@@ -39,7 +39,7 @@ describe('CancelableTreeEventArgs', () => {
 
 describe('NodeEventArgs', () => {
   it('should include the node', () => {
-    const node = createDefaultTreeNode({ ID: 'n1', Label: 'Test' });
+    const node = CreateDefaultTreeNode({ ID: 'n1', Label: 'Test' });
     const event = new NodeEventArgs(mockTree, node);
     expect(event.Node).toBe(node);
     expect(event.Tree).toBe(mockTree);
@@ -48,7 +48,7 @@ describe('NodeEventArgs', () => {
 
 describe('CancelableNodeEventArgs', () => {
   it('should include node and be cancelable', () => {
-    const node = createDefaultTreeNode({ ID: 'n1' });
+    const node = CreateDefaultTreeNode({ ID: 'n1' });
     const event = new CancelableNodeEventArgs(mockTree, node);
     expect(event.Node).toBe(node);
     expect(event.Cancel).toBe(false);
@@ -57,8 +57,8 @@ describe('CancelableNodeEventArgs', () => {
 
 describe('BeforeNodeSelectEventArgs', () => {
   it('should capture selection context', () => {
-    const node = createDefaultTreeNode({ ID: 'n1' });
-    const current = [createDefaultTreeNode({ ID: 'n2' })];
+    const node = CreateDefaultTreeNode({ ID: 'n1' });
+    const current = [CreateDefaultTreeNode({ ID: 'n2' })];
     const event = new BeforeNodeSelectEventArgs(mockTree, node, true, current);
 
     expect(event.Node).toBe(node);
@@ -68,18 +68,18 @@ describe('BeforeNodeSelectEventArgs', () => {
   });
 
   it('should create a copy of current selection', () => {
-    const current = [createDefaultTreeNode({ ID: 'n2' })];
-    const event = new BeforeNodeSelectEventArgs(mockTree, createDefaultTreeNode(), false, current);
-    current.push(createDefaultTreeNode({ ID: 'n3' }));
+    const current = [CreateDefaultTreeNode({ ID: 'n2' })];
+    const event = new BeforeNodeSelectEventArgs(mockTree, CreateDefaultTreeNode(), false, current);
+    current.push(CreateDefaultTreeNode({ ID: 'n3' }));
     expect(event.CurrentSelection).toHaveLength(1);
   });
 });
 
 describe('AfterNodeSelectEventArgs', () => {
   it('should capture before and after selection', () => {
-    const node = createDefaultTreeNode({ ID: 'n1' });
-    const prev = [createDefaultTreeNode({ ID: 'old' })];
-    const next = [createDefaultTreeNode({ ID: 'n1' })];
+    const node = CreateDefaultTreeNode({ ID: 'n1' });
+    const prev = [CreateDefaultTreeNode({ ID: 'old' })];
+    const next = [CreateDefaultTreeNode({ ID: 'n1' })];
     const event = new AfterNodeSelectEventArgs(mockTree, node, false, next, prev);
 
     expect(event.WasAdditive).toBe(false);
@@ -108,10 +108,10 @@ describe('AfterDataLoadEventArgs', () => {
 
 describe('AfterSearchEventArgs', () => {
   it('should separate branch and leaf match counts', () => {
-    const branches = [createDefaultTreeNode({ ID: 'b1', Type: 'branch' })];
+    const branches = [CreateDefaultTreeNode({ ID: 'b1', Type: 'branch' })];
     const leaves = [
-      createDefaultTreeNode({ ID: 'l1', Type: 'leaf' }),
-      createDefaultTreeNode({ ID: 'l2', Type: 'leaf' })
+      CreateDefaultTreeNode({ ID: 'l1', Type: 'leaf' }),
+      CreateDefaultTreeNode({ ID: 'l2', Type: 'leaf' })
     ];
     const event = new AfterSearchEventArgs(mockTree, 'test', [...branches, ...leaves]);
 

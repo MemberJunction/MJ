@@ -1,5 +1,99 @@
 # @memberjunction/ng-whiteboard
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 84fc9d4: The realtime overlay's channel surfaces can be moved. "Move to…", beside the active channel tab (and in the call pill while a surface is on the stage), puts a surface on the stage, back on its tab, or out of sight, and "Reset layout" puts every surface back. A surface on the stage is the focus layout: the call column folds away and the pill appears. A channel whose surface is elsewhere says where in its tab, with "Bring it here". Moves are saved per user (`mj.realtime.placement.v1`, through `UserInfoEngine`) and carry over to later sessions.
+
+  `BaseRealtimeChannelClient` gains an optional `OnSurfacePlacementChange(placement)` hook, called right after `BindSurface` with the surface's placement and then on every move. `mj-media-stage` gives each surface's template its `Placement`, and `mj-realtime-channel-pane` passes it on. The whiteboard's header button becomes "Move to stage", or "Back to tab" while the board is on the stage, kept true by the new hook.
+
+- 7d4906b: Whiteboard: markdown panels can be resized taller or shorter by dragging. Agents add panels with a max-height cap and the text beyond it was clipped with no way to reveal it, because the resize gesture never wrote the height. The drag now moves the cap (with a live preview) and is undoable like any resize.
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [490cd8d]
+- Updated dependencies [ae0a662]
+- Updated dependencies [5e1e343]
+- Updated dependencies [25f7b82]
+- Updated dependencies [e7b2ebc]
+- Updated dependencies [e0cf9ed]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/ng-ui-components@6.2.0-edge.4
+  - @memberjunction/ng-markdown@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/ng-code-editor@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [60bd774]
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/ng-ui-components@6.2.0-edge.3
+  - @memberjunction/ng-code-editor@6.2.0-edge.3
+  - @memberjunction/ng-markdown@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [4d647e6]
+- Updated dependencies [369e229]
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ng-ui-components@6.2.0-edge.2
+  - @memberjunction/ng-code-editor@6.2.0-edge.2
+  - @memberjunction/ng-markdown@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- f78fd63: Ctrl/Cmd+/ opens the command palette, and the whiteboard's Sees dropdown closes on an
+  outside click.
+
+  Two components declared the same host event twice, silently disabling a handler. Angular
+  collects host listeners into an object keyed by event name, so a second `@HostListener`
+  for the same event **replaces** the first — no build error, no warning.
+  - `ShellComponent` declared `document:keydown` twice; the surviving handler did not
+    handle the command-palette chord, so Ctrl/Cmd+/ never fired for the entire life of
+    the feature.
+  - `RealtimeWhiteboardHostComponent` had the same bug for `document:click`, killing the
+    Sees dropdown's outside-click dismissal.
+
+  Both packages get a source-level guard test, because a behavioural test can only observe
+  the surviving handler — it cannot see that a second declaration clobbered the first.
+
+  With the chord live, Ctrl/Cmd+/ no longer collides with places that already used it:
+  - The shell leaves the chord to an element that already handled it, so Ctrl/Cmd+/ in a
+    code editor toggles a comment without also opening the palette.
+  - Component Studio's shortcuts panel opens with `?` only, and Data Explorer's `/` filter
+    shortcut ignores Ctrl/Cmd+/.
+
+  The palette could not be opened before, so two of its own bugs are fixed with it:
+  - It lists only the user's own apps — the same list Home, the app switcher and the
+    omnibar show — instead of every app in the system.
+  - Its search row, now "Search everything", opens Search Results; nothing handled its
+    event before. It shows only while the chrome shows search (`Shell.SearchBar.Enabled`),
+    like the header search.
+
+- Updated dependencies [80905a1]
+- Updated dependencies [920bef8]
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/ng-code-editor@6.2.0-edge.1
+  - @memberjunction/ng-markdown@6.2.0-edge.1
+  - @memberjunction/ng-ui-components@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- @memberjunction/ng-code-editor@6.2.0-edge.0
+- @memberjunction/ng-markdown@6.2.0-edge.0
+- @memberjunction/ng-ui-components@6.2.0-edge.0
+- @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Patch Changes

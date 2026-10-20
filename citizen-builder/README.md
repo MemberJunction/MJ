@@ -56,12 +56,31 @@ If you prefer to initialize the workspace and start the Docker environment yours
 
 ## 1. Overview & Architecture
 
+> **Product Principle:** *Make the human surface simple; keep the agent surface complete.*
+> The business-user experience is a straightforward chat. The agent experience is comprehensive — giving coding agents full machine-readable access to live entity metadata, actions, progressive CLI discovery, diagnostic probes, execution traces, and packaging.
+
 The **Citizen Agent Builder** provides an isolated, local MemberJunction environment that runs entirely inside Docker:
 * **`sqlserver` (Port 1433)**: Microsoft SQL Server 2022.
 * **`mj` (Ports 4000 & 4202)**: A Node 24 container that executes `mj install` on first boot, provisions the database schema, installs business context (More Cheese default, or enterprise apps like Blue Cypress), and serves:
   * **MJAPI** at `http://localhost:4000` (GraphQL API and agent execution engine).
   * **MJExplorer** at `http://localhost:4202` (Web UI for testing agents and viewing records; port 4202 is an authorized redirect URI for Auth0/MSAL).
 * **Metadata Directory (`./metadata`)**: Local JSON and Markdown files mapped into the container. Pushing metadata to the database is done with a single command (`./scripts/sync-metadata.sh`).
+
+### Available Agent Tools & CLI Commands
+
+Every tool and command in this workspace supports machine-readable output (`--format json`) for autonomous coding agents:
+
+| Tool / Command | What It Does |
+|---|---|
+| `./scripts/sync-metadata.sh` | Pushes declarative metadata files in `./metadata/` to the database, resolving `@lookup` and `@file` references. |
+| `./scripts/query-run-history.sh ["<Agent>"\|<ID>]` | Queries agent run history, step execution traces, and action logs via native CLI. |
+| `./scripts/generate-capabilities.sh` | Re-scans the live database and regenerates `CAPABILITIES.md` with current entities and actions. |
+| `docker compose exec -T mj mj doctor --format json` | Runs system diagnostics returning structured checks, failures, and auto-remediations. |
+| `docker compose exec -T mj mj doctor --format json --scope [ai\|runtime\|install]` | Filters diagnostics by specific subsystem (e.g. AI provider credentials or encryption keys). |
+| `docker compose exec -T mj mj ai actions list --format json` | Lists all available system and business actions with parameter schemas. |
+| `docker compose exec -T mj mj ai agents list --format json` | Lists all existing agents, agent types, and categories in the instance. |
+| `docker compose exec -T mj mj ai agents run -a "<Name>" -p "<Input>" --format json` | Executes an agent headlessly and emits structured execution results. |
+| `docker compose exec -T mj mj ai audit agent-run <ID> --format json` | Audits an agent run: step-by-step prompts, LLM completions, token counts, and tool calls. |
 
 ---
 
@@ -169,20 +188,29 @@ Always enforce these constraints when authoring agents:
    Invite the user to test in their browser at `http://localhost:4202`.
 
 2. **Headless Execution**:
-   You can trigger test runs directly via CLI:
+   You can trigger test runs directly via CLI with structured output:
    ```bash
-   docker compose exec -T mj mj ai agents run -a "<Agent Name>" -p "<Test Input>"
+   docker compose exec -T mj mj ai agents run -a "<Agent Name>" -p "<Test Input>" --format json
    ```
 
-3. **Diagnosing Errors via Database Run Traces**:
-   If an agent errors out or returns unexpected output, **do not ask the user for console logs**. Run:
+3. **Diagnosing Errors & Auditing Execution Traces**:
+   When an agent runs, **do not ask the user for console logs**. Audit execution traces directly via native CLI:
    ```bash
+   # List recent runs for this agent
    ./scripts/query-run-history.sh "<Agent Name>"
+
+   # View full machine-readable JSON trace for a specific run ID
+   ./scripts/query-run-history.sh <RunID> --format json
+
+   # Or drill down into specific steps or errors
+   ./scripts/query-run-history.sh <RunID> --step 1 --detail full
+   ./scripts/query-run-history.sh <RunID> --errors
    ```
-   This script directly queries:
-   * **`[__mj].[vwAIAgentRuns]`**: High-level status, duration, error messages, and token usage.
-   * **`[__mj].[vwAIAgentRunSteps]`**: Step-by-step trace showing the exact prompt sent to the LLM, raw LLM completion, and action calls.
-   * **`[__mj].[vwActionExecutionLogs]`**: Errors and payloads for executed tools.
+   
+   **Trace Verification Assertions**:
+   * Verify that `actionsUsed` matches expected actions and tools.
+   * Verify that `actionsNotUsed` contains sensitive or dangerous actions.
+   * Check step prompts, outputs, and token counts to spot prompt drift or infinite loops.
    
    Analyze the trace, refine your prompt template or mapping, run `./scripts/sync-metadata.sh`, and re-test.
 

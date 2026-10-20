@@ -66,8 +66,8 @@ without standing up the agent framework.
 
 | File | Responsibility |
 |---|---|
-| `TaskGraphService.ts` | Validate a spec, resolve names to IDs, write parent + children + edges. The only write path. |
-| `TaskGraphDispatcher.ts` | Poll, claim, execute, evaluate edges, propagate, roll up, settle, credit cost. |
+| `TaskGraphService.ts` | Validate a spec, resolve names to IDs in parallel, write parent + children + edges concurrently inside a single entity transaction. The only write path. |
+| `TaskGraphDispatcher.ts` | Single-pass poll, claim, pre-hydrated execute, evaluate edges, propagate, roll up, settle, credit cost. |
 | `TaskClaimStore.ts` | The atomic claim protocol — guarded writes so two instances cannot run the same task. |
 | `TaskLoopExecutor.ts` | `ForEach` / `While` semantics: bounds, ordering, concurrency, delay, failure. |
 | `DispatcherConditionEvaluator.ts` | Edge conditions, over the superset context both dialects can read. |
@@ -112,6 +112,14 @@ DML, so the earlier raw SQL against the `Task` table was refused outright under 
 login — and, because a refusal returned the same zero rowcount a lost race does, the dispatcher
 skipped every task forever without saying so (#4575). Adding a guarded write means adding a
 procedure and its GRANT in a migration, not a statement in TypeScript.
+
+### Single-pass polling & zero-reload claimed execution
+
+Each `pollOnce()` pass loads active graph state **once** in `propagateAndRollup` (3 batched discovery queries plus 1 child-tasks query, 1 dependencies query, and 1 parent task load per active graph):
+
+1. **In-memory human-task short-circuit**: Human-step expiry, settlement, and reconciliation sweeps only run when `graph.entityById` actually contains a `Pending` human task, avoiding 3 redundant `RunView` queries per graph when no human tasks are waiting.
+2. **In-place status propagation & parent reuse**: Skip and block cascades update `graph.nodes` and `graph.entityById` in memory and reuse `graph.parent` for parent rollup. Surviving non-terminal `GraphState[]` are returned directly to `findClaimableTasks`, eliminating duplicate `findActiveGraphIDs` and `loadGraphState` passes.
+3. **Pre-hydrated `ClaimedTaskCandidate`**: `findClaimableTasks` packages each eligible task with its loaded `taskEntity`, `parentTask`, `parentMetadata`, and `dependencyOutputs` (extracted in memory from `graph.rawDependencies` and `graph.entityById`), allowing `executeClaimed` to begin node execution with zero pre-execution database queries.
 
 ---
 

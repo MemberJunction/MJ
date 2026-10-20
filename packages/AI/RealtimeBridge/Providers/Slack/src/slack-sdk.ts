@@ -130,10 +130,10 @@ export interface ISlackHuddleSdk {
      * @param args Join parameters (channel id, huddle id, bot name, auth).
      * @returns The bot participant + huddle handles.
      */
-    join(args: SlackJoinArgs): Promise<SlackJoinResult>;
+    join(args: SlackJoinArgs): Promise<SlackJoinResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /** Leaves the huddle (and tears down the bot's media leg) and releases SDK resources. */
-    leave(): Promise<void>;
+    leave(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Sends one raw PCM audio frame as the bot's outbound audio (the agent's voice into the huddle),
@@ -143,7 +143,7 @@ export interface ISlackHuddleSdk {
      *
      * @param pcm The PCM audio bytes to send.
      */
-    sendAudioFrame(pcm: ArrayBuffer): void;
+    sendAudioFrame(pcm: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback for inbound raw per-participant audio frames (what the agent hears, carrying
@@ -153,21 +153,21 @@ export interface ISlackHuddleSdk {
      *
      * @param cb Invoked with each inbound audio frame.
      */
-    onAudioFrame(cb: (frame: SlackAudioFrame) => void): void;
+    onAudioFrame(cb: (frame: SlackAudioFrame) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a participant joins the huddle. "Latest handler wins."
      *
      * @param cb Invoked with the participant who joined.
      */
-    onParticipantJoin(cb: (participant: SlackParticipant) => void): void;
+    onParticipantJoin(cb: (participant: SlackParticipant) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a participant leaves the huddle. "Latest handler wins."
      *
      * @param cb Invoked with the participant id that left.
      */
-    onParticipantLeave(cb: (participantId: string) => void): void;
+    onParticipantLeave(cb: (participantId: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback for native raised-hand signals. "Latest handler wins."
@@ -177,28 +177,28 @@ export interface ISlackHuddleSdk {
      *
      * @param cb Invoked with the participant id and whether the hand is now raised.
      */
-    onHandRaise(cb: (participantId: string, raised: boolean) => void): void;
+    onHandRaise(cb: (participantId: string, raised: boolean) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Returns the current huddle participant roster (including the bot).
      *
      * @returns The current participants.
      */
-    getParticipants(): Promise<SlackParticipant[]>;
+    getParticipants(): Promise<SlackParticipant[]>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Posts a message to the huddle's thread / channel (everyone), via `chat.postMessage`.
      *
      * @param text The chat message text.
      */
-    postChatMessage(text: string): Promise<void>;
+    postChatMessage(text: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Mutes a participant in the huddle (subject to the bot holding the relevant authority).
      *
      * @param participantId The participant to mute.
      */
-    muteParticipant(participantId: string): Promise<void>;
+    muteParticipant(participantId: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when the huddle ends (starter ended / all participants left).
@@ -206,7 +206,7 @@ export interface ISlackHuddleSdk {
      *
      * @param cb Invoked when the huddle has ended.
      */
-    onMeetingEnded(cb: () => void): void;
+    onMeetingEnded(cb: () => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

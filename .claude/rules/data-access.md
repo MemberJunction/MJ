@@ -110,7 +110,21 @@ function gateCacheWrite(name: string, provider?: IMetadataProvider) {
 }
 ```
 
+The same holds when the provider goes **into an options object** rather than being called directly. An Angular component (`BaseAngularComponent` subclass) has a bound provider, `this.ProviderToUse`, so hand that one on:
+
+```typescript
+// ❌ WRONG — inside a component: the save goes to the default server, not this component's
+await op.Execute({ spec }, { provider: Metadata.Provider, user: this.CurrentUser });
+
+// ✅ CORRECT
+await op.Execute({ spec }, { provider: this.ProviderToUse, user: this.CurrentUser });
+```
+
+**Genuinely global code** (bootstrap, CLI, CodeGen, a singleton that registers itself as the default) marks the line with `// global-provider-ok: <specific reason>`. A `provider ?? Metadata.Provider` fallback needs no marker. Anything else fails `MultiProviderCompliance` (`npm run check:guards`).
+
 **Why this matters**: `LocalCacheManager.SetRunViewResult`, `BaseEntityEvent` consumers, `AuthorizationEvaluator`, and `BaseEngine.applyRemoteRecordData` all read per-provider state (entity flags, roles, current user). When they reach for `new Metadata()` in a multi-provider client, they read the wrong server's metadata and produce subtly wrong cache decisions, role evaluations, or entity instances. These are latent bugs that don't surface until parallel-server scenarios exist.
+
+**Metadata Info objects know their provider.** Providers construct every Info object as `new X(row, provider)`, and `BaseInfo.OwningProvider` keeps that back-reference (outside the instance, so it never serializes). Getters on an Info class that resolve sibling metadata — `EntityInfo.ChildEntities` / `ParentEntityInfo`, RLS filters, `QueryInfo.Fields`, `AuthorizationInfo.Roles` — go through `MetadataProviderFor(this)`, never `Metadata.Provider`. When you add such a getter, do the same, and when an Info class builds child Info objects, pass the provider on.
 
 **When `new Metadata()` IS fine**: methods that genuinely operate on the global default — e.g., a one-off CLI script, application bootstrap, a singleton initializer that explicitly registers itself as the global provider.
 
@@ -357,6 +371,10 @@ Other rules that follow from this:
   it. `ClassFactory` priority auto-increments by load order, so the server subclass wins server-side
   with no configuration — and the browser still sees the collection.
 - **`BeginISATransaction()`, `ProviderTransaction` and `PropagateTransactionToParents()` were removed in 6.2.** Use `BeginEntityTransaction()` / `RunInEntityTransaction()`.
+- **`DeclareRelatedRecordsDynamic(options)` is for generic engines only.** It is the public form of
+  the protected `DeclareRelatedRecords`: it registers a collection on *one instance* at runtime, for a
+  relationship the class declares no collection for (Record Cloning's materializer, `mj sync push`).
+  It throws on a duplicate name. In entity code, declare the collection statically or in metadata.
 
 Read [`guides/TRANSACTIONS_AND_BATCHING_GUIDE.md`](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md)
 before writing anything that saves more than one record together, and
@@ -586,6 +604,7 @@ const result = await rv.RunView<{ID: string; Name: string; Status: string}>({
 - **`entity_object`**: Creates full BaseEntity subclass instances with getters/setters, validation, dirty tracking
 - **`simple`**: Returns plain JavaScript objects with just the data - much faster for read-only operations
 - **`Fields` parameter**: Reduces data transfer by excluding large columns (JSON blobs, text fields)
+- **Binary fields** (`varbinary`/`bytea`, base64 strings above the DB) are omitted from `RunView` unless `IncludeBinaryFields: true` or one is named in `Fields`; `Load()` always includes them. See [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md).
 
 #### Anti-Patterns
 ```typescript
@@ -752,6 +771,33 @@ If you're tempted to use `localStorage` because "it's just a little thing" — t
 - This feature tracks all changes to entity records unless explicitly disabled
 - No need to implement custom versioning - it's handled automatically by the framework
 - Access historical versions through the Record Changes entities
+
+### Record Changes written by a clone
+
+A row saved by the record-cloning engine gets a Record Change with `Source = 'Clone'` and a
+`ChangeContext` JSON column shaped like `IRecordChangeContext`
+(`metadata/entities/JSONType-interfaces/IRecordChangeContext.ts`):
+`{ Version: 1, Kind: 'Clone', Clone: { CloneLogID, SourceEntityName, SourceRecordID, RootEntityName, RootSourceRecordID, RootTargetRecordID, Depth, Route, FieldChangeSummary, Reason? } }`.
+Read it through the typed `ChangeContextObject` accessor on `MJRecordChangeEntity`.
+
+- **Only the server sets it, through the engine.** `CloneExecutor` calls `BaseEntity.SetCloneContext()`
+  on each row it stages, and the database provider writes `Source`/`ChangeContext` from it. The
+  context stays on the instance until `ClearCloneContext()`.
+- **GraphQL clients cannot supply it.** `GraphQLDataProvider` never sends a clone context (a wire
+  test guards this) and the resolver accepts only `RestoreContext___`. A client-supplied clone
+  context would forge lineage.
+- A save can't be both: with a restore context also set, the provider throws ("an operation cannot be both a restore and a clone"). `SetCloneContext()` does not clear a pending restore context, so clear one before setting the other.
+
+### Annotating a Record Change — `Comments` only
+
+Record Changes are immutable except for `Comments`. `MJRecordChangeEntityServer`
+(`packages/MJCoreEntitiesServer/src/custom/MJRecordChangeEntityServer.server.ts`) refuses an update
+unless **all** of these hold:
+
+1. `Comments` is the only dirty field.
+2. The user holds `Record Changes: Annotate` (directly or through an ancestor authorization).
+3. The user has ordinary Update permission on `MJ: Record Changes` and its Update API is enabled.
+   The authorization narrows who may annotate; it does not replace the role permission.
 
 ## Related guides
 

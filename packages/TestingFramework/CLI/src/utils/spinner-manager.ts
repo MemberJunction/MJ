@@ -15,76 +15,116 @@ export class SpinnerManager {
     /**
      * Start a spinner with the given message
      */
-    start(message: string): void {
+    Start(message: string): void {
         if (this.spinner) {
             this.spinner.stop();
         }
         this.spinner = ora(message).start();
     }
 
+    /** @deprecated Use {@link Start}. */
+    start(message: string): void {
+        return this.Start(message);
+    }
+
     /**
      * Update spinner message
      */
-    update(message: string): void {
+    Update(message: string): void {
         if (this.spinner) {
             this.spinner.text = message;
         }
     }
 
+    /** @deprecated Use {@link Update}. */
+    update(message: string): void {
+        return this.Update(message);
+    }
+
     /**
      * Stop spinner with success message
      */
-    succeed(message?: string): void {
+    Succeed(message?: string): void {
         if (this.spinner) {
             this.spinner.succeed(message);
             this.spinner = null;
         }
     }
 
+    /** @deprecated Use {@link Succeed}. */
+    succeed(message?: string): void {
+        return this.Succeed(message);
+    }
+
     /**
      * Stop spinner with failure message
      */
-    fail(message?: string): void {
+    Fail(message?: string): void {
         if (this.spinner) {
             this.spinner.fail(message);
             this.spinner = null;
         }
     }
 
+    /** @deprecated Use {@link Fail}. */
+    fail(message?: string): void {
+        return this.Fail(message);
+    }
+
     /**
      * Stop spinner with warning message
      */
-    warn(message?: string): void {
+    Warn(message?: string): void {
         if (this.spinner) {
             this.spinner.warn(message);
             this.spinner = null;
         }
     }
 
+    /** @deprecated Use {@link Warn}. */
+    warn(message?: string): void {
+        return this.Warn(message);
+    }
+
     /**
      * Stop spinner with info message
      */
-    info(message?: string): void {
+    Info(message?: string): void {
         if (this.spinner) {
             this.spinner.info(message);
             this.spinner = null;
         }
     }
 
+    /** @deprecated Use {@link Info}. */
+    info(message?: string): void {
+        return this.Info(message);
+    }
+
     /**
      * Stop spinner without any message
      */
-    stop(): void {
+    Stop(): void {
         if (this.spinner) {
             this.spinner.stop();
             this.spinner = null;
         }
     }
 
+    /** @deprecated Use {@link Stop}. */
+    stop(): void {
+        return this.Stop();
+    }
+
     /**
      * Check if spinner is currently running
      */
-    get isSpinning(): boolean {
+    get IsSpinning(): boolean {
         return this.spinner !== null;
+    }
+
+    /** @deprecated Use {@link IsSpinning}. */
+    get isSpinning(): boolean {
+        return this.IsSpinning;
     }
 }

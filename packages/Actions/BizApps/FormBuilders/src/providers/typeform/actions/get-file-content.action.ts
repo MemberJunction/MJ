@@ -109,13 +109,13 @@ export class GetTypeformFileContentAction extends TypeformBaseAction {
                 Buffer.from(response.Data),
                 contentType,
                 {
-                    format: format as any,
-                    includeWarnings: true,
-                    maxFileSize: 50 * 1024 * 1024 // 50MB limit
+                    Format: format as any,
+                    IncludeWarnings: true,
+                    MaxFileSize: 50 * 1024 * 1024 // 50MB limit
                 }
             );
 
-            if (!processResult.success) {
+            if (!processResult.Success) {
                 return {
                     Success: false,
                     ResultCode: 'PROCESSING_ERROR',
@@ -127,17 +127,17 @@ export class GetTypeformFileContentAction extends TypeformBaseAction {
                 {
                     Name: 'Content',
                     Type: 'Output',
-                    Value: processResult.content
+                    Value: processResult.Content
                 },
                 {
                     Name: 'ContentType',
                     Type: 'Output',
-                    Value: processResult.contentType
+                    Value: processResult.ContentType
                 },
                 {
                     Name: 'ContentFormat',
                     Type: 'Output',
-                    Value: processResult.format
+                    Value: processResult.Format
                 },
                 {
                     Name: 'Size',
@@ -152,16 +152,16 @@ export class GetTypeformFileContentAction extends TypeformBaseAction {
                 {
                     Name: 'ExtractionMethod',
                     Type: 'Output',
-                    Value: processResult.extractionMethod
+                    Value: processResult.ExtractionMethod
                 }
             ];
 
             // Add warning if present
-            if (processResult.warning) {
+            if (processResult.Warning) {
                 outputParams.push({
                     Name: 'Warning',
                     Type: 'Output',
-                    Value: processResult.warning
+                    Value: processResult.Warning
                 });
             }
 

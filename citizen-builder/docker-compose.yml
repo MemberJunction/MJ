@@ -23,6 +23,10 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      args:
+        # Required: the CLI and MemberJunction release inside the container must match the CLI
+        # that scaffolded this workspace. `mj agent init` writes it to .env.
+        MJ_VERSION: "${MJ_VERSION:?MJ_VERSION is not set in .env - re-run mj agent init, or set it to the MemberJunction version to install}"
     platform: linux/amd64
     restart: unless-stopped
     depends_on:
@@ -37,6 +41,8 @@ services:
       DB_USERNAME: "sa"
       DB_PASSWORD: "${DB_PASSWORD:-TestPassword123!}"
       DB_DATABASE: "${DB_DATABASE:-MemberJunction}"
+      # Tells the entrypoint which MemberJunction release `mj install` must fetch
+      MJ_VERSION: "${MJ_VERSION}"
       MJ_BASE_ENCRYPTION_KEY: "${MJ_BASE_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef}"
       # LLM Provider API Keys
       AI_VENDOR_API_KEY__OpenAILLM: "${OPENAI_API_KEY:-}"

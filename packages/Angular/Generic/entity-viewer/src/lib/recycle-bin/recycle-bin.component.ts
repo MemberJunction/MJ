@@ -554,7 +554,7 @@ export class RecycleBinComponent extends BaseAngularComponent implements OnInit 
 
   // ─── Display helpers (template) ─────────────────────────────────
 
-  public formatTimestamp(date: Date | string | null): string {
+  public FormatTimestamp(date: Date | string | null): string {
     if (!date) return '';
     return new Intl.DateTimeFormat('en-US', {
       year: 'numeric',
@@ -566,9 +566,19 @@ export class RecycleBinComponent extends BaseAngularComponent implements OnInit 
     }).format(new Date(date));
   }
 
-  public getUserDisplay(user: string | null): string {
+  /** @deprecated Use {@link FormatTimestamp}. */
+  public formatTimestamp(date: Date | string | null): string {
+    return this.FormatTimestamp(date);
+  }
+
+  public GetUserDisplay(user: string | null): string {
     if (!user) return 'Unknown';
     if (user.includes('@')) return user.split('@')[0];
     return user;
+  }
+
+  /** @deprecated Use {@link GetUserDisplay}. */
+  public getUserDisplay(user: string | null): string {
+    return this.GetUserDisplay(user);
   }
 }

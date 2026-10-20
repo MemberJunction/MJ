@@ -6,6 +6,7 @@
 import type { ChatTool } from '@memberjunction/ai';
 import type { MJActionParamEntity } from '@memberjunction/core-entities';
 import type { MJActionEntityExtended } from '@memberjunction/actions-base';
+import { CoerceValueToSchema, type ParamValueSchema, ResolveParamElementSchema } from './action-param-schema';
 
 /** One Action, and the provider-legal tool name it was declared under. */
 export interface ActionToolBinding {
@@ -16,6 +17,8 @@ export interface ActionToolBinding {
     /** The Action the framework dispatches when that name comes back. */
     action: MJActionEntityExtended;
     tool: ChatTool;
+    /** The Action's params the tool was built from — what {@link CoerceActionArguments} reads back. */
+    params: readonly MJActionParamEntity[];
 }
 
 /**
@@ -65,7 +68,7 @@ const DESCRIPTION_DETAIL_LEVELS: readonly number[] = [160, 110, 70, 40, 0];
  * the Action that produced it; the collision check lives in {@link buildActionToolSet} rather than
  * here, so this stays a pure function of the name.
  */
-export function sanitizeToolName(actionName: string): string {
+export function SanitizeToolName(actionName: string): string {
     return actionName
         .trim()
         .replace(/[^a-zA-Z0-9]+/g, '_')
@@ -74,29 +77,37 @@ export function sanitizeToolName(actionName: string): string {
         .slice(0, MAX_TOOL_NAME_LENGTH);
 }
 
+/** @deprecated Use {@link SanitizeToolName}. */
+export function sanitizeToolName(actionName: string): string {
+    return SanitizeToolName(actionName);
+}
+
 /**
- * Maps one param's `ValueType` onto a JSON Schema fragment (§8.2 table).
+ * Coerces a call's arguments toward each param's declared schema, before the Action runs.
  *
- * `ActionParam.ValueType` distinguishes only five coarse kinds, so this mapping is lossy by
- * construction and the prose `Description` carries the real type — exactly as the rendered action
- * catalog does today. Two choices here were settled by measurement rather than by reasoning
- * Measured:
+ * Models sometimes send an object as a JSON string, a number as `"10"` or a boolean as `"true"`.
+ * Each declared param is coerced against the same schema its tool declaration used — the stored
+ * `ValueSchema` or the `ValueType` mapping, array-wrapped for `IsArray` — so a param declared as a
+ * string (an `Other` param, which may legitimately hold JSON-looking text) is never decoded.
  *
- * - **`Scalar` emits a union type.** It appears to violate the cross-provider common subset —
- *   OpenAPI 3.0, which Gemini's classic function declarations follow, has no union `type` — but it
- *   measured clean on every provider tested, so the plan's literal mapping stands.
- * - **Everything else emits `string`, not `object`.** §8.2 originally specified `object` for the
- *   opaque kinds, reasoning it was "exact parity with the prose catalog". It is not:
- *   `Run Ad-hoc Query.Query` is `ValueType: 'Other'` but holds SQL text, and typing it as an
- *   object made models emit `Query: {}` on 40% of calls — well-formed, dispatchable and useless,
- *   which no well-formedness check catches. Switching to `string` took usable arguments from
- *   60% to 100% on the same prompts. The structural type beats the prose description whenever the
- *   two disagree, so it must not disagree.
+ * @param params The Action's params, as the tool was built from them
+ * @param args The call's arguments, as the provider returned them
+ * @returns A new argument object; `args` is not mutated
  */
-function schemaForValueType(valueType: MJActionParamEntity['ValueType']): Record<string, unknown> {
-    return valueType === 'Scalar'
-        ? { type: ['string', 'number', 'boolean'] }
-        : { type: 'string' };
+export function CoerceActionArguments(
+    params: readonly MJActionParamEntity[],
+    args: Record<string, unknown> | undefined
+): Record<string, unknown> {
+    const coerced: Record<string, unknown> = { ...(args ?? {}) };
+    for (const param of params) {
+        if (!(param.Name in coerced)) {
+            continue;
+        }
+        const element = ResolveParamElementSchema(param);
+        const schema: ParamValueSchema = param.IsArray ? { type: 'array', items: element } : element;
+        coerced[param.Name] = CoerceValueToSchema(coerced[param.Name], schema);
+    }
+    return coerced;
 }
 
 /**
@@ -105,10 +116,11 @@ function schemaForValueType(valueType: MJActionParamEntity['ValueType']): Record
  * Dropping `DefaultValue` would make the tool strictly less informative than the prose catalog it
  * replaces, which is the one thing this mapping must never be.
  */
-function describeParam(param: MJActionParamEntity): string {
+function describeParam(param: MJActionParamEntity, schemaDescription?: string): string {
     const parts: string[] = [];
-    if (param.Description) {
-        parts.push(param.Description.trim());
+    const description = schemaDescription ?? param.Description;
+    if (description) {
+        parts.push(description.trim());
     }
     if (param.DefaultValue) {
         parts.push(`Default: ${param.DefaultValue}.`);
@@ -193,24 +205,35 @@ function describeTool(action: MJActionEntityExtended, params: readonly MJActionP
 }
 
 /**
+ * The property schema one param is declared with.
+ *
+ * The element schema is the param's stored `ValueSchema` when it has one, else the `ValueType`
+ * mapping. `IsArray` wraps it rather than replacing it (§8.2), and the element keeps its own
+ * description inside `items`. On a non-array param a description in the stored schema takes the
+ * place of the param's `Description`, since the schema author wrote it for this declaration.
+ */
+function declareParam(param: MJActionParamEntity): ParamValueSchema {
+    const element = ResolveParamElementSchema(param);
+    const schema: ParamValueSchema = param.IsArray ? { type: 'array', items: element } : element;
+    const description = describeParam(param, param.IsArray ? undefined : element.description);
+    return description ? { ...schema, description } : schema;
+}
+
+/**
  * Builds the `ChatTool` declaration for one Action.
  *
  * Only `Input` and `Both` params are declared: an `Output` param is something the Action returns,
  * and declaring it would invite the model to supply it.
  */
-export function buildToolFromAction(action: MJActionEntityExtended, params: readonly MJActionParamEntity[]): ChatTool {
-    const properties: Record<string, unknown> = {};
+export function BuildToolFromAction(action: MJActionEntityExtended, params: readonly MJActionParamEntity[]): ChatTool {
+    const properties: Record<string, ParamValueSchema> = {};
     const required: string[] = [];
 
     for (const param of params) {
         if (param.Type !== 'Input' && param.Type !== 'Both') {
             continue;
         }
-        const element = schemaForValueType(param.ValueType);
-        // IsArray wraps the element schema rather than replacing it (§8.2).
-        const schema = param.IsArray ? { type: 'array', items: element } : element;
-        const description = describeParam(param);
-        properties[param.Name] = description ? { ...schema, description } : schema;
+        properties[param.Name] = declareParam(param);
         if (param.IsRequired) {
             required.push(param.Name);
         }
@@ -222,10 +245,15 @@ export function buildToolFromAction(action: MJActionEntityExtended, params: read
     }
 
     return {
-        name: sanitizeToolName(action.Name),
+        name: SanitizeToolName(action.Name),
         description: describeTool(action, params),
         inputSchema
     };
+}
+
+/** @deprecated Use {@link BuildToolFromAction}. */
+export function buildToolFromAction(action: MJActionEntityExtended, params: readonly MJActionParamEntity[]): ChatTool {
+    return BuildToolFromAction(action, params);
 }
 
 /**
@@ -237,7 +265,7 @@ export function buildToolFromAction(action: MJActionEntityExtended, params: read
  * looks like a model error and would be found, if at all, by someone reading eval failures.
  * Failing at build time turns it into a metadata problem with a name attached.
  */
-export function buildActionToolSet(
+export function BuildActionToolSet(
     actions: readonly MJActionEntityExtended[],
     paramsByActionId: ReadonlyMap<string, readonly MJActionParamEntity[]>
 ): ActionToolSet {
@@ -245,7 +273,8 @@ export function buildActionToolSet(
     const tools: ChatTool[] = [];
 
     for (const action of actions) {
-        const tool = buildToolFromAction(action, paramsByActionId.get(action.ID) ?? []);
+        const params = paramsByActionId.get(action.ID) ?? [];
+        const tool = BuildToolFromAction(action, params);
         const existing = byToolName.get(tool.name);
         if (existing) {
             throw new Error(
@@ -256,11 +285,19 @@ export function buildActionToolSet(
         if (tool.name.length === 0) {
             throw new Error(`Action '${action.Name}' sanitizes to an empty tool name — it must contain at least one alphanumeric character.`);
         }
-        byToolName.set(tool.name, { kind: 'action', toolName: tool.name, action, tool });
+        byToolName.set(tool.name, { kind: 'action', toolName: tool.name, action, tool, params });
         tools.push(tool);
     }
 
     return { tools, byToolName };
+}
+
+/** @deprecated Use {@link BuildActionToolSet}. */
+export function buildActionToolSet(
+    actions: readonly MJActionEntityExtended[],
+    paramsByActionId: ReadonlyMap<string, readonly MJActionParamEntity[]>
+): ActionToolSet {
+    return BuildActionToolSet(actions, paramsByActionId);
 }
 
 /** The two fields of an `MJ: AI Agent Actions` row that declaration control reads. */
@@ -280,7 +317,7 @@ export interface AgentActionDeclarationRow {
  * Note the consequence the design accepts: in native mode the prose catalog is not rendered, so an
  * action removed here is unreachable on that turn, not merely de-emphasised.
  */
-export function filterDeclarableActions(
+export function FilterDeclarableActions(
     actions: readonly MJActionEntityExtended[],
     agentActionRows: ReadonlyArray<AgentActionDeclarationRow>
 ): MJActionEntityExtended[] {
@@ -290,4 +327,12 @@ export function filterDeclarableActions(
             .map((row) => (row.ActionID as string).toLowerCase())
     );
     return actions.filter((action) => !excluded.has(action.ID.toLowerCase()));
+}
+
+/** @deprecated Use {@link FilterDeclarableActions}. */
+export function filterDeclarableActions(
+    actions: readonly MJActionEntityExtended[],
+    agentActionRows: ReadonlyArray<AgentActionDeclarationRow>
+): MJActionEntityExtended[] {
+    return FilterDeclarableActions(actions, agentActionRows);
 }

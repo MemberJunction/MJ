@@ -41,25 +41,24 @@ import { IArtifactPreviewComponent } from '../interfaces/artifact-viewer-plugin.
                 {{ artifact.Type }}
               </span>
               <span class="artifact-version">v{{ currentVersion.VersionNumber || 1 }}</span>
-              <span class="open-icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
             </div>
           </div>
         } @else {
-          <div class="artifact-info-bar" (click)="openFullView()">
+          <div class="artifact-info-bar" (click)="openFullView()" [title]="displayDescription ? (displayName + ' — ' + displayDescription) : displayName">
             <div class="artifact-icon">
               <i class="fa-solid" [ngClass]="getArtifactIcon()"></i>
             </div>
             <div class="artifact-info">
               <span class="artifact-name">{{ displayName }}</span>
+              @if (displayDescription && displayDescription !== displayName) {
+                <span class="artifact-description">{{ displayDescription }}</span>
+              }
               <div class="artifact-meta">
                 <span class="artifact-type-badge" [style.background]="getTypeBadgeColor()">
                   {{ artifact.Type }}
                 </span>
                 <span class="artifact-version">v{{ currentVersion?.VersionNumber || 1 }}</span>
               </div>
-            </div>
-            <div class="open-icon">
-              <i class="fa-solid fa-arrow-up-right-from-square"></i>
             </div>
           </div>
         }
@@ -165,6 +164,15 @@ import { IArtifactPreviewComponent } from '../interfaces/artifact-viewer-plugin.
       text-overflow: ellipsis;
     }
 
+    .artifact-description {
+      font-size: 12px;
+      color: var(--mj-text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.35;
+    }
+
     .artifact-meta {
       display: flex;
       align-items: center;
@@ -247,15 +255,69 @@ import { IArtifactPreviewComponent } from '../interfaces/artifact-viewer-plugin.
 })
 export class ArtifactMessageCardComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
   @Input() artifactId!: string;
-  @Input() versionNumber?: number;
-  @Input() currentUser!: UserInfo;
-  @Input() artifact?: MJArtifactEntity; // Optional - if provided, skips loading
-  @Input() artifactVersion?: MJArtifactVersionEntity; // Optional - if provided, skips loading
-  @Output() actionPerformed = new EventEmitter<{action: string; artifact: MJArtifactEntity; version?: MJArtifactVersionEntity}>();
+  @Input() VersionNumber?: number;
 
-  public _artifact: MJArtifactEntity | null = null;
-  public _currentVersion: MJArtifactVersionEntity | null = null;
-  public loading = true;
+  /** @deprecated Use {@link VersionNumber}. */
+  @Input() set versionNumber(value: number | undefined) {
+    this.VersionNumber = value;
+  }
+  /** @deprecated Use {@link VersionNumber}. */
+  get versionNumber(): number | undefined {
+    return this.VersionNumber;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() Artifact?: MJArtifactEntity;
+
+  /** @deprecated Use {@link Artifact}. */
+  @Input() set artifact(value: MJArtifactEntity | undefined) {
+    this.Artifact = value;
+  }
+  /** @deprecated Use {@link Artifact}. */
+  get artifact(): MJArtifactEntity | undefined {
+    return this.Artifact;
+  } // Optional - if provided, skips loading
+  @Input() artifactVersion?: MJArtifactVersionEntity; // Optional - if provided, skips loading
+  @Output() ActionPerformed = new EventEmitter<{action: string; artifact: MJArtifactEntity; version?: MJArtifactVersionEntity}>();
+
+  /**
+   * @deprecated Use {@link ActionPerformed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (actionPerformed) keeps working. Must stay AFTER ActionPerformed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() actionPerformed = this.ActionPerformed;
+
+  public _artifact: MJArtifactEntity | null = null;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+  public CurrentVersion: MJArtifactVersionEntity | null = null;
+
+  /** @deprecated Use {@link CurrentVersion}. */
+  public get _currentVersion(): MJArtifactVersionEntity | null {
+    return this.CurrentVersion;
+  }
+  /** @deprecated Use {@link CurrentVersion}. */
+  public set _currentVersion(value: MJArtifactVersionEntity | null) {
+    this.CurrentVersion = value;
+  }
+  public Loading = true;
+
+  /** @deprecated Use {@link Loading}. */
+  public get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  public set loading(value) {
+    this.Loading = value;
+  }
   public error = false;
 
   /**
@@ -263,10 +325,28 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
    * exposes a matching preview (the card then falls back to its existing info-bar box). Resolved
    * SYNCHRONOUSLY up front (before the box renders) to avoid a flash / ExpressionChanged error.
    */
-  public previewComponentType: Type<IArtifactPreviewComponent> | null = null;
+  public PreviewComponentType: Type<IArtifactPreviewComponent> | null = null;
+
+  /** @deprecated Use {@link PreviewComponentType}. */
+  public get previewComponentType(): Type<IArtifactPreviewComponent> | null {
+    return this.PreviewComponentType;
+  }
+  /** @deprecated Use {@link PreviewComponentType}. */
+  public set previewComponentType(value: Type<IArtifactPreviewComponent> | null) {
+    this.PreviewComponentType = value;
+  }
 
   /** Inputs forwarded to the dynamically rendered preview component via *ngComponentOutlet. */
-  public previewInputs: Record<string, unknown> = {};
+  public PreviewInputs: Record<string, unknown> = {};
+
+  /** @deprecated Use {@link PreviewInputs}. */
+  public get previewInputs(): Record<string, unknown> {
+    return this.PreviewInputs;
+  }
+  /** @deprecated Use {@link PreviewInputs}. */
+  public set previewInputs(value: Record<string, unknown>) {
+    this.PreviewInputs = value;
+  }
 
   private destroy$ = new Subject<void>();
   private readonly previewResolver = inject(ArtifactPreviewResolverService);
@@ -276,10 +356,10 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
 
   async ngOnInit(): Promise<void> {
     // If entities are provided, use them directly
-    if (this.artifact && this.artifactVersion) {
-      this._artifact = this.artifact;
-      this._currentVersion = this.artifactVersion;
-      this.loading = false;
+    if (this.Artifact && this.artifactVersion) {
+      this._artifact = this.Artifact;
+      this.CurrentVersion = this.artifactVersion;
+      this.Loading = false;
     } else {
       // Otherwise load from database
       await this.loadArtifact();
@@ -295,26 +375,31 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
    * No match → previewComponentType stays null → existing info-bar box renders unchanged.
    */
   private resolvePreview(): void {
-    if (!this._artifact || !this._currentVersion) {
-      this.previewComponentType = null;
+    if (!this._artifact || !this.CurrentVersion) {
+      this.PreviewComponentType = null;
       return;
     }
-    this.previewComponentType = this.previewResolver.resolvePreviewComponent(
+    this.PreviewComponentType = this.previewResolver.resolvePreviewComponent(
       this._artifact.Type,
-      this._currentVersion.MimeType,
+      this.CurrentVersion.MimeType,
     );
-    if (this.previewComponentType) {
-      this.previewInputs = { artifactVersion: this._currentVersion };
+    if (this.PreviewComponentType) {
+      this.PreviewInputs = { artifactVersion: this.CurrentVersion };
     }
   }
 
   // Getters to access the internal properties
-  public get artifactEntity(): MJArtifactEntity | null {
+  public get ArtifactEntity(): MJArtifactEntity | null {
     return this._artifact;
   }
 
-  public get currentVersion(): MJArtifactVersionEntity | null {
-    return this._currentVersion;
+  /** @deprecated Use {@link ArtifactEntity}. */
+  public get artifactEntity(): MJArtifactEntity | null {
+    return this.ArtifactEntity;
+  }
+
+  public get currentVersion(): MJArtifactVersionEntity | null {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+    return this.CurrentVersion;
   }
 
   ngOnDestroy(): void {
@@ -325,12 +410,12 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
   private async loadArtifact(): Promise<void> {
     if (!this.artifactId) {
       this.error = true;
-      this.loading = false;
+      this.Loading = false;
       return;
     }
 
     try {
-      this.loading = true;
+      this.Loading = true;
       this.error = false;
 
       // Load artifact directly
@@ -340,7 +425,7 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
         ExtraFilter: `ID='${this.artifactId}'`,
         MaxRows: 1,
         ResultType: 'entity_object'
-      }, this.currentUser);
+      }, this.CurrentUser);
 
       if (result.Success && result.Results && result.Results.length > 0) {
         this._artifact = result.Results[0];
@@ -354,7 +439,7 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
       console.error('Error loading artifact:', err);
       this.error = true;
     } finally {
-      this.loading = false;
+      this.Loading = false;
     }
   }
 
@@ -363,8 +448,8 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
 
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const filter = this.versionNumber
-        ? `ArtifactID='${this._artifact.ID}' AND VersionNumber=${this.versionNumber}`
+      const filter = this.VersionNumber
+        ? `ArtifactID='${this._artifact.ID}' AND VersionNumber=${this.VersionNumber}`
         : `ArtifactID='${this._artifact.ID}'`;
 
       const result = await rv.RunView<MJArtifactVersionEntity>({
@@ -373,10 +458,10 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
         OrderBy: 'VersionNumber DESC',
         MaxRows: 1,
         ResultType: 'entity_object'
-      }, this.currentUser);
+      }, this.CurrentUser);
 
       if (result.Success && result.Results && result.Results.length > 0) {
-        this._currentVersion = result.Results[0];
+        this.CurrentVersion = result.Results[0];
       }
     } catch (err) {
       console.error('Error loading version content:', err);
@@ -387,8 +472,8 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
    * Get the display name - prefer version-specific name if available, otherwise use artifact name
    */
   public get displayName(): string {
-    if (this._currentVersion?.Name) {
-      return this._currentVersion.Name;
+    if (this.CurrentVersion?.Name) {
+      return this.CurrentVersion.Name;
     }
     return this._artifact?.Name || 'Untitled';
   }
@@ -396,45 +481,70 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
   /**
    * Get the display description - prefer version-specific description if available, otherwise use artifact description
    */
-  public get displayDescription(): string | null {
-    if (this._currentVersion?.Description) {
-      return this._currentVersion.Description;
+  public get DisplayDescription(): string | null {
+    if (this.CurrentVersion?.Description) {
+      return this.CurrentVersion.Description;
     }
     return this._artifact?.Description || null;
   }
 
-  public get isCodeArtifact(): boolean {
+  /** @deprecated Use {@link DisplayDescription}. */
+  public get displayDescription(): string | null {
+    return this.DisplayDescription;
+  }
+
+  public get IsCodeArtifact(): boolean {
     if (!this._artifact) return false;
     const name = this._artifact.Name?.toLowerCase() || '';
     const codeExtensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cs', '.cpp', '.c', '.go', '.rs', '.sql', '.html', '.css', '.scss'];
     return codeExtensions.some(ext => name.endsWith(ext));
   }
 
+  /** @deprecated Use {@link IsCodeArtifact}. */
+  public get isCodeArtifact(): boolean {
+    return this.IsCodeArtifact;
+  }
+
   /**
    * Get the icon for this artifact using the centralized icon service.
    * Fallback priority: Plugin icon > Metadata icon > Hardcoded mapping > Generic icon
    */
-  public getArtifactIcon(): string {
+  public GetArtifactIcon(): string {
     if (!this._artifact) return 'fa-file';
     return this.artifactIconService.getArtifactIcon(this._artifact);
   }
 
-  public getTypeBadgeColor(): string {
+  /** @deprecated Use {@link GetArtifactIcon}. */
+  public getArtifactIcon(): string {
+    return this.GetArtifactIcon();
+  }
+
+  public GetTypeBadgeColor(): string {
     if (!this._artifact) return '#6B7280';
 
     const type = this._artifact.Type?.toLowerCase() || '';
 
-    if (type.includes('code')) return '#8B5CF6'; // Purple
-    if (type.includes('report')) return '#3B82F6'; // Blue
-    if (type.includes('dashboard')) return '#10B981'; // Green
+    if (type.includes('code') || type === 'json') return '#8B5CF6'; // Purple
+    if (type.includes('report') || type.includes('research')) return '#3B82F6'; // Blue
+    if (type.includes('dashboard') || type.includes('data')) return '#10B981'; // Green
     if (type.includes('document')) return '#F59E0B'; // Orange
 
     return '#6B7280'; // Gray
   }
 
-  public openFullView(): void {
+  /** @deprecated Use {@link GetTypeBadgeColor}. */
+  public getTypeBadgeColor(): string {
+    return this.GetTypeBadgeColor();
+  }
+
+  public OpenFullView(): void {
     if (this._artifact) {
-      this.actionPerformed.emit({ action: 'open', artifact: this._artifact, version: this._currentVersion || undefined });
+      this.ActionPerformed.emit({ action: 'open', artifact: this._artifact, version: this.CurrentVersion || undefined });
     }
+  }
+
+  /** @deprecated Use {@link OpenFullView}. */
+  public openFullView(): void {
+    return this.OpenFullView();
   }
 }

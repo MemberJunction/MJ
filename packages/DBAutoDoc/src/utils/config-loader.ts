@@ -11,7 +11,7 @@ export class ConfigLoader {
    * Load configuration from file
    * Supports environment variable expansion using ${ENV_VAR} syntax
    */
-  public static async load(configPath: string): Promise<DBAutoDocConfig> {
+  public static async Load(configPath: string): Promise<DBAutoDocConfig> {
     try {
       const content = await fs.readFile(configPath, 'utf-8');
 
@@ -19,6 +19,9 @@ export class ConfigLoader {
       const expandedContent = this.expandEnvVars(content);
 
       const config = JSON.parse(expandedContent) as DBAutoDocConfig;
+
+      // Resolve seedContext.file or seedContext.files if specified
+      await this.resolveSeedContextFiles(config, path.dirname(configPath));
 
       // Validate required fields
       this.validate(config);
@@ -30,6 +33,11 @@ export class ConfigLoader {
     } catch (error) {
       throw new Error(`Failed to load configuration: ${(error as Error).message}`);
     }
+  }
+
+  /** @deprecated Use {@link Load}. */
+  public static async load(configPath: string): Promise<DBAutoDocConfig> {
+    return this.Load(configPath);
   }
 
   /**
@@ -49,7 +57,7 @@ export class ConfigLoader {
   /**
    * Save configuration to file
    */
-  public static async save(config: DBAutoDocConfig, configPath: string): Promise<void> {
+  public static async Save(config: DBAutoDocConfig, configPath: string): Promise<void> {
     try {
       const dir = path.dirname(configPath);
       await fs.mkdir(dir, { recursive: true });
@@ -61,10 +69,15 @@ export class ConfigLoader {
     }
   }
 
+  /** @deprecated Use {@link Save}. */
+  public static async save(config: DBAutoDocConfig, configPath: string): Promise<void> {
+    return this.Save(config, configPath);
+  }
+
   /**
    * Create default configuration
    */
-  public static createDefault(): DBAutoDocConfig {
+  public static CreateDefault(): DBAutoDocConfig {
     return {
       version: '1.0.0',
       database: {
@@ -79,7 +92,7 @@ export class ConfigLoader {
       },
       ai: {
         provider: 'gemini',
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.8-flash',
         apiKey: '',
         temperature: 0.1,
         maxTokens: 4000
@@ -117,6 +130,11 @@ export class ConfigLoader {
         exclude: ['sysdiagrams', '__MigrationHistory']
       }
     };
+  }
+
+  /** @deprecated Use {@link CreateDefault}. */
+  public static createDefault(): DBAutoDocConfig {
+    return this.CreateDefault();
   }
 
   /**
@@ -167,9 +185,46 @@ export class ConfigLoader {
     if (!config.ai.model) {
       throw new Error('Missing ai.model');
     }
+    config.ai.model = config.ai.model.trim();
 
     if (!config.ai.apiKey) {
       throw new Error('Missing ai.apiKey');
     }
+  }
+
+  /**
+   * Resolve seedContext.file or seedContext.files if specified,
+   * reading contents and appending to customInstructions.
+   */
+  private static async resolveSeedContextFiles(config: DBAutoDocConfig, baseDir: string): Promise<void> {
+    if (!config.seedContext) return;
+
+    const filesToLoad: string[] = [];
+    if (config.seedContext.file) {
+      filesToLoad.push(config.seedContext.file);
+    }
+    if (Array.isArray(config.seedContext.files)) {
+      filesToLoad.push(...config.seedContext.files);
+    }
+
+    if (filesToLoad.length === 0) return;
+
+    const contents: string[] = [];
+    for (const relOrAbsPath of filesToLoad) {
+      const resolvedPath = path.isAbsolute(relOrAbsPath)
+        ? relOrAbsPath
+        : path.resolve(baseDir, relOrAbsPath);
+      try {
+        contents.push(await fs.readFile(resolvedPath, 'utf-8'));
+      } catch (error) {
+        const setting = config.seedContext.file === relOrAbsPath ? 'seedContext.file' : 'seedContext.files';
+        throw new Error(`Could not read ${setting} entry '${relOrAbsPath}' (resolved to ${resolvedPath}): ${(error as Error).message}`);
+      }
+    }
+
+    const loadedText = contents.join('\n\n---\n\n');
+    config.seedContext.customInstructions = config.seedContext.customInstructions
+      ? `${config.seedContext.customInstructions}\n\n${loadedText}`
+      : loadedText;
   }
 }

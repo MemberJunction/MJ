@@ -12,6 +12,8 @@ export * from './TaskGraphService';
 export * from './TaskClaimStore';
 export * from './settlement-rescue';
 export * from './condition-gate';
+export * from './decision-node';
+export * from './AIDecisionTaskRunner';
 export * from './task-predicates';
 export * from './DispatcherConditionEvaluator';
 export * from './TaskGraphDispatcher';

@@ -59,7 +59,7 @@ export class ConversationMessageResolver {
      * @param conversationMessages - Array of chat messages to resolve from
      * @returns Resolved message(s) or property value(s), or undefined if invalid path
      */
-    public static resolve(
+    public static Resolve(
         conversationPath: string,
         conversationMessages: ChatMessage[]
     ): ChatMessage | ChatMessage[] | any | undefined {
@@ -135,6 +135,14 @@ export class ConversationMessageResolver {
         return result;
     }
 
+    /** @deprecated Use {@link Resolve}. */
+    public static resolve(
+        conversationPath: string,
+        conversationMessages: ChatMessage[]
+    ): ChatMessage | ChatMessage[] | any | undefined {
+        return this.Resolve(conversationPath, conversationMessages);
+    }
+
     /**
      * Gets the role filter function for a given role specification.
      *
@@ -164,9 +172,14 @@ export class ConversationMessageResolver {
      * @param value - The value to check
      * @returns True if the value is a conversation reference
      */
-    public static isConversationReference(value: string): boolean {
+    public static IsConversationReference(value: string): boolean {
         return typeof value === 'string' &&
                value.trim().toLowerCase().startsWith('conversation.');
+    }
+
+    /** @deprecated Use {@link IsConversationReference}. */
+    public static isConversationReference(value: string): boolean {
+        return this.IsConversationReference(value);
     }
 
     /**

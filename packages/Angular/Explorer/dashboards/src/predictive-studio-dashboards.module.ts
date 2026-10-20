@@ -12,6 +12,7 @@ import {
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
+import { AngularSplitModule } from 'angular-split';
 
 import { PSHomeComponent } from './PredictiveStudio/components/ps-home.component';
 import { PSCatalogComponent } from './PredictiveStudio/components/ps-catalog.component';
@@ -60,6 +61,7 @@ import { PSModelsResourceComponent } from './PredictiveStudio/resources/ps-model
     MJStatBadgeComponent,
     SharedGenericModule,
     ConversationsModule,
+    AngularSplitModule,
     PSHomeComponent,
     PSCatalogComponent,
     PSPipelinesComponent,

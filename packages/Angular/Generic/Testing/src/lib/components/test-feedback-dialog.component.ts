@@ -1,7 +1,11 @@
 import { Component, OnInit, Input, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
+import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import type { RubricFormAnswer } from '@memberjunction/ng-rubrics';
+import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import { JudgedRubric, PriorHumanEvaluation, VersionSnapshot } from '../models/human-review';
 
 export interface TestFeedbackDialogData {
   testRunId: string;
@@ -89,6 +93,22 @@ export interface TestFeedbackDialogResult {
                     placeholder="Provide detailed feedback, corrections, or comments about this test execution..."
                   rows="6"></textarea>
                 </div>
+                @if (Judged) {
+                  <div class="feedback-section">
+                    <button type="button" class="btn btn-secondary" (click)="OpenRubric()" [disabled]="isSaving || ShowRubric">Score against rubric</button>
+                    @if (ShowRubric && RubricVersion) {
+                      <mj-rubric-scoring-form
+                        [Version]="RubricVersion"
+                        [Answers]="RubricAnswers"
+                        (AnswersChange)="RubricAnswers = $event"
+                        (Submit)="OnRubricSubmit($event)">
+                      </mj-rubric-scoring-form>
+                    }
+                    @if (RubricMessage) {
+                      <div class="feedback-info">{{ RubricMessage }}</div>
+                    }
+                  </div>
+                }
                 @if (isSaving) {
                   <div class="feedback-info">
                     <i class="fas fa-spinner fa-spin"></i>
@@ -462,21 +482,35 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
   private _visible = false;
   private dataLoaded = false;
 
-  readonly ratingNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  readonly RatingNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+  /** @deprecated Use {@link RatingNumbers}. */
+  get ratingNumbers() {
+    return this.RatingNumbers;
+  }
 
   @Input()
-  set data(value: TestFeedbackDialogData) {
+  set Data(value: TestFeedbackDialogData) {
     this._data = value;
     if (value && this._visible && !this.dataLoaded) {
       this.initializeWithData();
     }
   }
-  get data(): TestFeedbackDialogData {
+  get Data(): TestFeedbackDialogData {
     return this._data;
   }
 
+  /** @deprecated Use {@link Data}. */
+  get data(): TestFeedbackDialogData {
+    return this.Data;
+  }
+  /** @deprecated Use {@link Data}. */
+  @Input() set data(value: TestFeedbackDialogData) {
+    this.Data = value;
+  }
+
   @Input()
-  set visible(value: boolean) {
+  set Visible(value: boolean) {
     const wasVisible = this._visible;
     this._visible = value;
     if (value && !wasVisible) {
@@ -489,20 +523,92 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
       this.dataLoaded = false;
     }
   }
-  get visible(): boolean {
+  get Visible(): boolean {
     return this._visible;
   }
 
-  @Output() closed = new EventEmitter<TestFeedbackDialogResult>();
+  /** @deprecated Use {@link Visible}. */
+  get visible(): boolean {
+    return this.Visible;
+  }
+  /** @deprecated Use {@link Visible}. */
+  @Input() set visible(value: boolean) {
+    this.Visible = value;
+  }
 
-  rating = 0;
-  hoverRating = 0;
-  isCorrect: boolean | null = null;
-  comments = '';
-  isSaving = false;
+  @Output() Closed = new EventEmitter<TestFeedbackDialogResult>();
+
+  /**
+   * @deprecated Use {@link Closed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closed) keeps working. Must stay AFTER Closed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() closed = this.Closed;
+
+  Rating = 0;
+
+  /** @deprecated Use {@link Rating}. */
+  get rating() {
+    return this.Rating;
+  }
+  /** @deprecated Use {@link Rating}. */
+  set rating(value) {
+    this.Rating = value;
+  }
+  HoverRating = 0;
+
+  /** @deprecated Use {@link HoverRating}. */
+  get hoverRating() {
+    return this.HoverRating;
+  }
+  /** @deprecated Use {@link HoverRating}. */
+  set hoverRating(value) {
+    this.HoverRating = value;
+  }
+  IsCorrect: boolean | null = null;
+
+  /** @deprecated Use {@link IsCorrect}. */
+  get isCorrect(): boolean | null {
+    return this.IsCorrect;
+  }
+  /** @deprecated Use {@link IsCorrect}. */
+  set isCorrect(value: boolean | null) {
+    this.IsCorrect = value;
+  }
+  Comments = '';
+
+  /** @deprecated Use {@link Comments}. */
+  get comments() {
+    return this.Comments;
+  }
+  /** @deprecated Use {@link Comments}. */
+  set comments(value) {
+    this.Comments = value;
+  }
+  IsSaving = false;
+
+  /** @deprecated Use {@link IsSaving}. */
+  get isSaving() {
+    return this.IsSaving;
+  }
+  /** @deprecated Use {@link IsSaving}. */
+  set isSaving(value) {
+    this.IsSaving = value;
+  }
   isLoading = false;
   errorMessage = '';
-  existingFeedback: MJTestRunFeedbackEntity | null = null;
+  ExistingFeedback: MJTestRunFeedbackEntity | null = null;
+
+  /** @deprecated Use {@link ExistingFeedback}. */
+  get existingFeedback(): MJTestRunFeedbackEntity | null {
+    return this.ExistingFeedback;
+  }
+  /** @deprecated Use {@link ExistingFeedback}. */
+  set existingFeedback(value: MJTestRunFeedbackEntity | null) {
+    this.ExistingFeedback = value;
+  }
 
   private get metadata() { return this.ProviderToUse; }
 
@@ -517,20 +623,26 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
   }
 
   private resetForm(): void {
-    this.rating = 0;
-    this.hoverRating = 0;
-    this.isCorrect = null;
-    this.comments = '';
-    this.isSaving = false;
+    this.Rating = 0;
+    this.HoverRating = 0;
+    this.IsCorrect = null;
+    this.Comments = '';
+    this.IsSaving = false;
     this.isLoading = false;
     this.errorMessage = '';
-    this.existingFeedback = null;
+    this.ExistingFeedback = null;
+    this.Judged = null;
+    this.ShowRubric = false;
+    this.RubricVersion = null;
+    this.RubricAnswers = [];
+    this.RubricMessage = '';
   }
 
   private async initializeWithData(): Promise<void> {
     if (this.dataLoaded) return;
     this.dataLoaded = true;
     await this.loadExistingFeedback();
+    await this.loadRubricJudgment();
   }
 
   private async loadExistingFeedback(): Promise<void> {
@@ -540,17 +652,17 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTestRunFeedbackEntity>({
         EntityName: 'MJ: Test Run Feedbacks',
-        ExtraFilter: `TestRunID='${this.data.testRunId}' AND ReviewerUserID='${this.data.currentUser.ID}'`,
+        ExtraFilter: `TestRunID='${this.Data.testRunId}' AND ReviewerUserID='${this.Data.currentUser.ID}'`,
         ResultType: 'entity_object'
-      }, this.data.currentUser);
+      }, this.Data.currentUser);
 
       if (result.Success && result.Results && result.Results.length > 0) {
-        this.existingFeedback = result.Results[0];
+        this.ExistingFeedback = result.Results[0];
 
         // Pre-populate form with existing feedback
-        this.rating = this.existingFeedback.Rating || 0;
-        this.isCorrect = this.existingFeedback.IsCorrect;
-        this.comments = this.existingFeedback.CorrectionSummary || '';
+        this.Rating = this.ExistingFeedback.Rating || 0;
+        this.IsCorrect = this.ExistingFeedback.IsCorrect;
+        this.Comments = this.ExistingFeedback.CorrectionSummary || '';
       }
     } catch (error) {
       console.error('Error loading existing feedback:', error);
@@ -560,71 +672,190 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
     }
   }
 
-  setRating(value: number): void {
-    this.rating = value;
+  Judged: JudgedRubric | null = null;
+  ShowRubric = false;
+  RubricVersion: RubricVersionSnapshot | null = null;
+  RubricAnswers: RubricFormAnswer[] = [];
+  RubricMessage = '';
+
+  private async loadRubricJudgment(): Promise<void> {
+    try {
+      const rows = await this.rows('MJ: Rubric Evaluations', `SubjectRecordID='${this.Data.testRunId.replace(/'/g, "''")}'`);
+      this.Judged = JudgedRubric(rows);
+    } catch (error) {
+      console.error('Error loading the rubric judgment:', error);
+    } finally {
+      this.cdr.detectChanges();
+    }
   }
 
-  getRatingLabel(): string {
-    if (this.rating <= 3) return 'Poor';
-    if (this.rating <= 5) return 'Below Average';
-    if (this.rating <= 6) return 'Average';
-    if (this.rating <= 7) return 'Good';
-    if (this.rating <= 8) return 'Very Good';
-    if (this.rating <= 9) return 'Excellent';
+  async OpenRubric(): Promise<void> {
+    if (!this.Judged || this.ShowRubric) return;
+    this.errorMessage = '';
+    try {
+      const versions = await this.rows('MJ: Rubric Versions', `ID='${this.Judged.VersionId}'`);
+      const version = versions[0];
+      if (!version) {
+        this.errorMessage = 'The rubric version for this run was not found.';
+        return;
+      }
+      const criteria = await this.rows('MJ: Rubric Criteria', `RubricVersionID='${this.Judged.VersionId}'`);
+      const scaleIds = [...new Set(criteria.map(row => row.ScaleID).filter(id => id != null).map(id => `'${String(id).replace(/'/g, "''")}'`))];
+      const scales = scaleIds.length === 0 ? [] : await this.rows('MJ: Rubric Scales', `ID IN (${scaleIds.join(', ')})`);
+      const levels = scaleIds.length === 0 ? [] : await this.rows('MJ: Rubric Scale Levels', `ScaleID IN (${scaleIds.join(', ')})`);
+      const criterionIds = criteria.map(row => `'${String(row.ID).replace(/'/g, "''")}'`);
+      const criterionLevels = criterionIds.length === 0 ? [] : await this.rows('MJ: Rubric Criterion Levels', `CriterionID IN (${criterionIds.join(', ')})`);
+      this.RubricVersion = VersionSnapshot(version, criteria, scales, levels, criterionLevels);
+      this.RubricAnswers = [];
+      this.ShowRubric = true;
+    } catch (error) {
+      this.errorMessage = (error as Error).message || 'Could not open the rubric.';
+    } finally {
+      this.cdr.detectChanges();
+    }
+  }
+
+  async OnRubricSubmit(answers: RubricFormAnswer[]): Promise<void> {
+    if (!this.Judged || this.IsSaving) return;
+    this.IsSaving = true;
+    this.errorMessage = '';
+    this.RubricMessage = '';
+    try {
+      const existing = await this.rows('MJ: Rubric Evaluations', `SubjectRecordID='${this.Data.testRunId.replace(/'/g, "''")}'`);
+      const priorId = PriorHumanEvaluation(existing, this.Judged, this.Data.currentUser.ID);
+      const found = await this.rows('MJ: Actions', `Name='Submit Human Rubric'`);
+      const actionId = String(found[0]?.ID ?? '');
+      if (!actionId) {
+        this.errorMessage = 'Submit Human Rubric was not found.';
+        return;
+      }
+      const result = await new GraphQLActionClient(this.ProviderToUse as GraphQLDataProvider).RunAction(actionId, [
+        { Name: 'RubricVersionID', Value: this.Judged.VersionId, Type: 'Input' },
+        { Name: 'SubjectEntityID', Value: this.Judged.SubjectEntityId, Type: 'Input' },
+        { Name: 'SubjectRecordID', Value: this.Judged.SubjectRecordId, Type: 'Input' },
+        { Name: 'ContextEntityID', Value: this.Judged.ContextEntityId, Type: 'Input' },
+        { Name: 'ContextRecordID', Value: this.Judged.ContextRecordId, Type: 'Input' },
+        { Name: 'SupersedesEvaluationID', Value: priorId, Type: 'Input' },
+        { Name: 'Answers', Value: JSON.stringify(answers.map(answer => ({
+          CriterionId: answer.criterionId,
+          ScaleLevelId: answer.scaleLevelId,
+          RawValue: answer.rawValue,
+          IsNotApplicable: answer.isNotApplicable,
+          Rationale: answer.rationale,
+          Evidence: answer.evidence,
+        }))), Type: 'Input' },
+      ]);
+      if (!result.Success) {
+        this.errorMessage = result.Message || 'Could not submit the human score.';
+        return;
+      }
+      this.RubricMessage = 'Human rubric score saved. The overall rating is unchanged.';
+      this.ShowRubric = false;
+    } catch (error) {
+      this.errorMessage = (error as Error).message || 'Could not save the human score.';
+    } finally {
+      this.IsSaving = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  private async rows(entityName: string, filter: string): Promise<Record<string, unknown>[]> {
+    const view = RunView.FromMetadataProvider(this.ProviderToUse);
+    const result = await view.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: 500 }, this.Data.currentUser);
+    if (!result.Success) throw new Error(result.ErrorMessage || `Could not read ${entityName}.`);
+    return (result.Results ?? []) as Record<string, unknown>[];
+  }
+
+  SetRating(value: number): void {
+    this.Rating = value;
+  }
+
+  /** @deprecated Use {@link SetRating}. */
+  setRating(value: number): void {
+    return this.SetRating(value);
+  }
+
+  GetRatingLabel(): string {
+    if (this.Rating <= 3) return 'Poor';
+    if (this.Rating <= 5) return 'Below Average';
+    if (this.Rating <= 6) return 'Average';
+    if (this.Rating <= 7) return 'Good';
+    if (this.Rating <= 8) return 'Very Good';
+    if (this.Rating <= 9) return 'Excellent';
     return 'Outstanding';
   }
 
-  canSubmit(): boolean {
-    return this.rating > 0;
+  /** @deprecated Use {@link GetRatingLabel}. */
+  getRatingLabel(): string {
+    return this.GetRatingLabel();
   }
 
-  async onSubmit(): Promise<void> {
-    if (!this.canSubmit() || this.isSaving) {
+  CanSubmit(): boolean {
+    return this.Rating > 0;
+  }
+
+  /** @deprecated Use {@link CanSubmit}. */
+  canSubmit(): boolean {
+    return this.CanSubmit();
+  }
+
+  async OnSubmit(): Promise<void> {
+    if (!this.CanSubmit() || this.IsSaving) {
       return;
     }
 
-    this.isSaving = true;
+    this.IsSaving = true;
     this.errorMessage = '';
 
     try {
       let feedback: MJTestRunFeedbackEntity;
 
-      if (this.existingFeedback) {
-        feedback = this.existingFeedback;
+      if (this.ExistingFeedback) {
+        feedback = this.ExistingFeedback;
       } else {
         feedback = await this.metadata.GetEntityObject<MJTestRunFeedbackEntity>(
           'MJ: Test Run Feedbacks',
-          this.data.currentUser
+          this.Data.currentUser
         );
-        feedback.TestRunID = this.data.testRunId;
-        feedback.ReviewerUserID = this.data.currentUser.ID;
+        feedback.TestRunID = this.Data.testRunId;
+        feedback.ReviewerUserID = this.Data.currentUser.ID;
       }
 
-      feedback.Rating = this.rating;
-      feedback.IsCorrect = this.isCorrect;
-      feedback.CorrectionSummary = this.comments.trim() || null;
+      feedback.Rating = this.Rating;
+      feedback.IsCorrect = this.IsCorrect;
+      feedback.CorrectionSummary = this.Comments.trim() || null;
 
       const result = await feedback.Save();
 
       if (result) {
-        this.closed.emit({ success: true, feedbackId: feedback.ID });
+        this.Closed.emit({ success: true, feedbackId: feedback.ID });
       } else {
         this.errorMessage = feedback.LatestResult?.Message || 'Failed to save feedback';
-        this.isSaving = false;
+        this.IsSaving = false;
       }
     } catch (error) {
       this.errorMessage = (error as Error).message || 'An error occurred while saving feedback';
-      this.isSaving = false;
+      this.IsSaving = false;
     }
+  }
+
+  /** @deprecated Use {@link OnSubmit}. */
+  async onSubmit(): Promise<void> {
+    return this.OnSubmit();
   }
 
   onCancel(): void {
-    this.closed.emit({ success: false });
+    this.Closed.emit({ success: false });
   }
 
-  onOverlayClick(event: MouseEvent): void {
-    if (event.target === event.currentTarget && !this.isSaving) {
+  OnOverlayClick(event: MouseEvent): void {
+    if (event.target === event.currentTarget && !this.IsSaving) {
       this.onCancel();
     }
+  }
+
+  /** @deprecated Use {@link OnOverlayClick}. */
+  onOverlayClick(event: MouseEvent): void {
+    return this.OnOverlayClick(event);
   }
 }

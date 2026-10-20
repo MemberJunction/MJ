@@ -1,0 +1,31 @@
+{
+  "url": "https://api.apollo.io/api/v1/mixed_people/search",
+  "status": 422,
+  "headers": {
+    "x-rate-limit-24-hour": "50000",
+    "x-rate-limit-hourly": "6000",
+    "x-rate-limit-minute": "200"
+  },
+  "body": {
+    "error": "This endpoint is deprecated for API callers. Please use the new mixed_people/api_search endpoint: https://docs.apollo.io/reference/people-api-search.",
+    "error_details": {
+      "code": "SEARCH.ROUTING.LEGACY_PEOPLE_SEARCH_DEPRECATED",
+      "message": "This endpoint is deprecated for API callers. Use the People Search API endpoint instead.",
+      "suggestions": [
+        {
+          "label": "Move to the People Search API endpoint",
+          "url": "https://docs.apollo.io/reference/people-api-search"
+        }
+      ],
+      "context": {}
+    },
+    "deprecation": {
+      "fields": [
+        "error"
+      ],
+      "sunset": "2027-02-16T00:00:00Z",
+      "replacement": "error_details",
+      "changelog": "https://docs.apollo.io/changelog/api-errors-now-include-structured-details"
+    }
+  }
+}

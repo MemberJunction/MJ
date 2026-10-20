@@ -52,7 +52,7 @@ function isIgnored(relativeDir: string, ignoreDirectories: string[]): boolean {
  *
  * A missing directory yields an empty list: on a first pull the target may not exist yet.
  */
-export async function findExistingRecordFiles(
+export async function FindExistingRecordFiles(
     dir: string,
     filePattern: string,
     ignoreDirectories: string[] = []
@@ -92,4 +92,13 @@ export async function findExistingRecordFiles(
 
     await walk(dir, '');
     return found;
+}
+
+/** @deprecated Use {@link FindExistingRecordFiles}. */
+export async function findExistingRecordFiles(
+    dir: string,
+    filePattern: string,
+    ignoreDirectories: string[] = []
+): Promise<string[]> {
+    return FindExistingRecordFiles(dir, filePattern, ignoreDirectories);
 }

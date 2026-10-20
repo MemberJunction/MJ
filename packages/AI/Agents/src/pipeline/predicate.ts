@@ -19,7 +19,7 @@
  */
 import safeRegexCheck from 'safe-regex';
 import { PipeValue } from './pipeline.types';
-import { getValue } from './path';
+import { GetValue } from './path';
 
 /**
  * Hard cap on the source length of a `matches` pattern. The pattern is LLM-authored, so this bounds
@@ -39,25 +39,35 @@ const WORD_OPS = ['contains', 'startsWith', 'endsWith', 'matches', 'in'];
 const STOP_CHARS = new Set([' ', '\t', '\n', '=', '!', '<', '>', '(', ')', ',']);
 
 /** Parse a predicate string into an AST. Throws with a clear message on malformed input. */
-export function parsePredicate(src: string): PredicateNode {
+export function ParsePredicate(src: string): PredicateNode {
     const parser = new PredicateParser(src);
     const ast = parser.ParseExpr();
     parser.ExpectEnd();
     return ast;
 }
 
+/** @deprecated Use {@link ParsePredicate}. */
+export function parsePredicate(src: string): PredicateNode {
+    return ParsePredicate(src);
+}
+
 /** Evaluate a parsed predicate against one element. */
-export function evaluatePredicate(ast: PredicateNode, element: PipeValue): boolean {
+export function EvaluatePredicate(ast: PredicateNode, element: PipeValue): boolean {
     switch (ast.kind) {
         case 'and':
-            return ast.nodes.every((n) => evaluatePredicate(n, element));
+            return ast.nodes.every((n) => EvaluatePredicate(n, element));
         case 'or':
-            return ast.nodes.some((n) => evaluatePredicate(n, element));
+            return ast.nodes.some((n) => EvaluatePredicate(n, element));
         case 'not':
-            return !evaluatePredicate(ast.node, element);
+            return !EvaluatePredicate(ast.node, element);
         case 'cmp':
             return evaluateComparison(ast, element);
     }
+}
+
+/** @deprecated Use {@link EvaluatePredicate}. */
+export function evaluatePredicate(ast: PredicateNode, element: PipeValue): boolean {
+    return EvaluatePredicate(ast, element);
 }
 
 class PredicateParser {
@@ -262,7 +272,7 @@ class PredicateParser {
 }
 
 function evaluateComparison(cmp: Comparison, element: PipeValue): boolean {
-    const actual = getValue(element, cmp.path) ?? null;
+    const actual = GetValue(element, cmp.path) ?? null;
     switch (cmp.op) {
         case '==':
             return looseEquals(actual, cmp.value as PipeValue);

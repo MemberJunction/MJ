@@ -33,11 +33,11 @@ const ENTITY_OAUTH_AUTHORIZATION_STATES = 'MJ: O Auth Authorization States';
  */
 export interface OAuthCallbackHandlerOptions {
     /** Base URL for this MJAPI instance (for redirects) */
-    publicUrl: string;
+    publicUrl: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** URL to redirect to after successful authorization */
-    successRedirectUrl?: string;
+    successRedirectUrl?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** URL to redirect to after failed authorization */
-    errorRedirectUrl?: string;
+    errorRedirectUrl?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /**
      * Origins a caller-supplied `frontendReturnUrl` is allowed to point at, so the OAuth callback
      * cannot be turned into an open redirect from the trusted MJAPI origin. Normally wired to
@@ -54,7 +54,7 @@ export interface OAuthCallbackHandlerOptions {
      * dependency on configuration loading — importing the config module validates the whole config
      * as a side effect, which makes this handler unimportable in any context without one.
      */
-    allowedFrontendOrigins: string[];
+    allowedFrontendOrigins: string[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /**
@@ -863,15 +863,25 @@ export class OAuthCallbackHandler {
     /**
      * Gets the router for unauthenticated callback endpoint.
      */
-    public getCallbackRouter(): express.Router {
+    public GetCallbackRouter(): express.Router {
         return this.callbackRouter;
+    }
+
+    /** @deprecated Use {@link GetCallbackRouter}. */
+    public getCallbackRouter(): express.Router {
+        return this.GetCallbackRouter();
     }
 
     /**
      * Gets the router for authenticated OAuth endpoints.
      */
-    public getAuthenticatedRouter(): express.Router {
+    public GetAuthenticatedRouter(): express.Router {
         return this.authenticatedRouter;
+    }
+
+    /** @deprecated Use {@link GetAuthenticatedRouter}. */
+    public getAuthenticatedRouter(): express.Router {
+        return this.GetAuthenticatedRouter();
     }
 }
 
@@ -881,7 +891,7 @@ export class OAuthCallbackHandler {
  * @param options - Handler configuration
  * @returns Object with callback and authenticated routers
  */
-export function createOAuthCallbackHandler(options: OAuthCallbackHandlerOptions): {
+export function CreateOAuthCallbackHandler(options: OAuthCallbackHandlerOptions): {
     callbackRouter: express.Router;
     authenticatedRouter: express.Router;
 } {
@@ -890,4 +900,12 @@ export function createOAuthCallbackHandler(options: OAuthCallbackHandlerOptions)
         callbackRouter: handler.getCallbackRouter(),
         authenticatedRouter: handler.getAuthenticatedRouter()
     };
+}
+
+/** @deprecated Use {@link CreateOAuthCallbackHandler}. */
+export function createOAuthCallbackHandler(options: OAuthCallbackHandlerOptions): {
+    callbackRouter: express.Router;
+    authenticatedRouter: express.Router;
+} {
+    return CreateOAuthCallbackHandler(options);
 }

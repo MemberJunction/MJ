@@ -12,7 +12,7 @@
 import { RunView } from '@memberjunction/core';
 import type { MJTestSuiteTestEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
-import { bootstrapAI } from './lib/ai-bootstrap';
+import { BootstrapAI } from './lib/ai-bootstrap';
 
 const arg = (name: string): string | undefined => {
     const i = process.argv.indexOf(`--${name}`);
@@ -27,7 +27,7 @@ const arg = (name: string): string | undefined => {
         process.exit(2);
     }
     const dryRun = process.argv.includes('--dry-run');
-    const ctx = await bootstrapAI();
+    const ctx = await BootstrapAI();
     const rv = new RunView(ctx.provider);
     const result = await rv.RunView<MJTestSuiteTestEntity>({
         EntityName: 'MJ: Test Suite Tests',

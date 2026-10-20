@@ -27,7 +27,7 @@ import {
     RemoveExcludeSchema,
     AddEntityPackageMapping,
 } from '../install/config-manager.js';
-import { mjAppManifestSchema } from '../manifest/manifest-schema.js';
+import { MjAppManifestSchema } from '../manifest/manifest-schema.js';
 
 const mockedExistsSync = vi.mocked(existsSync);
 const mockedReadFileSync = vi.mocked(readFileSync);
@@ -141,7 +141,7 @@ describe('manifest schema — hostile identifiers rejected up front (defence in 
     };
 
     it('rejects a package name containing quotes/semicolons', () => {
-        const result = mjAppManifestSchema.safeParse({
+        const result = MjAppManifestSchema.safeParse({
             ...base,
             packages: { server: [{ name: HOSTILE, role: 'actions', startupExport: 'load' }] },
         });
@@ -149,7 +149,7 @@ describe('manifest schema — hostile identifiers rejected up front (defence in 
     });
 
     it('rejects a startupExport that is not a bare JS identifier', () => {
-        const result = mjAppManifestSchema.safeParse({
+        const result = MjAppManifestSchema.safeParse({
             ...base,
             packages: { server: [{ name: '@acme/server', role: 'actions', startupExport: 'load(); attack' }] },
         });
@@ -157,7 +157,7 @@ describe('manifest schema — hostile identifiers rejected up front (defence in 
     });
 
     it('rejects a schema.entityPackage that is not a valid npm name', () => {
-        const result = mjAppManifestSchema.safeParse({
+        const result = MjAppManifestSchema.safeParse({
             ...base,
             schema: { name: 'acme_schema', entityPackage: HOSTILE },
         });
@@ -165,7 +165,7 @@ describe('manifest schema — hostile identifiers rejected up front (defence in 
     });
 
     it('still accepts valid scoped npm names and identifiers', () => {
-        const result = mjAppManifestSchema.safeParse({
+        const result = MjAppManifestSchema.safeParse({
             ...base,
             schema: { name: 'acme_schema', entityPackage: '@acme/acme-entities' },
             packages: {

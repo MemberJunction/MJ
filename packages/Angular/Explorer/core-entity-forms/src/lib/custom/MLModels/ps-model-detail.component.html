@@ -1,0 +1,213 @@
+<div class="ps-model-detail" data-testid="ps-model-detail">
+  @if (model) {
+    <!-- 1. Header Card -->
+    <div class="ps-card">
+      <div class="ps-card-body dh">
+        <div class="big-ico"><i class="fa-solid fa-cube"></i></div>
+        <div style="flex:1;min-width:0;">
+          <h2 data-testid="ps-registry-detail-name">
+            {{ modelDisplayName }}
+            <span class="ps-tag ps-mono">v{{ model.Version }}</span>
+          </h2>
+          <div class="ps-muted ps-small sub">
+            {{ model.Algorithm || 'Model' }}{{ targetSuffix }} &bull; immutable snapshot
+          </div>
+        </div>
+        <span class="ps-badge" [class]="statusBadgeClass(model.Status)">{{ model.Status }}</span>
+      </div>
+    </div>
+
+    <!-- 2. Lifecycle Stepper -->
+    <div class="ps-card">
+      <div class="ps-card-body">
+        <div class="ps-section-title">Lifecycle</div>
+        <div class="ps-stepper">
+          @for (step of lifecycleSteps; track step; let last = $last) {
+            <div class="ps-step" [class.done]="stepState(step) === 'done'" [class.curr]="stepState(step) === 'curr'">
+              <span class="pip">
+                @if (stepState(step) === 'done') {
+                  <i class="fa-solid fa-check"></i>
+                } @else {
+                  {{ $index + 1 }}
+                }
+              </span>
+              {{ step }}
+            </div>
+            @if (!last) {
+              <span class="ln"></span>
+            }
+          }
+        </div>
+        <div class="ps-small ps-muted" style="margin-top:10px">
+          Models are immutable once registered; promotion only changes lifecycle state, never weights.
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Performance Metrics -->
+    <div class="ps-card">
+      <div class="ps-card-head">
+        <h3>Performance</h3>
+        <span class="ps-muted ps-small">Holdout = held-out test fold, never seen in training</span>
+      </div>
+      <div class="ps-card-body">
+        <div class="metric-pair">
+          <div class="mtile">
+            <div class="ps-section-title">Train {{ primaryScoreLabel }}</div>
+            <div class="v">{{ trainPrimaryScore }}</div>
+            <div class="ps-muted ps-small">in-sample &bull; optimistic</div>
+          </div>
+          <div class="mtile honest">
+            <div class="ps-section-title">Holdout {{ primaryScoreLabel }}</div>
+            <div class="v">{{ holdoutPrimaryScore }}</div>
+            <div class="ps-muted ps-small">out-of-sample &bull; the honest number</div>
+          </div>
+        </div>
+
+        @if (secondaryMetrics.length > 0) {
+          <div class="stat-bar">
+            @for (s of secondaryMetrics; track s.key) {
+              <div class="b">
+                <span class="ps-muted ps-small">{{ s.label }}</span>
+                <strong>{{ s.value }}</strong>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="ps-small ps-muted" style="margin-top:6px">No secondary metrics recorded for this model.</div>
+        }
+
+        @if (gapText) {
+          <div class="ps-small ps-muted" style="margin-top:10px">
+            Train–holdout gap of <strong>{{ gapText }}</strong> {{ gapVerdict }}.
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- 4. Feature Importance -->
+    <div class="ps-card">
+      <div class="ps-card-head">
+        <h3>Feature Importance</h3>
+        <span class="ps-muted ps-small">{{ importanceCaption }}</span>
+      </div>
+      <div class="ps-card-body">
+        @if (importance.length > 0) {
+          @for (f of importance; track f.name) {
+            <div class="ps-fbar">
+              <span class="name ps-small" [title]="f.name">{{ f.name }}</span>
+              <div class="track">
+                <span [class.warn]="f.warning" [style.width.%]="f.pct"></span>
+              </div>
+              <span class="ps-mono">{{ f.value }}</span>
+            </div>
+          }
+        } @else {
+          <div class="ps-small ps-muted">No feature-importance data was recorded for this model.</div>
+        }
+      </div>
+    </div>
+
+    <!-- 5. Leakage Sign-Off Gate -->
+    @if (importance.length > 0) {
+      <div class="ps-callout gate" [class.success]="!leakageFlagged" [class.warn]="leakageFlagged">
+        <i [class]="leakageFlagged ? 'fa-solid fa-triangle-exclamation' : 'fa-solid fa-shield-halved'"></i>
+        <div>
+          @if (leakageFlagged) {
+            <strong>Leakage flag raised.</strong> A single feature dominates — top importance is
+            <strong>{{ topFeatureName }} at {{ topFeatureValue }}</strong>, at/above the
+            <strong>{{ dominanceThreshold }}</strong> dominance threshold.
+            <div class="ps-small" style="margin-top:6px">
+              <i class="fa-solid fa-pen"></i> Sign-off with a reason is required to publish this model.
+            </div>
+          } @else {
+            <strong>Leakage gate clear.</strong> No single feature dominates — top importance is
+            <strong>{{ topFeatureName }} at {{ topFeatureValue }}</strong>, below the
+            <strong>{{ dominanceThreshold }}</strong> dominance threshold.
+            <div class="ps-small" style="margin-top:6px">
+              <i class="fa-solid fa-check"></i> Sign-off required before any Validated &rarr; Published promotion.
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- 6. Lifecycle Actions -->
+    @if (showActions) {
+      <div class="ps-card">
+        <div class="ps-card-body ps-row" style="align-items:center;flex-wrap:wrap;gap:8px">
+          <span class="ps-muted ps-small" style="flex:1">{{ actionHint }}</span>
+          @if (canValidate) {
+            <button mjButton variant="secondary" size="sm" data-testid="ps-registry-validate" (click)="requestPromote('Validated')">
+              <i class="fa-solid fa-circle-check"></i> Mark Validated
+            </button>
+          }
+          @if (canPublish) {
+            <button mjButton variant="primary" size="sm" data-testid="ps-registry-promote" (click)="requestPromote('Published')">
+              <i class="fa-solid fa-arrow-up"></i> Promote to Published
+            </button>
+          }
+          @if (canArchive) {
+            <button mjButton variant="secondary" size="sm" data-testid="ps-registry-archive" (click)="requestPromote('Archived')">
+              <i class="fa-solid fa-box-archive"></i> Archive
+            </button>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- 7. Confirm Promotion Modal -->
+    @if (pending) {
+      <div class="ps-modal-backdrop" (click)="cancelPromote()">
+        <div class="ps-modal" (click)="$event.stopPropagation()" data-testid="ps-confirm-modal">
+          <div class="ps-modal-head" [class.warn]="pendingVariant === 'warn'" [class.danger]="pendingVariant === 'danger'">
+            <span class="ico"><i [class]="pendingIcon"></i></span>
+            <h3>{{ pendingTitle }}</h3>
+          </div>
+          <div class="ps-modal-body">
+            <div [innerHTML]="pendingMessage"></div>
+            @if (pending.leakageFlagged || pending.targetStatus === 'Archived') {
+              <div class="ps-field" style="margin-top:12px">
+                <label>
+                  {{ pending.leakageFlagged ? 'Leakage sign-off reason' : 'Reason (optional)' }}
+                  {{ pending.leakageFlagged ? ' *' : '' }}
+                </label>
+                <textarea
+                  class="ps-input"
+                  rows="3"
+                  [(ngModel)]="pendingReason"
+                  [placeholder]="pending.leakageFlagged ? 'Explain why this model is safe to publish despite the leakage flag…' : 'Add an optional note for the record…'"
+                  [disabled]="busy"></textarea>
+              </div>
+            }
+          </div>
+          <div class="ps-modal-foot">
+            <button
+              mjButton
+              [variant]="pendingVariant === 'danger' ? 'danger' : 'primary'"
+              size="sm"
+              [disabled]="busy || (pending.leakageFlagged && !pendingReason.trim())"
+              (click)="confirmPromote(pendingReason.trim())">
+              @if (busy) {
+                <i class="fa-solid fa-circle-notch fa-spin"></i>
+              } @else {
+                <i [class]="pendingIcon"></i>
+              }
+              {{ pendingConfirmLabel }}
+            </button>
+            <span class="ps-spacer" style="flex:1"></span>
+            <button mjButton variant="secondary" size="sm" [disabled]="busy" (click)="cancelPromote()">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+  } @else {
+    <div class="ps-empty" style="padding: 32px; text-align: center;">
+      <span class="ps-empty-ico"><i class="fa-solid fa-cube"></i></span>
+      <h3>No Model Selected</h3>
+      <p class="ps-muted">Select an ML Model from the list to inspect its configuration and metrics.</p>
+    </div>
+  }
+</div>

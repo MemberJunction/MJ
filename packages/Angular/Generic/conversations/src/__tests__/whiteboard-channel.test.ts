@@ -4,7 +4,7 @@ import '@angular/compiler';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EventEmitter } from '@angular/core';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/components/realtime/channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient, RealtimeChannelContext } from '@memberjunction/realtime-runtime';
 import {
   RealtimeWhiteboardChannel, WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS, rasterizeSvgToJpegBase64
 } from '../lib/components/realtime/whiteboard/whiteboard-channel';
@@ -42,6 +42,10 @@ class FakeWhiteboardHost {
   public ToggleFocus(): void {
     this.FocusMode = !this.FocusMode;
     this.FocusModeChange.emit(this.FocusMode);
+  }
+
+  public SetOnStage(onStage: boolean): void {
+    this.FocusMode = onStage;
   }
 }
 
@@ -96,6 +100,8 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     expect(channel.TabIcon).toBe('fa-solid fa-chalkboard');
     expect(channel.GetToolDefinitions()).toBe(WHITEBOARD_TOOL_DEFINITIONS);
     expect(channel.GetSurfaceComponent()).toBe(RealtimeWhiteboardHostComponent);
+    // The board is the call's first panel the user can share on its own ("This panel").
+    expect(channel.SurfaceShareable).toBe(true);
   });
 
   it('supplies first-run onboarding details (heading, description, tips, icon)', () => {
@@ -310,6 +316,20 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     expect(log.Focus).toEqual([true, false]);
   });
 
+  it("keeps the board's button true to where the host placed it, without asking to move", () => {
+    const fake = new FakeWhiteboardHost();
+    channel.BindSurface(asHost(fake));
+    channel.OnSurfacePlacementChange('stage');
+    expect(fake.FocusMode).toBe(true);
+    channel.OnSurfacePlacementChange('hidden');
+    expect(fake.FocusMode).toBe(false);
+    expect(log.Focus).toEqual([]);
+  });
+
+  it('ignores a placement with no board bound', () => {
+    expect(() => channel.OnSurfacePlacementChange('stage')).not.toThrow();
+  });
+
   it('Dispose releases the surface, the state subscription and the context', () => {
     const fake = new FakeWhiteboardHost();
     channel.BindSurface(asHost(fake));
@@ -490,6 +510,42 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
       await vi.advanceTimersByTimeAsync(1100);
       // Resting frame is identical to first frame -> deduplicated, no second push
       expect(pushedFrames).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('tags frames with the change id of the state they describe, and emits typed state events (the lifted pump)', async () => {
+    const mockBridge = { PushFrame: () => true };
+    const c = channel as unknown as { videoBridge: typeof mockBridge };
+    vi.spyOn(channel, 'GetLatestFrame').mockResolvedValue('tagged-frame');
+    channel.Initialize({
+      ...makeContext(log),
+      Client: {
+        IsTrackEstablished: (modality: string, direction: string) => modality === 'video' && direction === 'inbound',
+      } as unknown as RealtimeChannelContext['Client'],
+    });
+    c.videoBridge = mockBridge;
+    const events: Array<{ Name: string; ChangeId?: number; Payload: Record<string, unknown> }> = [];
+    channel.Events$.subscribe((e) => events.push(e));
+
+    channel.State.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'hello' }, 'user');
+    await vi.waitFor(() => expect(events.some((e) => e.Name === 'frame_pushed')).toBe(true));
+
+    const change = events.find((e) => e.Name === 'state_changed');
+    const frame = events.find((e) => e.Name === 'frame_pushed');
+    expect(change?.Payload).toEqual({ author: 'user' });
+    expect(frame?.ChangeId).toBe(change?.ChangeId); // the pixels and the state event describe the same moment
+    expect(frame?.Payload).toMatchObject({ reason: 'change' });
+  });
+
+  it('does not add a structured perception note: the board already feeds the model its own scene deltas', async () => {
+    vi.useFakeTimers();
+    try {
+      channel.Initialize(makeContext(log));
+      channel.State.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'hello' }, 'user');
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(log.Notes.some((n) => n.startsWith('[channel:Whiteboard'))).toBe(false);
     } finally {
       vi.useRealTimers();
     }

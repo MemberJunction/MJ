@@ -27,6 +27,7 @@
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider, SearchProviderConfig } from '../generic/ISearchProvider';
+import type { LaneKind } from '../generic/ScopeExplanation';
 import { CheckScopeObjectFilter } from '../generic/ScopeFilterGuard';
 import {
     SearchSource,
@@ -92,13 +93,16 @@ interface ElasticsearchProviderConfig {
     password?: string;
     cloudId?: string;
     defaultField?: string;
-    /** Optional default index name when a scope doesn't list ExternalIndexes. */
+    /** Optional index an UNSCOPED search queries. A scoped search queries only its own Elasticsearch rows. */
     defaultIndex?: string;
 }
 
 @RegisterClass(BaseSearchProvider, 'ElasticsearchSearchProvider')
 export class ElasticsearchSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'fulltext';
+
+    /** Reads the scope's `Elasticsearch` external-index rows (see `BaseSearchProvider.ConsumesLaneKinds`). */
+    public override readonly ConsumesLaneKinds: readonly LaneKind[] = ['ExternalIndex'];
 
     private client: ElasticsearchClientLike | null = null;
     private available = false;
@@ -161,14 +165,13 @@ export class ElasticsearchSearchProvider extends BaseSearchProvider {
     ): Promise<SearchResultItem[]> {
         if (!this.client || !this.parsedConfig) return [];
 
-        // Determine target indexes: prefer scope-supplied, else providerConfig.defaultIndex
-        const scopedIndexes = scopeConstraints?.ExternalIndexes
-            ?.filter(r => r.IndexType === 'Elasticsearch' && r.ExternalIndexName)
-            .map(r => r.ExternalIndexName as string) ?? [];
+        // Determine target indexes: a scoped search queries only the scope's Elasticsearch rows (none
+        // means nothing); providerConfig.defaultIndex is for an UNSCOPED search alone.
+        const scopedIndexes = this.ScopedExternalIndexRows(scopeConstraints, 'Elasticsearch')
+            ?.map(r => r.ExternalIndexName as string);
 
-        const target: string[] = scopedIndexes.length > 0
-            ? scopedIndexes
-            : (this.parsedConfig.defaultIndex ? [this.parsedConfig.defaultIndex] : []);
+        const target: string[] = scopedIndexes
+            ?? (this.parsedConfig.defaultIndex ? [this.parsedConfig.defaultIndex] : []);
 
         if (target.length === 0) {
             // No index to query — fail closed (silently empty), matching VectorSearchProvider's pattern.
@@ -260,6 +263,11 @@ export function LoadElasticsearchSearchProvider(): void {
 }
 
 /** Test-only: clear the memoized SDK loader so each test installs its own mock. */
-export function __resetElasticsearchClientLoaderForTests(): void {
+export function ResetElasticsearchClientLoaderForTests(): void {
     clientCtorPromise = null;
+}
+
+/** @deprecated Use {@link ResetElasticsearchClientLoaderForTests}. */
+export function __resetElasticsearchClientLoaderForTests(): void {
+    return ResetElasticsearchClientLoaderForTests();
 }

@@ -1,11 +1,11 @@
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import { ERDNode, ERDField, ERDFieldValue, ERDLink } from '../interfaces/erd-types';
 
 /**
  * Converts MemberJunction EntityFieldInfo to generic ERDField format.
  */
-export function entityFieldToERDField(field: EntityFieldInfo): ERDField {
+export function EntityFieldToERDField(field: EntityFieldInfo): ERDField {
   const erdField: ERDField = {
     id: field.ID,
     name: field.Name,
@@ -42,10 +42,15 @@ export function entityFieldToERDField(field: EntityFieldInfo): ERDField {
   return erdField;
 }
 
+/** @deprecated Use {@link EntityFieldToERDField}. */
+export function entityFieldToERDField(field: EntityFieldInfo): ERDField {
+  return EntityFieldToERDField(field);
+}
+
 /**
  * Converts MemberJunction EntityInfo to generic ERDNode format.
  */
-export function entityInfoToERDNode(entity: EntityInfo): ERDNode {
+export function EntityInfoToERDNode(entity: EntityInfo): ERDNode {
   return {
     id: entity.ID,
     name: entity.Name,
@@ -53,7 +58,7 @@ export function entityInfoToERDNode(entity: EntityInfo): ERDNode {
     description: entity.Description,
     status: entity.Status,
     baseTable: entity.BaseTable,
-    fields: entity.Fields.map(f => entityFieldToERDField(f)),
+    fields: entity.Fields.map(f => EntityFieldToERDField(f)),
     customData: {
       // Store original entity for reverse lookup if needed
       originalEntity: entity
@@ -61,29 +66,49 @@ export function entityInfoToERDNode(entity: EntityInfo): ERDNode {
   };
 }
 
+/** @deprecated Use {@link EntityInfoToERDNode}. */
+export function entityInfoToERDNode(entity: EntityInfo): ERDNode {
+  return EntityInfoToERDNode(entity);
+}
+
 /**
  * Converts an array of MemberJunction EntityInfo objects to ERDNode format.
  */
+export function EntitiesToERDNodes(entities: EntityInfo[]): ERDNode[] {
+  return entities.map(e => EntityInfoToERDNode(e));
+}
+
+/** @deprecated Use {@link EntitiesToERDNodes}. */
 export function entitiesToERDNodes(entities: EntityInfo[]): ERDNode[] {
-  return entities.map(e => entityInfoToERDNode(e));
+  return EntitiesToERDNodes(entities);
 }
 
 /**
  * Extracts the original EntityInfo from an ERDNode's customData.
  * Returns null if not found.
  */
-export function getOriginalEntityFromERDNode(node: ERDNode): EntityInfo | null {
+export function GetOriginalEntityFromERDNode(node: ERDNode): EntityInfo | null {
   if (node.customData && node.customData['originalEntity']) {
     return node.customData['originalEntity'] as EntityInfo;
   }
   return null;
 }
 
+/** @deprecated Use {@link GetOriginalEntityFromERDNode}. */
+export function getOriginalEntityFromERDNode(node: ERDNode): EntityInfo | null {
+  return GetOriginalEntityFromERDNode(node);
+}
+
 /**
  * Finds an EntityInfo by node ID from an array.
  */
-export function findEntityByNodeId(nodeId: string, entities: EntityInfo[]): EntityInfo | undefined {
+export function FindEntityByNodeId(nodeId: string, entities: EntityInfo[]): EntityInfo | undefined {
   return entities.find(e => UUIDsEqual(e.ID, nodeId));
+}
+
+/** @deprecated Use {@link FindEntityByNodeId}. */
+export function findEntityByNodeId(nodeId: string, entities: EntityInfo[]): EntityInfo | undefined {
+  return FindEntityByNodeId(nodeId, entities);
 }
 
 /**
@@ -127,7 +152,7 @@ export interface BuildERDDataResult {
  * });
  * ```
  */
-export function buildERDDataFromEntities(
+export function BuildERDDataFromEntities(
   entities: EntityInfo[],
   options: BuildERDDataOptions = {}
 ): BuildERDDataResult {
@@ -138,6 +163,10 @@ export function buildERDDataFromEntities(
     depth = 1
   } = options;
 
+  // Built once: the outgoing-relationship loops look a related entity up per field, which was a
+  // scan of every entity per field.
+  const allEntitiesByID = IndexByUUID(allEntities);
+
   const nodes: ERDNode[] = [];
   const links: ERDLink[] = [];
   const addedNodeIds = new Set<string>();
@@ -146,7 +175,7 @@ export function buildERDDataFromEntities(
   // Helper to add a node if not already added
   const addNode = (entity: EntityInfo): void => {
     if (!addedNodeIds.has(entity.ID)) {
-      nodes.push(entityInfoToERDNode(entity));
+      nodes.push(EntityInfoToERDNode(entity));
       addedNodeIds.add(entity.ID);
     }
   };
@@ -171,7 +200,7 @@ export function buildERDDataFromEntities(
     if (includeOutgoing) {
       for (const field of entity.Fields) {
         if (field.RelatedEntityID) {
-          const relatedEntity = allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
+          const relatedEntity = allEntitiesByID.Get(field.RelatedEntityID);
           if (relatedEntity) {
             addNode(relatedEntity);
 
@@ -179,8 +208,8 @@ export function buildERDDataFromEntities(
             addLink({
               sourceNodeId: entity.ID,
               targetNodeId: field.RelatedEntityID,
-              sourceField: entityFieldToERDField(field),
-              targetField: pkField ? entityFieldToERDField(pkField) : undefined,
+              sourceField: EntityFieldToERDField(field),
+              targetField: pkField ? EntityFieldToERDField(pkField) : undefined,
               isSelfReference: UUIDsEqual(entity.ID, field.RelatedEntityID),
               relationshipType: 'many-to-one'
             });
@@ -204,8 +233,8 @@ export function buildERDDataFromEntities(
             addLink({
               sourceNodeId: relEntity.ID,
               targetNodeId: entity.ID,
-              sourceField: entityFieldToERDField(fkField),
-              targetField: pkField ? entityFieldToERDField(pkField) : undefined,
+              sourceField: EntityFieldToERDField(fkField),
+              targetField: pkField ? EntityFieldToERDField(pkField) : undefined,
               isSelfReference: UUIDsEqual(relEntity.ID, entity.ID),
               relationshipType: 'many-to-one'
             });
@@ -219,7 +248,7 @@ export function buildERDDataFromEntities(
   if (depth > 1) {
     const processedIds = new Set(entities.map(e => e.ID));
     let currentDepthEntities = [...nodes]
-      .map(n => getOriginalEntityFromERDNode(n))
+      .map(n => GetOriginalEntityFromERDNode(n))
       .filter((e): e is EntityInfo => e !== null && !processedIds.has(e.ID));
 
     for (let d = 1; d < depth; d++) {
@@ -233,7 +262,7 @@ export function buildERDDataFromEntities(
         if (includeOutgoing) {
           for (const field of entity.Fields) {
             if (field.RelatedEntityID && !addedNodeIds.has(field.RelatedEntityID)) {
-              const relatedEntity = allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
+              const relatedEntity = allEntitiesByID.Get(field.RelatedEntityID);
               if (relatedEntity) {
                 addNode(relatedEntity);
                 nextDepthEntities.push(relatedEntity);
@@ -242,8 +271,8 @@ export function buildERDDataFromEntities(
                 addLink({
                   sourceNodeId: entity.ID,
                   targetNodeId: field.RelatedEntityID,
-                  sourceField: entityFieldToERDField(field),
-                  targetField: pkField ? entityFieldToERDField(pkField) : undefined,
+                  sourceField: EntityFieldToERDField(field),
+                  targetField: pkField ? EntityFieldToERDField(pkField) : undefined,
                   isSelfReference: UUIDsEqual(entity.ID, field.RelatedEntityID),
                   relationshipType: 'many-to-one'
                 });
@@ -268,8 +297,8 @@ export function buildERDDataFromEntities(
                 addLink({
                   sourceNodeId: relEntity.ID,
                   targetNodeId: entity.ID,
-                  sourceField: entityFieldToERDField(fkField),
-                  targetField: pkField ? entityFieldToERDField(pkField) : undefined,
+                  sourceField: EntityFieldToERDField(fkField),
+                  targetField: pkField ? EntityFieldToERDField(pkField) : undefined,
                   isSelfReference: UUIDsEqual(relEntity.ID, entity.ID),
                   relationshipType: 'many-to-one'
                 });
@@ -284,4 +313,12 @@ export function buildERDDataFromEntities(
   }
 
   return { nodes, links };
+}
+
+/** @deprecated Use {@link BuildERDDataFromEntities}. */
+export function buildERDDataFromEntities(
+  entities: EntityInfo[],
+  options: BuildERDDataOptions = {}
+): BuildERDDataResult {
+  return BuildERDDataFromEntities(entities, options);
 }

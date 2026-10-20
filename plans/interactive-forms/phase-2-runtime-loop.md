@@ -247,7 +247,7 @@ After the initial implementation landed, a candid critique surfaced 13 real hole
 
 | # | Closed? | Verification + new gaps found |
 |---|---|---|
-| 1 | ✅ | `checkOverrideOwnership` covers User/Role/Global cases. Uses `UserInfo.Type === 'Owner'` — confirmed as MJ's canonical admin marker (matches `MJServer/src/index.ts:backupSysUser`). 3 new FORBIDDEN tests. |
+| 1 | ✅ | `checkOverrideOwnership` covers User/Role/Global cases. Uses `UserInfo.Type === 'Owner'` — confirmed as MJ's canonical admin marker (matches `MJServer/src/index.ts:backupSysUser`). 3 new FORBIDDEN tests. **Superseded:** `checkOverrideOwnership` no longer exists. Modify, Activate and Revert Interactive Form call `CheckPersonalWrite` (`CoreActions/src/custom/interactive-forms/_shared.ts`): they change only the caller's own `User` override and return FORBIDDEN for a `Role` or `Global` one, an Owner included. Shared forms are managed in Form Builder or the form's Manage drawer, which need the `Manage Form Defaults` authorization. |
 | 2 | ✅ | Event bubbles plugin-viewer → viewer-panel → chat-area + artifact-resource. `InteractiveFormApplyService` wires Create/Modify decision. 7 tests cover full chain. |
 | 3 | ✅ | Modify docstring rewritten to match actual User-scope clamp. |
 | 4 | ✅ | `OnEntityPicked` calls `buildDefaultFormScaffold` in new-form mode. Manual create path now starts at the same baseline as the agent. |

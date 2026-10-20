@@ -95,37 +95,83 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
   `]
 })
 export class TextImportDialogComponent {
-  @Output() importSpec = new EventEmitter<ComponentSpec>();
-  @Output() cancelDialog = new EventEmitter<void>();
+  @Output() ImportSpec = new EventEmitter<ComponentSpec>();
+
+  /**
+   * @deprecated Use {@link ImportSpec}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (importSpec) keeps working. Must stay AFTER ImportSpec: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() importSpec = this.ImportSpec;
+  @Output() CancelDialog = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link CancelDialog}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (cancelDialog) keeps working. Must stay AFTER CancelDialog: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() cancelDialog = this.CancelDialog;
   
-  public componentJson = '';
-  public errorMessage = '';
+  public ComponentJson = '';
+
+  /** @deprecated Use {@link ComponentJson}. */
+  public get componentJson() {
+    return this.ComponentJson;
+  }
+  /** @deprecated Use {@link ComponentJson}. */
+  public set componentJson(value) {
+    this.ComponentJson = value;
+  }
+  public ErrorMessage = '';
+
+  /** @deprecated Use {@link ErrorMessage}. */
+  public get errorMessage() {
+    return this.ErrorMessage;
+  }
+  /** @deprecated Use {@link ErrorMessage}. */
+  public set errorMessage(value) {
+    this.ErrorMessage = value;
+  }
   
-  public import(): void {
-    this.errorMessage = '';
+  public Import(): void {
+    this.ErrorMessage = '';
     
-    if (!this.componentJson.trim()) {
-      this.errorMessage = 'Please enter a component specification';
+    if (!this.ComponentJson.trim()) {
+      this.ErrorMessage = 'Please enter a component specification';
       return;
     }
     
     try {
-      const spec = JSON.parse(this.componentJson) as ComponentSpec;
+      const spec = JSON.parse(this.ComponentJson) as ComponentSpec;
       
       // Validate required fields
       if (!spec.name || !spec.code) {
-        this.errorMessage = 'Invalid specification: missing required fields (name and code)';
+        this.ErrorMessage = 'Invalid specification: missing required fields (name and code)';
         return;
       }
       
       // Emit the parsed spec
-      this.importSpec.emit(spec);
+      this.ImportSpec.emit(spec);
     } catch (error) {
-      this.errorMessage = 'Invalid JSON format. Please check your syntax.';
+      this.ErrorMessage = 'Invalid JSON format. Please check your syntax.';
     }
   }
+
+  /** @deprecated Use {@link Import}. */
+  public import(): void {
+    return this.Import();
+  }
   
+  public Cancel(): void {
+    this.CancelDialog.emit();
+  }
+
+  /** @deprecated Use {@link Cancel}. */
   public cancel(): void {
-    this.cancelDialog.emit();
+    return this.Cancel();
   }
 }

@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { HttpError } from '@memberjunction/network-utils';
-import { classifyHttpFailure } from '../providers/httpFailure';
+import { ClassifyHttpFailure } from '../providers/httpFailure';
 
 /**
  * Build a real {@link HttpError} — `IsHttpError` narrows with `instanceof`, so a structural
@@ -31,7 +31,7 @@ describe('classifyHttpFailure', () => {
     describe('a 400 that is really an auth failure', () => {
         it("treats Google's keyInvalid 400 as transient so the engine fails over", () => {
             // The shape Google actually returns, verbatim in structure.
-            const result = classifyHttpFailure(
+            const result = ClassifyHttpFailure(
                 httpError(400, {
                     error: {
                         code: 400,
@@ -50,7 +50,7 @@ describe('classifyHttpFailure', () => {
 
         it('finds the verdict in a machine-readable reason the detail extractor never reaches', () => {
             // `message` here says nothing about credentials; only `reason` does.
-            const result = classifyHttpFailure(
+            const result = ClassifyHttpFailure(
                 httpError(400, {
                     error: {
                         message: 'Request contains an invalid argument.',
@@ -64,14 +64,14 @@ describe('classifyHttpFailure', () => {
         });
 
         it('classifies a string body too', () => {
-            const result = classifyHttpFailure(httpError(400, 'Invalid API key'), 'Some Vendor');
+            const result = ClassifyHttpFailure(httpError(400, 'Invalid API key'), 'Some Vendor');
             expect(result.FailureKind).toBe('transient');
         });
     });
 
     describe('a 400 that is really a bad request', () => {
         it('stays permanent so the engine stops instead of paying every vendor', () => {
-            const result = classifyHttpFailure(
+            const result = ClassifyHttpFailure(
                 httpError(400, { error: { message: 'query too long: 8000 characters exceeds limit' } }),
                 'Some Vendor',
             );
@@ -82,7 +82,7 @@ describe('classifyHttpFailure', () => {
 
         it('does not fire on a query that merely mentions the words', () => {
             // A search FOR the phrase must not be mistaken for a verdict ABOUT the key.
-            const result = classifyHttpFailure(
+            const result = ClassifyHttpFailure(
                 httpError(400, { error: { message: "unsupported operator in query: 'api key rotation'" } }),
                 'Some Vendor',
             );
@@ -91,7 +91,7 @@ describe('classifyHttpFailure', () => {
         });
 
         it('treats 422 the same way', () => {
-            const result = classifyHttpFailure(
+            const result = ClassifyHttpFailure(
                 httpError(422, { detail: 'max_results must be between 1 and 20' }),
                 'Perplexity',
             );
@@ -102,29 +102,29 @@ describe('classifyHttpFailure', () => {
 
     describe('the statuses that were already unambiguous', () => {
         it('401 is transient', () => {
-            const result = classifyHttpFailure(httpError(401, { error: 'Invalid API key' }), 'Perplexity');
+            const result = ClassifyHttpFailure(httpError(401, { error: 'Invalid API key' }), 'Perplexity');
             expect(result.FailureKind).toBe('transient');
             expect(result.ErrorMessage).toContain('rejected the API key');
         });
 
         it('403 is transient', () => {
-            expect(classifyHttpFailure(httpError(403, {}), 'Tavily').FailureKind).toBe('transient');
+            expect(ClassifyHttpFailure(httpError(403, {}), 'Tavily').FailureKind).toBe('transient');
         });
 
         it('429 is transient and names the quota', () => {
-            const result = classifyHttpFailure(httpError(429, { message: 'rate limit exceeded' }), 'Brave');
+            const result = ClassifyHttpFailure(httpError(429, { message: 'rate limit exceeded' }), 'Brave');
             expect(result.FailureKind).toBe('transient');
             expect(result.ErrorMessage).toContain('rate limit or quota');
         });
 
         it('5xx is transient', () => {
-            expect(classifyHttpFailure(httpError(503, {}), 'Tavily').FailureKind).toBe('transient');
+            expect(ClassifyHttpFailure(httpError(503, {}), 'Tavily').FailureKind).toBe('transient');
         });
     });
 
     describe('errors that never reached the vendor', () => {
         it('treats a non-HTTP error as transient', () => {
-            const result = classifyHttpFailure(new Error('socket hang up'), 'Brave');
+            const result = ClassifyHttpFailure(new Error('socket hang up'), 'Brave');
             expect(result.FailureKind).toBe('transient');
             expect(result.ErrorMessage).toContain('socket hang up');
         });
@@ -132,14 +132,14 @@ describe('classifyHttpFailure', () => {
         it('survives an unserialisable body rather than throwing', () => {
             const circular: Record<string, unknown> = {};
             circular.self = circular;
-            const result = classifyHttpFailure(httpError(400, circular, 'bad request'), 'Some Vendor');
+            const result = ClassifyHttpFailure(httpError(400, circular, 'bad request'), 'Some Vendor');
             expect(result.FailureKind).toBe('permanent');
         });
     });
 
     it('never reports a classified failure as a success', () => {
         for (const status of [400, 401, 403, 422, 429, 500]) {
-            const result = classifyHttpFailure(httpError(status, {}), 'Vendor');
+            const result = ClassifyHttpFailure(httpError(status, {}), 'Vendor');
             expect(result.Success).toBe(false);
             expect(result.Hits).toEqual([]);
         }

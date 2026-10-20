@@ -22,15 +22,15 @@ import { randomBytes } from 'node:crypto';
  * An ephemeral in-memory staged upload record.
  */
 export interface StagedUploadEntry {
-  token: string;
-  buffer: Buffer;
-  fileName: string;
-  mimeType: string;
-  contentLength: number;
-  userId: string;
-  createdAt: number;
-  expiresAt: number;
-  timer: NodeJS.Timeout;
+  token: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Buffer: Buffer;
+  fileName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  mimeType: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  ContentLength: number;
+  userId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  CreatedAt: number;
+  expiresAt: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Timer: NodeJS.Timeout;
 }
 
 /**
@@ -47,10 +47,46 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
   private readonly _staged = new Map<string, StagedUploadEntry>();
   private _totalMemoryBytes = 0;
 
-  public defaultTtlSeconds = 300; // 5 minutes
-  public maxFileSizeBytes = 100 * 1024 * 1024; // 100 MB
-  public maxUserMemoryBytes = 150 * 1024 * 1024; // 150 MB per user
-  public maxPoolMemoryBytes = 500 * 1024 * 1024; // 500 MB
+  public DefaultTtlSeconds = 300;
+
+  /** @deprecated Use {@link DefaultTtlSeconds}. */
+  public get defaultTtlSeconds() {
+    return this.DefaultTtlSeconds;
+  }
+  /** @deprecated Use {@link DefaultTtlSeconds}. */
+  public set defaultTtlSeconds(value) {
+    this.DefaultTtlSeconds = value;
+  } // 5 minutes
+  public MaxFileSizeBytes = 100 * 1024 * 1024;
+
+  /** @deprecated Use {@link MaxFileSizeBytes}. */
+  public get maxFileSizeBytes() {
+    return this.MaxFileSizeBytes;
+  }
+  /** @deprecated Use {@link MaxFileSizeBytes}. */
+  public set maxFileSizeBytes(value) {
+    this.MaxFileSizeBytes = value;
+  } // 100 MB
+  public MaxUserMemoryBytes = 150 * 1024 * 1024;
+
+  /** @deprecated Use {@link MaxUserMemoryBytes}. */
+  public get maxUserMemoryBytes() {
+    return this.MaxUserMemoryBytes;
+  }
+  /** @deprecated Use {@link MaxUserMemoryBytes}. */
+  public set maxUserMemoryBytes(value) {
+    this.MaxUserMemoryBytes = value;
+  } // 150 MB per user
+  public MaxPoolMemoryBytes = 500 * 1024 * 1024;
+
+  /** @deprecated Use {@link MaxPoolMemoryBytes}. */
+  public get maxPoolMemoryBytes() {
+    return this.MaxPoolMemoryBytes;
+  }
+  /** @deprecated Use {@link MaxPoolMemoryBytes}. */
+  public set maxPoolMemoryBytes(value) {
+    this.MaxPoolMemoryBytes = value;
+  } // 500 MB
 
   // Public constructor required by BaseSingleton
   public constructor() {
@@ -68,7 +104,7 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
     let total = 0;
     for (const entry of this._staged.values()) {
       if (UUIDsEqual(entry.userId, userId)) {
-        total += entry.contentLength;
+        total += entry.ContentLength;
       }
     }
     return total;
@@ -88,27 +124,27 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
   }): string {
     const size = params.buffer.length;
 
-    if (size > this.maxFileSizeBytes) {
+    if (size > this.MaxFileSizeBytes) {
       throw new Error(
-        `Staged upload exceeds maximum allowed file size of ${Math.round(this.maxFileSizeBytes / (1024 * 1024))}MB (received ${Math.round(size / (1024 * 1024))}MB).`
+        `Staged upload exceeds maximum allowed file size of ${Math.round(this.MaxFileSizeBytes / (1024 * 1024))}MB (received ${Math.round(size / (1024 * 1024))}MB).`
       );
     }
 
     const userCurrentBytes = this.GetUserMemoryBytes(params.userId);
-    if (userCurrentBytes + size > this.maxUserMemoryBytes) {
+    if (userCurrentBytes + size > this.MaxUserMemoryBytes) {
       throw new Error(
-        `Per-user upload memory quota reached (${Math.round(userCurrentBytes / (1024 * 1024))}MB / ${Math.round(this.maxUserMemoryBytes / (1024 * 1024))}MB used). Please wait for active uploads to finalize.`
+        `Per-user upload memory quota reached (${Math.round(userCurrentBytes / (1024 * 1024))}MB / ${Math.round(this.MaxUserMemoryBytes / (1024 * 1024))}MB used). Please wait for active uploads to finalize.`
       );
     }
 
-    if (this._totalMemoryBytes + size > this.maxPoolMemoryBytes) {
+    if (this._totalMemoryBytes + size > this.MaxPoolMemoryBytes) {
       throw new Error(
-        `Staged upload memory capacity reached (${Math.round(this._totalMemoryBytes / (1024 * 1024))}MB / ${Math.round(this.maxPoolMemoryBytes / (1024 * 1024))}MB used). Please try again shortly.`
+        `Staged upload memory capacity reached (${Math.round(this._totalMemoryBytes / (1024 * 1024))}MB / ${Math.round(this.MaxPoolMemoryBytes / (1024 * 1024))}MB used). Please try again shortly.`
       );
     }
 
     const token = 'upt_' + randomBytes(32).toString('hex');
-    const ttl = params.ttlSeconds || this.defaultTtlSeconds;
+    const ttl = params.ttlSeconds || this.DefaultTtlSeconds;
     const now = Date.now();
     const expiresAt = now + ttl * 1000;
 
@@ -123,14 +159,14 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
 
     const entry: StagedUploadEntry = {
       token,
-      buffer: params.buffer,
+      Buffer: params.buffer,
       fileName: params.fileName,
       mimeType: params.mimeType,
-      contentLength: size,
+      ContentLength: size,
       userId: params.userId,
-      createdAt: now,
+      CreatedAt: now,
       expiresAt,
-      timer,
+      Timer: timer,
     };
 
     this._staged.set(token, entry);
@@ -168,10 +204,10 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
     this.Evict(token);
 
     return {
-      buffer: entry.buffer,
+      buffer: entry.Buffer,
       fileName: entry.fileName,
       mimeType: entry.mimeType,
-      contentLength: entry.contentLength,
+      contentLength: entry.ContentLength,
     };
   }
 
@@ -184,9 +220,9 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
       return false;
     }
 
-    clearTimeout(entry.timer);
+    clearTimeout(entry.Timer);
     this._staged.delete(token);
-    this._totalMemoryBytes = Math.max(0, this._totalMemoryBytes - entry.contentLength);
+    this._totalMemoryBytes = Math.max(0, this._totalMemoryBytes - entry.ContentLength);
     return true;
   }
 
@@ -203,7 +239,7 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
   /** Clears all active staged uploads. */
   public Clear(): void {
     for (const [, entry] of this._staged) {
-      clearTimeout(entry.timer);
+      clearTimeout(entry.Timer);
     }
     this._staged.clear();
     this._totalMemoryBytes = 0;

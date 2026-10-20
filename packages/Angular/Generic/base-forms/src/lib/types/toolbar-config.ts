@@ -46,6 +46,13 @@ export interface FormToolbarConfig {
   ShowAttachmentsButton: boolean;
 
   /**
+   * Show the Clone action for saved records, which opens the `ng-record-clone` slide-in.
+   * The button still appears only when the entity's `Configuration.Clone.Enabled` is true
+   * and `RecordClone.Describe` says the user may clone it. Omitted means off.
+   */
+  ShowCloneButton?: boolean;
+
+  /**
    * Show the **form-variant picker** button — a right-side toolbar button
    * (form icon) that opens a dropdown of available `EntityFormOverride`
    * variants (Default form + any active overrides) so the user can switch
@@ -97,6 +104,18 @@ export interface FormToolbarConfig {
   /** Show the "Manage Sections" button (section manager drawer). Default: true */
   ShowSectionManager: boolean;
 
+  /**
+   * How many pinnable actions a user may pin as toolbar buttons; the rest are in the More menu.
+   * The same for every user and screen width. Default: 3.
+   */
+  MaxPinnedActions?: number;
+
+  /**
+   * Pinnable actions shown as buttons for a user who has not chosen their own pins yet.
+   * Default: `['favorite', 'history']`.
+   */
+  DefaultPinnedActions?: string[];
+
   // ---- Behavior ----
 
   /**
@@ -133,6 +152,7 @@ export const DEFAULT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowListButton: true,
   ShowTagsButton: true,
   ShowAttachmentsButton: true,
+  ShowCloneButton: true,
   ShowFormVariantPicker: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: true,
@@ -162,6 +182,7 @@ export const EXPLORER_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowListButton: true,
   ShowTagsButton: true,
   ShowAttachmentsButton: true,
+  ShowCloneButton: true,
   ShowFormVariantPicker: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: true,
@@ -195,6 +216,7 @@ export const CUSTOM_LAYOUT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowListButton: true,
   ShowTagsButton: true,
   ShowAttachmentsButton: true,
+  ShowCloneButton: true,
   ShowFormVariantPicker: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: false,            // ← hides the whole right group

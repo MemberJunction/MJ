@@ -1,7 +1,7 @@
 import { Command, Flags } from '@oclif/core';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { getOptionalConfig } from '../../config.js';
+import { GetOptionalConfig } from '../../config.js';
 
 /** A client dynamic-package entry as read from mj.config `dynamicPackages.client`. */
 export interface OpenAppClientEntry {
@@ -55,7 +55,7 @@ function escapeRegex(s: string): string {
  *
  * Exported for unit testing of the idempotency / disabled / cleared cases.
  */
-export function applyOpenAppClientBootstrapBlock(content: string, clientEntries: OpenAppClientEntry[]): string {
+export function ApplyOpenAppClientBootstrapBlock(content: string, clientEntries: OpenAppClientEntry[]): string {
     const blockPattern = new RegExp(
         `\\n*${escapeRegex(OPEN_APP_BOOTSTRAP_BEGIN)}[\\s\\S]*?${escapeRegex(OPEN_APP_BOOTSTRAP_END)}\\n*`,
         'g'
@@ -97,6 +97,11 @@ export function applyOpenAppClientBootstrapBlock(content: string, clientEntries:
         result = `${result.replace(/\n+$/, '')}\n\n${OPEN_APP_BOOTSTRAP_BEGIN}\n${lines.join('\n')}\n${OPEN_APP_BOOTSTRAP_END}\n`;
     }
     return result;
+}
+
+/** @deprecated Use {@link ApplyOpenAppClientBootstrapBlock}. */
+export function applyOpenAppClientBootstrapBlock(content: string, clientEntries: OpenAppClientEntry[]): string {
+    return ApplyOpenAppClientBootstrapBlock(content, clientEntries);
 }
 
 export default class CodeGenManifest extends Command {
@@ -269,8 +274,8 @@ generate a supplemental manifest covering only your own application classes.`;
             return; // manifest generation produced no file (e.g. --no-sync-deps fallback); nothing to append to
         }
 
-        const clientEntries = (getOptionalConfig()?.dynamicPackages?.client ?? []) as OpenAppClientEntry[];
-        const content = applyOpenAppClientBootstrapBlock(readFileSync(filePath, 'utf-8'), clientEntries);
+        const clientEntries = (GetOptionalConfig()?.dynamicPackages?.client ?? []) as OpenAppClientEntry[];
+        const content = ApplyOpenAppClientBootstrapBlock(readFileSync(filePath, 'utf-8'), clientEntries);
 
         writeFileSync(filePath, content, 'utf-8');
         if (!quiet) {

@@ -1,18 +1,18 @@
-export { resetMJSingletons, resetClassFactory, resetObjectCache } from './singleton-reset';
-export { createMockEntity, type MockEntityOptions } from './mock-entity';
-export { mockRunView, mockRunViews, resetRunViewMocks } from './mock-run-view';
-export { installCustomMatchers } from './custom-matchers';
+export { ResetMJSingletons, resetMJSingletons, ResetClassFactory, resetClassFactory, ResetObjectCache, resetObjectCache } from './singleton-reset';
+export { CreateMockEntity, createMockEntity, type MockEntityOptions } from './mock-entity';
+export { MockRunView, mockRunView, MockRunViews, mockRunViews, ResetRunViewMocks, resetRunViewMocks } from './mock-run-view';
+export { InstallCustomMatchers, installCustomMatchers } from './custom-matchers';
 export type {} from './vitest.d';
 
 // ---- Shared AI test harness (real @memberjunction/ai contracts, no structural fakes) ----
-export { TestLLM, registerTestLLM, type TestLLMOutcome } from './ai/test-llm';
+export { TestLLM, RegisterTestLLM, registerTestLLM, type TestLLMOutcome } from './ai/test-llm';
 export {
-  makeModelUsage,
-  makeSuccessChatResult,
-  makeFailedChatResult,
-  makeDriverFailureChatResult,
-  makeErrorInfo,
-  makeChatParams,
+  MakeModelUsage, makeModelUsage,
+  MakeSuccessChatResult, makeSuccessChatResult,
+  MakeFailedChatResult, makeFailedChatResult,
+  MakeDriverFailureChatResult, makeDriverFailureChatResult,
+  MakeErrorInfo, makeErrorInfo,
+  MakeChatParams, makeChatParams,
   type ModelUsageOverrides,
   type SuccessChatResultOptions,
   type FailedChatResultOptions,
@@ -23,10 +23,10 @@ export {
   MODEL_TYPE,
   CONFIG,
   MODEL,
-  makeModelVendor,
-  makeModel,
-  makePromptModel,
-  buildRealisticCatalog,
+  MakeModelVendor, makeModelVendor,
+  MakeModel, makeModel,
+  MakePromptModel, makePromptModel,
+  BuildRealisticCatalog, buildRealisticCatalog,
   DEFAULT_CONFIGURED_DRIVERS,
   type FxVendorType,
   type FxVendor,

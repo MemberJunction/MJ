@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
     RealVonageBindings,
-    buildConnectNcco,
-    buildTransferNccoAction,
-    parseVonageControlEvent,
+    BuildVonageMediaUrl,
+    VONAGE_MEDIA_CORRELATION_PARAM,
+    VONAGE_MEDIA_TOKEN_PARAM,
+    BuildConnectNcco,
+    BuildTransferNccoAction,
+    BuildTalkNcco,
+    ParseVonageControlEvent,
     IVonageVoiceLike,
     IVonageMediaPump,
     VonageCreateCallParams,
@@ -21,8 +25,14 @@ class FakeVoice implements IVonageVoiceLike {
     public readonly Transfers: Array<{ callUuid: string; params: VonageTransferParams }> = [];
     public readonly Dtmfs: Array<{ callUuid: string; digits: string }> = [];
 
+    public OnCreate?: () => void;
+    public FailWith?: Error;
     public async CreateCall(params: VonageCreateCallParams): Promise<string> {
         this.Created = params;
+        this.OnCreate?.();
+        if (this.FailWith) {
+            throw this.FailWith;
+        }
         return 'von-created-1';
     }
     public async HangupCall(callUuid: string): Promise<void> {
@@ -40,6 +50,10 @@ class FakeVoice implements IVonageVoiceLike {
 class FakeMediaPump implements IVonageMediaPump {
     public readonly SentAudio: Array<{ callUuid: string; pcm: ArrayBuffer }> = [];
     public readonly Cleared: string[] = [];
+    public readonly Calls: string[] = [];
+    public readonly Expected: Array<{ correlationId: string; token: string }> = [];
+    public readonly Bound: Array<{ correlationId: string; callUuid: string }> = [];
+    public readonly Abandoned: string[] = [];
     private audioHandlers = new Map<string, (pcm: ArrayBuffer) => void>();
     private eventHandlers = new Map<string, (event: VonageControlEvent) => void>();
 
@@ -54,6 +68,18 @@ class FakeMediaPump implements IVonageMediaPump {
     }
     public Clear(callUuid: string): void {
         this.Cleared.push(callUuid);
+    }
+    public ExpectOutboundCall(correlationId: string, token: string): void {
+        this.Calls.push('expect');
+        this.Expected.push({ correlationId, token });
+    }
+    public BindOutboundCall(correlationId: string, callUuid: string): void {
+        this.Calls.push('bind');
+        this.Bound.push({ correlationId, callUuid });
+    }
+    public AbandonOutboundCall(correlationId: string): void {
+        this.Calls.push('abandon');
+        this.Abandoned.push(correlationId);
     }
     public DriveAudio(callUuid: string, pcm: ArrayBuffer): void {
         this.audioHandlers.get(callUuid)?.(pcm);
@@ -80,7 +106,7 @@ function makeBindings(mediaWssUrl = 'wss://api.example/telephony/vonage/media'):
 
 describe('NCCO pure helpers', () => {
     it('buildConnectNcco emits a connect action with a websocket endpoint + default content-type', () => {
-        const ncco = buildConnectNcco('wss://h/media');
+        const ncco = BuildConnectNcco('wss://h/media');
         expect(ncco).toHaveLength(1);
         expect(ncco[0].action).toBe('connect');
         expect(ncco[0].endpoint?.[0]).toMatchObject({
@@ -91,13 +117,13 @@ describe('NCCO pure helpers', () => {
     });
 
     it('buildConnectNcco honors a custom content-type + forwards headers', () => {
-        const ncco = buildConnectNcco('wss://h/media', 'audio/l16;rate=16000', { callId: 'abc' });
+        const ncco = BuildConnectNcco('wss://h/media', 'audio/l16;rate=16000', { callId: 'abc' });
         expect(ncco[0].endpoint?.[0]['content-type']).toBe('audio/l16;rate=16000');
         expect(ncco[0].endpoint?.[0].headers).toEqual({ callId: 'abc' });
     });
 
     it('buildTransferNccoAction connects to a phone endpoint for the transfer destination', () => {
-        const ncco = buildTransferNccoAction('+15551112222');
+        const ncco = BuildTransferNccoAction('+15551112222');
         expect(ncco[0].action).toBe('connect');
         expect(ncco[0].endpoint?.[0]).toMatchObject({ type: 'phone', number: '+15551112222' });
     });
@@ -109,7 +135,7 @@ describe('NCCO pure helpers', () => {
 
 describe('parseVonageControlEvent', () => {
     it('parses a DTMF event with the digit at the TOP level (not nested under dtmf)', () => {
-        const event = parseVonageControlEvent('{"event":"websocket:dtmf","digit":"5","duration":260}');
+        const event = ParseVonageControlEvent('{"event":"websocket:dtmf","digit":"5","duration":260}');
         expect(event).not.toBeNull();
         expect(event!.event).toBe('websocket:dtmf');
         expect(event!.digit).toBe('5');
@@ -117,14 +143,14 @@ describe('parseVonageControlEvent', () => {
     });
 
     it('parses the connected + close lifecycle events', () => {
-        expect(parseVonageControlEvent('{"event":"websocket:connected"}')!.event).toBe('websocket:connected');
-        expect(parseVonageControlEvent('{"event":"close"}')!.event).toBe('close');
+        expect(ParseVonageControlEvent('{"event":"websocket:connected"}')!.event).toBe('websocket:connected');
+        expect(ParseVonageControlEvent('{"event":"close"}')!.event).toBe('close');
     });
 
     it('returns null for non-JSON, non-object JSON, or an object with no event string', () => {
-        expect(parseVonageControlEvent('not json')).toBeNull();
-        expect(parseVonageControlEvent('123')).toBeNull();
-        expect(parseVonageControlEvent('{"foo":"bar"}')).toBeNull();
+        expect(ParseVonageControlEvent('not json')).toBeNull();
+        expect(ParseVonageControlEvent('123')).toBeNull();
+        expect(ParseVonageControlEvent('{"foo":"bar"}')).toBeNull();
     });
 });
 
@@ -140,7 +166,8 @@ describe('RealVonageBindings — Voice API mapping', () => {
         expect(voice.Created?.To).toBe('+15551234567');
         expect(voice.Created?.From).toBe('+15559876543');
         expect(voice.Created?.Ncco[0].action).toBe('connect');
-        expect(voice.Created?.Ncco[0].endpoint?.[0].uri).toBe('wss://api.example/media');
+        const uri = new URL(voice.Created?.Ncco[0].endpoint?.[0].uri ?? '');
+        expect(`${uri.origin}${uri.pathname}`).toBe('wss://api.example/media');
         expect(voice.Created?.EventUrl).toBeUndefined();
     });
 
@@ -170,6 +197,14 @@ describe('RealVonageBindings — Voice API mapping', () => {
         const { bindings, voice } = makeBindings();
         await bindings.playDigits('von9', '456#');
         expect(voice.Dtmfs).toEqual([{ callUuid: 'von9', digits: '456#' }]);
+    });
+
+    it('sayAndHangup transfers to a one-action talk NCCO (the call ends when it finishes)', async () => {
+        const { bindings, voice } = makeBindings();
+        await bindings.sayAndHangup('von9', 'We hit a problem.');
+        expect(voice.Transfers[0].callUuid).toBe('von9');
+        expect(voice.Transfers[0].params.Ncco).toEqual(BuildTalkNcco('We hit a problem.'));
+        expect(voice.Transfers[0].params.Ncco).toEqual([{ action: 'talk', text: 'We hit a problem.' }]);
     });
 
     it('acceptInbound is a no-op (no Voice call — the answer webhook already returned the connect NCCO)', async () => {
@@ -229,5 +264,85 @@ describe('RealVonageBindings — WebSocket media mapping', () => {
         const { bindings, pump } = makeBindings();
         bindings.flushOutbound('von9');
         expect(pump.Cleared).toEqual(['von9']);
+    });
+});
+
+describe('BuildVonageMediaUrl', () => {
+    it('appends URL-encoded params', () => {
+        expect(BuildVonageMediaUrl('wss://h/media', { call_uuid: 'a b', mj_token: 'x&y' })).toBe('wss://h/media?call_uuid=a%20b&mj_token=x%26y');
+    });
+
+    it('preserves an existing query string', () => {
+        expect(BuildVonageMediaUrl('wss://h/media?region=eu', { mj_token: 't' })).toBe('wss://h/media?region=eu&mj_token=t');
+    });
+
+    it('returns the URL untouched when there is nothing to append', () => {
+        expect(BuildVonageMediaUrl('wss://h/media', {})).toBe('wss://h/media');
+    });
+});
+
+describe('RealVonageBindings — outbound media correlation (the no-audio fix)', () => {
+    it('puts a correlation id AND a token on the OUTBOUND websocket URI, so the media router can identify the call', async () => {
+        const { bindings, voice, pump } = makeBindings('wss://api.example/telephony/vonage/media');
+
+        await bindings.createCall('+15551234567', '+15559876543');
+
+        const uri = new URL(voice.Created?.Ncco[0].endpoint?.[0].uri ?? '');
+        expect(uri.searchParams.get(VONAGE_MEDIA_CORRELATION_PARAM)).toMatch(/^[0-9a-f-]{36}$/);
+        expect(uri.searchParams.get(VONAGE_MEDIA_TOKEN_PARAM)).toMatch(/^[0-9a-f]{64}$/);
+        expect(pump.Expected).toEqual([
+            { correlationId: uri.searchParams.get(VONAGE_MEDIA_CORRELATION_PARAM), token: uri.searchParams.get(VONAGE_MEDIA_TOKEN_PARAM) },
+        ]);
+    });
+
+    it('registers the expectation BEFORE createCall is issued, and binds the UUID AFTER it resolves', async () => {
+        const { bindings, voice, pump } = makeBindings();
+        const orderAtCreate: string[] = [];
+        voice.OnCreate = () => orderAtCreate.push(...pump.Calls);
+
+        const uuid = await bindings.createCall('+1', '+2');
+
+        expect(orderAtCreate).toEqual(['expect']); // already registered when the REST call went out (a socket may connect first)
+        expect(pump.Calls).toEqual(['expect', 'bind']);
+        expect(pump.Bound).toEqual([{ correlationId: pump.Expected[0].correlationId, callUuid: uuid }]);
+    });
+
+    it('abandons the expectation when createCall fails, and rethrows', async () => {
+        const { bindings, voice, pump } = makeBindings();
+        voice.FailWith = new Error('vonage 429');
+
+        await expect(bindings.createCall('+1', '+2')).rejects.toThrow('vonage 429');
+
+        expect(pump.Calls).toEqual(['expect', 'abandon']);
+        expect(pump.Abandoned).toEqual([pump.Expected[0].correlationId]);
+        expect(pump.Bound).toEqual([]);
+    });
+
+    it('every call gets its own correlation id and token', async () => {
+        const { bindings, pump } = makeBindings();
+        await bindings.createCall('+1', '+2');
+        await bindings.createCall('+1', '+2');
+        expect(pump.Expected[0].correlationId).not.toBe(pump.Expected[1].correlationId);
+        expect(pump.Expected[0].token).not.toBe(pump.Expected[1].token);
+    });
+
+    it('tolerates a media pump that does not authenticate sockets (no outbound-correlation hooks)', async () => {
+        const voice = new FakeVoice();
+        const pump = new FakeMediaPump();
+        (pump as { ExpectOutboundCall?: unknown }).ExpectOutboundCall = undefined;
+        (pump as { BindOutboundCall?: unknown }).BindOutboundCall = undefined;
+        const bindings = new RealVonageBindings({ Voice: voice, MediaPump: pump, MediaWssUrl: 'wss://x' });
+        await expect(bindings.createCall('+1', '+2')).resolves.toBe('von-created-1');
+    });
+
+    it('passes machine detection through to createCall when configured, and omits it otherwise', async () => {
+        const voice = new FakeVoice();
+        const withMd = new RealVonageBindings({ Voice: voice, MediaPump: new FakeMediaPump(), MediaWssUrl: 'wss://x', MachineDetection: 'hangup' });
+        await withMd.createCall('+1', '+2');
+        expect(voice.Created?.MachineDetection).toBe('hangup');
+
+        const { bindings, voice: voice2 } = makeBindings();
+        await bindings.createCall('+1', '+2');
+        expect(voice2.Created?.MachineDetection).toBeUndefined();
     });
 });

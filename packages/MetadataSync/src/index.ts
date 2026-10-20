@@ -9,7 +9,7 @@ export type { RecordData, BatchContext } from './lib/sync-engine';
 export { BatchContextIndex } from './lib/batch-context-index';
 export type { BatchContextStub } from './lib/batch-context-index';
 export { ConfigManager, configManager } from './lib/config-manager';
-export { getSyncEngine, resetSyncEngine } from './lib/singleton-manager';
+export { GetSyncEngine, getSyncEngine, ResetSyncEngine, resetSyncEngine } from './lib/singleton-manager';
 export { SQLLogger } from './lib/sql-logger';
 export { TransactionManager } from './lib/transaction-manager';
 export { JsonWriteHelper } from './lib/json-write-helper';
@@ -17,9 +17,14 @@ export { FileWriteBatch } from './lib/file-write-batch';
 export { JsonPreprocessor } from './lib/json-preprocessor';
 export type { IncludeDirective } from './lib/json-preprocessor';
 export { SyncStateManager } from './lib/sync-state-manager';
+export { FindSyncRootDir } from './lib/push-directories';
 export type { SyncState } from './lib/sync-state-manager';
-export { parseMetadataReference } from './lib/reference-parser';
-export { resolveCollectionRelationship } from './lib/collection-resolver';
+export type { SkippedDirectory } from './lib/push-when';
+export type { PullFieldOverrides } from './lib/pull-option-overrides';
+export { ParseMetadataReference, parseMetadataReference } from './lib/reference-parser';
+/** @deprecated Import from `@memberjunction/record-graph`. */
+export { ResolveCollectionRelationship, resolveCollectionRelationship } from './lib/collection-resolver';
+/** @deprecated Import from `@memberjunction/record-graph`. */
 export type { ResolvedCollectionInfo } from './lib/collection-resolver';
 
 // Deletion audit exports
@@ -42,11 +47,11 @@ export type { PullOptions, PullCallbacks, PullResult } from './services/PullServ
 
 export { PushService } from './services/PushService';
 export type { PushOptions, PushCallbacks, PushResult } from './services/PushService';
-export { PushAbortedError, describeRollbackOutcome, describeCommittedWrites, describeCommitFailure } from './lib/push-outcome';
+export { PushAbortedError, DescribeRollbackOutcome, describeRollbackOutcome, DescribeCommittedWrites, describeCommittedWrites, DescribeCommitFailure, describeCommitFailure } from './lib/push-outcome';
 export type { CommittedWrite, PushAbortedDetails, PushPartialTotals } from './lib/push-outcome';
-export { resolveDirectoryMode, graphBatchSizeFor, isolatedModeWarning, unusedBatchSizeWarning, DEFAULT_PARALLEL_BATCH_SIZE } from './lib/push-write-mode';
+export { ResolveDirectoryMode, resolveDirectoryMode, GraphBatchSizeFor, graphBatchSizeFor, IsolatedModeWarning, isolatedModeWarning, UnusedBatchSizeWarning, unusedBatchSizeWarning, DEFAULT_PARALLEL_BATCH_SIZE } from './lib/push-write-mode';
 export type { PushWriteMode, PushWriteModeInput, PushWriteModeSource, PushDirectoryMode } from './lib/push-write-mode';
-export { GraphProviderPool, probeIndependentInstances } from './lib/graph-provider-pool';
+export { GraphProviderPool, ProbeIndependentInstances, probeIndependentInstances } from './lib/graph-provider-pool';
 export type { GraphProviderLike, GraphProviderMode, GraphSettleOutcome, GraphProviderPoolOptions } from './lib/graph-provider-pool';
 
 export { StatusService } from './services/StatusService';
@@ -63,10 +68,10 @@ export { FormattingService } from './services/FormattingService';
 
 // Configuration types
 export {
-  loadMJConfig,
-  loadSyncConfig,
-  loadEntityConfig,
-  loadFolderConfig,
+  LoadMJConfig, loadMJConfig,
+  LoadSyncConfig, loadSyncConfig,
+  LoadEntityConfig, loadEntityConfig,
+  LoadFolderConfig, loadFolderConfig,
   type EntityConfig,
   type FolderConfig,
   type RelatedEntityConfig
@@ -74,11 +79,11 @@ export {
 
 // Provider utilities
 export {
-  initializeProvider,
-  cleanupProvider,
-  getSystemUser,
-  findEntityDirectories,
-  getDataProvider
+  InitializeProvider, initializeProvider,
+  CleanupProvider, cleanupProvider,
+  GetSystemUser, getSystemUser,
+  FindEntityDirectories, findEntityDirectories,
+  GetDataProvider, getDataProvider
 } from './lib/provider-utils';
 
 // Validation types

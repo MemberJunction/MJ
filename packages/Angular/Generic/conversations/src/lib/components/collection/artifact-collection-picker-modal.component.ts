@@ -638,24 +638,105 @@ interface SaveResult {
   `]
 })
 export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent implements OnInit, OnChanges, AfterViewInit {
-  @Input() isOpen: boolean = false;
-  @Input() environmentId!: string;
-  @Input() currentUser!: UserInfo;
+  @Input() IsOpen: boolean = false;
+
+  /** @deprecated Use {@link IsOpen}. */
+  @Input() set isOpen(value: boolean) {
+    this.IsOpen = value;
+  }
+  /** @deprecated Use {@link IsOpen}. */
+  get isOpen(): boolean {
+    return this.IsOpen;
+  }
+  @Input() EnvironmentId!: string;
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
   /** Collections that already contain the *current version* — rendered with a green check and locked. */
-  @Input() excludeCollectionIds: string[] = [];
+  @Input() ExcludeCollectionIds: string[] = [];
+
+  /** @deprecated Use {@link ExcludeCollectionIds}. */
+  @Input() set excludeCollectionIds(value: string[]) {
+    this.ExcludeCollectionIds = value;
+  }
+  /** @deprecated Use {@link ExcludeCollectionIds}. */
+  get excludeCollectionIds(): string[] {
+    return this.ExcludeCollectionIds;
+  }
   /** ID of the artifact version being saved. Required for writes. */
-  @Input() artifactVersionId: string | null = null;
+  @Input() ArtifactVersionId: string | null = null;
+
+  /** @deprecated Use {@link ArtifactVersionId}. */
+  @Input() set artifactVersionId(value: string | null) {
+    this.ArtifactVersionId = value;
+  }
+  /** @deprecated Use {@link ArtifactVersionId}. */
+  get artifactVersionId(): string | null {
+    return this.ArtifactVersionId;
+  }
   /** Display-only: artifact name shown in the preview pane. */
-  @Input() artifactName: string = '';
+  @Input() ArtifactName: string = '';
+
+  /** @deprecated Use {@link ArtifactName}. */
+  @Input() set artifactName(value: string) {
+    this.ArtifactName = value;
+  }
+  /** @deprecated Use {@link ArtifactName}. */
+  get artifactName(): string {
+    return this.ArtifactName;
+  }
   /** Display-only: version number shown in the preview pane. */
-  @Input() artifactVersionNumber: number | null = null;
+  @Input() ArtifactVersionNumber: number | null = null;
+
+  /** @deprecated Use {@link ArtifactVersionNumber}. */
+  @Input() set artifactVersionNumber(value: number | null) {
+    this.ArtifactVersionNumber = value;
+  }
+  /** @deprecated Use {@link ArtifactVersionNumber}. */
+  get artifactVersionNumber(): number | null {
+    return this.ArtifactVersionNumber;
+  }
 
   /** Fired when the save flow finishes (fully successful, or user acknowledged partial result). */
   @Output() completed = new EventEmitter<{ successIds: string[]; failedIds: string[] }>();
   @Output() cancelled = new EventEmitter<void>();
 
-  @ViewChild('searchInput') searchInputRef?: ElementRef<HTMLInputElement>;
-  @ViewChild('newNameInput') newNameInputRef?: ElementRef<HTMLInputElement>;
+  @ViewChild('searchInput') SearchInputRef?: ElementRef<HTMLInputElement>;
+
+  /** @deprecated Use {@link SearchInputRef}. */
+  get searchInputRef(): ElementRef<HTMLInputElement> | undefined {
+    return this.SearchInputRef;
+  }
+  /** @deprecated Use {@link SearchInputRef}. */
+  set searchInputRef(value: ElementRef<HTMLInputElement> | undefined) {
+    this.SearchInputRef = value;
+  }
+  @ViewChild('newNameInput') NewNameInputRef?: ElementRef<HTMLInputElement>;
+
+  /** @deprecated Use {@link NewNameInputRef}. */
+  get newNameInputRef(): ElementRef<HTMLInputElement> | undefined {
+    return this.NewNameInputRef;
+  }
+  /** @deprecated Use {@link NewNameInputRef}. */
+  set newNameInputRef(value: ElementRef<HTMLInputElement> | undefined) {
+    this.NewNameInputRef = value;
+  }
 
   // Data
   private allCollections: MJCollectionEntity[] = [];
@@ -665,25 +746,106 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
   private expandedIds: Set<string> = new Set();
 
   // Selection (normalized UUIDs so SQL Server vs Postgres casing doesn't bite us)
-  public selectedIds: Set<string> = new Set();
+  public SelectedIds: Set<string> = new Set();
+
+  /** @deprecated Use {@link SelectedIds}. */
+  public get selectedIds(): Set<string> {
+    return this.SelectedIds;
+  }
+  /** @deprecated Use {@link SelectedIds}. */
+  public set selectedIds(value: Set<string>) {
+    this.SelectedIds = value;
+  }
 
   // Filter / search
-  public searchQuery: string = '';
-  public filterMode: FilterMode = 'editable';
+  public SearchQuery: string = '';
+
+  /** @deprecated Use {@link SearchQuery}. */
+  public get searchQuery(): string {
+    return this.SearchQuery;
+  }
+  /** @deprecated Use {@link SearchQuery}. */
+  public set searchQuery(value: string) {
+    this.SearchQuery = value;
+  }
+  public FilterMode: FilterMode = 'editable';
+
+  /** @deprecated Use {@link FilterMode}. */
+  public get filterMode(): FilterMode {
+    return this.FilterMode;
+  }
+  /** @deprecated Use {@link FilterMode}. */
+  public set filterMode(value: FilterMode) {
+    this.FilterMode = value;
+  }
 
   // Render output
-  public visibleNodes: CollectionNode[] = [];
+  public VisibleNodes: CollectionNode[] = [];
+
+  /** @deprecated Use {@link VisibleNodes}. */
+  public get visibleNodes(): CollectionNode[] {
+    return this.VisibleNodes;
+  }
+  /** @deprecated Use {@link VisibleNodes}. */
+  public set visibleNodes(value: CollectionNode[]) {
+    this.VisibleNodes = value;
+  }
 
   // States
   public isLoading: boolean = false;
-  public isSaving: boolean = false;
+  public IsSaving: boolean = false;
+
+  /** @deprecated Use {@link IsSaving}. */
+  public get isSaving(): boolean {
+    return this.IsSaving;
+  }
+  /** @deprecated Use {@link IsSaving}. */
+  public set isSaving(value: boolean) {
+    this.IsSaving = value;
+  }
   public errorMessage: string = '';
-  public showCreateForm: boolean = false;
-  public newCollectionName: string = '';
-  public isCreatingCollection: boolean = false;
+  public ShowCreateForm: boolean = false;
+
+  /** @deprecated Use {@link ShowCreateForm}. */
+  public get showCreateForm(): boolean {
+    return this.ShowCreateForm;
+  }
+  /** @deprecated Use {@link ShowCreateForm}. */
+  public set showCreateForm(value: boolean) {
+    this.ShowCreateForm = value;
+  }
+  public NewCollectionName: string = '';
+
+  /** @deprecated Use {@link NewCollectionName}. */
+  public get newCollectionName(): string {
+    return this.NewCollectionName;
+  }
+  /** @deprecated Use {@link NewCollectionName}. */
+  public set newCollectionName(value: string) {
+    this.NewCollectionName = value;
+  }
+  public IsCreatingCollection: boolean = false;
+
+  /** @deprecated Use {@link IsCreatingCollection}. */
+  public get isCreatingCollection(): boolean {
+    return this.IsCreatingCollection;
+  }
+  /** @deprecated Use {@link IsCreatingCollection}. */
+  public set isCreatingCollection(value: boolean) {
+    this.IsCreatingCollection = value;
+  }
 
   // Per-collection save outcomes
-  public saveResults: Map<string, SaveResult> = new Map();
+  public SaveResults: Map<string, SaveResult> = new Map();
+
+  /** @deprecated Use {@link SaveResults}. */
+  public get saveResults(): Map<string, SaveResult> {
+    return this.SaveResults;
+  }
+  /** @deprecated Use {@link SaveResults}. */
+  public set saveResults(value: Map<string, SaveResult>) {
+    this.SaveResults = value;
+  }
 
   constructor(
     private toastService: ToastService,
@@ -698,58 +860,83 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
   // ============================================================
   async ngOnInit() {
     this.permissionService.Provider = this.ProviderToUse;
-    if (this.isOpen) {
+    if (this.IsOpen) {
       await this.loadCollections();
     }
   }
 
   async ngOnChanges(changes: SimpleChanges) {
     if (changes['isOpen']) {
-      if (this.isOpen) {
+      if (this.IsOpen) {
         this.resetState();
         await this.loadCollections();
         // Autofocus search on next tick
-        Promise.resolve().then(() => this.searchInputRef?.nativeElement?.focus());
+        Promise.resolve().then(() => this.SearchInputRef?.nativeElement?.focus());
       }
     }
   }
 
   ngAfterViewInit(): void {
-    if (this.isOpen) {
-      this.searchInputRef?.nativeElement?.focus();
+    if (this.IsOpen) {
+      this.SearchInputRef?.nativeElement?.focus();
     }
   }
 
   // ============================================================
   //  Selection helpers (normalized UUIDs)
   // ============================================================
-  public isSelected(id: string): boolean {
-    return this.selectedIds.has(NormalizeUUID(id));
+  public IsSelected(id: string): boolean {
+    return this.SelectedIds.has(NormalizeUUID(id));
   }
 
-  public get selectedCollections(): MJCollectionEntity[] {
+  /** @deprecated Use {@link IsSelected}. */
+  public isSelected(id: string): boolean {
+    return this.IsSelected(id);
+  }
+
+  public get SelectedCollections(): MJCollectionEntity[] {
     const list: MJCollectionEntity[] = [];
-    for (const id of this.selectedIds) {
+    for (const id of this.SelectedIds) {
       const c = this.collectionById.get(id);
       if (c) list.push(c);
     }
     return list;
   }
 
+  /** @deprecated Use {@link SelectedCollections}. */
+  public get selectedCollections(): MJCollectionEntity[] {
+    return this.SelectedCollections;
+  }
+
+  public get ResultsList(): SaveResult[] {
+    return Array.from(this.SaveResults.values());
+  }
+
+  /** @deprecated Use {@link ResultsList}. */
   public get resultsList(): SaveResult[] {
-    return Array.from(this.saveResults.values());
+    return this.ResultsList;
   }
 
+  public get SuccessCount(): number {
+    let n = 0;
+    for (const r of this.SaveResults.values()) if (r.status === 'success') n++;
+    return n;
+  }
+
+  /** @deprecated Use {@link SuccessCount}. */
   public get successCount(): number {
+    return this.SuccessCount;
+  }
+
+  public get FailedCount(): number {
     let n = 0;
-    for (const r of this.saveResults.values()) if (r.status === 'success') n++;
+    for (const r of this.SaveResults.values()) if (r.status === 'error') n++;
     return n;
   }
 
+  /** @deprecated Use {@link FailedCount}. */
   public get failedCount(): number {
-    let n = 0;
-    for (const r of this.saveResults.values()) if (r.status === 'error') n++;
-    return n;
+    return this.FailedCount;
   }
 
   // ============================================================
@@ -761,16 +948,16 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
     this.userPermissions.clear();
     this.collectionById.clear();
     this.expandedIds.clear();
-    this.selectedIds.clear();
-    this.visibleNodes = [];
-    this.searchQuery = '';
-    this.filterMode = 'editable';
+    this.SelectedIds.clear();
+    this.VisibleNodes = [];
+    this.SearchQuery = '';
+    this.FilterMode = 'editable';
     this.errorMessage = '';
-    this.showCreateForm = false;
-    this.newCollectionName = '';
-    this.saveResults.clear();
-    this.isSaving = false;
-    this.isCreatingCollection = false;
+    this.ShowCreateForm = false;
+    this.NewCollectionName = '';
+    this.SaveResults.clear();
+    this.IsSaving = false;
+    this.IsCreatingCollection = false;
   }
 
   private async loadCollections(): Promise<void> {
@@ -781,10 +968,10 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJCollectionEntity>({
         EntityName: 'MJ: Collections',
-        ExtraFilter: `EnvironmentID='${this.environmentId}'`,
+        ExtraFilter: `EnvironmentID='${this.EnvironmentId}'`,
         OrderBy: 'Name ASC',
         ResultType: 'entity_object'
-      }, this.currentUser);
+      }, this.CurrentUser);
 
       if (!result.Success) {
         this.errorMessage = result.ErrorMessage || 'Failed to load collections';
@@ -812,19 +999,19 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
 
   private async loadUserPermissions(): Promise<void> {
     const nonOwned = this.allCollections.filter(
-      c => c.OwnerID && !UUIDsEqual(c.OwnerID, this.currentUser.ID)
+      c => c.OwnerID && !UUIDsEqual(c.OwnerID, this.CurrentUser.ID)
     );
     if (nonOwned.length === 0) return;
 
     const ids = nonOwned.map(c => c.ID);
     const permissions = await this.permissionService.checkBulkPermissions(
-      ids, this.currentUser.ID, this.currentUser
+      ids, this.CurrentUser.ID, this.CurrentUser
     );
     permissions.forEach((permission, id) => this.userPermissions.set(id, permission));
   }
 
   private canEdit(c: MJCollectionEntity): boolean {
-    if (!c.OwnerID || UUIDsEqual(c.OwnerID, this.currentUser.ID)) return true;
+    if (!c.OwnerID || UUIDsEqual(c.OwnerID, this.CurrentUser.ID)) return true;
     return this.userPermissions.get(c.ID)?.canEdit || false;
   }
 
@@ -832,11 +1019,11 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
   //  Tree rendering — flat list of CollectionNode, ordered DFS
   // ============================================================
   private rebuildVisibleNodes(): void {
-    const q = this.searchQuery.trim().toLowerCase();
+    const q = this.SearchQuery.trim().toLowerCase();
     if (q) {
-      this.visibleNodes = this.buildSearchNodes(q);
+      this.VisibleNodes = this.buildSearchNodes(q);
     } else {
-      this.visibleNodes = this.buildTreeNodes();
+      this.VisibleNodes = this.buildTreeNodes();
     }
   }
 
@@ -899,33 +1086,48 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
   }
 
   private isAlreadyAdded(id: string): boolean {
-    return this.excludeCollectionIds.some(eid => UUIDsEqual(eid, id));
+    return this.ExcludeCollectionIds.some(eid => UUIDsEqual(eid, id));
   }
 
   // ============================================================
   //  Tree interactions
   // ============================================================
-  public onRowClick(node: CollectionNode): void {
-    if (this.isSaving) return;
+  public OnRowClick(node: CollectionNode): void {
+    if (this.IsSaving) return;
     if (node.alreadyContainsArtifact) return;
-    this.toggleSelection(node.collection);
+    this.ToggleSelection(node.collection);
   }
 
-  public toggleSelection(c: MJCollectionEntity): void {
+  /** @deprecated Use {@link OnRowClick}. */
+  public onRowClick(node: CollectionNode): void {
+    return this.OnRowClick(node);
+  }
+
+  public ToggleSelection(c: MJCollectionEntity): void {
     const id = NormalizeUUID(c.ID);
-    if (this.selectedIds.has(id)) {
-      this.selectedIds.delete(id);
+    if (this.SelectedIds.has(id)) {
+      this.SelectedIds.delete(id);
     } else {
-      this.selectedIds.add(id);
+      this.SelectedIds.add(id);
     }
   }
 
-  public deselect(id: string): void {
-    if (this.isSaving) return;
-    this.selectedIds.delete(NormalizeUUID(id));
+  /** @deprecated Use {@link ToggleSelection}. */
+  public toggleSelection(c: MJCollectionEntity): void {
+    return this.ToggleSelection(c);
   }
 
-  public toggleExpand(node: CollectionNode): void {
+  public Deselect(id: string): void {
+    if (this.IsSaving) return;
+    this.SelectedIds.delete(NormalizeUUID(id));
+  }
+
+  /** @deprecated Use {@link Deselect}. */
+  public deselect(id: string): void {
+    return this.Deselect(id);
+  }
+
+  public ToggleExpand(node: CollectionNode): void {
     if (!node.hasChildren) return;
     const id = NormalizeUUID(node.collection.ID);
     if (this.expandedIds.has(id)) {
@@ -936,53 +1138,83 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
     this.rebuildVisibleNodes();
   }
 
+  /** @deprecated Use {@link ToggleExpand}. */
+  public toggleExpand(node: CollectionNode): void {
+    return this.ToggleExpand(node);
+  }
+
+  public OnSearchChange(): void {
+    this.rebuildVisibleNodes();
+  }
+
+  /** @deprecated Use {@link OnSearchChange}. */
   public onSearchChange(): void {
-    this.rebuildVisibleNodes();
+    return this.OnSearchChange();
   }
 
+  public ClearSearch(): void {
+    this.SearchQuery = '';
+    this.rebuildVisibleNodes();
+    this.SearchInputRef?.nativeElement?.focus();
+  }
+
+  /** @deprecated Use {@link ClearSearch}. */
   public clearSearch(): void {
-    this.searchQuery = '';
-    this.rebuildVisibleNodes();
-    this.searchInputRef?.nativeElement?.focus();
+    return this.ClearSearch();
   }
 
-  public setFilter(mode: FilterMode): void {
-    this.filterMode = mode;
+  public SetFilter(mode: FilterMode): void {
+    this.FilterMode = mode;
     // 'recent' filter is a placeholder for now — same data, future sort change.
     // Keeping the chip wired so the UI is honest and a future PR can flip the sort.
     this.rebuildVisibleNodes();
   }
 
+  /** @deprecated Use {@link SetFilter}. */
+  public setFilter(mode: FilterMode): void {
+    return this.SetFilter(mode);
+  }
+
   // ============================================================
   //  Create new collection (root-level only — keeps the picker simple)
   // ============================================================
-  public openCreateForm(): void {
-    this.showCreateForm = true;
+  public OpenCreateForm(): void {
+    this.ShowCreateForm = true;
     // Force the @if branch to render now, then focus the input it created.
     // A microtask alone isn't enough — Angular hasn't run change detection by then,
     // so the @ViewChild ref is still undefined.
     this.cdr.detectChanges();
-    this.newNameInputRef?.nativeElement?.focus();
+    this.NewNameInputRef?.nativeElement?.focus();
   }
 
+  /** @deprecated Use {@link OpenCreateForm}. */
+  public openCreateForm(): void {
+    return this.OpenCreateForm();
+  }
+
+  public CancelCreate(): void {
+    this.ShowCreateForm = false;
+    this.NewCollectionName = '';
+  }
+
+  /** @deprecated Use {@link CancelCreate}. */
   public cancelCreate(): void {
-    this.showCreateForm = false;
-    this.newCollectionName = '';
+    return this.CancelCreate();
   }
 
-  public async createCollection(): Promise<void> {
-    const name = this.newCollectionName.trim();
+  public async CreateCollection(): Promise<void> {
+    const name = this.NewCollectionName.trim();
     if (!name) {
       this.toastService.warning('Please enter a collection name');
       return;
     }
     try {
-      this.isCreatingCollection = true;
+      this.IsCreatingCollection = true;
       const p = this.ProviderToUse;
-      const collection = await p.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
+      const collection = await p.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.CurrentUser);
       collection.Name = name;
-      collection.EnvironmentID = this.environmentId;
-      collection.OwnerID = this.currentUser.ID;
+      collection.EnvironmentID = this.EnvironmentId;
+      collection.OwnerID = this.CurrentUser.ID;
 
       const saved = await collection.Save();
       if (!saved) {
@@ -995,7 +1227,7 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
       // and triggering a server-side auth failure on freshly-created collections.
 
       this.toastService.success('Collection created');
-      this.cancelCreate();
+      this.CancelCreate();
 
       // Splice the new collection into local state directly. Re-running loadCollections() here
       // races with the server's cache-invalidation propagation and intermittently returns the
@@ -1004,36 +1236,41 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
       this.editableCollections = [...this.editableCollections, collection];
       this.collectionById.set(NormalizeUUID(collection.ID), collection);
       // Auto-select the new one
-      this.selectedIds.add(NormalizeUUID(collection.ID));
+      this.SelectedIds.add(NormalizeUUID(collection.ID));
       this.rebuildVisibleNodes();
     } catch (error) {
       LogError(error);
       this.toastService.error('Failed to create collection');
     } finally {
-      this.isCreatingCollection = false;
+      this.IsCreatingCollection = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link CreateCollection}. */
+  public async createCollection(): Promise<void> {
+    return this.CreateCollection();
   }
 
   // ============================================================
   //  Save flow (writes happen here, dialog stays open until done)
   // ============================================================
-  public async onSave(): Promise<void> {
-    if (this.isSaving) return;
-    if (this.selectedIds.size === 0) {
+  public async OnSave(): Promise<void> {
+    if (this.IsSaving) return;
+    if (this.SelectedIds.size === 0) {
       this.toastService.warning('Pick at least one collection');
       return;
     }
-    if (!this.artifactVersionId) {
+    if (!this.ArtifactVersionId) {
       this.toastService.error('No version selected to save');
       return;
     }
 
-    this.isSaving = true;
-    this.saveResults.clear();
+    this.IsSaving = true;
+    this.SaveResults.clear();
     // Seed each result as pending so they render in order
-    for (const c of this.selectedCollections) {
-      this.saveResults.set(NormalizeUUID(c.ID), {
+    for (const c of this.SelectedCollections) {
+      this.SaveResults.set(NormalizeUUID(c.ID), {
         collectionId: c.ID,
         collectionName: c.Name,
         status: 'pending'
@@ -1041,25 +1278,30 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
     }
     this.cdr.detectChanges();
 
-    for (const c of this.selectedCollections) {
+    for (const c of this.SelectedCollections) {
       await this.saveOne(c);
     }
 
-    this.isSaving = false;
+    this.IsSaving = false;
 
     // Auto-close on full success
-    if (this.failedCount === 0) {
+    if (this.FailedCount === 0) {
       this.emitCompleted();
     } else {
-      this.toastService.warning(`Saved to ${this.successCount} of ${this.saveResults.size} collections`);
+      this.toastService.warning(`Saved to ${this.SuccessCount} of ${this.SaveResults.size} collections`);
       this.cdr.detectChanges();
     }
   }
 
-  public async retryFailed(): Promise<void> {
-    if (this.isSaving) return;
+  /** @deprecated Use {@link OnSave}. */
+  public async onSave(): Promise<void> {
+    return this.OnSave();
+  }
+
+  public async RetryFailed(): Promise<void> {
+    if (this.IsSaving) return;
     const toRetry: MJCollectionEntity[] = [];
-    for (const r of this.saveResults.values()) {
+    for (const r of this.SaveResults.values()) {
       if (r.status === 'error') {
         const c = this.collectionById.get(NormalizeUUID(r.collectionId));
         if (c) toRetry.push(c);
@@ -1067,45 +1309,55 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
     }
     if (toRetry.length === 0) return;
 
-    this.isSaving = true;
+    this.IsSaving = true;
     this.cdr.detectChanges();
     for (const c of toRetry) {
       await this.saveOne(c);
     }
-    this.isSaving = false;
+    this.IsSaving = false;
 
-    if (this.failedCount === 0) {
+    if (this.FailedCount === 0) {
       this.emitCompleted();
     } else {
       this.cdr.detectChanges();
     }
   }
 
-  public async retryOne(collectionId: string): Promise<void> {
-    if (this.isSaving) return;
+  /** @deprecated Use {@link RetryFailed}. */
+  public async retryFailed(): Promise<void> {
+    return this.RetryFailed();
+  }
+
+  public async RetryOne(collectionId: string): Promise<void> {
+    if (this.IsSaving) return;
     const c = this.collectionById.get(NormalizeUUID(collectionId));
     if (!c) return;
-    this.isSaving = true;
+    this.IsSaving = true;
     this.cdr.detectChanges();
     await this.saveOne(c);
-    this.isSaving = false;
-    if (this.failedCount === 0 && this.successCount === this.saveResults.size) {
+    this.IsSaving = false;
+    if (this.FailedCount === 0 && this.SuccessCount === this.SaveResults.size) {
       this.emitCompleted();
     } else {
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link RetryOne}. */
+  public async retryOne(collectionId: string): Promise<void> {
+    return this.RetryOne(collectionId);
   }
 
   private async saveOne(collection: MJCollectionEntity): Promise<void> {
     const key = NormalizeUUID(collection.ID);
-    const r = this.saveResults.get(key);
+    const r = this.SaveResults.get(key);
     if (!r) return;
     r.status = 'saving';
     r.errorMessage = undefined;
     this.cdr.detectChanges();
 
     try {
-      const versionId = this.artifactVersionId;
+      const versionId = this.ArtifactVersionId;
       if (!versionId) {
         r.status = 'error';
         r.errorMessage = 'No artifact version selected';
@@ -1122,7 +1374,7 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
         ExtraFilter: `CollectionID='${collection.ID}' AND ArtifactVersionID='${versionId}'`,
         ResultType: 'simple',
         Fields: ['ID']
-      }, this.currentUser);
+      }, this.CurrentUser);
 
       if (existing.Success && (existing.Results?.length ?? 0) > 0) {
         r.status = 'success';
@@ -1130,7 +1382,7 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
       }
 
       const junction = await p.GetEntityObject<MJCollectionArtifactEntity>(
-        'MJ: Collection Artifacts', this.currentUser
+        'MJ: Collection Artifacts', this.CurrentUser
       );
       junction.CollectionID = collection.ID;
       junction.ArtifactVersionID = versionId;
@@ -1154,23 +1406,28 @@ export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent
   //  Close paths
   // ============================================================
   public onCancel(): void {
-    if (this.isSaving) return; // can't close while writes are in flight
+    if (this.IsSaving) return; // can't close while writes are in flight
     // If any saves completed before cancel, treat it as completion so the viewer reloads
-    if (this.successCount > 0) {
+    if (this.SuccessCount > 0) {
       this.emitCompleted();
     } else {
       this.cancelled.emit();
     }
   }
 
-  public onAcknowledgeAndClose(): void {
+  public OnAcknowledgeAndClose(): void {
     this.emitCompleted();
+  }
+
+  /** @deprecated Use {@link OnAcknowledgeAndClose}. */
+  public onAcknowledgeAndClose(): void {
+    return this.OnAcknowledgeAndClose();
   }
 
   private emitCompleted(): void {
     const successIds: string[] = [];
     const failedIds: string[] = [];
-    for (const r of this.saveResults.values()) {
+    for (const r of this.SaveResults.values()) {
       if (r.status === 'success') successIds.push(r.collectionId);
       else if (r.status === 'error') failedIds.push(r.collectionId);
     }

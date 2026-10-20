@@ -26,6 +26,10 @@ interface ArtifactEntry {
   alphaId: string;
   name: string;
   typeName: string;
+  artifactId?: string;
+  versionId?: string;
+  versionNumber?: number;
+  description?: string;
   mimeType?: string;
   content: string | Buffer;
   library: BaseArtifactToolLibrary;
@@ -105,7 +109,7 @@ export interface StoredToolResult {
 }
 
 export interface ArtifactToolSnapshot {
-  artifacts: Array<{ alphaId: string; name: string; typeName: string }>;
+  artifacts: Array<{ alphaId: string; name: string; typeName: string; artifactId?: string; versionNumber?: number }>;
   resultCount: number;
 }
 
@@ -130,14 +134,18 @@ export class ArtifactToolManager {
   Initialize(inputArtifacts: InputArtifact[]): void {
     this.Clear();
     for (const artifact of inputArtifacts) {
-      const alphaId = this.NextAlphaId();
+      const alphaId = this.nextAlphaId();
       this.artifacts.set(alphaId, {
         alphaId,
         name: artifact.name,
         typeName: artifact.typeName,
+        artifactId: artifact.artifactId,
+        versionId: artifact.versionId,
+        versionNumber: artifact.versionNumber,
+        description: artifact.description,
         mimeType: artifact.mimeType,
         content: artifact.content,
-        library: this.ResolveLibrary(artifact.typeName, artifact.toolLibraryClass),
+        library: this.resolveLibrary(artifact.typeName, artifact.toolLibraryClass),
         annotation: artifact.annotation,
         deliveryMode: artifact.deliveryMode,
         forceToolsOnly: artifact.forceToolsOnly,
@@ -147,16 +155,51 @@ export class ArtifactToolManager {
 
   /** Register a mid-run artifact and return its alpha ID */
   RegisterArtifact(artifact: InputArtifact): string {
-    const alphaId = this.NextAlphaId();
+    const alphaId = this.nextAlphaId();
     this.artifacts.set(alphaId, {
       alphaId,
       name: artifact.name,
       typeName: artifact.typeName,
+      artifactId: artifact.artifactId,
+      versionId: artifact.versionId,
+      versionNumber: artifact.versionNumber,
+      description: artifact.description,
       mimeType: artifact.mimeType,
       content: artifact.content,
-      library: this.ResolveLibrary(artifact.typeName, artifact.toolLibraryClass),
+      library: this.resolveLibrary(artifact.typeName, artifact.toolLibraryClass),
     });
     return alphaId;
+  }
+
+  /**
+   * Resolves a manifest alpha ID (e.g. `"A"`, `"B"`), an artifact UUID, or a version UUID
+   * to the underlying `MJ: Artifacts` record UUID (`artifactId`).
+   * Allows agents to reference either `"A"` or the full UUID in `artifactDirective.targetArtifactId`.
+   */
+  ResolveArtifactUuid(idOrAlpha: string | undefined | null): string | undefined {
+    if (typeof idOrAlpha !== 'string') return undefined;
+    const trimmed = idOrAlpha.trim();
+    if (!trimmed) return undefined;
+
+    // 1. Direct alpha ID lookup (case-insensitive, e.g. 'A', 'B', 'AA', or 'Artifact B')
+    const normalizedAlpha = trimmed.replace(/^artifact\s+/i, '').trim().toUpperCase();
+    const byAlpha = this.artifacts.get(normalizedAlpha);
+    if (byAlpha?.artifactId) {
+      return byAlpha.artifactId;
+    }
+
+    // 2. Match by artifactId or versionId UUID
+    for (const entry of this.artifacts.values()) {
+      if (entry.artifactId && (UUIDsEqual(entry.artifactId, trimmed) || (entry.versionId && UUIDsEqual(entry.versionId, trimmed)))) {
+        return entry.artifactId;
+      }
+    }
+
+    // 3. Pass through well-formed UUIDs so callers can pass an explicit artifact UUID directly
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+      return trimmed;
+    }
+    return undefined;
   }
 
   /** Reset all state */
@@ -280,8 +323,15 @@ export class ArtifactToolManager {
         : typeof entry.content === 'string' && entry.content.length > 0
           ? ` (${(entry.content.length / 1024).toFixed(0)} KB)`
           : '';
+      const versionNote = entry.versionNumber != null ? ` (v${entry.versionNumber})` : '';
+      const idNote = entry.artifactId ? ` [artifactId: ${entry.artifactId}]` : '';
       const mimeNote = entry.mimeType ? ` [${entry.mimeType}]` : '';
-      lines.push(`**${entry.alphaId}** — ${entry.typeName}: "${entry.name}"${mimeNote}${sizeSuffix}`);
+      lines.push(`**${entry.alphaId}** — ${entry.typeName}: "${entry.name}"${versionNote}${idNote}${mimeNote}${sizeSuffix}`);
+
+      if (entry.description) {
+        const desc = entry.description.length > 240 ? entry.description.slice(0, 240) + '…' : entry.description;
+        lines.push(`    > Description: ${desc}`);
+      }
 
       // Surface the content SHAPE so the agent paths correctly (e.g. knows it's a top-level JSON
       // array, not a `content`-wrapped object) instead of guessing and failing on the first tool call.
@@ -310,7 +360,8 @@ export class ArtifactToolManager {
     lines.push('artifact tools below (e.g. `get_full`), or use one as a pipeline source (e.g. `get_full`');
     lines.push('then `where`/`select`/`distinct`). NEVER ask the user to paste, provide, upload, or "send"');
     lines.push('an artifact\'s content, and do NOT request a data snapshot to obtain it — you already have it.');
-    lines.push('IMPORTANT: Always use the single-letter artifact ID (A, B, C, etc.) as the `artifactId` value — NOT the artifact name.');
+    lines.push('IMPORTANT: Always use the single-letter artifact ID (A, B, C, etc.) as the `artifactId` value in `artifactToolCalls` — NOT the artifact name.');
+    lines.push('When setting `artifactDirective.targetArtifactId` (with `behavior: "version-source"`), you may use either the artifact\'s `artifactId` UUID or its single-letter ID (A, B, C, etc.).');
     return lines.join('\n');
   }
 
@@ -331,9 +382,9 @@ export class ArtifactToolManager {
 
   /**
    * Compact, agent-facing description of an artifact's content structure for the manifest.
-   * For JSON: whether it's an array (+ length + item fields) or an object (+ keys) — so the agent
-   * paths against the REAL shape rather than guessing a `content` wrapper. For text: line count +
-   * a short start preview. Returns null for binary / empty content.
+   * For JSON: whether it's an array (+ length + item fields) or an object (+ keys, plus title/table/row
+   * summary for Data artifacts) — so the agent paths against the REAL shape rather than guessing a
+   * `content` wrapper. For text: line count + a short start preview. Returns null for binary / empty content.
    */
   private describeContentShape(content: string | Buffer): string | null {
     if (Buffer.isBuffer(content)) {
@@ -356,7 +407,28 @@ export class ArtifactToolManager {
           );
         }
         if (parsed !== null && typeof parsed === 'object') {
-          return `JSON object; keys: ${Object.keys(parsed).slice(0, 20).join(', ')}.`;
+          const obj = parsed as Record<string, unknown>;
+          const base = `JSON object; keys: ${Object.keys(obj).slice(0, 20).join(', ')}.`;
+          const extras: string[] = [];
+          if (typeof obj.title === 'string' && obj.title.trim()) {
+            extras.push(`Title: "${obj.title.trim().slice(0, 120)}".`);
+          }
+          if (Array.isArray(obj.tables) && obj.tables.length > 0) {
+            const tableSummaries = (obj.tables as Array<Record<string, unknown>>).slice(0, 8).map((t) => {
+              const tName = typeof t?.name === 'string' ? t.name : (typeof t?.id === 'string' ? t.id : 'table');
+              const tRows = Array.isArray(t?.rows)
+                ? t.rows.length
+                : (typeof (t?.metadata as Record<string, unknown> | undefined)?.rowCount === 'number'
+                  ? ((t.metadata as Record<string, unknown>).rowCount as number)
+                  : 0);
+              return `"${tName}" (${tRows} rows)`;
+            });
+            extras.push(`Tables (${obj.tables.length}): ${tableSummaries.join(', ')}.`);
+          } else if (Array.isArray(obj.rows)) {
+            const colCount = Array.isArray(obj.columns) ? `, ${obj.columns.length} columns` : '';
+            extras.push(`Single table (${obj.rows.length} rows${colCount}).`);
+          }
+          return extras.length > 0 ? `${base} ${extras.join(' ')}` : base;
         }
         return `JSON ${typeof parsed} value.`;
       } catch {
@@ -604,7 +676,7 @@ export class ArtifactToolManager {
   // ─── PRIVATE ───
 
   /** Generate next alpha-sequence ID: A, B, ... Z, AA, AB, ... */
-  private NextAlphaId(): string {
+  private nextAlphaId(): string {
     const index = this.nextAlphaIndex++;
     if (index < 26) {
       return String.fromCharCode(65 + index); // A-Z
@@ -630,12 +702,12 @@ export class ArtifactToolManager {
    * The engine is expected to be configured by AgentRunner before Initialize
    * is called, so path (1) is the normal case.
    */
-  private ResolveLibrary(typeName: string, toolLibraryClass?: string): BaseArtifactToolLibrary {
-    const chain = this.ResolveLibraryChain(typeName);
+  private resolveLibrary(typeName: string, toolLibraryClass?: string): BaseArtifactToolLibrary {
+    const chain = this.resolveLibraryChain(typeName);
     if (chain.length > 1) return new CompositeArtifactToolLibrary(chain);
     if (chain.length === 1) return chain[0];
     // Engine didn't yield anything — fall back to a single leaf library.
-    return this.ResolveLeafLibrary(typeName, toolLibraryClass);
+    return this.resolveLeafLibrary(typeName, toolLibraryClass);
   }
 
   /**
@@ -644,7 +716,7 @@ export class ArtifactToolManager {
    * Returns the chain leaf-first. Levels without a ToolLibraryClass are
    * skipped. Returns [] if the engine isn't loaded or the type isn't found.
    */
-  private ResolveLibraryChain(typeName: string): BaseArtifactToolLibrary[] {
+  private resolveLibraryChain(typeName: string): BaseArtifactToolLibrary[] {
     const engine = ArtifactMetadataEngine.Instance;
     if (!engine.ArtifactTypes?.length) return [];
 
@@ -669,7 +741,7 @@ export class ArtifactToolManager {
    * Single-library fallback when the metadata engine isn't available.
    * Uses the provided `toolLibraryClass` hint first, then name-based heuristics.
    */
-  private ResolveLeafLibrary(typeName: string, toolLibraryClass?: string): BaseArtifactToolLibrary {
+  private resolveLeafLibrary(typeName: string, toolLibraryClass?: string): BaseArtifactToolLibrary {
     if (toolLibraryClass) {
       const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, toolLibraryClass);
       if (instance) return instance;

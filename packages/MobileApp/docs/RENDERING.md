@@ -155,7 +155,10 @@ On screen, `PartCard` dispatches by kind:
 - **`query`** parts execute their query through `useQueryRun` (`RunQuery`) and
   `analyzeResult` auto-classifies the result into **KPI tiles**, a **bar `Chart`**,
   or a **compact table**.
-- **`artifact`** parts link to `/artifact/:id`.
+- **`artifact`** parts render inline through `ArtifactContentView` — the same renderer the
+  artifact detail screen uses — with an "Open full screen" affordance beneath. An
+  agent-authored interactive component on a dashboard therefore *runs* on the dashboard
+  rather than becoming a link.
 - **`view`**, **`weburl`**, and **`unknown`** parts render a "desktop-optimized"
   placeholder with an "Open on desktop" affordance (`Linking.openURL`) — native
   rendering of arbitrary saved views/embeds is a later phase.
@@ -173,3 +176,60 @@ On screen, `PartCard` dispatches by kind:
 | json / json-table | inline JSON tree / data-table cards | artifact detail |
 | dashboard parts | `explorer.ts` parser + `PartCard` | dashboard view |
 </content>
+
+---
+
+## 8. Interactive components — the library seam
+
+[`src/interactive/library-registry.ts`](../src/interactive/library-registry.ts) +
+[`src/interactive/runtime-loader.ts`](../src/interactive/runtime-loader.ts)
+
+An agent-authored component declares its third-party libraries in the spec, and
+`@memberjunction/react-runtime` compiles each declaration into a binding:
+
+```js
+const _  = libraries['_'];
+const ss = libraries['ss'];
+```
+
+### What the web does
+
+`ScriptLoaderService` → `LibraryLoader.loadAllLibraries()` appends one `<script>` per approved
+library, waits for its UMD bundle to define a global on `window`, and hands the runtime a map keyed
+by **global variable name**. The browser therefore ends up with the library in *two* places: in
+`RuntimeContext.libraries`, and as a real global.
+
+Both matter, because of a scoping detail in the generated factory: the compiler emits the
+`const _ = …` bindings **inside** `DestructureWrapperUserComponent`, but splices the component's own
+source one scope out. A component body referencing `_` is reading a *free variable* — which resolves
+to the global the script tag defined, not to the runtime's map.
+
+### What mobile does
+
+Hermes has no `document`, so the CDN path cannot run — and it no longer tries: the compiler's guard
+now tests for a DOM rather than for `window` (React Native defines `window` but not `document`, which
+previously sent it down the script-loading path and threw `Library 'lodash' not found`).
+
+Instead the app performs the same two acts through the module system it actually has:
+
+1. `ResolveMobileLibraries` lazily `import()`s the declared libraries from ordinary npm
+   dependencies, keyed by the same `globalVariable`, and merges them into `RuntimeContext.libraries`.
+2. `PublishLibraryGlobals` defines each one on `globalThis` — the native equivalent of what a UMD
+   bundle does to `window`. Existing globals are never overwritten.
+
+Versions are pinned to exactly what `__mj.ComponentLibrary` declares, so a component behaves the
+same on both surfaces.
+
+### What is and isn't available
+
+Provided (13): `lodash`, `dayjs`, `moment`, `luxon`, `mathjs`, `simple-statistics`, `chroma-js`,
+`uuid`, `axios`, `marked`, `d3`, `topojson-client`, `xlsx`.
+
+Declined: anything DOM- or canvas-bound — Chart.js, ApexCharts, AG Grid, Ant Design, Leaflet,
+Mapbox GL, GSAP, SortableJS, Popper, Emotion, DOMPurify, html2canvas, jsPDF, geo-maps. Shimming
+these would render nothing and report no error, which is worse than declining, so `AssessSpec` sends
+the component to the desktop-fallback card **naming the library and the reason** rather than issuing
+a blanket "uses external libraries".
+
+Bundle cost is paid in app size, not startup: imports are lazy, so a component that never declares a
+library never evaluates one.

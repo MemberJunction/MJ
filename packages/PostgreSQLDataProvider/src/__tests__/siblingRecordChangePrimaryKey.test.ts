@@ -9,7 +9,7 @@ import { PostgreSQLDataProvider } from '../PostgreSQLDataProvider.js';
 import type { EntityInfo } from '@memberjunction/core';
 
 type Host = {
-    BuildSiblingRecordChangeSQL: (varName: string, entityInfo: EntityInfo, changesJSON: string, changesDesc: string, pkValue: string, userId: string) => string;
+    BuildSiblingRecordChangeSQL: (varName: string, entityInfo: EntityInfo, changesJSON: string, changesDesc: string, pkValue: string, userId: string, source?: 'Internal' | 'Clone', changeContext?: string | null) => string;
 };
 
 function makeHost(): Host {
@@ -41,5 +41,20 @@ describe('BuildSiblingRecordChangeSQL — IS-A sibling read uses the real key co
     it('ID-keyed entity is unchanged', () => {
         const sql = makeHost().BuildSiblingRecordChangeSQL('@_rc_prop_0', makeEntity('Widgets', 'ID'), '{}', 'desc', 'abc', 'u-1');
         expect(sql).toContain('FROM "crm"."vwWidgets" r\nWHERE "ID" = \'abc\'');
+    });
+
+    it('writes Source=Clone and the escaped ChangeContext on a clone, and leaves the column out otherwise', () => {
+        const entity = makeEntity('Widgets', 'ID');
+        const context = JSON.stringify({ Version: 1, Kind: 'Clone', Clone: { Reason: "O'Brien's copy" } });
+
+        const clone = makeHost().BuildSiblingRecordChangeSQL('@_rc_prop_0', entity, '{}', 'desc', 'abc', 'u-1', 'Clone', context);
+        expect(clone).toContain(', "ChangeContext")');
+        expect(clone).toContain("'Clone'");
+        expect(clone).toContain("O''Brien''s copy");
+        expect(clone).toContain('::text');
+
+        const plain = makeHost().BuildSiblingRecordChangeSQL('@_rc_prop_0', entity, '{}', 'desc', 'abc', 'u-1');
+        expect(plain).not.toContain('ChangeContext');
+        expect(plain).toContain("'Internal'");
     });
 });

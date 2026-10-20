@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Locator, Page } from 'playwright';
 
-import { clickInteractiveElement, typeIntoInteractiveElement } from '../browser/element-extraction.js';
+import { ClickInteractiveElement, TypeIntoInteractiveElement } from '../browser/element-extraction.js';
 import { InteractiveElement } from '../types/browser.js';
 
 const STALE_XPATH = 'xpath=/html/body[1]/div[1]/button[1]';
@@ -83,7 +83,7 @@ describe('clickInteractiveElement', () => {
     it('clicks the exact selector and never re-extracts when the DOM held still', async () => {
         const { page, clicks, evaluate } = makePage();
 
-        await clickInteractiveElement(page, chosen(), {}, TIMEOUT);
+        await ClickInteractiveElement(page, chosen(), {}, TIMEOUT);
 
         expect(clicks).toEqual([{ selector: STALE_XPATH, timeout: 2000 }]);
         expect(evaluate).not.toHaveBeenCalled();
@@ -94,7 +94,7 @@ describe('clickInteractiveElement', () => {
         // 10s ActionTimeoutMs producing nothing. It must fail fast instead.
         const { page, clicks } = makePage({ failSelectors: [STALE_XPATH] });
 
-        await expect(clickInteractiveElement(page, chosen(), {}, TIMEOUT)).rejects.toThrow(/Timeout 2000ms/);
+        await expect(ClickInteractiveElement(page, chosen(), {}, TIMEOUT)).rejects.toThrow(/Timeout 2000ms/);
         expect(clicks).toHaveLength(1);
     });
 
@@ -104,7 +104,7 @@ describe('clickInteractiveElement', () => {
             fresh: [probed('link', 'Cancel', 'xpath=/html/body[1]/a[1]'), probed('button', 'Save', FRESH_XPATH)],
         });
 
-        await clickInteractiveElement(page, chosen(), {}, TIMEOUT);
+        await ClickInteractiveElement(page, chosen(), {}, TIMEOUT);
 
         expect(evaluate).toHaveBeenCalledTimes(1);
         expect(clicks).toEqual([
@@ -119,7 +119,7 @@ describe('clickInteractiveElement', () => {
             fresh: [probed('button', 'Save', FRESH_XPATH)],
         });
 
-        await clickInteractiveElement(page, chosen(), {}, TIMEOUT);
+        await ClickInteractiveElement(page, chosen(), {}, TIMEOUT);
 
         expect(clicks.reduce((sum, c) => sum + c.timeout, 0)).toBeLessThanOrEqual(TIMEOUT);
     });
@@ -131,7 +131,7 @@ describe('clickInteractiveElement', () => {
         });
 
         // The message must stay about the element the controller actually chose.
-        await expect(clickInteractiveElement(page, chosen(), {}, TIMEOUT)).rejects.toThrow(/locator\.click: Timeout/);
+        await expect(ClickInteractiveElement(page, chosen(), {}, TIMEOUT)).rejects.toThrow(/locator\.click: Timeout/);
         expect(clicks).toHaveLength(1);
     });
 
@@ -142,7 +142,7 @@ describe('clickInteractiveElement', () => {
             fresh: [probed('button', 'Save', FRESH_XPATH), probed('button', 'Save', 'xpath=/html/body[1]/div[3]/button[1]')],
         });
 
-        await expect(clickInteractiveElement(page, chosen(), {}, TIMEOUT)).rejects.toThrow();
+        await expect(ClickInteractiveElement(page, chosen(), {}, TIMEOUT)).rejects.toThrow();
         expect(clicks).toHaveLength(1);
     });
 
@@ -152,7 +152,7 @@ describe('clickInteractiveElement', () => {
             fresh: [probed('button', 'Save changes', FRESH_XPATH)],
         });
 
-        await clickInteractiveElement(page, chosen(), {}, TIMEOUT);
+        await ClickInteractiveElement(page, chosen(), {}, TIMEOUT);
 
         expect(clicks[1].selector).toBe(FRESH_XPATH);
     });
@@ -165,7 +165,7 @@ describe('clickInteractiveElement', () => {
             fresh: [probed('div', 'Row 7', FRESH_XPATH)],
         });
 
-        await clickInteractiveElement(page, chosen({ Role: 'div', Name: 'Row 7' }), {}, TIMEOUT);
+        await ClickInteractiveElement(page, chosen({ Role: 'div', Name: 'Row 7' }), {}, TIMEOUT);
 
         expect(clicks[1].selector).toBe(FRESH_XPATH);
     });
@@ -184,7 +184,7 @@ describe('clickInteractiveElement', () => {
         });
         const page = { locator, evaluate: vi.fn().mockResolvedValue([probed('button', 'Save', FRESH_XPATH)]) } as unknown as Page;
 
-        await clickInteractiveElement(page, chosen(), { clickCount: 2, button: 'right', modifiers: ['Shift'] }, TIMEOUT);
+        await ClickInteractiveElement(page, chosen(), { clickCount: 2, button: 'right', modifiers: ['Shift'] }, TIMEOUT);
 
         expect(seen[1]).toMatchObject({ selector: FRESH_XPATH, clickCount: 2, button: 'right', modifiers: ['Shift'] });
     });
@@ -195,7 +195,7 @@ describe('clickInteractiveElement', () => {
             fresh: [probed('button', 'Save', FRESH_XPATH)],
         });
 
-        await clickInteractiveElement(page, chosen(), {}, 1500);
+        await ClickInteractiveElement(page, chosen(), {}, 1500);
 
         expect(clicks.map(c => c.timeout)).toEqual([1500, 1500]);
     });
@@ -205,7 +205,7 @@ describe('typeIntoInteractiveElement', () => {
     it('fills the exact selector when it still resolves', async () => {
         const { page, fills, presses } = makePage();
 
-        await typeIntoInteractiveElement(page, chosen({ Role: 'textbox', Name: 'Email' }), 'a@b.com', false, TIMEOUT);
+        await TypeIntoInteractiveElement(page, chosen({ Role: 'textbox', Name: 'Email' }), 'a@b.com', false, TIMEOUT);
 
         expect(fills).toEqual([{ selector: STALE_XPATH, timeout: 2000, text: 'a@b.com' }]);
         expect(presses).toEqual([]);
@@ -217,7 +217,7 @@ describe('typeIntoInteractiveElement', () => {
             fresh: [probed('textbox', 'Email', FRESH_XPATH)],
         });
 
-        await typeIntoInteractiveElement(page, chosen({ Role: 'textbox', Name: 'Email' }), 'a@b.com', true, TIMEOUT);
+        await TypeIntoInteractiveElement(page, chosen({ Role: 'textbox', Name: 'Email' }), 'a@b.com', true, TIMEOUT);
 
         expect(fills.map(f => f.selector)).toEqual([STALE_XPATH, FRESH_XPATH]);
         expect(presses).toEqual(['Enter']);
@@ -231,7 +231,7 @@ describe('dismissable-overlay recovery', () => {
             overlayClearsOnEscape: true,
         });
 
-        await clickInteractiveElement(page, chosen(), {}, TIMEOUT);
+        await ClickInteractiveElement(page, chosen(), {}, TIMEOUT);
 
         expect(keys).toContain('Escape');
         // Same target, tried twice: blocked, then again after the backdrop went away.
@@ -244,7 +244,7 @@ describe('dismissable-overlay recovery', () => {
             overlayClearsOnEscape: true,
         });
 
-        await clickInteractiveElement(page, chosen(), {}, TIMEOUT);
+        await ClickInteractiveElement(page, chosen(), {}, TIMEOUT);
 
         expect(evaluate).not.toHaveBeenCalled();
     });
@@ -256,7 +256,7 @@ describe('dismissable-overlay recovery', () => {
             fresh: [probed('button', 'Save', FRESH_XPATH)],
         });
 
-        await clickInteractiveElement(page, chosen(), {}, TIMEOUT);
+        await ClickInteractiveElement(page, chosen(), {}, TIMEOUT);
 
         expect(keys).toContain('Escape');
         // Ends up on the re-resolved selector rather than giving up.
@@ -269,7 +269,7 @@ describe('dismissable-overlay recovery', () => {
             fresh: [probed('button', 'Save', FRESH_XPATH)],
         });
 
-        await clickInteractiveElement(page, chosen(), {}, TIMEOUT);
+        await ClickInteractiveElement(page, chosen(), {}, TIMEOUT);
 
         expect(keys).not.toContain('Escape');
     });

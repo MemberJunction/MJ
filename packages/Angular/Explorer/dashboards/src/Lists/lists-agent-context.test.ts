@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
-    capListNames,
-    resolveNamedRecord,
-    buildNotFoundError,
-    buildListBrowseAgentContext,
-    buildListCategoriesAgentContext,
-    buildListOperationsAgentContext,
+    CapListNames,
+    ResolveNamedRecord,
+    BuildNotFoundError,
+    BuildListBrowseAgentContext,
+    BuildListCategoriesAgentContext,
+    BuildListOperationsAgentContext,
     LISTS_AGENT_CONTEXT_NAME_LIST_CAP,
     type NamedRecord,
     type CategoryNodeSummary,
@@ -16,18 +16,18 @@ import {
 describe('capListNames', () => {
     it('returns the list unchanged when under the cap', () => {
         const names = ['a', 'b', 'c'];
-        expect(capListNames(names)).toEqual(['a', 'b', 'c']);
+        expect(CapListNames(names)).toEqual(['a', 'b', 'c']);
     });
 
     it('caps the list at the documented maximum', () => {
         const names = Array.from({ length: 100 }, (_, i) => `n${i}`);
-        expect(capListNames(names).length).toBe(LISTS_AGENT_CONTEXT_NAME_LIST_CAP);
+        expect(CapListNames(names).length).toBe(LISTS_AGENT_CONTEXT_NAME_LIST_CAP);
     });
 
     it('does not mutate the input array', () => {
         const names = Array.from({ length: 30 }, (_, i) => `n${i}`);
         const copy = [...names];
-        capListNames(names);
+        CapListNames(names);
         expect(names).toEqual(copy);
     });
 });
@@ -40,29 +40,29 @@ describe('resolveNamedRecord', () => {
     ];
 
     it('matches an exact ID (case-insensitive)', () => {
-        expect(resolveNamedRecord('aaaa-1111', records)?.Name).toBe('Active Members');
+        expect(ResolveNamedRecord('aaaa-1111', records)?.Name).toBe('Active Members');
     });
 
     it('matches an exact name (case- and whitespace-insensitive)', () => {
-        expect(resolveNamedRecord('  lapsed donors ', records)?.ID).toBe('BBBB-2222');
+        expect(ResolveNamedRecord('  lapsed donors ', records)?.ID).toBe('BBBB-2222');
     });
 
     it('falls back to a contains match on the name', () => {
         // "Volunteers" appears in exactly one name.
-        expect(resolveNamedRecord('volunteers', records)?.ID).toBe('CCCC-3333');
+        expect(ResolveNamedRecord('volunteers', records)?.ID).toBe('CCCC-3333');
     });
 
     it('returns the FIRST contains match when ambiguous', () => {
         // "Active" appears in two names; the first in order wins (tolerant, deterministic).
-        expect(resolveNamedRecord('active', records)?.Name).toBe('Active Members');
+        expect(ResolveNamedRecord('active', records)?.Name).toBe('Active Members');
     });
 
     it('returns null on an empty input', () => {
-        expect(resolveNamedRecord('   ', records)).toBeNull();
+        expect(ResolveNamedRecord('   ', records)).toBeNull();
     });
 
     it('returns null on a complete miss', () => {
-        expect(resolveNamedRecord('Nonexistent', records)).toBeNull();
+        expect(ResolveNamedRecord('Nonexistent', records)).toBeNull();
     });
 
     it('prefers an exact name over a contains match', () => {
@@ -71,7 +71,7 @@ describe('resolveNamedRecord', () => {
             { ID: '2', Name: 'Members' },
         ];
         // Exact "members" must win over the earlier "Members Extended" contains candidate.
-        expect(resolveNamedRecord('members', recs)?.ID).toBe('2');
+        expect(ResolveNamedRecord('members', recs)?.ID).toBe('2');
     });
 });
 
@@ -81,21 +81,21 @@ describe('buildNotFoundError', () => {
             { ID: '1', Name: 'Alpha' },
             { ID: '2', Name: 'Beta' },
         ];
-        const msg = buildNotFoundError('Gamma', records, 'list');
+        const msg = BuildNotFoundError('Gamma', records, 'list');
         expect(msg).toContain('Gamma');
         expect(msg).toContain('Alpha, Beta');
         expect(msg).toContain('list');
     });
 
     it('handles an empty candidate list', () => {
-        expect(buildNotFoundError('x', [], 'category')).toContain('(none)');
+        expect(BuildNotFoundError('x', [], 'category')).toContain('(none)');
     });
 });
 
 describe('buildListBrowseAgentContext', () => {
     it('includes core fields and bounds the visible-name list', () => {
         const names = Array.from({ length: 30 }, (_, i) => `List ${i}`);
-        const ctx = buildListBrowseAgentContext({
+        const ctx = BuildListBrowseAgentContext({
             SearchTerm: 'mem',
             ViewMode: 'table',
             AllListCount: 30,
@@ -109,7 +109,7 @@ describe('buildListBrowseAgentContext', () => {
     });
 
     it('omits optional filter fields that are not supplied', () => {
-        const ctx = buildListBrowseAgentContext({
+        const ctx = BuildListBrowseAgentContext({
             SearchTerm: '',
             ViewMode: 'grid',
             AllListCount: 2,
@@ -123,7 +123,7 @@ describe('buildListBrowseAgentContext', () => {
     });
 
     it('includes optional filter fields when supplied (including false favorites)', () => {
-        const ctx = buildListBrowseAgentContext({
+        const ctx = BuildListBrowseAgentContext({
             SearchTerm: '',
             ViewMode: 'table',
             AllListCount: 5,
@@ -149,7 +149,7 @@ describe('buildListCategoriesAgentContext', () => {
     ];
 
     it('reports selection id+name, counts, member-list names, and expanded nodes', () => {
-        const ctx = buildListCategoriesAgentContext({
+        const ctx = BuildListCategoriesAgentContext({
             SelectedCategoryId: 'cat-1',
             SelectedCategoryName: 'Marketing',
             CategoryCount: 2,
@@ -165,7 +165,7 @@ describe('buildListCategoriesAgentContext', () => {
     });
 
     it('omits member-list names and node fields when empty', () => {
-        const ctx = buildListCategoriesAgentContext({
+        const ctx = BuildListCategoriesAgentContext({
             SelectedCategoryId: null,
             SelectedCategoryName: null,
             CategoryCount: 0,
@@ -190,7 +190,7 @@ describe('buildListOperationsAgentContext', () => {
     ];
 
     it('reports operands, locked entity, regions, selection, and last op', () => {
-        const ctx = buildListOperationsAgentContext({
+        const ctx = BuildListOperationsAgentContext({
             Operands: operands,
             ListOperandCount: 1,
             ViewOperandCount: 1,
@@ -214,7 +214,7 @@ describe('buildListOperationsAgentContext', () => {
     });
 
     it('omits operand/region/preview arrays when empty (empty canvas)', () => {
-        const ctx = buildListOperationsAgentContext({
+        const ctx = BuildListOperationsAgentContext({
             Operands: [],
             ListOperandCount: 0,
             ViewOperandCount: 0,

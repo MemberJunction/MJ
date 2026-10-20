@@ -14,9 +14,11 @@
  * @module @memberjunction/standards
  */
 
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { CheckContext, CheckResult, StandardCheck, Violation } from '../types.js';
+import { HasMarkerNear } from '../lib/markers.js';
+import { FindPackageDirs, FindSourceFiles } from '../lib/walk.js';
 
 /** The layers a package can declare. */
 export type UILayer = 'runtime' | 'widgets' | 'surface' | 'shell';
@@ -170,55 +172,17 @@ export function ParseImports(source: string): ImportRecord[] {
  * would let a marker drift away from the thing it excuses.
  */
 export function IsAllowed(lines: string[], lineNumber: number): boolean {
-    const own = lines[lineNumber - 1] ?? '';
-    const above = lineNumber >= 2 ? (lines[lineNumber - 2] ?? '') : '';
-    return own.includes(ALLOW_MARKER) || above.includes(ALLOW_MARKER);
+    return HasMarkerNear(lines, lineNumber, ALLOW_MARKER);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Filesystem walk
 // ─────────────────────────────────────────────────────────────────────────────
 
-function findPackageDirs(root: string): string[] {
-    const found: string[] = [];
-    const walk = (dir: string): void => {
-        let entries;
-        try {
-            entries = readdirSync(dir, { withFileTypes: true });
-        } catch {
-            return;
-        }
-        if (entries.some((e) => e.isFile() && e.name === 'package.json')) found.push(dir);
-        for (const entry of entries) {
-            if (!entry.isDirectory() || SKIP_DIRS.has(entry.name)) continue;
-            walk(join(dir, entry.name));
-        }
-    };
-    walk(root);
-    return found;
-}
+const findPackageDirs = (root: string): string[] => FindPackageDirs(root, { SkipDirs: SKIP_DIRS });
 
-function findSourceFiles(packageDir: string): string[] {
-    const found: string[] = [];
-    const walk = (dir: string): void => {
-        let entries;
-        try {
-            entries = readdirSync(dir, { withFileTypes: true });
-        } catch {
-            return;
-        }
-        for (const entry of entries) {
-            const full = join(dir, entry.name);
-            if (entry.isDirectory()) {
-                if (!SKIP_DIRS.has(entry.name)) walk(full);
-            } else if (SOURCE_EXTENSIONS.some((ext) => entry.name.endsWith(ext))) {
-                found.push(full);
-            }
-        }
-    };
-    walk(packageDir);
-    return found;
-}
+const findSourceFiles = (packageDir: string): string[] =>
+    FindSourceFiles(packageDir, { SkipDirs: SKIP_DIRS, Extensions: SOURCE_EXTENSIONS });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The check

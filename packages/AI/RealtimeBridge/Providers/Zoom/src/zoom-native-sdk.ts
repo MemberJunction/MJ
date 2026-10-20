@@ -43,7 +43,7 @@ import {
 } from './zoom-sdk';
 // Reuse the package's single PCM-coercion helper (defined in the RTMS binding) rather than redefining +
 // re-exporting it, which would collide under index.ts's `export *`.
-import { toArrayBuffer } from './zoom-rtms-sdk';
+import { ToArrayBuffer } from './zoom-rtms-sdk';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // The minimal native-Meeting-SDK-addon surface this adapter depends on (a local
@@ -176,7 +176,7 @@ export interface ZoomNativeSdkConfig {
 }
 
 /** Normalizes the addon's free-form role string onto the bridge's {@link ZoomParticipantRole}. */
-export function mapNativeRole(role?: string): ZoomParticipantRole {
+export function MapNativeRole(role?: string): ZoomParticipantRole {
     switch ((role ?? '').trim().toLowerCase()) {
         case 'host':
             return 'Host';
@@ -188,30 +188,45 @@ export function mapNativeRole(role?: string): ZoomParticipantRole {
     }
 }
 
+/** @deprecated Use {@link MapNativeRole}. */
+export function mapNativeRole(role?: string): ZoomParticipantRole {
+    return MapNativeRole(role);
+}
+
 /**
  * **Pure mapping** of one native participant onto the bridge's {@link ZoomParticipant}. Isolated from the
  * addon and from I/O so it is unit-tested directly.
  */
-export function mapNativeParticipant(p: NativeParticipant): ZoomParticipant {
+export function MapNativeParticipant(p: NativeParticipant): ZoomParticipant {
     return {
         ParticipantId: String(p.participantId),
         DisplayName: p.displayName,
-        Role: mapNativeRole(p.role),
+        Role: MapNativeRole(p.role),
         IsSelf: p.isSelf,
     };
+}
+
+/** @deprecated Use {@link MapNativeParticipant}. */
+export function mapNativeParticipant(p: NativeParticipant): ZoomParticipant {
+    return MapNativeParticipant(p);
 }
 
 /**
  * **Pure mapping** of one native inbound audio frame onto the bridge's diarized {@link ZoomAudioFrame}.
  * Copies the PCM (see {@link toArrayBuffer}) and resolves the speaker label. Isolated for direct testing.
  */
-export function mapNativeAudioFrame(frame: NativeAudioFrame): ZoomAudioFrame {
+export function MapNativeAudioFrame(frame: NativeAudioFrame): ZoomAudioFrame {
     return {
-        Pcm: toArrayBuffer(frame.data),
+        Pcm: ToArrayBuffer(frame.data),
         ParticipantId: String(frame.participantId),
         DisplayName: frame.displayName,
         TimestampMs: typeof frame.timestampMs === 'number' ? frame.timestampMs : Date.now(),
     };
+}
+
+/** @deprecated Use {@link MapNativeAudioFrame}. */
+export function mapNativeAudioFrame(frame: NativeAudioFrame): ZoomAudioFrame {
+    return MapNativeAudioFrame(frame);
 }
 
 /**
@@ -249,7 +264,7 @@ function unwrapDefault(mod: unknown): unknown {
  * VERIFY against the native Zoom Meeting SDK addon: the module's default/namespace interop + that it
  * exposes `createClient`.
  */
-export const defaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeMeetingModule> => {
+export const DefaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeMeetingModule> => {
     try {
         const mod: unknown = await import(/* @vite-ignore */ specifier);
         const resolved = unwrapDefault(mod);
@@ -266,6 +281,9 @@ export const defaultNativeLoader: NativeModuleLoader = async (specifier: string)
         );
     }
 };
+
+/** @deprecated Use {@link DefaultNativeLoader}. */
+export const defaultNativeLoader: NativeModuleLoader = DefaultNativeLoader;
 
 /**
  * A **real, two-way** {@link IZoomMeetingSdk} over the native Zoom Meeting SDK (raw-data send + receive).
@@ -304,7 +322,7 @@ export class ZoomNativeMeetingSdk implements IZoomMeetingSdk {
      * @param config Resolved credentials + raw-audio opts + the native module specifier.
      * @param loadModule The native-addon loader (defaults to the lazy specifier loader).
      */
-    constructor(config: ZoomNativeSdkConfig, loadModule: NativeModuleLoader = defaultNativeLoader) {
+    constructor(config: ZoomNativeSdkConfig, loadModule: NativeModuleLoader = DefaultNativeLoader) {
         this.config = config;
         this.loadModule = loadModule;
     }
@@ -402,7 +420,7 @@ export class ZoomNativeMeetingSdk implements IZoomMeetingSdk {
             return [];
         }
         const natives = await this.client.getParticipants();
-        return natives.map(mapNativeParticipant);
+        return natives.map(MapNativeParticipant);
     }
 
     /** Registers the meeting-ended handler. */
@@ -436,8 +454,8 @@ export class ZoomNativeMeetingSdk implements IZoomMeetingSdk {
 
     /** Wires the native client's callbacks to this adapter's handlers, mapping native shapes to the seam. */
     private wireClient(client: NativeMeetingClient): void {
-        client.onAudioFrame((frame) => this.audioHandler?.(mapNativeAudioFrame(frame)));
-        client.onParticipantJoin((p) => this.joinHandler?.(mapNativeParticipant(p)));
+        client.onAudioFrame((frame) => this.audioHandler?.(MapNativeAudioFrame(frame)));
+        client.onParticipantJoin((p) => this.joinHandler?.(MapNativeParticipant(p)));
         client.onParticipantLeave((id) => this.leaveHandler?.(String(id)));
         client.onHandRaise((id, raised) => this.handRaiseHandler?.(String(id), raised));
         client.onMeetingEnded(() => this.endedHandler?.());
@@ -461,9 +479,9 @@ export class ZoomNativeMeetingSdk implements IZoomMeetingSdk {
  * @returns A factory `(config) => ZoomNativeMeetingSdk`.
  */
 export function BindZoomNative(
-    loadModule: NativeModuleLoader = defaultNativeLoader,
+    loadModule: NativeModuleLoader = DefaultNativeLoader,
 ): (config?: Record<string, unknown>) => ZoomNativeMeetingSdk {
-    return (config?: Record<string, unknown>) => new ZoomNativeMeetingSdk(readNativeConfig(config), loadModule);
+    return (config?: Record<string, unknown>) => new ZoomNativeMeetingSdk(ReadNativeConfig(config), loadModule);
 }
 
 /**
@@ -472,7 +490,7 @@ export function BindZoomNative(
  * partially-resolved object (and {@link ZoomNativeMeetingSdk.join} then throws a precise error if the
  * required specifier is absent) rather than a half-typed blob.
  */
-export function readNativeConfig(config?: Record<string, unknown>): ZoomNativeSdkConfig {
+export function ReadNativeConfig(config?: Record<string, unknown>): ZoomNativeSdkConfig {
     const cfg = config ?? {};
     return {
         SdkKey: readString(cfg.SdkKey),
@@ -484,6 +502,11 @@ export function readNativeConfig(config?: Record<string, unknown>): ZoomNativeSd
         Channels: readNumber(cfg.Channels),
         NativeModuleSpecifier: readString(cfg.NativeModuleSpecifier),
     };
+}
+
+/** @deprecated Use {@link ReadNativeConfig}. */
+export function readNativeConfig(config?: Record<string, unknown>): ZoomNativeSdkConfig {
+    return ReadNativeConfig(config);
 }
 
 /** Reads a value as a non-empty string, or `undefined`. */

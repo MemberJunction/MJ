@@ -1,12 +1,12 @@
 import mssql from 'mssql';
-import { dbDatabase, dbHost, dbPassword, dbPort, dbUsername } from '../config';
+import { DbDatabase, DbHost, DbPassword, DbPort, DbUsername } from '../config';
 
 const config = {
-  user: dbUsername,
-  password: dbPassword,
-  server: dbHost,
-  port: dbPort,
-  database: dbDatabase,
+  user: DbUsername,
+  password: DbPassword,
+  server: DbHost,
+  port: DbPort,
+  database: DbDatabase,
   options: {
     encrypt: true,
   },

@@ -39,7 +39,7 @@ export interface SettlePollSignals {
  * reason distinguishes "markers cleared" (we saw it busy, then it settled) from
  * a plain "stable"/"networkidle" quiescence.
  */
-export function resolveSettleExit(s: SettlePollSignals): SettleReason | null {
+export function ResolveSettleExit(s: SettlePollSignals): SettleReason | null {
     // Honor the adaptive floor: never declare ready before it elapses.
     if (s.elapsedMs < s.floorMs) {
         return null;
@@ -56,6 +56,11 @@ export function resolveSettleExit(s: SettlePollSignals): SettleReason | null {
         return s.networkIdle ? 'networkidle' : 'stable';
     }
     return null;
+}
+
+/** @deprecated Use {@link ResolveSettleExit}. */
+export function resolveSettleExit(s: SettlePollSignals): SettleReason | null {
+    return ResolveSettleExit(s);
 }
 
 // ─── Loop Detection ────────────────────────────────────
@@ -76,7 +81,7 @@ export interface LoopSignal {
  * "same page" then produce equal strings even if a per-visit token differs.
  * Never throws — a non-URL string is returned trimmed.
  */
-export function normalizeUrlForLoop(url: string, volatileParams: readonly string[] = []): string {
+export function NormalizeUrlForLoop(url: string, volatileParams: readonly string[] = []): string {
     if (!url) {
         return '';
     }
@@ -94,12 +99,17 @@ export function normalizeUrlForLoop(url: string, volatileParams: readonly string
     }
 }
 
+/** @deprecated Use {@link NormalizeUrlForLoop}. */
+export function normalizeUrlForLoop(url: string, volatileParams: readonly string[] = []): string {
+    return NormalizeUrlForLoop(url, volatileParams);
+}
+
 /**
  * Build a state signature from a step's post-action URL and perceptual hash.
  * Returns '' when there's no hash (couldn't perceive) so the caller can skip
  * loop scoring for that step rather than treat blanks as a repeated state.
  */
-export function computeStateSignature(
+export function ComputeStateSignature(
     urlAfter: string,
     screenshotHash: string,
     volatileParams: readonly string[] = []
@@ -107,7 +117,16 @@ export function computeStateSignature(
     if (!screenshotHash) {
         return '';
     }
-    return `${normalizeUrlForLoop(urlAfter, volatileParams)}|${screenshotHash}`;
+    return `${NormalizeUrlForLoop(urlAfter, volatileParams)}|${screenshotHash}`;
+}
+
+/** @deprecated Use {@link ComputeStateSignature}. */
+export function computeStateSignature(
+    urlAfter: string,
+    screenshotHash: string,
+    volatileParams: readonly string[] = []
+): string {
+    return ComputeStateSignature(urlAfter, screenshotHash, volatileParams);
 }
 
 /**
@@ -125,11 +144,16 @@ export function computeStateSignature(
  *
  * `requestedParts <= 0` (a single-goal run) keeps the base threshold unchanged.
  */
-export function stateRepeatThresholdFor(baseThreshold: number, requestedParts: number): number {
+export function StateRepeatThresholdFor(baseThreshold: number, requestedParts: number): number {
     if (!Number.isFinite(requestedParts) || requestedParts <= 0) {
         return baseThreshold;
     }
     return baseThreshold + Math.floor(requestedParts);
+}
+
+/** @deprecated Use {@link StateRepeatThresholdFor}. */
+export function stateRepeatThresholdFor(baseThreshold: number, requestedParts: number): number {
+    return StateRepeatThresholdFor(baseThreshold, requestedParts);
 }
 
 /**
@@ -139,7 +163,7 @@ export function stateRepeatThresholdFor(baseThreshold: number, requestedParts: n
  * - repeat-state: the most-recent signature has occurred ≥ `stateRepeatThreshold` times.
  * - cycle: the tail is a repeating block of period 2..4 that repeats ≥ twice.
  */
-export function detectLoop(
+export function DetectLoop(
     signatures: readonly string[],
     stateRepeatThreshold: number,
     cycleRepeatThreshold: number = 2
@@ -194,6 +218,15 @@ export function detectLoop(
     return null;
 }
 
+/** @deprecated Use {@link DetectLoop}. */
+export function detectLoop(
+    signatures: readonly string[],
+    stateRepeatThreshold: number,
+    cycleRepeatThreshold: number = 2
+): LoopSignal | null {
+    return DetectLoop(signatures, stateRepeatThreshold, cycleRepeatThreshold);
+}
+
 // ─── Auth Detour ───────────────────────────────────────
 
 /** The outcome of evaluating the current URL against the watchdog config. */
@@ -214,7 +247,7 @@ export interface AuthDetourDecision {
  * work alongside host markers like `auth0.com`. Empty patterns → never a
  * detour (watchdog disabled).
  */
-export function isAuthDetourUrl(url: string, patterns: string[]): boolean {
+export function IsAuthDetourUrl(url: string, patterns: string[]): boolean {
     if (!url || patterns.length === 0) {
         return false;
     }
@@ -225,13 +258,18 @@ export function isAuthDetourUrl(url: string, patterns: string[]): boolean {
     });
 }
 
+/** @deprecated Use {@link IsAuthDetourUrl}. */
+export function isAuthDetourUrl(url: string, patterns: string[]): boolean {
+    return IsAuthDetourUrl(url, patterns);
+}
+
 /**
  * Evaluate the current URL for the watchdog. `priorDetourCount` is how many
  * detours have already occurred this run (before this one); the caller
  * increments its counter when `isDetour` is true. `shouldTerminate` is set once
  * the count *including this detour* reaches `maxDetours`.
  */
-export function evaluateAuthDetour(
+export function EvaluateAuthDetour(
     url: string,
     patterns: string[],
     priorDetourCount: number,
@@ -243,13 +281,24 @@ export function evaluateAuthDetour(
     // session fault. Engaging the watchdog would be strictly harmful: its recovery
     // re-applies auth, which is a documented no-op for FormLogin, so it can only
     // bounce the agent off the login form until MaxDetours ends the run.
-    const isDetour = isAuthDetourUrl(url, patterns) && !agentLogsInHere;
+    const isDetour = IsAuthDetourUrl(url, patterns) && !agentLogsInHere;
     if (!isDetour) {
         return { isDetour: false, shouldTerminate: false };
     }
     // The count after we record this detour.
     const countAfter = priorDetourCount + 1;
     return { isDetour: true, shouldTerminate: countAfter >= maxDetours };
+}
+
+/** @deprecated Use {@link EvaluateAuthDetour}. */
+export function evaluateAuthDetour(
+    url: string,
+    patterns: string[],
+    priorDetourCount: number,
+    maxDetours: number,
+    agentLogsInHere: boolean = false
+): AuthDetourDecision {
+    return EvaluateAuthDetour(url, patterns, priorDetourCount, maxDetours, agentLogsInHere);
 }
 
 // ─── Run Limits ────────────────────────────────────────
@@ -295,7 +344,7 @@ export class StepDeadlineError extends Error {
  * run, rather than holding its worker (and, in a parallel suite, that worker's
  * whole remaining queue) on a promise that will never settle.
  */
-export function raceStepAgainstDeadline<T>(
+export function RaceStepAgainstDeadline<T>(
     step: Promise<T>,
     deadlineMs: number | null,
     reason: string,
@@ -344,12 +393,22 @@ export function raceStepAgainstDeadline<T>(
     });
 }
 
+/** @deprecated Use {@link RaceStepAgainstDeadline}. */
+export function raceStepAgainstDeadline<T>(
+    step: Promise<T>,
+    deadlineMs: number | null,
+    reason: string,
+    signal?: AbortSignal
+): Promise<T> {
+    return RaceStepAgainstDeadline(step, deadlineMs, reason, signal);
+}
+
 /**
  * Resolve after `ms`, or early the moment `signal` aborts. Always resolves, never
  * rejects — the caller's next cancellation checkpoint turns the early return into
  * the terminal status.
  */
-export function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+export function AbortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
     if (signal?.aborted) {
         return Promise.resolve();
     }
@@ -366,6 +425,11 @@ export function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> 
     });
 }
 
+/** @deprecated Use {@link AbortableDelay}. */
+export function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+    return AbortableDelay(ms, signal);
+}
+
 /** Minimum wall-clock grace over the budget before the engine's own ceiling fires. */
 export const WALL_CLOCK_GRACE_MIN_MS = 15_000;
 /** Wall-clock grace as a fraction of the budget (whichever is larger wins). */
@@ -379,9 +443,14 @@ export const WALL_CLOCK_GRACE_FACTOR = 0.125;
  * rather than being abandoned unscored by the watchdog. Keep the halving if the
  * watchdog formula changes.
  */
-export function wallClockCeilingMs(maxMs: number): number {
+export function WallClockCeilingMs(maxMs: number): number {
     const base = Math.max(0, maxMs);
     return base + Math.max(WALL_CLOCK_GRACE_MIN_MS, Math.round(base * WALL_CLOCK_GRACE_FACTOR));
+}
+
+/** @deprecated Use {@link WallClockCeilingMs}. */
+export function wallClockCeilingMs(maxMs: number): number {
+    return WallClockCeilingMs(maxMs);
 }
 
 /**
@@ -390,7 +459,7 @@ export function wallClockCeilingMs(maxMs: number): number {
  * settle so a slow-rendering app doesn't burn the reasoning budget, and the
  * wall-clock ceiling, which caps total elapsed time.
  */
-export function timeBudgetExpiryReason(
+export function TimeBudgetExpiryReason(
     elapsedMs: number,
     cumulativeSettleMs: number,
     maxMs: number | undefined
@@ -402,11 +471,20 @@ export function timeBudgetExpiryReason(
     if (agentTimeMs >= maxMs) {
         return `agent-time budget (${maxMs}ms, settle excluded)`;
     }
-    const ceiling = wallClockCeilingMs(maxMs);
+    const ceiling = WallClockCeilingMs(maxMs);
     if (elapsedMs >= ceiling) {
         return `wall-clock ceiling (${ceiling}ms, settle included)`;
     }
     return null;
+}
+
+/** @deprecated Use {@link TimeBudgetExpiryReason}. */
+export function timeBudgetExpiryReason(
+    elapsedMs: number,
+    cumulativeSettleMs: number,
+    maxMs: number | undefined
+): string | null {
+    return TimeBudgetExpiryReason(elapsedMs, cumulativeSettleMs, maxMs);
 }
 
 // ─── Action Batch ──────────────────────────────────────
@@ -421,8 +499,13 @@ export type BatchStopReason = 'action-failed' | 'url-changed' | 'page-changing-a
  * Action types that change the page/route. Nothing queued after one of these
  * should run in the same batch — the DOM the later actions targeted is gone.
  */
-export function isPageChangingAction(type: BrowserAction['Type']): boolean {
+export function IsPageChangingAction(type: BrowserAction['Type']): boolean {
     return type === 'Navigate' || type === 'GoBack' || type === 'GoForward' || type === 'Refresh';
+}
+
+/** @deprecated Use {@link IsPageChangingAction}. */
+export function isPageChangingAction(type: BrowserAction['Type']): boolean {
+    return IsPageChangingAction(type);
 }
 
 /**
@@ -430,7 +513,7 @@ export function isPageChangingAction(type: BrowserAction['Type']): boolean {
  * Returns the reason, or null to continue. A failed action stops first so queued
  * actions can't fire into the wrong place.
  */
-export function evaluateBatchStop(params: {
+export function EvaluateBatchStop(params: {
     actionType: BrowserAction['Type'];
     success: boolean;
     urlChanged: boolean;
@@ -443,13 +526,24 @@ export function evaluateBatchStop(params: {
     if (params.urlChanged) {
         return 'url-changed';
     }
-    if (isPageChangingAction(params.actionType)) {
+    if (IsPageChangingAction(params.actionType)) {
         return 'page-changing-action';
     }
     if (params.executedCount >= params.maxActions) {
         return 'max-actions';
     }
     return null;
+}
+
+/** @deprecated Use {@link EvaluateBatchStop}. */
+export function evaluateBatchStop(params: {
+    actionType: BrowserAction['Type'];
+    success: boolean;
+    urlChanged: boolean;
+    executedCount: number;
+    maxActions: number;
+}): BatchStopReason | null {
+    return EvaluateBatchStop(params);
 }
 
 /** The phrase Playwright appends to a line naming what blocked a click. */
@@ -485,7 +579,7 @@ function condenseTag(tag: string): string {
  * an undistilled timeout reads as "the element isn't there" and the controller
  * retries the identical click.
  */
-export function distillActionError(message: string | undefined): string {
+export function DistillActionError(message: string | undefined): string {
     if (!message) {
         return 'unknown';
     }
@@ -508,4 +602,9 @@ export function distillActionError(message: string | undefined): string {
     const subject = unique.length > 1 ? `${unique.join(' then ')} were` : `${unique[0]} was`;
     return `${headline} The element WAS found, but ${subject} covering it at the click point, so the click could not land. ` +
         `Repeating this exact click will fail the same way. Dismiss whatever is covering it first (press Escape, or click the covering element itself), or reach the target a different way.`;
+}
+
+/** @deprecated Use {@link DistillActionError}. */
+export function distillActionError(message: string | undefined): string {
+    return DistillActionError(message);
 }

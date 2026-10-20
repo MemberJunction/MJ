@@ -87,7 +87,7 @@ export interface CuratedFormSchema {
  *
  * Returns `null` if the entity is not registered with the provider.
  */
-export function buildCuratedFormSchema(
+export function BuildCuratedFormSchema(
     entityName: string,
     provider: IMetadataProvider,
 ): CuratedFormSchema | null {
@@ -95,7 +95,15 @@ export function buildCuratedFormSchema(
     if (!entity) {
         return null;
     }
-    return curateFromEntityInfo(entity, provider);
+    return CurateFromEntityInfo(entity, provider);
+}
+
+/** @deprecated Use {@link BuildCuratedFormSchema}. */
+export function buildCuratedFormSchema(
+    entityName: string,
+    provider: IMetadataProvider,
+): CuratedFormSchema | null {
+    return BuildCuratedFormSchema(entityName, provider);
 }
 
 /**
@@ -104,7 +112,7 @@ export function buildCuratedFormSchema(
  * inside `InteractiveFormComponent.rebuildFormHostProps`) and want to
  * skip the second lookup.
  */
-export function curateFromEntityInfo(
+export function CurateFromEntityInfo(
     entity: EntityInfo,
     provider: IMetadataProvider,
 ): CuratedFormSchema {
@@ -120,6 +128,14 @@ export function curateFromEntityInfo(
         nameField: entity.NameField?.Name,
         fields,
     };
+}
+
+/** @deprecated Use {@link CurateFromEntityInfo}. */
+export function curateFromEntityInfo(
+    entity: EntityInfo,
+    provider: IMetadataProvider,
+): CuratedFormSchema {
+    return CurateFromEntityInfo(entity, provider);
 }
 
 /** Pre-filter: drop audit and non-writable columns. */

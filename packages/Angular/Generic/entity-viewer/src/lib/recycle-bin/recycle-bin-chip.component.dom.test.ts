@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { renderComponentFixture, query, text, capture } from '@memberjunction/ng-test-utils';
+import { BaseEntity, BaseEntityEvent } from '@memberjunction/core';
+import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { RecycleBinChipComponent } from './recycle-bin-chip.component';
 import type { AfterRecycleBinOpenEventArgs, AfterRestoreCommitEventArgs, BeforeRecordRestoreEventArgs } from './events/recycle-bin-events';
 
@@ -103,5 +105,83 @@ describe('RecycleBinChipComponent (DOM)', () => {
     const evt = { recordId: 'r1' } as unknown as BeforeRecordRestoreEventArgs;
     panel(f).BeforeRecordRestore.emit(evt);
     expect(out).toEqual([evt]);
+  });
+});
+
+describe('RecycleBinChipComponent (DOM) — recount when a record is deleted elsewhere', () => {
+  let refreshCount: ReturnType<typeof vi.fn<() => Promise<void>>>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    refreshCount = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    vi.spyOn(RecycleBinChipComponent.prototype as unknown as { refreshCount: () => Promise<void> }, 'refreshCount')
+      .mockImplementation(refreshCount);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  function chipFor(entityName: string) {
+    const f = renderComponentFixture(RecycleBinChipComponent, {
+      imports: [RecycleBinStub],
+      declarations: [RecycleBinChipComponent],
+      setup: (c) => { c.EntityName = entityName; },
+    });
+    refreshCount.mockClear(); // ignore the count taken on init
+    return f;
+  }
+
+  function raise(args: Partial<BaseEntityEvent>): void {
+    MJGlobal.Instance.RaiseEvent({
+      event: MJEventType.ComponentEvent,
+      eventCode: BaseEntity.BaseEventCode,
+      args: { payload: null, baseEntity: null, type: 'other', ...args } as BaseEntityEvent,
+      component: {},
+    });
+  }
+  const localDelete = (entityName: string) =>
+    raise({ type: 'delete', baseEntity: { EntityInfo: { Name: entityName } } as unknown as BaseEntity });
+  const remote = (entityName: string, action: string) =>
+    raise({ type: 'remote-invalidate', entityName, payload: { action, primaryKeyValues: null } });
+
+  it('recounts after a record of its entity is deleted in this session', () => {
+    chipFor('MJ: List Categories');
+    localDelete('MJ: List Categories');
+    vi.advanceTimersByTime(300);
+    expect(refreshCount).toHaveBeenCalledTimes(1);
+  });
+
+  it('recounts after another session deletes a record of its entity', () => {
+    chipFor('MJ: List Categories');
+    remote('mj: list categories', 'delete');
+    vi.advanceTimersByTime(300);
+    expect(refreshCount).toHaveBeenCalledTimes(1);
+  });
+
+  it('recounts once for a burst of deletes', () => {
+    chipFor('MJ: List Categories');
+    localDelete('MJ: List Categories');
+    localDelete('MJ: List Categories');
+    remote('MJ: List Categories', 'delete');
+    vi.advanceTimersByTime(300);
+    expect(refreshCount).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores deletes of other entities, saves, and remote saves', () => {
+    chipFor('MJ: List Categories');
+    localDelete('MJ: Lists');
+    raise({ type: 'save', baseEntity: { EntityInfo: { Name: 'MJ: List Categories' } } as unknown as BaseEntity });
+    remote('MJ: List Categories', 'save');
+    vi.advanceTimersByTime(300);
+    expect(refreshCount).not.toHaveBeenCalled();
+  });
+
+  it('stops listening once destroyed', () => {
+    const f = chipFor('MJ: List Categories');
+    f.destroy();
+    localDelete('MJ: List Categories');
+    vi.advanceTimersByTime(300);
+    expect(refreshCount).not.toHaveBeenCalled();
   });
 });

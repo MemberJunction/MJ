@@ -21,7 +21,7 @@ export type BiometricLabel = 'Face ID' | 'Touch ID' | 'Biometrics';
  * @returns `true` only when a biometric prompt would succeed; `false` on
  *   simulators without enrollment, unsupported devices, or any native error.
  */
-export async function isBiometricAvailable(): Promise<boolean> {
+export async function IsBiometricAvailable(): Promise<boolean> {
     try {
         const [hasHardware, isEnrolled] = await Promise.all([
             LocalAuthentication.hasHardwareAsync(),
@@ -33,6 +33,11 @@ export async function isBiometricAvailable(): Promise<boolean> {
     }
 }
 
+/** @deprecated Use {@link IsBiometricAvailable}. */
+export async function isBiometricAvailable(): Promise<boolean> {
+    return IsBiometricAvailable();
+}
+
 /**
  * Resolve a friendly label for the strongest biometric modality the device
  * supports (Face ID > Touch ID > generic). Used for UI copy on the lock screen
@@ -41,7 +46,7 @@ export async function isBiometricAvailable(): Promise<boolean> {
  * @returns `'Face ID'`, `'Touch ID'`, or `'Biometrics'` (the safe default when
  *   the modality can't be determined).
  */
-export async function getBiometricLabel(): Promise<BiometricLabel> {
+export async function GetBiometricLabel(): Promise<BiometricLabel> {
     try {
         const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
         if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) return 'Face ID';
@@ -50,6 +55,11 @@ export async function getBiometricLabel(): Promise<BiometricLabel> {
     } catch {
         return 'Biometrics';
     }
+}
+
+/** @deprecated Use {@link GetBiometricLabel}. */
+export async function getBiometricLabel(): Promise<BiometricLabel> {
+    return GetBiometricLabel();
 }
 
 /**
@@ -62,9 +72,9 @@ export async function getBiometricLabel(): Promise<BiometricLabel> {
  * @returns `true` if the user successfully authenticated; `false` on cancel,
  *   failure, unavailability, or any native error.
  */
-export async function authenticate(reason: string): Promise<boolean> {
+export async function Authenticate(reason: string): Promise<boolean> {
     try {
-        if (!(await isBiometricAvailable())) return false;
+        if (!(await IsBiometricAvailable())) return false;
         const result = await LocalAuthentication.authenticateAsync({
             promptMessage: reason,
             cancelLabel: 'Cancel',
@@ -74,4 +84,9 @@ export async function authenticate(reason: string): Promise<boolean> {
     } catch {
         return false;
     }
+}
+
+/** @deprecated Use {@link Authenticate}. */
+export async function authenticate(reason: string): Promise<boolean> {
+    return Authenticate(reason);
 }

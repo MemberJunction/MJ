@@ -1823,48 +1823,282 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
   private engine!: TestEngineBase;
 
   // Selection state
-  @Input() runMode: 'test' | 'suite' | 'monitor' = 'test';
-  searchText = '';
-  @Input() selectedTestId: string | null = null;
-  @Input() selectedSuiteId: string | null = null;
+  @Input() RunMode: 'test' | 'suite' | 'monitor' = 'test';
+
+  /** @deprecated Use {@link RunMode}. */
+  @Input() set runMode(value: 'test' | 'suite' | 'monitor') {
+    this.RunMode = value;
+  }
+  /** @deprecated Use {@link RunMode}. */
+  get runMode(): 'test' | 'suite' | 'monitor' {
+    return this.RunMode;
+  }
+  SearchText = '';
+
+  /** @deprecated Use {@link SearchText}. */
+  get searchText() {
+    return this.SearchText;
+  }
+  /** @deprecated Use {@link SearchText}. */
+  set searchText(value) {
+    this.SearchText = value;
+  }
+  @Input() SelectedTestId: string | null = null;
+
+  /** @deprecated Use {@link SelectedTestId}. */
+  @Input() set selectedTestId(value: string | null) {
+    this.SelectedTestId = value;
+  }
+  /** @deprecated Use {@link SelectedTestId}. */
+  get selectedTestId(): string | null {
+    return this.SelectedTestId;
+  }
+  @Input() SelectedSuiteId: string | null = null;
+
+  /** @deprecated Use {@link SelectedSuiteId}. */
+  @Input() set selectedSuiteId(value: string | null) {
+    this.SelectedSuiteId = value;
+  }
+  /** @deprecated Use {@link SelectedSuiteId}. */
+  get selectedSuiteId(): string | null {
+    return this.SelectedSuiteId;
+  }
   verbose = true;
-  parallel = false;
+  Parallel = false;
+
+  /** @deprecated Use {@link Parallel}. */
+  get parallel() {
+    return this.Parallel;
+  }
+  /** @deprecated Use {@link Parallel}. */
+  set parallel(value) {
+    this.Parallel = value;
+  }
 
   // Tags for test/suite runs
   tags: string[] = [];
-  newTag = '';
+  NewTag = '';
+
+  /** @deprecated Use {@link NewTag}. */
+  get newTag() {
+    return this.NewTag;
+  }
+  /** @deprecated Use {@link NewTag}. */
+  set newTag(value) {
+    this.NewTag = value;
+  }
 
   // Pre-selection mode - when launched from a specific test/suite
-  isPreselected = false;
-  preselectedName = '';
+  IsPreselected = false;
+
+  /** @deprecated Use {@link IsPreselected}. */
+  get isPreselected() {
+    return this.IsPreselected;
+  }
+  /** @deprecated Use {@link IsPreselected}. */
+  set isPreselected(value) {
+    this.IsPreselected = value;
+  }
+  PreselectedName = '';
+
+  /** @deprecated Use {@link PreselectedName}. */
+  get preselectedName() {
+    return this.PreselectedName;
+  }
+  /** @deprecated Use {@link PreselectedName}. */
+  set preselectedName(value) {
+    this.PreselectedName = value;
+  }
 
   // Data
-  allTests: MJTestEntity[] = [];
-  allSuites: MJTestSuiteEntity[] = [];
-  filteredTests: MJTestEntity[] = [];
-  filteredSuites: MJTestSuiteEntity[] = [];
+  AllTests: MJTestEntity[] = [];
+
+  /** @deprecated Use {@link AllTests}. */
+  get allTests(): MJTestEntity[] {
+    return this.AllTests;
+  }
+  /** @deprecated Use {@link AllTests}. */
+  set allTests(value: MJTestEntity[]) {
+    this.AllTests = value;
+  }
+  AllSuites: MJTestSuiteEntity[] = [];
+
+  /** @deprecated Use {@link AllSuites}. */
+  get allSuites(): MJTestSuiteEntity[] {
+    return this.AllSuites;
+  }
+  /** @deprecated Use {@link AllSuites}. */
+  set allSuites(value: MJTestSuiteEntity[]) {
+    this.AllSuites = value;
+  }
+  FilteredTests: MJTestEntity[] = [];
+
+  /** @deprecated Use {@link FilteredTests}. */
+  get filteredTests(): MJTestEntity[] {
+    return this.FilteredTests;
+  }
+  /** @deprecated Use {@link FilteredTests}. */
+  set filteredTests(value: MJTestEntity[]) {
+    this.FilteredTests = value;
+  }
+  FilteredSuites: MJTestSuiteEntity[] = [];
+
+  /** @deprecated Use {@link FilteredSuites}. */
+  get filteredSuites(): MJTestSuiteEntity[] {
+    return this.FilteredSuites;
+  }
+  /** @deprecated Use {@link FilteredSuites}. */
+  set filteredSuites(value: MJTestSuiteEntity[]) {
+    this.FilteredSuites = value;
+  }
 
   // Selective test execution for suites (progressive disclosure)
-  showAdvancedOptions = false;
-  suiteTests: SuiteTestItem[] = [];
-  useSequenceRange = false;
-  sequenceStart: number | null = null;
-  sequenceEnd: number | null = null;
+  ShowAdvancedOptions = false;
+
+  /** @deprecated Use {@link ShowAdvancedOptions}. */
+  get showAdvancedOptions() {
+    return this.ShowAdvancedOptions;
+  }
+  /** @deprecated Use {@link ShowAdvancedOptions}. */
+  set showAdvancedOptions(value) {
+    this.ShowAdvancedOptions = value;
+  }
+  SuiteTests: SuiteTestItem[] = [];
+
+  /** @deprecated Use {@link SuiteTests}. */
+  get suiteTests(): SuiteTestItem[] {
+    return this.SuiteTests;
+  }
+  /** @deprecated Use {@link SuiteTests}. */
+  set suiteTests(value: SuiteTestItem[]) {
+    this.SuiteTests = value;
+  }
+  UseSequenceRange = false;
+
+  /** @deprecated Use {@link UseSequenceRange}. */
+  get useSequenceRange() {
+    return this.UseSequenceRange;
+  }
+  /** @deprecated Use {@link UseSequenceRange}. */
+  set useSequenceRange(value) {
+    this.UseSequenceRange = value;
+  }
+  SequenceStart: number | null = null;
+
+  /** @deprecated Use {@link SequenceStart}. */
+  get sequenceStart(): number | null {
+    return this.SequenceStart;
+  }
+  /** @deprecated Use {@link SequenceStart}. */
+  set sequenceStart(value: number | null) {
+    this.SequenceStart = value;
+  }
+  SequenceEnd: number | null = null;
+
+  /** @deprecated Use {@link SequenceEnd}. */
+  get sequenceEnd(): number | null {
+    return this.SequenceEnd;
+  }
+  /** @deprecated Use {@link SequenceEnd}. */
+  set sequenceEnd(value: number | null) {
+    this.SequenceEnd = value;
+  }
 
   // Variables for parameterized tests
-  availableVariables: VariableInput[] = [];
-  showVariablesSection = false;
+  AvailableVariables: VariableInput[] = [];
+
+  /** @deprecated Use {@link AvailableVariables}. */
+  get availableVariables(): VariableInput[] {
+    return this.AvailableVariables;
+  }
+  /** @deprecated Use {@link AvailableVariables}. */
+  set availableVariables(value: VariableInput[]) {
+    this.AvailableVariables = value;
+  }
+  ShowVariablesSection = false;
+
+  /** @deprecated Use {@link ShowVariablesSection}. */
+  get showVariablesSection() {
+    return this.ShowVariablesSection;
+  }
+  /** @deprecated Use {@link ShowVariablesSection}. */
+  set showVariablesSection(value) {
+    this.ShowVariablesSection = value;
+  }
 
   // Execution state
-  isRunning = false;
-  hasCompleted = false;
-  hasError = false;
-  progress = 0;
-  executionTitle = '';
-  executionStatus = '';
-  result: any = null;
+  IsRunning = false;
 
-  progressSteps = [
+  /** @deprecated Use {@link IsRunning}. */
+  get isRunning() {
+    return this.IsRunning;
+  }
+  /** @deprecated Use {@link IsRunning}. */
+  set isRunning(value) {
+    this.IsRunning = value;
+  }
+  HasCompleted = false;
+
+  /** @deprecated Use {@link HasCompleted}. */
+  get hasCompleted() {
+    return this.HasCompleted;
+  }
+  /** @deprecated Use {@link HasCompleted}. */
+  set hasCompleted(value) {
+    this.HasCompleted = value;
+  }
+  HasError = false;
+
+  /** @deprecated Use {@link HasError}. */
+  get hasError() {
+    return this.HasError;
+  }
+  /** @deprecated Use {@link HasError}. */
+  set hasError(value) {
+    this.HasError = value;
+  }
+  Progress = 0;
+
+  /** @deprecated Use {@link Progress}. */
+  get progress() {
+    return this.Progress;
+  }
+  /** @deprecated Use {@link Progress}. */
+  set progress(value) {
+    this.Progress = value;
+  }
+  ExecutionTitle = '';
+
+  /** @deprecated Use {@link ExecutionTitle}. */
+  get executionTitle() {
+    return this.ExecutionTitle;
+  }
+  /** @deprecated Use {@link ExecutionTitle}. */
+  set executionTitle(value) {
+    this.ExecutionTitle = value;
+  }
+  ExecutionStatus = '';
+
+  /** @deprecated Use {@link ExecutionStatus}. */
+  get executionStatus() {
+    return this.ExecutionStatus;
+  }
+  /** @deprecated Use {@link ExecutionStatus}. */
+  set executionStatus(value) {
+    this.ExecutionStatus = value;
+  }
+  Result: any = null;
+
+  /** @deprecated Use {@link Result}. */
+  get result(): any {
+    return this.Result;
+  }
+  /** @deprecated Use {@link Result}. */
+  set result(value: any) {
+    this.Result = value;
+  }
+
+  ProgressSteps = [
     { step: 'loading_test', label: 'Loading Configuration', message: '', active: false, completed: false },
     { step: 'initializing_driver', label: 'Initializing Driver', message: '', active: false, completed: false },
     { step: 'executing_test', label: 'Executing Test', message: '', active: false, completed: false },
@@ -1872,7 +2106,25 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
     { step: 'complete', label: 'Complete', message: '', active: false, completed: false }
   ];
 
-  executionLog: Array<{ timestamp: Date; message: string; type: 'info' | 'success' | 'error' }> = [];
+  /** @deprecated Use {@link ProgressSteps}. */
+  get progressSteps() {
+    return this.ProgressSteps;
+  }
+  /** @deprecated Use {@link ProgressSteps}. */
+  set progressSteps(value) {
+    this.ProgressSteps = value;
+  }
+
+  ExecutionLog: Array<{ timestamp: Date; message: string; type: 'info' | 'success' | 'error' }> = [];
+
+  /** @deprecated Use {@link ExecutionLog}. */
+  get executionLog(): Array<{ timestamp: Date; message: string; type: 'info' | 'success' | 'error' }> {
+    return this.ExecutionLog;
+  }
+  /** @deprecated Use {@link ExecutionLog}. */
+  set executionLog(value: Array<{ timestamp: Date; message: string; type: 'info' | 'success' | 'error' }>) {
+    this.ExecutionLog = value;
+  }
 
   /**
    * User-facing text for the "Execution Failed" banner. The suite path returns
@@ -1881,12 +2133,12 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
    * failed/errored test, then a generic note. The banner must never render empty when
    * hasError is true.
    */
-  get failureMessage(): string {
-    const top = this.result?.errorMessage as string | undefined;
+  get FailureMessage(): string {
+    const top = this.Result?.errorMessage as string | undefined;
     if (top) {
       return top;
     }
-    const detail = this.result?.result;
+    const detail = this.Result?.result;
     if (detail) {
       // Suite path: result is a TestSuiteRunResult with per-test entries. Count anything
       // that isn't a pass/skip — the engine's `failedTests` counts only 'Failed', not
@@ -1913,11 +2165,21 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
     return 'Execution failed — see the execution log above for details.';
   }
 
-  get dialogTitle(): string {
-    if (this.isRunning || this.hasCompleted) {
+  /** @deprecated Use {@link FailureMessage}. */
+  get failureMessage(): string {
+    return this.FailureMessage;
+  }
+
+  get DialogTitle(): string {
+    if (this.IsRunning || this.HasCompleted) {
       return 'Test Execution';
     }
     return 'Run Test';
+  }
+
+  /** @deprecated Use {@link DialogTitle}. */
+  get dialogTitle(): string {
+    return this.DialogTitle;
   }
 
   @Input() PanelMode = false;
@@ -1941,57 +2203,57 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
     }
 
     // Load tests and suites from cache
-    this.allTests = this.engine.Tests.filter(t => t.Status === 'Active');
-    this.allSuites = this.engine.TestSuites.filter(s => s.Status === 'Active');
+    this.AllTests = this.engine.Tests.filter(t => t.Status === 'Active');
+    this.AllSuites = this.engine.TestSuites.filter(s => s.Status === 'Active');
 
     // Monitor mode: show running state for a test executing on the server
-    if (this.runMode === 'monitor' && this.selectedTestId) {
+    if (this.RunMode === 'monitor' && this.SelectedTestId) {
       // Try to reconnect to an active run tracked by the execution service
-      if (this.reconnectToActiveRun(this.selectedTestId)) {
+      if (this.reconnectToActiveRun(this.SelectedTestId)) {
         this.cdr.markForCheck();
         return;
       }
 
       // No active run in the execution service (started externally or from a previous session).
       // Show a server-monitoring view.
-      const test = this.allTests.find(t => UUIDsEqual(t.ID, this.selectedTestId));
+      const test = this.AllTests.find(t => UUIDsEqual(t.ID, this.SelectedTestId));
       this.enterServerMonitoringMode(test?.Name ?? 'Test');
       this.cdr.markForCheck();
       return;
     }
 
     // Check if we have a pre-selected test or suite
-    if (this.selectedTestId) {
+    if (this.SelectedTestId) {
       // Check if this test has an active run we can reconnect to
-      if (this.reconnectToActiveRun(this.selectedTestId)) {
+      if (this.reconnectToActiveRun(this.SelectedTestId)) {
         this.cdr.markForCheck();
         return;
       }
 
-      this.isPreselected = true;
-      this.runMode = 'test';
-      const test = this.allTests.find(t => UUIDsEqual(t.ID, this.selectedTestId));
-      this.preselectedName = test ? test.Name : 'Test';
+      this.IsPreselected = true;
+      this.RunMode = 'test';
+      const test = this.AllTests.find(t => UUIDsEqual(t.ID, this.SelectedTestId));
+      this.PreselectedName = test ? test.Name : 'Test';
       // Load variables for the selected test
       if (test) {
         this.loadVariablesForTest(test);
       }
-    } else if (this.selectedSuiteId) {
+    } else if (this.SelectedSuiteId) {
       // Check if this suite has an active run we can reconnect to
-      if (this.reconnectToActiveRun(this.selectedSuiteId)) {
+      if (this.reconnectToActiveRun(this.SelectedSuiteId)) {
         this.cdr.markForCheck();
         return;
       }
 
-      this.isPreselected = true;
-      this.runMode = 'suite';
-      const suite = this.allSuites.find(s => UUIDsEqual(s.ID, this.selectedSuiteId));
-      this.preselectedName = suite ? suite.Name : 'Test Suite';
+      this.IsPreselected = true;
+      this.RunMode = 'suite';
+      const suite = this.AllSuites.find(s => UUIDsEqual(s.ID, this.SelectedSuiteId));
+      this.PreselectedName = suite ? suite.Name : 'Test Suite';
       // Load suite tests for selective execution
-      this.loadSuiteTests(this.selectedSuiteId);
+      this.loadSuiteTests(this.SelectedSuiteId);
     }
 
-    this.filterItems();
+    this.FilterItems();
     this.cdr.markForCheck();
   }
 
@@ -2000,25 +2262,30 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
     this.destroy$.complete();
   }
 
-  setRunMode(mode: 'test' | 'suite'): void {
-    this.runMode = mode;
-    this.searchText = '';
-    this.selectedTestId = null;
-    this.selectedSuiteId = null;
-    this.filterItems();
+  SetRunMode(mode: 'test' | 'suite'): void {
+    this.RunMode = mode;
+    this.SearchText = '';
+    this.SelectedTestId = null;
+    this.SelectedSuiteId = null;
+    this.FilterItems();
     this.cdr.markForCheck();
   }
 
-  filterItems(): void {
-    const search = this.searchText.toLowerCase();
+  /** @deprecated Use {@link SetRunMode}. */
+  setRunMode(mode: 'test' | 'suite'): void {
+    return this.SetRunMode(mode);
+  }
 
-    if (this.runMode === 'test') {
-      this.filteredTests = this.allTests.filter(t =>
+  FilterItems(): void {
+    const search = this.SearchText.toLowerCase();
+
+    if (this.RunMode === 'test') {
+      this.FilteredTests = this.AllTests.filter(t =>
         t.Name.toLowerCase().includes(search) ||
         (t.Description && t.Description.toLowerCase().includes(search))
       );
     } else {
-      this.filteredSuites = this.allSuites.filter(s =>
+      this.FilteredSuites = this.AllSuites.filter(s =>
         s.Name.toLowerCase().includes(search) ||
         (s.Description && s.Description.toLowerCase().includes(search))
       );
@@ -2027,33 +2294,53 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link FilterItems}. */
+  filterItems(): void {
+    return this.FilterItems();
+  }
+
+  ClearSearch(): void {
+    this.SearchText = '';
+    this.FilterItems();
+  }
+
+  /** @deprecated Use {@link ClearSearch}. */
   clearSearch(): void {
-    this.searchText = '';
-    this.filterItems();
+    return this.ClearSearch();
   }
 
   IsTestSelected(test: MJTestEntity): boolean {
-    return UUIDsEqual(this.selectedTestId, test.ID);
+    return UUIDsEqual(this.SelectedTestId, test.ID);
   }
 
   IsSuiteSelected(suite: MJTestSuiteEntity): boolean {
-    return UUIDsEqual(this.selectedSuiteId, suite.ID);
+    return UUIDsEqual(this.SelectedSuiteId, suite.ID);
   }
 
-  selectTest(testId: string): void {
-    this.selectedTestId = testId;
+  SelectTest(testId: string): void {
+    this.SelectedTestId = testId;
     // Load variables for the selected test
-    const test = this.allTests.find(t => UUIDsEqual(t.ID, testId));
+    const test = this.AllTests.find(t => UUIDsEqual(t.ID, testId));
     if (test) {
       this.loadVariablesForTest(test);
     }
     this.cdr.markForCheck();
   }
 
-  selectSuite(suiteId: string): void {
-    this.selectedSuiteId = suiteId;
+  /** @deprecated Use {@link SelectTest}. */
+  selectTest(testId: string): void {
+    return this.SelectTest(testId);
+  }
+
+  SelectSuite(suiteId: string): void {
+    this.SelectedSuiteId = suiteId;
     this.loadSuiteTests(suiteId);
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link SelectSuite}. */
+  selectSuite(suiteId: string): void {
+    return this.SelectSuite(suiteId);
   }
 
   /**
@@ -2063,9 +2350,9 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
     const suiteTestLinks = this.engine.TestSuiteTests.filter(st => UUIDsEqual(st.SuiteID, suiteId));
 
     // Build list of tests with their sequence numbers
-    this.suiteTests = suiteTestLinks
+    this.SuiteTests = suiteTestLinks
       .map(st => {
-        const test = this.allTests.find(t => UUIDsEqual(t.ID, st.TestID));
+        const test = this.AllTests.find(t => UUIDsEqual(t.ID, st.TestID));
         if (!test) return null;
         return {
           testId: st.TestID,
@@ -2078,22 +2365,27 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
       .sort((a, b) => a.sequence - b.sequence);
 
     // Reset sequence range
-    this.useSequenceRange = false;
-    this.sequenceStart = this.suiteTests.length > 0 ? this.suiteTests[0].sequence : null;
-    this.sequenceEnd = this.suiteTests.length > 0 ? this.suiteTests[this.suiteTests.length - 1].sequence : null;
+    this.UseSequenceRange = false;
+    this.SequenceStart = this.SuiteTests.length > 0 ? this.SuiteTests[0].sequence : null;
+    this.SequenceEnd = this.SuiteTests.length > 0 ? this.SuiteTests[this.SuiteTests.length - 1].sequence : null;
   }
 
-  onAdvancedOptionsExpandedChange(expanded: boolean): void {
-    this.showAdvancedOptions = expanded;
+  OnAdvancedOptionsExpandedChange(expanded: boolean): void {
+    this.ShowAdvancedOptions = expanded;
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link OnAdvancedOptionsExpandedChange}. */
+  onAdvancedOptionsExpandedChange(expanded: boolean): void {
+    return this.OnAdvancedOptionsExpandedChange(expanded);
   }
 
   /**
    * Load available variables for a test based on its TestType's VariablesSchema
    */
   private loadVariablesForTest(test: MJTestEntity): void {
-    this.availableVariables = [];
-    this.showVariablesSection = false;
+    this.AvailableVariables = [];
+    this.ShowVariablesSection = false;
 
     // Get the TestType to access VariablesSchema
     const testType = this.engine.TestTypes.find(tt => UUIDsEqual(tt.ID, test.TypeID));
@@ -2127,7 +2419,7 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
       // Determine the default value to show
       const defaultValue = testOverride?.defaultValue ?? varDef.defaultValue;
 
-      this.availableVariables.push({
+      this.AvailableVariables.push({
         definition: varDef,
         value: defaultValue ?? null,
         stringValue: defaultValue != null ? String(defaultValue) : ''
@@ -2135,8 +2427,8 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
     }
 
     // Auto-expand variables section if there are required variables
-    if (this.availableVariables.some(v => v.definition.required)) {
-      this.showVariablesSection = true;
+    if (this.AvailableVariables.some(v => v.definition.required)) {
+      this.ShowVariablesSection = true;
     }
   }
 
@@ -2144,14 +2436,14 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
    * Collect variable values for test execution
    */
   private getVariablesForExecution(): Record<string, unknown> | undefined {
-    if (this.availableVariables.length === 0) {
+    if (this.AvailableVariables.length === 0) {
       return undefined;
     }
 
     const variables: Record<string, unknown> = {};
     let hasValues = false;
 
-    for (const variable of this.availableVariables) {
+    for (const variable of this.AvailableVariables) {
       if (variable.stringValue !== '' && variable.stringValue != null) {
         hasValues = true;
         // Convert string value to appropriate type
@@ -2171,100 +2463,140 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
     return hasValues ? variables : undefined;
   }
 
-  toggleAllTests(selectAll: boolean): void {
-    this.suiteTests.forEach(t => t.selected = selectAll);
+  ToggleAllTests(selectAll: boolean): void {
+    this.SuiteTests.forEach(t => t.selected = selectAll);
     this.cdr.markForCheck();
   }
 
-  toggleTest(testId: string): void {
-    const test = this.suiteTests.find(t => t.testId === testId);
+  /** @deprecated Use {@link ToggleAllTests}. */
+  toggleAllTests(selectAll: boolean): void {
+    return this.ToggleAllTests(selectAll);
+  }
+
+  ToggleTest(testId: string): void {
+    const test = this.SuiteTests.find(t => t.testId === testId);
     if (test) {
       test.selected = !test.selected;
       this.cdr.markForCheck();
     }
   }
 
+  /** @deprecated Use {@link ToggleTest}. */
+  toggleTest(testId: string): void {
+    return this.ToggleTest(testId);
+  }
+
+  get SelectedTestCount(): number {
+    return this.SuiteTests.filter(t => t.selected).length;
+  }
+
+  /** @deprecated Use {@link SelectedTestCount}. */
   get selectedTestCount(): number {
-    return this.suiteTests.filter(t => t.selected).length;
+    return this.SelectedTestCount;
   }
 
+  get AllTestsSelected(): boolean {
+    return this.SuiteTests.length > 0 && this.SuiteTests.every(t => t.selected);
+  }
+
+  /** @deprecated Use {@link AllTestsSelected}. */
   get allTestsSelected(): boolean {
-    return this.suiteTests.length > 0 && this.suiteTests.every(t => t.selected);
+    return this.AllTestsSelected;
   }
 
+  get SomeTestsSelected(): boolean {
+    const selected = this.SelectedTestCount;
+    return selected > 0 && selected < this.SuiteTests.length;
+  }
+
+  /** @deprecated Use {@link SomeTestsSelected}. */
   get someTestsSelected(): boolean {
-    const selected = this.selectedTestCount;
-    return selected > 0 && selected < this.suiteTests.length;
+    return this.SomeTestsSelected;
   }
 
+  get SequenceRangeValid(): boolean {
+    if (!this.UseSequenceRange) return true;
+    if (this.SequenceStart == null || this.SequenceEnd == null) return false;
+    return this.SequenceStart <= this.SequenceEnd;
+  }
+
+  /** @deprecated Use {@link SequenceRangeValid}. */
   get sequenceRangeValid(): boolean {
-    if (!this.useSequenceRange) return true;
-    if (this.sequenceStart == null || this.sequenceEnd == null) return false;
-    return this.sequenceStart <= this.sequenceEnd;
+    return this.SequenceRangeValid;
   }
 
-  get testsInSequenceRange(): number {
-    if (!this.useSequenceRange || this.sequenceStart == null || this.sequenceEnd == null) {
-      return this.suiteTests.length;
+  get TestsInSequenceRange(): number {
+    if (!this.UseSequenceRange || this.SequenceStart == null || this.SequenceEnd == null) {
+      return this.SuiteTests.length;
     }
-    return this.suiteTests.filter(t =>
-      t.sequence >= this.sequenceStart! && t.sequence <= this.sequenceEnd!
+    return this.SuiteTests.filter(t =>
+      t.sequence >= this.SequenceStart! && t.sequence <= this.SequenceEnd!
     ).length;
+  }
+
+  /** @deprecated Use {@link TestsInSequenceRange}. */
+  get testsInSequenceRange(): number {
+    return this.TestsInSequenceRange;
   }
 
   /**
    * Get IDs of selected tests for execution
    */
   private getSelectedTestIds(): string[] {
-    if (!this.showAdvancedOptions) {
+    if (!this.ShowAdvancedOptions) {
       // If advanced options not shown, run all tests
-      return this.suiteTests.map(t => t.testId);
+      return this.SuiteTests.map(t => t.testId);
     }
-    return this.suiteTests.filter(t => t.selected).map(t => t.testId);
+    return this.SuiteTests.filter(t => t.selected).map(t => t.testId);
   }
 
   /**
    * Get sequence range parameters if enabled
    */
   private getSequenceRangeParams(): { start: number | undefined; end: number | undefined } {
-    if (!this.showAdvancedOptions || !this.useSequenceRange) {
+    if (!this.ShowAdvancedOptions || !this.UseSequenceRange) {
       return { start: undefined, end: undefined };
     }
     return {
-      start: this.sequenceStart ?? undefined,
-      end: this.sequenceEnd ?? undefined
+      start: this.SequenceStart ?? undefined,
+      end: this.SequenceEnd ?? undefined
     };
   }
 
-  canRun(): boolean {
-    return (this.runMode === 'test' && this.selectedTestId != null) ||
-           (this.runMode === 'suite' && this.selectedSuiteId != null);
+  CanRun(): boolean {
+    return (this.RunMode === 'test' && this.SelectedTestId != null) ||
+           (this.RunMode === 'suite' && this.SelectedSuiteId != null);
   }
 
-  async runTest(): Promise<void> {
-    if (!this.canRun()) return;
+  /** @deprecated Use {@link CanRun}. */
+  canRun(): boolean {
+    return this.CanRun();
+  }
 
-    this.isRunning = true;
-    this.hasCompleted = false;
-    this.hasError = false;
-    this.progress = 0;
-    this.executionLog = [];
+  async RunTest(): Promise<void> {
+    if (!this.CanRun()) return;
+
+    this.IsRunning = true;
+    this.HasCompleted = false;
+    this.HasError = false;
+    this.Progress = 0;
+    this.ExecutionLog = [];
     this.resetProgressSteps();
 
-    if (this.runMode === 'test') {
-      const test = this.allTests.find(t => UUIDsEqual(t.ID, this.selectedTestId));
-      this.executionTitle = test ? test.Name : 'Running Test...';
-      this.executionStatus = 'Running';
+    if (this.RunMode === 'test') {
+      const test = this.AllTests.find(t => UUIDsEqual(t.ID, this.SelectedTestId));
+      this.ExecutionTitle = test ? test.Name : 'Running Test...';
+      this.ExecutionStatus = 'Running';
       // Register with execution service so other components can reconnect
-      this.executionService.RegisterRun(this.selectedTestId!, this.executionTitle);
+      this.executionService.RegisterRun(this.SelectedTestId!, this.ExecutionTitle);
       this.addLogEntry(`Starting test: ${test?.Name}`, 'info');
       await this.executeTest();
     } else {
-      const suite = this.allSuites.find(s => UUIDsEqual(s.ID, this.selectedSuiteId));
-      this.executionTitle = suite ? suite.Name : 'Running Suite...';
-      this.executionStatus = 'Running';
+      const suite = this.AllSuites.find(s => UUIDsEqual(s.ID, this.SelectedSuiteId));
+      this.ExecutionTitle = suite ? suite.Name : 'Running Suite...';
+      this.ExecutionStatus = 'Running';
       // Register with execution service so other components can reconnect
-      this.executionService.RegisterRun(this.selectedSuiteId!, this.executionTitle);
+      this.executionService.RegisterRun(this.SelectedSuiteId!, this.ExecutionTitle);
       this.addLogEntry(`Starting suite: ${suite?.Name}`, 'info');
       await this.executeSuite();
     }
@@ -2272,8 +2604,13 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link RunTest}. */
+  async runTest(): Promise<void> {
+    return this.RunTest();
+  }
+
   private async executeTest(): Promise<void> {
-    const testId = this.selectedTestId!;
+    const testId = this.SelectedTestId!;
     try {
       // Collect variable values for execution
       const variables = this.getVariablesForExecution();
@@ -2285,7 +2622,7 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
         variables,
         onProgress: (progress) => {
           // Update progress percentage (fallback to 0 if not provided)
-          this.progress = progress.percentage ?? 0;
+          this.Progress = progress.percentage ?? 0;
 
           // Update progress steps based on current step
           this.updateProgressStep(progress.currentStep);
@@ -2294,18 +2631,18 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
           this.addLogEntry(progress.message, 'info');
 
           // Push to execution service for cross-component visibility
-          this.executionService.UpdateRunProgress(testId, this.progress, progress.currentStep, progress.message);
+          this.executionService.UpdateRunProgress(testId, this.Progress, progress.currentStep, progress.message);
 
           // Trigger change detection
           this.cdr.markForCheck();
         }
       });
 
-      this.result = result;
-      this.progress = 100;
-      this.hasCompleted = true;
-      this.hasError = !result.success;
-      this.executionStatus = result.success ? 'Completed' : 'Failed';
+      this.Result = result;
+      this.Progress = 100;
+      this.HasCompleted = true;
+      this.HasError = !result.success;
+      this.ExecutionStatus = result.success ? 'Completed' : 'Failed';
       this.completeAllSteps();
 
       // Map RunTestResult to TestExecutionResult for the execution service
@@ -2325,23 +2662,23 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
       }
 
     } catch (error) {
-      this.hasCompleted = true;
-      this.hasError = true;
-      this.executionStatus = 'Error';
-      this.result = {
+      this.HasCompleted = true;
+      this.HasError = true;
+      this.ExecutionStatus = 'Error';
+      this.Result = {
         success: false,
         errorMessage: (error as Error).message
       };
       this.addLogEntry(`Error: ${(error as Error).message}`, 'error');
-      this.executionService.CompleteRun(testId, 'failed', this.result);
+      this.executionService.CompleteRun(testId, 'failed', this.Result);
     } finally {
-      this.isRunning = false;
+      this.IsRunning = false;
       this.cdr.markForCheck();
     }
   }
 
   private async executeSuite(): Promise<void> {
-    const suiteId = this.selectedSuiteId!;
+    const suiteId = this.SelectedSuiteId!;
     try {
       // Build selective execution parameters
       const selectedTestIds = this.getSelectedTestIds();
@@ -2352,15 +2689,15 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
       const result = await this.testingClient.RunTestSuite({
         suiteId,
         verbose: this.verbose,
-        parallel: this.parallel,
+        parallel: this.Parallel,
         tags: this.tags.length > 0 ? this.tags : undefined,
         variables,
-        selectedTestIds: selectedTestIds.length < this.suiteTests.length ? selectedTestIds : undefined,
+        selectedTestIds: selectedTestIds.length < this.SuiteTests.length ? selectedTestIds : undefined,
         sequenceStart: sequenceParams.start,
         sequenceEnd: sequenceParams.end,
         onProgress: (progress) => {
           // Update progress percentage (fallback to 0 if not provided)
-          this.progress = progress.percentage ?? 0;
+          this.Progress = progress.percentage ?? 0;
 
           // Update progress steps based on current step
           this.updateProgressStep(progress.currentStep);
@@ -2369,18 +2706,18 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
           this.addLogEntry(progress.message, 'info');
 
           // Push to execution service for cross-component visibility
-          this.executionService.UpdateRunProgress(suiteId, this.progress, progress.currentStep, progress.message);
+          this.executionService.UpdateRunProgress(suiteId, this.Progress, progress.currentStep, progress.message);
 
           // Trigger change detection
           this.cdr.markForCheck();
         }
       });
 
-      this.result = result;
-      this.progress = 100;
-      this.hasCompleted = true;
-      this.hasError = !result.success;
-      this.executionStatus = result.success ? 'Completed' : 'Failed';
+      this.Result = result;
+      this.Progress = 100;
+      this.HasCompleted = true;
+      this.HasError = !result.success;
+      this.ExecutionStatus = result.success ? 'Completed' : 'Failed';
       this.completeAllSteps();
 
       // Map RunTestResult to TestExecutionResult for the execution service
@@ -2395,15 +2732,15 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
         this.addLogEntry('Suite completed successfully', 'success');
         this.executionService.CompleteRun(suiteId, 'completed', execResult);
       } else {
-        this.addLogEntry(`Suite failed: ${this.failureMessage}`, 'error');
+        this.addLogEntry(`Suite failed: ${this.FailureMessage}`, 'error');
         this.executionService.CompleteRun(suiteId, 'failed', execResult);
       }
 
     } catch (error) {
-      this.hasCompleted = true;
-      this.hasError = true;
-      this.executionStatus = 'Error';
-      this.result = {
+      this.HasCompleted = true;
+      this.HasError = true;
+      this.ExecutionStatus = 'Error';
+      this.Result = {
         success: false,
         errorMessage: (error as Error).message
       };
@@ -2414,26 +2751,26 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
         executionTimeMs: 0
       });
     } finally {
-      this.isRunning = false;
+      this.IsRunning = false;
       this.cdr.markForCheck();
     }
   }
 
   private updateProgress(update: ProgressUpdate): void {
-    this.progress = update.percentage;
+    this.Progress = update.percentage;
 
     // Update step states
-    const stepIndex = this.progressSteps.findIndex(s => s.step === update.step);
+    const stepIndex = this.ProgressSteps.findIndex(s => s.step === update.step);
     if (stepIndex >= 0) {
       // Mark previous steps as completed
       for (let i = 0; i < stepIndex; i++) {
-        this.progressSteps[i].completed = true;
-        this.progressSteps[i].active = false;
+        this.ProgressSteps[i].completed = true;
+        this.ProgressSteps[i].active = false;
       }
 
       // Mark current step as active
-      this.progressSteps[stepIndex].active = true;
-      this.progressSteps[stepIndex].message = update.message;
+      this.ProgressSteps[stepIndex].active = true;
+      this.ProgressSteps[stepIndex].message = update.message;
     }
 
     this.addLogEntry(update.message, 'info');
@@ -2451,18 +2788,18 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
     };
 
     const mappedStep = stepMapping[currentStep] || currentStep;
-    const stepIndex = this.progressSteps.findIndex(s => s.step === mappedStep);
+    const stepIndex = this.ProgressSteps.findIndex(s => s.step === mappedStep);
 
     if (stepIndex >= 0) {
       // Mark previous steps as completed
       for (let i = 0; i < stepIndex; i++) {
-        this.progressSteps[i].completed = true;
-        this.progressSteps[i].active = false;
+        this.ProgressSteps[i].completed = true;
+        this.ProgressSteps[i].active = false;
       }
 
       // Mark current step as active
-      this.progressSteps[stepIndex].active = true;
-      this.progressSteps[stepIndex].completed = false;
+      this.ProgressSteps[stepIndex].active = true;
+      this.ProgressSteps[stepIndex].completed = false;
     }
   }
 
@@ -2471,19 +2808,19 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
    * started from this client session (no active run in the execution service).
    */
   private enterServerMonitoringMode(testName: string): void {
-    this.isRunning = true;
-    this.hasCompleted = false;
-    this.hasError = false;
-    this.progress = -1; // indeterminate
-    this.executionTitle = testName;
-    this.executionStatus = 'Running on server';
-    this.executionLog = [];
+    this.IsRunning = true;
+    this.HasCompleted = false;
+    this.HasError = false;
+    this.Progress = -1; // indeterminate
+    this.ExecutionTitle = testName;
+    this.ExecutionStatus = 'Running on server';
+    this.ExecutionLog = [];
     this.addLogEntry('This test is running on the server. Detailed progress is not available for externally started runs.', 'info');
     this.addLogEntry('Close this panel and check the dashboard for results when the test completes.', 'info');
   }
 
   private resetProgressSteps(): void {
-    this.progressSteps.forEach(step => {
+    this.ProgressSteps.forEach(step => {
       step.active = false;
       step.completed = false;
       step.message = '';
@@ -2491,27 +2828,27 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
   }
 
   private completeAllSteps(): void {
-    this.progressSteps.forEach(step => {
+    this.ProgressSteps.forEach(step => {
       step.active = false;
       step.completed = true;
     });
   }
 
   private addLogEntry(message: string, type: 'info' | 'success' | 'error'): void {
-    this.executionLog.push({
+    this.ExecutionLog.push({
       timestamp: new Date(),
       message,
       type
     });
 
     // Keep log manageable
-    if (this.executionLog.length > 100) {
-      this.executionLog = this.executionLog.slice(-100);
+    if (this.ExecutionLog.length > 100) {
+      this.ExecutionLog = this.ExecutionLog.slice(-100);
     }
 
     // Push to execution service for cross-component visibility
-    const runId = this.selectedTestId ?? this.selectedSuiteId;
-    if (runId && this.isRunning) {
+    const runId = this.SelectedTestId ?? this.SelectedSuiteId;
+    if (runId && this.IsRunning) {
       this.executionService.AddRunLog(runId, message, type);
     }
   }
@@ -2527,13 +2864,13 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
     }
 
     // Restore execution UI state from the active run
-    this.isRunning = true;
-    this.hasCompleted = false;
-    this.hasError = false;
-    this.progress = activeRun.Progress;
-    this.executionTitle = activeRun.TestName;
-    this.executionStatus = 'Running';
-    this.executionLog = activeRun.LogEntries.map(e => ({
+    this.IsRunning = true;
+    this.HasCompleted = false;
+    this.HasError = false;
+    this.Progress = activeRun.Progress;
+    this.ExecutionTitle = activeRun.TestName;
+    this.ExecutionStatus = 'Running';
+    this.ExecutionLog = activeRun.LogEntries.map(e => ({
       timestamp: e.timestamp,
       message: e.message,
       type: e.type
@@ -2547,22 +2884,22 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
       const run = runs.find(r => r.TestId === id);
       if (!run) return;
 
-      this.progress = run.Progress;
+      this.Progress = run.Progress;
       this.updateProgressStep(run.CurrentStep);
 
       // Sync log entries from the service
-      this.executionLog = run.LogEntries.map(e => ({
+      this.ExecutionLog = run.LogEntries.map(e => ({
         timestamp: e.timestamp,
         message: e.message,
         type: e.type
       }));
 
       if (run.Status === 'completed' || run.Status === 'failed') {
-        this.isRunning = false;
-        this.hasCompleted = true;
-        this.hasError = run.Status === 'failed';
-        this.executionStatus = run.Status === 'completed' ? 'Completed' : 'Failed';
-        this.result = run.Result ?? null;
+        this.IsRunning = false;
+        this.HasCompleted = true;
+        this.HasError = run.Status === 'failed';
+        this.ExecutionStatus = run.Status === 'completed' ? 'Completed' : 'Failed';
+        this.Result = run.Result ?? null;
         this.completeAllSteps();
       }
 
@@ -2572,41 +2909,61 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
     return true;
   }
 
-  resetDialog(): void {
-    this.isRunning = false;
-    this.hasCompleted = false;
-    this.hasError = false;
-    this.progress = 0;
-    this.executionTitle = '';
-    this.executionStatus = '';
-    this.result = null;
-    this.executionLog = [];
-    this.selectedTestId = null;
-    this.selectedSuiteId = null;
-    this.searchText = '';
+  ResetDialog(): void {
+    this.IsRunning = false;
+    this.HasCompleted = false;
+    this.HasError = false;
+    this.Progress = 0;
+    this.ExecutionTitle = '';
+    this.ExecutionStatus = '';
+    this.Result = null;
+    this.ExecutionLog = [];
+    this.SelectedTestId = null;
+    this.SelectedSuiteId = null;
+    this.SearchText = '';
     this.tags = [];
-    this.newTag = '';
+    this.NewTag = '';
     this.resetProgressSteps();
-    this.filterItems();
+    this.FilterItems();
     this.cdr.markForCheck();
   }
 
-  onClose(): void {
+  /** @deprecated Use {@link ResetDialog}. */
+  resetDialog(): void {
+    return this.ResetDialog();
+  }
+
+  OnClose(): void {
     this.PanelClose.emit();
   }
 
+  /** @deprecated Use {@link OnClose}. */
+  onClose(): void {
+    return this.OnClose();
+  }
+
   // Tag management methods
-  addTag(): void {
-    const tag = this.newTag.trim();
+  AddTag(): void {
+    const tag = this.NewTag.trim();
     if (tag && !this.tags.includes(tag)) {
       this.tags = [...this.tags, tag];
-      this.newTag = '';
+      this.NewTag = '';
       this.cdr.markForCheck();
     }
   }
 
-  removeTag(tag: string): void {
+  /** @deprecated Use {@link AddTag}. */
+  addTag(): void {
+    return this.AddTag();
+  }
+
+  RemoveTag(tag: string): void {
     this.tags = this.tags.filter(t => t !== tag);
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link RemoveTag}. */
+  removeTag(tag: string): void {
+    return this.RemoveTag(tag);
   }
 }

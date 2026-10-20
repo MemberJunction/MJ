@@ -29,7 +29,7 @@ import {
 
 import type { TrainModelInput } from '../training/types';
 import { TrainingEngine } from '../training/training-engine';
-import { trainModelViaEngine, wasTrainingLeakageFlagged } from './delegation';
+import { TrainModelViaEngine, WasTrainingLeakageFlagged } from './delegation';
 
 /**
  * Server implementation of `PredictiveStudio.TrainModel`. Extends the CodeGen-emitted
@@ -57,7 +57,7 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
       Message: `Training model from pipeline ${input.pipelineId}…`,
     });
 
-    const result = await trainModelViaEngine(this.toEngineInput(input), provider, user, this.engine());
+    const result = await TrainModelViaEngine(this.toEngineInput(input), provider, user, this.engine());
 
     context.emitProgress({
       OperationKey: this.OperationKey,
@@ -72,7 +72,7 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
       trainingRunId: result.run.ID,
       version: result.model.Version,
       holdoutMetrics: result.model.HoldoutMetrics ?? undefined,
-      leakageFlagged: wasTrainingLeakageFlagged(result),
+      leakageFlagged: WasTrainingLeakageFlagged(result),
       status: result.model.Status,
     };
   }

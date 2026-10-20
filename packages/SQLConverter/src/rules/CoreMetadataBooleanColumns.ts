@@ -186,7 +186,7 @@ const CORE_METADATA_BOOLEAN_COLUMNS: Record<string, string[]> = {
  * boolean rewriters look them up. Existing entries are left untouched so a
  * migration's own CREATE TABLE always wins.
  */
-export function seedCoreMetadataBooleanColumns(
+export function SeedCoreMetadataBooleanColumns(
   tableColumns: Map<string, Map<string, string>>
 ): void {
   for (const [table, columns] of Object.entries(CORE_METADATA_BOOLEAN_COLUMNS)) {
@@ -198,4 +198,11 @@ export function seedCoreMetadataBooleanColumns(
     }
     tableColumns.set(key, colMap);
   }
+}
+
+/** @deprecated Use {@link SeedCoreMetadataBooleanColumns}. */
+export function seedCoreMetadataBooleanColumns(
+  tableColumns: Map<string, Map<string, string>>
+): void {
+  return SeedCoreMetadataBooleanColumns(tableColumns);
 }

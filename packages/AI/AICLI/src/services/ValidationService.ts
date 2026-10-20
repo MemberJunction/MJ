@@ -1,6 +1,6 @@
 export class ValidationService {
   
-  async validateAgentInput(agentName?: string, prompt?: string, chatMode?: boolean): Promise<void> {
+  async ValidateAgentInput(agentName?: string, prompt?: string, chatMode?: boolean): Promise<void> {
     // If no agent name provided, we'll show the list (handled in command)
     if (!agentName) {
       return;
@@ -47,7 +47,12 @@ Next steps:
     }
   }
 
-  async validateActionInput(actionName?: string, parameters?: Record<string, any>): Promise<void> {
+  /** @deprecated Use {@link ValidateAgentInput}. */
+  async validateAgentInput(agentName?: string, prompt?: string, chatMode?: boolean): Promise<void> {
+    return this.ValidateAgentInput(agentName, prompt, chatMode);
+  }
+
+  async ValidateActionInput(actionName?: string, parameters?: Record<string, any>): Promise<void> {
     // If no action name provided, we'll show the list (handled in command)
     if (!actionName) {
       return;
@@ -97,7 +102,12 @@ Next steps:
     }
   }
 
-  validateTimeout(timeout: number): number {
+  /** @deprecated Use {@link ValidateActionInput}. */
+  async validateActionInput(actionName?: string, parameters?: Record<string, any>): Promise<void> {
+    return this.ValidateActionInput(actionName, parameters);
+  }
+
+  ValidateTimeout(timeout: number): number {
     if (timeout < 1000) {
       throw new Error(`❌ Invalid timeout value
 
@@ -125,7 +135,12 @@ Next steps:
     return timeout;
   }
 
-  validateOutputFormat(format: string): 'compact' | 'json' | 'table' {
+  /** @deprecated Use {@link ValidateTimeout}. */
+  validateTimeout(timeout: number): number {
+    return this.ValidateTimeout(timeout);
+  }
+
+  ValidateOutputFormat(format: string): 'compact' | 'json' | 'table' {
     const validFormats = ['compact', 'json', 'table'];
     
     if (!validFormats.includes(format)) {
@@ -143,7 +158,12 @@ Next steps:
     return format as 'compact' | 'json' | 'table';
   }
 
-  parseParameters(paramStrings: string[]): Record<string, any> {
+  /** @deprecated Use {@link ValidateOutputFormat}. */
+  validateOutputFormat(format: string): 'compact' | 'json' | 'table' {
+    return this.ValidateOutputFormat(format);
+  }
+
+  ParseParameters(paramStrings: string[]): Record<string, any> {
     const parameters: Record<string, any> = {};
 
     for (const paramString of paramStrings) {
@@ -196,7 +216,12 @@ Next steps:
     return parameters;
   }
 
-  validateDryRun(isDryRun: boolean, hasRequiredParams: boolean): void {
+  /** @deprecated Use {@link ParseParameters}. */
+  parseParameters(paramStrings: string[]): Record<string, any> {
+    return this.ParseParameters(paramStrings);
+  }
+
+  ValidateDryRun(isDryRun: boolean, hasRequiredParams: boolean): void {
     if (isDryRun && !hasRequiredParams) {
       throw new Error(`❌ Dry run validation failed
 
@@ -208,5 +233,10 @@ Next steps:
 2. Or remove --dry-run flag to see parameter requirements
 3. Use 'list' commands to see parameter requirements`);
     }
+  }
+
+  /** @deprecated Use {@link ValidateDryRun}. */
+  validateDryRun(isDryRun: boolean, hasRequiredParams: boolean): void {
+    return this.ValidateDryRun(isDryRun, hasRequiredParams);
   }
 }

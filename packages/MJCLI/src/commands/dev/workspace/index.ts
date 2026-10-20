@@ -1,5 +1,5 @@
 import { confirm } from '@inquirer/prompts';
-import { isInteractiveRun } from '../../../lib/interactive-guard.js';
+import { IsInteractiveRun } from '../../../lib/interactive-guard.js';
 import { Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
 import path from 'node:path';
@@ -36,7 +36,7 @@ function describeConflict(conflict: DevDepConflict): string {
  */
 
 /** Parses repeatable `--apps <member>=<glob>[,<glob>]` values into member -> globs (later entries for a member append). */
-export function parseAppsFlag(values: readonly string[]): Map<string, string[]> {
+export function ParseAppsFlag(values: readonly string[]): Map<string, string[]> {
   const out = new Map<string, string[]>();
   for (const value of values) {
     const eq = value.indexOf('=');
@@ -49,6 +49,11 @@ export function parseAppsFlag(values: readonly string[]): Map<string, string[]> 
     out.set(member, [...(out.get(member) ?? []), ...globs]);
   }
   return out;
+}
+
+/** @deprecated Use {@link ParseAppsFlag}. */
+export function parseAppsFlag(values: readonly string[]): Map<string, string[]> {
+  return ParseAppsFlag(values);
 }
 
 export default class DevWorkspace extends Command {
@@ -111,7 +116,7 @@ export default class DevWorkspace extends Command {
 
     try {
       AssertParentDirSafe(parentDir);
-      const members = this.selectMembers(parentDir, flags.include ?? [], flags.exclude ?? [], parseAppsFlag(flags.apps ?? []));
+      const members = this.selectMembers(parentDir, flags.include ?? [], flags.exclude ?? [], ParseAppsFlag(flags.apps ?? []));
       const admittedApps = AssertAppPackageNamesUnique(members);
       if (admittedApps.length > 0) this.log(chalk.green('apps admitted') + ` ${admittedApps.join(', ')}`);
       await this.handleStandaloneInstalls(parentDir, members, flags['clean-members']);
@@ -280,7 +285,7 @@ export default class DevWorkspace extends Command {
     // Non-interactive by default (see lib/interactive-guard). This one skips loudly rather
     // than failing: leaving a standalone install in place is a safe no-op, and the warning
     // names the flags. Destructive prompts elsewhere fail fast instead.
-    if (!isInteractiveRun()) {
+    if (!IsInteractiveRun()) {
       this.warn(
         `${name} has a standalone install (${treeCount} node_modules tree(s)) and this run is non-interactive ` +
           `with no --clean-members/--no-clean-members given — leaving it in place. ` +

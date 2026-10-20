@@ -3,20 +3,15 @@ import { RegisterClass } from '@memberjunction/global';
 import { DataSnapshot, DataTable, MJColumnDescriptor } from '@memberjunction/core';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
-import { ColDef, GridReadyEvent, GridApi } from 'ag-grid-community';
+import { ColDef } from 'ag-grid-community';
+import { FetchArrayBuffer, type SheetData } from '../previews/office-preview.logic';
 
-/** A parsed sheet ready for display in AG Grid. */
-interface SheetData {
-  name: string;
-  rowData: Record<string, string | number | boolean | null>[];
-  columnDefs: ColDef[];
-}
 
 /**
  * Viewer plugin for Excel (XLSX/XLS) artifact versions stored in MJStorage.
  *
- * Downloads the file, parses all sheets with SheetJS, then renders the active
- * sheet in an AG Grid. Sheet tabs let the user switch between sheets.
+ * Downloads the file and hands the bytes to `mj-xlsx-preview`, Explorer's one spreadsheet renderer (SheetJS into an
+ * AG Grid with sheet tabs), which the Files form shares. Keeps the parsed sheets for the state snapshot.
  */
 @Component({
   standalone: false,
@@ -31,7 +26,7 @@ interface SheetData {
       >
       </mj-file-artifact-toolbar>
 
-      @if (isLoading) {
+      @if (!ArrayBuffer && !errorMessage) {
         <div class="xlsx-viewer__state">
           <i class="fas fa-spinner fa-spin"></i>
           <span>Loading workbook…</span>
@@ -42,29 +37,8 @@ interface SheetData {
           <span>{{ errorMessage }}</span>
         </div>
       } @else {
-        @if (sheets.length > 1) {
-          <div class="xlsx-viewer__tabs">
-            @for (sheet of sheets; track sheet.name; let i = $index) {
-              <button class="xlsx-viewer__tab" [class.xlsx-viewer__tab--active]="i === activeSheetIndex" (click)="selectSheet(i)">
-                <i class="fas fa-table"></i>
-                {{ sheet.name }}
-              </button>
-            }
-          </div>
-        }
-
-        <div class="xlsx-viewer__grid">
-          <ag-grid-angular
-            class="ag-theme-quartz"
-            [rowData]="activeSheet?.rowData"
-            [columnDefs]="activeSheet?.columnDefs"
-            [defaultColDef]="defaultColDef"
-            [animateRows]="false"
-            [suppressMovableColumns]="false"
-            [enableCellTextSelection]="true"
-            (gridReady)="onGridReady($event)"
-          >
-          </ag-grid-angular>
+        <div class="xlsx-viewer__body">
+          <mj-xlsx-preview [ArrayBuffer]="ArrayBuffer" (Loaded)="OnPreviewLoaded($event)" (Failed)="ShowError($event)" (SheetChange)="ActiveSheetIndex = $event"></mj-xlsx-preview>
         </div>
       }
     </div>
@@ -93,82 +67,61 @@ interface SheetData {
         color: var(--mj-status-error-text);
       }
 
-      .xlsx-viewer__tabs {
-        display: flex;
-        gap: 2px;
-        padding: 4px 8px 0;
-        background: var(--mj-bg-surface-card);
-        border-bottom: 1px solid var(--mj-border-default);
-        overflow-x: auto;
-        flex-shrink: 0;
-      }
-
-      .xlsx-viewer__tab {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        padding: 6px 14px;
-        background: var(--mj-bg-surface);
-        border: 1px solid var(--mj-border-default);
-        border-bottom: none;
-        border-radius: 4px 4px 0 0;
-        color: var(--mj-text-secondary);
-        font-size: 12px;
-        cursor: pointer;
-        white-space: nowrap;
-        transition:
-          background 0.1s,
-          color 0.1s;
-      }
-
-      .xlsx-viewer__tab:hover {
-        background: var(--mj-bg-surface-hover);
-        color: var(--mj-text-primary);
-      }
-
-      .xlsx-viewer__tab--active {
-        background: var(--mj-bg-surface);
-        color: var(--mj-brand-primary);
-        border-color: var(--mj-border-default);
-        font-weight: 600;
-        position: relative;
-      }
-
-      .xlsx-viewer__tab--active::after {
-        content: '';
-        position: absolute;
-        bottom: -1px;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: var(--mj-bg-surface);
-      }
-
-      .xlsx-viewer__grid {
+      .xlsx-viewer__body {
         flex: 1;
         min-height: 0;
         overflow: hidden;
-      }
-
-      .xlsx-viewer__grid ag-grid-angular {
-        height: 100%;
-        width: 100%;
-        display: block;
       }
     `,
   ],
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'XlsxArtifactViewerPlugin')
 export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit {
-  public isLoading = true;
-  public isDownloading = false;
-  public errorMessage = '';
-  public sheets: SheetData[] = [];
-  public activeSheetIndex = 0;
-  public defaultColDef: ColDef = { resizable: true, sortable: true, filter: true, minWidth: 80 };
+  public IsDownloading = false;
 
-  private gridApi: GridApi | null = null;
+  /** @deprecated Use {@link IsDownloading}. */
+  public get isDownloading() {
+    return this.IsDownloading;
+  }
+  /** @deprecated Use {@link IsDownloading}. */
+  public set isDownloading(value) {
+    this.IsDownloading = value;
+  }
+  public errorMessage = '';
+  public Sheets: SheetData[] = [];
+
+  /** @deprecated Use {@link Sheets}. */
+  public get sheets(): SheetData[] {
+    return this.Sheets;
+  }
+  /** @deprecated Use {@link Sheets}. */
+  public set sheets(value: SheetData[]) {
+    this.Sheets = value;
+  }
+  public ActiveSheetIndex = 0;
+
+  /** @deprecated Use {@link ActiveSheetIndex}. */
+  public get activeSheetIndex() {
+    return this.ActiveSheetIndex;
+  }
+  /** @deprecated Use {@link ActiveSheetIndex}. */
+  public set activeSheetIndex(value) {
+    this.ActiveSheetIndex = value;
+  }
+  public DefaultColDef: ColDef = { resizable: true, sortable: true, filter: true, minWidth: 80 };
+
+  /** @deprecated Use {@link DefaultColDef}. */
+  public get defaultColDef(): ColDef {
+    return this.DefaultColDef;
+  }
+  /** @deprecated Use {@link DefaultColDef}. */
+  public set defaultColDef(value: ColDef) {
+    this.DefaultColDef = value;
+  }
+
   private downloadUrl = '';
+  /** The workbook's bytes, handed to the shared preview once downloaded. */
+  public ArrayBuffer: ArrayBuffer | null = null;
 
   constructor(
     private fileService: ArtifactFileService,
@@ -181,45 +134,43 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     return true;
   }
 
+  public get ActiveSheet(): SheetData | null {
+    return this.Sheets[this.ActiveSheetIndex] ?? null;
+  }
+
+  /** @deprecated Use {@link ActiveSheet}. */
   public get activeSheet(): SheetData | null {
-    return this.sheets[this.activeSheetIndex] ?? null;
+    return this.ActiveSheet;
   }
 
   async ngOnInit(): Promise<void> {
     await this.loadWorkbook();
   }
 
-  public onGridReady(event: GridReadyEvent): void {
-    this.gridApi = event.api;
-    this.gridApi.sizeColumnsToFit();
-  }
-
-  public selectSheet(index: number): void {
-    this.activeSheetIndex = index;
-    this.cdr.markForCheck();
-    // Let Angular render the new rowData/columnDefs before re-sizing
-    setTimeout(() => this.gridApi?.sizeColumnsToFit(), 0);
-  }
-
-  public async onDownload(): Promise<void> {
-    if (!this.downloadUrl || this.isDownloading) {
+  public async OnDownload(): Promise<void> {
+    if (!this.downloadUrl || this.IsDownloading) {
       return;
     }
-    this.isDownloading = true;
+    this.IsDownloading = true;
     this.cdr.markForCheck();
     try {
       await this.triggerBrowserDownload(this.downloadUrl, this.artifactVersion?.FileName || 'workbook.xlsx');
     } finally {
-      this.isDownloading = false;
+      this.IsDownloading = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link OnDownload}. */
+  public async onDownload(): Promise<void> {
+    return this.OnDownload();
   }
 
   // ─── Private helpers ────────────────────────────────────────────────────────
 
   private async loadWorkbook(): Promise<void> {
     if (!this.artifactVersion?.ID) {
-      this.showError('No artifact version provided.');
+      this.ShowError('No artifact version provided.');
       return;
     }
 
@@ -229,12 +180,12 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       if (this.artifactVersion.ContentMode === 'File') {
         // File-backed: download from storage via pre-auth URL
         this.downloadUrl = await this.fileService.getDownloadUrl(this.artifactVersion.ID);
-        arrayBuffer = await this.fetchAsArrayBuffer(this.downloadUrl);
+        arrayBuffer = await FetchArrayBuffer(this.downloadUrl);
       } else {
         // Inline: content is a base64 data URL stored in the artifact version
         const content = this.artifactVersion.Content;
         if (!content) {
-          this.showError('Artifact has no content.');
+          this.ShowError('Artifact has no content.');
           return;
         }
         arrayBuffer = this.fileService.dataUrlToArrayBuffer(content);
@@ -245,54 +196,31 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         );
       }
 
-      const XLSX = (await import('xlsx')) as unknown as XlsxModuleShim;
-      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-      this.sheets = this.parseWorkbook(workbook, XLSX);
-      this.isLoading = false;
+      this.ArrayBuffer = arrayBuffer;
       this.cdr.markForCheck();
     } catch (err) {
-      this.showError(`Could not load workbook: ${err instanceof Error ? err.message : String(err)}`);
+      this.ShowError(`Could not load workbook: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  private parseWorkbook(workbook: WorkbookType, XLSX: XlsxModuleShim): SheetData[] {
-    return workbook.SheetNames.map((name) => {
-      const sheet = workbook.Sheets[name];
-      const rows = XLSX.utils.sheet_to_json<Record<string, string | number | boolean | null>>(sheet, {
-        defval: null,
-        raw: false, // Format dates/numbers as strings so AG Grid can display them
-      });
-
-      const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
-      const columnDefs: ColDef[] = headers.map((h) => ({
-        field: h,
-        headerName: h,
-        tooltipField: h,
-      }));
-
-      return { name, rowData: rows, columnDefs };
-    });
+  /** The shared preview has parsed the workbook: keep the sheets for the snapshot and clear the loading state. */
+  public OnPreviewLoaded(sheets: SheetData[]): void {
+    this.Sheets = sheets;
+    this.ActiveSheetIndex = 0;
+    this.cdr.markForCheck();
   }
 
-  private async fetchAsArrayBuffer(url: string): Promise<ArrayBuffer> {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} fetching file`);
-    }
-    return response.arrayBuffer();
-  }
 
-  private showError(message: string): void {
-    this.isLoading = false;
+  public ShowError(message: string): void {
     this.errorMessage = message;
     this.cdr.markForCheck();
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
-    if (this.sheets.length === 0) return null;
+    if (this.Sheets.length === 0) return null;
 
     // Convert parsed sheets into DataTables for structured snapshot
-    const tables: DataTable[] = this.sheets.map((sheet) => {
+    const tables: DataTable[] = this.Sheets.map((sheet) => {
       const table = new DataTable();
       table.name = sheet.name;
       table.source = 'static';
@@ -310,21 +238,7 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     });
 
     const snap = DataSnapshot.FromTables(tables, this.getDisplayTitle() ?? undefined);
-    snap.activeTab = this.sheets[this.activeSheetIndex]?.name;
+    snap.activeTab = this.Sheets[this.ActiveSheetIndex]?.name;
     return snap;
   }
-}
-
-// ─── Minimal type shims for xlsx dynamic import ────────────────────────────────
-
-interface WorkbookType {
-  SheetNames: string[];
-  Sheets: Record<string, unknown>;
-}
-
-interface XlsxModuleShim {
-  read(data: ArrayBuffer, opts: { type: 'array' | 'buffer' | 'binary' | 'base64' | 'string' }): WorkbookType;
-  utils: {
-    sheet_to_json<T>(sheet: unknown, opts: { defval: null; raw: boolean }): T[];
-  };
 }

@@ -378,7 +378,7 @@ export abstract class BaseTestDriver {
      *
      * @returns true if driver supports cancellation, false otherwise
      */
-    public supportsCancellation(): boolean {
+    public supportsCancellation(): boolean {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         return false;
     }
 

@@ -89,7 +89,16 @@ export class ImageArtifactPreviewComponent extends BaseArtifactPreviewComponent 
     private readonly cdr = inject(ChangeDetectorRef);
 
     /** Resolved URL bound to `<img src>` — data URI (inline) or pre-auth URL (file). */
-    public imageUrl = '';
+    public ImageUrl = '';
+
+    /** @deprecated Use {@link ImageUrl}. */
+    public get imageUrl() {
+        return this.ImageUrl;
+    }
+    /** @deprecated Use {@link ImageUrl}. */
+    public set imageUrl(value) {
+        this.ImageUrl = value;
+    }
 
     /** Non-empty hides the image and shows a compact error line. */
     public errorMessage = '';
@@ -99,18 +108,32 @@ export class ImageArtifactPreviewComponent extends BaseArtifactPreviewComponent 
      * covers URL resolution: for a multi-megabyte inline `data:` URI the decode after `src` is
      * assigned is what the user actually waits on, so the indicator holds until the `load` event.
      */
-    public imagePainted = false;
+    public ImagePainted = false;
+
+    /** @deprecated Use {@link ImagePainted}. */
+    public get imagePainted() {
+        return this.ImagePainted;
+    }
+    /** @deprecated Use {@link ImagePainted}. */
+    public set imagePainted(value) {
+        this.ImagePainted = value;
+    }
 
     /** Accessible alt text — prefers a descriptive name over a raw filename. */
-    public get altText(): string {
+    public get AltText(): string {
         return this.artifactVersion?.Name || this.artifactVersion?.FileName || 'Image artifact';
+    }
+
+    /** @deprecated Use {@link AltText}. */
+    public get altText(): string {
+        return this.AltText;
     }
 
     async ngOnInit(): Promise<void> {
         try {
             const url = await this.resolveContentUrl();
             if (url) {
-                this.imageUrl = url;
+                this.ImageUrl = url;
             } else {
                 this.errorMessage = 'No image content.';
             }
@@ -120,13 +143,23 @@ export class ImageArtifactPreviewComponent extends BaseArtifactPreviewComponent 
         this.cdr.markForCheck();
     }
 
-    public onImageLoaded(): void {
-        this.imagePainted = true;
+    public OnImageLoaded(): void {
+        this.ImagePainted = true;
         this.cdr.markForCheck();
     }
 
-    public onImageError(): void {
+    /** @deprecated Use {@link OnImageLoaded}. */
+    public onImageLoaded(): void {
+        return this.OnImageLoaded();
+    }
+
+    public OnImageError(): void {
         this.errorMessage = 'Image could not be displayed.';
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link OnImageError}. */
+    public onImageError(): void {
+        return this.OnImageError();
     }
 }

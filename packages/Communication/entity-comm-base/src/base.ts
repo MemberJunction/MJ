@@ -42,16 +42,16 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
         return super.getInstance<EntityCommunicationsEngineBase>();
     }
 
-    private _Metadata: {
+    private _metadata: {
         EntityCommunicationMessageTypes: MJEntityCommunicationMessageTypeEntityExtended[],
         EntityCommunicationFields: MJEntityCommunicationFieldEntity[]
     } = {EntityCommunicationMessageTypes: [], EntityCommunicationFields: []};
 
     public get EntityCommunicationMessageTypes(): MJEntityCommunicationMessageTypeEntityExtended[] {
-        return this._Metadata.EntityCommunicationMessageTypes;
+        return this._metadata.EntityCommunicationMessageTypes;
     }
     public get EntityCommunicationFields(): MJEntityCommunicationFieldEntity[] {
-        return this._Metadata.EntityCommunicationFields;
+        return this._metadata.EntityCommunicationFields;
     }
 
     protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
@@ -61,8 +61,8 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
         }
 
         // post-process the fields to be linked to the message types they're part of 
-        this._Metadata.EntityCommunicationFields = CommunicationEngineBase.Instance.Metadata.EntityCommunicationFields || [];
-        this._Metadata.EntityCommunicationMessageTypes = <MJEntityCommunicationMessageTypeEntityExtended[]>CommunicationEngineBase.Instance.Metadata.EntityCommunicationMessageTypes || [];
+        this._metadata.EntityCommunicationFields = CommunicationEngineBase.Instance.Metadata.EntityCommunicationFields || [];
+        this._metadata.EntityCommunicationMessageTypes = <MJEntityCommunicationMessageTypeEntityExtended[]>CommunicationEngineBase.Instance.Metadata.EntityCommunicationMessageTypes || [];
         this.EntityCommunicationMessageTypes.forEach(m => {
             m.CommunicationFields = this.EntityCommunicationFields.filter(f => UUIDsEqual(f.EntityCommunicationMessageTypeID, m.ID));
         });

@@ -17,6 +17,12 @@
   transition: all var(--mj-transition-base) ease;
 }
 
+/* No label (e.g. a generated section holding a single field, whose section title names it):
+   the control takes the whole row instead of falling into the label column. */
+.mj-forms-field--no-label {
+  grid-template-columns: 1fr;
+}
+
 /* Subtle row hover in edit mode */
 .mj-forms-field--editing:hover {
   background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
@@ -430,6 +436,105 @@
   color: var(--mj-text-primary);
 }
 
+/* Population toggle ("All organizations" / "Customers"). Sits where the search-field pill
+   would, or left of the pill when both show; the input reserves room for it so it never covers
+   typed text. Same visual family as the pill. */
+.mj-fk-search--toggle .mj-forms-field-input {
+  padding-right: 178px;
+}
+
+.mj-fk-search--scoped.mj-fk-search--toggle .mj-forms-field-input {
+  padding-right: 306px;
+}
+
+.mj-fk-search--scoped .mj-fk-scope-toggle {
+  right: 158px;
+}
+
+.mj-fk-scope-toggle {
+  position: absolute;
+  right: 30px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-strong);
+  color: var(--mj-text-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 1px 7px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.35;
+  transition: border-color var(--mj-transition-base), color var(--mj-transition-base);
+}
+
+.mj-fk-scope-toggle:hover {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-text-primary);
+}
+
+/* Group header inside the results grid — spans every column, never selectable. Rows are
+   `display: contents`, so the header needs a box of its own to be a grid item at all. */
+.mj-fk-grid-row.mj-fk-group-head {
+  display: block;
+  grid-column: 1 / -1;
+  padding: 8px 12px 2px;
+  font-size: var(--mj-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mj-text-muted);
+  cursor: default;
+}
+
+/* Name plus its chips on one line, so the second line sits directly beneath the name. */
+.mj-fk-name-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mj-fk-chip {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: var(--mj-text-xs);
+  font-weight: 600;
+  color: var(--mj-text-muted);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-sm);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.mj-fk-chip--info {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-text-secondary);
+}
+
+.mj-fk-chip--warn {
+  border-color: var(--mj-status-warning);
+  color: var(--mj-text-secondary);
+}
+
+/* The disambiguating second line — city and state, a website, a count. Takes the whole row of
+   the wrapping name cell, so it lands beneath the name rather than beside the chips. */
+.mj-fk-secondary {
+  display: block;
+  flex-basis: 100%;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .mj-fk-scope-pill-icon {
   font-size: 9px;
   opacity: 0.7;
@@ -796,6 +901,8 @@
   font-size: 14px;
   color: var(--mj-text-primary);
   gap: 6px;
+  /* Lets a strategy's second line wrap beneath the name. */
+  flex-wrap: wrap;
 }
 
 .mj-fk-selected-check {
@@ -1288,6 +1395,11 @@
 /* ============================================
    RESPONSIVE
    ============================================ */
+/* With no label column, validation messages sit under the control in the only column. */
+.mj-forms-field--no-label .mj-forms-field-validation {
+  grid-column: 1;
+}
+
 @media (max-width: 640px) {
   .mj-forms-field {
     grid-template-columns: 1fr;

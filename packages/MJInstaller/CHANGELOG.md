@@ -1,5 +1,94 @@
 # @memberjunction/installer
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- ed668f0: `mj install` now sets up the database itself instead of leaving `mj-db-setup.sql` for the user to run by hand. The database phase signs in as the CodeGen and API logins; when they can't sign in yet, it runs the setup script with an administrator login (asked for interactively, or `MJ_INSTALL_DB_ADMIN_USER` / `MJ_INSTALL_DB_ADMIN_PASSWORD` / `DatabaseAdminUser` / `DatabaseAdminPassword`), then signs in as both logins again to confirm. The administrator login is never saved. Interactive installs can still choose to run the script themselves. `--yes` installs with no administrator login and no database now stop with instructions instead of continuing to a failing migrate. Names and passwords in the generated scripts are now properly quoted. Long database commands (`install`, `app install`, `app upgrade`, `migrate`) also start with a warning not to let the machine sleep until they finish.
+- fec0c86: fix(installer): smoke-test cleanup no longer kills the installer itself on macOS/Linux. `KillByPort` now asks `lsof` for listening sockets only (`-sTCP:LISTEN`); a bare `-ti:<port>` also matched the installer's own health-check connection, so `mj install` exited 137 and left Explorer running.
+- d07faca: `mj install` now installs MemberJunction on PostgreSQL (`MJ_INSTALL_DB_PLATFORM=postgresql`, or pick it at the first prompt). As on SQL Server, the database phase sets everything up itself when given an administrator login: it creates the database, the CodeGen and API login roles (no `CREATEDB` / `CREATEROLE`), MJ's `cdp_*` group roles, the `pgcrypto` / `uuid-ossp` extensions, the `__mj` schema owned by the CodeGen role, and the API role's grants and default privileges. The statements run one at a time through the `pg` driver and are also written to `mj-db-setup.sql` as a `psql` script. `.env` gets `DB_PLATFORM='postgresql'` with the usual `DB_*` and `CODEGEN_DB_*` keys, keeping the CodeGen and API logins separate. SQL Server installs are unchanged.
+- 7d5097d: `mj app install` is more robust for clean installs: package installs run asynchronously with a 30-minute default ceiling (override with `MJ_APP_PACKAGE_INSTALL_TIMEOUT_MS`) instead of a blocking 5-minute `execFileSync`; transient GitHub failures (connection resets, timeouts, 502/503/504) are retried with backoff instead of failing the whole dependency chain; and an app left Disabled because its packages did not install is reported as such — with the real remedy — instead of "Successfully installed" and an "npm auth" guess.
+
+  `mj install --yes` no longer warns that config files were "created with default/empty values" when every value was supplied; it now names only the required connection values that are actually unset.
+
+  On macOS, `mj install`, `mj app install`, `mj app upgrade` and `mj migrate` keep the machine awake while they run (a `caffeinate` assertion tied to the CLI process; `MJ_ALLOW_SLEEP=1` opts out). Sleeping mid-install paused the local database and every connection, and on wake in-flight migration batches reported spurious 300-second timeouts and downloads reported `ECONNRESET` — the cause of every intermittent chained-install failure seen in clean-install testing.
+
+## 6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- 662d68f: Installer: the post-CodeGen artifact check now finds `mj_generatedentities` under `apps/MJAPI/node_modules` as well as the repo root. pnpm (the installer default) links workspace packages into each dependent and never creates the root entry, so a healthy install reported "Failed phase(s): codegen" (MemberJunction/MJ#4599, #4707).
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 73fa918: Enhance agent-first tooling across MemberJunction with machine-readable diagnostics, hardened secret redaction, and native CLI execution trace auditing:
+  - **Machine-Readable Diagnostics (`mj doctor --format json`)**: Added canonical format flag and `--scope [install|runtime|ai|metadata|agent]` filtering to `mj doctor`. When JSON format is requested, suppress all terminal formatting and output structured diagnostics adhering to the `Diagnostics.toJSON()` schema, exiting non-zero on failure.
+  - **Diagnostic Codes & Subsystem Probes**: Added stable machine-readable check codes, scopes, contextual evidence, and actionable remediation descriptors. Added checks for `MJ_BASE_ENCRYPTION_KEY` and AI provider credentials (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`).
+  - **Hardened Secret Redaction**: Extended credential pattern matching in `ReportGenerator` across sensitive environment variable names (`KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CREDENTIAL`, etc.) and high-entropy token shapes (`sk-...`, `Bearer ...`, `ghp_...`, JWTs) across file snapshots, markdown reports, and container service logs.
+  - **Native CLI Trace Auditing**: Updated `citizen-builder/scripts/query-run-history.sh` to delegate to native `mj ai audit agent-run`, supporting `--format json`, step-by-step inspections, error audits, and agent name filtering.
+  - **Citizen Agent Builder Documentation & Skills**: Detailed the complete 11-step agent engineering loop in `citizen-builder/AGENTS.md` and `README.md`, updated skill templates (`test-agent`, `package-agent`) to use native JSON auditing, and bundled updated template assets into `@memberjunction/cli`.
+
+### Patch Changes
+
+- ee5c033: Fix a fresh `mj install` that could not boot MJAPI or Explorer (MemberJunction/MJ#4477). Since the schema-scale emit change, CodeGen produced the entity-subclass, GraphQL and Angular outputs by iterating a per-directory partition of the non-core entities. On a fresh database that list is empty, the partition was empty, and the generators were never called, so `packages/GeneratedEntities/src/generated/entity_subclasses.ts` and the Angular generated-forms module were never written while CodeGen still reported "complete". `partitionEntitiesByOutputDirectory` now always includes the default directory with an empty group when one is configured, restoring the pre-change behaviour of emitting an empty barrel. The installer's post-CodeGen artifact check now treats a missing `entity_subclasses.ts` as critical and names the missing file in the failure, instead of trusting the exit code.
+- ce55864: Fix four defects that break `mj install` on a fresh host.
+
+  **turbo's build summary was misread, in two ways.** turbo prints one comma-separated `Failed:` line naming every failed task. Both installer phases parsed it with a regex requiring a literal `Failed:` before each name, so they read only the first — a real `mj_api` build failure listed behind `mj_generatedactions` was tolerated and the install reported success. The same regex matched nothing at all when `FORCE_COLOR` made turbo wrap the names in ANSI escapes, turning the expected pre-CodeGen state of every distribution install (both `Generated*` packages fail until CodeGen writes their `src/generated/`) into a hard `BUILD_FAILED`. Both phases now share one classifier that strips ANSI and reads the whole list; `CodeGenPhase`'s copy additionally required a leading `@` and so could never match the unscoped generated packages. "No failures could be attributed" is now its own named error, build failure messages include turbo's stdout summary, and installer-spawned turbo runs pin `FORCE_COLOR=0`.
+
+  **`mj install --dir <new-directory>` failed preflight** with a false "pnpm not found on PATH". The package-manager probe runs from the target directory (corepack resolves per directory) but preflight ran it before anything created that directory, so the spawn failed `ENOENT` and a bare `catch` reported a missing binary. The directory is now created first, and a failed probe reports its real reason.
+
+  **Five interactive prompts could never fire.** `InstallConfigDefaults` pre-answered `DatabaseHost`, `DatabasePort`, `DatabaseTrustCert`, `APIPort` and `ExplorerPort` before `ConfigurePhase` applied its `??` guards. `DatabaseTrustCert` defaulting to `false` wrote an empty `DB_TRUST_SERVER_CERTIFICATE` and failed `migrate` against every self-signed (Docker, local) SQL Server. `--yes` and `--config` installs are unchanged.
+
+  **The database phase reported things it had not checked** — "Database connectivity verified" on a bare TCP probe, and `[FAIL] User sa NOT found` on a correct `sa` setup (`sa` maps to `dbo`).
+
+- 2cd8411: Fix a set of resource-leak findings from the Round 14 memory-leak audit: `ai-mcp-server`'s `--list-tools` CLI path now attaches a pool `error` handler and guarantees the SQL connection pool is closed in a `finally` block, so a failed tool-discovery run no longer orphans the connection; `ai-openai`'s `OpenAIRealtimeSession.Close()` (inherited by the xAI provider) now clears its callback-handler fields on close, matching the Gemini and ElevenLabs realtime sessions; `ng-dashboards`'s `ConnectionsComponent` and `GraphQLConsoleComponent` now call `super.ngOnInit()`/`super.ngOnDestroy()` so `BaseResourceComponent`'s query-param subscription and `destroy$` teardown run correctly; `installer`'s `GitHubReleaseProvider` and `SmokeTestPhase` now drain discarded HTTP response bodies instead of leaving them unconsumed; and `messaging-adapters`'s `SlackAdapter.thinkingMessageIds` map now uses the same TTL/max-size eviction pattern already applied to its sibling per-thread maps.
+
 ## 6.1.0
 
 ### Patch Changes

@@ -9,7 +9,8 @@ const mockProvider = {
 };
 
 vi.mock('../lib/provider-utils', () => ({
-  getDataProvider: () => mockProvider,
+  GetDataProvider: () => mockProvider,
+    get getDataProvider() { return this.GetDataProvider; },
 }));
 
 // Imported AFTER vi.mock so the mock is applied
