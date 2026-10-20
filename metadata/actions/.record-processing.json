@@ -56,7 +56,7 @@
             "IsArray": false,
             "IsRequired": false,
             "DefaultValue": "false",
-            "Description": "When true, compute the per-record changes without writing (FieldRules work type). Defaults to false."
+            "Description": "When true, compute the per-record changes without writing, for every work type: Infer, FieldRules and every write-back persist nothing, while an Action or Agent still runs and only its write-back is previewed. An Infer dry run over the stored scope previews the first 25 records. Defaults to false."
           },
           "primaryKey": {
             "ID": "A597799F-4388-4EEB-85EA-1D542B032DD1"
@@ -64,6 +64,21 @@
           "sync": {
             "lastModified": "2026-06-26T21:32:00.757Z",
             "checksum": "f481d93cc175e89e3e911b565ba4fa935e08ab2667391d5286173ea561ec1e25"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OverwriteHumanValues",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "DefaultValue": "false",
+            "Description": "When true, the run's write-back overwrites values a person entered and retires their Human Feature Values. Defaults to false: values a person entered are kept."
+          },
+          "primaryKey": {
+            "ID": "58A9A967-570D-4B0C-8890-7E27E33BF680"
           }
         },
         {
@@ -154,6 +169,18 @@
           "sync": {
             "lastModified": "2026-06-26T21:32:00.855Z",
             "checksum": "a28ef78652740f141f119193db8b53b5b79ca32706193ab2d0db19859eb9a00c"
+          }
+        }
+      ],
+      "MJ: Action Authorizations": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "AuthorizationID": "@lookup:MJ: Authorizations.Name=Run Record Processes",
+            "Comments": "Holders of Run Record Processes (or Record Processing) may run this action. The action does not authorize its caller itself, so without this row only an Owner could run it."
+          },
+          "primaryKey": {
+            "ID": "49FBDB8C-BE76-4524-86B5-522B6E9FA31A"
           }
         }
       ],
