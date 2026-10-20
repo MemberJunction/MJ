@@ -44,18 +44,25 @@
       @if (ShowVariables && !Prefs.InvocationOpen) {
         <button type="button" class="run-view-vars-rail"
                 (click)="OnToggleInvocation()"
-                title="Show invocation and output"
-                aria-label="Show invocation and output">
+                title="Show step inputs and outputs"
+                aria-label="Show step inputs and outputs">
           <i class="fa-solid fa-code" aria-hidden="true"></i>
           <span>Data</span>
         </button>
       }
       <as-split class="run-view-split" direction="horizontal" unit="percent"
                 [gutterSize]="8" (dragEnd)="OnInvocationSplitDragEnd($event.sizes)">
-        <as-split-area [size]="InvocationPaneSize" [minSize]="14" [visible]="InvocationPaneOpen">
+        <as-split-area [size]="InvocationPaneSize" [minSize]="18" [visible]="InvocationPaneOpen">
           <div class="run-view-vars">
             <div class="run-view-vars-bar">
-              <span>Data</span>
+              <div class="run-view-vars-title">
+                @if (SelectedTask; as step) {
+                  <span class="run-view-vars-step-name" [title]="step.Name">{{ step.Name }}</span>
+                  <span class="run-view-vars-status" [attr.data-status]="step.Status">{{ step.Status }}</span>
+                } @else {
+                  <span>Step Inputs &amp; Outputs</span>
+                }
+              </div>
               <button type="button" class="run-view-vars-min"
                       (click)="OnToggleInvocation()"
                       title="Minimize"
@@ -63,6 +70,12 @@
                 <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
               </button>
             </div>
+            @if (SelectedTask?.ErrorMessage; as errMsg) {
+              <div class="run-view-vars-error" role="status">
+                <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+                <span>{{ errMsg }}</span>
+              </div>
+            }
             <mj-task-graph-variables
               [InputPayload]="SelectedTask?.InputPayload"
               [OutputPayload]="SelectedTask?.OutputPayload"
