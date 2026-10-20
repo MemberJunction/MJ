@@ -26,8 +26,6 @@
     "@memberjunction/aiengine": "6.2.0-edge.4",
     "@memberjunction/core": "6.2.0-edge.4",
     "@memberjunction/core-entities": "6.2.0-edge.4",
-    "@memberjunction/entity-documents": "6.2.0-edge.4",
-    "@memberjunction/feature-pipelines": "6.2.0-edge.4",
     "@memberjunction/field-rules-transforms": "6.2.0-edge.4",
     "@memberjunction/global": "6.2.0-edge.4",
     "@memberjunction/record-set-processor-base": "6.2.0-edge.4",
@@ -35,6 +33,7 @@
     "@memberjunction/templates": "6.2.0-edge.4"
   },
   "devDependencies": {
+    "@memberjunction/unit-testing": "6.2.0-edge.4",
     "@types/node": "24.10.11",
     "typescript": "^5.9.3",
     "vitest": "^3.1.1"

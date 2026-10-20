@@ -1448,12 +1448,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   private async syncWorkspaceWithUrl(url: string, navigatedAt: number = this.lastNavigationAt): Promise<void> {
     const config = this.workspaceManager.GetConfiguration();
-    if (!config?.tabs?.length) {
+    if (!config?.tabs) {
       return;
     }
 
-    // Find the tab that matches this URL
-    const matchingTab = await this.findTabForUrl(url, config.tabs);
+    // Find the tab that matches this URL (null when workspace has no tabs yet,
+    // which falls through to handleMissingTabForUrl below so deep links still open).
+    const matchingTab = config.tabs.length > 0 ? await this.findTabForUrl(url, config.tabs) : null;
 
     if (matchingTab && matchingTab.id !== config.activeTabId) {
       /**

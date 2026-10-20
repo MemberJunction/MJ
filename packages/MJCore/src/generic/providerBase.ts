@@ -1996,7 +1996,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // This touches ONLY how the slot is keyed. param.Fields is left untouched, so what the
         // provider FETCHES is unchanged — an earlier attempt cleared param.Fields instead and was
         // reverted precisely because fetch behavior could not be verified.
-        const fieldsKey = this.isFullCoverageFieldList(param) ? '*' : ProviderBase.normalizeFieldsKey(param.Fields);
+        const fieldsKey = (param.ResultType === 'entity_object' || this.isFullCoverageFieldList(param))
+            ? '*'
+            : ProviderBase.normalizeFieldsKey(param.Fields);
         const fingerprint = `${base}|f:${fieldsKey}`;
         this._clientFingerprintMemo.set(param, fingerprint);
         return fingerprint;
@@ -2004,8 +2006,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _clientFingerprintMemo = new WeakMap<RunViewParams, string>();
 
     /**
-     * True when `param.Fields` names EVERY field of the entity — i.e. an explicit list that is
-     * semantically "full width". Case-insensitive; order-independent. Returns false on any
+     * True when `param.Fields` names EVERY fetchable field of the entity — i.e. an explicit list
+     * that is semantically "full width" (accounting for binary fields excluded when
+     * `IncludeBinaryFields !== true`). Case-insensitive; order-independent. Returns false on any
      * uncertainty (unknown entity, missing fields) so the fingerprint falls back to the explicit
      * list — the safe direction, since misclassifying narrow-as-full would cross-serve shapes.
      */
@@ -2017,11 +2020,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (!entity || entity.Fields.length === 0) {
             return false;
         }
-        if (param.Fields.length < entity.Fields.length) {
+        const includeBinary = param.IncludeBinaryFields === true;
+        const expectedFields = includeBinary || !entity.HasBinaryFields
+            ? entity.Fields
+            : entity.Fields.filter(f => !f.IsBinaryFieldType);
+        if (param.Fields.length < expectedFields.length) {
             return false;   // cheap reject: cannot cover every field with fewer names
         }
         const requested = new Set(param.Fields.map(f => f.trim().toLowerCase()));
-        return entity.Fields.every(f => requested.has(f.Name.trim().toLowerCase()));
+        return expectedFields.every(f => requested.has(f.Name.trim().toLowerCase()));
     }
 
     /**
@@ -2761,6 +2768,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
          * fingerprint string for every batch item.
          */
         fingerprintMap?: Map<number, string>;
+        /**
+         * Pre-resolved local cache entries keyed by client cache fingerprint, populated
+         * during prepareSmartCacheCheckParams so executeSmartCacheCheck can reuse the
+         * already-parsed results for 'current' items without a second IndexedDB read.
+         */
+        preResolvedCache?: Map<string, CachedRunViewResult | null>;
     };
 
     /**
@@ -3559,24 +3572,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const param = params[i];
             await this.EntityStatusCheck(param, 'PreRunViews', contextUser);
 
+            let entity: EntityInfo | undefined;
             if (param.ResultType === 'entity_object') {
-                const entity = this.EntityByName(param.EntityName);
+                entity = this.EntityByName(param.EntityName);
                 if (!entity) {
                     throw new Error(`Entity ${param.EntityName} not found in metadata`);
                 }
-                // NOTE (R2-GAP-1, logged as B44): widening to an explicit full field list makes
-                // the client fingerprint carry `f:<every field>` rather than `f:*`, so the cache
-                // classifier reads the slot as a NARROW projection and stops maintaining it in
-                // place. entity_object is the BaseEngine default, so this costs in-place
-                // maintenance on the client's most common slot shape. It is a PERF gap only —
-                // the slot is invalidated and refetched, never served wrong.
-                //
-                // Deliberately NOT "fixed" by clearing Fields here: that would change what the
-                // provider FETCHES, not just how the slot is keyed, and I could not verify the
-                // downstream fetch behavior tonight. The safe fix is to normalize a full-coverage
-                // field list to `*` in the FINGERPRINT only, which cannot affect fetching.
                 this.ResolveIncludeBinaryFields(param, entity);
-                param.Fields = this.ComputeRunViewFetchFields(entity, param);
             }
 
             // Gate on runViewCacheEligible (NOT raw param.CacheLocal): the smart-cache-check path is a
@@ -3585,8 +3587,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // BaseEntity event), count_only, AfterKey, BypassCache, cache-disallowed entities. On a client
             // (!TrustLocalCacheCompletely) runViewCacheEligible already implies CacheLocal===true, so this is
             // strictly a tightening — normal cacheable slots are unaffected.
+            //
+            // Compute clientCacheFingerprint BEFORE widening param.Fields for entity_object so the
+            // fingerprint sees the caller's original Fields (normalizing to `|f:*` in O(1) without
+            // building a full-entity field Set or misclassifying entities with excluded binary columns).
             if (this.runViewCacheEligibleForWrite(param) && LocalCacheManager.Instance.IsInitialized) {
                 cacheable.push({ paramIndex: i, fingerprint: this.clientCacheFingerprint(param) });
+            }
+
+            if (param.ResultType === 'entity_object' && entity) {
+                param.Fields = this.ComputeRunViewFetchFields(entity, param);
             }
         }
 
@@ -3615,7 +3625,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             allCached: false, // Don't return cached directly - let server validate
             useSmartCacheCheck: true,
             smartCacheCheckParams,
-            cacheStatusMap: new Map()
+            cacheStatusMap: new Map(),
+            preResolvedCache: cacheMap,
         };
     }
 
@@ -3657,20 +3668,30 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }));
         }
 
-        // ── Batched cache pre-read for 'current' entries ──────────────────
-        // Each 'current' result needs its cached row data to materialize the response.
-        // Collect every fingerprint up front and issue ONE batched read instead of
-        // letting each per-param processor do its own GetRunViewResult call (~85
-        // serialized IDB transactions in the 8-engine warm-load case).
-        const currentFingerprints: string[] = [];
+        // ── Reuse pre-resolved cache map from prepareSmartCacheCheckParams ──
+        // prepareSmartCacheCheckParams already read all cacheable fingerprints from
+        // LocalCacheManager in a single batched IDB transaction. Reuse that map directly
+        // so 'current' entries don't trigger a second IDB transaction + JSON.parse pass.
+        // Only query LocalCacheManager for any 'current' fingerprint not already present
+        // in preResult.preResolvedCache (e.g., direct test invocations).
+        const preResolvedCache = preResult.preResolvedCache
+            ? new Map<string, CachedRunViewResult | null>(preResult.preResolvedCache)
+            : new Map<string, CachedRunViewResult | null>();
+        const missingFingerprints: string[] = [];
         for (const sr of response.results) {
             if (sr.status === 'current' && params[sr.viewIndex]) {
-                currentFingerprints.push(this.clientCacheFingerprint(params[sr.viewIndex]));
+                const fp = this.clientCacheFingerprint(params[sr.viewIndex]);
+                if (!preResolvedCache.has(fp)) {
+                    missingFingerprints.push(fp);
+                }
             }
         }
-        const preResolvedCache = currentFingerprints.length > 0
-            ? await LocalCacheManager.Instance.GetRunViewResults(currentFingerprints)
-            : new Map<string, CachedRunViewResult | null>();
+        if (missingFingerprints.length > 0) {
+            const fetched = await LocalCacheManager.Instance.GetRunViewResults(missingFingerprints);
+            for (const [k, v] of fetched) {
+                preResolvedCache.set(k, v);
+            }
+        }
 
         // Pre-build index Map for server results lookup — avoids O(N^2) .find() scans below.
         const serverResultsByViewIndex = new Map<number, RunViewWithCacheCheckResult<T>>();
@@ -4880,11 +4901,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // settings to give it, so a LATER caller that does (StartupManager, passing the host's
         // cacheSettings) is not a no-op: Initialize applies that configuration to the already
         // initialized manager rather than discarding it, which is what made cacheSettings inert
-        // before.
-        if (!LocalCacheManager.Instance.IsInitialized) {
-            const storageProvider = this.LocalStorageProvider;
-            await LocalCacheManager.Instance.Initialize(storageProvider);
-        }
+        // before. Kick off initialization without awaiting immediately so on warm boots it runs
+        // concurrently with LoadLocalMetadataFromStorage() instead of adding a serial IDB round-trip.
+        const localCacheInitPromise = !LocalCacheManager.Instance.IsInitialized
+            ? LocalCacheManager.Instance.Initialize(this.LocalStorageProvider)
+            : Promise.resolve();
 
         // first, let's check to see if we have an existing Metadata.Provider registered, if so
         // unless our data.IgnoreExistingMetadata is set to true, we will not refresh the metadata.
@@ -4902,6 +4923,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // we have an existing globally registered provider AND we are not
             // requested to ignore the existing metadata, so we will not refresh it
             if (this.CopyMetadataFromGlobalProvider()) {
+                await localCacheInitPromise;
                 return true; // we're done, if we fail here, we keep going and do normal logic
             }
         }
@@ -4917,7 +4939,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // This is a stale-while-revalidate pattern: serve cached data instantly, then
         // refresh if the server says it's outdated.
         if (!this.TrustLocalCacheCompletely && !hardRefresh && !this._localMetadata?.AllEntities?.length) {
-            await this.LoadLocalMetadataFromStorage();
+            await Promise.all([localCacheInitPromise, this.LoadLocalMetadataFromStorage()]);
             if (this._localMetadata?.AllEntities?.length) {
                 LogStatusEx({ message: `⚡ [Metadata Cache] Loaded ${this._localMetadata.AllEntities.length} entities from local cache — pre-validating before engine startup`, verboseOnly: false });
 
@@ -4928,6 +4950,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
                 return true; // App can proceed immediately with cached metadata
             }
+        } else {
+            await localCacheInitPromise;
         }
 
         // An empty graph has nothing to throttle: the throttle exists to stop redundant checks of a
@@ -4951,6 +4975,22 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // guaranteeing the final swap comes from a read that started after the last request.
             if (this._metadataReloadInFlight) {
                 this._metadataReloadQueued = true;
+                if (this._metadataReadsJoinTransaction) {
+                    // Caller owns an open database transaction (RefreshWithinTransaction) and is
+                    // waiting for this reload before it can COMMIT or ROLLBACK. An in-flight pool
+                    // reload may be blocked in the database on the caller's own uncommitted locks
+                    // (LCK_M_S), so awaiting _metadataReloadInFlight here would self-deadlock.
+                    // Run the transactional reload directly on the ambient transaction; setting
+                    // _metadataReloadQueued = true above ensures the pool reload re-reads clean
+                    // committed state once the transaction finishes and releases its locks.
+                    await this.RefreshRemoteMetadataTimestamps(providerToUse);
+                    const res = await this.GetAllMetadata(providerToUse, true);
+                    if (res) {
+                        await this.adoptServerMetadata(res);
+                        this._configLoadedFromServer = true;
+                    }
+                    return true;
+                }
                 await this._metadataReloadInFlight;
                 return true;
             }
@@ -5077,7 +5117,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return;
         }
         try {
-            const needsRefresh = await this.CheckToSeeIfRefreshNeeded(providerToUse);
+            // Run the staleness check and CurrentUser refresh concurrently on warm boot so
+            // when metadata is current (99%+ of warm loads) we eliminate a sequential round-trip.
+            const [needsRefresh] = await Promise.all([
+                this.CheckToSeeIfRefreshNeeded(providerToUse),
+                this.RefreshCurrentUser(),
+            ]);
             if (needsRefresh) {
                 LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata is stale — refreshing before engine startup`, verboseOnly: false });
                 const start = Date.now();
@@ -5089,9 +5134,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 }
             } else {
                 LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata is current`, verboseOnly: false });
-                // Even when entity metadata is current, refresh CurrentUser so user roles and permissions
-                // stay in sync with the database without requiring a schema change or manual cache clear.
-                await this.RefreshCurrentUser();
             }
         } catch (e) {
             LogError(`[Metadata Cache] Pre-validation failed: ${e instanceof Error ? e.message : String(e)} — engines will smart-cache-check`);
@@ -5329,8 +5371,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         try {
             const user = await this.GetCurrentUser();
             if (user && this._localMetadata) {
+                const previousUserJson = this._localMetadata.CurrentUser
+                    ? JSON.stringify(this._localMetadata.CurrentUser)
+                    : null;
                 this._localMetadata.CurrentUser = user;
-                void this.SaveLocalMetadataToStorage();
+                // Only re-persist the full metadata snapshot when the user record or roles
+                // actually changed; on warm boots where CurrentUser is unchanged, skipping
+                // SaveLocalMetadataToStorage avoids a multi-MB JSON.stringify + gzip + IDB
+                // write pass on the main thread during startup.
+                if (previousUserJson !== JSON.stringify(user)) {
+                    void this.SaveLocalMetadataToStorage();
+                }
                 return user;
             }
         } catch (e) {
@@ -6551,17 +6602,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Used for compressed metadata storage/retrieval.
      */
     protected static arrayBufferToBase64(buffer: ArrayBuffer): string {
-        // Node encodes natively. The loop below concatenates one character per byte, building a rope
-        // the size of the payload that then has to be flattened.
+        // Node encodes natively. In browsers, process in 32KB chunks with spread to avoid
+        // building a character-by-character rope across multi-MB payloads.
         if (typeof Buffer !== 'undefined') {
             return Buffer.from(buffer).toString('base64');
         }
         const bytes = new Uint8Array(buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
+        const chunkSize = 0x8000;
+        const chunks: string[] = [];
+        for (let i = 0; i < bytes.byteLength; i += chunkSize) {
+            chunks.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
         }
-        return btoa(binary);
+        return btoa(chunks.join(''));
     }
 
     /**

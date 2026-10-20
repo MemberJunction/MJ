@@ -414,6 +414,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     SafeDetectChanges(this.cdr);
   }
 
+  private recordsLayoutInitRetryCount = 0;
+
   /**
    * Keep the RECORDS region in lockstep with the workspace configuration:
    * resolve region visibility (active tab is a record), lazily initialize the
@@ -435,6 +437,14 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     const activeTab = config.tabs.find(t => t.id === config.activeTabId);
     const showing = !!activeTab && this.isRecordTab(activeTab);
 
+    if (showing !== this.ShowRecordsRegion) {
+      this.ShowRecordsRegion = showing;
+      // Flush NOW — the visibility class must land BEFORE records GL init/tab
+      // creation so synchronous TabShown events see ShowRecordsRegion=true and
+      // load the active record immediately instead of parking it.
+      this.flushRegionCd();
+    }
+
     // EAGER init + sync on EVERY emission. The region container always keeps
     // its full layout box (visibility-hidden, never display:none — see the
     // component CSS), so the records GL can initialize and reconcile even
@@ -449,14 +459,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.syncRecordsTabs(recordTabs);
     }
 
-    if (showing !== this.ShowRecordsRegion) {
-      this.ShowRecordsRegion = showing;
-      // Flush NOW — the visibility class must land in this pass, not
-      // whenever the next unrelated emission happens to run CD.
-      this.flushRegionCd();
-      if (showing) {
-        this.flushPendingRecordShows();
-      }
+    if (this.ShowRecordsRegion) {
+      this.flushPendingRecordShows();
     }
 
     if (showing && activeTab && this.recordsLayoutInitialized) {
@@ -693,17 +697,24 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       return;
     }
     const container = this.RecordsGlContainer?.nativeElement;
-    if (!container) {
-      return; // Template not settled yet — the next sync pass retries
-    }
-    // NEVER initialize GL inside a zero-size (hidden) container — it bakes a
-    // 0x0 internal size into every stack it later creates and the region
-    // renders collapsed forever. Happens when the region flip is reverted
-    // (activation stolen) before this deferred init runs; staying
-    // uninitialized is safe — the next real show retries.
-    if (container.getBoundingClientRect().height === 0) {
+    if (!container || container.getBoundingClientRect().height === 0) {
+      // NEVER initialize GL inside a missing or zero-size (hidden) container —
+      // it bakes a 0x0 internal size into every stack it later creates and the
+      // region renders collapsed forever. If the records region IS the active
+      // surface (e.g. startup deep link to a record before layout settles),
+      // schedule a bounded retry so initialization is not stranded.
+      if (this.ShowRecordsRegion && this.recordsLayoutInitRetryCount < this.MAX_LAYOUT_INIT_RETRIES) {
+        this.recordsLayoutInitRetryCount++;
+        setTimeout(() => {
+          const latest = this.workspaceManager.GetConfiguration();
+          if (latest && !this.recordsLayoutInitialized) {
+            this.syncRecordsRegion(latest);
+          }
+        }, 50);
+      }
       return;
     }
+    this.recordsLayoutInitRetryCount = 0;
     // Mobile: headerless GL — the record bar replaces the strip
     this.recordsLayoutManager.Initialize(container, { HideHeaders: this.mobileRecordsActive });
     this.recordsLayoutInitialized = true;
@@ -723,6 +734,14 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       // loading such a layout would render a ghost pane for a closed record.
       if (layoutToLoad?.root && recordTabs.length > 0 && this.layoutCoversExactTabSet(layoutToLoad.root, recordTabs)) {
         if (this.recordsLayoutManager.LoadLayout(layoutToLoad)) {
+          recordTabs.forEach(tab => this.updateTabDisplayName(tab));
+          setTimeout(() => {
+            const latest = this.workspaceManager.GetConfiguration();
+            if (latest?.activeTabId && this.ShowRecordsRegion) {
+              this.focusRecordsTab(latest.activeTabId);
+            }
+            this.recordsLayoutManager.updateSize();
+          }, 50);
           return;
         }
       }
@@ -1041,6 +1060,12 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   }
 
   ngAfterViewInit(): void {
+    const config = this.workspaceManager.GetConfiguration();
+    if (config) {
+      this.syncRecordsRegion(config);
+      this.updateRecordSurfaceState(config);
+    }
+
     // Initialize Golden Layout only if we're not in single-resource mode
     if (!this.UseSingleResourceMode) {
       this.initializeGoldenLayout();

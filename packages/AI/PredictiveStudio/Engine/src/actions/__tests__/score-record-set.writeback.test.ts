@@ -73,7 +73,7 @@ class TestableWriteBackRunner extends ProductionScoreRecordSetRunner {
     results: RecordResult[],
     request: ScoreRecordSetRequest,
   ): Promise<{ wroteBack: boolean; failedIndexes: Set<number> }> {
-    const ctx = { contextUser: { ID: 'u1' }, provider: {} } as unknown as RecordProcessorContext;
+    const ctx = { ContextUser: { ID: 'u1' }, Provider: {} } as unknown as RecordProcessorContext;
     return (this as unknown as {
       applyWriteBack(
         r: RecordRef[],
