@@ -16,6 +16,14 @@ import {
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MarkdownService } from '../services/markdown.service';
 import { MarkdownConfig, DEFAULT_MARKDOWN_CONFIG, MarkdownRenderEvent, HeadingInfo } from '@memberjunction/markdown-core';
+
+/** A rendered image the reader clicked or activated: what a host needs to show it full size. */
+export interface MarkdownImageClickEvent {
+  /** The image's `src`, as rendered (absolute). */
+  Src: string;
+  /** Its alt text; '' when it has none. */
+  Alt: string;
+}
 // Collapsible section toggle is handled inline in setupCollapsibleListeners
 
 /** Inputs whose change re-parses the markdown, by camelCase name. */
@@ -397,6 +405,14 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   @Output() codeCopied = this.CodeCopied;
 
   /**
+   * Emitted when a rendered image is clicked (or focused and activated with Enter or Space), so a
+   * host can show it full size; a chat opens its image viewer. Images react only while something
+   * is bound to this output, so a host that does not listen keeps inert images. An image inside a
+   * link keeps the link's behaviour and is not reported.
+   */
+  @Output() ImageClicked = new EventEmitter<MarkdownImageClickEvent>();
+
+  /**
    * The sanitized HTML content to display
    */
   public RenderedContent: SafeHtml = '';
@@ -568,6 +584,11 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     // Setup code copy listeners for custom event emission
     if (this.EnableCodeCopy) {
       this.setupCodeCopyListeners(container as HTMLElement);
+    }
+
+    // Setup image click listeners, only when a host listens
+    if (this.ImageClicked.observed) {
+      this.setupImageClickListeners(container as HTMLElement);
     }
 
     // Emit rendered event
@@ -757,6 +778,27 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
           level,
           raw: text,
         });
+      });
+    });
+  }
+
+  /**
+   * Report clicks on rendered images, except those inside a link, and make them reachable by
+   * keyboard. The class lets the stylesheet show them as zoomable, and marks an image already wired:
+   * post-render processing can run twice over the same DOM (ngAfterViewInit and the render
+   * microtask on first render), and a second listener would report every click twice.
+   */
+  private setupImageClickListeners(container: HTMLElement): void {
+    container.querySelectorAll('img').forEach((img) => {
+      if (img.closest('a') || img.classList.contains('mj-markdown-image-clickable')) return;
+      img.classList.add('mj-markdown-image-clickable');
+      img.tabIndex = 0;
+      const report = () => this.ImageClicked.emit({ Src: img.src, Alt: img.alt });
+      img.addEventListener('click', report);
+      img.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        report();
       });
     });
   }

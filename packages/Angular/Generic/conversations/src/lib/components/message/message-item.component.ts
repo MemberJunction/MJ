@@ -20,7 +20,7 @@ import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand,
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { PlanModePreference } from '../../utils/plan-mode-preference';
-import { MarkdownService } from '@memberjunction/ng-markdown';
+import { MarkdownService, type MarkdownImageClickEvent } from '@memberjunction/ng-markdown';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -2626,6 +2626,21 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /** @deprecated Use {@link OnAttachmentClick}. */
   public onAttachmentClick(attachment: MessageAttachment): void {
     return this.OnAttachmentClick(attachment);
+  }
+
+  /**
+   * An image in the message text was clicked: open it in the chat's image viewer, the way an
+   * attachment thumbnail opens there.
+   */
+  public OnMarkdownImageClicked(image: MarkdownImageClickEvent): void {
+    this.AttachmentClicked.emit({
+      id: image.Src,
+      type: 'Image',
+      mimeType: '',
+      fileName: image.Alt || null,
+      sizeBytes: 0,
+      contentUrl: image.Src,
+    });
   }
 
   /**
