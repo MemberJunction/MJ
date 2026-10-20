@@ -3121,7 +3121,7 @@
       "Name": "Llama 3 70b",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 4,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -3161,7 +3161,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "meta-llama/llama-3-70b-instruct",
             "MaxInputTokens": 8192,
@@ -3220,7 +3220,7 @@
       "Description": "Llama 3.1 405 billion parameters",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 5,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -3260,7 +3260,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "meta-llama/llama-3.1-405b-instruct",
             "MaxInputTokens": 128000,
@@ -5601,7 +5601,7 @@
       "Description": "The o1 reasoning model is designed to solve hard problems across domains. o1-mini is a faster and more affordable reasoning model, but we recommend using the newer o3-mini model that features higher intelligence at the same latency and price as o1-mini.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -5660,7 +5660,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "openai/o1-mini",
             "MaxInputTokens": 200000,
@@ -5815,7 +5815,7 @@
       "Description": "First model of the Claude 3.5 model family",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 5,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -5874,7 +5874,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "anthropic/claude-3.5-sonnet",
             "MaxInputTokens": 200000,
@@ -6736,7 +6736,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "mistralai/mistral-medium",
             "SupportedResponseFormats": "Any",
@@ -6819,7 +6819,7 @@
       "Description": "MoE Model from Mistral AI",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 2,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "LLM": {
@@ -6883,7 +6883,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "mistralai/mixtral-8x7b-instruct",
             "MaxInputTokens": 32000,
@@ -7116,7 +7116,7 @@
       "Description": "Deepseek R1/Llama 3.3 70B Distillation",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 9,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true,
@@ -7179,7 +7179,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "deepseek/deepseek-r1-distill-llama-70b",
             "MaxInputTokens": 128000,
@@ -17393,7 +17393,7 @@
             "Priority": 50,
             "Status": "Active",
             "DriverClass": "OpenRouterLLM",
-            "APIName": "mistralai/mistral-medium-3.5",
+            "APIName": "mistralai/mistral-medium-3-5",
             "MaxInputTokens": 256000,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
@@ -17668,7 +17668,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "qwen/qwen3.6-max-preview",
             "MaxInputTokens": 262144,
@@ -17717,16 +17717,17 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "StartedAt": "2026-04-27T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 1.04,
             "OutputPricePerUnit": 6.24,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3.6 Max Preview on OpenRouter (passthrough). Source: https://openrouter.ai/qwen/qwen3.6-max-preview",
+            "Comments": "Qwen 3.6 Max Preview on OpenRouter (passthrough). Source: https://openrouter.ai/qwen/qwen3.6-max-preview Expired: OpenRouter retired qwen/qwen3.6-max-preview on 2026-10-09 (announced date); the id is absent from openrouter.ai/api/v1/models as of 2026-10-20.",
             "CacheReadPricePerUnit": null,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-10-09T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "35E5C2D6-C32A-4D4C-8271-0F909D6F850A"
@@ -18640,7 +18641,7 @@
             "Priority": 50,
             "Status": "Active",
             "DriverClass": "OpenRouterLLM",
-            "APIName": "qwen/qwen3.8-max",
+            "APIName": "qwen/qwen3.8-max-0902",
             "MaxInputTokens": 991800,
             "MaxOutputTokens": 131072,
             "SupportedResponseFormats": "Any",
@@ -20175,7 +20176,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "mistralai/magistral-medium-2509",
             "MaxInputTokens": 128000,
@@ -20223,14 +20224,15 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "StartedAt": "2025-09-18T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 2,
             "OutputPricePerUnit": 5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Magistral Medium 1.2 on OpenRouter (passthrough pricing). Source: OpenRouter Mistral models listing."
+            "Comments": "Magistral Medium 1.2 on OpenRouter (passthrough pricing). Source: OpenRouter Mistral models listing. Expired: mistralai/magistral-medium-2509 is not on openrouter.ai/api/v1/models (2026-10-20) and no Magistral id is listed there; EndedAt is the observation date, not a published sunset date.",
+            "EndedAt": "2026-10-20T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "8EFB2986-9A24-49DD-8CA3-935B2CB02450"
@@ -20351,7 +20353,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "mistralai/magistral-small-2509",
             "MaxInputTokens": 128000,
@@ -20399,14 +20401,15 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "StartedAt": "2025-09-18T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 0.5,
             "OutputPricePerUnit": 1.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Magistral Small 1.2 on OpenRouter (passthrough pricing)."
+            "Comments": "Magistral Small 1.2 on OpenRouter (passthrough pricing). Expired: mistralai/magistral-small-2509 is not on openrouter.ai/api/v1/models (2026-10-20) and no Magistral id is listed there; EndedAt is the observation date, not a published sunset date.",
+            "EndedAt": "2026-10-20T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "148C5D7D-6E0A-4831-BAFF-5B9EF838A8DC"
@@ -23005,7 +23008,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "Priority": 50,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "OpenRouterLLM",
             "APIName": "anthropic/claude-opus-5-fast",
             "MaxInputTokens": 1000000,
@@ -23054,16 +23057,17 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "StartedAt": "2026-07-24T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 10,
             "OutputPricePerUnit": 50,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 5 Fast on OpenRouter (passthrough pricing, 2x standard Opus 5). Source: https://openrouter.ai/anthropic/claude-opus-5-fast",
+            "Comments": "Claude Opus 5 Fast on OpenRouter (passthrough pricing, 2x standard Opus 5). Source: https://openrouter.ai/anthropic/claude-opus-5-fast Expired: anthropic/claude-opus-5-fast is absent from openrouter.ai/api/v1/models as of 2026-10-20 (the listing carried a deprecation notice); EndedAt is the observation date, not a published sunset date.",
             "CacheReadPricePerUnit": null,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-10-20T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "8EEA0010-913E-4848-8443-8FADDE46B309"
@@ -29082,6 +29086,7 @@
             "DriverClass": "OpenRouterLLM",
             "APIName": "meta/muse-spark-open",
             "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 943718,
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
@@ -29107,7 +29112,7 @@
             "ProcessingType": "Realtime",
             "CacheReadPricePerUnit": 0.15,
             "CacheWritePricePerUnit": null,
-            "Comments": "Muse Spark Open on OpenRouter (meta/muse-spark-open): $1.25/$4.25 per 1M with 1M context, listed as released 2026-10-15. Together AI publishes the same $1.25/$4.25 with $0.15/1M cached input, and the cache-read figure here comes from that Together AI rate card rather than from OpenRouter, which did not publish one — treat it as indicative for this route. MaxOutputTokens is deliberately omitted: no source consulted published an output cap. A cheaper \"Contributor\" tier ($0.10/$0.20) exists on the Muse Spark line in exchange for letting Meta train on your traffic, with a 60 rpm cap; it is a separate SKU and is not modelled. OpenRouter was unreachable from the 2026-10-19 research session, so these figures come from its indexed listing page rather than a live read of /api/v1/models. Source: https://openrouter.ai/meta/muse-spark-open"
+            "Comments": "Muse Spark Open on OpenRouter (meta/muse-spark-open): $1.25/$4.25 per 1M with 1M context, listed as released 2026-10-15. Together AI publishes the same $1.25/$4.25 with $0.15/1M cached input, and the cache-read figure here comes from that Together AI rate card rather than from OpenRouter, which did not publish one — treat it as indicative for this route. MaxOutputTokens (943,718) is top_provider.max_completion_tokens from a live read of openrouter.ai/api/v1/models on 2026-10-20, which also lists input_cache_read at $0.15/1M, confirming the cache-read figure for this route. A cheaper \"Contributor\" tier ($0.10/$0.20) exists on the Muse Spark line in exchange for letting Meta train on your traffic, with a 60 rpm cap; it is a separate SKU and is not modelled. OpenRouter was unreachable from the 2026-10-19 research session, so these figures come from its indexed listing page rather than a live read of /api/v1/models. Source: https://openrouter.ai/meta/muse-spark-open"
           },
           "primaryKey": {
             "ID": "DF04F33C-02C0-414A-8E25-E9612DF356F5"
@@ -29117,6 +29122,255 @@
     },
     "primaryKey": {
       "ID": "DCC7619F-29B8-4792-99B8-1D6F9DC4B061"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Muse Spark 1.1",
+      "PowerRank": 19,
+      "Description": "Meta's multimodal reasoning model for agentic tasks (snapshot 2026-07-09, listed on OpenRouter 2026-07-16). Features a 1,048,576-token context window and up to 943,718 output tokens. Accepts text, image, video and PDF input and returns text. Reasoning is always on; supports native tool calling and structured outputs. MJ reaches it through OpenRouter.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 4,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Meta",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "208C63C6-5DB2-4F12-B21F-8CA5691B9082"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "meta/muse-spark-1.1",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 943718,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "26D0D942-2013-481A-86DD-0E20DD00FAF9"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-07-16T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.25,
+            "OutputPricePerUnit": 4.25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Muse Spark 1.1 on OpenRouter (meta/muse-spark-1.1): $1.25/$4.25 per 1M, cache read $0.15/1M as published in input_cache_read (OpenRouter's absolute rate, no write charge). StartedAt is the OpenRouter listing date. OpenRouter also bills web search at $0.0025 per request, which this schema does not model. Source: live read of https://openrouter.ai/api/v1/models on 2026-10-20."
+          },
+          "primaryKey": {
+            "ID": "C8989DB5-C7C5-42E5-AFD1-7BD8F104C0D3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "14C6113B-56AB-4640-AF47-BA54275151F6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Muse Spark 1.2",
+      "PowerRank": 20,
+      "Description": "Meta's reasoning model for complex agentic tasks (snapshot and OpenRouter listing 2026-08-05). Features a 1,048,576-token context window and up to 943,718 output tokens. Accepts text, image, video and PDF input and returns text. Reasoning is always on; supports native tool calling and structured outputs. MJ reaches it through OpenRouter.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 4,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Meta",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "611C2B12-EB00-4B3E-AA90-78087BB26B66"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "meta/muse-spark-1.2",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 943718,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "893FCF70-35CE-4262-B3A6-3E7C7A968F03"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-08-05T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.25,
+            "OutputPricePerUnit": 4.25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.15,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Muse Spark 1.2 on OpenRouter (meta/muse-spark-1.2): $1.25/$4.25 per 1M, cache read $0.15/1M as published in input_cache_read (OpenRouter's absolute rate, no write charge). StartedAt is the OpenRouter listing date. OpenRouter also bills web search at $0.0025 per request, which this schema does not model. Source: live read of https://openrouter.ai/api/v1/models on 2026-10-20."
+          },
+          "primaryKey": {
+            "ID": "57448AEC-1171-478B-BE61-6AD33011C148"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7A77764D-453C-4630-B3AD-381048C4E1EC"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Muse Wonder",
+      "PowerRank": 24,
+      "Description": "Meta's frontier reasoning model for complex personal and professional agentic tasks (snapshot and OpenRouter listing 2026-10-12). Features a 1,048,576-token context window and up to 943,718 output tokens. Accepts text, image, video, audio and PDF input and returns text. Reasoning is always on; supports native tool calling and structured outputs. MJ reaches it through OpenRouter. Effort levels run from minimal to max.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 7,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Meta",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "DBBAF9D5-2CC0-47A8-9F13-7897D4443467"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "meta/muse-wonder",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 943718,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "382C5242-160E-47DE-A7D0-BE741E5FB2A0"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-10-12T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 4,
+            "OutputPricePerUnit": 20,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Muse Wonder on OpenRouter (meta/muse-wonder): $4/$20 per 1M, cache read $0.2/1M as published in input_cache_read (OpenRouter's absolute rate, no write charge). StartedAt is the OpenRouter listing date. OpenRouter also bills web search at $0.0025 per request, which this schema does not model. Source: live read of https://openrouter.ai/api/v1/models on 2026-10-20."
+          },
+          "primaryKey": {
+            "ID": "C693C401-2E78-4944-AD62-B05B26C1D48C"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6E4B78AA-A07B-4A6A-90D9-BC9D2235EF67"
     }
   }
 ]
