@@ -52,6 +52,7 @@ import {
     ListGitHubTags,
     ListGitHubReleases,
     GetLatestVersion,
+    DescribeUnresolvedVersion,
     ParseGitHubUrl,
     FetchManifestFromGitHub,
     IsPrereleaseVersion,
@@ -147,6 +148,17 @@ describe('ValidateGitHubTag', () => {
         expect(result.Exists).toBe(false);
         expect(result.ErrorMessage).toContain("Tag 'v9.9.9' not found");
         expect(result.ErrorMessage).toContain('Acme/App');
+    });
+
+    it('links to the REPOSITORY tags page for a multi-app subpath URL', async () => {
+        // github.com/<owner>/<repo>/<subpath>/tags is a 404 page; the tags live at the repo root.
+        mocks.getRef.mockRejectedValueOnce({ status: 404 });
+        stubRepoReadable();
+
+        const result = await ValidateGitHubTag('https://github.com/Acme/Mono/apps/crm', '1.0.0', {});
+
+        expect(result.ErrorMessage).toContain('Available versions can be checked at https://github.com/Acme/Mono/tags');
+        expect(result.ErrorMessage).not.toContain('/apps/crm/tags');
     });
 
     it('names the missing credential when a 404 is the REPOSITORY, not the tag (#4505)', async () => {
@@ -303,6 +315,25 @@ describe('ListGitHubTags', () => {
         mocks.listTags.mockRejectedValueOnce({ status: 404 });
         const result = await ListGitHubTags('https://github.com/Acme/App', {});
         expect(result).toEqual([]);
+    });
+});
+
+describe('DescribeUnresolvedVersion', () => {
+    it('names the missing credential when the repository itself cannot be read (#4505)', async () => {
+        stubRepoUnreadable();
+
+        const message = await DescribeUnresolvedVersion('https://github.com/Acme/Private', {});
+
+        expect(message).toContain('Cannot read Acme/Private');
+        expect(message).toContain('GITHUB_TOKEN');
+    });
+
+    it('keeps the original message when the repository is readable but has no versions', async () => {
+        stubRepoReadable();
+
+        const message = await DescribeUnresolvedVersion('https://github.com/Acme/App', {});
+
+        expect(message).toBe('Could not determine target version: no version tags or releases found in Acme/App');
     });
 });
 
@@ -526,6 +557,39 @@ describe('TokenMap resolution', () => {
 
         await FetchManifestFromGitHub('https://github.com/Acme/App.git', undefined, options);
         expect(lastAuth()).toBe('app-token');
+    });
+
+    it('matches a TokenMap entry keyed by the repository when the URL carries a multi-app subpath', async () => {
+        // `mj app install https://github.com/<owner>/<repo>/<subpath>` passes the subpath URL through,
+        // while a GitHub credential belongs to the repository — so a repo-keyed entry must apply.
+        mocks.getContent.mockResolvedValueOnce(fileResponse('{}'));
+
+        const options: GitHubClientOptions = { TokenMap: { 'https://github.com/Acme/Mono': 'mono-token' } };
+
+        await FetchManifestFromGitHub('https://github.com/Acme/Mono/apps/crm', undefined, options);
+        expect(lastAuth()).toBe('mono-token');
+    });
+
+    it('prefers a TokenMap entry keyed by the exact subpath URL over one keyed by its repository', async () => {
+        mocks.getContent.mockResolvedValueOnce(fileResponse('{}'));
+
+        const options: GitHubClientOptions = {
+            TokenMap: { 'https://github.com/Acme/Mono': 'mono-token', 'https://github.com/Acme/Mono/apps/crm': 'crm-token' },
+        };
+
+        await FetchManifestFromGitHub('https://github.com/Acme/Mono/apps/crm', undefined, options);
+        expect(lastAuth()).toBe('crm-token');
+    });
+
+    it('does not report a missing credential for a subpath URL whose repository is in TokenMap', async () => {
+        mocks.getRef.mockRejectedValueOnce({ status: 404 });
+        stubRepoUnreadable();
+
+        const options: GitHubClientOptions = { TokenMap: { 'https://github.com/Acme/Mono': 'ghp_wrong' } };
+        const result = await ValidateGitHubTag('https://github.com/Acme/Mono/apps/crm', '1.0.0', options);
+
+        expect(result.ErrorMessage).toContain('does not grant access');
+        expect(result.ErrorMessage).not.toContain('no GitHub credential was supplied');
     });
 
     it('sends no auth token when no token matches and no default', async () => {

@@ -59,6 +59,7 @@ export {
     ValidateGitHubTag,
     DownloadMigrations,
     GetLatestVersion,
+    DescribeUnresolvedVersion,
     ParseGitHubUrl,
     GitHubAccessError,
     IsPrereleaseVersion,

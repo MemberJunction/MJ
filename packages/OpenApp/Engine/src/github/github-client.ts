@@ -102,18 +102,34 @@ export function ParseGitHubUrl(repoUrl: string): { Owner: string; Repo: string; 
 
 /**
  * Resolves the appropriate token for a given repository URL.
- * Checks the TokenMap first (matching by normalized URL), then falls back to the default Token.
+ * Checks the TokenMap first, then falls back to the default Token.
+ *
+ * A TokenMap entry matches by normalized URL first, then by repository (owner/repo). The second
+ * pass is what lets a multi-app install URL (`https://github.com/<owner>/<repo>/<subpath>`, passed
+ * through as-is) use an entry keyed by the repository URL: a GitHub credential grants access to a
+ * repository, not to a path inside it. An entry keyed by the exact subpath URL still wins.
  */
 function ResolveToken(repoUrl: string, options: GitHubClientOptions): string | undefined {
     if (options.TokenMap) {
+        const entries = Object.entries(options.TokenMap);
         const normalized = normalizeRepoUrl(repoUrl);
-        for (const [mapUrl, mapToken] of Object.entries(options.TokenMap)) {
-            if (normalizeRepoUrl(mapUrl) === normalized) {
-                return mapToken;
-            }
+        const exact = entries.find(([mapUrl]) => normalizeRepoUrl(mapUrl) === normalized);
+        if (exact) {
+            return exact[1];
+        }
+        const repoKey = repositoryKey(repoUrl);
+        const sameRepo = repoKey ? entries.find(([mapUrl]) => repositoryKey(mapUrl) === repoKey) : undefined;
+        if (sameRepo) {
+            return sameRepo[1];
         }
     }
     return options.Token;
+}
+
+/** `owner/repo`, lowercased, for a GitHub URL with or without a subpath; null if it is not one. */
+function repositoryKey(url: string): string | null {
+    const parsed = ParseGitHubUrl(url);
+    return parsed ? `${parsed.Owner}/${parsed.Repo}`.toLowerCase() : null;
 }
 
 /**
@@ -318,8 +334,10 @@ function UnreadableRepoMessage(
  * *confirms* the wrong conclusion. Probing the repository is what separates the two cases, so it
  * happens here, once, instead of being re-derived at every call site.
  *
- * Not cached: this runs only on a path that has already failed and is about to stop, so the extra
- * request costs nothing on any successful install.
+ * Not cached: this runs only after a 404, so a successful fetch never pays for it. Most callers stop
+ * on that 404. The dependency walk does not when the dependency is already installed — it treats the
+ * failed manifest fetch as a leaf and continues — so such an install pays one extra request per
+ * unreadable installed dependency.
  *
  * @param describeMissingTarget - the message to use when the repository IS readable, i.e. when the
  *                                addressed thing really is absent. Lazy, so it is built only then.
@@ -617,6 +635,32 @@ export async function DownloadMigrations(
 }
 
 /**
+ * The message for a repository whose latest version could not be resolved ({@link GetLatestVersion}
+ * returned null).
+ *
+ * The release and tag listings turn a 404 into an empty list, and GitHub answers 404 for a private
+ * repository the caller cannot see — so "no versions" and "cannot read this repository" look the
+ * same to GetLatestVersion. This tells them apart with the same probe {@link DescribeNotFound} uses.
+ *
+ * @param repoUrl - GitHub repository URL (an in-repo subpath is allowed)
+ * @param options - GitHub client options; the probe uses the same credential the listings used
+ * @param subpath - Optional in-repo app path, named in the message when the repository is readable
+ */
+export async function DescribeUnresolvedVersion(
+    repoUrl: string,
+    options: GitHubClientOptions,
+    subpath?: string
+): Promise<string> {
+    const parsed = ParseGitHubUrl(repoUrl);
+    if (!parsed) {
+        return `Invalid GitHub URL: ${repoUrl}`;
+    }
+    const where = subpath ? `${parsed.Owner}/${parsed.Repo} (${subpath})` : `${parsed.Owner}/${parsed.Repo}`;
+    return DescribeNotFound(repoUrl, parsed, options, () =>
+        `Could not determine target version: no version tags or releases found in ${where}`);
+}
+
+/**
  * Fetches the latest release version for a repository.
  * Falls back to listing tags if no GitHub Releases exist (common for repos
  * that only push semver tags without creating formal releases).
@@ -908,7 +952,7 @@ export async function ValidateGitHubTag(
             return {
                 Exists: false,
                 ErrorMessage: await DescribeNotFound(repoUrl, parsed, options, () =>
-                    `Tag '${tag}' not found in ${parsed.Owner}/${parsed.Repo}. Available versions can be checked at ${repoUrl}/tags`),
+                    `Tag '${tag}' not found in ${parsed.Owner}/${parsed.Repo}. Available versions can be checked at https://github.com/${parsed.Owner}/${parsed.Repo}/tags`),
             };
         }
         const message = error instanceof Error ? error.message : String(error);
