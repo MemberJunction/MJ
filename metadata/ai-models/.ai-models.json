@@ -28530,5 +28530,133 @@
     "primaryKey": {
       "ID": "A4E82C91-71F4-4B83-9D12-8C3A4E5F6000"
     }
+  },
+  {
+    "fields": {
+      "Name": "Mercury 3",
+      "PowerRank": 20,
+      "Description": "Inception Labs' commercial-scale diffusion large language model (dLLM) and most capable model to date, released October 19, 2026. Over 40x the scale of Mercury 1 while maintaining 1,000+ tokens per second throughput via parallel token generation and refinement. Features a 1,000,000-token context window, up to 131,072 output tokens, 4-tier reasoning effort (instant, low, medium, high; defaults to low), tool calling, and structured outputs. Temperature is adjustable from 0.5 to 1.0. Launch promotional pricing (50% off) is $0.10/1M input, $0.35/1M output, and $0.01/1M cached input (regularly $0.20/1M input, $0.70/1M output, $0.02/1M cached input).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 12,
+      "CostRank": 2,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Mercury 2",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "02D0868D-3217-45A6-A755-A39003FE1C24"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "InceptionLLM",
+            "APIName": "mercury-3",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "EE727044-D269-4F6B-A12B-8EBA75F19659"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "inception/mercury-3",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "0B7CD06C-224D-43A1-868A-0E78BF019035"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "StartedAt": "2026-10-19T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.1,
+            "OutputPricePerUnit": 0.35,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Mercury 3 (mercury-3) launch promotional pricing on Inception Labs as of October 19, 2026 (50% off): $0.10/1M input, $0.35/1M output, $0.01/1M cached input. Regular pricing is $0.20/1M input, $0.70/1M output, $0.02/1M cached input. Source: https://docs.inceptionlabs.ai/get-started/models",
+            "CacheReadPricePerUnit": 0.01,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "00344402-CD95-43FA-8094-282432EDEE8B"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-10-19T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.1,
+            "OutputPricePerUnit": 0.35,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Mercury 3 on OpenRouter (inception/mercury-3, canonical slug inception/mercury-3-20261019), served by Inception at launch promotional pricing (50% discount): $0.10/1M input, $0.35/1M output, $0.01/1M cache read. Source: https://openrouter.ai/api/v1/models",
+            "CacheReadPricePerUnit": 0.01,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "9C9D64B6-0129-447B-B9D1-197DAD453A61"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4254C52B-AE73-4211-803A-B66168B6F5D5"
+    }
   }
 ]

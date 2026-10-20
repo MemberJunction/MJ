@@ -125,7 +125,9 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
     if (!event?.entityName || !event?.recordId) {
       return;
     }
-    const key = new CompositeKey([{ FieldName: 'ID', Value: event.recordId }]);
+    // The entity arrives at runtime, so the key is built against its real primary key; a
+    // composite key's "F1|v1||F2|v2" segment round-trips too.
+    const key = CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(event.entityName), event.recordId);
     this.navigationService.OpenEntityRecord(event.entityName, key);
   }
 
