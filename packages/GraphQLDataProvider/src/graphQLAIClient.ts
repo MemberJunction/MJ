@@ -2,7 +2,7 @@ import { LogError, LogStatusEx } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
-import type { DecisionAnswer, DecisionQuestion } from "@memberjunction/ai";
+import type { DecisionAnswer, DecisionQuestion, EmbeddingInputType } from "@memberjunction/ai";
 import { SafeJSONParse, CleanAndParseJSON, UUIDsEqual } from "@memberjunction/global";
 import { FireAndForgetHelper, StallDecision } from "./fireAndForgetHelper";
 
@@ -1236,14 +1236,16 @@ export class GraphQLAIClient {
      */
     public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
         try {
+            // inputType is only sent when set, so a server that predates the argument still answers
+            const withInputType = params.inputType != null;
             const mutation = gql`
                 mutation EmbedText(
                     $textToEmbed: [String!]!,
-                    $modelSize: String!
+                    $modelSize: String!${withInputType ? ', $inputType: String' : ''}
                 ) {
                     EmbedText(
                         textToEmbed: $textToEmbed,
-                        modelSize: $modelSize
+                        modelSize: $modelSize${withInputType ? ', inputType: $inputType' : ''}
                     ) {
                         embeddings
                         modelName
@@ -1260,7 +1262,8 @@ export class GraphQLAIClient {
 
             const variables = {
                 textToEmbed: textArray,
-                modelSize: params.modelSize
+                modelSize: params.modelSize,
+                ...(withInputType ? { inputType: params.inputType } : {})
             };
 
             // Execute the mutation
@@ -2024,6 +2027,12 @@ export interface EmbedTextParams {
      * Size of the embedding model to use
      */
     modelSize: 'small' | 'medium';
+
+    /**
+     * Retrieval role of the texts: `'query'` for search text, `'document'` (the default) for text
+     * that is stored and compared
+     */
+    inputType?: EmbeddingInputType;
 }
 
 /**

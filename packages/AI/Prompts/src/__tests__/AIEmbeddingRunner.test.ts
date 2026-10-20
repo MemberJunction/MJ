@@ -101,6 +101,8 @@ const h = vi.hoisted(() => {
     GetConfigurationChain() { return []; },
     HasCredentialBindings() { return false; },
     GetCredentialBindingsForTarget() { return []; },
+    // The real one prefixes texts from the model's catalog config; AIEngine's own tests cover that.
+    PrepareEmbeddingInput: vi.fn((_model: unknown, texts: string[]) => ({ texts, maxInputTokens: undefined as number | undefined })),
   };
 
   let runSeq = 0;
@@ -577,6 +579,27 @@ describe('AIEmbeddingRunner', () => {
     expect(run?.Success).toBe(false);
     expect(run?.Status).toBe('Failed');
     expect(run?.ErrorMessage).toContain('Fatal unrecoverable network crash');
+  });
+
+  it('sends the texts AIEngine prepared, with the input type and the catalog token cap', async () => {
+    h.engine.PrepareEmbeddingInput.mockImplementationOnce((_model: unknown, texts: string[]) => ({
+      texts: texts.map(t => `task: search result | query: ${t}`),
+      maxInputTokens: 8192,
+    }));
+    const result = await runner.RunEmbedding({
+      Texts: ['red planet'],
+      ContextUser: mockUser,
+      PromptID: PROMPT_ID,
+      InputType: 'query',
+    });
+
+    expect(result.Success).toBe(true);
+    expect(h.engine.PrepareEmbeddingInput).toHaveBeenCalledWith(expect.objectContaining({ ID: expect.any(String) }), ['red planet'], 'query', expect.anything());
+    expect(scriptFor(DRIVER_1).Calls[0]).toMatchObject({
+      texts: ['task: search result | query: red planet'],
+      inputType: 'query',
+      maxInputTokens: 8192,
+    });
   });
 
   it('Dimensions are forwarded to the driver', async () => {
