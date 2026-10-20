@@ -2,7 +2,10 @@
 
 Measurements from `index.html` (see README.md) on 2026-10-19, in Chrome 155 on macOS (prefers-color-scheme: dark,
 so the page's shared tokens resolved to their dark values). The two MJ-resident elements were built from this repo
-at `d3903777ba` (MJ 6.2.0-edge.4); the three Open App elements from fresh clones of bizapps-forms `d665fce3`,
+at `d3903777ba` (MJ 6.2.0-edge.4). The support widget's browser bundle is not published anywhere and is produced by
+neither its `build` script nor the publish workflow; "the `bundle:min` build" below means the bundle its own
+`bundle:min` script emits (minified, no keep-names), which is what a consumer following its README gets. The three
+Open App elements come from fresh clones of bizapps-forms `d665fce3`,
 bizapps-orders `514d09bf` and bizapps-caliber `0dbb43a7`, which take `@memberjunction/*` from npm at 6.1.x. Every
 "observed" cell below was read from a saved report or from `measure.mjs`; nothing is estimated.
 
@@ -16,12 +19,12 @@ Runs cited (query string on `http://localhost:8099/`):
 
 | Run | Elements | Query | What it varies |
 |---|---|---|---|
-| R1 | 2 MJ | `?auto=1` | Strict nonce CSP header, support widget as published (minified names), realtime call first |
+| R1 | 2 MJ | `?auto=1` | Strict nonce CSP header, support widget from its `bundle:min` build (minified names), realtime call first |
 | R2 | 2 MJ | `?auto=1&support=keepnames` | Same, support widget rebuilt with `--keep-names` |
-| R3 | 2 MJ | `?auto=1&csp=none` | No CSP header, support widget as published |
+| R3 | 2 MJ | `?auto=1&csp=none` | No CSP header, support widget from its `bundle:min` build |
 | R4 | 2 MJ | `?auto=1&csp=none&support=keepnames` | No CSP, keep-names, realtime call first |
 | R5 | 2 MJ | `?auto=1&csp=none&support=keepnames&order=support-first` | No CSP, keep-names, support runtime loaded before the realtime call |
-| R6 | all 5 | `?auto=1` | Strict nonce CSP, support as published, Open App bundles present |
+| R6 | all 5 | `?auto=1` | Strict nonce CSP, support from its `bundle:min` build, Open App bundles present |
 | R7 | all 5 | `?auto=1&csp=none` | No CSP, all five |
 
 Step numbers are the probe's. Two-element runs: 1 before any bundle, 2 after the realtime shell, 3 after the support
@@ -103,7 +106,7 @@ Columns: what the plan expected, what was observed, which elements, where to see
 |---|---|---|---|---|
 | Entry scripts touch MJ core | Unknown | The realtime shell, the support entry, Forms and Orders do not: 0 `___SINGLETON__` keys after each of them. Caliber does: loading `caliber-widget.js` creates `MJGlobal`, `StartupManager` and `UserInfoEngine` at page load, with 498 `ClassFactory` registrations, before any visitor action. | all | R6 and R7 steps 2 to 6 |
 | Keys the realtime call creates | MJ core singletons | On a page without Caliber: `MJGlobal`, `StartupManager`, `UserInfoEngine`, 505 registrations. On a page with Caliber: none; see the cross-version row. | realtime | R1 step 5; R4 step 5 |
-| Keys the published support bundle creates | §2.1: minified names collide | Two keys with minified names: `zi` and `a` (the keep-names build shows these are `MJGlobal` and `StartupManager`; `zi` holds 472 registrations). So as published, the support bundle never shares with anyone: its own `MJGlobal`, its own `ClassFactory`, its own copy of `BaseSingleton`. `window.___SINGLETON__MJGlobal instanceof <support's BaseSingleton>` is false. No collision inside the support bundle itself: the keep-names build creates the same two keys. | support | R1 step 6, R6 step 9 (`instanceof` matrix `[true, false]`, `baseSingletonCopies: 2`); R5 step 5 for the names |
+| Keys the support widget's `bundle:min` build creates | §2.1: minified names collide | Two keys with minified names: `zi` and `a` (the keep-names build shows these are `MJGlobal` and `StartupManager`; `zi` holds 472 registrations). So from its `bundle:min` build, the support bundle never shares with anyone: its own `MJGlobal`, its own `ClassFactory`, its own copy of `BaseSingleton`. `window.___SINGLETON__MJGlobal instanceof <support's BaseSingleton>` is false. No collision inside the support bundle itself: the keep-names build creates the same two keys. | support | R1 step 6, R6 step 9 (`instanceof` matrix `[true, false]`, `baseSingletonCopies: 2`); R5 step 5 for the names |
 | Keep-names support bundle loaded after the realtime call | §2.1: the second bundle's `getInstance()` returns the first bundle's object | Confirmed. No new key, `MJGlobal` identity unchanged, and the support bundle's 472 registrations landed in the realtime bundle's `ClassFactory`: 505 before, 977 after. Four base classes registered under two different class objects in one registry: `BaseEntity`, `BaseRemotableOperation`, `PermissionProviderBase`, `BasePriceUnitType`. | realtime, support | R2 step 6; R4 step 6 |
 | Keep-names, support runtime first | Same, the other way round | Confirmed. The support bundle creates `MJGlobal` (472 registrations) and `StartupManager`; the realtime call then reuses that `MJGlobal` (977 registrations, the same four doubled base classes) but creates `UserInfoEngine` from its own copy of `BaseSingleton`, so two copies coexist and the shared `MJGlobal` is `instanceof` the support copy only (`[true, false]`). | realtime, support | R5 steps 5 and 6 |
 | **Two MJ versions in one registry** (Caliber from npm 6.1.x with keep-names, the realtime call from this repo at 6.2.0-edge) | §2.1: "with names kept, the second bundle's `getInstance()` returns the first bundle's object. That object was built from another copy of the code, possibly another MJ version" | Confirmed, with the versions mixed. Caliber creates `MJGlobal` at load (498 registrations). The realtime call creates no key and reuses Caliber's 6.1.x `MJGlobal`: 1003 registrations afterwards, ten base classes registered under two class objects: `BaseEntity`, `BaseRemotableOperation`, `PermissionProviderBase`, `BasePriceUnitType`, `BaseRealtimeClient`, `BaseRealtimeChannelClient`, `VectorDBBase`, `RuntimeUtilities`, `BaseEntityActionRuntimeUX`, `BaseArtifactViewerPluginComponent`. The realtime element's channel and driver lookups now run against a registry Caliber owns. | Caliber, realtime | R6 and R7 steps 6 and 8 |
@@ -196,7 +199,7 @@ Caliber carry none.
 - Light OS theme: Matt's machine prefers dark, so `theme="auto"` was only observed resolving to dark on a page without
   `data-theme`.
 - The realtime bundle was built with `keepNames: true` (its script requires it); the support widget was measured both
-  as published (no keep-names) and with keep-names, since the plan's cross-bundle question only arises with names kept.
+  from its `bundle:min` build (no keep-names) and with keep-names, since the plan's cross-bundle question only arises with names kept.
   Caliber's script requires keep-names (the §2.1 incident); Forms and Orders were measured as their scripts build them.
 
 ## 4. Connected run: the two MJ elements against a real MJAPI
@@ -209,7 +212,7 @@ README.md has the recipe and the three things that had to be fixed before a toke
 
 | Run | Query | Report |
 |---|---|---|
-| C1 | `?api=…&csp=none` with the support widget as published | not saved: the support loader failed before mounting (first row below) |
+| C1 | `?api=…&csp=none` with the support widget's `bundle:min` build | not saved: the support loader failed before mounting (first row below) |
 | C2 | `?api=…&csp=none&support=keepnames` | `report-2026-10-20T02-03-11-106Z.json` |
 | C3 | `?api=…&support=keepnames` (strict nonce CSP) | `report-2026-10-20T02-05-07-395Z.json` |
 
@@ -218,8 +221,8 @@ Orders, Caliber, then the realtime call on instance A.
 
 | Check | Expected | Observed | Element(s) | Evidence |
 |---|---|---|---|---|
-| **Published support widget on a real session** | Works (it is the shipped shape) | Fails. The mint succeeds, then the loader's `transport.Initialize(session)` throws `C.Instance.Initialize is not a function` as an uncaught rejection and the element never mounts. That is the same failure as the Caliber incident in §2.1 (`Oo.Instance.Initialize is not a function`): the published bundle is minified without `keepNames`, so two classes share a minified name and `BaseSingleton`'s `___SINGLETON__<name>` key, and `getInstance()` hands back the wrong object. The keep-names build of the same source initializes and mounts. Offline (§2) this never showed, because the loader never got past the mint. | support | C1 (log line `unhandledrejection: C.Instance.Initialize is not a function`); C2 and C3 mount by the loader |
-| Singletons the support runtime creates (keep-names) | A few | 21 keys once its transport initializes: `MJGlobal`, `StartupManager`, `GraphQLDataProvider`, `LocalCacheManager`, `PermissionEngine`, `TelemetryManager`, `BaseEngineRegistry`, `ResourcePermissionEngine`, `DashboardEngine`, `QueryEngine`, `EncryptionEngineBase`, `RemoteOperationEngineBase`, `UserInfoEngine`, `ApplicationSettingEngine`, `SearchEngineBase`, `IdentityClaimEngine`, `AIEngineBase`, `TemplateEngineBase`, `ArtifactMetadataEngine`, `ConversationEngine` and one more. Each engine logs a `[Cache] … Skipping N entity config(s)` warning because the guest user cannot read its entities (19 to 28 `console.error` lines per load). Even the published build creates a readable `GraphQLDataProvider` key, so that one singleton is shared across bundles with or without keep-names. | support | C2, C3 final `singletons.entries`; C1 keys `zi`, `a`, `GraphQLDataProvider` |
+| **Support widget's `bundle:min` build on a real session** | Works (it is the build its README describes) | Fails. The mint succeeds, then the loader's `transport.Initialize(session)` throws `C.Instance.Initialize is not a function` as an uncaught rejection and the element never mounts. The keep-names build of the same source initializes and mounts, so minified class names are the cause; the error has the same shape as the Caliber incident in §2.1 (`Oo.Instance.Initialize is not a function`). Which two classes share the name `C`, and whether the lookup that returns the wrong object is `BaseSingleton`'s `___SINGLETON__<name>` store or the `ClassFactory` string key (the realtime widget's build script names both as reasons it keeps names), was not pinned down. Offline (§2) this never showed, because the loader never got past the mint. | support | C1 (log line `unhandledrejection: C.Instance.Initialize is not a function`); C2 and C3 mount by the loader |
+| Singletons the support runtime creates (keep-names) | A few | 21 keys once its transport initializes: `MJGlobal`, `StartupManager`, `GraphQLDataProvider`, `LocalCacheManager`, `PermissionEngine`, `TelemetryManager`, `BaseEngineRegistry`, `ResourcePermissionEngine`, `DashboardEngine`, `QueryEngine`, `EncryptionEngineBase`, `RemoteOperationEngineBase`, `UserInfoEngine`, `ApplicationSettingEngine`, `SearchEngineBase`, `IdentityClaimEngine`, `AIEngineBase`, `TemplateEngineBase`, `ArtifactMetadataEngine`, `ConversationEngine` and one more. Each engine logs a `[Cache] … Skipping N entity config(s)` warning because the guest user cannot read its entities (19 to 28 `console.error` lines per load). Even the `bundle:min` build creates a readable `GraphQLDataProvider` key, so that one singleton is shared across bundles with or without keep-names. | support | C2, C3 final `singletons.entries`; C1 keys `zi`, `a`, `GraphQLDataProvider` |
 | **Three MJ copies in one registry** | §2.1 | With the support runtime (this repo, 6.2.0-edge) first, Caliber (npm 6.1.x) and then the realtime call (6.2.0-edge) both reuse its `MJGlobal`: 1485 registrations at the end, and `BaseEntity`, `BaseRemotableOperation`, `PermissionProviderBase`, `BasePriceUnitType` and `BaseRealtimeClient` each registered under three different class objects (five more under two). The second `BaseSingleton` copy on the page is Caliber's. | support, Caliber, realtime | C2, C3 final `MJGlobal.classRegistrations`, `baseClassesWithTwoCopies` |
 | Realtime call end to end | The Angular overlay renders | Yes. Consent accepted, `[RealtimeCoAgent] mint model=gpt-realtime-2 driver=OpenAIRealtime` on the server, the overlay mounts inside instance A (`mj-realtime-agent-banner`, `mj-realtime-agent-orb`, `mj-realtime-perception-chip`, `mj-realtime-composer`, `mj-media-controls`, `mj-media-stage`), status "Listening", and `end()` closes it to "That's a wrap". Instance A stays 320 px tall; the media stage is `position: absolute` inside it. | realtime | C2, C3 step 7; the two screenshots taken during C2 |
 | Icons in the live overlay (Forms built `<mjf-icon>` because Font Awesome measured 0 by 0 on a host page, D4) | Measure | Every `<i class="fa-…">` in the overlay renders a glyph: `::before` content set, font `"Font Awesome 6 Free"`, boxes 11 to 18 px wide, both inlined faces `loaded`. The 0 by 0 case did not reproduce on this host. | realtime | C2 live measurement (`icons`) |

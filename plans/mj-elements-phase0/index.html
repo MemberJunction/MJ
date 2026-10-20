@@ -486,7 +486,7 @@
       }
       function report() {
         const final = snapshot('final');
-        const out = { page: location.href.replace(/(rtkey|supportkey)=[^&]*/g, '$1=redacted'), userAgent: navigator.userAgent, csp: params.get('csp') === 'none' ? 'none' : 'header (strict, nonce-based)', supportVariant: supportVariant || 'as published (minified names)', order: params.get('order') || 'realtime-first', manifest, steps, errors, cspViolations: violations, summary: summarize(final) };
+        const out = { page: location.href.replace(/(rtkey|supportkey)=[^&]*/g, '$1=redacted'), userAgent: navigator.userAgent, csp: params.get('csp') === 'none' ? 'none' : 'header (strict, nonce-based)', supportVariant: supportVariant || 'bundle:min build (minified names, no keep-names)', order: params.get('order') || 'realtime-first', manifest, steps, errors, cspViolations: violations, summary: summarize(final) };
         window.__phase0 = out;
         reportEl.textContent = JSON.stringify(out, null, 2);
         say('report written to window.__phase0');
@@ -524,7 +524,7 @@
       document.getElementById('btn-transport').addEventListener('click', loadTransport);
       document.getElementById('btn-scheme').addEventListener('click', toggleScheme);
       document.getElementById('btn-report').addEventListener('click', report);
-      document.getElementById('mode').textContent = `csp=${params.get('csp') || 'header'} support=${supportVariant || 'published'} order=${params.get('order') || 'realtime-first'}${params.get('auto') ? ' auto' : ''} api=${params.get('api') || 'none (closed port)'}`;
+      document.getElementById('mode').textContent = `csp=${params.get('csp') || 'header'} support=${supportVariant || 'bundle:min'} order=${params.get('order') || 'realtime-first'}${params.get('auto') ? ' auto' : ''} api=${params.get('api') || 'none (closed port)'}`;
 
       fetch('bundles/manifest.json').then((r) => r.json()).then(async (m) => {
         manifest = m;

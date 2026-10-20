@@ -32,7 +32,7 @@ Then open the page in a browser and press the buttons in order, or let the query
 |---|---|
 | `/?auto=1` | Loads every bundle present, starts the realtime call on A (accepting the consent notice), loads the support widget's MJ runtime chunk, toggles `color-scheme` twice, prints the report and saves it to `reports/`. |
 | `/?auto=1&csp=none` | Same, without the CSP header. |
-| `/?auto=1&support=keepnames` | Uses the support widget bundle built with `--keep-names` (see below) instead of the published shape. |
+| `/?auto=1&support=keepnames` | Uses the support widget bundle built with `--keep-names` (see below) instead of its own `bundle:min` shape. |
 | `/?auto=1&order=support-first` | Loads the support widget's MJ runtime before the realtime call, so the realtime bundle is the one that finds singletons already on the page. |
 | `/?auto=1&first=b` | Starts the call on instance B (no `csp-nonce` attribute, in a parent with no definite height) instead of A. |
 
@@ -53,7 +53,7 @@ cd packages/Angular/Generic/realtime-widget && pnpm run build
 cd packages/Web/RealtimeWidget && pnpm run build
 # the browser bundle is NOT part of `build`; this is the package's own `bundle:min` line plus a metafile (quote the chunk-names glob in zsh):
 npx esbuild dist/embed.js --bundle --splitting --minify --format=esm --platform=browser --outdir=dist/embed-min --entry-names=mj-widget '--chunk-names=chunks/[name]-[hash]' --metafile=dist/embed-min/meta.json
-# the same with --keep-names, so its singleton keys match the realtime bundle's (the published shape has no keep-names; both are measured):
+# the same with --keep-names, so its singleton keys match the realtime bundle's (the package's own `bundle:min` has no keep-names; both are measured):
 npx esbuild dist/embed.js --bundle --splitting --minify --keep-names --format=esm --platform=browser --outdir=dist/embed-min-keepnames --entry-names=mj-widget '--chunk-names=chunks/[name]-[hash]' --metafile=dist/embed-min-keepnames/meta.json
 ```
 
@@ -204,7 +204,7 @@ their own.
 
    Press "1. Load element bundles", then "2a. Start realtime call on A"; Chrome asks for the microphone. The support
    widget mounts itself after its mint (the page waits up to eight seconds for that before mounting one by hand). Use
-   `support=keepnames`: as published, the support widget's loader fails on a real session (FINDINGS.md §4, first row).
+   `support=keepnames`: built by its own `bundle:min` script (no keep-names), the support widget's loader fails on a real session (FINDINGS.md §4, first row).
    Run it once more without `csp=none` for the nonce-CSP variant.
 
 The database must be at the branch's migrations; a stale one fails in the session janitor on `RecordingStatus` and
