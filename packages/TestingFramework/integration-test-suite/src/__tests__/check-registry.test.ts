@@ -219,7 +219,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['search-origin-gate', SearchOriginGateChecks, 4], // SOG1-SOG4 the search origin-record gate against the live views (IT116)
         ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT118)
         ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT123)
-        ['agent-consult', AgentConsultChecks, 1], // AC1 deterministic sub-agent consult, escalation, request resume, open-consult reload, and resumeRunId chain (IT124)
+        ['agent-consult', AgentConsultChecks, 1], // AC1 deterministic sub-agent consult, escalation, request resume, open-consult reload, and resumeRunId chain (IT153)
         ['agent-handoff', AgentHandoffChecks, 6], // AH1-AH6 top-level peer-to-peer handoff, FollowHandoffs, preset precedence, continuity, refusals, and non-handoff host guard (IT125)
         ['video-data-snapshot', VideoDataSnapshotChecks, 3], // VDS1-VDS3 CaptureDataSnapshot + LoadDataSnapshotValues RLS and permission enforcement per contextUser (IT135)
         ['video-generation-cost', VideoGenerationCostChecks, 2], // VGC1-VGC2 AIVideoRunner.RunGenerateVideo server-calculated Per Second cost and driver-reported cost preservation (IT136)

@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "IT: Consult Parent",
-      "Description": "Deterministic fixture agent for IT124 (agent-consult). Uses DriverClass=ITConsultParentAgent and ChatHandlingOption=Consult (MaxSubAgentConsultRounds=1) so a child Chat question is consulted once, escalated to the root caller on round 2, and resumed when the MJ: AI Agent Requests row is answered.",
+      "Description": "Deterministic fixture agent for IT153 (agent-consult). Uses DriverClass=ITConsultParentAgent and ChatHandlingOption=Consult (MaxSubAgentConsultRounds=1) so a child Chat question is consulted once, escalated to the root caller on round 2, and resumed when the MJ: AI Agent Requests row is answered.",
       "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "DriverClass": "ITConsultParentAgent",
@@ -40,7 +40,7 @@
   {
     "fields": {
       "Name": "IT: Consult Child",
-      "Description": "Deterministic child fixture agent for IT124 (agent-consult). Uses DriverClass=ITConsultChildAgent under ParentID=IT: Consult Parent.",
+      "Description": "Deterministic child fixture agent for IT153 (agent-consult). Uses DriverClass=ITConsultChildAgent under ParentID=IT: Consult Parent.",
       "ParentID": "@lookup:MJ: AI Agents.Name=IT: Consult Parent",
       "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",

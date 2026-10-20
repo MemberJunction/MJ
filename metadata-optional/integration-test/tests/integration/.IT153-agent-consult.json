@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT124 - Agent Consult",
+    "Name": "IT153 - Agent Consult",
     "Description": "Deterministic sub-agent consult, escalation, request persistence, and entity-driven resume end to end with no live model call: IT: Consult Parent (DriverClass=ITConsultParentAgent, ChatHandlingOption=Consult) invokes IT: Consult Child (DriverClass=ITConsultChildAgent), which returns a Chat question; the parent escalates with its own Chat step, leaving the parent run AwaitingFeedback with one Requested MJ: AI Agent Requests row; answering the request triggers MJAIAgentRequestEntityServer.resumeAgent, which reloads the open consult from the parent's persisted Sub-Agent step, injects the sub-agent-consult message before the user answer, and lets the parent resume the child via resumeRunId so the child receives assistant:<question> then user:<answer> and both runs complete.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
