@@ -43,9 +43,8 @@ import {
     BettyBotLLM,
 } from '@memberjunction/ai-betty-bot';
 
-// @memberjunction/ai-blackforestlabs (2 classes)
+// @memberjunction/ai-blackforestlabs (1 classes)
 import {
-    FLUX3VideoGenerator,
     FLUXImageGenerator,
 } from '@memberjunction/ai-blackforestlabs';
 
@@ -222,7 +221,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (454 classes)
+// @memberjunction/core-entities (453 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -266,10 +265,12 @@ import {
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSessionRecordingShardEntity,
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -347,8 +348,6 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
-    MJBrandKitAssetEntity,
-    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -665,7 +664,6 @@ import {
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
-    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -935,6 +933,13 @@ import {
     DatabaseWellKnownUserSource,
 } from '@memberjunction/generic-database-provider';
 
+// @memberjunction/react-linter (3 classes)
+import {
+    RequiredWhenValidator,
+    SqlWhereClauseValidator,
+    SubsetOfEntityFieldsValidator,
+} from '@memberjunction/react-linter';
+
 // @memberjunction/record-cloning (4 classes)
 import {
     RecordCloneDescribeServerOperation,
@@ -1144,13 +1149,12 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (64 classes)
+// @memberjunction/core-entities-server (62 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
-    MJAIAgentRelationshipEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
@@ -1167,7 +1171,6 @@ import {
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
-    MJBrandKitEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
@@ -1212,7 +1215,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (157 classes)
+// @memberjunction/core-actions (164 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1230,11 +1233,13 @@ import {
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
+    ChiefOfStaffInterAgentRequestAction,
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
     ComposeListsAction,
     ConditionalAction,
+    ConfigureAgentUserPolicyAction,
     CopyObjectAction,
     CreateDirectoryAction,
     CreateDocumentAction,
@@ -1276,7 +1281,6 @@ import {
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
-    GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
     GetDefaultFormScaffoldForEntityAction,
@@ -1289,6 +1293,7 @@ import {
     GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
+    GetMyCalendarAndAvailabilityAction,
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
@@ -1311,6 +1316,8 @@ import {
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
+    ManageMyCalendarEventAction,
+    ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
     ModifyFormContributionAction,
@@ -1324,6 +1331,7 @@ import {
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
+    PrepareChiefOfStaffOutboundCallAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
@@ -1339,6 +1347,7 @@ import {
     RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
+    ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
     SearchAction,
@@ -1366,6 +1375,7 @@ import {
     ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
+    VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
@@ -1390,21 +1400,6 @@ import {
     PromptEvalDriver,
     RubricCalibrationTestDriver,
 } from '@memberjunction/testing-engine';
-
-// @memberjunction/video-studio (11 classes)
-import {
-    DockerRenderDriver,
-    LocalWorkerRenderDriver,
-    ProduceVideoAction,
-    RemoteRenderDriver,
-    VideoStudioAgent,
-    VideoStudioArtDirectorAgent,
-    VideoStudioCriticAgent,
-    VideoStudioMotionEngineerAgent,
-    VideoStudioPreProductionAgent,
-    VideoStudioRenderAgent,
-    VideoStudioSetupHealthServerOperation,
-} from '@memberjunction/video-studio';
 
 // @memberjunction/work-queue-engine (14 classes)
 import {
@@ -1446,7 +1441,6 @@ const CLASS_REGISTRATIONS_0: any[] = [
     BedrockLLM,
     BettyLLM,
     BettyBotLLM,
-    FLUX3VideoGenerator,
     FLUXImageGenerator,
     CerebrasLLM,
     CloudflareDecision,
@@ -1543,10 +1537,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSessionRecordingShardEntity,
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -1624,8 +1620,6 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
-    MJBrandKitAssetEntity,
-    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1638,11 +1632,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
     MJCompanyEntity,
+    MJCompanyIntegrationEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
-    MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
@@ -1842,11 +1836,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecommendationRunEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
+    MJRecordCloneLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
-    MJRecordCloneLogEntity,
     MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
@@ -1950,7 +1944,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
-    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -2046,12 +2039,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetTypeformStatisticsAction,
     UpdateJotFormAction,
     UpdateSurveyMonkeyAction,
+    UpdateTypeformAction,
+    WatchNewJotFormSubmissionsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
-    UpdateTypeformAction,
-    WatchNewJotFormSubmissionsAction,
     WatchNewSurveyMonkeyResponsesAction,
     WatchNewTypeformResponsesAction,
     AttachTagsAction,
@@ -2150,6 +2143,9 @@ const CLASS_REGISTRATIONS_3: any[] = [
     GoogleGeocodingProvider,
     HereGeocodingProvider,
     DatabaseWellKnownUserSource,
+    RequiredWhenValidator,
+    SqlWhereClauseValidator,
+    SubsetOfEntityFieldsValidator,
     RecordCloneDescribeServerOperation,
     RecordCloneExecuteServerOperation,
     RecordCloneGetLineageServerOperation,
@@ -2249,11 +2245,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
-    PredictiveStudioRunExperimentAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
@@ -2291,7 +2287,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
-    MJAIAgentRelationshipEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
@@ -2308,7 +2303,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
-    MJBrandKitEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
@@ -2367,11 +2361,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
+    ChiefOfStaffInterAgentRequestAction,
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
     ComposeListsAction,
     ConditionalAction,
+    ConfigureAgentUserPolicyAction,
     CopyObjectAction,
     CreateDirectoryAction,
     CreateDocumentAction,
@@ -2413,7 +2409,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
-    GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
     GetDefaultFormScaffoldForEntityAction,
@@ -2426,6 +2421,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
+    GetMyCalendarAndAvailabilityAction,
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
@@ -2448,16 +2444,18 @@ const CLASS_REGISTRATIONS_4: any[] = [
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
+    ManageMyCalendarEventAction,
+    ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
     ModifyFormContributionAction,
-    ModifyInteractiveFormAction,
-    MoveListMembersAction,
-    MoveObjectAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ModifyInteractiveFormAction,
+    MoveListMembersAction,
+    MoveObjectAction,
     OAuthFlowAction,
     ObjectExistsAction,
     PDFExtractorAction,
@@ -2465,6 +2463,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
+    PrepareChiefOfStaffOutboundCallAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
@@ -2480,6 +2479,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
+    ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
     SearchAction,
@@ -2507,6 +2507,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
+    VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
@@ -2522,17 +2523,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     DecisionEvalDriver,
     PromptEvalDriver,
     RubricCalibrationTestDriver,
-    DockerRenderDriver,
-    LocalWorkerRenderDriver,
-    ProduceVideoAction,
-    RemoteRenderDriver,
-    VideoStudioAgent,
-    VideoStudioArtDirectorAgent,
-    VideoStudioCriticAgent,
-    VideoStudioMotionEngineerAgent,
-    VideoStudioPreProductionAgent,
-    VideoStudioRenderAgent,
-    VideoStudioSetupHealthServerOperation,
     DatabaseTransportDriverFactory,
     MJWorkQueueDeduplicationEntityServer,
     MJWorkQueueDeliveryEntityServer,
@@ -2564,7 +2554,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1090;
+export const CLASS_REGISTRATIONS_COUNT = 1085;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2624,6 +2614,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/feature-pipelines',
     '@memberjunction/geo-core',
     '@memberjunction/generic-database-provider',
+    '@memberjunction/react-linter',
     '@memberjunction/record-cloning',
     '@memberjunction/record-comparison',
     '@memberjunction/rubrics-base',
@@ -2647,7 +2638,6 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/core-actions',
     '@memberjunction/scheduling-actions',
     '@memberjunction/testing-engine',
-    '@memberjunction/video-studio',
     '@memberjunction/work-queue-engine',
     '@memberjunction/work-queue-samples',
 ] as const;

@@ -39,7 +39,11 @@ export type TaskRunRow = {
     Configuration?: string | null;
     AgentRunID?: string | null;
     ActionID?: string | null;
+    Action?: string | null;
     AgentID?: string | null;
+    Agent?: string | null;
+    PromptID?: string | null;
+    Prompt?: string | null;
     UserID?: string | null;
     ErrorMessage?: string | null;
     OutputPayload?: string | null;
@@ -106,6 +110,8 @@ export function ProjectTaskRowsToSpec(
             name: row.Name,
             description: row.Description ?? '',
             dependsOn: dependsOnByTask.get(row.ID) ?? [],
+            ...(config?.layout ? { layout: config.layout } : {}),
+            ...(config?.policy ? { policy: config.policy } : {}),
         };
 
         const layout = config?.layout;
@@ -137,18 +143,20 @@ function nodeFor(
     switch (row.StepType as TaskGraphNodeKind | null | undefined) {
         case 'Agent':
             return TaskNode.Agent(base, {
-                agentName: row.Name,
+                agentName: row.Agent?.trim() || row.AgentID?.trim() || row.Name,
                 message: config?.agent?.message,
                 ...(config?.agent?.presetName ? { presetName: config.agent.presetName } : {}),
             });
         case 'Action':
             return TaskNode.Action(base, {
-                actionName: row.Name,
+                actionName: row.Action?.trim() || row.ActionID?.trim() || row.Name,
                 inputMapping: config?.inputMapping,
                 outputMapping: config?.outputMapping,
             });
         case 'Prompt':
-            return TaskNode.Prompt(base, { promptName: row.Name });
+            return TaskNode.Prompt(base, {
+                promptName: row.Prompt?.trim() || row.PromptID?.trim() || row.Name,
+            });
         case 'ForEach':
             return TaskNode.ForEach(base, config?.forEach ?? { collectionPath: '' });
         case 'While':
@@ -181,6 +189,7 @@ type StoredConfiguration = {
     inputMapping?: string;
     outputMapping?: string;
     layout?: { x?: number; y?: number; width?: number; height?: number };
+    policy?: TaskNodeBase['policy'];
 };
 
 /**

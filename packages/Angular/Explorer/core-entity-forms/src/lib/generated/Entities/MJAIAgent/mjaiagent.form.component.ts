@@ -70,7 +70,8 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentRubrics', sectionName: 'AI Agent Rubrics', isExpanded: false },
             { sectionKey: 'mJInteractionEvents', sectionName: 'Interaction Events', isExpanded: false },
             { sectionKey: 'mJMeetingParticipants', sectionName: 'Meeting Participants', isExpanded: false },
-            { sectionKey: 'mJInteractionOffers', sectionName: 'Interaction Offers', isExpanded: false }
+            { sectionKey: 'mJInteractionOffers', sectionName: 'Interaction Offers', isExpanded: false },
+            { sectionKey: 'mJAIAgentUserPolicies', sectionName: 'AI Agent User Policies', isExpanded: false }
         ]);
     }
 }

@@ -48,10 +48,12 @@ import { MJAIAgentSessionBridgeFormComponent } from "./Entities/MJAIAgentSession
 import { MJAIAgentSessionBridgeParticipantFormComponent } from "./Entities/MJAIAgentSessionBridgeParticipant/mjaiagentsessionbridgeparticipant.form.component";
 import { MJAIAgentSessionChannelFormComponent } from "./Entities/MJAIAgentSessionChannel/mjaiagentsessionchannel.form.component";
 import { MJAIAgentSessionFormComponent } from "./Entities/MJAIAgentSession/mjaiagentsession.form.component";
+import { MJAIAgentSessionRecordingShardFormComponent } from "./Entities/MJAIAgentSessionRecordingShard/mjaiagentsessionrecordingshard.form.component";
 import { MJAIAgentSkillFormComponent } from "./Entities/MJAIAgentSkill/mjaiagentskill.form.component";
 import { MJAIAgentStepFormComponent } from "./Entities/MJAIAgentStep/mjaiagentstep.form.component";
 import { MJAIAgentStepPathFormComponent } from "./Entities/MJAIAgentStepPath/mjaiagentsteppath.form.component";
 import { MJAIAgentTypeFormComponent } from "./Entities/MJAIAgentType/mjaiagenttype.form.component";
+import { MJAIAgentUserPolicyFormComponent } from "./Entities/MJAIAgentUserPolicy/mjaiagentuserpolicy.form.component";
 import { MJAIArchitectureFormComponent } from "./Entities/MJAIArchitecture/mjaiarchitecture.form.component";
 import { MJAIBridgeAgentIdentityFormComponent } from "./Entities/MJAIBridgeAgentIdentity/mjaibridgeagentidentity.form.component";
 import { MJAIBridgeProviderChannelFormComponent } from "./Entities/MJAIBridgeProviderChannel/mjaibridgeproviderchannel.form.component";
@@ -1143,6 +1145,7 @@ export class GeneratedForms_SubModule_22 { }
 @NgModule({
 declarations: [
     MJAIAgentSessionChannelFormComponent,
+    MJAIAgentSessionRecordingShardFormComponent,
     MJAIConfigurationFormComponent,
     MJAPIKeyUsageLogFormComponent,
     MJActionFilterFormComponent,
@@ -1211,6 +1214,7 @@ export class GeneratedForms_SubModule_24 { }
 declarations: [
     MJAIAgentChannelFormComponent,
     MJAIAgentRubricFormComponent,
+    MJAIAgentUserPolicyFormComponent,
     MJActionFormComponent,
     MJCommunicationLogFormComponent,
     MJConversationArtifactPermissionFormComponent,

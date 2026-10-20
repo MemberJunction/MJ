@@ -35,7 +35,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (454 classes)
+// @memberjunction/core-entities (453 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -79,10 +79,12 @@ import {
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSessionRecordingShardEntity,
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -160,8 +162,6 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
-    MJBrandKitAssetEntity,
-    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -478,7 +478,6 @@ import {
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
-    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -538,7 +537,7 @@ import {
     MJRecordProcessEntityExtended,
 } from '@memberjunction/feature-pipelines';
 
-// @memberjunction/ng-artifacts (15 classes)
+// @memberjunction/ng-artifacts (14 classes)
 import {
     AudioArtifactViewerComponent,
     CodeArtifactViewerComponent,
@@ -553,7 +552,6 @@ import {
     PdfArtifactViewerComponent,
     SvgArtifactViewerComponent,
     VideoArtifactViewerComponent,
-    VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
@@ -637,15 +635,13 @@ import {
     RubricEngineBase,
 } from '@memberjunction/rubrics-base';
 
-// @memberjunction/ng-core-entity-forms (74 classes)
+// @memberjunction/ng-core-entity-forms (72 classes)
 import {
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
     AIAgentCategoryOverviewPanel,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
-    BrandKitAssetsPanelComponent,
-    BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
@@ -778,10 +774,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSessionRecordingShardEntity,
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -859,8 +857,6 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
-    MJBrandKitAssetEntity,
-    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1185,7 +1181,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
-    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -1232,7 +1227,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     PdfArtifactViewerComponent,
     SvgArtifactViewerComponent,
     VideoArtifactViewerComponent,
-    VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
     MJAuth0Provider,
     MJCognitoProvider,
@@ -1287,8 +1281,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     AIAgentCategoryOverviewPanel,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
-    BrandKitAssetsPanelComponent,
-    BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
@@ -1332,14 +1324,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestSuiteRunFormComponentExtended,
     MLModelFormComponentExtended,
     MLModelFormPolicy,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     ProjectHierarchyPanel,
     QueryCategoryHierarchyPanel,
     RecordProcessCategoryHierarchyPanel,
     RecordProcessFormComponentExtended,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     RecordProcessFormPolicy,
     RubricAuthorPanel,
     RubricDiffPanel,
@@ -1374,7 +1366,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 624;
+export const CLASS_REGISTRATIONS_COUNT = 620;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

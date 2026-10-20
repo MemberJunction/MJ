@@ -314,6 +314,229 @@
   z-index: 10;
 }
 
+/* Multi-artifact showcase: supporting step outputs in a collapsible grid + brand-tinted final deliverable */
+.multi-artifact-showcase {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* Strip the default 12px top/bottom margin from inner <mj-artifact-message-card> when inside the showcase
+   so the grid and Final Deliverable containers control padding and vertical rhythm directly. */
+.multi-artifact-showcase ::ng-deep .artifact-message-card {
+  margin: 0;
+}
+
+.multi-artifact-supporting-section {
+  border: 1px solid var(--mj-border-default);
+  border-radius: 12px;
+  background: var(--mj-bg-surface-sunken);
+  overflow: hidden;
+}
+
+.supporting-artifacts-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--mj-bg-surface-sunken) 65%, var(--mj-bg-surface-card));
+  border: none;
+  border-bottom: 1px solid var(--mj-border-subtle);
+  cursor: pointer;
+  color: var(--mj-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.multi-artifact-supporting-section.is-collapsed .supporting-artifacts-header {
+  border-bottom: none;
+}
+
+.supporting-artifacts-header:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.supporting-header-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.supporting-header-icon {
+  color: var(--mj-brand-primary);
+  font-size: 12px;
+}
+
+.supporting-header-title {
+  color: var(--mj-text-primary);
+  letter-spacing: 0.01em;
+}
+
+.supporting-header-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.supporting-collapsed-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.supporting-preview-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 220px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.supporting-preview-index {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--mj-text-muted);
+}
+
+.supporting-header-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mj-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.supporting-chevron {
+  font-size: 10px;
+  transition: transform 0.18s ease;
+}
+
+.supporting-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.supporting-artifacts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.supporting-artifact-cell {
+  position: relative;
+  min-width: 0;
+}
+
+.supporting-artifact-cell ::ng-deep .artifact-info-bar {
+  padding: 10px 44px 10px 12px;
+  border-radius: 8px;
+}
+
+.supporting-step-badge {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-subtle);
+  pointer-events: none;
+}
+
+.multi-artifact-primary-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 7%, var(--mj-bg-surface-card));
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 38%, var(--mj-border-default));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+
+.primary-artifact-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mj-brand-primary);
+}
+
+.primary-header-icon {
+  font-size: 11px;
+}
+
+.primary-step-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 32%, var(--mj-border-subtle));
+}
+
+.primary-artifact-card {
+  min-width: 0;
+}
+
+.primary-artifact-card ::ng-deep .artifact-info-bar {
+  background: color-mix(in srgb, var(--mj-brand-primary) 11%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 38%, var(--mj-border-default));
+  border-radius: 8px;
+}
+
+.primary-artifact-card ::ng-deep .artifact-info-bar:hover {
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+}
+
+.primary-artifact-card ::ng-deep .artifact-icon {
+  background: color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-bg-surface-sunken));
+  color: var(--mj-brand-primary);
+}
+
 .message-content {
   flex: 1;
   min-width: 0;
@@ -1981,5 +2204,493 @@
   .message-body .skeleton {
     animation: none;
   }
+}
+
+/* ==================== Inline Workflow Execution Card ==================== */
+.workflow-execution-card {
+  margin-top: 14px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  box-shadow: var(--mj-shadow-sm);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.workflow-execution-card.workflow-status-running {
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default));
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
+
+.workflow-execution-card.workflow-status-complete {
+  border-color: color-mix(in srgb, var(--mj-status-success) 35%, var(--mj-border-default));
+}
+
+.workflow-execution-card.workflow-status-failed {
+  border-color: color-mix(in srgb, var(--mj-status-error) 45%, var(--mj-border-default));
+}
+
+.workflow-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--mj-bg-surface-sunken) 55%, var(--mj-bg-surface-card));
+}
+
+.workflow-card-header.is-collapsible {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.workflow-card-header.is-collapsible:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.workflow-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.workflow-status-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  color: var(--mj-brand-primary);
+}
+
+.workflow-status-complete .workflow-status-icon {
+  background: color-mix(in srgb, var(--mj-status-success) 14%, transparent);
+  color: var(--mj-status-success);
+}
+
+.workflow-status-failed .workflow-status-icon {
+  background: color-mix(in srgb, var(--mj-status-error) 14%, transparent);
+  color: var(--mj-status-error);
+}
+
+.workflow-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.workflow-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.workflow-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.workflow-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.2px;
+}
+
+.workflow-badge.badge-running {
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);
+  color: var(--mj-brand-primary);
+}
+
+.workflow-badge.badge-complete {
+  background: color-mix(in srgb, var(--mj-status-success) 14%, transparent);
+  color: var(--mj-status-success);
+}
+
+.workflow-badge.badge-failed {
+  background: color-mix(in srgb, var(--mj-status-error) 14%, transparent);
+  color: var(--mj-status-error);
+}
+
+.workflow-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--mj-text-muted);
+}
+
+.workflow-dot {
+  opacity: 0.6;
+}
+
+.workflow-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.workflow-duration-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-subtle);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--mj-text-secondary);
+}
+
+.workflow-graph-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-border-subtle));
+  color: var(--mj-brand-primary);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.workflow-graph-btn:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary);
+  transform: translateY(-1px);
+}
+
+.workflow-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.workflow-collapse-btn:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.workflow-collapse-chevron {
+  font-size: 10px;
+  transition: transform 0.18s ease;
+}
+
+.workflow-collapse-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.workflow-progress-track {
+  height: 3px;
+  width: 100%;
+  background: var(--mj-border-subtle);
+  overflow: hidden;
+}
+
+.workflow-progress-fill {
+  height: 100%;
+  background: var(--mj-status-success);
+  transition: width 0.35s ease;
+}
+
+.workflow-progress-fill.is-running {
+  background: linear-gradient(90deg, var(--mj-brand-primary), var(--mj-status-info));
+}
+
+.workflow-status-failed .workflow-progress-fill {
+  background: var(--mj-status-error);
+}
+
+.workflow-steps-pipeline {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 14px;
+}
+
+.workflow-step-item {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.workflow-step-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 24px;
+  flex-shrink: 0;
+}
+
+.workflow-step-node {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  margin-top: 6px;
+  background: var(--mj-bg-surface-sunken);
+  border: 1.5px solid var(--mj-border-default);
+  color: var(--mj-text-muted);
+  flex-shrink: 0;
+}
+
+.step-status-in-progress .workflow-step-node {
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+}
+
+.step-status-complete .workflow-step-node {
+  background: color-mix(in srgb, var(--mj-status-success) 16%, var(--mj-bg-surface));
+  border-color: var(--mj-status-success);
+  color: var(--mj-status-success);
+}
+
+.step-status-failed .workflow-step-node {
+  background: color-mix(in srgb, var(--mj-status-error) 16%, var(--mj-bg-surface));
+  border-color: var(--mj-status-error);
+  color: var(--mj-status-error);
+}
+
+.step-status-skipped .workflow-step-node {
+  background: var(--mj-bg-surface-sunken);
+  border-style: dashed;
+  border-color: var(--mj-border-strong);
+  color: var(--mj-text-muted);
+}
+
+.step-status-skipped .workflow-step-name {
+  color: var(--mj-text-muted);
+}
+
+.workflow-skipped-count {
+  color: var(--mj-text-secondary);
+  font-weight: 500;
+}
+
+.workflow-step-connector {
+  flex: 1;
+  width: 2px;
+  min-height: 12px;
+  background: var(--mj-border-default);
+  margin: 2px 0;
+}
+
+.workflow-step-connector.is-complete {
+  background: color-mix(in srgb, var(--mj-status-success) 55%, var(--mj-border-default));
+}
+
+.workflow-step-content {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.workflow-step-content:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.workflow-step-main-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workflow-step-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.workflow-step-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mj-text-primary);
+}
+
+.workflow-step-agent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 22%, transparent);
+}
+
+.workflow-step-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.workflow-step-duration {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--mj-text-muted);
+}
+
+.workflow-step-duration.is-skipped {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: var(--mj-bg-surface-sunken);
+  border: 1px dashed var(--mj-border-strong);
+  color: var(--mj-text-muted);
+}
+
+.workflow-step-run-btn {
+  border: none;
+  background: transparent;
+  color: var(--mj-text-muted);
+  padding: 2px 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.workflow-step-run-btn:hover {
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
+
+.workflow-step-chevron {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  transition: transform 0.2s ease;
+}
+
+.workflow-step-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.workflow-step-details {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--mj-bg-surface-sunken);
+  border-left: 2px solid var(--mj-brand-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--mj-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ==================== Workflow Continuation Context Banner ==================== */
+
+.workflow-continuation-banner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  margin-bottom: 10px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 26%, var(--mj-border-default));
+  background: color-mix(in srgb, var(--mj-brand-primary) 7%, var(--mj-bg-surface-sunken));
+  color: var(--mj-text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.workflow-continuation-banner:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 13%, var(--mj-bg-surface-sunken));
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default));
+}
+
+.continuation-banner-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.continuation-banner-icon {
+  color: var(--mj-brand-primary);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.continuation-banner-label {
+  font-weight: 500;
+  color: var(--mj-text-muted);
+  flex-shrink: 0;
+}
+
+.continuation-banner-sep {
+  color: var(--mj-text-muted);
+  flex-shrink: 0;
+}
+
+.continuation-banner-name {
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.continuation-banner-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--mj-brand-primary);
+  flex-shrink: 0;
+}
+
+.message-item.workflow-origin-highlight {
+  outline: 2px solid var(--mj-brand-primary);
+  outline-offset: 2px;
+  border-radius: 12px;
+  transition: outline-color 0.3s ease;
 }
 

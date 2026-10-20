@@ -181,9 +181,11 @@
                 <mj-ai-agent-run-step-detail
                   [selectedTimelineItem]="selectedTimelineItem"
                   [Provider]="ProviderToUse"
+                  [SavingWorkflow]="SavingWorkflow"
                   (closePanel)="closeJsonPanel()"
                   (navigateToActionLog)="navigateToActionLog($event)"
-                  (copyToClipboard)="copyToClipboard($event)">
+                  (copyToClipboard)="copyToClipboard($event)"
+                  (SaveAsWorkflowRequested)="OnSaveAsWorkflowRequested($event)">
                 </mj-ai-agent-run-step-detail>
               </as-split-area>
             }

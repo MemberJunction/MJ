@@ -48,6 +48,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
+import { AIEngine } from '@memberjunction/aiengine';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
 import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
@@ -1413,7 +1414,17 @@ export class TaskGraphService {
             activeRows.length > 0
                 ? await AIAgentPermissionHelper.FilterRunnableAgents(activeRows, context.ContextUser)
                 : [];
-        const runnableByName = new Map(runnableRows.map((r) => [r.Name, r.ID]));
+        const runnableByName = new Map<string, string>();
+        const engineLoaded = (AIEngine.Instance?.Agents?.length ?? 0) > 0;
+        for (const r of runnableRows) {
+            if (engineLoaded && context.ContextUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
+                const permitted = await AIEngine.Instance.CanUserRunAgent(r.ID, context.ContextUser);
+                if (!permitted) {
+                    continue;
+                }
+            }
+            runnableByName.set(r.Name, r.ID);
+        }
 
         const unknownOrInactive: string[] = [];
         const notRunnable: string[] = [];

@@ -154,7 +154,10 @@ the run, they appear as ordinary `AIAgentRunStep` rows rather than `Task` rows, 
 is not supported. `startAtStep` works in-process and is refused under dispatch.
 
 Both modes choose outgoing paths with the same function (`SelectOutgoingEdges`), so a flow takes the
-same branches either way. One consequence differs from 5.x in both modes: a path whose destination
+same branches either way. Workflows with multiple `StartingStep: true` entry points compile all
+active starting steps as parallel wave-1 root tasks (`dependsOn: []`) on the dispatcher, while the
+in-process walker executes all starting branches sequentially before entering any downstream join
+step. One consequence differs from 5.x in both modes: a path whose destination
 step is not `Active` is not followed, so a flow whose only satisfied path leads to a disabled step
 now finishes with **Success** where 5.x reported *"No active steps found"*.
 

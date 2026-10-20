@@ -15,6 +15,7 @@ import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import type { NativeToolBinding } from '../native-tools/control-tools';
 import { CoerceActionArguments } from '../native-tools/action-tool-builder';
+import { DecodeJSONArgument } from '../native-tools/json-argument';
 import type { ChatToolCall } from '@memberjunction/ai';
 import { GetToolCallingDecision } from '@memberjunction/ai-prompts';
 
@@ -193,6 +194,12 @@ export class LoopAgentType extends BaseAgentType {
             return;
         }
 
+        // Backward-compatibility normalization: if a prompt or model emits the legacy v1 flat
+        // `"agentName": "..."` field on a task node without `kind` / `configuration`, normalize it
+        // in place to the v2 `kind: "Agent"` + `configuration: { agentName }` shape before running
+        // ValidateTaskGraphSpec so single-agent and multi-agent delegations do not needlessly fail.
+        this.normalizeLegacyTaskNodes(spec);
+
         // The same validator the server runs at submission (D16), so a graph that passes here
         // cannot fail a different check later. Every failure is reported at once — a model fixing a
         // malformed graph should not discover the problems one round-trip at a time.
@@ -238,6 +245,34 @@ export class LoopAgentType extends BaseAgentType {
     }
 
     /**
+     * Normalizes legacy v1 flat `agentName` task nodes into the v2 `{ kind: 'Agent', configuration: { agentName } }`
+     * shape in place before validation.
+     */
+    private normalizeLegacyTaskNodes(spec: TaskGraphSpec): void {
+        if (!spec || !Array.isArray(spec.tasks)) {
+            return;
+        }
+        for (const rawNode of spec.tasks) {
+            if (!rawNode || typeof rawNode !== 'object') {
+                continue;
+            }
+            const record = rawNode as unknown as Record<string, unknown>;
+            const legacyAgentName = typeof record.agentName === 'string' ? record.agentName.trim() : '';
+            if (!record.kind && legacyAgentName.length > 0) {
+                record.kind = 'Agent';
+                if (!record.configuration || typeof record.configuration !== 'object') {
+                    record.configuration = { agentName: legacyAgentName };
+                } else {
+                    const configRecord = record.configuration as Record<string, unknown>;
+                    if (typeof configRecord.agentName !== 'string' || configRecord.agentName.trim().length === 0) {
+                        configRecord.agentName = legacyAgentName;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Decides whether a graph folds to an in-run sub-agent call, and says why when it does not.
      *
      * The reason is carried onto the run step rather than discarded: a user who edits a two-node
@@ -259,10 +294,10 @@ export class LoopAgentType extends BaseAgentType {
         // action, a prompt, a loop — has no in-run equivalent and must reach the dispatcher.
         if (node.kind !== 'Agent') return { folded: false, reason: `the single node is a ${node.kind} step, which has no in-run equivalent` };
         if (spec.durable === true) return { folded: false, reason: 'the graph requested durable execution' };
-        if (spec.continuation && spec.continuation !== 'message') {
-            return { folded: false, reason: `continuation is '${spec.continuation}', not the default` };
+        if (spec.continuation && spec.continuation !== 'message' && spec.continuation !== 'reinvoke') {
+            return { folded: false, reason: `continuation is '${spec.continuation}', not foldable in-run` };
         }
-        return { folded: true, reason: 'single agent node, no dependencies, default continuation' };
+        return { folded: true, reason: 'single agent node, no dependencies, foldable continuation' };
     }
 
     /**
@@ -482,10 +517,12 @@ export class LoopAgentType extends BaseAgentType {
             return this.createRetryStep('complete_task must be the only call on its turn. Finish any other tool calls first, then call complete_task on its own.');
         }
         const message = typeof complete.call.arguments?.message === 'string' ? complete.call.arguments.message.trim() : '';
-        const payloadChangeRequest = this.decodePayloadChangeArgument(complete.call.arguments?.payloadChangeRequest);
-        if (payloadChangeRequest === null) {
-            return this.createRetryStep('complete_task.payloadChangeRequest must be an object (newElements / updateElements / replaceElements / removeElements), or be omitted.');
+        const decoded = this.decodePayloadChangeArgument(complete.call.arguments?.payloadChangeRequest);
+        if ('error' in decoded) {
+            return this.createRetryStep('complete_task.payloadChangeRequest must be an object (newElements / updateElements / replaceElements / removeElements), or be omitted.'
+                + ` Problem: ${decoded.error}`);
         }
+        const payloadChangeRequest = decoded.payloadChangeRequest;
         return this.createSuccessStep({
             ...(message ? { message } : {}),
             payloadChangeRequest,
@@ -503,28 +540,33 @@ export class LoopAgentType extends BaseAgentType {
     }
 
     /**
-     * Reads `complete_task.payloadChangeRequest`: undefined when absent, null when unusable. Models
-     * occasionally JSON-encode a nested object argument, so a string that parses to one is accepted.
+     * Reads `complete_task.payloadChangeRequest`: no change when absent, an error when unusable. The
+     * argument is declared as a JSON string (see `BuildCompleteTaskTool`); an object is accepted too,
+     * since some providers send one anyway. A string whose layout the model wrote as escape sequences
+     * is repaired rather than rejected — see `DecodeJSONArgument`.
      */
-    private decodePayloadChangeArgument(value: unknown): AgentPayloadChangeRequest | undefined | null {
+    private decodePayloadChangeArgument(value: unknown): { payloadChangeRequest?: AgentPayloadChangeRequest } | { error: string } {
         if (value === undefined || value === null) {
-            return undefined;
+            return {};
         }
         // An empty or "null" string is the argument left out, not a malformed one.
         if (typeof value === 'string' && (value.trim() === '' || value.trim() === 'null')) {
-            return undefined;
+            return {};
         }
         let candidate: unknown = value;
         if (typeof value === 'string') {
-            try {
-                candidate = JSON.parse(value);
-            } catch {
-                return null;
+            const decoded = DecodeJSONArgument(value);
+            if ('Error' in decoded) {
+                return { error: decoded.Error };
             }
+            if (decoded.Repaired) {
+                LogStatusEx({ message: '🩹 Loop Agent: complete_task.payloadChangeRequest had layout escapes outside its strings — repaired' });
+            }
+            candidate = decoded.Value;
         }
         return candidate !== null && typeof candidate === 'object' && !Array.isArray(candidate)
-            ? candidate as AgentPayloadChangeRequest
-            : null;
+            ? { payloadChangeRequest: candidate as AgentPayloadChangeRequest }
+            : { error: 'the value is not a JSON object' };
     }
 
     /** One sub-agent tool → `subAgent`; several → the parallel `subAgents[]` form. */
@@ -727,6 +769,7 @@ export class LoopAgentType extends BaseAgentType {
                     terminate: true, // Chat always terminates to return to user
                     decisions: response.decisions,
                     payloadChangeRequest: response.payloadChangeRequest,
+                    artifactDirective: response.artifactDirective,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
                     conversationToolCalls: response.conversationToolCalls,
@@ -759,6 +802,7 @@ export class LoopAgentType extends BaseAgentType {
                     confidence: response.confidence,
                     decisions: response.decisions,
                     payloadChangeRequest: response.payloadChangeRequest,
+                    artifactDirective: response.artifactDirective,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
                     conversationToolCalls: response.conversationToolCalls,
@@ -778,6 +822,7 @@ export class LoopAgentType extends BaseAgentType {
             const retVal: Partial<BaseAgentNextStep<P>> = {
                 decisions: response.decisions,
                 payloadChangeRequest: response.payloadChangeRequest,
+                artifactDirective: response.artifactDirective,
                 scratchpad: response.scratchpad,
                 artifactToolCalls: response.artifactToolCalls,
                 conversationToolCalls: response.conversationToolCalls,
@@ -1021,6 +1066,7 @@ export class LoopAgentType extends BaseAgentType {
             }
             else if (response.payloadChangeRequest?.newElements ||
                     response.payloadChangeRequest?.updateElements ||
+                    response.payloadChangeRequest?.replaceElements ||
                     response.payloadChangeRequest?.removeElements) {
                 // the AI forgot to mark taskComplete as true but provided a payloadChangeRequest
                 // with changes to the elements, so we can consider this a valid response

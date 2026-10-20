@@ -210,5 +210,15 @@ describe('Loop Agent Type system prompt — rendered snapshot', () => {
         expect(withHandoff).toContain("## Transferring the conversation (nextStep.type = 'Handoff')");
         expect(withHandoff).toContain("- Use `'Handoff'` when another agent should own the request, and use `'Sub-Agent'` when you need a result back.");
     });
+
+    it('includes artifactDirective and Artifact Lifecycle section when _ARTIFACTS_ENABLED is true and omits both when false', () => {
+        const enabled = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS }, { _ARTIFACTS_ENABLED: true });
+        expect(enabled).toContain('artifactDirective?:');
+        expect(enabled).toContain('## Artifact Lifecycle: Creating a New Artifact vs. Versioning an Existing One (`artifactDirective`)');
+
+        const disabled = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS }, { _ARTIFACTS_ENABLED: false });
+        expect(disabled).not.toContain('artifactDirective?:');
+        expect(disabled).not.toContain('## Artifact Lifecycle: Creating a New Artifact vs. Versioning an Existing One (`artifactDirective`)');
+    });
 });
 

@@ -1,30 +1,47 @@
 /**
- * Unit tests for VS-CON-7 `TaskGraphAgentRunner` preset resolution:
- * 1. Named preset -> resolves the target agent's active preset -> passes `configurationId` to `AgentRunner.RunAgent`.
- * 2. Named preset with NULL `AIConfigurationID` -> passes `configurationId: undefined` even when the submitting run has a `ConfigurationID`.
- * 3. No preset -> inherits the submitting run's `ConfigurationID`.
- * 4. Unknown preset at run time (e.g. deleted after submit) -> fails the task with a clear error message.
+ * Tests for `TaskGraphAgentRunner`:
+ * - VS-CON-7 preset resolution (`ConfigurationPresetName`)
+ * - VS-INV-2b / VS-QA-3 #9 `parentAgentHierarchy` from submitted task
+ * - Specialist agent artifact persistence (`ProcessAgentArtifacts`), `CanUserRunAgent` permission check,
+ *   task Name/Description prompt formatting, and output normalization.
  */
+import 'reflect-metadata';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { TaskAgentRunParams } from '@memberjunction/task-graph';
 
-const mockRunAgent = vi.fn();
-const mockGetAgentConfigurationPresets = vi.fn();
-const mockEngineConfig = vi.fn();
-const mockRunView = vi.fn();
-const mockLogError = vi.fn();
+const {
+    runAgent,
+    processAgentArtifacts,
+    canUserRunAgent,
+    mockEngineAgents,
+    mockGetAgentConfigurationPresets,
+    mockEngineConfig,
+    mockRunView,
+    mockLogError,
+} = vi.hoisted(() => ({
+    runAgent: vi.fn(),
+    processAgentArtifacts: vi.fn(),
+    canUserRunAgent: vi.fn().mockResolvedValue(true),
+    mockEngineAgents: [
+        { ID: 'agent-1', Name: 'Storyboard Artist' },
+        { ID: 'qb-agent' },
+        { ID: 'writer-agent' },
+    ] as Array<{ ID: string; Name?: string }>,
+    mockGetAgentConfigurationPresets: vi.fn(),
+    mockEngineConfig: vi.fn(),
+    mockRunView: vi.fn(),
+    mockLogError: vi.fn(),
+}));
 
-const MOCK_AGENT = {
-    ID: 'agent-1',
-    Name: 'Storyboard Artist',
-};
+const mockRunAgent = runAgent;
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     return {
         ...actual,
         LogError: (...args: unknown[]) => mockLogError(...args),
+        LogStatus: vi.fn(),
         RunView: class {
             static FromMetadataProvider = () => ({ RunView: mockRunView });
             RunView = mockRunView;
@@ -32,12 +49,37 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     };
 });
 
+vi.mock('@memberjunction/generic-database-provider', () => ({
+    UserCache: {
+        Instance: { Users: [] },
+        Users: [],
+    },
+}));
+
+vi.mock('@memberjunction/core-entities', () => ({
+    MJTaskEntity: class {},
+}));
+
+vi.mock('@memberjunction/ai-core-plus', () => ({
+    MJAIAgentEntityExtended: class {},
+    MJAIAgentRunEntityExtended: class {},
+}));
+vi.mock('@memberjunction/ai', () => ({ ChatMessageRole: { user: 'user' } }));
+
+vi.mock('@memberjunction/ai-agents', () => ({
+    AgentRunner: class {
+        RunAgent = runAgent;
+        ProcessAgentArtifacts = processAgentArtifacts;
+    },
+}));
+
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         get Instance() {
             return {
                 Config: mockEngineConfig,
-                Agents: [MOCK_AGENT],
+                Agents: mockEngineAgents,
+                CanUserRunAgent: canUserRunAgent,
                 GetAgentConfigurationPresets: mockGetAgentConfigurationPresets,
                 FindActiveAgentConfigurationPreset: (agentId: string, presetName: string) => {
                     const target = presetName.trim().toLowerCase();
@@ -51,12 +93,6 @@ vi.mock('@memberjunction/aiengine', () => ({
                 },
             };
         },
-    },
-}));
-
-vi.mock('@memberjunction/ai-agents', () => ({
-    AgentRunner: class {
-        RunAgent = mockRunAgent;
     },
 }));
 
@@ -84,6 +120,11 @@ function makeParams(
                     Load: vi.fn().mockResolvedValue(true),
                     ID: overrides.AgentID ?? 'agent-1',
                     Name: 'Storyboard Artist',
+                };
+            }
+            if (entityName === 'MJ: Tasks') {
+                return {
+                    Load: vi.fn().mockResolvedValue(false),
                 };
             }
             return {
@@ -115,6 +156,8 @@ function makeParams(
 describe('VS-CON-7: TaskGraphAgentRunner preset resolution', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        canUserRunAgent.mockResolvedValue(true);
+        processAgentArtifacts.mockResolvedValue(undefined);
         mockEngineConfig.mockResolvedValue(undefined);
         mockRunAgent.mockResolvedValue({
             success: true,
@@ -211,6 +254,8 @@ describe('VS-INV-2b / VS-QA-3 #9: TaskGraphAgentRunner parentAgentHierarchy from
 
     beforeEach(() => {
         vi.clearAllMocks();
+        canUserRunAgent.mockResolvedValue(true);
+        processAgentArtifacts.mockResolvedValue(undefined);
         mockEngineConfig.mockResolvedValue(undefined);
         mockRunAgent.mockResolvedValue({
             success: true,
@@ -266,4 +311,212 @@ describe('VS-INV-2b / VS-QA-3 #9: TaskGraphAgentRunner parentAgentHierarchy from
         expect(mockRunAgent.mock.calls[0][0].parentAgentHierarchy).toBeUndefined();
     });
 });
+
+describe('TaskGraphAgentRunner', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        canUserRunAgent.mockResolvedValue(true);
+        runAgent.mockResolvedValue({
+            success: true,
+            payload: { queryName: 'Top Users', sql: 'SELECT TOP 10 * FROM Users' },
+            agentRun: { ID: 'step-run-1', Message: 'Built Top Users query' },
+        });
+        processAgentArtifacts.mockResolvedValue(undefined);
+    });
+
+    it('resolves ConversationDetailID from the submitting parent run and persists specialist agent artifacts', async () => {
+        const provider = {
+            GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+                if (entityName === 'MJ: AI Agents') {
+                    return { ID: 'qb-agent', Name: 'Query Builder', Load: vi.fn().mockResolvedValue(true) };
+                }
+                if (entityName === 'MJ: AI Agent Runs') {
+                    return {
+                        ID: 'parent-run-1',
+                        ConversationID: 'conv-1',
+                        ConversationDetailID: 'origin-detail-1',
+                        Load: vi.fn().mockResolvedValue(true),
+                    };
+                }
+                return { Load: vi.fn().mockResolvedValue(false) };
+            }),
+        } as unknown as IMetadataProvider;
+
+        const runner = new TaskGraphAgentRunner();
+        const outcome = await runner.RunAgentForTask({
+            TaskID: 'task-step-1',
+            AgentID: 'qb-agent',
+            SubmittingAgentRunID: 'parent-run-1',
+            InputPayload: { goal: 'Top 10 users' },
+            DependencyOutputs: new Map(),
+            Provider: provider,
+            ContextUser: { ID: 'user-1' } as UserInfo,
+        });
+
+        expect(outcome.Success).toBe(true);
+        expect(outcome.AgentRunID).toBe('step-run-1');
+        expect(runAgent).toHaveBeenCalledTimes(1);
+        expect(runAgent.mock.calls[0][0].inputArtifacts).toEqual([]);
+        expect(processAgentArtifacts).toHaveBeenCalledTimes(1);
+        expect(processAgentArtifacts.mock.calls[0][0].artifactDirective?.behavior).toBe('create-new');
+        expect(processAgentArtifacts.mock.calls[0][1]).toBe('origin-detail-1');
+    });
+
+    it('falls back to resolving ConversationDetailID from the task hierarchy when SubmittingAgentRunID has none', async () => {
+        const provider = {
+            GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+                if (entityName === 'MJ: AI Agents') {
+                    return { ID: 'writer-agent', Name: 'Research Report Writer', Load: vi.fn().mockResolvedValue(true) };
+                }
+                if (entityName === 'MJ: Tasks') {
+                    return {
+                        ID: 'task-step-2',
+                        ConversationDetailID: 'task-detail-2',
+                        ParentID: 'parent-task-1',
+                        Load: vi.fn().mockResolvedValue(true),
+                    };
+                }
+                return { Load: vi.fn().mockResolvedValue(false) };
+            }),
+        } as unknown as IMetadataProvider;
+
+        const runner = new TaskGraphAgentRunner();
+        const outcome = await runner.RunAgentForTask({
+            TaskID: 'task-step-2',
+            AgentID: 'writer-agent',
+            SubmittingAgentRunID: null,
+            InputPayload: { topic: 'Executive summary' },
+            DependencyOutputs: new Map(),
+            Provider: provider,
+            ContextUser: { ID: 'user-1' } as UserInfo,
+        });
+
+        expect(outcome.Success).toBe(true);
+        expect(processAgentArtifacts).toHaveBeenCalledTimes(1);
+        expect(processAgentArtifacts.mock.calls[0][0].artifactDirective?.behavior).toBe('create-new');
+        expect(processAgentArtifacts.mock.calls[0][1]).toBe('task-detail-2');
+    });
+
+    it('refuses execution when the acting user lacks run permission on the target agent', async () => {
+        canUserRunAgent.mockResolvedValue(false);
+        const provider = {
+            GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+                if (entityName === 'MJ: AI Agents') {
+                    return { ID: 'restricted-agent', Name: 'Restricted Agent', Load: vi.fn().mockResolvedValue(true) };
+                }
+                return { Load: vi.fn().mockResolvedValue(false) };
+            }),
+        } as unknown as IMetadataProvider;
+
+        const runner = new TaskGraphAgentRunner();
+        const outcome = await runner.RunAgentForTask({
+            TaskID: 'task-step-restricted',
+            AgentID: 'restricted-agent',
+            SubmittingAgentRunID: null,
+            InputPayload: {},
+            DependencyOutputs: new Map(),
+            Provider: provider,
+            ContextUser: { ID: 'user-no-perm' } as UserInfo,
+        });
+
+        expect(outcome.Success).toBe(false);
+        expect(outcome.ErrorMessage).toContain('User does not have permission to run agent "Restricted Agent"');
+        expect(runAgent).not.toHaveBeenCalled();
+    });
+
+    it('includes task Name and Description in prompt and preserves agentRun.Message when object payload lacks message/summary', async () => {
+        runAgent.mockResolvedValue({
+            success: true,
+            payload: {},
+            agentRun: {
+                ID: 'fb-run-1',
+                Message: 'Which entity would you like me to customize a form for?',
+                FinalStep: 'Chat',
+            },
+        });
+        const provider = {
+            GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+                if (entityName === 'MJ: AI Agents') {
+                    return { ID: 'qb-agent', Name: 'Form Builder', Load: vi.fn().mockResolvedValue(true) };
+                }
+                if (entityName === 'MJ: Tasks') {
+                    return {
+                        ID: 'task-fb-1',
+                        Name: 'Customize Orders Form',
+                        Description: 'Add a collapsible Customer Details section to the Orders form.',
+                        ConversationDetailID: 'detail-fb-1',
+                        ParentID: null,
+                        Load: vi.fn().mockResolvedValue(true),
+                    };
+                }
+                return { Load: vi.fn().mockResolvedValue(false) };
+            }),
+        } as unknown as IMetadataProvider;
+
+        const runner = new TaskGraphAgentRunner();
+        const outcome = await runner.RunAgentForTask({
+            TaskID: 'task-fb-1',
+            AgentID: 'qb-agent',
+            SubmittingAgentRunID: null,
+            InputPayload: { entityName: 'Orders' },
+            DependencyOutputs: new Map(),
+            Provider: provider,
+            ContextUser: { ID: 'user-1' } as UserInfo,
+        });
+
+        expect(outcome.Success).toBe(true);
+        const promptSent = runAgent.mock.calls[0][0].conversationMessages[0].content as string;
+        expect(promptSent).toContain('## Task: Customize Orders Form');
+        expect(promptSent).toContain('Add a collapsible Customer Details section to the Orders form.');
+        expect(outcome.Output).toEqual({
+            message: 'Which entity would you like me to customize a form for?',
+            finalStep: 'Chat',
+        });
+    });
+
+    it('normalizes results/result, lifts nested results fields to top level, and populates succeeded on completed agent steps', async () => {
+        runAgent.mockResolvedValue({
+            success: true,
+            payload: {
+                code: 'output = { totalSales: 2703745, summary: "Sales exceeded $1M" };',
+                results: { totalSales: 2703745, summary: 'Sales exceeded $1M' },
+                iterations: 1,
+            },
+            agentRun: {
+                ID: 'cs-run-1',
+                Message: 'Calculated total sales across 19 quarters.',
+                FinalStep: 'Success',
+            },
+        });
+        const provider = {
+            GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+                if (entityName === 'MJ: AI Agents') {
+                    return { ID: 'qb-agent', Name: 'Codesmith Agent', Load: vi.fn().mockResolvedValue(true) };
+                }
+                return { Load: vi.fn().mockResolvedValue(false) };
+            }),
+        } as unknown as IMetadataProvider;
+
+        const runner = new TaskGraphAgentRunner();
+        const outcome = await runner.RunAgentForTask({
+            TaskID: 'task-cs-1',
+            AgentID: 'qb-agent',
+            SubmittingAgentRunID: null,
+            InputPayload: {},
+            DependencyOutputs: new Map(),
+            Provider: provider,
+            ContextUser: { ID: 'user-1' } as UserInfo,
+        });
+
+        expect(outcome.Success).toBe(true);
+        expect(outcome.Output).toMatchObject({
+            totalSales: 2703745,
+            summary: 'Sales exceeded $1M',
+            results: { totalSales: 2703745, summary: 'Sales exceeded $1M' },
+            result: { totalSales: 2703745, summary: 'Sales exceeded $1M' },
+            succeeded: true,
+        });
+    });
+});
+
 

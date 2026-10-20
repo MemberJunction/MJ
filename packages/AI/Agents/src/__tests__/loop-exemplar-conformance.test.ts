@@ -42,7 +42,7 @@ const OUTPUT_DIR = join(REPO_ROOT, 'metadata/prompts/output');
 /** Top-level fields on `LoopAgentResponse`. Anything else is silently dropped at runtime. */
 const TOP_LEVEL_FIELDS = new Set([
     'taskComplete', 'message', 'responseForm', 'actionableCommands', 'automaticCommands',
-    'payloadChangeRequest', 'scratchpad', 'artifactToolCalls', 'conversationToolCalls',
+    'payloadChangeRequest', 'artifactDirective', 'scratchpad', 'artifactToolCalls', 'conversationToolCalls',
     'memoryWrites', 'reasoning', 'confidence', 'nextStep', 'decisions'
 ]);
 const NEXT_STEP_FIELDS = new Set([

@@ -1,10 +1,10 @@
-import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest, TaskGraphSpec, AgentDecisionRequest, AgentFinishIf, AgentHandoffRequest } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest, TaskGraphSpec, AgentDecisionRequest, AgentFinishIf, AgentHandoffRequest, ArtifactDirective } from "@memberjunction/ai-core-plus";
 import { ArtifactToolCall } from "../ArtifactToolManager";
 import { ConversationToolCall } from "../ConversationToolManager";
 import { MemoryWriteRequest } from "../MemoryWriteManager";
 
 // Re-export universal types for backward compatibility
-export type { ForEachOperation, WhileOperation, ArtifactToolCall, ConversationToolCall, MemoryWriteRequest };
+export type { ForEachOperation, WhileOperation, ArtifactToolCall, ConversationToolCall, MemoryWriteRequest, ArtifactDirective };
 
 /**
  * Every value `nextStep.type` may take, in the canonical casing the dispatcher switches on.
@@ -74,6 +74,13 @@ export interface LoopAgentResponse<P = any> {
      * Payload changes. Omit if no changes needed
      */
     payloadChangeRequest?: AgentPayloadChangeRequest<P>;
+
+    /**
+     * Optional directive controlling how the agent's payload artifact is created or versioned
+     * when the run completes (`behavior: 'create-new' | 'version-source' | 'suppress'`,
+     * optional `targetArtifactId`, `name`, and `description`).
+     */
+    artifactDirective?: ArtifactDirective;
     
     /**
      * Private working memory — not shared with parent or sub-agents.

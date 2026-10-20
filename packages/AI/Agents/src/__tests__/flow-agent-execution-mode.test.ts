@@ -248,6 +248,8 @@ class FlowHarness {
     public runs: FakeRun[] = [];
     public steps: FakeStep[] = [];
     public submissions: TaskGraphSubmitRequest[] = [];
+    public customSteps?: StepRow[];
+    public customPaths?: PathRow[];
     public readonly agent = makeFlowAgentRow();
     private stepSeq = 0;
 
@@ -256,6 +258,8 @@ class FlowHarness {
             ID: s.id, Name: s.name, ParentID: FLOW_ID, Status: 'Active', Description: s.name,
             ExposeAsAction: false, PayloadDownstreamPaths: '["*"]', PayloadUpstreamPaths: '["*"]',
         }));
+        const activeSteps = this.customSteps ?? STEPS;
+        const activePaths = this.customPaths ?? PATHS;
         return {
             Config: async (): Promise<void> => undefined,
             Agents: subAgentRows,
@@ -282,9 +286,9 @@ class FlowHarness {
             GetAgentBaseCatalog: (): unknown => undefined,
             SetAgentBaseCatalog: (): void => undefined,
             GetAgentSteps: (agentId: string, status?: string): StepRow[] =>
-                STEPS.filter((s) => s.AgentID === agentId && (!status || s.Status === status)),
-            GetAgentStepByID: (id: string): StepRow | null => STEPS.find((s) => s.ID === id) ?? null,
-            GetPathsFromStep: (id: string): PathRow[] => PATHS.filter((p) => p.OriginStepID === id),
+                activeSteps.filter((s) => s.AgentID === agentId && (!status || s.Status === status)),
+            GetAgentStepByID: (id: string): StepRow | null => activeSteps.find((s) => s.ID === id) ?? null,
+            GetPathsFromStep: (id: string): PathRow[] => activePaths.filter((p) => p.OriginStepID === id),
         };
     }
 
@@ -567,5 +571,48 @@ describe('FlowAgentType hooks in dispatch mode', () => {
 
         expect(state.executionMode).toBe('dispatch');
         expect(flowType.DescribeExecutionRouting(state)).toBeNull();
+    });
+});
+
+describe('Flow agent with multiple starting steps converging at a join', () => {
+    function setupTwoStartFlow(): void {
+        harness.customSteps = [
+            subAgentStep(STEP_IDS.requirements, 'Requirements', SUB_AGENTS.requirements.id, true),
+            subAgentStep(STEP_IDS.dataExpert, 'Data Expert', SUB_AGENTS.dataExpert.id, true),
+            subAgentStep(STEP_IDS.tpm, 'Technical Product Manager', SUB_AGENTS.tpm.id, false),
+            promptStep(STEP_IDS.successFinal, 'Success Finalization', SUCCESS_PROMPT_ID),
+        ];
+        harness.customPaths = [
+            { ID: 'bbbbbbbb-3000-4000-8000-000000000201', OriginStepID: STEP_IDS.requirements, DestinationStepID: STEP_IDS.tpm, Condition: null, Priority: 0, Description: null },
+            { ID: 'bbbbbbbb-3000-4000-8000-000000000202', OriginStepID: STEP_IDS.dataExpert, DestinationStepID: STEP_IDS.tpm, Condition: null, Priority: 0, Description: null },
+            { ID: 'bbbbbbbb-3000-4000-8000-000000000203', OriginStepID: STEP_IDS.tpm, DestinationStepID: STEP_IDS.successFinal, Condition: null, Priority: 0, Description: null },
+        ];
+    }
+
+    it('compiles and submits both starting steps as wave-1 roots in dispatch mode', async () => {
+        setupTwoStartFlow();
+        const { agent } = makeAgent();
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(harness.submissions).toHaveLength(1);
+        const tasks = harness.submissions[0].Spec.tasks;
+        expect(tasks).toHaveLength(4);
+        const roots = tasks.filter((t) => (t.dependsOn ?? []).length === 0).map((t) => t.name).sort();
+        expect(roots).toEqual(['Data Expert', 'Requirements']);
+    });
+
+    it('executes both starting steps before the join step in inRun mode', async () => {
+        setupTwoStartFlow();
+        const { agent, prompts } = makeAgent();
+        const agentTypeParams: FlowAgentExecuteParams = { executionMode: 'inRun' };
+
+        const result = await agent.Execute(makeParams({ agentTypeParams }));
+
+        expect(result.success).toBe(true);
+        // Sorted by step name ('Data Expert' before 'Requirements'), both starting steps run before 'Technical Product Manager'
+        expect(agent.SubAgentCalls).toEqual(['Data Expert', 'Requirements Expert', 'Technical Product Manager']);
+        expect(prompts.PromptIDs).toEqual([SUCCESS_PROMPT_ID]);
     });
 });

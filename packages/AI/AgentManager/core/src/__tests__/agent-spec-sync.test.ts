@@ -254,6 +254,75 @@ describe('AgentSpecSync', () => {
       expect(typeof result.success).toBe('boolean');
       expect(Array.isArray(result.mutations)).toBe(true);
     });
+
+    it('creates agent, steps, and paths when spec carries synthetic correlation IDs (e.g. from ConvertTaskGraphToAgentSpec)', async () => {
+      const createdEntities: Array<{ entityName: string; entity: Record<string, unknown> }> = [];
+      let uuidSeq = 0;
+      const customProvider = {
+        GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+          const id = `00000000-0000-0000-0000-00000000000${++uuidSeq}`;
+          const entity: Record<string, unknown> = {
+            ID: id,
+            Load: vi.fn().mockRejectedValue(new Error('Load must not be called for synthetic non-UUID IDs')),
+            NewRecord: vi.fn(),
+            Validate: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
+            Save: vi.fn().mockResolvedValue(true),
+          };
+          createdEntities.push({ entityName, entity });
+          return entity;
+        }),
+      };
+
+      const sync = AgentSpecSync.FromRawSpec(
+        {
+          ID: 'workflow-1792442000-0',
+          Name: 'Revenue Concentration Analysis',
+          Status: 'Disabled',
+          StartingPayloadValidationMode: 'Warn',
+          Steps: [
+            {
+              ID: 'wf-node-1',
+              Name: 'Top 5 Products',
+              StepType: 'Sub-Agent',
+              SubAgentID: '204FF1D6-A6E9-4B54-B3D8-2B7F82B8D3A2',
+              StartingStep: true,
+              PositionX: 120.4,
+              PositionY: 40.6,
+            },
+            {
+              ID: 'wf-node-2',
+              Name: 'Render Chart',
+              StepType: 'Sub-Agent',
+              SubAgentID: '304FF1D6-A6E9-4B54-B3D8-2B7F82B8D3A2',
+              StartingStep: false,
+            },
+          ],
+          Paths: [
+            {
+              ID: 'wf-node-3',
+              OriginStepID: 'wf-node-1',
+              DestinationStepID: 'wf-node-2',
+              Priority: 0,
+            },
+          ],
+        },
+        mockUser,
+        customProvider as never,
+      );
+
+      const result = await sync.SaveToDatabase();
+      expect(result.success).toBe(true);
+      expect(result.agentId).toBe('00000000-0000-0000-0000-000000000001');
+
+      const step1 = createdEntities[1].entity;
+      const step2 = createdEntities[2].entity;
+      const path1 = createdEntities[3].entity;
+
+      expect(step1.PositionX).toBe(120);
+      expect(step1.PositionY).toBe(41);
+      expect(path1.OriginStepID).toBe(step1.ID);
+      expect(path1.DestinationStepID).toBe(step2.ID);
+    });
   });
 
   describe('spec with actions', () => {
