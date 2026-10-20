@@ -58,17 +58,18 @@ export class PredictiveStudioRunFeaturePipelineServerOperation extends Predictiv
     }
 
     const result = await this.runner().RunByID(input.featurePipelineID, {
-      contextUser: user,
-      provider,
-      triggeredBy: 'OnDemand',
-      singleRecordID: input.singleRecordID,
-      dryRun: input.dryRun,
+      ContextUser: user,
+      Provider: provider,
+      TriggeredBy: 'OnDemand',
+      SingleRecordID: input.singleRecordID,
+      DryRun: input.dryRun,
+      OverwriteHumanValues: input.overwriteHumanValues === true,
       // The wire scope shape IS the substrate's RecordProcessScopeOverride (both are
       // the CodeGen-emitted `{ Kind: 'records' | 'view' | 'list' | 'filter'; … }`).
-      scope: input.scope as RecordProcessScopeOverride | undefined,
+      Scope: input.scope as RecordProcessScopeOverride | undefined,
       // Forward the executor's per-batch progress as typed RemoteOpProgress so an
       // attached caller's onProgress (and the over-the-wire channel) sees live progress.
-      onProgress: (p) =>
+      OnProgress: (p) =>
         context.emitProgress({
           OperationKey: this.OperationKey,
           Processed: p.Processed,
@@ -85,7 +86,9 @@ export class PredictiveStudioRunFeaturePipelineServerOperation extends Predictiv
   /**
    * Map the substrate's {@link ProcessRunResult} onto the operation's typed output.
    * `written` is the substrate's `Success` count — for a FieldRules feature pipeline
-   * those are the records whose feature values were written back (0 in dry-run).
+   * those are the records whose feature values were written back (0 in dry-run). A
+   * refused run is `status` `Failed` with its `errorMessage`; a dry run whose real run
+   * would be refused carries why in `wouldRefuse`.
    */
   protected toOutput(result: ProcessRunResult): PredictiveStudioRunFeaturePipelineOutput {
     return {
@@ -96,6 +99,7 @@ export class PredictiveStudioRunFeaturePipelineServerOperation extends Predictiv
       skipped: result.Skipped,
       error: result.Error,
       errorMessage: result.ErrorMessage,
+      ...(result.WouldRefuse ? { wouldRefuse: result.WouldRefuse } : {}),
     };
   }
 
