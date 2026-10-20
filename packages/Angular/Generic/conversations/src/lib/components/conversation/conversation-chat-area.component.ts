@@ -4218,7 +4218,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.ArtifactsByDetailId.clear();
       this.SystemArtifactsByDetailId.clear();
       this.RatingsByDetailId.clear();
-      this.handoffStepsByRunId?.clear();
+      this.handoffStepsByRunId.clear();
 
       // Copy agent runs from engine (cast to extended type for UI compatibility)
       for (const [detailId, agentRun] of cacheEntry.AgentRunsByDetailId) {
@@ -4308,7 +4308,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
       for (const step of steps) {
         if (step && step.ID && step.AgentRunID && (!step.StepType || step.StepType === 'Handoff')) {
-          (this.handoffStepsByRunId ??= new Map()).set(step.ID, step);
+          this.handoffStepsByRunId.set(step.ID, step);
         }
       }
     }
