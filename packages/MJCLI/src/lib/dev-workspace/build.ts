@@ -692,14 +692,14 @@ function readShellImportedEntries(member: CandidateRepo): MjAppPackageEntry[] {
  * DELIBERATE COPY of `ResolvePackagePlatform` / `PackageRunsOnTier` in
  * `packages/OpenApp/Engine/src/manifest/package-platform.ts`, which is canonical;
  * `packages/DynamicPackages/src/discover.ts` keeps a third copy. Importing the engine's version
- * here would bind this command to that package's built `dist/`. Change one, change all three; the
- * shared case table lives in the engine's `package-platform.test.ts`.
+ * here would bind this command to that package's built `dist/`. Change one, change all three. The
+ * engine's `package-platform.test.ts` holds the canonical case list; this module's spec mirrors its
+ * cases by hand, because it cannot import the engine.
  */
 function runsInBrowser(pkg: MjAppPackageEntry): boolean {
-  // Truthy, not `??`, to match canonical: `platform: ""` (unreachable via the zod schema, but
-  // this module reads raw JSON directly) falls back to the role default instead of being treated
-  // as its own (invalid) platform value, which would otherwise drop the package from both tiers.
-  const platform = pkg.platform || (pkg.role === 'actions' ? 'node' : 'both');
+  // `readDeclaredEntries` has already rejected every `platform` other than absent or one of the
+  // three literals, so only `undefined` needs the role default here.
+  const platform = pkg.platform ?? (pkg.role === 'actions' ? 'node' : 'both');
   return platform === 'both' || platform === 'browser';
 }
 

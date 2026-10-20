@@ -14,7 +14,8 @@
  * because neither may take a dependency on this package:
  *   - `packages/DynamicPackages/src/discover.ts` (ships to the browser; one dependency by design)
  *   - `packages/MJCLI/src/lib/dev-workspace/build.ts`
- * Change one, change all three. `package-platform.test.ts` holds the shared case table.
+ * Change one, change all three. `package-platform.test.ts` holds the canonical case list; the two
+ * copies' specs mirror its cases by hand, because neither package can import this one.
  */
 export type PackagePlatform = 'node' | 'browser' | 'both';
 
@@ -29,13 +30,14 @@ export interface PlatformRoutable {
  *
  * `actions` defaults to `node` because an MJ action is Node-side by construction — it is the one
  * role in the manifest's `role` enum (`packageRoleSchema` in `manifest-schema.ts`) that can never
- * be browser-safe. That is a distinct key space from `GENERATED_PACKAGE_TYPES_BY_TIER` in
- * `@memberjunction/dynamic-packages`'s `discover.ts`, which lists `'actions'` under its CLIENT
- * tier — that constant enumerates the HOST's own CodeGen-generated `codeGeneration.packages`
- * types, not manifest package roles, and a host's generated actions package legitimately ships on
- * both tiers. Same word, different axis; not a contradiction of this rule. Every other role here
- * defaults to `both`, which is exactly the behaviour every manifest had before this axis existed,
- * so no published app changes meaning by upgrading.
+ * be browser-safe. `GENERATED_PACKAGE_TYPES_BY_TIER` in `@memberjunction/dynamic-packages`'s
+ * `discover.ts` also uses the word `'actions'`, but it enumerates the HOST's own CodeGen-generated
+ * `codeGeneration.packages` types, not manifest package roles, so this rule does not govern it.
+ *
+ * Every other role defaults to `both`, which is how every manifest entry was routed before this
+ * axis existed. A `role: "actions"` entry with no `platform` does change meaning: under `shared` it
+ * no longer reaches the browser bundle (#4428), and under `client` the manifest schema now rejects
+ * it as contradictory.
  */
 export function ResolvePackagePlatform(pkg: PlatformRoutable): PackagePlatform {
     if (pkg.platform) {

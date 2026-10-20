@@ -1,14 +1,15 @@
 /**
  * The platform axis is the canonical answer to "may this package be loaded on this tier?".
  * `packages/DynamicPackages/src/discover.ts` and `packages/MJCLI/src/lib/dev-workspace/build.ts`
- * each keep a deliberate copy of this rule; `PLATFORM_ROUTING_CASES` below is the shared table
- * all three are pinned to.
+ * each keep a deliberate copy of this rule; `PLATFORM_ROUTING_CASES` below is the canonical case
+ * list. Neither copy's package can import this one, so their specs mirror these cases by hand —
+ * nothing pins them to this table mechanically.
  */
 import { describe, it, expect } from 'vitest';
 import { ResolvePackagePlatform, PackageRunsOnTier } from '../manifest/package-platform.js';
 
-/** Shared with the copies in DynamicPackages and MJCLI. Keep the three in lockstep. */
-export const PLATFORM_ROUTING_CASES: ReadonlyArray<{
+/** Canonical case list. When a case changes, update the hand-mirrored specs of both copies. */
+const PLATFORM_ROUTING_CASES: ReadonlyArray<{
     what: string;
     pkg: { role?: string; platform?: 'node' | 'browser' | 'both' };
     server: boolean;
