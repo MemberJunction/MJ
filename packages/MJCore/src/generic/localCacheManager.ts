@@ -4275,8 +4275,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     private async evictIfNeeded(neededBytes: number): Promise<void> {
         if (!this._storageProvider) return;
 
-        const stats = this.GetStats();
-        const wouldExceedSize = (stats.totalSizeBytes + neededBytes) > this._config.maxSizeBytes;
+        let currentSizeBytes = 0;
+        for (const entry of this._registry.values()) {
+            currentSizeBytes += entry.sizeBytes;
+        }
+        const wouldExceedSize = (currentSizeBytes + neededBytes) > this._config.maxSizeBytes;
 
         if (!wouldExceedSize) return;
 
