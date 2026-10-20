@@ -741,6 +741,66 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
             await fs.rm(tempRoot, { recursive: true, force: true });
         }
     });
+
+    it('releases the render semaphore slot even when staged-folder cleanup rejects so a second /render with Concurrency 1 completes', async () => {
+        const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-rw-cleanup-err-'));
+        let lockedDir: string | undefined;
+        try {
+            let callCount = 0;
+            const backend = new FakeRenderBackend({ StepDelayMs: 1 });
+            const origRender = backend.Render.bind(backend);
+            backend.Render = async (job, onProgress, signal) => {
+                callCount += 1;
+                const out = await origRender(job, onProgress, signal);
+                if (callCount === 1) {
+                    lockedDir = job.RootDir;
+                    // Make job.RootDir read-only so preStage.Cleanup()'s fs.rm rejects with EACCES
+                    await fs.chmod(job.RootDir, 0o500);
+                }
+                return out;
+            };
+
+            const server = CreateRenderWorkerServer({
+                Backend: backend,
+                Concurrency: 1,
+                TempRoot: tempRoot,
+            });
+            serversToClose.push(server);
+            const port = await server.Listen(0);
+            const renderUrl = `http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Render}`;
+
+            const firstRes = await fetch(renderUrl, {
+                method: 'POST',
+                body: JSON.stringify(createValidRenderRequest()),
+            });
+            expect(firstRes.status).toBe(200);
+            const firstEvents = await parseNdjsonStream(firstRes);
+            expect(firstEvents.some((e) => e.Type === 'Result')).toBe(true);
+
+            const secondPromise = fetch(renderUrl, {
+                method: 'POST',
+                body: JSON.stringify(createValidRenderRequest()),
+            }).then(async (res) => ({
+                status: res.status,
+                events: await parseNdjsonStream(res),
+            }));
+
+            const secondOut = await Promise.race([
+                secondPromise,
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('Second /render hung because semaphore slot was leaked')), 1500),
+                ),
+            ]);
+            expect(secondOut.status).toBe(200);
+            expect(secondOut.events.some((e) => e.Type === 'Result')).toBe(true);
+            expect(callCount).toBe(2);
+        } finally {
+            if (lockedDir) {
+                await fs.chmod(lockedDir, 0o700).catch(() => undefined);
+            }
+            await fs.rm(tempRoot, { recursive: true, force: true });
+        }
+    });
 });
 
 

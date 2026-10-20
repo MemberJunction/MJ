@@ -452,17 +452,25 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
             if (timeoutTimer !== undefined) {
                 clearTimeout(timeoutTimer);
             }
-            if (preStage !== undefined) {
-                await preStage.Cleanup();
-            }
             req.removeListener('aborted', onDisconnect);
             res.removeListener('close', onDisconnect);
             activeAbortControllers.delete(controller);
             if (acquired) {
                 semaphore.Release();
             }
+            let cleanupErr: unknown;
+            if (preStage !== undefined) {
+                try {
+                    await preStage.Cleanup();
+                } catch (err) {
+                    cleanupErr = err;
+                }
+            }
             if (res.headersSent && !res.writableEnded && !res.destroyed) {
                 res.end();
+            }
+            if (cleanupErr !== undefined) {
+                throw cleanupErr;
             }
         }
     }

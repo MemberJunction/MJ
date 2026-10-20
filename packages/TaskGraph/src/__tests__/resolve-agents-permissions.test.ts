@@ -47,12 +47,14 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
-import { TaskGraphService } from '../TaskGraphService';
+import { ParseTaskGraphParentMetadata, TaskGraphService } from '../TaskGraphService';
 
 interface SavedEntityRecord {
     EntityName: string;
     ID: string;
     Name?: string;
+    ParentID?: string | null;
+    InputPayload?: string | null;
     AgentID?: string | null;
     StepType?: string | null;
 }
@@ -74,6 +76,8 @@ function createHarness() {
                     EntityName: record.EntityName,
                     ID: record.ID,
                     Name: record.Name,
+                    ParentID: record.ParentID,
+                    InputPayload: record.InputPayload,
                     AgentID: record.AgentID,
                     StepType: record.StepType,
                 });
@@ -353,7 +357,10 @@ describe('VS-SAGE-4: TaskGraphService.resolveAgents status + permission enforcem
             ],
         };
 
-        const result = await service.Submit(spec, context);
+        const result = await service.Submit(spec, {
+            ...context,
+            ParentAgentHierarchy: ['Sage', 'Director'],
+        });
 
         expect(result.Success).toBe(true);
         expect(mockFilterRunnableAgents).toHaveBeenCalledWith(
@@ -361,6 +368,11 @@ describe('VS-SAGE-4: TaskGraphService.resolveAgents status + permission enforcem
             contextUser,
         );
         expect(savedRecords).toHaveLength(2); // parent + 1 child
+        const parentTask = savedRecords.find((r) => !r.ParentID);
+        expect(ParseTaskGraphParentMetadata(parentTask?.InputPayload).parentAgentHierarchy).toEqual([
+            'Sage',
+            'Director',
+        ]);
         const childTask = savedRecords.find((r) => r.Name === 'Draft Campaign');
         expect(childTask?.AgentID).toBe('agent-marketing-1');
     });

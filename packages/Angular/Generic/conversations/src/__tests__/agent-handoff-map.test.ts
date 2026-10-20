@@ -554,6 +554,45 @@ describe('MessageItemComponent handoff integration & prefers-reduced-motion CSS'
     expect(rebuildHandoffsMap).toHaveBeenCalledTimes(1);
   });
 
+  it('OnAgentRunUpdate skips rebuildHandoffsMap on progress frames for the same run ID and rebuilds on a new run ID (VS-QA-3 #10)', async () => {
+    const rebuildHandoffsMap = vi.fn();
+    const component = Object.create(ConversationChatAreaComponent.prototype) as ConversationChatAreaComponent;
+    const detailId = '11111111-1111-4111-8111-000000000001';
+    const run1Id = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001';
+    const run2Id = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000002';
+
+    Object.assign(component as unknown as Record<string, unknown>, {
+      AgentRunsByDetailId: new Map<string, MJAIAgentRunEntityExtended>(),
+      messages: [],
+      cdr: { detectChanges: vi.fn() },
+      isActiveConversation: (id: string) => id === 'conv-1',
+      rebuildHandoffsMap,
+    });
+
+    await component.OnAgentRunUpdate({
+      conversationId: 'conv-1',
+      conversationDetailId: detailId,
+      agentRun: { ID: run1Id, Status: 'Running', TotalTokensUsed: 100 } as unknown as MJAIAgentRunEntityExtended,
+    });
+    expect(rebuildHandoffsMap).toHaveBeenCalledTimes(1);
+
+    // Second progress frame for the same run ID must not rebuild the handoffs map
+    await component.OnAgentRunUpdate({
+      conversationId: 'conv-1',
+      conversationDetailId: detailId,
+      agentRun: { ID: run1Id, Status: 'Running', TotalTokensUsed: 250 } as unknown as MJAIAgentRunEntityExtended,
+    });
+    expect(rebuildHandoffsMap).toHaveBeenCalledTimes(1);
+
+    // A new run ID for the same detail does rebuild the handoffs map
+    await component.OnAgentRunUpdate({
+      conversationId: 'conv-1',
+      conversationDetailId: detailId,
+      agentRun: { ID: run2Id, Status: 'Running', TotalTokensUsed: 50 } as unknown as MJAIAgentRunEntityExtended,
+    });
+    expect(rebuildHandoffsMap).toHaveBeenCalledTimes(2);
+  });
+
   it('memoizes CurrentOwnerAgent and CurrentRouteAgent by message count (VS-QA-3 #10)', () => {
     const resolveHandoffAgentMeta = vi.fn((id: string) => ({
       ID: id,

@@ -2691,11 +2691,12 @@ describe('BaseAgent.Execute — Loop agent-type gates read the merged params (VS
             () => llmEnvelope(successEnvelope()),
         ]);
 
-        const result = await agent.Execute(makeParams());
+        const result = await agent.Execute(makeParams({ parentAgentHierarchy: ['Root Agent'] }));
 
         expect(result.success).toBe(true);
         expect(submitSpy).toHaveBeenCalledTimes(1);
         expect(submitSpy.mock.calls[0][0].Spec.workflowName).toBe('Quarterly review');
+        expect(submitSpy.mock.calls[0][0].ParentAgentHierarchy).toEqual(['Root Agent', 'Loop Test Agent']);
         expect(harness.steps.map((s) => s.StepType)).toContain('TaskGraph');
         expect(runner.Calls).toHaveLength(1);
     });
