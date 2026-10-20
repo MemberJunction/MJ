@@ -540,22 +540,6 @@ function parseRecordData(recordData: string): RecordDocumentVectorRow | null {
 }
 
 /**
- * Converts a SimpleVectorService cosine score back to cosine similarity.
- *
- * SimpleVectorService reports cosine as `(cos + 1) / 2`, so its own API stays in [0, 1]. A vector
- * database reports cosine similarity itself, in [-1, 1]: Pinecone, SQL Server and pgvector all do,
- * and the thresholds that read these scores (an Entity Document's match thresholds, search's
- * MinScore) are written for that scale. Without this, the same threshold meant a different
- * similarity on the in-memory store: 0.92 matched at cosine 0.84 here and at 0.92 on Pinecone.
- *
- * @param serviceScore a cosine score from SimpleVectorService, in [0, 1]
- * @returns the cosine similarity, in [-1, 1]
- */
-export function CosineFromServiceScore(serviceScore: number): number {
-    return serviceScore * 2 - 1;
-}
-
-/**
  * In-process VectorDBBase driver that loads embeddings from
  * `MJ: Entity Record Documents` rows (`VectorBinary`, falling back to `VectorJSON`) associated with a given
  * `EntityDocumentID`.
@@ -697,8 +681,10 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
      * Run cosine search over the cached vector pool for the supplied
      * EntityDocumentID. Match objects surface the parent entity's RecordID
      * under `metadata.RecordID` so callers can map results back without
-     * a second lookup. Scores are cosine similarity, as every other vector
-     * database reports it (see {@link CosineFromServiceScore}).
+     * a second lookup. Scores are standard cosine similarity, [-1, 1] (the
+     * `cosine-similarity` metric), as Pinecone, SQL Server and pgvector report it,
+     * so an Entity Document's match thresholds and search's MinScore mean the same
+     * thing on every store.
      */
     public async QueryIndex(params: QueryOptions, contextUser?: UserInfo): Promise<BaseResponse> {
         const p = params as { id?: string; vector?: number[]; topK?: number };
@@ -721,14 +707,14 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
             return { success: true, message: 'No embedded records yet', data: { matches: [] } };
         }
 
-        const matches = await loaded.service.FindNearestAsync(queryVector, topK, 0);
+        const matches = await loaded.service.FindNearestAsync(queryVector, topK, undefined, 'cosine-similarity');
         return {
             success: true,
             message: `Returned ${matches.length} match(es)`,
             data: {
                 matches: matches.map(m => ({
                     id: m.key,                                   // EntityRecordDocument.ID
-                    score: CosineFromServiceScore(m.score),
+                    score: m.score,
                     metadata: { RecordID: m.metadata?.RecordID ?? null },
                 })),
             },

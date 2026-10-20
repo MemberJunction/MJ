@@ -20,4 +20,4 @@ export * from './models/StoredVector';
 export * from './models/MetadataFilterEvaluator';
 
 export { SimpleVectorDatabase, LoadSimpleVectorDatabase } from './models/SimpleVectorDatabase';
-export { SimpleVectorServiceProvider, SimpleVectorIndexCache, LoadSimpleVectorServiceProvider, CosineFromServiceScore } from './models/SimpleVectorServiceProvider';
+export { SimpleVectorServiceProvider, SimpleVectorIndexCache, LoadSimpleVectorServiceProvider } from './models/SimpleVectorServiceProvider';
