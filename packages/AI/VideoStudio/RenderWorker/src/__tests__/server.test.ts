@@ -408,13 +408,12 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
             return [];
         };
 
-        // Staging and pre-render lint run under min(NonRenderTimeoutMs, TimeoutMs), so give both ample
-        // headroom (5000 ms / 1000 ms): only the per-request render TimeoutMs may abort the hanging
-        // render, even on a loaded CI runner. The /check half keeps its own 60 ms server, since that
-        // check hangs and must always time out.
+        // Staging and pre-render lint run under min(NonRenderTimeoutMs, TimeoutMs). The render server
+        // keeps the default NonRenderTimeoutMs (5 min), so the request's TimeoutMs (1000 ms) is the only
+        // limit that can abort the hanging render within the test timeout, even on a loaded CI runner.
+        // The /check half keeps its own 60 ms server, since that check hangs and must always time out.
         const renderServer = CreateRenderWorkerServer({
             Backend: hangingCheckBackend,
-            NonRenderTimeoutMs: 5000,
         });
         serversToClose.push(renderServer);
         const renderPort = await renderServer.Listen(0);

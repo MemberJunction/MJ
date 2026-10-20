@@ -280,6 +280,69 @@ describe('video-studio-fakes', () => {
         }
     });
 
+    it('UseMemoryStorage throws, after deleting its provider, when the storage account itself fails to save', async () => {
+        const deleteOrder: string[] = [];
+        const providerEntity = {
+            ID: '00000000-0000-0000-0000-000000000121',
+            Name: '',
+            Description: '',
+            ServerDriverKey: '',
+            ClientDriverKey: '',
+            Priority: 0,
+            IsActive: false,
+            SupportsSearch: false,
+            RequiresOAuth: false,
+            NewRecord: vi.fn(),
+            Save: vi.fn(async () => true),
+            Delete: vi.fn(async () => {
+                deleteOrder.push('provider');
+                return true;
+            }),
+        };
+        const accountEntity = {
+            ID: '',
+            Name: '',
+            ProviderID: '',
+            CredentialID: '',
+            IncludeInGlobalSearch: false,
+            LatestResult: { CompleteMessage: 'account insert rejected' },
+            NewRecord: vi.fn(),
+            Save: vi.fn(async () => false),
+            Delete: vi.fn(async () => true),
+        };
+
+        // An existing credential is reused, so only the account save can fail.
+        vi.spyOn(RunView.prototype, 'RunView').mockImplementation(async (params) => {
+            if (params.EntityName === 'MJ: Credentials') {
+                return { Success: true, Results: [{ ID: '00000000-0000-0000-0000-000000000313' }] } as never;
+            }
+            return { Success: true, Results: [] } as never;
+        });
+        vi.spyOn(FileStorageEngine.Instance, 'Config').mockResolvedValue(undefined);
+
+        const ctx = {
+            User: { ID: '00000000-0000-0000-0000-000000000999' },
+            Provider: {
+                GetEntityObject: vi.fn(async (entityName: string) => {
+                    if (entityName === 'MJ: File Storage Providers') {
+                        return providerEntity;
+                    }
+                    if (entityName === 'MJ: File Storage Accounts') {
+                        return accountEntity;
+                    }
+                    throw new Error(`Unexpected entity '${entityName}'`);
+                }),
+            },
+        } as never;
+
+        try {
+            await expect(UseMemoryStorage(ctx)).rejects.toThrow('fixture account save failed: account insert rejected');
+            expect(deleteOrder).toEqual(['provider']);
+        } finally {
+            vi.restoreAllMocks();
+        }
+    });
+
     it('FirstFailedOrRetryStep given steps [ok, refused, failed] returns the refused step', () => {
         const ok: StepDiagnosticInput = {
             StepName: 'Prompt - Step 1',
