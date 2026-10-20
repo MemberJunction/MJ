@@ -118,6 +118,32 @@ describe('BaseFormComponent.HasUnsavedChangesBeyondRecord', () => {
     expect(makeForm().HasUnsavedChangesBeyondRecord).toBe(false);
   });
 
+  // Some forms add related-record changes straight to their own PendingRecords instead of
+  // reporting them on POPULATE_PENDING_RECORDS (the AI Agent form's "Remove action", added
+  // actions and prompts). Those are unsaved work too.
+  it('is true when the form itself holds a pending delete while editing', () => {
+    const form = makeForm();
+    form.EditMode = true;
+    form.PendingRecordsForTest.push({ entityObject: makeRecord(), action: 'delete' });
+    expect(form.HasUnsavedChangesBeyondRecord).toBe(true);
+  });
+
+  it('is true when the form itself holds a dirty pending save while editing', () => {
+    const form = makeForm();
+    form.EditMode = true;
+    const related = makeRecord();
+    related.SetMany({ Name: 'Related edit' });
+    form.PendingRecordsForTest.push({ entityObject: related, action: 'save' });
+    expect(form.HasUnsavedChangesBeyondRecord).toBe(true);
+  });
+
+  it('ignores entries the form still holds after editing ended (CancelEdit leaves deletes behind)', () => {
+    const form = makeForm();
+    form.EditMode = false;
+    form.PendingRecordsForTest.push({ entityObject: makeRecord(), action: 'delete' });
+    expect(form.HasUnsavedChangesBeyondRecord).toBe(false);
+  });
+
   it('is a pure read: no EDITING_COMPLETE, and the form\'s pending-records list is untouched', () => {
     const form = makeForm();
     const child = makeRecord();
