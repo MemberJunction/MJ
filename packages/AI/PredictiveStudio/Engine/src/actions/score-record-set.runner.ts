@@ -271,8 +271,8 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     }
     const provider: IMetadataProvider = request.provider ?? Metadata.Provider;
     return {
-      contextUser: request.contextUser,
-      provider,
+      ContextUser: request.contextUser,
+      Provider: provider,
     };
   }
 
@@ -493,11 +493,11 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     if (record.Record instanceof BaseEntity) {
       return record.Record;
     }
-    const entityInfo = context.provider.EntityByID(record.EntityID);
+    const entityInfo = context.Provider.EntityByID(record.EntityID);
     if (!entityInfo) {
       throw new Error(`entity '${record.EntityID}' not found in metadata; cannot write back prediction.`);
     }
-    const obj = await context.provider.GetEntityObject<BaseEntity>(entityInfo.Name, context.contextUser);
+    const obj = await context.Provider.GetEntityObject<BaseEntity>(entityInfo.Name, context.ContextUser);
     const loaded = await obj.InnerLoad(CompositeKey.FromURLSegment(entityInfo, record.RecordID));
     if (!loaded) {
       throw new Error(`record '${record.RecordID}' of '${entityInfo.Name}' not found.`);

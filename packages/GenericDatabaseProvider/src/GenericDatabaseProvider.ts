@@ -85,14 +85,14 @@ import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { SqlLoggingSessionImpl } from './SqlLogger.js';
+import { ApplyStatementTransforms, SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
-import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from './saveTypes.js';
+import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from './saveTypes.js';
 import type { RecordChangePayload } from '@memberjunction/core';
 
 import {
@@ -285,6 +285,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Fast O(1) check for whether any SQL logging sessions are currently active.
+     */
+    protected get HasActiveSqlLoggingSessions(): boolean {
+        return this._sqlLoggingSessions.size > 0;
+    }
+
+    /**
      * Creates a new SQL logging session that will capture all SQL operations to a file.
      * Returns a disposable session object that must be disposed to stop logging.
      *
@@ -424,7 +431,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         if (hasVerboseSession) {
             console.log('=== SQL LOGGING DEBUG ===');
-            console.log(`Query to log: ${query.substring(0, 100)}...`);
+            console.log(`Query to log: ${ApplyStatementTransforms(query, allSessions).substring(0, 100)}...`);
             console.log(`Context user email: ${contextUser?.Email || 'NOT_PROVIDED'}`);
             console.log(`Active sessions count: ${this._sqlLoggingSessions.size}`);
 
@@ -541,6 +548,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         user: UserInfo,
         originatingEntityActionIDs?: string[],
     ): Promise<ActionResult[]> {
+        const engine = EntityActionEngineServer.Instance;
+        if (engine.Loaded && engine.GetActionsByEntityName(entity.EntityInfo.Name, 'Active').length === 0) {
+            return [];
+        }
         // FIRST STATEMENT, and deliberately before the first `await`. After-hooks are dispatched
         // fire-and-forget, and the moment this method yields, the save completes and `finalizeSave()`
         // reloads the entity — resetting every field's OldValue to its new value. A change context
@@ -552,8 +563,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // rolled-back save never fires it (see RunAfterCommit).
         const postCommitToken = this.CapturePostCommitToken();
         try {
-            const engine = EntityActionEngineServer.Instance;
-            await engine.Config(false, user);
+            if (!engine.Loaded) {
+                await engine.Config(false, user);
+            }
             const newRecord = entityChange.IsCreate;
             const baseTypeType = baseType === 'save' ? (newRecord ? 'Create' : 'Update') : 'Delete';
             const invocationType = baseType === 'validate' ? 'Validate' : before ? 'Before' + baseTypeType : 'After' + baseTypeType;
@@ -632,11 +644,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         try {
             if (baseType === 'delete') return; // delete not yet supported for AI actions
 
-            await AIEngine.Instance.Config(false, user);
+            const ai = AIEngine.Instance;
+            if (!ai.Loaded) {
+                await ai.Config(false, user);
+            }
 
             const actions = this.GetEntityAIActions(entity.EntityInfo, before);
             if (actions && actions.length > 0) {
-                const ai = AIEngine.Instance;
                 for (let i = 0; i < actions.length; i++) {
                     const a = actions[i];
                     if ((a.TriggerEvent === 'before save' && before) || (a.TriggerEvent === 'after save' && !before)) {
@@ -1357,6 +1371,53 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     ): SaveCallBinding;
 
     /**
+     * Builds the dialect-quoted, comma-separated column list for {@link EntityInfo.DatestampReturnFields}
+     * (primary key column(s) followed by `__mj_CreatedAt` and `__mj_UpdatedAt`) using {@link QuoteIdentifier}.
+     *
+     * Examples:
+     * - SQL Server: `[ID], [__mj_CreatedAt], [__mj_UpdatedAt]`
+     * - PostgreSQL: `"ID", "__mj_CreatedAt", "__mj_UpdatedAt"`
+     */
+    protected GetDatestampSelectColumnsSQL(entityInfo: EntityInfo): string {
+        const fields = entityInfo.DatestampReturnFields ?? entityInfo.PrimaryKeys ?? [];
+        return fields.map((f) => this.QuoteIdentifier(f.Name)).join(', ');
+    }
+
+    /**
+     * Resolves the compile-time vs. effective runtime {@link SaveReturnContext} for a save operation.
+     *
+     * Centralizes the `SaveReturnMode` decision logic in `GenericDatabaseProvider` so dialect providers
+     * (`SQLServerDataProvider`, `PostgreSQLDataProvider`, and future providers) never duplicate the
+     * rules for:
+     * - `spReturnMode`: the return shape compiled into the stored procedure / function (`EntityInfo.SaveReturnMode`).
+     * - `effectiveReturnMode`: the return shape requested for this call (`options?.SaveReturnMode ?? spReturnMode`).
+     * - `needsDatestampProjection`: `true` when the compiled routine returns the full row (`spReturnMode === 'full'`)
+     *   but the caller requested `'datestamps_only'` at runtime, requiring the provider to project the result down
+     *   to `datestampSelectColumnsSQL` before wire transmission.
+     */
+    protected ResolveSaveReturnContext(
+        entity: BaseEntity,
+        options?: EntitySaveOptions,
+    ): SaveReturnContext {
+        const spReturnMode = entity.EntityInfo.SaveReturnMode ?? 'full';
+        const effectiveReturnMode = options?.SaveReturnMode ?? spReturnMode;
+        const spReturnsDatestampsOnly = spReturnMode === 'datestamps_only';
+        const needsDatestampProjection = !spReturnsDatestampsOnly && effectiveReturnMode === 'datestamps_only';
+        const datestampSelectColumnsSQL = this.GetDatestampSelectColumnsSQL(entity.EntityInfo);
+        const routineSelectColumnsSQL = needsDatestampProjection ? datestampSelectColumnsSQL : '*';
+        const finalSelectColumnsSQL = effectiveReturnMode === 'datestamps_only' ? datestampSelectColumnsSQL : '*';
+        return {
+            spReturnMode,
+            effectiveReturnMode,
+            spReturnsDatestampsOnly,
+            needsDatestampProjection,
+            datestampSelectColumnsSQL,
+            routineSelectColumnsSQL,
+            finalSelectColumnsSQL,
+        };
+    }
+
+    /**
      * Wraps the bare SP-call binding with the dialect's result-capture
      * pattern. SQL Server emits `DECLARE @ResultTable + INSERT INTO @ResultTable EXEC + SELECT * FROM @ResultTable`;
      * PostgreSQL emits the bare `SELECT * FROM schema."fn"(...)`.
@@ -1366,6 +1427,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         entity: BaseEntity,
         spName: string,
         options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
+    ): SaveSQLFragment;
+
+    /**
+     * Projects a save call's result set down to {@link SaveReturnContext.datestampSelectColumnsSQL}
+     * when a caller requests `SaveReturnMode: 'datestamps_only'` at runtime on an entity whose
+     * compiled stored procedure / function returns the full row (`returnContext.needsDatestampProjection === true`).
+     *
+     * - SQL Server captures `EXEC` into `DECLARE @ResultTable TABLE (...)` and emits
+     *   `SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;`.
+     * - PostgreSQL emits `SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM schema."fn"(...)`.
+     */
+    protected abstract ProjectSaveCallToDatestamps(
+        binding: SaveCallBinding,
+        entity: BaseEntity,
+        spName: string,
+        returnContext: SaveReturnContext,
     ): SaveSQLFragment;
 
     /**
@@ -1383,6 +1461,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         payload: RecordChangePayload,
         entity: BaseEntity,
         options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
     ): SaveSQLFragment;
 
     /**
@@ -1418,10 +1497,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /** The entries of a save's parameter map whose fields this save actually changed. */
-    private changedFieldValues(entity: BaseEntity, fieldValues: Map<EntityFieldInfo, unknown>): Map<EntityFieldInfo, unknown> {
+    private changedFieldValues(
+        entity: BaseEntity,
+        fieldValues: Map<EntityFieldInfo, unknown>,
+        dirtyFields?: ReadonlySet<EntityFieldInfo>,
+    ): Map<EntityFieldInfo, unknown> {
         const changed = new Map<EntityFieldInfo, unknown>();
         for (const [f, value] of fieldValues) {
-            if (entity.GetFieldByName(f.Name)?.Dirty) changed.set(f, value);
+            const isDirty = dirtyFields ? dirtyFields.has(f) : !!entity.GetFieldByName(f.Name)?.Dirty;
+            if (isDirty) changed.set(f, value);
         }
         return changed;
     }
@@ -1447,6 +1531,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         // 1. Iterate fields, apply IsSPParameter + PK rules, coerce values.
         const fieldValueMap = new Map<EntityFieldInfo, unknown>();
+        const dirtyFields = isUpdate ? new Set<EntityFieldInfo>() : undefined;
         for (const f of entity.EntityInfo.Fields) {
             if (!f.IsSPParameter(isUpdate)) continue;
 
@@ -1485,6 +1570,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const coerced = this.CoerceSaveFieldValue(f, rawValue, isUpdate);
             if (coerced.kind === 'skip') continue;
             fieldValueMap.set(f, coerced.value);
+            if (dirtyFields && theField?.Dirty) {
+                dirtyFields.add(f);
+            }
         }
 
         // 2. Encrypt — between coercion and rendering, mutates the map in place.
@@ -1493,11 +1581,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // 3. Render the provider-specific binding.
         const binding = this.RenderSaveCallBinding(entity, fieldValueMap, isUpdate, spName);
 
-        // 4. Wrap with result capture. This is the "no-record-change" save
-        //    shape; we also keep it as simpleSQL so consumers (e.g.
-        //    DatabaseProviderBase's `simpleSQLFallback` flow) have a
-        //    record-change-free form to fall back to.
-        const baseSaveSQL = this.WrapSaveCallForResult(binding, entity, spName, options);
+        // 4. Resolve SaveReturnContext and wrap with result capture.
+        //    `unprojectedSaveSQL` is the bare SP/function call (kept for `simpleSQL` fallback so
+        //    SQL logging / migration replay never gets polluted with runtime datestamp projection wrappers).
+        //    When `returnContext.needsDatestampProjection` is true, `ProjectSaveCallToDatestamps`
+        //    projects the executed result down to `datestampSelectColumnsSQL`.
+        const returnContext = this.ResolveSaveReturnContext(entity, options);
+        const unprojectedSaveSQL = this.WrapSaveCallForResult(binding, entity, spName, undefined, {
+            ...returnContext,
+            effectiveReturnMode: returnContext.spReturnMode,
+            needsDatestampProjection: false,
+            routineSelectColumnsSQL: '*',
+            finalSelectColumnsSQL: returnContext.spReturnsDatestampsOnly ? returnContext.datestampSelectColumnsSQL : '*',
+        });
+        const baseSaveSQL = returnContext.needsDatestampProjection
+            ? this.ProjectSaveCallToDatestamps(binding, entity, spName, returnContext)
+            : unprojectedSaveSQL;
         let saveSQL = baseSaveSQL;
         // A CREATE's logged form is guarded on the primary key so a migration replay of
         // the recording converges on a database that already holds the row (#4503). An
@@ -1505,12 +1604,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // resets the target's other columns. A forced save (IgnoreDirtyState, e.g. MetadataSync's
         // `alwaysPush`) asked to re-impose the whole row, so it keeps the full-row form. Dialects
         // without a replay form log the plain save SQL.
-        const replaySQL = isNew
-            ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
-            : options?.IgnoreDirtyState
-              ? undefined
-              : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap));
-        const simpleSQL = replaySQL ?? baseSaveSQL.sql;
+        // Computed lazily and memoized so saves with SQL logging off skip replay/literal rendering.
+        let cachedSimpleSQL: string | undefined;
+        const computeSimpleSQL = (): string => {
+            if (cachedSimpleSQL === undefined) {
+                const replaySQL = isNew
+                    ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
+                    : options?.IgnoreDirtyState
+                      ? undefined
+                      : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap, dirtyFields));
+                // A statement that runs with parameters is logged in its literal form, which replays alone.
+                cachedSimpleSQL = replaySQL ?? unprojectedSaveSQL.literalSQL ?? unprojectedSaveSQL.sql;
+            }
+            return cachedSimpleSQL;
+        };
 
         // 5. Optionally wrap with record-change emission.
         let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
@@ -1519,18 +1626,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (this.ShouldTrackRecordChanges(entity.EntityInfo) && options?.SkipRecordChanges !== true) {
             const newData = entity.GetAll(false);
             const oldData = isUpdate ? entity.GetAll(true) : null;
-
-            // ISA propagation hook: capture the diff for SS subtype propagation.
-            // Returned via `extraData` so the SS subclass can consume it without re-diffing.
-            if (isUpdate && oldData) {
-                const diffChanges = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
-                if (diffChanges && Object.keys(diffChanges).length > 0) {
-                    overlappingChangeData = {
-                        changesJSON: JSON.stringify(diffChanges),
-                        changesDescription: this.CreateUserDescriptionOfChanges(diffChanges),
-                    };
-                }
-            }
 
             const payload = this.BuildRecordChangePayload(
                 newData,
@@ -1544,15 +1639,34 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 entity.CloneContext,
             );
             if (payload) {
-                saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity, options);
+                // ISA propagation hook: reuse the diff already computed by BuildRecordChangePayload
+                // for SS subtype propagation without running DiffObjects + JSON.stringify twice.
+                if (isUpdate && oldData && payload.changesJSON) {
+                    overlappingChangeData = {
+                        changesJSON: payload.changesJSON,
+                        changesDescription: payload.changesDescription,
+                    };
+                }
+                saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity, options, returnContext);
             }
         }
 
         const result: SaveSQLResult = {
             fullSQL: saveSQL.sql,
-            simpleSQL,
+            get simpleSQL(): string {
+                return computeSimpleSQL();
+            },
             parameters: saveSQL.parameters ?? null,
         };
+        if ('literalSQL' in saveSQL) {
+            Object.defineProperty(result, 'literalSQL', {
+                enumerable: true,
+                configurable: true,
+                get(): string | undefined {
+                    return saveSQL.literalSQL;
+                },
+            });
+        }
         if (overlappingChangeData) {
             (result as unknown as { extraData: Record<string, unknown> }).extraData = { overlappingChangeData };
         }
@@ -5678,8 +5792,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // the CAST becomes illegal and the RLS post-image gate throws on SQL SERVER: the exact
             // failure this change set out to remove from PostgreSQL, relocated to the primary
             // platform. `MaxLength` does the halving, but flattens the `-1` MAX sentinel to 0, so
-            // the sentinel is passed through explicitly.
-            const charLength = field.Length === -1 ? -1 : field.MaxLength;
+            // the sentinel is passed through explicitly. `MaxLength` is also 0 for `binary`/`varbinary`,
+            // whose length is a byte count, and SQL Server rejects `VARBINARY(0)`, so those keep
+            // `field.Length`.
+            const isBinary = /^(var)?binary$/i.test(baseType.trim());
+            const charLength = field.Length === -1 || isBinary ? field.Length : field.MaxLength;
             // `getDialect()` is nullable on this base. Falling back to `SQLFullType` — the exact
             // string this used to emit — keeps SQL Server, whose vocabulary that already is,
             // byte-identical to its previous behaviour.

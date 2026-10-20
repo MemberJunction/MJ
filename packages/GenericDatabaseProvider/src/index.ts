@@ -7,6 +7,7 @@ export type {
     SaveCoercedValue,
     SaveCallBinding,
     SaveSQLFragment,
+    SaveReturnContext,
     RecordChangePayload,
 } from './saveTypes.js';
 export {

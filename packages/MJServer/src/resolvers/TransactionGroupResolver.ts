@@ -338,13 +338,13 @@ export class TransactionResolver extends ResolverBase {
             }
         }
         if (Array.isArray(entity.Fields)) {
-            const hasSentForeignKey = entity.Fields.some(
-                f => Boolean(f.EntityFieldInfo?.RelatedEntityID) &&
-                     (Object.prototype.hasOwnProperty.call(sentRecord, f.Name) ||
-                      Object.prototype.hasOwnProperty.call(sentRecord, f.CodeName))
-            );
             for (const f of entity.Fields) {
-                if (f.EntityFieldInfo?.IsSpecialDateField || (hasSentForeignKey && f.EntityFieldInfo?.IsVirtual)) {
+                if (
+                    f.EntityFieldInfo?.IsSpecialDateField ||
+                    Boolean(f.EntityFieldInfo?.IsVirtual) ||
+                    Boolean(f.EntityFieldInfo?.IsComputed) ||
+                    f.ReadOnly
+                ) {
                     includeKeys.add(f.Name);
                 }
             }

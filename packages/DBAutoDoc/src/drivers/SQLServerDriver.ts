@@ -279,7 +279,8 @@ export class SQLServerDriver extends BaseAutoDocDriver {
       isForeignKey: row.is_foreign_key,
       checkConstraint: row.check_constraint || undefined,
       defaultValue: row.default_value || undefined,
-      maxLength: row.max_length > 0 ? row.max_length : undefined,
+      // sys.columns.max_length is in bytes (-1 for max); nchar/nvarchar store two bytes per character.
+      maxLength: row.max_length > 0 ? (/^n(var)?char$/i.test(row.data_type) ? row.max_length / 2 : row.max_length) : undefined,
       precision: row.precision > 0 ? row.precision : undefined,
       scale: row.scale > 0 ? row.scale : undefined
     }));
