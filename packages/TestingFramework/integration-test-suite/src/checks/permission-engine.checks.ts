@@ -1,5 +1,5 @@
 /**
- * permission-engine.checks.ts — the 'permission-engine' bundle (PE1–PE12): live proof of the
+ * permission-engine.checks.ts — the 'permission-engine' bundle (PE1–PE14, plus PE3b): live proof of the
  * UNIFIED PERMISSIONS model described in guides/UNIFIED_PERMISSIONS_GUIDE.md.
  *
  * TRANSPORT: **CLIENT-FIRST**. Every check here runs over the real GraphQL wire via
@@ -149,7 +149,18 @@ async function configuredAIEngine(ctx: IntegrationCheckContext): Promise<AIEngin
  * fixture can never make them fail (and so they still hard-fail on a genuine product regression).
  */
 function realDomains(engine: PermissionEngine): MJPermissionDomainEntity[] {
-    return engine.Domains.filter(d => !d.Name.startsWith(FIXTURE_DOMAIN_PREFIX));
+    return engine.Domains.filter(d => {
+        if (d.Name.startsWith(FIXTURE_DOMAIN_PREFIX)) {
+            return false;
+        }
+        // Core MJ permission providers always use the 'MJ*' class prefix and must always resolve.
+        // External OpenApp permission domains (e.g. 'CollaborationSpacePermissionProvider') are only
+        // in-scope when their OpenApp engine package is loaded in the current process.
+        if (!d.ProviderClassName.startsWith('MJ')) {
+            return MJGlobal.Instance.ClassFactory.GetRegistration(PermissionProviderBase, d.ProviderClassName) != null;
+        }
+        return true;
+    });
 }
 
 /** Split a comma-delimited catalog column into trimmed, non-empty tokens. */
@@ -888,9 +899,9 @@ export async function CheckPe11UnresolvableProviderIsContained(ctx: IntegrationC
         AssertEqual(engine.Domains.some(d => d.Name === name), true, 'the throwaway unresolvable domain row was not loaded into the catalog');
 
         // Every REAL domain still resolved — one bad row did not cascade.
-        const realDomains = engine.Domains.filter(d => !d.Name.startsWith(FIXTURE_DOMAIN_PREFIX));
-        Assert(realDomains.length > 0, 'no real domains remained in the catalog to verify against');
-        const broken = realDomains.filter(d => !engine.GetProvider(d.Name)).map(d => d.Name);
+        const domains = realDomains(engine);
+        Assert(domains.length > 0, 'no real domains remained in the catalog to verify against');
+        const broken = domains.filter(d => !engine.GetProvider(d.Name)).map(d => d.Name);
         AssertEqual(broken.length, 0, `one bad catalog row broke real domain(s): ${broken.join(', ')}`);
 
         // The bogus domain never ALLOWS anything (throwing is acceptable here; allowing is not).
@@ -913,7 +924,7 @@ export async function CheckPe11UnresolvableProviderIsContained(ctx: IntegrationC
                 `see PE13 for the consequence.`
             );
         }
-        console.log(`      → unresolvable domain contained: ${realDomains.length} real domain(s) intact, nothing granted`);
+        console.log(`      → unresolvable domain contained: ${domains.length} real domain(s) intact, nothing granted`);
     });
 }
 
@@ -1021,6 +1032,44 @@ export async function CheckPe13_UnresolvableProviderPoisonsFanOut(ctx: Integrati
     return CheckPe13UnresolvableProviderPoisonsFanOut(ctx);
 }
 
+const RLS_ENTITY = 'MJ: Row Level Security Filters';
+
+/**
+ * PE14 — Developer can create and update row-level security filters (MJ#4837).
+ *
+ * The grant lives in metadata, not a migration. GetUserPermisions is the check Save()
+ * runs, so this fails on a migrations-only database and passes once MJ metadata is pushed.
+ * The Developer row is asserted on its own so a different role cannot make the check pass.
+ */
+export async function CheckPe14DeveloperCanWriteRowLevelSecurityFilters(ctx: IntegrationCheckContext): Promise<void> {
+    const entity = ctx.Provider.EntityByName(RLS_ENTITY);
+    if (!entity) {
+        Assert(false, `PE14: '${RLS_ENTITY}' is not loaded`);
+        return;
+    }
+    const developerRole = ctx.Provider.Roles?.find((role) => role.Name === 'Developer');
+    if (!developerRole) {
+        Assert(false, 'PE14: the Developer role is not loaded');
+        return;
+    }
+    const developer = entity.Permissions.find((row) => UUIDsEqual(row.RoleID, developerRole.ID) && !row.IsDeny);
+    if (!developer) {
+        Assert(false, `PE14: Developer has no Allow row on '${RLS_ENTITY}' (${entity.Permissions.length} permission row(s) loaded)`);
+        return;
+    }
+    AssertEqual(!!developer.CanCreate, true, 'PE14: Developer Allow row CanCreate');
+    AssertEqual(!!developer.CanUpdate, true, 'PE14: Developer Allow row CanUpdate');
+
+    AssertEqual(ctx.User.Name?.trim(), 'System', 'PE14: the context user is the system user');
+    const perms = entity.GetUserPermisions(ctx.User);
+    if (!perms) {
+        Assert(false, 'PE14: GetUserPermisions returned null');
+        return;
+    }
+    AssertEqual(perms.CanCreate, true, `PE14: system user CanCreate on '${RLS_ENTITY}' (MJ#4837)`);
+    AssertEqual(perms.CanUpdate, true, `PE14: system user CanUpdate on '${RLS_ENTITY}' (MJ#4837)`);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────────────────
 // registration
 // ─────────────────────────────────────────────────────────────────────────────────────────
@@ -1043,7 +1092,8 @@ export const PermissionEngineChecks: NamedCheck[] = [
     // now reports resolution failure explicitly instead of returning a hollow base instance, and
     // the fan-out defers each provider call so a SYNCHRONOUS throw becomes a rejection allSettled
     // can isolate. Verified green end-to-end 2026-07-19. It stays as the regression pin.
-    { Id: 'permission-engine.PE13', Name: 'PE13: an unresolvable provider class must not poison the GetAllUserPermissions fan-out', Fn: CheckPe13UnresolvableProviderPoisonsFanOut, RequiresMutation: true }
+    { Id: 'permission-engine.PE13', Name: 'PE13: an unresolvable provider class must not poison the GetAllUserPermissions fan-out', Fn: CheckPe13UnresolvableProviderPoisonsFanOut, RequiresMutation: true },
+    { Id: 'permission-engine.PE14', Name: 'PE14: Developer can create and update MJ: Row Level Security Filters', Fn: CheckPe14DeveloperCanWriteRowLevelSecurityFilters },
 ];
 
 for (const check of PermissionEngineChecks) {

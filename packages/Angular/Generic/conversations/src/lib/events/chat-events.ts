@@ -18,6 +18,7 @@
  */
 
 import type { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
+import type { AgentTurnInfo, AgentTurnRoute } from '../models/agent-turn.model';
 
 /**
  * Base class for cancelable chat events. Listeners flip `Cancel = true` to
@@ -34,24 +35,56 @@ export class CancellableChatEventArgs {
 // ────────────────────────────────────────────────────────────────────
 
 /**
- * Fired BEFORE a user message is sent to the agent. Listeners can cancel
- * (e.g., a guardrail that blocks empty messages or messages matching a
- * forbidden pattern).
+ * Fired once per agent turn, BEFORE any reply row exists: the person's message is saved and the
+ * chat area has picked the agent that will answer it, on whichever route chose it (a tagged
+ * agent, the last agent that answered, a pinned or host default agent, or the conversation
+ * manager). A message that starts no turn (see `AgentReplyMode`) fires nothing.
+ *
+ * A listener can:
+ * - cancel the turn (`Cancel = true`). Nothing more is written: no placeholder, no reply row,
+ *   and `AfterAgentTurn` does not fire. `CancelReason` is logged, not shown.
+ * - send the turn to a different agent by setting {@link RedirectAgentId}. The agent must be
+ *   one the chat allows (`AllowedAgentIDs`); otherwise the turn is refused with a notice.
+ *
+ * Listeners run synchronously: the chat area reads `Cancel` and `RedirectAgentId` as soon as
+ * `emit()` returns.
+ *
+ * Earlier releases fired this event only on the conversation-manager route, after that route's
+ * placeholder row was saved, so a cancel left the row behind marked "Turn canceled".
  */
 export class BeforeAgentTurnEventArgs extends CancellableChatEventArgs {
+    /** The agent the turn resolved to. Null only when the args were built without turn details. */
+    public readonly AgentId: string | null;
+    /** The agent's name, when known. */
+    public readonly AgentName: string | null;
+    /** How the agent was chosen. */
+    public readonly Route: AgentTurnRoute | null;
+    /** The person's saved message the turn answers. */
+    public readonly UserMessageId: string | null;
+    /**
+     * Set to send the turn to a different agent instead. Null (the default) keeps
+     * {@link AgentId}. The turn then runs with `Route` `'Redirect'`.
+     */
+    public RedirectAgentId: string | null = null;
+
     constructor(
         public readonly ConversationId: string,
         public readonly MessageText: string,
-        public readonly ApplicationId: string | null = null
+        public readonly ApplicationId: string | null = null,
+        turn: AgentTurnInfo | null = null
     ) {
         super();
+        this.AgentId = turn?.AgentId ?? null;
+        this.AgentName = turn?.AgentName ?? null;
+        this.Route = turn?.Route ?? null;
+        this.UserMessageId = turn?.UserMessageId ?? null;
     }
 }
 
 /**
- * Fired AFTER a successful agent turn completes. Carries the agent run id
- * and the underlying `ExecuteAgentResult`. NOT fired when the corresponding
- * `BeforeAgentTurnEventArgs` was canceled or the turn errored.
+ * Fired AFTER a successful agent turn, on every route. Carries the agent run id and the
+ * underlying `ExecuteAgentResult`. NOT fired when the corresponding `BeforeAgentTurnEventArgs`
+ * was canceled, when the turn failed, or when a host `AgentTurnHandler` reported no `Result`.
  */
 export class AfterAgentTurnEventArgs {
     constructor(
@@ -134,6 +167,41 @@ export class AfterResponseFormSubmittedEventArgs {
     constructor(
         public readonly FormId: string,
         public readonly Values: Record<string, unknown>
+    ) {}
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Stopping an in-progress agent run
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Fired BEFORE an in-progress agent run is stopped, when the person clicks Stop on the reply
+ * the run is writing. Listeners can cancel (`Cancel = true`): nothing is written, the control
+ * stays available, and `AfterStopClicked` does not fire. `AgentRunId` is null when the run
+ * row has not been seen by the chat yet (the first moment after the reply placeholder appears);
+ * the stop is then resolved by the reply's detail id.
+ *
+ * Listeners run synchronously: the message item reads `Cancel` as soon as `emit()` returns.
+ */
+export class BeforeStopClickedEventArgs extends CancellableChatEventArgs {
+    constructor(
+        public readonly ConversationDetailId: string,
+        public readonly AgentRunId: string | null
+    ) {
+        super();
+    }
+}
+
+/**
+ * Fired AFTER a stop was attempted. `Stopped` is whether the run's row was marked Cancelled;
+ * false means the run had already finished or the write was refused. NOT fired when the
+ * corresponding `BeforeStopClickedEventArgs` was canceled.
+ */
+export class AfterStopClickedEventArgs {
+    constructor(
+        public readonly ConversationDetailId: string,
+        public readonly AgentRunId: string | null,
+        public readonly Stopped: boolean
     ) {}
 }
 

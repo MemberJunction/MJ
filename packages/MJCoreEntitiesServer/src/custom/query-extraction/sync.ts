@@ -505,8 +505,12 @@ export async function SyncDependencies(
         return;
     }
 
-    // Map resolved refs to the shape needed for sync
-    const extractedDeps = resolvedRefs.map(ref => ({
+    // Map resolved refs to the shape needed for sync. A query that references the same dependency
+    // more than once still has one dependency row for it, so keep the first reference.
+    const distinctRefs = resolvedRefs.filter((ref, i) => resolvedRefs.findIndex(
+        other => UUIDsEqual(other.DepQuery.ID, ref.DepQuery.ID) && other.ReferencePath === ref.ReferencePath
+    ) === i);
+    const extractedDeps = distinctRefs.map(ref => ({
         dependsOnQueryID: ref.DepQuery.ID,
         referencePath: ref.ReferencePath,
         alias: ref.Alias,

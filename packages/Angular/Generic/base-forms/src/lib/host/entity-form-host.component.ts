@@ -16,6 +16,7 @@ import {
   EntityFormMode, FormResolution, FormResolverService,
   HasStandardFormAlternative as hasStandardFormAlternative
 } from '../resolver/form-resolver.service';
+import { FormVariantChoices } from '../resolver/form-variants';
 import { EntityFormConfig } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import {
@@ -186,6 +187,13 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   @Output() FormCreated = new EventEmitter<BaseFormComponent>();
   /** The user switched between the custom and the standard form (so the surface can persist it, e.g. in the URL). */
   @Output() FormModeChange = new EventEmitter<EntityFormMode>();
+  /**
+   * Re-emitted form `EditModeChanged` (true = edit started, false = ended),
+   * plus one `true` right after mount when the form was created already in
+   * edit mode (`StartInEditMode`, or a new record) — StartEditMode never runs
+   * in that path, so without this the shell would never hear about it.
+   */
+  @Output() EditModeChanged = new EventEmitter<boolean>();
 
   // ── State ───────────────────────────────────────────────────────────────
 
@@ -427,6 +435,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       // The picker's "current" row describes the resolver's pick; the standard form is none of them.
       if (standardForm) instance.CurrentVariantID = null;
       this.subscribeToFormEvents(instance);
+      this.announceInitialEditMode(instance);
 
       this.FormCreated.emit(instance);
       this.ErrorTitle = null;
@@ -569,9 +578,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     resolution: FormResolution,
     entityName: string,
   ): void {
-    instance.Variants = (resolution.variants ?? [])
-      .filter(v => v.Status === 'Active')
-      .map(v => ({ ID: v.ID, Label: v.Name ?? `Override ${v.ID.substring(0, 8)}`, Scope: v.Scope, Status: v.Status }));
+    instance.Variants = FormVariantChoices(resolution.variants ?? []);
     instance.CurrentVariantID = resolution.kind === 'interactive' ? resolution.override.ID : null;
     instance.OnVariantChanged = (variantID: string | null) => {
       if (variantID === null) {
@@ -602,11 +609,25 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       form.RecordSaveFailed.subscribe(e => this.RecordSaveFailed.emit(e)),
       form.ValidationFailed.subscribe(e => this.ValidationFailed.emit(e)),
       form.RecordReady.subscribe(e => this.RecordReady.emit(e)),
+      form.EditModeChanged.subscribe(e => this.EditModeChanged.emit(e)),
     );
     // Surface 'dismiss' navigation as a first-class Dismissed event too.
     this._formEventSubs.push(
       form.Navigate.subscribe(e => { if (e.Kind === 'dismiss') this.Dismissed.emit(); }),
     );
+  }
+
+  /**
+   * Announce edit mode that was set by ASSIGNMENT rather than by
+   * StartEditMode() — the mount path writes `instance.EditMode` directly, so
+   * a form that starts in edit mode would otherwise be editing, unpinned and
+   * italic in a records preview tab. Safe to fire alongside ngOnInit's own
+   * StartEditMode for a new record: the shell's pin is idempotent.
+   */
+  private announceInitialEditMode(form: BaseFormComponent): void {
+    if (form.EditMode) {
+      this.EditModeChanged.emit(true);
+    }
   }
 
   // ── New-record value application (URL segment or object) ──────────────────

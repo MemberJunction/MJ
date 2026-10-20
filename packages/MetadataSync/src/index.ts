@@ -17,9 +17,14 @@ export { FileWriteBatch } from './lib/file-write-batch';
 export { JsonPreprocessor } from './lib/json-preprocessor';
 export type { IncludeDirective } from './lib/json-preprocessor';
 export { SyncStateManager } from './lib/sync-state-manager';
+export { FindSyncRootDir } from './lib/push-directories';
 export type { SyncState } from './lib/sync-state-manager';
+export type { SkippedDirectory } from './lib/push-when';
+export type { PullFieldOverrides } from './lib/pull-option-overrides';
 export { ParseMetadataReference, parseMetadataReference } from './lib/reference-parser';
+/** @deprecated Import from `@memberjunction/record-graph`. */
 export { ResolveCollectionRelationship, resolveCollectionRelationship } from './lib/collection-resolver';
+/** @deprecated Import from `@memberjunction/record-graph`. */
 export type { ResolvedCollectionInfo } from './lib/collection-resolver';
 
 // Deletion audit exports

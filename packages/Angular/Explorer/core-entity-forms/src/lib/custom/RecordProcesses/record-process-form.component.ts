@@ -1,6 +1,8 @@
-import { Component, OnInit } from '@angular/core';
-import { RegisterClass, RegisterClassEx, SafeJSONParse, EscapeSQLString } from '@memberjunction/global';
+import { Component, OnInit, ViewChild } from '@angular/core';
+import { RegisterClass, RegisterClassEx, SafeJSONParse, EscapeSQLString, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormPolicy, FormChromeContext, FormChromeSpec, DETAILS_SECTION_KEY } from '@memberjunction/ng-base-forms';
+import { FeaturePipelineBuilderComponent } from '@memberjunction/ng-record-process-studio';
+import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { MJRecordProcessFormComponent } from '../../generated/Entities/MJRecordProcess/mjrecordprocess.form.component';
 import { EntityInfo, RunView, LogError } from '@memberjunction/core';
 import type { DataFeatureSpec, SpecValidationIssue, EntityMetadataStub } from '@memberjunction/feature-pipelines';
@@ -224,6 +226,26 @@ export function buildPromptParamViewModels(
     return BuildPromptParamViewModels(spec, inputMapping);
 }
 
+/** The message the form refuses a save with when the builder flagged the pipeline without listing why. */
+export const PIPELINE_BUILDER_INVALID_MESSAGE = 'The pipeline configuration has errors. Fix them under Pipeline Configuration before saving.';
+
+/**
+ * Why the record form refuses to save an Infer pipeline the builder reports invalid: the builder's error
+ * messages, once each, or {@link PIPELINE_BUILDER_INVALID_MESSAGE} when they are not available. Empty for
+ * any other work type (the builder only edits Infer pipelines), and while the builder reports it valid.
+ */
+export function GetPipelineBuilderSaveErrors(
+    workType: MJRecordProcessEntity['WorkType'] | null | undefined,
+    pipelineValid: boolean,
+    builderIssues?: ReadonlyArray<SpecValidationIssue>
+): string[] {
+    if (workType !== 'Infer' || pipelineValid) {
+        return [];
+    }
+    const messages = (builderIssues ?? []).filter((issue) => issue.Severity === 'error').map((issue) => issue.Message);
+    return messages.length > 0 ? Array.from(new Set(messages)) : [PIPELINE_BUILDER_INVALID_MESSAGE];
+}
+
 /**
  * Custom form override for `MJ: Record Processes` (priority 100).
  * Presents the Record Process / Feature Pipeline in a first-class MJ form with:
@@ -245,7 +267,11 @@ export function buildPromptParamViewModels(
     styleUrls: ['./record-process-form.component.css'],
 })
 export class RecordProcessFormComponentExtended extends MJRecordProcessFormComponent implements OnInit {
+    /** Whether the Feature Pipeline builder last reported the pipeline valid. The form refuses to save while it is false. */
     public PipelineValid = true;
+
+    /** The embedded builder, when it is rendered, for the messages behind {@link PipelineValid}. */
+    @ViewChild(FeaturePipelineBuilderComponent) private pipelineBuilder?: FeaturePipelineBuilderComponent;
 
     /** @deprecated Use {@link PipelineValid}. */
     public get pipelineValid() {
@@ -378,6 +404,25 @@ export class RecordProcessFormComponentExtended extends MJRecordProcessFormCompo
     public OnPipelineValidChange(valid: boolean): void {
         this.PipelineValid = valid;
         this.cdr.markForCheck();
+    }
+
+    /**
+     * The record's validation (which includes the shared Feature Pipeline save check), plus the builder's
+     * verdict: while the builder reports an Infer pipeline invalid, the save is refused and its errors are
+     * listed on Configuration.
+     */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        const builderErrors = GetPipelineBuilderSaveErrors(this.record?.WorkType, this.PipelineValid, this.pipelineBuilder?.ValidationErrors);
+        for (const message of builderErrors) {
+            if (!result.Errors.some((error) => error.Message === message)) {
+                result.Errors.push(new ValidationErrorInfo('Configuration', message, this.record?.Configuration, ValidationErrorType.Failure));
+            }
+        }
+        if (builderErrors.length > 0) {
+            result.Success = false;
+        }
+        return result;
     }
 
     public ToggleRawJson(): void {

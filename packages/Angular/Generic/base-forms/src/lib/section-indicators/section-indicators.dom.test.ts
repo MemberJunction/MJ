@@ -224,7 +224,7 @@ describe('Section indicators — unsaved-changes dot', () => {
 
 describe('Section indicators — invalid fields', () => {
   it('flags a required field left empty in edit mode, live, before any save is attempted', () => {
-    const f = render({ record: makeSavedWidget({ Code: '' }) });
+    const f = render({ record: makeSavedWidget({ Code: null }) });
     expect(fieldByName(f, 'Code').IsRequiredEmpty).toBe(true);
     const identity = panelByKey(f, 'identity');
     expect(identity.SectionErrorCount).toBe(1);
@@ -246,13 +246,13 @@ describe('Section indicators — invalid fields', () => {
   });
 
   it('is silent in read mode — a blank required field is only a problem while editing', () => {
-    const f = render({ record: makeSavedWidget({ Code: '' }), editMode: false });
+    const f = render({ record: makeSavedWidget({ Code: null }), editMode: false });
     expect(panelByKey(f, 'identity').SectionErrorCount).toBe(0);
     expect(hostEl(f, 'identity').querySelector('.mj-forms-panel-error-badge')).toBeNull();
   });
 
   it('clears as soon as the required field is filled in', () => {
-    const f = render({ record: makeSavedWidget({ Code: '' }) });
+    const f = render({ record: makeSavedWidget({ Code: null }) });
     expect(panelByKey(f, 'identity').SectionErrorCount).toBe(1);
     fieldByName(f, 'Code').Value = 'G9';
     f.detectChanges();
@@ -268,7 +268,7 @@ describe('Section indicators — invalid fields', () => {
   });
 
   it('counts a field once even when it is both required-empty and named by a failed save', () => {
-    const f = render({ record: makeSavedWidget({ Code: '' }), ctx: { showValidation: true, validationErrors: [failure('Code'), failure('Code', 'too short')] } });
+    const f = render({ record: makeSavedWidget({ Code: null }), ctx: { showValidation: true, validationErrors: [failure('Code'), failure('Code', 'too short')] } });
     expect(panelByKey(f, 'identity').SectionErrorCount).toBe(1);
   });
 
@@ -329,7 +329,7 @@ describe('Section indicators — custom content via [Indicators]', () => {
 
 describe('Section indicators — coordinator wiring', () => {
   it('registers every panel under its SectionKey so a rail group can sum the sections it fronts', () => {
-    const f = render({ record: makeSavedWidget({ Code: '' }) });
+    const f = render({ record: makeSavedWidget({ Code: null }) });
     fieldByName(f, 'Notes').Value = 'changed';
     f.detectChanges();
     const c = coordinator();

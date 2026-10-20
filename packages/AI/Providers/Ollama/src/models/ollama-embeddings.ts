@@ -1,6 +1,7 @@
-import { BaseEmbeddings, EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult, ModelUsage } from '@memberjunction/ai';
+import { BaseEmbeddings, EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult, ModelUsage, ThrowIfAborted } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { Ollama, EmbeddingsRequest, EmbeddingsResponse } from 'ollama';
+import { CancellableOllamaClient, CreateCancellableOllamaClient } from './cancellable-client';
 
 /**
  * Ollama implementation of the BaseEmbeddings class for local embedding generation
@@ -15,6 +16,14 @@ export class OllamaEmbedding extends BaseEmbeddings {
     constructor(apiKey?: string) {
         super(apiKey || ''); // Ollama doesn't require API key for local usage
         this._client = new Ollama({ host: this._baseUrl });
+    }
+
+    /**
+     * Talks to an Ollama server and never sends the key, so it needs none. Lets credential checks
+     * (e.g. `AIEmbeddingRunner`) accept an Ollama embedding model with no key configured.
+     */
+    public override get RequiresAPIKey(): boolean {
+        return false;
     }
 
     /**
@@ -62,10 +71,14 @@ export class OllamaEmbedding extends BaseEmbeddings {
         }
 
         const startTime = new Date();
+        let scoped: CancellableOllamaClient | undefined;
 
         try {
+            ThrowIfAborted(params.CancellationToken, 'Ollama');
+            scoped = this.clientForRequest(params.CancellationToken);
+            const client = scoped.Client;
             // Ensure the model is available
-            await this.ensureModelAvailable(params.model);
+            await this.ensureModelAvailable(params.model, client);
 
             // Create embeddings request
             const embeddingsRequest: EmbeddingsRequest = {
@@ -80,7 +93,7 @@ export class OllamaEmbedding extends BaseEmbeddings {
             }
 
             // Make the embeddings request
-            const response: EmbeddingsResponse = await this.Client.embeddings(embeddingsRequest);
+            const response: EmbeddingsResponse = await client.embeddings(embeddingsRequest);
             
             const endTime = new Date();
 
@@ -101,9 +114,11 @@ export class OllamaEmbedding extends BaseEmbeddings {
             const endTime = new Date();
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             
-            // On error, return a minimal valid result structure
-            // The BaseEmbeddings class expects a specific format
+            // An aborted request is reported as cancelled; any other failure is rethrown as it is
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             throw error;
+        } finally {
+            scoped?.Dispose();
         }
     }
 
@@ -118,16 +133,22 @@ export class OllamaEmbedding extends BaseEmbeddings {
         }
 
         const startTime = new Date();
+        let scoped: CancellableOllamaClient | undefined;
         const embeddings: number[][] = [];
         let totalPromptTokens = 0;
 
         try {
+            ThrowIfAborted(params.CancellationToken, 'Ollama');
+            scoped = this.clientForRequest(params.CancellationToken);
+            const client = scoped.Client;
             // Ensure the model is available
-            await this.ensureModelAvailable(params.model);
+            await this.ensureModelAvailable(params.model, client);
 
             // Process each text sequentially
             // Note: Ollama doesn't support true batch processing, but we can optimize by keeping the model loaded
             for (const text of params.texts) {
+                // Checked before each text, so a cancelled batch sends no further requests.
+                ThrowIfAborted(params.CancellationToken, 'Ollama');
                 const embeddingsRequest: EmbeddingsRequest = {
                     model: params.model,
                     prompt: text,
@@ -139,7 +160,7 @@ export class OllamaEmbedding extends BaseEmbeddings {
                     Object.assign(embeddingsRequest, (params as any).additionalParams);
                 }
 
-                const response: EmbeddingsResponse = await this.Client.embeddings(embeddingsRequest);
+                const response: EmbeddingsResponse = await client.embeddings(embeddingsRequest);
                 embeddings.push(response.embedding);
                 totalPromptTokens += (response as any).prompt_eval_count || 0;
             }
@@ -160,25 +181,41 @@ export class OllamaEmbedding extends BaseEmbeddings {
             const endTime = new Date();
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             
-            // On error, throw to let caller handle
+            // On error, throw to let caller handle; an aborted request is reported as cancelled
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             throw error;
+        } finally {
+            scoped?.Dispose();
         }
+    }
+
+    /**
+     * The client for one request. The `ollama` client takes no per-request abort signal for a
+     * non-streaming call, and its instance-level `abort()` would end every request on the shared
+     * client, so a request with a cancellation token gets a short-lived client whose `fetch` carries
+     * the token: aborting it tears down the HTTP request. Without a token the shared client is used.
+     */
+    private clientForRequest(signal: AbortSignal | undefined): CancellableOllamaClient {
+        if (!signal) {
+            return { Client: this.Client, Dispose: () => undefined };
+        }
+        return CreateCancellableOllamaClient(this._baseUrl, signal);
     }
 
     /**
      * Ensure a model is available locally, pulling it if necessary
      */
-    private async ensureModelAvailable(modelName: string): Promise<void> {
+    private async ensureModelAvailable(modelName: string, client: Ollama = this.Client): Promise<void> {
         try {
             // Check if model is available
-            const models = await this.Client.list();
+            const models = await client.list();
             const isAvailable = models.models.some((m: any) => 
                 m.name === modelName || m.name.startsWith(modelName + ':')
             );
 
             if (!isAvailable) {
                 console.log(`Model ${modelName} not found locally. Attempting to pull...`);
-                await this.Client.pull({ model: modelName, stream: false });
+                await client.pull({ model: modelName, stream: false });
                 console.log(`Model ${modelName} pulled successfully.`);
             }
         } catch (error) {

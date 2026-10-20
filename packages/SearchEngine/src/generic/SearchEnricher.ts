@@ -16,7 +16,7 @@ import {
     EntityRecordNameInput,
     CompositeKey
 } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { SearchResultItem } from './search.types';
 
@@ -93,7 +93,9 @@ export class SearchEnricher {
      * When a content item originated from an Entity content source (or links to an
      * Entity Record Document):
      * 1. If its underlying entity record can be resolved, it is promoted to that target
-     *    entity (EntityName, RecordID), carrying its score and snippet forward.
+     *    entity (EntityName, RecordID), carrying its score and snippet forward, and marked with
+     *    `PromotedFromContentItemID` so the engine verifies the origin row and its lane bound
+     *    rather than trusting the provider that found the content item.
      * 2. If it cannot be resolved, it is excluded to avoid surfacing detached internal items.
      *
      * Genuine external content items (ContentSourceType !== 'Entity') remain as 'MJ: Content Items'.
@@ -158,7 +160,7 @@ export class SearchEnricher {
         // Step 2: For items needing DB lookup, check MJ: Content Items and MJ: Entity Record Documents
         if (itemsNeedingDbLookup.length > 0) {
             try {
-                const uniqueIDs = Array.from(new Set(itemsNeedingDbLookup)).map(id => `'${id.replace(/'/g, "''")}'`);
+                const uniqueIDs = Array.from(new Set(itemsNeedingDbLookup)).map(id => `'${EscapeSQLString(id)}'`);
                 const rv = new RunView();
                 const contentItemsRes = await rv.RunView<{ ID: string; ContentSourceID: string; EntityRecordDocumentID: string | null }>({
                     EntityName: 'MJ: Content Items',
@@ -179,7 +181,7 @@ export class SearchEnricher {
                     }
 
                     if (erdLookups.length > 0) {
-                        const erdIDList = Array.from(new Set(erdLookups.map(l => `'${l.erdID.replace(/'/g, "''")}'`)));
+                        const erdIDList = Array.from(new Set(erdLookups.map(l => `'${EscapeSQLString(l.erdID)}'`)));
                         const erdRes = await rv.RunView<{ ID: string; Entity: string; RecordID: string }>({
                             EntityName: 'MJ: Entity Record Documents',
                             Fields: ['ID', 'Entity', 'RecordID'],
@@ -236,7 +238,10 @@ export class SearchEnricher {
                     RecordID: promotion.RecordID,
                     ResultType: 'entity-record',
                     Title: `${entityDisplayName} Record`,
-                    EntityIcon: entityInfo?.Icon ?? undefined
+                    EntityIcon: entityInfo?.Icon ?? undefined,
+                    // The provider that found the content item never read this origin row, so the engine must
+                    // not extend that provider's trust to it (see SearchResultItem.PromotedFromContentItemID).
+                    PromotedFromContentItemID: r.RecordID
                 });
             } else if (unpromotableItemIDs.has(recIdLower)) {
                 continue;

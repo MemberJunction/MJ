@@ -545,44 +545,18 @@ describe('MistralLLM', () => {
             expect(mockStream.mock.calls[0][1]).toEqual({ signal: controller.signal });
         });
 
-        it('returns a cancelled ChatResult without calling the SDK when pre-aborted', async () => {
-            const controller = new AbortController();
-            controller.abort();
-
-            const result = await callNonStreaming(controller.signal);
-
-            expect(mockComplete).not.toHaveBeenCalled();
-            expect(result.success).toBe(false);
-            expect(result.statusText).toBe('Cancelled');
-        });
-
-        it('maps the SDK RequestAbortedError to a cancelled ChatResult', async () => {
+        it('rethrows an SDK abort for BaseLLM to report as a cancellation', async () => {
             const abortError = new Error('Request aborted by client');
             abortError.name = 'RequestAbortedError';
             mockComplete.mockRejectedValue(abortError);
 
-            const result = await callNonStreaming(new AbortController().signal);
-
-            expect(result.success).toBe(false);
-            expect(result.statusText).toBe('Cancelled');
-            expect(result.exception).toBe(abortError);
+            await expect(callNonStreaming(new AbortController().signal)).rejects.toBe(abortError);
         });
 
         it('still throws non-cancellation errors (unchanged behavior)', async () => {
             mockComplete.mockRejectedValue(new Error('boom'));
 
             await expect(callNonStreaming(undefined)).rejects.toThrow('boom');
-        });
-
-        it('finalizeStreamingResponse reports cancellation when the stream was aborted mid-flight', () => {
-            const controller = new AbortController();
-            (instance as ReturnType<typeof Object.create>)['_streamingCancellationToken'] = controller.signal;
-            controller.abort();
-
-            const result: ChatResultLike = (instance as ReturnType<typeof Object.create>)['finalizeStreamingResponse']('partial', null, null);
-
-            expect(result.success).toBe(false);
-            expect(result.statusText).toBe('Cancelled');
         });
     });
 });

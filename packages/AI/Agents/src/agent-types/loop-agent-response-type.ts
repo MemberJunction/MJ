@@ -1,10 +1,10 @@
-import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest, TaskGraphSpec } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest, TaskGraphSpec, AgentDecisionRequest, AgentFinishIf, ArtifactDirective } from "@memberjunction/ai-core-plus";
 import { ArtifactToolCall } from "../ArtifactToolManager";
 import { ConversationToolCall } from "../ConversationToolManager";
 import { MemoryWriteRequest } from "../MemoryWriteManager";
 
 // Re-export universal types for backward compatibility
-export type { ForEachOperation, WhileOperation, ArtifactToolCall, ConversationToolCall, MemoryWriteRequest };
+export type { ForEachOperation, WhileOperation, ArtifactToolCall, ConversationToolCall, MemoryWriteRequest, ArtifactDirective };
 
 /**
  * Every value `nextStep.type` may take, in the canonical casing the dispatcher switches on.
@@ -74,6 +74,13 @@ export interface LoopAgentResponse<P = any> {
      * Payload changes. Omit if no changes needed
      */
     payloadChangeRequest?: AgentPayloadChangeRequest<P>;
+
+    /**
+     * Optional directive controlling how the agent's payload artifact is created or versioned
+     * when the run completes (`behavior: 'create-new' | 'version-source' | 'suppress'`,
+     * optional `targetArtifactId`, `name`, and `description`).
+     */
+    artifactDirective?: ArtifactDirective;
     
     /**
      * Private working memory — not shared with parent or sub-agents.
@@ -82,6 +89,12 @@ export interface LoopAgentResponse<P = any> {
      * @since 2.46.0
      */
     scratchpad?: AgentScratchpad;
+
+    /**
+     * Decision requests answered inline on the same turn (zero turn cost)
+     * by a fast decision model. Results arrive on the next turn.
+     */
+    decisions?: AgentDecisionRequest[];
 
     /**
      * Artifact tool invocations — explore input artifacts without
@@ -252,6 +265,13 @@ export interface LoopAgentResponse<P = any> {
          * results into the conversation or starts you a fresh turn with the outcome.
          */
         tasks?: TaskGraphSpec;
+
+        /**
+         * Conditional completion gate for Actions or Sub-Agent steps.
+         * Evaluated inline after the step executes: if all questions pass the probability
+         * threshold, the agent completes immediately with `message` without an extra turn.
+         */
+        finishIf?: AgentFinishIf;
     };
 }
 

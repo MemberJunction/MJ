@@ -333,9 +333,9 @@ select.mj-agent-props-input {
 .mj-agent-props-delete-btn {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #fecaca;
+  border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, transparent);
   border-radius: var(--mj-radius-md);
-  background: var(--mj-status-error-subtle);
+  background: var(--mj-status-error-bg);
   color: var(--mj-status-error);
   font-size: var(--mj-text-sm);
   font-weight: 500;
@@ -347,6 +347,289 @@ select.mj-agent-props-input {
   transition: all 0.15s ease;
 }
 
-.mj-agent-props-delete-btn:hover { background: var(--mj-status-error-subtle); border-color: #fca5a5; }
+.mj-agent-props-delete-btn:hover {
+  background: color-mix(in srgb, var(--mj-status-error) 16%, var(--mj-bg-surface));
+  border-color: var(--mj-status-error-border);
+}
 
 .mj-agent-props-delete-btn i { font-size: var(--mj-text-xs); }
+
+/* ── Decision Step & Route Helper ──────────────────────────── */
+
+.mj-agent-props-required {
+  color: var(--mj-status-error);
+}
+
+.mj-agent-props-input--error {
+  border-color: var(--mj-status-error);
+}
+
+.mj-agent-props-error {
+  display: block;
+  font-size: 11px;
+  color: var(--mj-status-error);
+  margin-top: 3px;
+}
+
+.mj-agent-props-textarea {
+  resize: vertical;
+  min-height: 52px;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.mj-agent-props-questions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  margin-bottom: 8px;
+}
+
+.mj-agent-props-questions-label {
+  font-size: var(--mj-text-xs);
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mj-agent-props-questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.mj-agent-props-question-card {
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface);
+  overflow: hidden;
+}
+
+.mj-agent-props-question-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.mj-agent-props-question-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--mj-text-xs);
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  flex: 1;
+  min-width: 0;
+}
+
+.mj-agent-props-question-card-title code {
+  font-size: 11px;
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface);
+  padding: 1px 4px;
+  border-radius: var(--mj-radius-sm);
+  border: 1px solid var(--mj-border-subtle);
+}
+
+.mj-agent-props-question-kind-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: var(--mj-radius-sm);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-subtle);
+}
+
+.mj-agent-props-question-card-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mj-agent-props-options-section,
+.mj-agent-props-levels-section {
+  border-top: 1px solid var(--mj-border-subtle);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mj-agent-props-options-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+}
+
+.mj-agent-props-option-row,
+.mj-agent-props-level-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mj-agent-props-level-badge {
+  font-size: 11px;
+  font-weight: 700;
+  width: 18px;
+  text-align: center;
+  color: var(--mj-text-secondary);
+  flex-shrink: 0;
+}
+
+.mj-agent-props-input--sm {
+  height: 28px;
+  font-size: var(--mj-text-xs);
+  padding: 4px 8px;
+}
+
+.mj-agent-props-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--mj-radius-md);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+}
+
+.mj-agent-props-btn:hover:not(:disabled) {
+  background: var(--mj-bg-surface-sunken);
+}
+
+.mj-agent-props-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mj-agent-props-btn--sm {
+  height: 26px;
+  padding: 2px 8px;
+  font-size: var(--mj-text-xs);
+}
+
+.mj-agent-props-btn--xs {
+  height: 22px;
+  padding: 1px 6px;
+  font-size: 11px;
+}
+
+.mj-agent-props-btn--secondary {
+  background: var(--mj-bg-surface);
+  border-color: var(--mj-border-default);
+  font-size: var(--mj-text-xs);
+  padding: 6px 12px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.mj-agent-props-btn--secondary:hover:not(:disabled) {
+  background: var(--mj-bg-surface-sunken);
+}
+
+.mj-agent-props-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-sm);
+  background: transparent;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.mj-agent-props-icon-btn:hover:not(:disabled) {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-primary);
+}
+
+.mj-agent-props-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mj-agent-props-icon-btn--danger {
+  color: var(--mj-status-error);
+}
+
+.mj-agent-props-icon-btn--danger:hover:not(:disabled) {
+  background: var(--mj-status-error-bg);
+}
+
+.mj-agent-props-coverage-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--mj-text-secondary);
+  padding: 4px 6px;
+  background: var(--mj-bg-surface-sunken);
+  border-radius: var(--mj-radius-sm);
+  margin-top: 2px;
+}
+
+.mj-agent-props-coverage-hint i {
+  font-size: 11px;
+  color: var(--mj-text-disabled);
+}
+
+.mj-agent-props-run-problems {
+  display: flex;
+  margin: 10px 0 0;
+}
+
+.mj-agent-props-content > .mj-agent-props-run-problems {
+  margin: 10px 14px;
+}
+
+.mj-agent-props-run-problems-list {
+  margin: 4px 0 0;
+  padding-inline-start: 1.1rem;
+  word-break: break-word;
+}
+
+.mj-agent-props-route-helper {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-sunken);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mj-agent-props-route-helper-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mj-agent-props-route-helper-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--mj-text-xs);
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

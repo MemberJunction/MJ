@@ -14,6 +14,7 @@
     "@memberjunction/core",
     "@memberjunction/core-entities",
     "@memberjunction/entity-communications-base",
+    "@memberjunction/feature-pipelines",
     "@memberjunction/graphql-dataprovider",
     "@memberjunction/ng-artifacts",
     "@memberjunction/ng-auth-services",
@@ -28,6 +29,7 @@
     "@memberjunction/ng-explorer-settings",
     "@memberjunction/ng-file-storage",
     "@memberjunction/ng-shared",
+    "@memberjunction/rubrics-base",
     "@memberjunction/tag-engine-base",
     "rxjs"
   ]

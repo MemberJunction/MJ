@@ -2,19 +2,23 @@
  * @fileoverview Agent Run Analysis -- Cost Attribution Focus.
  *
  * Displays agent run stats, cost attribution horizontal stacked bars per agent,
- * and a sortable recent agent runs table. All data loaded via RunView from
- * "MJ: AI Agent Runs" and "MJ: AI Prompt Runs" entities.
+ * and a sortable recent agent runs table. Agent runs are read via RunView from
+ * "MJ: AI Agent Runs"; per-agent prompt volume and cost attribution come from the
+ * AI usage aggregates (AIUsageHourly / AIUsageDaily), which already resolve each
+ * prompt run to its agent and exclude parallel parents — no raw prompt-run pull.
  */
 
 import {
-    Component, Input, Output, EventEmitter,
+    Component, ChangeDetectionStrategy, Input, Output, EventEmitter,
     OnInit, OnDestroy, ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UUIDsEqual } from '@memberjunction/global';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
+import { AIInstrumentationService } from '../../../services/ai-instrumentation.service';
+import { ComputeTotalCost, ComputeCoveragePercent, ResolveCostCurrency } from '../../../services/ai-usage-analytics.compute';
+import { AIUsageDailyRow, AIUsageHourlyRow } from '../../../services/ai-usage-analytics.types';
 
 // ── Interfaces ──
 
@@ -34,30 +38,28 @@ interface AgentRunRecord {
     AgentID: string;
     Agent: string | null;
     ErrorMessage: string | null;
+    TotalPromptIterations: number | null;
 }
 
-interface PromptRunRecord {
-    ID: string;
-    AgentRunID: string | null;
-    Cost: number | null;
-    TotalCost: number | null;
-    Model: string | null;
-    Vendor: string | null;
-}
+/** An hourly or daily usage aggregate row — the fields this view reads are common to both. */
+type UsageRow = AIUsageHourlyRow | AIUsageDailyRow;
 
 interface AgentRunStats {
     TotalRuns: number;
-    TotalCost: number;
+    TotalCost: number | null;
+    CoverageSubtitle?: string;
     PromptRuns: number;
-    AvgCostPerRun: number;
+    AvgCostPerRun: number | null;
     SuccessRate: number;
     AvgDurationSeconds: number;
+    /** How many recent runs the duration average is taken over (the list is capped). */
+    DurationSampleSize: number;
 }
 
 interface CostAttributionRow {
     AgentName: string;
     AgentID: string;
-    TotalCost: number;
+    TotalCost: number | null;
     Segments: CostSegment[];
 }
 
@@ -84,22 +86,26 @@ type SortDirection = 'asc' | 'desc';
 
 const AGENT_RUN_FIELDS = [
     'ID', 'StartedAt', 'CompletedAt', 'Status', 'Success',
-    'TotalCost', 'TotalTokensUsed', 'AgentID', 'Agent', 'ErrorMessage'
+    'TotalCost', 'TotalTokensUsed', 'AgentID', 'Agent', 'ErrorMessage', 'TotalPromptIterations'
 ];
 
-const PROMPT_RUN_FIELDS = [
-    'ID', 'AgentRunID', 'Cost', 'TotalCost', 'Model', 'Vendor'
-];
-
+// Vendors are categories, so they take the categorical --mj-viz palette; brand/status tokens were
+// all blues and greys, and two vendors read as one. The palette is a hue ramp whose neighbours are
+// close (1-3 run blue to violet), so the steps are taken spread out.
 const COST_COLORS = [
-    'var(--mj-brand-primary)',
-    'var(--mj-brand-accent, var(--mj-brand-primary-hover))',
-    'var(--mj-status-info)',
-    'var(--mj-text-disabled)'
+    'var(--mj-viz-1)',
+    'var(--mj-viz-6)',
+    'var(--mj-viz-3)',
+    'var(--mj-viz-9)',
+    'var(--mj-viz-5)',
+    'var(--mj-viz-8)',
+    'var(--mj-viz-4)',
+    'var(--mj-viz-10)'
 ];
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-agent-runs',
     template: `
 
@@ -117,6 +123,9 @@ const COST_COLORS = [
                 <div class="stat-card accent-brand">
                     <div class="stat-label">Total Cost</div>
                     <div class="stat-value">{{ FormatCurrency(Stats.TotalCost) }}</div>
+                    @if (Stats.CoverageSubtitle) {
+                        <div class="stat-subtitle">{{ Stats.CoverageSubtitle }}</div>
+                    }
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">Prompt Runs</div>
@@ -133,6 +142,9 @@ const COST_COLORS = [
                 <div class="stat-card">
                     <div class="stat-label">Avg Duration</div>
                     <div class="stat-value">{{ Stats.AvgDurationSeconds | number:'1.1-1' }}s</div>
+                    @if (Stats.DurationSampleSize > 0 && Stats.DurationSampleSize < Stats.TotalRuns) {
+                        <div class="stat-subtitle">last {{ Stats.DurationSampleSize }} completed runs</div>
+                    }
                 </div>
             </div>
 
@@ -185,7 +197,7 @@ const COST_COLORS = [
                         <i class="fa-solid fa-list panel-header__icon"></i>
                         Recent Agent Runs
                     </div>
-                    <span class="panel-header__subtitle">{{ RecentRuns.length }} runs</span>
+                    <span class="panel-header__subtitle">showing latest 100</span>
                 </div>
                 <div class="table-wrapper">
                     <table class="data-table">
@@ -206,7 +218,7 @@ const COST_COLORS = [
                         </thead>
                         <tbody>
                             @if (RecentRuns.length === 0) {
-                                <tr><td [attr.colspan]="TableColumns.length" class="empty-row">No runs found</td></tr>
+                                <tr><td [attr.colspan]="TableColumns.length" class="empty-row"><mj-empty-state Variant="no-results" Size="compact" Title="No runs found" Message="No agent runs match this period and these filters."></mj-empty-state></td></tr>
                             }
                             @for (run of RecentRuns; track run.ID) {
                                 <tr>
@@ -275,6 +287,12 @@ const COST_COLORS = [
             font-weight: 700;
             color: var(--mj-text-primary);
             letter-spacing: -0.02em;
+        }
+
+        .stat-subtitle {
+            font-size: 11px;
+            color: var(--mj-text-muted);
+            margin-top: 2px;
         }
 
         /* ── Panel ── */
@@ -576,7 +594,8 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
         PromptRuns: 0,
         AvgCostPerRun: 0,
         SuccessRate: 0,
-        AvgDurationSeconds: 0
+        AvgDurationSeconds: 0,
+        DurationSampleSize: 0
     };
 
     public CostAttributionRows: CostAttributionRow[] = [];
@@ -588,7 +607,7 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
     public TableColumns: { field: SortField; label: string }[] = [
         { field: 'Agent', label: 'Agent' },
         { field: 'Status', label: 'Status' },
-        { field: 'StepCount', label: 'Steps' },
+        { field: 'StepCount', label: 'Prompts' },
         { field: 'Duration', label: 'Duration' },
         { field: 'Cost', label: 'Cost' },
         { field: 'Time', label: 'Time' }
@@ -609,8 +628,17 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
         return this.GlobalFilters;
     }
 
+    private instrumentation = inject(AIInstrumentationService);
+
     private agentRuns: AgentRunRecord[] = [];
-    private promptRuns: PromptRunRecord[] = [];
+
+    private totalRunCount = 0;
+
+    private successRunCount = 0;
+    /** Usage aggregate rows for agent-driven prompt runs in the period (AgentID set, agent filter applied). */
+    private agentUsageRows: UsageRow[] = [];
+    private vendorNames = new Map<string, string>();
+    private agentNames = new Map<string, string>();
 
     ngOnInit(): void {
         this.initialized = true;
@@ -647,7 +675,8 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
         this.cdr.detectChanges();
     }
 
-    public FormatCurrency(value: number, decimals = 2): string {
+    public FormatCurrency(value: number | null | undefined, decimals = 2): string {
+        if (value === null || value === undefined) return '—';
         if (value === 0) return '$0.00';
         if (value < 0.01 && decimals < 4) decimals = 4;
         return '$' + value.toFixed(decimals);
@@ -664,29 +693,53 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
             const dateFilter = this.buildDateFilter('StartedAt');
             const agentFilter = this.buildAgentFilter();
             const statusFilter = this.buildStatusFilter();
-            const extraFilter = [dateFilter, agentFilter, statusFilter].filter(Boolean).join(' AND ');
+            const extraFilter = [dateFilter, agentFilter, statusFilter, 'ParentRunID IS NULL'].filter(Boolean).join(' AND ');
 
-            const promptDateFilter = this.buildDateFilter('RunAt');
+            this.instrumentation.Provider = this.ProviderToUse;
+            const rangeMs = this.timeRangeToMs(this.TimeRange);
+            const now = new Date();
+            const start = new Date(now.getTime() - rangeMs);
 
-            const [agentResult, promptResult] = await rv.RunViews([
-                {
-                    EntityName: 'MJ: AI Agent Runs',
-                    ExtraFilter: extraFilter,
-                    Fields: AGENT_RUN_FIELDS,
-                    OrderBy: 'StartedAt DESC',
-                    ResultType: 'simple'
-                },
-                {
-                    EntityName: 'MJ: AI Prompt Runs',
-                    ExtraFilter: promptDateFilter,
-                    Fields: PROMPT_RUN_FIELDS,
-                    OrderBy: 'RunAt DESC',
-                    ResultType: 'simple'
-                }
+            // The run list is capped at the 100 most recent; the totals are exact counts, so the KPI
+            // cards never report the cap as if it were the period's run count.
+            const [agentResults, usageRows, lookups] = await Promise.all([
+                rv.RunViews([
+                    {
+                        EntityName: 'MJ: AI Agent Runs',
+                        ExtraFilter: extraFilter,
+                        Fields: AGENT_RUN_FIELDS,
+                        OrderBy: 'StartedAt DESC',
+                        MaxRows: 100,
+                        ResultType: 'simple'
+                    },
+                    { EntityName: 'MJ: AI Agent Runs', ExtraFilter: extraFilter, ResultType: 'count_only' },
+                    { EntityName: 'MJ: AI Agent Runs', ExtraFilter: `${extraFilter} AND Success = 1`, ResultType: 'count_only' }
+                ]),
+                // Hourly buckets for sub-day ranges so "last hour" is not a whole day's usage.
+                rangeMs <= 86400000
+                    ? this.instrumentation.GetUsageHourly(start, now)
+                    : this.instrumentation.GetUsageDaily(start, now),
+                this.instrumentation.GetModelAndVendorLookups()
             ]);
 
-            this.agentRuns = (agentResult?.Results ?? []) as AgentRunRecord[];
-            this.promptRuns = (promptResult?.Results ?? []) as PromptRunRecord[];
+            const [agentResult, totalResult, successResult] = agentResults;
+            if (!agentResult.Success) {
+                console.error(`Agent Run Analysis: agent runs failed to load. ${agentResult.ErrorMessage}`);
+            }
+            if (!totalResult.Success || !successResult.Success) {
+                console.error(`Agent Run Analysis: run counts failed to load. ${totalResult.ErrorMessage ?? successResult.ErrorMessage}`);
+            }
+            this.agentRuns = agentResult.Success ? (agentResult.Results as AgentRunRecord[]) ?? [] : [];
+            this.totalRunCount = totalResult.Success ? totalResult.TotalRowCount : this.agentRuns.length;
+            this.successRunCount = successResult.Success
+                ? successResult.TotalRowCount
+                : this.agentRuns.filter(r => r.Success === true).length;
+            const agentIds = new Set(this.Filters.Agents.map(a => a.toLowerCase()));
+            const usage: UsageRow[] = usageRows;
+            this.agentUsageRows = usage.filter(r =>
+                r.AgentID !== null && (agentIds.size === 0 || agentIds.has(r.AgentID.toLowerCase())));
+            this.vendorNames = lookups.vendors;
+            this.agentNames = lookups.agents;
 
             this.computeStats();
             this.computeCostAttribution();
@@ -704,10 +757,12 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
 
     private computeStats(): void {
         const runs = this.agentRuns;
-        const total = runs.length;
-        const totalCost = runs.reduce((s, r) => s + (r.TotalCost ?? 0), 0);
+        const total = this.totalRunCount;
+        // Own cost at prompt-run grain, from the usage aggregates — never a sum of
+        // AIAgentRun.TotalCost, which is subtree-inclusive (and defaults to 0, so it can
+        // never express "unpriced").
+        const totalCost = ComputeTotalCost(this.agentUsageRows);
         const completed = runs.filter(r => r.Status === 'Completed');
-        const successCount = runs.filter(r => r.Success === true).length;
 
         const durations = completed
             .filter(r => r.CompletedAt)
@@ -722,105 +777,104 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
             ? durations.reduce((s, d) => s + d, 0) / durations.length
             : 0;
 
-        const linkedPromptRuns = this.promptRuns.filter(
-            p => p.AgentRunID != null && this.agentRunIdSet.has(p.AgentRunID)
-        );
+        const agentPromptRuns = this.agentUsageRows.reduce((sum, r) => sum + (r.Runs ?? 0), 0);
+
+        const covPriced = this.agentUsageRows.reduce((sum, r) => sum + (r.PricedRuns ?? 0), 0);
+        const covUnpriced = this.agentUsageRows.reduce((sum, r) => sum + (r.UnpricedRuns ?? 0), 0);
+        const covPct = ComputeCoveragePercent({ PricedRuns: covPriced, UnpricedRuns: covUnpriced });
+        const covSubtitle = covPriced + covUnpriced > 0 ? `covers ${Math.round(covPct)}% of prompt runs` : undefined;
 
         this.Stats = {
             TotalRuns: total,
             TotalCost: totalCost,
-            PromptRuns: linkedPromptRuns.length,
-            AvgCostPerRun: total > 0 ? totalCost / total : 0,
-            SuccessRate: total > 0 ? (successCount / total) * 100 : 0,
-            AvgDurationSeconds: avgDuration
+            CoverageSubtitle: covSubtitle,
+            PromptRuns: agentPromptRuns,
+            AvgCostPerRun: total > 0 && totalCost !== null ? totalCost / total : null,
+            SuccessRate: total > 0 ? (this.successRunCount / total) * 100 : 0,
+            AvgDurationSeconds: avgDuration,
+            DurationSampleSize: durations.length
         };
     }
 
-    private get agentRunIdSet(): Set<string> {
-        return new Set(this.agentRuns.map(r => r.ID));
-    }
-
+    /**
+     * Cost per agent, split by vendor, from the usage aggregates. Each (agent, vendor) figure is a
+     * ComputeTotalCost over its rows in the period's primary currency, so an unpriced slice stays
+     * unpriced instead of reading as a zero-width free segment, and currencies are never summed.
+     */
     private computeCostAttribution(): void {
-        const agentCostMap = new Map<string, { name: string; vendorCosts: Map<string, number>; totalCost: number }>();
-
-        // Group prompt runs by agent run, then by vendor
-        for (const pr of this.promptRuns) {
-            if (!pr.AgentRunID) continue;
-            const agentRun = this.agentRuns.find(ar => UUIDsEqual(ar.ID, pr.AgentRunID));
-            if (!agentRun) continue;
-
-            const agentKey = agentRun.AgentID;
-            if (!agentCostMap.has(agentKey)) {
-                agentCostMap.set(agentKey, {
-                    name: agentRun.Agent ?? 'Unknown',
-                    vendorCosts: new Map<string, number>(),
-                    totalCost: 0
-                });
+        const currency = ResolveCostCurrency(this.agentUsageRows).Currency;
+        const byAgent = new Map<string, Map<string, UsageRow[]>>();
+        for (const r of this.agentUsageRows) {
+            const agentKey = r.AgentID!.toLowerCase();
+            const vendorName = (r.VendorID ? this.vendorNames.get(r.VendorID.toLowerCase()) : undefined) ?? 'Other';
+            let vendors = byAgent.get(agentKey);
+            if (!vendors) {
+                vendors = new Map<string, UsageRow[]>();
+                byAgent.set(agentKey, vendors);
             }
-
-            const entry = agentCostMap.get(agentKey)!;
-            const vendor = pr.Vendor ?? 'Other';
-            const cost = pr.Cost ?? pr.TotalCost ?? 0;
-            entry.vendorCosts.set(vendor, (entry.vendorCosts.get(vendor) ?? 0) + cost);
-            entry.totalCost += cost;
+            const list = vendors.get(vendorName);
+            if (list) {
+                list.push(r);
+            } else {
+                vendors.set(vendorName, [r]);
+            }
         }
 
-        // Collect all vendors for consistent coloring
+        const agentCosts: Array<{ agentId: string; name: string; vendorCosts: Map<string, number>; totalCost: number | null }> = [];
         const allVendors = new Set<string>();
-        for (const entry of agentCostMap.values()) {
-            for (const v of entry.vendorCosts.keys()) {
-                allVendors.add(v);
+        for (const [agentId, vendors] of byAgent) {
+            const vendorCosts = new Map<string, number>();
+            for (const [vendor, rows] of vendors) {
+                const cost = ComputeTotalCost(rows, currency);
+                if (cost !== null && cost > 0) {
+                    vendorCosts.set(vendor, cost);
+                    allVendors.add(vendor);
+                }
             }
+            const allRows = Array.from(vendors.values()).flat();
+            agentCosts.push({
+                agentId,
+                name: this.agentNames.get(agentId) ?? 'Unknown',
+                vendorCosts,
+                totalCost: ComputeTotalCost(allRows, currency)
+            });
         }
-        const vendorList = Array.from(allVendors);
 
-        // Build legend
+        const vendorList = Array.from(allVendors);
         this.LegendItems = vendorList.map((v, i) => ({
             Label: v,
             Color: COST_COLORS[i % COST_COLORS.length]
         }));
 
-        // Sort by total cost descending
-        const sorted = Array.from(agentCostMap.entries())
-            .sort((a, b) => b[1].totalCost - a[1].totalCost);
+        // Sort by total cost descending; fully unpriced agents last.
+        agentCosts.sort((a, b) => (b.totalCost ?? -1) - (a.totalCost ?? -1));
 
-        this.CostAttributionRows = sorted.map(([agentId, entry]) => {
-            const segments: CostSegment[] = vendorList.map((vendor, i) => {
+        this.CostAttributionRows = agentCosts.map(entry => ({
+            AgentName: entry.name,
+            AgentID: entry.agentId,
+            TotalCost: entry.totalCost,
+            Segments: vendorList.map((vendor, i) => {
                 const val = entry.vendorCosts.get(vendor) ?? 0;
                 return {
                     Label: vendor,
                     Value: val,
-                    Percent: entry.totalCost > 0 ? (val / entry.totalCost) * 100 : 0,
+                    Percent: entry.totalCost !== null && entry.totalCost > 0 ? (val / entry.totalCost) * 100 : 0,
                     Color: COST_COLORS[i % COST_COLORS.length]
                 };
-            }).filter(s => s.Value > 0);
-
-            return {
-                AgentName: entry.name,
-                AgentID: agentId,
-                TotalCost: entry.totalCost,
-                Segments: segments
-            };
-        });
+            }).filter(seg => seg.Value > 0)
+        }));
     }
 
     private buildRecentRuns(): void {
-        // Count prompt runs per agent run
-        const promptCountMap = new Map<string, number>();
-        for (const pr of this.promptRuns) {
-            if (pr.AgentRunID) {
-                promptCountMap.set(pr.AgentRunID, (promptCountMap.get(pr.AgentRunID) ?? 0) + 1);
-            }
-        }
-
         this.RecentRuns = this.agentRuns.slice(0, 100).map(r => ({
             ID: r.ID,
             Agent: r.Agent ?? 'Unknown',
             Status: r.Status,
             StatusClass: this.getStatusClass(r.Status),
-            StepCount: promptCountMap.get(r.ID) ?? 0,
+            // The run's own prompt-iteration count, recorded by the agent framework.
+            StepCount: r.TotalPromptIterations ?? 0,
             Duration: this.formatDuration(r.StartedAt, r.CompletedAt),
-            Cost: this.FormatCurrency(r.TotalCost ?? 0),
+            Cost: this.FormatCurrency(r.TotalCost),
             Time: this.formatRelativeTime(r.StartedAt)
         }));
     }

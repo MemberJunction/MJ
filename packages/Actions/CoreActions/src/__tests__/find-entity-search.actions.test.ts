@@ -65,9 +65,22 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
+/** The agent fields the moved filter reads. */
+type FilterableAgent = { ID: string; Status: string; InvocationMode: string; ParentID: string | null };
+
+// The agent actions filter through AIAgentPermissionHelper, whose real FilterRunnableAgents and
+// IsDirectlyDiscoverable are tested in ai-engine-base (AIAgentPermissionHelper.test.ts). These fakes
+// keep that contract on top of accessibleAgentsMock: runnable per the mock and Active unless
+// includeInactive; discoverable unless a Sub-Agent or a child agent.
 vi.mock('@memberjunction/ai-engine-base', () => ({
     AIAgentPermissionHelper: {
         GetAccessibleAgents: (...args: unknown[]) => accessibleAgentsMock(...args),
+        FilterRunnableAgents: async (agents: FilterableAgent[], user: { ID: string }, includeInactive = false): Promise<FilterableAgent[]> => {
+            const accessible: Array<{ ID: string }> = await accessibleAgentsMock(user, 'run');
+            const runnableIds = new Set(accessible.map(a => a.ID.toLowerCase()));
+            return agents.filter(a => runnableIds.has(a.ID.toLowerCase()) && (includeInactive || a.Status === 'Active'));
+        },
+        IsDirectlyDiscoverable: (agent: FilterableAgent): boolean => agent.InvocationMode !== 'Sub-Agent' && !agent.ParentID,
     },
 }));
 

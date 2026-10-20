@@ -5,18 +5,10 @@
 } @else {
     <!-- Sub-tab rail + refresh -->
     <div class="subtab-bar">
-        <div class="subtabs">
-            @for (tab of SubTabs; track tab.Key) {
-                <button class="subtab" [class.subtab--active]="ActiveSubTab === tab.Key"
-                        (click)="SelectSubTab(tab.Key)">
-                    <i [class]="tab.Icon"></i>
-                    <span>{{ tab.Label }}</span>
-                </button>
-            }
-        </div>
-        <button mjButton variant="secondary" size="sm" title="Refresh" (click)="LoadData()">
-            <i class="fa-solid fa-rotate"></i>
-        </button>
+        <mj-tab-nav class="subtab-nav" [Tabs]="SubTabConfigs" [ActiveKey]="ActiveSubTab"
+                    (TabChange)="OnSubTabChange($event)"></mj-tab-nav>
+        <mj-refresh-button [Loading]="IsLoading" [ShowLabel]="false" Title="Refresh realtime surface"
+                           (Clicked)="LoadData()"></mj-refresh-button>
     </div>
 
     @switch (ActiveSubTab) {
@@ -41,7 +33,9 @@
                         </thead>
                         <tbody>
                             @if (LiveBridges.length === 0) {
-                                <tr><td colspan="9" class="empty-row">No live bridged sessions right now</td></tr>
+                                <tr><td colspan="9" class="empty-cell">
+                                    <mj-empty-state Size="compact" Variant="empty" Title="No live bridged sessions right now" />
+                                </td></tr>
                             }
                             @for (b of LiveBridges; track b.Record.ID) {
                                 <tr class="data-row" (click)="OpenSession(b.Record.AgentSessionID)">
@@ -67,7 +61,7 @@
                                     <td class="cell-host mono" [title]="b.Record.HostInstanceID || ''">{{ b.Record.HostInstanceID || '—' }}</td>
                                     <td class="cell-action">
                                         <!-- TODO(v1+): replace with the observer-console deep link (§1 read-only monitor). -->
-                                        <button mjButton variant="icon" size="sm" title="Open session record"
+                                        <button mjButton variant="icon" size="sm" AriaLabel="Open session record" title="Open session record"
                                                 (click)="OpenSession(b.Record.AgentSessionID); $event.stopPropagation()">
                                             <i class="fa-solid fa-arrow-up-right-from-square"></i>
                                         </button>
@@ -100,7 +94,9 @@
                         </thead>
                         <tbody>
                             @if (Providers.length === 0) {
-                                <tr><td colspan="6" class="empty-row">No bridge providers registered</td></tr>
+                                <tr><td colspan="6" class="empty-cell">
+                                    <mj-empty-state Size="compact" Variant="empty" Title="No bridge providers registered" />
+                                </td></tr>
                             }
                             @for (p of Providers; track p.Record.ID) {
                                 <tr class="data-row" (click)="OpenProvider(p.Record.ID)">
@@ -163,7 +159,9 @@
                         </thead>
                         <tbody>
                             @if (Identities.length === 0) {
-                                <tr><td colspan="6" class="empty-row">No agent identities provisioned</td></tr>
+                                <tr><td colspan="6" class="empty-cell">
+                                    <mj-empty-state Size="compact" Variant="empty" Title="No agent identities provisioned" />
+                                </td></tr>
                             }
                             @for (id of Identities; track id.ID) {
                                 <tr class="data-row">
@@ -206,7 +204,9 @@
                         </thead>
                         <tbody>
                             @if (Channels.length === 0) {
-                                <tr><td colspan="4" class="empty-row">No channels registered</td></tr>
+                                <tr><td colspan="4" class="empty-cell">
+                                    <mj-empty-state Size="compact" Variant="empty" Title="No channels registered" />
+                                </td></tr>
                             }
                             @for (ch of Channels; track ch.ID) {
                                 <tr class="data-row">
@@ -264,7 +264,9 @@
                         </thead>
                         <tbody>
                             @if (CoAgents.length === 0) {
-                                <tr><td colspan="6" class="empty-row">No co-agent pairings configured</td></tr>
+                                <tr><td colspan="6" class="empty-cell">
+                                    <mj-empty-state Size="compact" Variant="empty" Title="No co-agent pairings configured" />
+                                </td></tr>
                             }
                             @for (c of CoAgents; track c.ID) {
                                 <tr class="data-row">
@@ -313,7 +315,9 @@
                         </thead>
                         <tbody>
                             @if (HistoryBridges.length === 0) {
-                                <tr><td colspan="8" class="empty-row">No closed bridges in this window</td></tr>
+                                <tr><td colspan="8" class="empty-cell">
+                                    <mj-empty-state Size="compact" Variant="empty" Title="No closed bridges in this window" />
+                                </td></tr>
                             }
                             @for (b of HistoryBridges; track b.Record.ID) {
                                 <tr class="data-row" (click)="OpenSession(b.Record.AgentSessionID)">
@@ -330,7 +334,7 @@
                                     <td class="cell-time">{{ FormatBridgeStart(b.StartedAt) }}</td>
                                     <td class="cell-action">
                                         <!-- TODO(v1+): transcript / recording review launch (§7 review reuse). -->
-                                        <button mjButton variant="icon" size="sm" title="Open session record"
+                                        <button mjButton variant="icon" size="sm" AriaLabel="Open session record" title="Open session record"
                                                 (click)="OpenSession(b.Record.AgentSessionID); $event.stopPropagation()">
                                             <i class="fa-solid fa-arrow-up-right-from-square"></i>
                                         </button>

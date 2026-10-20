@@ -644,6 +644,54 @@ describe('AgentClientSession — Session Lifecycle', () => {
             // Tool ran — cancel was too late.
             expect(handler).toHaveBeenCalledTimes(1);
         });
+
+        /** Runs one tool request whose handler returns `result`, and gives the variables of the response mutation. */
+        async function respondWith(result: { Success: boolean; Data?: Record<string, unknown>; Media?: Array<{ MimeType: string; Base64: string; Width?: number; Height?: number }> }) {
+            session.RegisterTool({
+                Name: 'GetDashboardScreenshot',
+                Description: 'Captures the dashboard',
+                ParameterSchema: {},
+                Handler: vi.fn().mockResolvedValue(result),
+            });
+            session.StartSession('sess-media');
+            mockProvider._toolRequestSubject.next({
+                ClientToolRequest: {
+                    RequestID: 'req-media-001',
+                    ToolName: 'GetDashboardScreenshot',
+                    Params: {},
+                    TimeoutMs: 5000,
+                    AgentRunID: 'run-media-1',
+                }
+            });
+            await vi.waitFor(() => expect(mockProvider.ExecuteGQL).toHaveBeenCalledTimes(1));
+            const [mutation, variables] = mockProvider.ExecuteGQL.mock.calls[0] as [string, Record<string, unknown>];
+            return { mutation, variables };
+        }
+
+        it('sends the handler result\'s Media as the media JSON of the response', async () => {
+            const media = [{ MimeType: 'image/jpeg', Base64: 'QUJD', Width: 1280, Height: 720 }];
+
+            const { mutation, variables } = await respondWith({ Success: true, Data: { width: 1280 }, Media: media });
+
+            expect(mutation).toContain('media: $media');
+            expect(variables).toEqual({
+                requestID: 'req-media-001',
+                success: true,
+                result: JSON.stringify({ width: 1280 }),
+                errorMessage: undefined,
+                media: JSON.stringify(media),
+            });
+        });
+
+        it.each([
+            ['no Media', { Success: true, Data: { width: 1280 } }],
+            ['an empty Media list', { Success: true, Data: { width: 1280 }, Media: [] }],
+        ])('sends no media when the handler result has %s', async (_case, result) => {
+            const { variables } = await respondWith(result);
+
+            expect(variables['media']).toBeUndefined();
+            expect(variables['result']).toBe(JSON.stringify({ width: 1280 }));
+        });
     });
 
     describe('RunAgent', () => {
@@ -732,6 +780,24 @@ describe('AgentClientSession — Session Lifecycle', () => {
             expect(callArgs.conversationDetailId).toBe('detail-abc');
             expect(callArgs.agentId).toBe('agent-456');
             expect(callArgs.maxHistoryMessages).toBe(10);
+        });
+
+        it('should forward a history floor, and leave it unset when none is given', async () => {
+            const floor = new Date('2026-09-01T12:00:00.000Z');
+            await session.RunAgentFromConversationDetail({
+                ConversationDetailId: 'detail-floor',
+                AgentId: 'agent-floor',
+                AgentHistoryFrom: floor,
+            });
+            await session.RunAgentFromConversationDetail({
+                ConversationDetailId: 'detail-no-floor',
+                AgentId: 'agent-floor',
+                AgentHistoryFrom: null,
+            });
+
+            const [withFloor, withoutFloor] = mockRunAIAgentFromConversationDetail.mock.calls.slice(-2).map(c => c[0]);
+            expect(withFloor.agentHistoryFrom).toBe(floor);
+            expect(withoutFloor.agentHistoryFrom).toBeUndefined();
         });
 
         it('should return error when provider is unavailable', async () => {

@@ -68,10 +68,18 @@ export interface RecordResult {
     AIAgentRunID?: string;
     /** Deep-trace link to an AI Prompt Run, when the work was an Infer-and-Write-Back. */
     AIPromptRunID?: string;
+    /**
+     * The `MJ: AI Prompts` row behind `AIPromptRunID` and `PromptVersionHash`, when it is not the Record
+     * Process's own prompt (a Decision pipeline's escalated record is answered by its LLM pipeline's prompt).
+     * Absent means the process's own prompt.
+     */
+    PromptID?: string;
     /** Content hash of the prompt version / instructions used to compute this record's result. */
     PromptVersionHash?: string;
     /** Reference to the FeatureValueCache entry when served from or saved to the cache. */
     FeatureValueCacheID?: string;
+    /** Per-output confidence scores keyed by output Name, when produced by the driver. */
+    Confidence?: Record<string, number>;
 }
 
 /** Running tallies for a process run. */

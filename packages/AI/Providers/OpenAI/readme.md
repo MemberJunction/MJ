@@ -51,7 +51,7 @@ graph TD
 - **Thinking/Reasoning**: Extraction of thinking content from reasoning model responses
 - **Embeddings**: Text embedding generation via text-embedding-3-small/large and other models
 - **Image Generation**: DALL-E integration via `BaseImageGenerator`
-- **Audio**: Text-to-speech and speech-to-text via `BaseAudio`
+- **Audio**: Text-to-speech and speech-to-text (Whisper) via `OpenAIAudioGenerator`, which implements both `BaseTextToSpeech` and `BaseSpeechToText`
 - **Multimodal Input**: Support for text, image, audio, and file content in messages
 - **Response Formats**: JSON mode, text, and structured output controls
 - **Effort Level**: Maps MJ effort levels to OpenAI reasoning effort parameters
@@ -160,6 +160,7 @@ export class MyProviderLLM extends OpenAILLM {
 
 - `OpenAILLM` -- Registered via `@RegisterClass(BaseLLM, OpenAILLM)`
 - `OpenAIEmbedding` -- Registered via `@RegisterClass(BaseEmbeddings, OpenAIEmbedding)`
+- `OpenAIAudioGenerator` -- Registered under the key `'OpenAIAudioGenerator'` against `BaseTextToSpeech`, `BaseSpeechToText` and the deprecated `BaseAudioGenerator`, so the TTS and speech-to-text runners and older callers all resolve it
 
 ## Dependencies
 

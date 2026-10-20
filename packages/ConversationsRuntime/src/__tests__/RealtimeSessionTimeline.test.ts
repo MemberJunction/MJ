@@ -5,10 +5,15 @@ import {
   ConversationTimelineItem,
   FindRealtimeSessionMeta,
   MapRealtimeSessionMeta,
+  REALTIME_SESSION_META_FIELDS,
   RealtimeSessionTimelineGroup,
   RealtimeSessionTimelineMeta,
   RealtimeTimelineSourceDetail,
+  SessionCardDurationLabel,
   SessionCardIsSameDayRange,
+  SessionCardMessageCountLabel,
+  SessionCardSpeakerLabel,
+  SessionCardStartedAt,
   SessionCardStatusChip,
   SessionCardTitle
 } from '../timeline/RealtimeSessionTimeline';
@@ -187,12 +192,12 @@ describe('session card presentation', () => {
 
   describe('SessionCardTitle', () => {
     it('names the agent when the lookup supplied one', () => {
-      expect(SessionCardTitle(meta({ AgentName: 'Sage' }))).toBe('Realtime session · Sage');
+      expect(SessionCardTitle(meta({ AgentName: 'Sage' }))).toBe('Voice call with Sage');
     });
 
     it('falls back to the generic label for a blank or absent name', () => {
-      expect(SessionCardTitle(meta({ AgentName: '   ' }))).toBe('Realtime session');
-      expect(SessionCardTitle(null)).toBe('Realtime session');
+      expect(SessionCardTitle(meta({ AgentName: '   ' }))).toBe('Voice call');
+      expect(SessionCardTitle(null)).toBe('Voice call');
     });
   });
 
@@ -211,7 +216,7 @@ describe('session card presentation', () => {
       const chip = (r: string | null) => SessionCardStatusChip(meta({ Status: 'Closed', CloseReason: r }));
       expect(chip('Explicit')).toEqual({ Label: 'Ended', Tone: 'neutral' });
       expect(chip('Janitor')).toEqual({ Label: 'Timed out', Tone: 'neutral' });
-      expect(chip('Shutdown')).toEqual({ Label: 'Server shutdown', Tone: 'neutral' });
+      expect(chip('Shutdown')).toEqual({ Label: 'Interrupted', Tone: 'neutral' });
       expect(chip('Error')).toEqual({ Label: 'Error', Tone: 'error' });
     });
 
@@ -246,6 +251,125 @@ describe('session card presentation', () => {
   });
 });
 
+/**
+ * What the card says about the call itself: when it started, how long it ran, how much was said
+ * and who said the quoted line. Every surface asks these helpers, so one test pins them all.
+ */
+describe('session card call details', () => {
+  const VIEWER = 'AAAA1111-0000-0000-0000-000000000001';
+  const OTHER = 'BBBB2222-0000-0000-0000-000000000002';
+
+  const group = (o: Partial<RealtimeSessionTimelineGroup> = {}): RealtimeSessionTimelineGroup => ({
+    SessionID: 'S-1',
+    StartedAt: new Date(2026, 8, 14, 9, 0, 30),
+    EndedAt: new Date(2026, 8, 14, 9, 40, 0),
+    TurnCount: 2,
+    DetailCount: 2,
+    LastTurnRole: 'Assistant',
+    LastTurnPreview: 'I pulled that up for you.',
+    ...o,
+  });
+
+  const meta = (o: Partial<RealtimeSessionTimelineMeta> = {}): RealtimeSessionTimelineMeta => ({
+    SessionID: 'S-1',
+    AgentName: 'Sage',
+    Status: 'Closed',
+    CloseReason: 'Explicit',
+    ClosedAt: new Date(2026, 8, 14, 9, 45, 0),
+    StartedAt: new Date(2026, 8, 14, 9, 0, 0),
+    UserID: VIEWER,
+    UserName: 'Amith Nagarajan',
+    ...o,
+  });
+
+  describe('SessionCardStartedAt', () => {
+    it('prefers the session row, which starts before the first caption', () => {
+      expect(SessionCardStartedAt(group(), meta())).toEqual(new Date(2026, 8, 14, 9, 0, 0));
+    });
+
+    it('falls back to the first caption, then to nothing', () => {
+      expect(SessionCardStartedAt(group(), meta({ StartedAt: null }))).toEqual(new Date(2026, 8, 14, 9, 0, 30));
+      expect(SessionCardStartedAt(group(), null)).toEqual(new Date(2026, 8, 14, 9, 0, 30));
+      expect(SessionCardStartedAt(null, null)).toBeNull();
+    });
+  });
+
+  describe('SessionCardDurationLabel', () => {
+    const span = (seconds: number) =>
+      SessionCardDurationLabel(group(), meta({ StartedAt: new Date(0), ClosedAt: new Date(seconds * 1000) }));
+
+    it('measures the session row, not the transcript, when the row has a start and a close', () => {
+      // Row: 9:00 → 9:45. Transcript: 9:00:30 → 9:40.
+      expect(SessionCardDurationLabel(group(), meta())).toBe('45 min');
+    });
+
+    it('reads like a person would say it', () => {
+      expect(span(20)).toBe('Under a minute');
+      expect(span(60)).toBe('1 min');
+      expect(span(12 * 60 + 29)).toBe('12 min');
+      expect(span(60 * 60)).toBe('1 hr');
+      expect(span(65 * 60)).toBe('1 hr 5 min');
+    });
+
+    it('falls back to the transcript span without meta, and to its end for a legacy row with no close', () => {
+      const transcript = group({ StartedAt: new Date(2026, 8, 14, 9, 2, 0) }); // 9:02 → 9:40
+      expect(SessionCardDurationLabel(transcript, null)).toBe('38 min');
+      expect(SessionCardDurationLabel(transcript, meta({ ClosedAt: null }))).toBe('40 min'); // row 9:00 → caption 9:40
+    });
+
+    it('says nothing while the call is still going', () => {
+      expect(SessionCardDurationLabel(group(), meta({ Status: 'Active', ClosedAt: null }))).toBeNull();
+      expect(SessionCardDurationLabel(group(), meta({ Status: 'Idle', ClosedAt: null }))).toBeNull();
+    });
+
+    it('says nothing when there is no span to measure', () => {
+      // One caption is a point in time, not a call length.
+      const oneCaption = group({ StartedAt: new Date(2026, 8, 14, 9, 0), EndedAt: new Date(2026, 8, 14, 9, 0) });
+      expect(SessionCardDurationLabel(oneCaption, null)).toBeNull();
+      expect(SessionCardDurationLabel(group({ StartedAt: null, EndedAt: null }), null)).toBeNull();
+      expect(SessionCardDurationLabel(group(), meta({ ClosedAt: new Date('not-a-date') }))).toBeNull();
+    });
+  });
+
+  describe('SessionCardMessageCountLabel', () => {
+    it('counts in plain words', () => {
+      expect(SessionCardMessageCountLabel(group({ TurnCount: 0 }))).toBe('No messages');
+      expect(SessionCardMessageCountLabel(group({ TurnCount: 1 }))).toBe('1 message');
+      expect(SessionCardMessageCountLabel(group({ TurnCount: 12 }))).toBe('12 messages');
+      expect(SessionCardMessageCountLabel(null)).toBe('No messages');
+    });
+  });
+
+  describe('SessionCardSpeakerLabel', () => {
+    it('names the agent, or says "Agent" when the lookup did not', () => {
+      expect(SessionCardSpeakerLabel('Assistant', meta(), VIEWER)).toBe('Sage');
+      expect(SessionCardSpeakerLabel('Assistant', meta({ AgentName: '  ' }), VIEWER)).toBe('Agent');
+      expect(SessionCardSpeakerLabel('Assistant', null, VIEWER)).toBe('Agent');
+    });
+
+    it('says "You" on the viewer\'s own call, whatever the id casing', () => {
+      expect(SessionCardSpeakerLabel('User', meta(), VIEWER.toLowerCase())).toBe('You');
+    });
+
+    it('names the caller on someone else\'s call, and never calls it yours', () => {
+      expect(SessionCardSpeakerLabel('User', meta({ UserID: OTHER, UserName: 'Dana Lee' }), VIEWER)).toBe('Dana Lee');
+      expect(SessionCardSpeakerLabel('User', meta({ UserID: OTHER, UserName: null }), VIEWER, 'You')).toBe('Caller');
+    });
+
+    it('says "Caller", never "You", when the viewer is known but the session row is not', () => {
+      expect(SessionCardSpeakerLabel('User', meta({ UserID: null }), VIEWER)).toBe('Caller');
+      expect(SessionCardSpeakerLabel('User', meta({ UserID: '  ', UserName: 'Dana Lee' }), VIEWER, 'You')).toBe('Caller');
+      expect(SessionCardSpeakerLabel('User', null, VIEWER)).toBe('Caller');
+    });
+
+    it('uses the fallback only when the caller passes no viewer id', () => {
+      expect(SessionCardSpeakerLabel('User', meta(), null, 'Amith')).toBe('Amith');
+      expect(SessionCardSpeakerLabel('User', meta({ UserID: OTHER }), undefined, 'Amith')).toBe('Amith');
+      expect(SessionCardSpeakerLabel('User', null, '  ')).toBe('You');
+    });
+  });
+});
+
 describe('session meta lookup helpers', () => {
   it('collects distinct stamped ids in first-seen order, keeping the original casing', () => {
     // The casing matters: the id goes straight into an `ID IN (…)` filter.
@@ -268,9 +392,30 @@ describe('session meta lookup helpers', () => {
     expect(found?.ClosedAt).toBeInstanceOf(Date);
   });
 
-  it('nulls an unparseable ClosedAt rather than rendering "Invalid Date"', () => {
-    const map = MapRealtimeSessionMeta([{ ID: 'S-1', ClosedAt: 'not-a-date' }]);
+  it('maps who the call belonged to and when it started', () => {
+    const map = MapRealtimeSessionMeta([
+      { ID: 'S-1', UserID: 'U-1', User: 'Dana Lee', __mj_CreatedAt: '2026-09-14T09:00:00Z' },
+      { ID: 'S-2' },
+    ]);
+    expect(FindRealtimeSessionMeta(map, 'S-1')).toMatchObject({
+      UserID: 'U-1',
+      UserName: 'Dana Lee',
+      StartedAt: new Date('2026-09-14T09:00:00Z'),
+    });
+    // A row without them maps to nulls, which every card helper reads as "unknown".
+    expect(FindRealtimeSessionMeta(map, 'S-2')).toMatchObject({ UserID: null, UserName: null, StartedAt: null });
+  });
+
+  it('asks for every column the mapping reads, so no host gets a card with pieces missing', () => {
+    expect(REALTIME_SESSION_META_FIELDS).toEqual(
+      expect.arrayContaining(['ID', 'Agent', 'Status', 'CloseReason', 'ClosedAt', 'UserID', 'User', '__mj_CreatedAt'])
+    );
+  });
+
+  it('nulls an unparseable ClosedAt or start rather than rendering "Invalid Date"', () => {
+    const map = MapRealtimeSessionMeta([{ ID: 'S-1', ClosedAt: 'not-a-date', __mj_CreatedAt: 'nope' }]);
     expect(FindRealtimeSessionMeta(map, 'S-1')?.ClosedAt).toBeNull();
+    expect(FindRealtimeSessionMeta(map, 'S-1')?.StartedAt).toBeNull();
   });
 
   it('returns null for an unknown session and for an absent map', () => {

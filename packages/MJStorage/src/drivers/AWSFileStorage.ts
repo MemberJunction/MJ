@@ -187,6 +187,18 @@ export class AWSFileStorage extends FileStorageBase {
   }
 
   /**
+   * Releases the underlying `S3Client`'s keep-alive sockets and credential-provider chain.
+   * Called by {@link FileStorageEngine} before this driver instance is dropped from its cache
+   * (e.g. on `RefreshDriverCache()`), mirroring the destroy-before-reassign already done inside
+   * {@link initialize} when the same instance is re-configured in place.
+   */
+  public override Dispose(): void {
+    if (this._client) {
+      this._client.destroy();
+    }
+  }
+
+  /**
    * Checks if AWS S3 provider is properly configured.
    * Returns true if access credentials and bucket name are present.
    * Logs detailed error messages if configuration is incomplete.
@@ -268,6 +280,18 @@ export class AWSFileStorage extends FileStorageBase {
       return key.substring(this._keyPrefix.length);
     }
     return key;
+  }
+
+  /**
+   * The canonical key for the storage access checks: the S3 key this driver would address for `objectKey`, relative to
+   * its key prefix. Mirrors {@link _normalizeKey} — which keeps a key that already starts with the prefix and prepends
+   * the prefix to anything else — then removes the prefix, so `hr/secret.pdf`, `/hr/secret.pdf` and (with prefix
+   * `tenant1/`) `tenant1/hr/secret.pdf` all canonicalize to `hr/secret.pdf`, while `/tenant1/hr/secret.pdf` (which this
+   * driver serves from `tenant1/tenant1/hr/secret.pdf`) canonicalizes to `tenant1/hr/secret.pdf`.
+   */
+  public override NormalizeObjectKey(objectKey: string): string {
+    const trimmed = (objectKey ?? '').trim();
+    return super.NormalizeObjectKey(this._removePrefix(this._normalizeKey(trimmed)));
   }
 
   /**

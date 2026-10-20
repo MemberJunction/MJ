@@ -240,5 +240,108 @@
         }
       ]
     }
+  },
+  "example_4_flow_agent_with_decision_step": {
+    "description": "Creating a Flow agent with a Decision step that triages incoming items and branches deterministically to appropriate action steps.",
+    "action": "return_to_parent",
+    "output": {
+      "ID": "",
+      "Name": "Customer Issue Triager",
+      "Description": "Flow agent that uses a fast typed Decision step to triage customer issues and routes execution accordingly",
+      "TypeID": "4F6A189B-C068-4736-9F23-3FF540B40FDD",
+      "Status": "Active",
+      "StartingPayloadValidationMode": "Fail",
+      "IconClass": "fa-solid fa-code-branch",
+      "InvocationMode": "Any",
+      "Actions": [
+        {
+          "ActionID": "billing-action-guid",
+          "AgentActionID": "",
+          "Status": "Active"
+        },
+        {
+          "ActionID": "tech-action-guid",
+          "AgentActionID": "",
+          "Status": "Active"
+        },
+        {
+          "ActionID": "general-action-guid",
+          "AgentActionID": "",
+          "Status": "Active"
+        }
+      ],
+      "SubAgents": [],
+      "Prompts": [],
+      "Steps": [
+        {
+          "ID": "",
+          "Name": "Triage Issue",
+          "Description": "Fast typed classification of customer issue category",
+          "StepType": "Decision",
+          "StartingStep": true,
+          "Configuration": {
+            "key": "triage",
+            "questions": {
+              "category": {
+                "instructions": "What category best describes this issue?",
+                "kind": "Choice",
+                "options": [
+                  { "value": "billing", "description": "Billing inquiry or invoice problem" },
+                  { "value": "technical", "description": "Technical defect or system error" },
+                  { "value": "general", "description": "General question or account update" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "ID": "",
+          "Name": "Handle Billing",
+          "Description": "Processes billing inquiries",
+          "StepType": "Action",
+          "StartingStep": false,
+          "ActionID": "billing-action-guid"
+        },
+        {
+          "ID": "",
+          "Name": "Handle Technical",
+          "Description": "Processes technical issues",
+          "StepType": "Action",
+          "StartingStep": false,
+          "ActionID": "tech-action-guid"
+        },
+        {
+          "ID": "",
+          "Name": "Handle General",
+          "Description": "Processes general requests",
+          "StepType": "Action",
+          "StartingStep": false,
+          "ActionID": "general-action-guid"
+        }
+      ],
+      "Paths": [
+        {
+          "ID": "",
+          "OriginStepID": "Triage Issue",
+          "DestinationStepID": "Handle Billing",
+          "Condition": "decisions.triage.category.value === 'billing'",
+          "Priority": 10
+        },
+        {
+          "ID": "",
+          "OriginStepID": "Triage Issue",
+          "DestinationStepID": "Handle Technical",
+          "Condition": "decisions.triage.category.value === 'technical'",
+          "Priority": 10
+        },
+        {
+          "ID": "",
+          "OriginStepID": "Triage Issue",
+          "DestinationStepID": "Handle General",
+          "Condition": "decisions.triage.category.value === 'general'",
+          "Priority": 10
+        }
+      ]
+    }
   }
 }

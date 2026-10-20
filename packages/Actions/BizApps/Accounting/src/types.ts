@@ -55,7 +55,11 @@ export interface Dimension {
 }
 
 export interface ResolvedAccountingIntegration {
-    /** Integration.Name — the ERP vendor string used in plugin keys. */
+    /**
+     * The connection's Integration name as stored (`vwCompanyIntegrations.Integration`). It may be
+     * an alias such as `business-central`; map it with `CanonicalERPIntegrationName` before
+     * building a plugin key.
+     */
     Name: string;
     CompanyIntegrationID: string;
     CompanyID: string;

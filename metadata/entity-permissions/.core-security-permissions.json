@@ -1,0 +1,20 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Row Level Security Filters",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Row Level Security Filters&RoleID=@lookup:MJ: Roles.Name=Developer&Type=Allow"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:48.214Z",
+      "checksum": "f180e336774c1fa4769217880cc63dd4e654da98302cad7d53d2da85670bff4e"
+    }
+  }
+]

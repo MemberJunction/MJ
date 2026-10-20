@@ -55,6 +55,34 @@ describe('BeforeAgentTurnEventArgs', () => {
         const e = new BeforeAgentTurnEventArgs('conv-1', 'hello');
         expect(e.ApplicationId).toBeNull();
     });
+
+    it('carries the resolved agent, its route and the message it answers', () => {
+        const e = new BeforeAgentTurnEventArgs('conv-1', 'hello', null, {
+            AgentId: 'agent-1',
+            AgentName: 'Research',
+            Route: 'Mention',
+            UserMessageId: 'detail-1',
+        });
+        expect(e.AgentId).toBe('agent-1');
+        expect(e.AgentName).toBe('Research');
+        expect(e.Route).toBe('Mention');
+        expect(e.UserMessageId).toBe('detail-1');
+    });
+
+    it('turn details are null when constructed without them (older call sites)', () => {
+        const e = new BeforeAgentTurnEventArgs('conv-1', 'hello', 'app-1');
+        expect(e.AgentId).toBeNull();
+        expect(e.AgentName).toBeNull();
+        expect(e.Route).toBeNull();
+        expect(e.UserMessageId).toBeNull();
+    });
+
+    it('RedirectAgentId starts null and a listener can set it', () => {
+        const e = new BeforeAgentTurnEventArgs('conv-1', 'hello');
+        expect(e.RedirectAgentId).toBeNull();
+        e.RedirectAgentId = 'agent-2';
+        expect(e.RedirectAgentId).toBe('agent-2');
+    });
 });
 
 describe('AfterAgentTurnEventArgs', () => {

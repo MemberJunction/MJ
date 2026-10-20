@@ -14,6 +14,7 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime } from 'rxjs/operators';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
+import { FormatDateOnly, IsDateOnlySQLType } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { QueryGridColumnConfig } from '../query-data-grid/models/query-grid-types';
 
@@ -229,6 +230,12 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
             const date = new Date(value as string);
             if (isNaN(date.getTime())) return String(value);
 
+            // A SQL `date` is a calendar day delivered as UTC midnight. Format it in UTC, and give it
+            // no "hours ago": measured from UTC midnight, a day has no time of its own to be ago from.
+            if (IsDateOnlySQLType(baseType)) {
+                return FormatDateOnly(date, { year: 'numeric', month: 'short', day: 'numeric' }, 'en-US');
+            }
+
             const now = new Date();
             const diffMs = now.getTime() - date.getTime();
             const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -243,12 +250,10 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
                 relativeTime = `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
             }
 
-            const formatted = baseType === 'date'
-                ? date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-                : date.toLocaleString('en-US', {
-                    year: 'numeric', month: 'short', day: 'numeric',
-                    hour: 'numeric', minute: '2-digit'
-                });
+            const formatted = date.toLocaleString('en-US', {
+                year: 'numeric', month: 'short', day: 'numeric',
+                hour: 'numeric', minute: '2-digit'
+            });
 
             return relativeTime ? `${formatted} • ${relativeTime}` : formatted;
         }

@@ -256,7 +256,7 @@ ${this.trimStatementTerminator(selectSQL)}`;
             additionalFieldList = callerSuppliedKeys.map(k => `[${k.Name}]`).join(',\n                ');
             additionalValueList = callerSuppliedKeys.map(k => `@${k.CodeName}`).join(',\n                ');
             const callerSuppliedKeyPredicates = callerSuppliedKeys.map(k => ` AND [${k.Name}] = @${k.CodeName}`).join('');
-            selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${identityKey.Name}] = SCOPE_IDENTITY()${callerSuppliedKeyPredicates}`;
+            selectInsertedRecord = this.buildCRUDReturnSelect(entity, `[${identityKey.Name}] = SCOPE_IDENTITY()${callerSuppliedKeyPredicates}`);
         } else if (firstKey.Type.toLowerCase().trim() === 'uniqueidentifier' && entity.PrimaryKeys.length === 1) {
             const hasDefaultValue = firstKey.DefaultValue && firstKey.DefaultValue.trim().length > 0;
 
@@ -302,7 +302,7 @@ ${this.trimStatementTerminator(selectSQL)}`;
                 additionalFieldList = '';
                 additionalValueList = '';
                 outputCode = '';
-                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${firstKey.Name}] = (SELECT [${firstKey.Name}] FROM @InsertedRow)`;
+                selectInsertedRecord = this.buildCRUDReturnSelect(entity, `[${firstKey.Name}] = (SELECT [${firstKey.Name}] FROM @InsertedRow)`);
             } else {
                 // UUID without DB default: generate via ISNULL(@PK, NEWID()).
                 // PK is added via additionalFieldList; no leading comma — the
@@ -311,7 +311,7 @@ ${this.trimStatementTerminator(selectSQL)}`;
                 additionalFieldList = '[' + firstKey.Name + ']';
                 additionalValueList = '@ActualID';
                 outputCode = '';
-                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${firstKey.Name}] = @ActualID`;
+                selectInsertedRecord = this.buildCRUDReturnSelect(entity, `[${firstKey.Name}] = @ActualID`);
             }
         } else {
             // Composite PKs or single non-UUID PKs (e.g. string `Code` keys): the caller MUST
@@ -329,13 +329,8 @@ ${this.trimStatementTerminator(selectSQL)}`;
             }
             additionalFieldList = pkColumns.join(',\n                ');
             additionalValueList = pkValues.join(',\n                ');
-            selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE `;
-            let isFirst = true;
-            for (const k of entity.PrimaryKeys) {
-                if (!isFirst) selectInsertedRecord += ' AND ';
-                selectInsertedRecord += `[${k.Name}] = @${k.CodeName}`;
-                isFirst = false;
-            }
+            const pkWhereClause = entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ');
+            selectInsertedRecord = this.buildCRUDReturnSelect(entity, pkWhereClause);
         }
 
         // Build the INSERT column and value lists. For the non-hasDefaultValue branches,
@@ -396,11 +391,31 @@ GO${permissions}
     }
 
     /**
+     * Builds the post-insert / post-update `SELECT` statement returned by a CRUD stored procedure.
+     *
+     * - When `entity.SaveReturnMode` is `'full'` (default), queries `SELECT *` (or `SELECT TOP 0 *`)
+     *   from `[schema].[BaseView]` so calculated and joined columns are returned.
+     * - When `entity.SaveReturnMode` is `'datestamps_only'`, queries only the primary key column(s)
+     *   plus `__mj_CreatedAt` and `__mj_UpdatedAt` (via {@link EntityInfo.DatestampReturnFields})
+     *   directly from `[schema].[BaseTable]`, avoiding the post-write `BaseView` joins and large
+     *   payload columns while still returning DB-generated key and timestamp values.
+     */
+    protected buildCRUDReturnSelect(entity: EntityInfo, whereClause: string, topZero: boolean = false): string {
+        const topPrefix = topZero ? 'TOP 0 ' : '';
+        if (entity.SaveReturnMode === 'datestamps_only') {
+            const cols = entity.DatestampReturnFields.map(f => `[${f.Name}]`).join(', ');
+            return `SELECT ${topPrefix}${cols} FROM [${entity.SchemaName}].[${entity.BaseTable}] WHERE ${whereClause}`;
+        }
+        return `SELECT ${topPrefix}* FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE ${whereClause}`;
+    }
+
+    /**
      * Generates the `spUpdate` stored procedure for a SQL Server entity. Performs a standard
      * `UPDATE ... SET ... WHERE PK = @PK` and uses `@@ROWCOUNT` to detect whether the row
      * was found: if no rows were updated (e.g., stale PK or concurrent delete), returns an
      * empty result set with the base view's column structure (`SELECT TOP 0 ... WHERE 1=0`);
-     * otherwise returns the updated record from the base view. Also generates the
+     * otherwise returns the updated record from the base view (or PK + datestamp columns from
+     * the base table when `entity.SaveReturnMode === 'datestamps_only'`). Also generates the
      * `__mj_UpdatedAt` timestamp trigger if the entity has that column.
      */
     generateCRUDUpdate(entity: EntityInfo): string {
@@ -410,13 +425,18 @@ GO${permissions}
         const hasUpdatedAtField = entity.Fields.find(f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase()) !== undefined;
         const updatedAtTrigger = hasUpdatedAtField ? this.generateTimestampTrigger(entity) : '';
         const updateFields = this.generateUpdateFieldString(entity.Fields);
-        const selectUpdatedRecord = `SELECT
+        const pkWhereClause = entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ');
+        const isDatestampsOnly = entity.SaveReturnMode === 'datestamps_only';
+        const selectUpdatedRecord = isDatestampsOnly
+            ? this.buildCRUDReturnSelect(entity, pkWhereClause)
+            : `SELECT
                                         *
                                     FROM
                                         [${entity.SchemaName}].[${entity.BaseView}]
                                     WHERE
-                                        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+                                        ${pkWhereClause}
                                     `;
+        const selectEmptyRecord = this.buildCRUDReturnSelect(entity, '1=0', true);
 
         // PK-only entities (e.g. junction tables with only PK + __mj timestamp columns)
         // have no updatable fields. Generate a no-op SP that just returns the existing row
@@ -429,12 +449,12 @@ GO${permissions}
     SET
         ${updateFields}
     WHERE
-        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+        ${pkWhereClause}
 
     -- Check if the update was successful
     IF @@ROWCOUNT = 0
         -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE 1=0
+        ${selectEmptyRecord}
     ELSE
         -- Return the updated record so the caller can see the updated values and any calculated fields
         ${selectUpdatedRecord}`

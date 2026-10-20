@@ -1828,7 +1828,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Handle drag over event
    */
   OnDragOver(event: DragEvent): void {
-    if (!this.EnableAttachments) return;
+    if (this.Disabled || !this.EnableAttachments) return;
 
     event.preventDefault();
     event.stopPropagation();
@@ -1858,7 +1858,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Handle drop event
    */
   OnDrop(event: DragEvent): void {
-    if (!this.EnableAttachments) return;
+    if (this.Disabled || !this.EnableAttachments) return;
 
     event.preventDefault();
     event.stopPropagation();

@@ -11,6 +11,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { AIPromptManagementService } from './ai-prompt-management.service';
 import { MJAIModelEntityExtended, MJAIPromptCategoryEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { DedupePendingRecordsByEntity } from './pending-records';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompts')
 @Component({
@@ -941,21 +942,9 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
      * Adds template content changes to pending records
      */
     private addTemplateContentsToPendingRecords() {
-        // This method would typically get pending changes from the template editor
-        // The template editor should expose its pending changes through events or direct calls
-        // For now, we'll rely on the template editor to manage its own pending records
-        // and communicate them through the MJ event system
-        
-        // If the template editor has a method to get pending changes, we would call it here
-        if (this.TemplateEditor && typeof (this.TemplateEditor as any).getPendingChanges === 'function') {
-            try {
-                const pendingChanges = (this.TemplateEditor as any).getPendingChanges();
-                if (pendingChanges && pendingChanges.length > 0) {
-                    this.PendingRecords.push(...pendingChanges);
-                }
-            } catch (error) {
-                console.warn('Template editor does not support getPendingChanges method:', error);
-            }
+        // The embedded editor's new/dirty Template Contents ride along in this form's save transaction.
+        if (this.TemplateEditor) {
+            this.PendingRecords.push(...this.TemplateEditor.GetPendingChanges());
         }
     }
 
@@ -1553,9 +1542,15 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
         
         // Add prompt model changes to pending records
         this.addPromptModelsToPendingRecords();
-        
+
         // Handle template content changes through the template editor
         this.addTemplateContentsToPendingRecords();
+
+        // The preserved copy above and the fresh collection can name the same entity (a retry after a
+        // failed save); keep one pending record per entity object.
+        const unique = DedupePendingRecordsByEntity(this.PendingRecords);
+        this.PendingRecords.length = 0;
+        this.PendingRecords.push(...unique);
     }
 
     /**
