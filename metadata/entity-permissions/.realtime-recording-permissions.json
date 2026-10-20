@@ -11,6 +11,10 @@
       "CanCreate": false,
       "CanUpdate": false,
       "CanDelete": false
+    },
+    "sync": {
+      "lastModified": "2026-10-18T00:27:39.567Z",
+      "checksum": "5d5a75ff1826cde843d30029d92b97a98de3463d95ab65ce7f048abbdab9ed01"
     }
   }
 ]

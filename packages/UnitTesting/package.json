@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@memberjunction/ai": "6.2.0-edge.4",
+    "@memberjunction/core": "6.2.0-edge.4",
     "@memberjunction/global": "6.2.0-edge.4"
   },
   "repository": {

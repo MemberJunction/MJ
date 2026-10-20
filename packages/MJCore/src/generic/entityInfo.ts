@@ -2397,10 +2397,15 @@ export class EntityFieldInfo extends BaseInfo {
         return FormatValue(this.Type, value, decimals, currency, maxLength, trailingChars);
     }
 
+    private static readonly CHILD_INIT_KEYS: ReadonlySet<string> = new Set([
+        'EntityFieldValues', '_EntityFieldValues',
+        'EntityFieldPermissions', '_FieldPermissions', 'FieldPermissions',
+    ]);
+
     constructor(initData: any = null) {
         super();
         if (initData) {
-            this.copyInitData(initData);
+            this.copyInitData(initData, EntityFieldInfo.CHILD_INIT_KEYS);
 
             // Lazy-construct EntityFieldValueInfo objects — stash raw data now,
             // construct typed instances on first access via the getter.
@@ -3690,8 +3695,9 @@ export class EntityInfo extends BaseInfo {
     public FieldByName(name: string): EntityFieldInfo | undefined {
         if (name == null) return undefined;
         if (this._fieldByNameMap === null) {
+            const fields = this._fields ?? this.Fields ?? [];
             const map = new Map<string, EntityFieldInfo>();
-            for (const f of this._fields) {
+            for (const f of fields) {
                 if (f.Name != null) map.set(f.Name.trim().toLowerCase(), f);
             }
             this._fieldByNameMap = map;
@@ -3700,24 +3706,26 @@ export class EntityInfo extends BaseInfo {
     }
 
     private ensureFieldIndexEntry(): { byName: Map<string, number>; byCodeName: Map<string, number> } {
+        const fields = this._fields ?? this.Fields ?? [];
         let entry = _entityFieldIndexCache.get(this);
-        if (!entry || entry.fieldsRef !== this._fields || entry.fieldsLen !== this._fields.length) {
+        if (!entry || entry.fieldsRef !== fields || entry.fieldsLen !== fields.length) {
             const byName = new Map<string, number>();
             const byCodeName = new Map<string, number>();
-            for (let i = 0; i < this._fields.length; i++) {
-                const f = this._fields[i];
+            for (let i = 0; i < fields.length; i++) {
+                const f = fields[i];
                 if (f.Name != null) {
                     const nameKey = f.Name.trim().toLowerCase();
                     if (!byName.has(nameKey)) {
                         byName.set(nameKey, i);
                     }
-                    const codeKey = f.CodeName.trim().toLowerCase();
+                    const rawCodeName = f.CodeName ?? f.Name;
+                    const codeKey = rawCodeName.trim().toLowerCase();
                     if (!byCodeName.has(codeKey)) {
                         byCodeName.set(codeKey, i);
                     }
                 }
             }
-            entry = { fieldsRef: this._fields, fieldsLen: this._fields.length, byName, byCodeName };
+            entry = { fieldsRef: fields, fieldsLen: fields.length, byName, byCodeName };
             _entityFieldIndexCache.set(this, entry);
         }
         return entry;
@@ -3739,6 +3747,20 @@ export class EntityInfo extends BaseInfo {
     public FieldIndexByCodeName(codeName: string): number {
         if (!codeName) return -1;
         return this.ensureFieldIndexEntry().byCodeName.get(codeName.trim().toLowerCase()) ?? -1;
+    }
+
+    /**
+     * O(1) case-insensitive field lookup by `CodeName`. Uses the shared `_entityFieldIndexCache`
+     * index so GraphQL resolvers and mutation handlers can resolve client `CodeName` keys without
+     * linear `Fields.find(...)` scans.
+     *
+     * @param codeName field CodeName (matched case-insensitively, whitespace-trimmed)
+     * @returns the matching EntityFieldInfo, or undefined if not found
+     */
+    public FieldByCodeName(codeName: string): EntityFieldInfo | undefined {
+        const idx = this.FieldIndexByCodeName(codeName);
+        const fields = this._fields ?? this.Fields;
+        return idx >= 0 && fields ? fields[idx] : undefined;
     }
 
     /**
@@ -4911,6 +4933,14 @@ export class EntityInfo extends BaseInfo {
     }
 
 
+    private static readonly CHILD_INIT_KEYS: ReadonlySet<string> = new Set([
+        'EntityFields', '_Fields', 'Fields',
+        'EntityPermissions', '_Permissions', 'Permissions',
+        'EntitySettings', '_Settings', 'Settings',
+        'EntityRelationships', '_RelatedEntities', 'RelatedEntities',
+        'EntityOrganicKeys', '_OrganicKeys', 'OrganicKeys',
+    ]);
+
     /**
      * @param initData - the raw entity row (or another EntityInfo being re-instantiated)
      * @param md - the provider that owns this metadata. Sibling lookups ({@link ParentEntityInfo},
@@ -4921,7 +4951,7 @@ export class EntityInfo extends BaseInfo {
         super();
         this.SetOwningProvider(md);
         if (initData) {
-            this.copyInitData(initData);
+            this.copyInitData(initData, EntityInfo.CHILD_INIT_KEYS);
 
             // do some special handling to create class instances instead of just data objects
             // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)

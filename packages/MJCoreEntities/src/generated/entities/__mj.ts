@@ -9649,6 +9649,12 @@ export const MJActionParamSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this parameter's VALUE may be written to ActionExecutionLog.Params. Default 1. Set to 0 for parameters that carry records, credentials or personal data - for example the Data payload of Execute Agent. Independent of the hard rule that Entity Action params of ValueType 'Entity Object' or 'Entity Object Data' are never logged regardless of this flag. When logging is suppressed the log records the parameter name, its type and a redaction marker, never the value.`),
+    ValueSchema: z.any().nullable().describe(`
+        * * Field Name: ValueSchema
+        * * Display Name: Value Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJActionParamEntity_IActionParamValueSchema
+        * * Description: Optional JSON Schema fragment describing this parameter's value, limited to the cross-provider subset: type, description, enum, items, properties and required. When set, the native tool builder declares it to the model in place of the coarse ValueType mapping, and argument coercion follows it. For an IsArray parameter it describes one element. When NULL, the schema is derived from ValueType.`),
     Action: z.string().describe(`
         * * Field Name: Action
         * * Display Name: Action
@@ -10404,6 +10410,16 @@ export const MJArchiveConfigurationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    StorageMode: z.union([z.literal('Purge'), z.literal('Store')]).describe(`
+        * * Field Name: StorageMode
+        * * Display Name: Storage Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Store
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Purge
+    *   * Store
+        * * Description: Whether runs keep a copy of the data they remove. Store (default): each record's archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode, entities missing from metadata, entities that track Record Changes, entities whose driver is not registered or does not support purge, and HardDelete entities that use soft delete or whose delete cascade reaches an entity that tracks Record Changes or uses soft delete.`),
     StorageAccount: z.string().nullable().describe(`
         * * Field Name: StorageAccount
         * * Display Name: Storage Account Name
@@ -10494,10 +10510,10 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ArchiveRun: z.date().describe(`
+    ArchiveRun: z.string().describe(`
         * * Field Name: ArchiveRun
-        * * Display Name: Archive Run Timestamp
-        * * SQL Data Type: datetimeoffset`),
+        * * Display Name: Archive Run
+        * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
@@ -10596,6 +10612,16 @@ export const MJArchiveRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    StorageMode: z.union([z.literal('Purge'), z.literal('Store')]).describe(`
+        * * Field Name: StorageMode
+        * * Display Name: Storage Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Store
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Purge
+    *   * Store
+        * * Description: The configuration's StorageMode when this run started: Store (copies written to storage) or Purge (no copies kept; only failed records get an ArchiveRunDetail row).`),
     ArchiveConfiguration: z.string().describe(`
         * * Field Name: ArchiveConfiguration
         * * Display Name: Configuration Name
@@ -21487,6 +21513,184 @@ export const MJFeaturePipelineTypeSchema = z.object({
 export type MJFeaturePipelineTypeEntityType = z.infer<typeof MJFeaturePipelineTypeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Feature Pipeline Versions
+ */
+export const MJFeaturePipelineVersionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    RecordProcessID: z.string().describe(`
+        * * Field Name: RecordProcessID
+        * * Display Name: Record Process ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)`),
+    Version: z.number().describe(`
+        * * Field Name: Version
+        * * Display Name: Version
+        * * SQL Data Type: int
+        * * Description: Monotonic version number within the pipeline (1, 2, ...).`),
+    PinHash: z.string().describe(`
+        * * Field Name: PinHash
+        * * Display Name: Pin Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the pin (SpecHash, PromptVersionHash, AIModelID, ParametersHash). Unique per pipeline.`),
+    SpecHash: z.string().describe(`
+        * * Field Name: SpecHash
+        * * Display Name: Spec Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the output-affecting parts of the DataFeatureSpec (Context, Outputs, PipelineType, Escalation, PromptID, ProcessorExtensionKey) and the OutputMapping.`),
+    PromptID: z.string().nullable().describe(`
+        * * Field Name: PromptID
+        * * Display Name: Prompt
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: The pipeline prompt this version runs.`),
+    PromptVersionHash: z.string().nullable().describe(`
+        * * Field Name: PromptVersionHash
+        * * Display Name: Prompt Version Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: Prompt version hash (template text, outputs, constraint block, pipeline type, escalation) of this version.`),
+    AIModelID: z.string().nullable().describe(`
+        * * Field Name: AIModelID
+        * * Display Name: AI Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+        * * Description: Primary AI model of the prompt for this version.`),
+    ParametersHash: z.string().nullable().describe(`
+        * * Field Name: ParametersHash
+        * * Display Name: Parameters Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the prompt inference parameters for this version.`),
+    Status: z.union([z.literal('Active'), z.literal('Candidate'), z.literal('Refused'), z.literal('Retired')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Candidate
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Candidate
+    *   * Refused
+    *   * Retired
+        * * Description: Candidate (registered, not yet allowed to write), Active (the version runs write), Refused (golden-set result below threshold), Retired (superseded by a later Active version).`),
+    Gated: z.boolean().describe(`
+        * * Field Name: Gated
+        * * Display Name: Gated
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when the pipeline declares DataFeatureSpec.Activation: the version can become Active only through a stored golden-set result at or above Threshold.`),
+    GoldenSetTestID: z.string().nullable().describe(`
+        * * Field Name: GoldenSetTestID
+        * * Display Name: Golden Set Test
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tests (vwTests.ID)
+        * * Description: The MJ: Tests row holding the golden set this version was evaluated on.`),
+    GoldenSetTestRunID: z.string().nullable().describe(`
+        * * Field Name: GoldenSetTestRunID
+        * * Display Name: Golden Set Test Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+        * * Description: The MJ: Test Runs row of the evaluation whose result is stored here.`),
+    Metric: z.literal('accuracy').nullable().describe(`
+        * * Field Name: Metric
+        * * Display Name: Metric
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * accuracy
+        * * Description: Metric of the stored result: accuracy.`),
+    Threshold: z.number().nullable().describe(`
+        * * Field Name: Threshold
+        * * Display Name: Threshold
+        * * SQL Data Type: float(53)
+        * * Description: Declared activation threshold copied from DataFeatureSpec.Activation at evaluation time.`),
+    ResultValue: z.number().nullable().describe(`
+        * * Field Name: ResultValue
+        * * Display Name: Result Value
+        * * SQL Data Type: float(53)
+        * * Description: Point estimate of the metric (the lowest per-output value when the pipeline has several outputs).`),
+    ResultLower: z.number().nullable().describe(`
+        * * Field Name: ResultLower
+        * * Display Name: Result Lower Bound
+        * * SQL Data Type: float(53)
+        * * Description: Lower bound of the 95% Wilson interval of ResultValue.`),
+    ResultUpper: z.number().nullable().describe(`
+        * * Field Name: ResultUpper
+        * * Display Name: Result Upper Bound
+        * * SQL Data Type: float(53)
+        * * Description: Upper bound of the 95% Wilson interval of ResultValue.`),
+    ResultN: z.number().nullable().describe(`
+        * * Field Name: ResultN
+        * * Display Name: Result Sample Size (N)
+        * * SQL Data Type: int
+        * * Description: Number of golden cases scored.`),
+    ResultDetails: z.string().nullable().describe(`
+        * * Field Name: ResultDetails
+        * * Display Name: Result Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON per-output results (correct, n, value, interval) and the per-case answers of the evaluation.`),
+    ActivatedAt: z.date().nullable().describe(`
+        * * Field Name: ActivatedAt
+        * * Display Name: Activated At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the version became Active.`),
+    ApprovedByUserID: z.string().nullable().describe(`
+        * * Field Name: ApprovedByUserID
+        * * Display Name: Approved By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user whose run activated the version (for an unattended activation, the Feature Pipeline Version Steward job's user).`),
+    RetiredAt: z.date().nullable().describe(`
+        * * Field Name: RetiredAt
+        * * Display Name: Retired At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When a later Active version superseded this one.`),
+    BackfilledAt: z.date().nullable().describe(`
+        * * Field Name: BackfilledAt
+        * * Display Name: Backfilled At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    RecordProcess: z.string().describe(`
+        * * Field Name: RecordProcess
+        * * Display Name: Record Process
+        * * SQL Data Type: nvarchar(255)`),
+    Prompt: z.string().nullable().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt Text
+        * * SQL Data Type: nvarchar(255)`),
+    AIModel: z.string().nullable().describe(`
+        * * Field Name: AIModel
+        * * Display Name: AI Model Name
+        * * SQL Data Type: nvarchar(50)`),
+    GoldenSetTest: z.string().nullable().describe(`
+        * * Field Name: GoldenSetTest
+        * * Display Name: Golden Set Test Name
+        * * SQL Data Type: nvarchar(255)`),
+    GoldenSetTestRun: z.string().nullable().describe(`
+        * * Field Name: GoldenSetTestRun
+        * * Display Name: Golden Set Test Run Name
+        * * SQL Data Type: nvarchar(255)`),
+    ApprovedByUser: z.string().nullable().describe(`
+        * * Field Name: ApprovedByUser
+        * * Display Name: Approved By User Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJFeaturePipelineVersionEntityType = z.infer<typeof MJFeaturePipelineVersionSchema>;
+
+/**
  * zod schema definition for the entity MJ: Feature Value Caches
  */
 export const MJFeatureValueCacheSchema = z.object({
@@ -21582,6 +21786,17 @@ export const MJFeatureValueCacheSchema = z.object({
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()
         * * Description: Timestamp when this record was last updated.`),
+    AIModelID: z.string().nullable().describe(`
+        * * Field Name: AIModelID
+        * * Display Name: AI Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+        * * Description: Primary AI model of the prompt that computed this cached result. Part of the cache key.`),
+    ParametersHash: z.string().nullable().describe(`
+        * * Field Name: ParametersHash
+        * * Display Name: Parameters Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the prompt's inference parameters when this result was computed. Part of the cache key.`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process Name
@@ -21590,6 +21805,10 @@ export const MJFeatureValueCacheSchema = z.object({
         * * Field Name: Prompt
         * * Display Name: Prompt Name
         * * SQL Data Type: nvarchar(255)`),
+    AIModel: z.string().nullable().describe(`
+        * * Field Name: AIModel
+        * * Display Name: AI Model
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type MJFeatureValueCacheEntityType = z.infer<typeof MJFeatureValueCacheSchema>;
@@ -21718,6 +21937,42 @@ export const MJFeatureValueSchema = z.object({
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()
         * * Description: Timestamp when this record was last updated.`),
+    PipelineVersion: z.number().nullable().describe(`
+        * * Field Name: PipelineVersion
+        * * Display Name: Pipeline Version
+        * * SQL Data Type: int
+        * * Description: Version of the Feature Pipeline (MJ: Feature Pipeline Versions.Version) that computed this value; part of the FeatureValueKey.`),
+    AIModelID: z.string().nullable().describe(`
+        * * Field Name: AIModelID
+        * * Display Name: AI Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+        * * Description: Primary AI model the pipeline's prompt is configured to run (highest-priority Active AI Prompt Model). Part of the FeatureValueKey; the model that actually answered is on the linked AI Prompt Run.`),
+    ParametersHash: z.string().nullable().describe(`
+        * * Field Name: ParametersHash
+        * * Display Name: Parameters Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the prompt's inference parameters (temperature, topP, topK, minP, penalties, seed, response format, effort level, model parameters). Part of the FeatureValueKey.`),
+    InputHash: z.string().nullable().describe(`
+        * * Field Name: InputHash
+        * * Display Name: Input Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the normalized input the value was computed from (the Dedup Cache key hash when the pipeline caches). Part of the FeatureValueKey.`),
+    ValueKeyHash: z.string().nullable().describe(`
+        * * Field Name: ValueKeyHash
+        * * Display Name: Value Key Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the canonical FeatureValueKey (entity, record, feature, pipeline version, prompt version hash, AI model, parameters hash, input hash, source). Unique per pipeline: re-computing the same key updates the row instead of inserting a duplicate.`),
+    Source: z.union([z.literal('Human'), z.literal('Pipeline')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pipeline
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Human
+    *   * Pipeline
+        * * Description: Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (entered by a person, which write-back leaves in place).`),
     RecordProcess: z.string().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process
@@ -21738,6 +21993,10 @@ export const MJFeatureValueSchema = z.object({
         * * Field Name: FeatureValueCache
         * * Display Name: Feature Value Cache
         * * SQL Data Type: nvarchar(500)`),
+    AIModel: z.string().nullable().describe(`
+        * * Field Name: AIModel
+        * * Display Name: AI Model Details
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type MJFeatureValueEntityType = z.infer<typeof MJFeatureValueSchema>;
@@ -27225,6 +27484,11 @@ export const MJProcessRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Warnings: z.string().nullable().describe(`
+        * * Field Name: Warnings
+        * * Display Name: Warnings
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of the record's non-fatal problems (for example, its Dedup Cache entry could not be stored) on a record that otherwise succeeded. NULL when there were none. Failures are in ErrorMessage, never here.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
@@ -27408,6 +27672,11 @@ export const MJProcessRunSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.`),
+    ResultSummary: z.string().nullable().describe(`
+        * * Field Name: ResultSummary
+        * * Display Name: Result Summary
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON summary of a Feature Pipeline run (FeaturePipelineRunResult); NULL for other work types.`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process Name
@@ -68024,6 +68293,42 @@ export class MJActionLibraryEntity extends BaseEntity<MJActionLibraryEntityType>
 
 
 /**
+ * JSON Schema fragment for one Action parameter's value.
+ *
+ * Stored in the `ValueSchema` column of `MJ: Action Params`. CodeGen emits a typed
+ * `ValueSchemaObject` accessor that returns `MJActionParamEntity_IActionParamValueSchema | null`.
+ *
+ * When set, the native tool builder declares this schema to the model in place of the coarse
+ * `ValueType` mapping, and argument coercion follows it before the Action runs. For an `IsArray`
+ * param it describes ONE element; the builder wraps it in `{ type: 'array', items: … }`.
+ *
+ * Deliberately limited to the subset every tool-calling provider accepts (`type`, `description`,
+ * `enum`, `items`, `properties`, `required`). Keywords outside it (`oneOf`, `$ref`, `format`,
+ * `additionalProperties`, …) are rejected or handled differently from one provider to the next, so
+ * the interface does not offer them.
+ *
+ * @example { "type": "string", "enum": ["asc", "desc"] }
+ * @example { "type": "object", "properties": { "TopCount": { "type": "integer" } }, "required": ["TopCount"] }
+ */
+export interface MJActionParamEntity_IActionParamValueSchema {
+    /**
+     * The JSON type of the value. An array of types is a union; prefer a single type, since OpenAPI
+     * 3.0 (which Gemini's function declarations follow) has no union `type`.
+     */
+    type?: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'null' | Array<'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'null'>;
+    /** What the value means. On the top-level schema the param's own `Description` is used when this is absent. */
+    description?: string;
+    /** The only values allowed. */
+    enum?: Array<string | number | boolean | null>;
+    /** For `type: 'array'`: the schema of each element. */
+    items?: MJActionParamEntity_IActionParamValueSchema;
+    /** For `type: 'object'`: the schema of each named property. */
+    properties?: Record<string, MJActionParamEntity_IActionParamValueSchema>;
+    /** For `type: 'object'`: the property names that must be present. */
+    required?: string[];
+}
+
+/**
  * MJ: Action Params - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ActionParam
@@ -68236,6 +68541,35 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
     }
     set LogValue(value: boolean) {
         this.Set('LogValue', value);
+    }
+
+    /**
+    * * Field Name: ValueSchema
+    * * Display Name: Value Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJActionParamEntity_IActionParamValueSchema
+    * * Description: Optional JSON Schema fragment describing this parameter's value, limited to the cross-provider subset: type, description, enum, items, properties and required. When set, the native tool builder declares it to the model in place of the coarse ValueType mapping, and argument coercion follows it. For an IsArray parameter it describes one element. When NULL, the schema is derived from ValueType.
+    */
+    get ValueSchema(): string | null {
+        return this.Get('ValueSchema');
+    }
+    set ValueSchema(value: string | null) {
+        this.Set('ValueSchema', value);
+    }
+
+    /**
+    * Typed accessor for ValueSchema — a live view of the parsed JSON as MJActionParamEntity_IActionParamValueSchema.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ValueSchema field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ValueSchemaObject(): MJActionParamEntity_IActionParamValueSchema | null {
+        return this.GetJSONFieldObject<MJActionParamEntity_IActionParamValueSchema>('ValueSchema');
+    }
+    set ValueSchemaObject(value: MJActionParamEntity_IActionParamValueSchema | null) {
+        this.SetJSONFieldObject<MJActionParamEntity_IActionParamValueSchema>('ValueSchema', value);
     }
 
     /**
@@ -70554,6 +70888,24 @@ export class MJArchiveConfigurationEntity extends BaseEntity<MJArchiveConfigurat
     }
 
     /**
+    * * Field Name: StorageMode
+    * * Display Name: Storage Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Store
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Purge
+    *   * Store
+    * * Description: Whether runs keep a copy of the data they remove. Store (default): each record's archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode, entities missing from metadata, entities that track Record Changes, entities whose driver is not registered or does not support purge, and HardDelete entities that use soft delete or whose delete cascade reaches an entity that tracks Record Changes or uses soft delete.
+    */
+    get StorageMode(): 'Purge' | 'Store' {
+        return this.Get('StorageMode');
+    }
+    set StorageMode(value: 'Purge' | 'Store') {
+        this.Set('StorageMode', value);
+    }
+
+    /**
     * * Field Name: StorageAccount
     * * Display Name: Storage Account Name
     * * SQL Data Type: nvarchar(200)
@@ -70777,10 +71129,10 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
 
     /**
     * * Field Name: ArchiveRun
-    * * Display Name: Archive Run Timestamp
-    * * SQL Data Type: datetimeoffset
+    * * Display Name: Archive Run
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArchiveRun(): Date {
+    get ArchiveRun(): string {
         return this.Get('ArchiveRun');
     }
 
@@ -71015,6 +71367,24 @@ export class MJArchiveRunEntity extends BaseEntity<MJArchiveRunEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: StorageMode
+    * * Display Name: Storage Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Store
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Purge
+    *   * Store
+    * * Description: The configuration's StorageMode when this run started: Store (copies written to storage) or Purge (no copies kept; only failed records get an ArchiveRunDetail row).
+    */
+    get StorageMode(): 'Purge' | 'Store' {
+        return this.Get('StorageMode');
+    }
+    set StorageMode(value: 'Purge' | 'Store') {
+        this.Set('StorageMode', value);
     }
 
     /**
@@ -100444,6 +100814,440 @@ export class MJFeaturePipelineTypeEntity extends BaseEntity<MJFeaturePipelineTyp
 
 
 /**
+ * MJ: Feature Pipeline Versions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: FeaturePipelineVersion
+ * * Base View: vwFeaturePipelineVersions
+ * * @description One version of a Feature Pipeline: a distinct pin (spec hash, prompt version hash, primary AI model, parameters hash). A gated pipeline runs only under an Active version, and a version becomes Active only with a stored golden-set result at or above its declared threshold.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Feature Pipeline Versions')
+export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipelineVersionEntityType> {
+    /**
+    * Loads the MJ: Feature Pipeline Versions record from the database
+    * @param ID: string - primary key value to load the MJ: Feature Pipeline Versions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJFeaturePipelineVersionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RecordProcessID
+    * * Display Name: Record Process ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+    */
+    get RecordProcessID(): string {
+        return this.Get('RecordProcessID');
+    }
+    set RecordProcessID(value: string) {
+        this.Set('RecordProcessID', value);
+    }
+
+    /**
+    * * Field Name: Version
+    * * Display Name: Version
+    * * SQL Data Type: int
+    * * Description: Monotonic version number within the pipeline (1, 2, ...).
+    */
+    get Version(): number {
+        return this.Get('Version');
+    }
+    set Version(value: number) {
+        this.Set('Version', value);
+    }
+
+    /**
+    * * Field Name: PinHash
+    * * Display Name: Pin Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the pin (SpecHash, PromptVersionHash, AIModelID, ParametersHash). Unique per pipeline.
+    */
+    get PinHash(): string {
+        return this.Get('PinHash');
+    }
+    set PinHash(value: string) {
+        this.Set('PinHash', value);
+    }
+
+    /**
+    * * Field Name: SpecHash
+    * * Display Name: Spec Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the output-affecting parts of the DataFeatureSpec (Context, Outputs, PipelineType, Escalation, PromptID, ProcessorExtensionKey) and the OutputMapping.
+    */
+    get SpecHash(): string {
+        return this.Get('SpecHash');
+    }
+    set SpecHash(value: string) {
+        this.Set('SpecHash', value);
+    }
+
+    /**
+    * * Field Name: PromptID
+    * * Display Name: Prompt
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: The pipeline prompt this version runs.
+    */
+    get PromptID(): string | null {
+        return this.Get('PromptID');
+    }
+    set PromptID(value: string | null) {
+        this.Set('PromptID', value);
+    }
+
+    /**
+    * * Field Name: PromptVersionHash
+    * * Display Name: Prompt Version Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: Prompt version hash (template text, outputs, constraint block, pipeline type, escalation) of this version.
+    */
+    get PromptVersionHash(): string | null {
+        return this.Get('PromptVersionHash');
+    }
+    set PromptVersionHash(value: string | null) {
+        this.Set('PromptVersionHash', value);
+    }
+
+    /**
+    * * Field Name: AIModelID
+    * * Display Name: AI Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    * * Description: Primary AI model of the prompt for this version.
+    */
+    get AIModelID(): string | null {
+        return this.Get('AIModelID');
+    }
+    set AIModelID(value: string | null) {
+        this.Set('AIModelID', value);
+    }
+
+    /**
+    * * Field Name: ParametersHash
+    * * Display Name: Parameters Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the prompt inference parameters for this version.
+    */
+    get ParametersHash(): string | null {
+        return this.Get('ParametersHash');
+    }
+    set ParametersHash(value: string | null) {
+        this.Set('ParametersHash', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Candidate
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Candidate
+    *   * Refused
+    *   * Retired
+    * * Description: Candidate (registered, not yet allowed to write), Active (the version runs write), Refused (golden-set result below threshold), Retired (superseded by a later Active version).
+    */
+    get Status(): 'Active' | 'Candidate' | 'Refused' | 'Retired' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Candidate' | 'Refused' | 'Retired') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Gated
+    * * Display Name: Gated
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True when the pipeline declares DataFeatureSpec.Activation: the version can become Active only through a stored golden-set result at or above Threshold.
+    */
+    get Gated(): boolean {
+        return this.Get('Gated');
+    }
+    set Gated(value: boolean) {
+        this.Set('Gated', value);
+    }
+
+    /**
+    * * Field Name: GoldenSetTestID
+    * * Display Name: Golden Set Test
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tests (vwTests.ID)
+    * * Description: The MJ: Tests row holding the golden set this version was evaluated on.
+    */
+    get GoldenSetTestID(): string | null {
+        return this.Get('GoldenSetTestID');
+    }
+    set GoldenSetTestID(value: string | null) {
+        this.Set('GoldenSetTestID', value);
+    }
+
+    /**
+    * * Field Name: GoldenSetTestRunID
+    * * Display Name: Golden Set Test Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+    * * Description: The MJ: Test Runs row of the evaluation whose result is stored here.
+    */
+    get GoldenSetTestRunID(): string | null {
+        return this.Get('GoldenSetTestRunID');
+    }
+    set GoldenSetTestRunID(value: string | null) {
+        this.Set('GoldenSetTestRunID', value);
+    }
+
+    /**
+    * * Field Name: Metric
+    * * Display Name: Metric
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * accuracy
+    * * Description: Metric of the stored result: accuracy.
+    */
+    get Metric(): 'accuracy' | null {
+        return this.Get('Metric');
+    }
+    set Metric(value: 'accuracy' | null) {
+        this.Set('Metric', value);
+    }
+
+    /**
+    * * Field Name: Threshold
+    * * Display Name: Threshold
+    * * SQL Data Type: float(53)
+    * * Description: Declared activation threshold copied from DataFeatureSpec.Activation at evaluation time.
+    */
+    get Threshold(): number | null {
+        return this.Get('Threshold');
+    }
+    set Threshold(value: number | null) {
+        this.Set('Threshold', value);
+    }
+
+    /**
+    * * Field Name: ResultValue
+    * * Display Name: Result Value
+    * * SQL Data Type: float(53)
+    * * Description: Point estimate of the metric (the lowest per-output value when the pipeline has several outputs).
+    */
+    get ResultValue(): number | null {
+        return this.Get('ResultValue');
+    }
+    set ResultValue(value: number | null) {
+        this.Set('ResultValue', value);
+    }
+
+    /**
+    * * Field Name: ResultLower
+    * * Display Name: Result Lower Bound
+    * * SQL Data Type: float(53)
+    * * Description: Lower bound of the 95% Wilson interval of ResultValue.
+    */
+    get ResultLower(): number | null {
+        return this.Get('ResultLower');
+    }
+    set ResultLower(value: number | null) {
+        this.Set('ResultLower', value);
+    }
+
+    /**
+    * * Field Name: ResultUpper
+    * * Display Name: Result Upper Bound
+    * * SQL Data Type: float(53)
+    * * Description: Upper bound of the 95% Wilson interval of ResultValue.
+    */
+    get ResultUpper(): number | null {
+        return this.Get('ResultUpper');
+    }
+    set ResultUpper(value: number | null) {
+        this.Set('ResultUpper', value);
+    }
+
+    /**
+    * * Field Name: ResultN
+    * * Display Name: Result Sample Size (N)
+    * * SQL Data Type: int
+    * * Description: Number of golden cases scored.
+    */
+    get ResultN(): number | null {
+        return this.Get('ResultN');
+    }
+    set ResultN(value: number | null) {
+        this.Set('ResultN', value);
+    }
+
+    /**
+    * * Field Name: ResultDetails
+    * * Display Name: Result Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON per-output results (correct, n, value, interval) and the per-case answers of the evaluation.
+    */
+    get ResultDetails(): string | null {
+        return this.Get('ResultDetails');
+    }
+    set ResultDetails(value: string | null) {
+        this.Set('ResultDetails', value);
+    }
+
+    /**
+    * * Field Name: ActivatedAt
+    * * Display Name: Activated At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the version became Active.
+    */
+    get ActivatedAt(): Date | null {
+        return this.Get('ActivatedAt');
+    }
+    set ActivatedAt(value: Date | null) {
+        this.Set('ActivatedAt', value);
+    }
+
+    /**
+    * * Field Name: ApprovedByUserID
+    * * Display Name: Approved By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user whose run activated the version (for an unattended activation, the Feature Pipeline Version Steward job's user).
+    */
+    get ApprovedByUserID(): string | null {
+        return this.Get('ApprovedByUserID');
+    }
+    set ApprovedByUserID(value: string | null) {
+        this.Set('ApprovedByUserID', value);
+    }
+
+    /**
+    * * Field Name: RetiredAt
+    * * Display Name: Retired At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When a later Active version superseded this one.
+    */
+    get RetiredAt(): Date | null {
+        return this.Get('RetiredAt');
+    }
+    set RetiredAt(value: Date | null) {
+        this.Set('RetiredAt', value);
+    }
+
+    /**
+    * * Field Name: BackfilledAt
+    * * Display Name: Backfilled At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version.
+    */
+    get BackfilledAt(): Date | null {
+        return this.Get('BackfilledAt');
+    }
+    set BackfilledAt(value: Date | null) {
+        this.Set('BackfilledAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RecordProcess
+    * * Display Name: Record Process
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RecordProcess(): string {
+        return this.Get('RecordProcess');
+    }
+
+    /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt Text
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Prompt(): string | null {
+        return this.Get('Prompt');
+    }
+
+    /**
+    * * Field Name: AIModel
+    * * Display Name: AI Model Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AIModel(): string | null {
+        return this.Get('AIModel');
+    }
+
+    /**
+    * * Field Name: GoldenSetTest
+    * * Display Name: Golden Set Test Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get GoldenSetTest(): string | null {
+        return this.Get('GoldenSetTest');
+    }
+
+    /**
+    * * Field Name: GoldenSetTestRun
+    * * Display Name: Golden Set Test Run Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get GoldenSetTestRun(): string | null {
+        return this.Get('GoldenSetTestRun');
+    }
+
+    /**
+    * * Field Name: ApprovedByUser
+    * * Display Name: Approved By User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ApprovedByUser(): string | null {
+        return this.Get('ApprovedByUser');
+    }
+}
+
+
+/**
  * MJ: Feature Value Caches - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: FeatureValueCache
@@ -100696,6 +101500,33 @@ export class MJFeatureValueCacheEntity extends BaseEntity<MJFeatureValueCacheEnt
     }
 
     /**
+    * * Field Name: AIModelID
+    * * Display Name: AI Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    * * Description: Primary AI model of the prompt that computed this cached result. Part of the cache key.
+    */
+    get AIModelID(): string | null {
+        return this.Get('AIModelID');
+    }
+    set AIModelID(value: string | null) {
+        this.Set('AIModelID', value);
+    }
+
+    /**
+    * * Field Name: ParametersHash
+    * * Display Name: Parameters Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the prompt's inference parameters when this result was computed. Part of the cache key.
+    */
+    get ParametersHash(): string | null {
+        return this.Get('ParametersHash');
+    }
+    set ParametersHash(value: string | null) {
+        this.Set('ParametersHash', value);
+    }
+
+    /**
     * * Field Name: RecordProcess
     * * Display Name: Record Process Name
     * * SQL Data Type: nvarchar(255)
@@ -100712,6 +101543,15 @@ export class MJFeatureValueCacheEntity extends BaseEntity<MJFeatureValueCacheEnt
     get Prompt(): string {
         return this.Get('Prompt');
     }
+
+    /**
+    * * Field Name: AIModel
+    * * Display Name: AI Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AIModel(): string | null {
+        return this.Get('AIModel');
+    }
 }
 
 
@@ -100720,7 +101560,7 @@ export class MJFeatureValueCacheEntity extends BaseEntity<MJFeatureValueCacheEnt
  * * Schema: __mj
  * * Base Table: FeatureValue
  * * Base View: vwFeatureValues
- * * @description Complete historical audit table for Feature Pipelines. Records every feature value ever computed per entity record, with full provenance, model reasoning, and run back-links.
+ * * @description Feature values computed by Feature Pipelines (or entered by people), one row per Feature Value key, updated in place when the same key is recomputed.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -101036,6 +101876,90 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     }
 
     /**
+    * * Field Name: PipelineVersion
+    * * Display Name: Pipeline Version
+    * * SQL Data Type: int
+    * * Description: Version of the Feature Pipeline (MJ: Feature Pipeline Versions.Version) that computed this value; part of the FeatureValueKey.
+    */
+    get PipelineVersion(): number | null {
+        return this.Get('PipelineVersion');
+    }
+    set PipelineVersion(value: number | null) {
+        this.Set('PipelineVersion', value);
+    }
+
+    /**
+    * * Field Name: AIModelID
+    * * Display Name: AI Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    * * Description: Primary AI model the pipeline's prompt is configured to run (highest-priority Active AI Prompt Model). Part of the FeatureValueKey; the model that actually answered is on the linked AI Prompt Run.
+    */
+    get AIModelID(): string | null {
+        return this.Get('AIModelID');
+    }
+    set AIModelID(value: string | null) {
+        this.Set('AIModelID', value);
+    }
+
+    /**
+    * * Field Name: ParametersHash
+    * * Display Name: Parameters Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the prompt's inference parameters (temperature, topP, topK, minP, penalties, seed, response format, effort level, model parameters). Part of the FeatureValueKey.
+    */
+    get ParametersHash(): string | null {
+        return this.Get('ParametersHash');
+    }
+    set ParametersHash(value: string | null) {
+        this.Set('ParametersHash', value);
+    }
+
+    /**
+    * * Field Name: InputHash
+    * * Display Name: Input Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the normalized input the value was computed from (the Dedup Cache key hash when the pipeline caches). Part of the FeatureValueKey.
+    */
+    get InputHash(): string | null {
+        return this.Get('InputHash');
+    }
+    set InputHash(value: string | null) {
+        this.Set('InputHash', value);
+    }
+
+    /**
+    * * Field Name: ValueKeyHash
+    * * Display Name: Value Key Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the canonical FeatureValueKey (entity, record, feature, pipeline version, prompt version hash, AI model, parameters hash, input hash, source). Unique per pipeline: re-computing the same key updates the row instead of inserting a duplicate.
+    */
+    get ValueKeyHash(): string | null {
+        return this.Get('ValueKeyHash');
+    }
+    set ValueKeyHash(value: string | null) {
+        this.Set('ValueKeyHash', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pipeline
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Human
+    *   * Pipeline
+    * * Description: Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (entered by a person, which write-back leaves in place).
+    */
+    get Source(): 'Human' | 'Pipeline' {
+        return this.Get('Source');
+    }
+    set Source(value: 'Human' | 'Pipeline') {
+        this.Set('Source', value);
+    }
+
+    /**
     * * Field Name: RecordProcess
     * * Display Name: Record Process
     * * SQL Data Type: nvarchar(255)
@@ -101078,6 +102002,15 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     */
     get FeatureValueCache(): string | null {
         return this.Get('FeatureValueCache');
+    }
+
+    /**
+    * * Field Name: AIModel
+    * * Display Name: AI Model Details
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AIModel(): string | null {
+        return this.Get('AIModel');
     }
 }
 
@@ -115233,6 +116166,19 @@ export class MJProcessRunDetailEntity extends BaseEntity<MJProcessRunDetailEntit
     }
 
     /**
+    * * Field Name: Warnings
+    * * Display Name: Warnings
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of the record's non-fatal problems (for example, its Dedup Cache entry could not be stored) on a record that otherwise succeeded. NULL when there were none. Failures are in ErrorMessage, never here.
+    */
+    get Warnings(): string | null {
+        return this.Get('Warnings');
+    }
+    set Warnings(value: string | null) {
+        this.Set('Warnings', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
@@ -115654,6 +116600,19 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
     }
     set DryRun(value: boolean) {
         this.Set('DryRun', value);
+    }
+
+    /**
+    * * Field Name: ResultSummary
+    * * Display Name: Result Summary
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON summary of a Feature Pipeline run (FeaturePipelineRunResult); NULL for other work types.
+    */
+    get ResultSummary(): string | null {
+        return this.Get('ResultSummary');
+    }
+    set ResultSummary(value: string | null) {
+        this.Set('ResultSummary', value);
     }
 
     /**
