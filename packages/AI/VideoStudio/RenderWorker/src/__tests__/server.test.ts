@@ -408,20 +408,30 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
             return [];
         };
 
-        const server = CreateRenderWorkerServer({
+        // Staging and pre-render lint run under min(NonRenderTimeoutMs, TimeoutMs), so give both ample
+        // headroom (5000 ms / 1000 ms): only the per-request render TimeoutMs may abort the hanging
+        // render, even on a loaded CI runner. The /check half keeps its own 60 ms server, since that
+        // check hangs and must always time out.
+        const renderServer = CreateRenderWorkerServer({
+            Backend: hangingCheckBackend,
+            NonRenderTimeoutMs: 5000,
+        });
+        serversToClose.push(renderServer);
+        const renderPort = await renderServer.Listen(0);
+        const checkServer = CreateRenderWorkerServer({
             Backend: hangingCheckBackend,
             NonRenderTimeoutMs: 60,
         });
-        serversToClose.push(server);
-        const port = await server.Listen(0);
+        serversToClose.push(checkServer);
+        const checkPort = await checkServer.Listen(0);
 
         const hangBundle = createCleanBundle(
             '<!doctype html><html><body><div data-composition-id="main" data-duration="2" data-fps="30" data-width="1280" data-height="720" data-fake-hang data-no-timeline></div></body></html>',
         );
 
-        const res = await fetch(`http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Render}`, {
+        const res = await fetch(`http://127.0.0.1:${renderPort}${RENDER_WORKER_ROUTES.Render}`, {
             method: 'POST',
-            body: JSON.stringify(createValidRenderRequest(hangBundle, 80)),
+            body: JSON.stringify(createValidRenderRequest(hangBundle, 1000)),
         });
         expect(res.status).toBe(200);
         const events = await parseNdjsonStream(res);
@@ -431,7 +441,7 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
             expect(errorEvent.Error.Code).toBe('Timeout');
         }
 
-        const checkRes = await fetch(`http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Check}`, {
+        const checkRes = await fetch(`http://127.0.0.1:${checkPort}${RENDER_WORKER_ROUTES.Check}`, {
             method: 'POST',
             body: JSON.stringify({ Bundle: createCleanBundle(), Width: 1280, Height: 720 }),
         });
@@ -653,12 +663,12 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
 
     it('starts execution timeout only after acquiring a concurrency slot for queued /render and non-render jobs', async () => {
         let renderCallCount = 0;
-        const baseBackend = new FakeRenderBackend({ StepDelayMs: 30 });
+        const baseBackend = new FakeRenderBackend({ StepDelayMs: 300 });
         const origRender = baseBackend.Render.bind(baseBackend);
         baseBackend.Render = async (job, onProgress, signal) => {
             renderCallCount += 1;
             if (renderCallCount === 1) {
-                // First render takes ~150ms (5 steps * 30ms)
+                // First render takes ~1.5s (5 steps * 300ms)
                 return origRender(job, onProgress, signal);
             }
             // Subsequent render is fast (~5ms total)
@@ -666,30 +676,32 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
             return fastBackend.Render(job, onProgress, signal);
         };
 
+        // Timings are 10x the minimum so staging and lint (which run under the timeouts once a slot is
+        // acquired) fit comfortably on a loaded CI runner.
         const server = CreateRenderWorkerServer({
             Backend: baseBackend,
             Concurrency: 1,
-            NonRenderTimeoutMs: 60,
+            NonRenderTimeoutMs: 600,
         });
         serversToClose.push(server);
         const port = await server.Listen(0);
         const renderUrl = `http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Render}`;
         const checkUrl = `http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Check}`;
 
-        // Job 1 holds the sole concurrency slot for ~120ms
+        // Job 1 holds the sole concurrency slot for ~1.5s
         const job1Promise = fetch(renderUrl, {
             method: 'POST',
-            body: JSON.stringify(createValidRenderRequest(undefined, 500)),
+            body: JSON.stringify(createValidRenderRequest(undefined, 5000)),
         }).then(parseNdjsonStream);
 
         // Give Job 1 a brief moment to acquire the slot
-        await new Promise((r) => setTimeout(r, 10));
+        await new Promise((r) => setTimeout(r, 100));
 
-        // Job 2 (/render with TimeoutMs: 60) and Job 3 (/check with NonRenderTimeoutMs: 60)
-        // wait in queue longer than 60ms while Job 1 runs, but each executes in <15ms once acquired.
+        // Job 2 (/render with TimeoutMs: 600) and Job 3 (/check with NonRenderTimeoutMs: 600)
+        // wait in queue longer than 600ms while Job 1 runs, but each executes well within 600ms once acquired.
         const job2Promise = fetch(renderUrl, {
             method: 'POST',
-            body: JSON.stringify(createValidRenderRequest(undefined, 60)),
+            body: JSON.stringify(createValidRenderRequest(undefined, 600)),
         }).then(parseNdjsonStream);
 
         const job3Promise = fetch(checkUrl, {
