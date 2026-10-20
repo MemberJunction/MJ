@@ -96,7 +96,19 @@ export function WhiteboardTagClass(tag: string | undefined | null): string {
   if (!tag) {
     return '';
   }
-  const slug = tag.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, WHITEBOARD_TAG_MAX_CHARS).replace(/-+$/g, '');
+  // The collapse is linear (the class excludes '-', so no run can backtrack). The edge trims
+  // are index walks rather than `^-+|-+$` regexes: those backtrack polynomially on a long run of
+  // dashes, and a tag is library input (agent tool arguments) — CodeQL js/polynomial-redos.
+  const collapsed = tag.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  let start = 0;
+  while (start < collapsed.length && collapsed[start] === '-') {
+    start++;
+  }
+  let end = Math.min(collapsed.length, start + WHITEBOARD_TAG_MAX_CHARS);
+  while (end > start && collapsed[end - 1] === '-') {
+    end--;
+  }
+  const slug = collapsed.slice(start, end);
   return slug ? `wb-tag-${slug}` : '';
 }
 

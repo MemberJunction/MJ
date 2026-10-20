@@ -27,6 +27,17 @@ describe('WhiteboardTagClass — the DOM hook', () => {
     const long = 'a'.repeat(WHITEBOARD_TAG_MAX_CHARS + 40);
     expect(WhiteboardTagClass(long)).toBe(`wb-tag-${'a'.repeat(WHITEBOARD_TAG_MAX_CHARS)}`);
   });
+
+  it('a cap that lands on a dash drops the dash (no trailing separator in the class)', () => {
+    const tag = `${'a'.repeat(WHITEBOARD_TAG_MAX_CHARS - 1)} tail`;
+    expect(WhiteboardTagClass(tag)).toBe(`wb-tag-${'a'.repeat(WHITEBOARD_TAG_MAX_CHARS - 1)}`);
+  });
+
+  it('trims long runs of separators at both ends without backtracking regexes (CodeQL js/polynomial-redos)', () => {
+    const run = '-'.repeat(50_000);
+    expect(WhiteboardTagClass(`${run}slot${run}`)).toBe('wb-tag-slot');
+    expect(WhiteboardTagClass(run)).toBe('');
+  });
 });
 
 describe('WhiteboardState — Tag on items', () => {
