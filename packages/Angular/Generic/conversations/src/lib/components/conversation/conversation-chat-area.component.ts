@@ -1,8 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ContentChildren, TemplateRef, ElementRef, AfterViewChecked, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, type MJUserEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ShouldReplaceDetailAgentRun, CONVERSATIONS_FORK_AUTHORIZATION, CONVERSATIONS_FORKING_SETTING_KEY, UserInfoEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, type ConversationScope, type CreateForkInput, type MJConversationBranchEntity, type ForkPoint, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand } from "@memberjunction/ai-core-plus";
+import { MJConversationEntity, MJConversationDetailEntity, type MJUserEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ShouldReplaceDetailAgentRun, CONVERSATIONS_FORK_AUTHORIZATION, CONVERSATIONS_FORKING_SETTING_KEY, UserInfoEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, WorkflowSaveOperation, type ConversationScope, type CreateForkInput, type MJConversationBranchEntity, type ForkPoint, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand, type WorkflowSpec, type TaskGraphSpec } from "@memberjunction/ai-core-plus";
 import { ActionableCommandRequest, UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -7299,10 +7299,67 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
+  public IsSavingTaskGraphWorkflow: boolean = false;
+
   public OnCloseTaskGraphPanel(): void {
     this.SelectedTaskGraphPanel = null;
     this.resetArtifactPaneSizing();
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Persists the currently displayed Task Graph in the chat side-panel as a reusable
+   * Draft Flow Agent workflow via {@link WorkflowSaveOperation} and opens the new
+   * `MJ: AI Agents` record.
+   */
+  public async OnSaveTaskGraphAsWorkflow(spec: TaskGraphSpec | null): Promise<void> {
+    if (!spec?.tasks?.length || this.IsSavingTaskGraphWorkflow) {
+      return;
+    }
+    this.IsSavingTaskGraphWorkflow = true;
+    this.cdr.detectChanges();
+    try {
+      const name =
+        spec.workflowName?.trim() ||
+        this.SelectedTaskGraphPanel?.workflowTitle?.trim() ||
+        'Saved Workflow';
+      const workflowSpec: WorkflowSpec = {
+        name,
+        description: `Saved from Conversation ${this.Conversation?.Name || this.ConversationId || ''}`.trim(),
+        status: 'Draft',
+        graph: { ...spec, workflowName: name },
+        triggers: [],
+      };
+      const op = new WorkflowSaveOperation();
+      const result = await op.Execute(
+        { spec: workflowSpec },
+        { provider: Metadata.Provider, user: this.CurrentUser },
+      );
+      const output = result.Output;
+      if (!result.Success || !output?.success || !output.agentID) {
+        MJNotificationService.Instance.CreateSimpleNotification(
+          output?.errorMessage ?? result.ErrorMessage ?? 'Could not save workflow.',
+          'error',
+          5000,
+        );
+        return;
+      }
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `Saved workflow "${name}". Opening Flow Agent record…`,
+        'success',
+        3500,
+      );
+      this.OpenEntityRecord.emit({
+        entityName: 'MJ: AI Agents',
+        compositeKey: CompositeKey.FromID(output.agentID),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      MJNotificationService.Instance.CreateSimpleNotification(`Failed to save workflow: ${msg}`, 'error', 5000);
+    } finally {
+      this.IsSavingTaskGraphWorkflow = false;
+      this.cdr.detectChanges();
+    }
   }
 
   async OnArtifactCreated(data: {conversationId: string, conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {

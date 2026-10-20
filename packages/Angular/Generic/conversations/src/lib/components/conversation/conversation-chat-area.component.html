@@ -601,6 +601,15 @@
           <div class="task-graph-pane-actions">
             <button
               type="button"
+              class="task-graph-pane-save-btn"
+              [disabled]="IsSavingTaskGraphWorkflow || !taskGraphRunView.Spec?.tasks?.length"
+              (click)="OnSaveTaskGraphAsWorkflow(taskGraphRunView.Spec)"
+              title="Save this task graph as a reusable Draft Flow Agent workflow">
+              <i class="fa-solid" [class.fa-spinner]="IsSavingTaskGraphWorkflow" [class.fa-spin]="IsSavingTaskGraphWorkflow" [class.fa-floppy-disk]="!IsSavingTaskGraphWorkflow"></i>
+              <span>{{ IsSavingTaskGraphWorkflow ? 'Saving…' : 'Save as Workflow' }}</span>
+            </button>
+            <button
+              type="button"
               class="task-graph-pane-btn"
               (click)="toggleMaximizeArtifactPane()"
               [title]="isArtifactPaneMaximized ? 'Restore panel size' : 'Maximize panel'">
@@ -617,6 +626,7 @@
         </div>
         <div class="task-graph-pane-body">
           <mj-task-graph-run-view
+            #taskGraphRunView
             [ParentTaskID]="SelectedTaskGraphPanel.parentTaskId"
             [WorkflowName]="SelectedTaskGraphPanel.workflowTitle"
             [LiveUpdates]="true"

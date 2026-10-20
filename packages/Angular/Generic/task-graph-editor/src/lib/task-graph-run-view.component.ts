@@ -242,8 +242,8 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     @Input() public AllowBreakpointEditing: boolean = false;
     /** Compact debug key under the summary line. Off unless the host is a debugger. */
     @Input() public ShowDebugLegend: boolean = false;
-    /** VS Code VARIABLES pane to the left of the canvas. Off unless the host is debugging. */
-    @Input() public ShowVariables: boolean = false;
+    /** Step Inputs & Outputs (VARIABLES) inspector pane to the left of the canvas. Enabled by default across all task graph views. */
+    @Input() public ShowVariables: boolean = true;
     /** The parent bag's `data` / `context` roots, for the Invocation scope. */
     @Input() public Invocation: { data?: unknown; context?: unknown } | null = null;
 
@@ -379,6 +379,9 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         const tempId = args?.Task?.tempId;
         if (!tempId) return;
         this.SelectedTaskID = tempId;
+        if (this.ShowVariables && !this.Prefs.InvocationOpen) {
+            this.prefsStore.SetInvocationOpen(true);
+        }
         this.NodeSelected.emit({ TaskID: tempId, Task: this.taskByID.get(tempId) ?? null });
         this.cdr.markForCheck();
     }
