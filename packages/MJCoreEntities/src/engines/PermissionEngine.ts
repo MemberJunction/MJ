@@ -81,12 +81,12 @@ export const PERMISSION_DOMAIN_ICON_FALLBACK = 'fa-solid fa-lock';
  * );
  * ```
  *
- * Priority 15 so it configures after default-priority engines (e.g., UserInfoEngine at 10);
- * providers lazy-resolve their backing engines on first use, so even if a backing engine
- * has not been configured yet at provider construction time, permission checks still work
- * once the backing engine comes online.
+ * Runs at the default startup priority (100) alongside `UserInfoEngine`, `ApplicationManager`,
+ * and `DashboardEngine` so its `MJ: Permission Domains` `RunView` coalesces into the main
+ * synchronous startup batch rather than forcing a solo round-trip. Providers lazy-resolve
+ * their backing engines on first use, so configure order within the priority group does not matter.
  */
-@RegisterForStartup({ priority: 15, severity: 'warn', description: 'PermissionEngine — unified permission provider registry' })
+@RegisterForStartup({ severity: 'warn', description: 'PermissionEngine — unified permission provider registry' })
 export class PermissionEngine extends BaseEngine<PermissionEngine> {
     public static get Instance(): PermissionEngine {
         return super.getInstance<PermissionEngine>();

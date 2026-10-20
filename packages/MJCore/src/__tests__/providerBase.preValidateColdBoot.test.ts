@@ -89,4 +89,26 @@ describe('ProviderBase preValidateAndRefresh after a cold boot', () => {
 
         expect(checkSpy).toHaveBeenCalledTimes(1);
     });
+
+    it('runs CheckToSeeIfRefreshNeeded and RefreshCurrentUser concurrently on warm validation', async () => {
+        const provider = new TestMetadataProvider();
+        const events: string[] = [];
+
+        vi.spyOn(provider, 'CheckToSeeIfRefreshNeeded').mockImplementation(async () => {
+            events.push('check:start');
+            await new Promise(resolve => setTimeout(resolve, 20));
+            events.push('check:end');
+            return false;
+        });
+        vi.spyOn(provider, 'RefreshCurrentUser').mockImplementation(async () => {
+            events.push('user:start');
+            await new Promise(resolve => setTimeout(resolve, 20));
+            events.push('user:end');
+        });
+
+        await provider.preValidateAndRefresh();
+
+        // Both must start before either finishes (concurrent Promise.all execution)
+        expect(events.slice(0, 2)).toEqual(['check:start', 'user:start']);
+    });
 });
