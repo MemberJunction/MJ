@@ -330,6 +330,7 @@ export abstract class BaseModelRunner {
 
   protected _promptRunQueue = new BaseEntitySaveQueue({
     onError: (message) => this.logError(message, { category: 'PromptRunSave' }),
+    saveReturnMode: 'datestamps_only',
   });
 
   /**
@@ -2633,7 +2634,9 @@ export abstract class BaseModelRunner {
     const fields = runRecord['Fields'];
     if (Array.isArray(fields)) {
       for (const field of fields) {
-        const name = (field as { Name?: unknown } | null)?.Name;
+        const f = field as { Name?: unknown; NotLoaded?: boolean } | null;
+        if (f?.NotLoaded) continue;
+        const name = f?.Name;
         if (typeof name === 'string' && !BaseModelRunner.INTERNAL_MOCK_KEYS.has(name)) {
           keys.add(name);
         }

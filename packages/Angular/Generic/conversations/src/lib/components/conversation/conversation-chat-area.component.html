@@ -435,7 +435,8 @@
               (messagePinToggled)="onMessagePinToggled($event)"
               (beforeResponseFormSubmitted)="beforeResponseFormSubmitted.emit($event)"
               (afterResponseFormSubmitted)="afterResponseFormSubmitted.emit($event)"
-              (TaskGraphPanelRequested)="OnTaskGraphPanelRequested($event)">
+              (TaskGraphPanelRequested)="OnTaskGraphPanelRequested($event)"
+              (ScrollToMessageRequested)="OnJumpToMessage($event)">
             </mj-conversation-message-list>
 
             <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->

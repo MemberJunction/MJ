@@ -3490,7 +3490,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * Adds or updates an agent run in the cache for a specific detail.
+     * Adds or updates an agent run in the cache for a specific detail, honoring
+     * {@link ShouldReplaceDetailAgentRun} so a continuation/sub-agent run never overwrites
+     * the primary root orchestrating run for that detail.
      *
      * @param conversationId - The conversation ID
      * @param detailId - The detail ID the agent run is associated with
@@ -3499,8 +3501,22 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     public SetAgentRunForDetail(conversationId: string, detailId: string, agentRun: MJAIAgentRunEntity): void {
         const key = NormalizeUUID(conversationId);
         const cached = this._detailCache.get(key);
-        if (cached) {
-            cached.AgentRunsByDetailId.set(detailId, agentRun);
+        if (!cached) {
+            return;
+        }
+        let targetDetailKey = detailId;
+        let existing = cached.AgentRunsByDetailId.get(detailId);
+        if (!existing) {
+            for (const [cachedDetailId, cachedRun] of cached.AgentRunsByDetailId) {
+                if (UUIDsEqual(cachedDetailId, detailId)) {
+                    targetDetailKey = cachedDetailId;
+                    existing = cachedRun;
+                    break;
+                }
+            }
+        }
+        if (ShouldReplaceDetailAgentRun(existing, agentRun)) {
+            cached.AgentRunsByDetailId.set(targetDetailKey, agentRun);
         }
     }
 

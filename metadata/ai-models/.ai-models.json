@@ -1972,7 +1972,12 @@
       "IsActive": true,
       "SpeedRank": 0,
       "CostRank": 0,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": false
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -2730,7 +2735,15 @@
       "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 8,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -2747,7 +2760,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "99ED676C-5774-45FE-95A6-3AD130381502"
@@ -2795,7 +2813,15 @@
       "IsActive": true,
       "SpeedRank": 10,
       "CostRank": 10,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -2812,7 +2838,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "44BB0BD7-5D80-4200-9540-7D82DF009FBB"
@@ -2860,7 +2891,15 @@
       "IsActive": true,
       "SpeedRank": 9,
       "CostRank": 9,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -2896,7 +2935,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "43E10F00-DAC0-4FEB-813C-9906F038966E"
@@ -2925,7 +2969,15 @@
       "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 7,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -2942,7 +2994,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "B8F7C234-9E12-4F73-8D51-A23F5C8E9D45"
@@ -2990,7 +3047,15 @@
       "IsActive": true,
       "SpeedRank": 10,
       "CostRank": 10,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -3007,7 +3072,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "EC99CEA8-2E89-430F-B10D-3E02D27B4B0A"
@@ -5863,7 +5933,15 @@
       "IsActive": true,
       "SpeedRank": 7,
       "CostRank": 3,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -5899,7 +5977,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "4D99CFBA-3D99-4DF5-8884-4E732F1AF5D1"
@@ -5954,7 +6037,15 @@
       "IsActive": false,
       "SpeedRank": 7,
       "CostRank": 4,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -5990,7 +6081,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "684B79A4-285B-4F75-937B-76BC26C63000"
@@ -6045,7 +6141,15 @@
       "IsActive": false,
       "SpeedRank": 7,
       "CostRank": 4,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -6062,7 +6166,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "78C494F7-5AB3-4145-AF43-687B29183245"
@@ -6458,7 +6567,15 @@
       "IsActive": false,
       "SpeedRank": 8,
       "CostRank": 1,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -6494,7 +6611,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "5E1FA065-D57D-45AF-A1D1-8824D6045A91"
@@ -17757,7 +17879,15 @@
       "IsActive": false,
       "SpeedRank": 7,
       "CostRank": 7,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -17793,7 +17923,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "F5EF8063-D71D-4478-9BFC-D37FF4165BB8"
@@ -18000,7 +18135,12 @@
       "SpeedRank": 11,
       "CostRank": 2,
       "InheritTypeModalities": true,
-      "PriorVersionID": null
+      "PriorVersionID": null,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": false
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -18877,7 +19017,15 @@
       "SpeedRank": 7,
       "CostRank": 7,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=Cohere Command A"
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Cohere Command A",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -18913,7 +19061,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "650AC4DE-2773-4362-9560-BAA6F0306210"
@@ -22686,7 +22839,15 @@
       "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 6,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -22722,7 +22883,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "C274FFCB-AD37-4AF8-B27E-393A81CE4817"
@@ -24626,6 +24792,10 @@
       "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Fable 5",
       "ModelConfiguration": {
         "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true,
           "SupportsForcedToolChoice": false
         }
       }
@@ -24687,7 +24857,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "88223ADC-55B1-44E8-B151-7B06FE41A68F"
@@ -24846,7 +25021,15 @@
       "SpeedRank": 7,
       "CostRank": 10,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5.6"
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5.6",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -24905,7 +25088,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "CD6F2B29-31B2-4D43-B660-4FB79DE63AF2"
@@ -24928,7 +25116,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "13915962-3449-429C-8F63-A83B7A441AC0"
@@ -25032,7 +25225,15 @@
       "SpeedRank": 11,
       "CostRank": 5,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=Gemini 3.7 Flash"
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Gemini 3.7 Flash",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -25274,7 +25475,15 @@
       "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 4,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -27244,7 +27453,15 @@
       "IsActive": true,
       "SpeedRank": 6,
       "CostRank": 3,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -27335,7 +27552,15 @@
       "IsActive": true,
       "SpeedRank": 9,
       "CostRank": 2,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -27426,7 +27651,12 @@
       "IsActive": true,
       "SpeedRank": 0,
       "CostRank": 0,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": false
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -28272,7 +28502,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "C8DC5F43-0C3F-459C-A8C6-E71ACEC4748D"
@@ -28753,7 +28988,15 @@
       "SpeedRank": 9,
       "CostRank": 5,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro"
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [

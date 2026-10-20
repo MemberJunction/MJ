@@ -671,10 +671,14 @@ export class TaskGraphService {
         }
 
         try {
-            // 2. Resolve every agent and action BEFORE writing anything. An unresolvable name is a
-            //    hard error, not a skipped node: silently dropping a task executes the graph with
-            //    holes where the caller's work should have been.
-            const agentIDsByName = await this.resolveAgents(spec, context);
+            // 2. Resolve every agent, action, and prompt in parallel BEFORE writing anything. An
+            //    unresolvable name is a hard error, not a skipped node: silently dropping a task
+            //    executes the graph with holes where the caller's work should have been.
+            const [agentIDsByName, actionIDsByName, promptIDsByName] = await Promise.all([
+                this.resolveAgents(spec, context),
+                this.resolveActions(spec, context),
+                this.resolvePrompts(spec, context),
+            ]);
             if (!agentIDsByName.Success) {
                 return { Success: false, ErrorMessage: agentIDsByName.ErrorMessage };
             }
@@ -682,11 +686,9 @@ export class TaskGraphService {
             if (!presetCheck.Success) {
                 return { Success: false, ErrorMessage: presetCheck.ErrorMessage };
             }
-            const actionIDsByName = await this.resolveActions(spec, context);
             if (!actionIDsByName.Success) {
                 return { Success: false, ErrorMessage: actionIDsByName.ErrorMessage };
             }
-            const promptIDsByName = await this.resolvePrompts(spec, context);
             if (!promptIDsByName.Success) {
                 return { Success: false, ErrorMessage: promptIDsByName.ErrorMessage };
             }
@@ -1699,7 +1701,14 @@ export class TaskGraphService {
         return parent.ID;
     }
 
-    /** Writes each child task, returning the tempId -> real ID mapping edges will need. */
+    /**
+     * Writes each child task in parallel, returning the `tempId -> real ID` mapping edges will need.
+     *
+     * Child tasks only reference `parentTaskID` (`ParentID = parentTaskID`) — inter-step edges live
+     * in `MJ: Task Dependencies`, so child rows have no foreign-key ordering dependencies on each
+     * other. `NewRecord()` assigns each child task's UUID synchronously in memory, allowing all
+     * child rows to be persisted concurrently via `Promise.all`.
+     */
     private async persistChildren(
         spec: TaskGraphSpec,
         parentTaskID: string,
@@ -1718,99 +1727,104 @@ export class TaskGraphService {
                 (t.dependsOn ?? []).map((d) => ({ From: NormalizeDependency(d).tempId, To: t.tempId })),
             ),
         );
-        for (const node of spec.tasks) {
-            const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
-            task.NewRecord();
-            task.Name = node.name;
-            task.Description = node.description;
-            task.TypeID = taskTypeID;
-            task.EnvironmentID = context.EnvironmentID;
-            task.ParentID = parentTaskID;
-            task.ConversationDetailID = context.ConversationDetailID ?? null;
-            task.Status = 'Pending';
-            task.PercentComplete = 0;
-
-            // The discriminator the dispatcher routes on. Written first because everything below —
-            // and everything the dispatcher later does with this row — reads it.
-            task.StepType = node.kind;
-
-            // Switching on `kind` rather than on which config field happens to be populated. The
-            // old shape — "agentName? then agent; actionName? then action; ELSE human" — turned
-            // every kind it did not know about into a Human task assigned to the submitter, so a
-            // ForEach step became an approval request that nobody had asked for and nothing would
-            // ever complete. A graph that stalls forever while LOOKING like it is waiting on a
-            // person is the worst available failure. `findUnrunnableKinds` refuses unsupported
-            // kinds before anything is written; this switch is what keeps the two in step.
-            switch (node.kind) {
-                case 'Agent':
-                    task.AgentID = agentIDsByName.get(ConfigOf(node, 'Agent')!.agentName)!;
-                    break;
-                case 'Action':
-                    task.ActionID = actionIDsByName.get(ConfigOf(node, 'Action')!.actionName)!;
-                    break;
-                case 'Human':
-                    // Assigned to the submitting user only — cross-user assignment stays rejected
-                    // until the authorization model in #3524 lands, and `findCrossUserAssignments`
-                    // has already refused any graph that asked for someone else.
-                    task.UserID = context.ContextUser.ID;
-                    break;
-                case 'Prompt':
-                    task.PromptID = promptIDsByName.get(ConfigOf(node, 'Prompt')!.promptName)!;
-                    break;
-                case 'Decision':
-                    // The decision prompt, as a real foreign key like a Prompt step's. The row stays a
-                    // machine task for claiming and reclamation; `StepType` is what routes it to the
-                    // decision runner rather than the prompt runner.
-                    task.PromptID = promptIDsByName.get(DecisionPromptNameOf(node)!)!;
-                    break;
-                case 'ForEach':
-                case 'While': {
-                    // A loop's key points at what it REPEATS, not at the loop itself. That keeps the
-                    // reference a real foreign key — joinable, constrained, rename-proof — instead
-                    // of a name buried in JSON, and CK_Task_Assignment still holds because a loop
-                    // body is exactly one thing.
-                    const op = LoopOperationOf(node);
-                    if (op?.action) task.ActionID = actionIDsByName.get(op.action.name)!;
-                    else if (op?.subAgent) task.AgentID = agentIDsByName.get(op.subAgent.name)!;
-                    else if (op?.prompt) task.PromptID = promptIDsByName.get(op.prompt.name)!;
-                    else {
-                        throw new Error(
-                            `Task "${node.name}" is a loop with nothing to repeat. Choose an action, ` +
-                            `a prompt, or a sub-agent for it to run on each pass.`,
-                        );
-                    }
-                    break;
+        await Promise.all(
+            spec.tasks.map(async (node) => {
+                const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
+                task.NewRecord();
+                if (task.ID) {
+                    map.set(node.tempId, task.ID);
                 }
-                default:
-                    // Unreachable: findUnrunnableKinds rejected these before any write. Throwing
-                    // rather than falling through means a kind added later fails loudly here
-                    // instead of quietly becoming somebody's to-do item.
-                    throw new Error(
-                        `Task "${node.name}" has kind "${node.kind}", which cannot be persisted for dispatch.`,
-                    );
-            }
+                task.Name = node.name;
+                task.Description = node.description;
+                task.TypeID = taskTypeID;
+                task.EnvironmentID = context.EnvironmentID;
+                task.ParentID = parentTaskID;
+                task.ConversationDetailID = context.ConversationDetailID ?? null;
+                task.Status = 'Pending';
+                task.PercentComplete = 0;
 
-            // Everything about the step that has no column of its own. Dropping this is what used
-            // to lose the input/output mappings — and with them the payload values every branch
-            // condition downstream reads.
-            //
-            // The step's rank in the graph's own order rides along. `Task` has no sequence column,
-            // so without it every consumer listing a graph's steps falls back to creation order —
-            // the compiler's walk, which is neither the order they were drawn in nor the order they
-            // run in. A graph that has not started yet has no timestamps to sort by, so its
-            // structure is the only order available, and it is available from the moment it is
-            // compiled.
-            const configuration = { ...buildStepConfiguration(node), sequence: ranks.get(node.tempId) };
-            task.Configuration = JSON.stringify(configuration);
+                // The discriminator the dispatcher routes on. Written first because everything below —
+                // and everything the dispatcher later does with this row — reads it.
+                task.StepType = node.kind;
 
-            // Input rides in its own column; Description stays human-readable.
-            task.InputPayload = node.inputPayload ? JSON.stringify(node.inputPayload) : null;
+                // Switching on `kind` rather than on which config field happens to be populated. The
+                // old shape — "agentName? then agent; actionName? then action; ELSE human" — turned
+                // every kind it did not know about into a Human task assigned to the submitter, so a
+                // ForEach step became an approval request that nobody had asked for and nothing would
+                // ever complete. A graph that stalls forever while LOOKING like it is waiting on a
+                // person is the worst available failure. `findUnrunnableKinds` refuses unsupported
+                // kinds before anything is written; this switch is what keeps the two in step.
+                switch (node.kind) {
+                    case 'Agent':
+                        task.AgentID = agentIDsByName.get(ConfigOf(node, 'Agent')!.agentName)!;
+                        break;
+                    case 'Action':
+                        task.ActionID = actionIDsByName.get(ConfigOf(node, 'Action')!.actionName)!;
+                        break;
+                    case 'Human':
+                        // Assigned to the submitting user only — cross-user assignment stays rejected
+                        // until the authorization model in #3524 lands, and `findCrossUserAssignments`
+                        // has already refused any graph that asked for someone else.
+                        task.UserID = context.ContextUser.ID;
+                        break;
+                    case 'Prompt':
+                        task.PromptID = promptIDsByName.get(ConfigOf(node, 'Prompt')!.promptName)!;
+                        break;
+                    case 'Decision':
+                        // The decision prompt, as a real foreign key like a Prompt step's. The row stays a
+                        // machine task for claiming and reclamation; `StepType` is what routes it to the
+                        // decision runner rather than the prompt runner.
+                        task.PromptID = promptIDsByName.get(DecisionPromptNameOf(node)!)!;
+                        break;
+                    case 'ForEach':
+                    case 'While': {
+                        // A loop's key points at what it REPEATS, not at the loop itself. That keeps the
+                        // reference a real foreign key — joinable, constrained, rename-proof — instead
+                        // of a name buried in JSON, and CK_Task_Assignment still holds because a loop
+                        // body is exactly one thing.
+                        const op = LoopOperationOf(node);
+                        if (op?.action) task.ActionID = actionIDsByName.get(op.action.name)!;
+                        else if (op?.subAgent) task.AgentID = agentIDsByName.get(op.subAgent.name)!;
+                        else if (op?.prompt) task.PromptID = promptIDsByName.get(op.prompt.name)!;
+                        else {
+                            throw new Error(
+                                `Task "${node.name}" is a loop with nothing to repeat. Choose an action, ` +
+                                `a prompt, or a sub-agent for it to run on each pass.`,
+                            );
+                        }
+                        break;
+                    }
+                    default:
+                        // Unreachable: findUnrunnableKinds rejected these before any write. Throwing
+                        // rather than falling through means a kind added later fails loudly here
+                        // instead of quietly becoming somebody's to-do item.
+                        throw new Error(
+                            `Task "${node.name}" has kind "${node.kind}", which cannot be persisted for dispatch.`,
+                        );
+                }
 
-            if (!(await task.Save())) {
-                throw new Error(`Could not create task "${node.name}": ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-            }
-            map.set(node.tempId, task.ID);
-        }
+                // Everything about the step that has no column of its own. Dropping this is what used
+                // to lose the input/output mappings — and with them the payload values every branch
+                // condition downstream reads.
+                //
+                // The step's rank in the graph's own order rides along. `Task` has no sequence column,
+                // so without it every consumer listing a graph's steps falls back to creation order —
+                // the compiler's walk, which is neither the order they were drawn in nor the order they
+                // run in. A graph that has not started yet has no timestamps to sort by, so its
+                // structure is the only order available, and it is available from the moment it is
+                // compiled.
+                const configuration = { ...buildStepConfiguration(node), sequence: ranks.get(node.tempId) };
+                task.Configuration = JSON.stringify(configuration);
+
+                // Input rides in its own column; Description stays human-readable.
+                task.InputPayload = node.inputPayload ? JSON.stringify(node.inputPayload) : null;
+
+                if (!(await task.Save())) {
+                    throw new Error(`Could not create task "${node.name}": ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+                map.set(node.tempId, task.ID);
+            }),
+        );
         return map;
     }
 
@@ -1834,12 +1848,13 @@ export class TaskGraphService {
         return FindUnrunnableKinds(spec);
     }
 
-    /** Writes the dependency edges, translating tempIds to persisted IDs. */
+    /** Writes the dependency edges in parallel, translating tempIds to persisted IDs. */
     private async persistDependencies(
         spec: TaskGraphSpec,
         taskIDMap: Map<string, string>,
         context: TaskGraphSubmitContext,
     ): Promise<void> {
+        const edgeWrites: Promise<void>[] = [];
         for (const node of spec.tasks) {
             const taskID = taskIDMap.get(node.tempId);
             if (!taskID) continue;
@@ -1848,31 +1863,36 @@ export class TaskGraphService {
                 const dependsOnTaskID = taskIDMap.get(edge.tempId);
                 if (!dependsOnTaskID) continue; // validation already rejected unknown refs
 
-                const dep = await context.Provider.GetEntityObject<MJTaskDependencyEntity>('MJ: Task Dependencies', context.ContextUser);
-                dep.NewRecord();
-                dep.TaskID = taskID;
-                dep.DependsOnTaskID = dependsOnTaskID;
-                dep.DependencyType = edge.dependencyType ?? 'Prerequisite';
-                // NULL for an unconditional edge, matching AIAgentStepPath — so a graph authored in
-                // the flow editor and one emitted by an agent store the same thing.
-                dep.Condition = edge.condition ?? null;
+                edgeWrites.push(
+                    (async () => {
+                        const dep = await context.Provider.GetEntityObject<MJTaskDependencyEntity>('MJ: Task Dependencies', context.ContextUser);
+                        dep.NewRecord();
+                        dep.TaskID = taskID;
+                        dep.DependsOnTaskID = dependsOnTaskID;
+                        dep.DependencyType = edge.dependencyType ?? 'Prerequisite';
+                        // NULL for an unconditional edge, matching AIAgentStepPath — so a graph authored in
+                        // the flow editor and one emitted by an agent store the same thing.
+                        dep.Condition = edge.condition ?? null;
 
-                // The exclusive-choice fields. Dropping these was silent and severe: without an
-                // ExclusiveGroup the dispatcher sees a plain fan-out and runs EVERY branch, so a
-                // workflow that should pick one route would take all of them — doing work its author
-                // never intended and, in the Demo workflow's case, calling two different APIs where
-                // the flow calls one. Priority and Sequence are what decide which branch wins, so a
-                // group without them resolves arbitrarily.
-                dep.ExclusiveGroup = edge.exclusiveGroup ?? null;
-                dep.Priority = edge.priority ?? 0;
-                dep.Sequence = edge.sequence ?? 0;
-                if (!(await dep.Save())) {
-                    throw new Error(
-                        `Could not create dependency ${node.tempId} -> ${edge.tempId}: ${dep.LatestResult?.CompleteMessage ?? 'unknown error'}`,
-                    );
-                }
+                        // The exclusive-choice fields. Dropping these was silent and severe: without an
+                        // ExclusiveGroup the dispatcher sees a plain fan-out and runs EVERY branch, so a
+                        // workflow that should pick one route would take all of them — doing work its author
+                        // never intended and, in the Demo workflow's case, calling two different APIs where
+                        // the flow calls one. Priority and Sequence are what decide which branch wins, so a
+                        // group without them resolves arbitrarily.
+                        dep.ExclusiveGroup = edge.exclusiveGroup ?? null;
+                        dep.Priority = edge.priority ?? 0;
+                        dep.Sequence = edge.sequence ?? 0;
+                        if (!(await dep.Save())) {
+                            throw new Error(
+                                `Could not create dependency ${node.tempId} -> ${edge.tempId}: ${dep.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                            );
+                        }
+                    })(),
+                );
             }
         }
+        await Promise.all(edgeWrites);
     }
 
     private async loadChildren(parentTaskID: string, context: TaskGraphSubmitContext): Promise<MJTaskEntity[]> {

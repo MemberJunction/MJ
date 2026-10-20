@@ -23402,6 +23402,9 @@ export class MJActionParam_ {
     @Field(() => Boolean, {nullable: true, description: "Whether this parameter's VALUE may be written to ActionExecutionLog.Params. Default 1. Set to 0 for parameters that carry records, credentials or personal data - for example the Data payload of Execute Agent. Independent of the hard rule that Entity Action params of ValueType 'Entity Object' or 'Entity Object Data' are never logged regardless of this flag. When logging is suppressed the log records the parameter name, its type and a redaction marker, never the value."}) 
     LogValue?: boolean;
         
+    @Field({nullable: true, description: "Optional JSON Schema fragment describing this parameter's value, limited to the cross-provider subset: type, description, enum, items, properties and required. When set, the native tool builder declares it to the model in place of the coarse ValueType mapping, and argument coercion follows it. For an IsArray parameter it describes one element. When NULL, the schema is derived from ValueType."}) 
+    ValueSchema?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(425)
     Action?: string;
@@ -23449,6 +23452,9 @@ export class CreateMJActionParamInput {
     @Field(() => Boolean, { nullable: true })
     LogValue?: boolean;
 
+    @Field({ nullable: true })
+    ValueSchema: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -23491,6 +23497,9 @@ export class UpdateMJActionParamInput {
 
     @Field(() => Boolean, { nullable: true })
     LogValue?: boolean;
+
+    @Field({ nullable: true })
+    ValueSchema?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

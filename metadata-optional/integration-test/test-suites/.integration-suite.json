@@ -1807,7 +1807,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT63 - Agent Wire Callback (fire-and-forget)",
-            "Sequence": 17,
+            "Sequence": 18,
             "Status": "Active"
           },
           "primaryKey": {
@@ -1853,6 +1853,17 @@
           },
           "primaryKey": {
             "ID": "D2944155-33FC-4CCF-9225-DA59DE5A1A61"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT129 - Native Tool Calling and Action Param Schemas",
+            "Sequence": 17,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "275B45D4-EB50-4AC0-8872-E04845D47A24"
           }
         }
       ]

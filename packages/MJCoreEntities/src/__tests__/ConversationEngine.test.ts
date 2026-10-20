@@ -1115,6 +1115,54 @@ describe('ConversationEngine', () => {
             const result = engine.GetAgentRunForDetail('no-conv', 'no-detail');
             expect(result).toBeUndefined();
         });
+
+        it('should honor ShouldReplaceDetailAgentRun and not overwrite a root primary run with a continuation or sub-agent run', async () => {
+            enqueueDetailsResults([
+                createMockDetail({ ID: 'd1', ConversationID: 'conv-1' }),
+            ]);
+            await engine.LoadConversationDetails('conv-1', contextUser);
+
+            const primaryRun = createMockAgentRun({
+                ID: 'run-primary',
+                ConversationDetailID: 'd1',
+                ParentRunID: null,
+                ContinuationDepth: 0,
+            });
+            const continuationRun = createMockAgentRun({
+                ID: 'run-continuation',
+                ConversationDetailID: 'd1',
+                ParentRunID: null,
+                ContinuationDepth: 1,
+            });
+            const subAgentRun = createMockAgentRun({
+                ID: 'run-child',
+                ConversationDetailID: 'd1',
+                ParentRunID: 'run-primary',
+                ContinuationDepth: 0,
+            });
+
+            engine.SetAgentRunForDetail('conv-1', 'd1', primaryRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['ID']).toBe('run-primary');
+
+            // Continuation synthesis run must not replace the root primary orchestrating run
+            engine.SetAgentRunForDetail('conv-1', 'd1', continuationRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['ID']).toBe('run-primary');
+
+            // Child sub-agent run must not replace the root primary orchestrating run
+            engine.SetAgentRunForDetail('conv-1', 'd1', subAgentRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['ID']).toBe('run-primary');
+
+            // Same primary run ID (in-place update) IS allowed to replace
+            const updatedPrimaryRun = createMockAgentRun({
+                ID: 'run-primary',
+                ConversationDetailID: 'd1',
+                ParentRunID: null,
+                ContinuationDepth: 0,
+                Status: 'Completed',
+            });
+            engine.SetAgentRunForDetail('conv-1', 'd1', updatedPrimaryRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['Status']).toBe('Completed');
+        });
     });
 
     // ========================================================================

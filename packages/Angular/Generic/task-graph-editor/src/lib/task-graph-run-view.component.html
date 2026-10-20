@@ -77,6 +77,7 @@
               </div>
             }
             <mj-task-graph-variables
+              [TaskID]="SelectedTask?.ID"
               [InputPayload]="SelectedTask?.InputPayload"
               [OutputPayload]="SelectedTask?.OutputPayload"
               [Invocation]="Invocation">
