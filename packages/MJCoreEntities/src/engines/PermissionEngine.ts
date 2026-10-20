@@ -105,7 +105,9 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
             },
         ];
         await super.Load(configs, provider, forceRefresh, contextUser);
+    }
 
+    protected override async AdditionalLoading(): Promise<void> {
         this.instantiateProviders();
     }
 
