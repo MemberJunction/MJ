@@ -429,8 +429,8 @@ class InMemoryModelLoader implements IMLModelLoader {
 /** A RecordProcessorContext with no real provider (scoring uses inline rows, so none is needed). */
 function fakeScoringContext(): RecordProcessorContext {
   return {
-    contextUser: undefined as unknown as UserInfo,
-    provider: undefined as unknown as IMetadataProvider,
+    ContextUser: undefined as unknown as UserInfo,
+    Provider: undefined as unknown as IMetadataProvider,
   };
 }
 

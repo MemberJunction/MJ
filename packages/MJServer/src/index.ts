@@ -845,6 +845,8 @@ const setupComplete$ = new ReplaySubject(1);
   if (sharedCache) {
     await LocalCacheManager.Instance.SetStorageProvider(sharedCache);
   }
+  // The derived per-entry ceiling, so the boot log says what the largest cacheable entry actually is.
+  startupLog.LogIf('verbose', `LocalCacheManager: largest cacheable entry ${Math.floor(LocalCacheManager.Instance.MaxEntrySizeBytes / 1024 / 1024)} MB (maxEntryPercentOfCache: ${configInfo.cacheSettings?.maxEntryPercentOfCache ?? 'auto'})`);
   const engineSweepMs = StartEngineSweeper(configInfo.cacheSettings);
   startupLog.LogIf('verbose', engineSweepMs > 0 ? `Engine/database sweep every ${engineSweepMs / 1000}s` : 'Engine/database sweep disabled');
   const userCacheCheckMs = StartUserCacheChecks(configInfo.cacheSettings);

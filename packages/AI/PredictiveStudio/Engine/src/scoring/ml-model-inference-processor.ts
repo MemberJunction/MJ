@@ -145,11 +145,11 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       {
         pipelineId: this.autoTrain.pipelineId,
         currentModelId: this.modelId || null,
-        recordProcessId: context.recordProcessID ?? null,
+        recordProcessId: context.RecordProcessID ?? null,
         binding: this.autoTrain.binding,
       },
-      context.contextUser,
-      context.provider,
+      context.ContextUser,
+      context.Provider,
     );
     try {
       await this.ensureModel(context);
@@ -248,14 +248,14 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     if (!this.modelId) {
       throw new ModelNeedsTrainingError('MLModelInferenceProcessor: no ML Model is configured yet — the model needs training.');
     }
-    const model = await this.deps.modelLoader.loadModel(this.modelId, context.contextUser, context.provider);
+    const model = await this.deps.modelLoader.loadModel(this.modelId, context.ContextUser, context.Provider);
     if (!model) {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ML Model '${this.modelId}' not found`);
     }
     if (!ModelHasTrainedArtifact(model) || !model.ArtifactFileID) {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelNeedsTrainingMessage(this.modelId)}`);
     }
-    const bytes = await this.deps.artifactLoader.load(model.ArtifactFileID, context.contextUser);
+    const bytes = await this.deps.artifactLoader.load(model.ArtifactFileID, context.ContextUser);
     if (!bytes) {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelArtifactMissingMessage(this.modelId, model.ArtifactFileID)}`);
     }
@@ -294,7 +294,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     context: RecordProcessorContext,
   ): Promise<ResolvedScoringPipeline> {
     try {
-      const rv = context.provider ? RunView.FromMetadataProvider(context.provider) : new RunView();
+      const rv = context.Provider ? RunView.FromMetadataProvider(context.Provider) : new RunView();
       interface PipelineViewRow {
         TargetEntityID?: string;
         TargetEntity?: string;
@@ -309,14 +309,14 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
           ResultType: 'simple',
           MaxRows: 1,
         },
-        context.contextUser,
+        context.ContextUser,
       );
       if (res.Success && res.Results.length > 0) {
         const row = res.Results[0];
         const rawSteps = parseJson<FeatureStepGraph>(row.FeatureSteps, { Steps: [] });
         const targetEntity =
           row.TargetEntity ||
-          (row.TargetEntityID && context.provider ? context.provider.EntityByID(row.TargetEntityID)?.Name : undefined) ||
+          (row.TargetEntityID && context.Provider ? context.Provider.EntityByID(row.TargetEntityID)?.Name : undefined) ||
           existing.targetEntityName;
 
         return {
@@ -380,8 +380,8 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       primaryKeyField: this.primaryKeyField,
       // No targetVariable at score time — the label is what we're predicting.
       context: 'on-demand',
-      contextUser: context.contextUser,
-      provider: context.provider,
+      contextUser: context.ContextUser,
+      provider: context.Provider,
     });
 
     if (assembly.matrix.columns.length === 0 && model.featureSchema.length > 0) {
