@@ -1,3 +1,12 @@
+@if (DeletedRemotely) {
+  <mj-alert
+    class="single-record-deleted-banner"
+    Variant="warning"
+    Title="This record was deleted by another user"
+    Message="It no longer exists. What you see here is the last copy that was loaded.">
+    <button actions mjButton Variant="secondary" Size="sm" (click)="OnCloseDeletedRecord()">Close</button>
+  </mj-alert>
+}
 <mj-entity-form-host
   [EntityName]="entityName"
   [PrimaryKey]="PrimaryKey"

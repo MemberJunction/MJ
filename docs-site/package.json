@@ -13,6 +13,9 @@
   },
   "dependencies": {
     "@astrojs/starlight": "^0.36.0",
+    "@fortawesome/free-brands-svg-icons": "6.7.2",
+    "@fortawesome/free-regular-svg-icons": "6.7.2",
+    "@fortawesome/free-solid-svg-icons": "6.7.2",
     "astro": "^5.0.0",
     "mdast-util-to-string": "^4.0.0",
     "mermaid": "^11.0.0",

@@ -9,7 +9,7 @@
 @if (!IsClaimedByContribution && !IsFieldDeprecatedOrDisabled && IsFieldReadableByUser && Record && (Record.IsSaved || !IsFieldReadOnly) && !ShouldHideField) {
   <!-- READ-ONLY MODE -->
   @if ((!EditMode || IsFieldReadOnly) && !ShouldHideField) {
-    <div class="mj-forms-field" [class.mj-forms-field--readonly]="EditMode && IsFieldReadOnly" [class.mj-forms-field--dirty]="IsDirty">
+    <div class="mj-forms-field" [class.mj-forms-field--no-label]="!ShowLabel" [class.mj-forms-field--readonly]="EditMode && IsFieldReadOnly" [class.mj-forms-field--dirty]="IsDirty">
       @if (ShowLabel) {
         <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
       }
@@ -123,7 +123,7 @@
 
   <!-- EDIT MODE -->
   @if (EditMode && !IsFieldReadOnly) {
-    <div class="mj-forms-field mj-forms-field--editing" [class.mj-forms-field--dirty]="IsDirty" [class.mj-forms-field--required-empty]="IsRequiredEmpty" [class.mj-forms-field--has-error]="ShowErrors" [class.mj-forms-field--has-warning]="ShowWarnings || StoredDateIsUnreadable">
+    <div class="mj-forms-field mj-forms-field--editing" [class.mj-forms-field--no-label]="!ShowLabel" [class.mj-forms-field--dirty]="IsDirty" [class.mj-forms-field--required-empty]="IsRequiredEmpty" [class.mj-forms-field--has-error]="ShowErrors" [class.mj-forms-field--has-warning]="ShowWarnings || StoredDateIsUnreadable">
       @if (ShowLabel) {
         <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
       }

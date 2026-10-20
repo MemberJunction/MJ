@@ -12,7 +12,7 @@
 
 import { createHash } from 'crypto';
 import { BaseEntity, LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString, IndexByUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
     ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID,
@@ -133,6 +133,9 @@ export class AgentRunner {
 
     /** Fallback artifact type for agent payloads when the agent declares no DefaultArtifactTypeID. */
     private static readonly JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
+
+    /** Artifact type for structured research report payloads containing `{ report: { html } }`. */
+    private static readonly RESEARCH_CONTENT_ARTIFACT_TYPE_ID = 'a7b8c9d0-e1f2-3a4b-5c6d-7e8f9a0b1c2d';
 
     /**
      * Max length of `MJ: Artifacts.Name` (`nvarchar(255)`).
@@ -1104,8 +1107,37 @@ export class AgentRunner {
 
         // Check agent's ArtifactCreationMode
         await AIEngine.Instance.Config(false, contextUser);
-        const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentRun.AgentID));
-        const creationMode = agent?.ArtifactCreationMode;
+        const agentsById = IndexByUUID(AIEngine.Instance.Agents);
+        let agent = agentsById.Get(agentRun.AgentID);
+        let creationMode = agent?.ArtifactCreationMode;
+
+        // When an orchestrator with ArtifactCreationMode='Never' or 'System Only' (or no
+        // DefaultArtifactTypeID, such as Sage) delegates a folded single-node task graph (or
+        // sub-agent step) to a specialist agent (such as Query Builder or Research Agent) that
+        // DOES produce user-visible artifacts, resolve the artifact creation mode and
+        // DefaultArtifactTypeID from the last completed Sub-Agent step's specialist agent so
+        // the specialist's deliverable artifact is persisted with the specialist's
+        // DefaultArtifactTypeID and visibility.
+        if ((creationMode === 'Never' || creationMode === 'System Only' || !agent?.DefaultArtifactTypeID) && agentRun?.Steps?.length) {
+            for (let i = agentRun.Steps.length - 1; i >= 0; i--) {
+                const step = agentRun.Steps[i];
+                if (step.StepType === 'Sub-Agent' && step.Success) {
+                    const subAgentId = step.TargetID || step.SubAgentRun?.AgentID;
+                    const delegatedAgent = subAgentId
+                        ? agentsById.Get(subAgentId)
+                        : undefined;
+                    if (
+                        delegatedAgent &&
+                        delegatedAgent.ArtifactCreationMode !== 'Never' &&
+                        (delegatedAgent.DefaultArtifactTypeID != null || delegatedAgent.ArtifactCreationMode === 'Always')
+                    ) {
+                        agent = delegatedAgent;
+                        creationMode = delegatedAgent.ArtifactCreationMode;
+                        break;
+                    }
+                }
+            }
+        }
 
         if (creationMode === 'Never') {
             LogStatus(`Skipping artifact creation - agent "${agent?.Name}" has ArtifactCreationMode='Never'`);
@@ -1193,7 +1225,7 @@ export class AgentRunner {
                     newVersionNumber = previousArtifact.versionNumber + 1;
                     LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
                 } else {
-                    const artifact = await this.createArtifactHeader(md, contextUser, agent, creationMode, directive);
+                    const artifact = await this.createArtifactHeader(md, contextUser, agent, creationMode, directive, payload);
                     artifactId = artifact.ID;
                     newVersionNumber = 1;
                     isNewArtifact = true;
@@ -1237,12 +1269,18 @@ export class AgentRunner {
             const payloadRecord = (typeof payload === 'object' && payload !== null && !Array.isArray(payload))
                 ? (payload as Record<string, unknown>)
                 : undefined;
+            const reportRecord = (typeof payloadRecord?.report === 'object' && payloadRecord.report !== null && !Array.isArray(payloadRecord.report))
+                ? (payloadRecord.report as Record<string, unknown>)
+                : undefined;
+            const synthesisRecord = (typeof payloadRecord?.synthesis === 'object' && payloadRecord.synthesis !== null && !Array.isArray(payloadRecord.synthesis))
+                ? (payloadRecord.synthesis as Record<string, unknown>)
+                : undefined;
             const payloadName = AgentRunner.safeDirectiveText(
-                payloadRecord?.title ?? payloadRecord?.name ?? payloadRecord?.savedQueryName,
+                payloadRecord?.title ?? payloadRecord?.name ?? payloadRecord?.savedQueryName ?? reportRecord?.name,
                 AgentRunner.ARTIFACT_NAME_MAX_LENGTH
             );
             const payloadDescription = AgentRunner.safeDirectiveText(
-                payloadRecord?.description ?? payloadRecord?.interpretation
+                payloadRecord?.description ?? payloadRecord?.interpretation ?? reportRecord?.description ?? synthesisRecord?.executiveSummary
             );
 
             if (directiveName || payloadName) {
@@ -1528,7 +1566,8 @@ export class AgentRunner {
         contextUser: UserInfo,
         agent: (typeof AIEngine.Instance.Agents)[number] | undefined,
         creationMode: string | undefined,
-        directive: ArtifactDirective | undefined
+        directive: ArtifactDirective | undefined,
+        payload?: unknown
     ): Promise<MJArtifactEntity> {
         const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
 
@@ -1541,8 +1580,17 @@ export class AgentRunner {
         artifact.Description = AgentRunner.safeDirectiveText(directive?.description)
             || `Payload returned by ${agentName}`;
 
-        // Use agent's DefaultArtifactTypeID if available
-        artifact.TypeID = agent?.DefaultArtifactTypeID || AgentRunner.JSON_ARTIFACT_TYPE_ID;
+        // Use agent's DefaultArtifactTypeID if available; otherwise infer Research Content when
+        // the payload carries a non-empty report.html string (e.g., Research Report Writer).
+        const payloadObj = (typeof payload === 'object' && payload !== null && !Array.isArray(payload))
+            ? (payload as Record<string, unknown>)
+            : undefined;
+        const reportObj = (typeof payloadObj?.report === 'object' && payloadObj.report !== null && !Array.isArray(payloadObj.report))
+            ? (payloadObj.report as Record<string, unknown>)
+            : undefined;
+        const hasReportHtml = typeof reportObj?.html === 'string' && reportObj.html.trim().length > 0;
+        artifact.TypeID = agent?.DefaultArtifactTypeID
+            || (hasReportHtml ? AgentRunner.RESEARCH_CONTENT_ARTIFACT_TYPE_ID : AgentRunner.JSON_ARTIFACT_TYPE_ID);
 
         artifact.UserID = contextUser.ID;
         artifact.EnvironmentID = (contextUser as any).EnvironmentID || MJEnvironmentEntityExtended.DefaultEnvironmentID;

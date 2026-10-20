@@ -255,7 +255,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * impossible). The queue is self-bounding (in-flight tasks only), so it needs no flush on this
     * long-lived singleton.
     */
-   private readonly _logQueue = new BaseEntitySaveQueue();
+   private readonly _logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only' });
 
    /**
     * Engine-default wall-clock timeout applied to any action whose

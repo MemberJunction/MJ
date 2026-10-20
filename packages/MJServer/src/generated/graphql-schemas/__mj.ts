@@ -23369,6 +23369,9 @@ export class MJActionParam_ {
     @Field(() => Boolean, {nullable: true, description: "Whether this parameter's VALUE may be written to ActionExecutionLog.Params. Default 1. Set to 0 for parameters that carry records, credentials or personal data - for example the Data payload of Execute Agent. Independent of the hard rule that Entity Action params of ValueType 'Entity Object' or 'Entity Object Data' are never logged regardless of this flag. When logging is suppressed the log records the parameter name, its type and a redaction marker, never the value."}) 
     LogValue?: boolean;
         
+    @Field({nullable: true, description: "Optional JSON Schema fragment describing this parameter's value, limited to the cross-provider subset: type, description, enum, items, properties and required. When set, the native tool builder declares it to the model in place of the coarse ValueType mapping, and argument coercion follows it. For an IsArray parameter it describes one element. When NULL, the schema is derived from ValueType."}) 
+    ValueSchema?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(425)
     Action?: string;
@@ -23416,6 +23419,9 @@ export class CreateMJActionParamInput {
     @Field(() => Boolean, { nullable: true })
     LogValue?: boolean;
 
+    @Field({ nullable: true })
+    ValueSchema: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -23458,6 +23464,9 @@ export class UpdateMJActionParamInput {
 
     @Field(() => Boolean, { nullable: true })
     LogValue?: boolean;
+
+    @Field({ nullable: true })
+    ValueSchema?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -25293,6 +25302,10 @@ export class MJArchiveConfiguration_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "Whether runs keep a copy of the data they remove. Store (default): each record's archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode, entities missing from metadata, entities that track Record Changes, entities whose driver is not registered or does not support purge, and HardDelete entities that use soft delete or whose delete cascade reaches an entity that tracks Record Changes or uses soft delete."}) 
+    @MaxLength(20)
+    StorageMode?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     StorageAccount?: string;
@@ -25350,6 +25363,9 @@ export class CreateMJArchiveConfigurationInput {
     @Field({ nullable: true })
     CreatedByUserID?: string;
 
+    @Field({ nullable: true })
+    StorageMode?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -25398,6 +25414,9 @@ export class UpdateMJArchiveConfigurationInput {
 
     @Field({ nullable: true })
     CreatedByUserID?: string;
+
+    @Field({ nullable: true })
+    StorageMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -25553,7 +25572,8 @@ export class MJArchiveRunDetail_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    ArchiveRun?: Date;
+    @MaxLength(255)
+    ArchiveRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -25799,6 +25819,10 @@ export class MJArchiveRun_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "The configuration's StorageMode when this run started: Store (copies written to storage) or Purge (no copies kept; only failed records get an ArchiveRunDetail row)."}) 
+    @MaxLength(20)
+    StorageMode?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     ArchiveConfiguration?: string;
@@ -25853,6 +25877,9 @@ export class CreateMJArchiveRunInput {
     @Field({ nullable: true })
     UserID?: string;
 
+    @Field({ nullable: true })
+    StorageMode?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -25898,6 +25925,9 @@ export class UpdateMJArchiveRunInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field({ nullable: true })
+    StorageMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
