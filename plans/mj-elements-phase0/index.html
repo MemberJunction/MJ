@@ -119,18 +119,18 @@
     </div>
     <div class="cell missing">
       <h2>&lt;mj-form&gt;</h2>
-      <small>bundles/mj-form/mj-form.js: from bizapps-forms, the Forms element build (README.md). Not in this repo.</small>
-      <mj-form id="form" slug="phase0"></mj-form>
+      <small>bundles/mj-form/mj-form.js (classic script). Built in a sibling clone of bizapps-forms, packages/Angular, and copied in by sync-bundles.mjs (README.md). Zoneless; MJ core is kept out by a build gate.</small>
+      <mj-form id="form" slug="phase0" api-url="http://localhost:9/"></mj-form>
     </div>
     <div class="cell missing">
       <h2>&lt;mj-orders-checkout&gt;</h2>
-      <small>bundles/mj-orders-checkout/main.js: from bizapps-orders, the checkout element build (README.md). Not in this repo. Orders reads its nonce off the first &lt;mj-orders-checkout&gt;, so this one carries one.</small>
-      <mj-orders-checkout id="orders" slug="phase0" csp-nonce="phase0page"></mj-orders-checkout>
+      <small>bundles/mj-orders-checkout/main.js (ES module, not minified). Built in a sibling clone of bizapps-orders, packages/Angular, and copied in by sync-bundles.mjs (README.md). Ships zone.js. Reads its nonce off the first &lt;mj-orders-checkout&gt;, so this one carries one.</small>
+      <mj-orders-checkout id="orders" slug="phase0" api-root="http://localhost:9/checkout" csp-nonce="phase0page"></mj-orders-checkout>
     </div>
     <div class="cell missing no-height">
       <h2>&lt;caliber-widget&gt;, in a parent with no definite height</h2>
-      <small>bundles/caliber-widget/caliber-widget.js: from bizapps-caliber (private), the widget build (README.md). Not in this repo.</small>
-      <caliber-widget id="caliber"></caliber-widget>
+      <small>bundles/caliber-widget/caliber-widget.js (classic script, one 16 MB file). Built in a sibling clone of bizapps-caliber (internal repo), packages/Angular, and copied in by sync-bundles.mjs (README.md). Zoneless; carries MJ core from npm and creates MJGlobal at load.</small>
+      <caliber-widget id="caliber" api-url="http://localhost:9/" protocol-id="phase0"></caliber-widget>
     </div>
     <div class="cell host">
       <h2>Host probe</h2>
@@ -318,8 +318,12 @@
           supportShadow_hostElement: computed(document.querySelector('mj-support-widget')),
           supportShadow_styleElements: root ? Array.from(root.querySelectorAll('style')).map((s) => ({ nonce: s.nonce || '', sheetRules: s.sheet ? s.sheet.cssRules.length : 'blocked or none' })) : null,
           form: computed(document.getElementById('form')),
+          form_anyButton: computed(document.getElementById('form').querySelector('button')),
           orders: computed(document.getElementById('orders')),
+          orders_anyButton: computed(document.getElementById('orders').querySelector('button')),
           caliber: computed(document.getElementById('caliber')),
+          caliber_anyButton: computed(document.getElementById('caliber').querySelector('button')),
+          caliber_firstText: computed(document.getElementById('caliber').querySelector('p, h1, h2, span')),
         };
       }
       function layoutSnapshot() {
@@ -508,6 +512,13 @@
 
       fetch('bundles/manifest.json').then((r) => r.json()).then(async (m) => {
         manifest = m;
+        // Cards are written as "needs bundle"; a card whose bundle is in the manifest loses that mark.
+        for (const row of m.elements) {
+          if (!row.entry) continue;
+          const el = document.querySelector(row.tag);
+          const cell = el && el.closest('.cell');
+          if (cell) cell.classList.remove('missing');
+        }
         say(`manifest: ${m.elements.filter((e) => e.entry).map((e) => e.folder).join(', ')} present; ${m.elements.filter((e) => !e.entry).map((e) => e.folder).join(', ')} missing`);
         if (params.get('auto') && !window.__phase0Ran) {
           window.__phase0Ran = true;

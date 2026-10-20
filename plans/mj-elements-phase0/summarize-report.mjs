@@ -15,6 +15,7 @@ for (const s of r.steps) {
     console.log(`  host probe: ${pick(st.hostProbe)}\n  host button: ${pick(st.hostButton)}\n  host --mj-brand-primary: ${st.hostTokenBrandPrimary}`);
     console.log(`  realtime A button: ${pick(st.realtimeA_anyButton)}\n  realtime B button: ${pick(st.realtimeB_anyButton)}`);
     console.log(`  support launcher (shadow): ${pick(st.supportShadow_launcher)}\n  support host element: ${pick(st.supportShadow_hostElement)}\n  support shadow <style>: ${JSON.stringify(st.supportShadow_styleElements)}`);
+    console.log(`  mj-form: ${pick(st.form)} | button ${pick(st.form_anyButton)}\n  orders: ${pick(st.orders)} | button ${pick(st.orders_anyButton)}\n  caliber: ${pick(st.caliber)} | button ${pick(st.caliber_anyButton)} | text ${pick(st.caliber_firstText)}`);
     console.log(`  layout: ${JSON.stringify(s.layout)}`);
     console.log(`  nonces: head styles ${s.nonces.headStyleCount} (with nonce ${s.nonces.headStylesWithNonce}, without: ${JSON.stringify(s.nonces.headStylesWithoutNonce)}), nonces used ${JSON.stringify(s.nonces.headStyleNonces)}, shell: ${JSON.stringify(s.nonces.realtimeShellStyleElement)}, adopted ${s.nonces.documentAdoptedStyleSheets}, preload links ${JSON.stringify(s.nonces.preloadLinks)}`);
     console.log(`  color-scheme: ${JSON.stringify(s.colorScheme)}`);

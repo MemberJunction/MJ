@@ -62,22 +62,23 @@ const ELEMENTS = [
         repo: 'bizapps-forms',
         package: '@mj-biz-apps/forms-ng',
         // bizapps-forms packages/Angular/scripts/build-widget.mjs: an IIFE at dist/widget/mj-form.js. The script keeps esbuild's
-        // metafile in memory for its own guard and does not write it; README.md says how to get one.
+        // metafile in memory for its own guard and does not write it; README.md says how to produce mj-form.js.meta.json.
         from: process.env.BIZAPPS_FORMS ? join(process.env.BIZAPPS_FORMS, 'packages/Angular/dist/widget') : '',
         entry: 'mj-form.js',
         module: false,
-        metafile: 'meta.json',
+        metafile: 'mj-form.js.meta.json',
         lazy: {},
     },
     {
         tag: 'mj-orders-checkout',
         repo: 'bizapps-orders',
         package: '@mj-biz-apps/orders-ng',
-        // bizapps-orders packages/Angular/scripts/build-checkout-element.mjs: an ES module at dist/checkout-element/main.js, no metafile.
+        // bizapps-orders packages/Angular/scripts/build-checkout-element.mjs: an ES module at dist/checkout-element/main.js. The script
+        // requests no metafile; README.md says how to produce main.js.meta.json.
         from: process.env.BIZAPPS_ORDERS ? join(process.env.BIZAPPS_ORDERS, 'packages/Angular/dist/checkout-element') : '',
         entry: 'main.js',
         module: true,
-        metafile: 'meta.json',
+        metafile: 'main.js.meta.json',
         lazy: {},
     },
     {

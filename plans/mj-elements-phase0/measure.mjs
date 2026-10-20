@@ -13,7 +13,7 @@
  * Run `node sync-bundles.mjs` first. Writes sizes.json and prints Markdown tables to paste into FINDINGS.md.
  */
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
@@ -21,11 +21,30 @@ const here = dirname(fileURLToPath(import.meta.url));
 const manifest = JSON.parse(readFileSync(join(here, 'bundles/manifest.json'), 'utf8'));
 const FA_MARK = 'data:font/woff2;base64,';
 
-/** Names the package an esbuild input path came from. */
-function packageOf(input) {
+/**
+ * Names the package an esbuild input path came from. Inputs under node_modules carry their npm name. An in-repo
+ * build (the two MJ elements) references sibling workspace packages by relative path instead, so those are resolved
+ * against the element's package root and named from the nearest package.json, which makes "@memberjunction/core-entities"
+ * the same package whether one element bundled it from the workspace and another from npm.
+ */
+const packageNameCache = new Map();
+function packageOf(input, packageRoot) {
     const fromNodeModules = input.match(/node_modules\/(@[^/]+\/[^/]+|[^@][^/]*)/g);
     if (fromNodeModules) return fromNodeModules[fromNodeModules.length - 1].replace('node_modules/', '');
     if (/^dist\//.test(input) || /^src\//.test(input)) return '(own)';
+    if (packageRoot) {
+        let dir = dirname(resolve(packageRoot, input));
+        while (dir !== dirname(dir)) {
+            if (packageNameCache.has(dir)) return packageNameCache.get(dir);
+            const pkg = join(dir, 'package.json');
+            if (existsSync(pkg)) {
+                const name = JSON.parse(readFileSync(pkg, 'utf8')).name ?? `(unnamed) ${dir}`;
+                packageNameCache.set(dir, name);
+                return name;
+            }
+            dir = dirname(dir);
+        }
+    }
     const workspace = input.match(/^(?:\.\.\/)+(.*?)\/(dist|src)\//);
     return workspace ? `@memberjunction/(workspace) ${workspace[1]}` : `(other) ${input}`;
 }
@@ -55,6 +74,8 @@ for (const element of manifest.elements) {
         continue;
     }
     const folder = join(here, 'bundles', element.folder);
+    // esbuild wrote input paths relative to the package it ran in: the parent of the dist folder the bundle was copied from.
+    const packageRoot = element.source ? element.source.replace(/\/dist\/.*$/, '') : null;
     const json = JSON.parse(readFileSync(join(here, element.metafile), 'utf8'));
     // The realtime widget writes { shell, session } (two esbuild runs); plain esbuild writes one metafile.
     const metafiles = 'outputs' in json ? [json] : Object.values(json);
@@ -73,7 +94,7 @@ for (const element of manifest.elements) {
             fontAwesomeInline += inlined;
             outputs.push({ file, raw: bytes.length, gzip: gzipSync(bytes, { level: 9 }).length, entry: Boolean(info.entryPoint), fontAwesomeInlineBytes: inlined });
             for (const [input, { bytesInOutput }] of Object.entries(info.inputs)) {
-                const pkg = packageOf(input);
+                const pkg = packageOf(input, packageRoot);
                 packages[pkg] = (packages[pkg] ?? 0) + bytesInOutput;
             }
         }

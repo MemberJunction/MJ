@@ -64,7 +64,8 @@ Both package builds need the workspace's dists in place (ngc output of `ng-share
 
 The bizapps repos are not in this checkout. Clone them beside it, build each element with its own script, then
 point `sync-bundles.mjs` at the clones. Commands below were read from each repo's `package.json` and build script on
-its `next` branch on 2026-10-19; check them against the clone before trusting them.
+its `next` branch on 2026-10-19, and the measurements in FINDINGS.md came from exactly this sequence that day
+(bizapps-forms `d665fce3`, bizapps-orders `514d09bf`, bizapps-caliber `0dbb43a7`).
 
 ```bash
 # Forms (public). <mj-form>: an IIFE at packages/Angular/dist/widget/mj-form.js, built by ngc + scripts/build-widget.mjs.
@@ -84,9 +85,21 @@ gh repo clone MemberJunction/bizapps-caliber ../bizapps-caliber
 cd ../bizapps-caliber && pnpm install && pnpm run build
 ```
 
-Each root build expects a database (`pnpm run setup` prints the migrate and codegen steps). If a full build is more than
-the measurement needs, `cd packages/Angular && pnpm run build` in each clone builds only the Angular package and its
-element, once the clone's `pnpm install` has run.
+A root `pnpm run build` runs every package, and a root `setup` expects a database. The measurement needs only the
+Angular package and the workspace packages it imports, which turbo's dependency filter builds without a database
+(about 10 seconds each after `pnpm install`):
+
+```bash
+cd ../bizapps-forms && pnpm exec turbo --log-order=stream build --filter='@mj-biz-apps/forms-ng...'
+```
+
+```bash
+cd ../bizapps-orders && pnpm exec turbo --log-order=stream build --filter='@mj-biz-apps/orders-ng...'
+```
+
+```bash
+cd ../bizapps-caliber && pnpm exec turbo --log-order=stream build --filter='@mj-biz-apps/caliber-ng...'
+```
 
 ```bash
 BIZAPPS_FORMS=../bizapps-forms BIZAPPS_ORDERS=../bizapps-orders BIZAPPS_CALIBER=../bizapps-caliber node sync-bundles.mjs
@@ -95,13 +108,22 @@ node measure.mjs
 
 Metafiles: Caliber writes `dist/widget/meta.json`. Forms keeps the metafile in memory for its own guard
 (`assertNoServerOnlyInputs`) and does not write it; Orders does not request one. Without a metafile `measure.mjs`
-reports raw and gzip sizes only, no attribution. To attribute those two, add a `writeFileSync('dist/widget/meta.json',
-JSON.stringify(result.metafile))` next to the guard in Forms, and `metafile: true` plus the same write in Orders, in a
-local change that is not committed (or propose it upstream; Caliber's script is the pattern).
+reports raw and gzip sizes only, no attribution. The manifest expects `dist/widget/mj-form.js.meta.json` (Forms) and
+`dist/checkout-element/main.js.meta.json` (Orders). They were produced for FINDINGS.md with a temporary edit to each
+build script, run once, then reversed so the clones stayed clean:
 
-Attributes: `index.html` gives `<mj-form slug>`, `<mj-orders-checkout slug csp-nonce>` and `<caliber-widget>` the
-attributes named in the plan's §2 table and Caliber's `smoke/widget/host/index.html` (`api-url`, `protocol-id`). Check
-each element's README for what it needs at upgrade time before reading its row in FINDINGS.md.
+- Forms, `packages/Angular/scripts/build-widget.mjs`, after `assertNoServerOnlyInputs(result.metafile);`: write
+  `JSON.stringify(result.metafile)` to `outFile + '.meta.json'`, then `node scripts/build-widget.mjs`.
+- Orders, `packages/Angular/scripts/build-checkout-element.mjs`: keep the result of `esbuild.build({ metafile: true, ... })`
+  and write its `.metafile` to `dist/checkout-element/main.js.meta.json`, then `node scripts/build-checkout-element.mjs`.
+
+The better fix is upstream: both scripts writing the metafile the way Caliber's does.
+
+Attributes, read from each element's source: `<mj-form slug api-url>` (Forms also takes `token` and
+`turnstile-site-key`); `<mj-orders-checkout slug api-root csp-nonce>` (its Angular inputs are `slug`, `apiRoot`,
+`memberToken`, `renewalToken`; Orders reads the nonce off the first `<mj-orders-checkout>`); `<caliber-widget api-url
+protocol-id>` (plus `invite-token` or a `?ct=` magic link). The page points each at `http://localhost:9/` so its first
+request fails fast.
 
 ## The page's own look
 
