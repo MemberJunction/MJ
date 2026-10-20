@@ -1,7 +1,7 @@
 # MJ Elements Phase 0: the collision test page
 
 Phase 0 item 1 of [`plans/mj-elements.md`](../mj-elements.md) (PR #5903), and the wave 0 gate of
-[`plans/lego/README.md`](../lego/README.md) §7: every embeddable MJ custom element on one plain HTML
+[`plans/ui-foundation/README.md`](../ui-foundation/README.md) §7: every embeddable MJ custom element on one plain HTML
 page, with a probe that records what collides. It produces measurements only. Decisions D3 (light
 or shadow DOM) and D4 (icons) are taken in the Lego plan, not here.
 
