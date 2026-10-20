@@ -496,10 +496,12 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
     it('the toolbar renders the host palette', () => {
       const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
         inputs: { State: new WhiteboardState(), PenPalette: ['#1d4ed8', '#b91c1c'] },
+        // `setup` runs before the first change-detection pass; a post-render `Tool = 'pen'`
+        // trips dev-mode NG0100 on the board's [Tool] binding (a harness artifact — see renderRO).
+        setup: (c) => { c.Tool = 'pen'; },
       });
-      f.componentInstance.Tool = 'pen';
-      f.detectChanges();
-      expect(f.nativeElement.querySelectorAll('.pen-flyout .pen-c').length).toBe(2);
+      const swatches = Array.from(f.nativeElement.querySelectorAll('.pen-flyout .pen-c')) as HTMLElement[];
+      expect(swatches.length).toBe(2);
     });
   });
 });
