@@ -1807,7 +1807,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT63 - Agent Wire Callback (fire-and-forget)",
-            "Sequence": 18,
+            "Sequence": 19,
             "Status": "Active"
           },
           "primaryKey": {
@@ -1848,7 +1848,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT152 - Video Studio Live Smoke",
-            "Sequence": 19,
+            "Sequence": 18,
             "Status": "Active"
           },
           "primaryKey": {
