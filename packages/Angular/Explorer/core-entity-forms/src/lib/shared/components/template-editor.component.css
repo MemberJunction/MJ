@@ -561,7 +561,7 @@
 }
 
 .no-content-state i,
-.contents-load-failed i {
+.contents-load-failed > i {
     font-size: 48px;
     margin-bottom: 16px;
     color: var(--mj-text-muted);
@@ -584,7 +584,8 @@
     border-color: var(--mj-status-error);
 }
 
-.contents-load-failed i {
+/* Only the panel's own icon: the Retry button's icon keeps the button's size and colour */
+.contents-load-failed > i {
     color: var(--mj-status-error);
     opacity: 1;
 }
