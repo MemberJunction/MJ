@@ -3,7 +3,7 @@
 **Working name:** Lego. The rest of this plan says Lego.
 **Status:** PROPOSED 2026-10-19. Wave 0 spec not started. Prototype gate not run.
 **Ask:** Matt, 2026-10-13. Every app built on MemberJunction should be able to rearrange, restyle, and build anything from any design, using MJ's own component library, without asking its permission. Today the library is about 40 finished widgets with no floor under them, so apps rebuild the floor themselves. Lego is the floor plus the catalog that goes on top of it, with every opinion shipped as a default rather than a wall.
-**Owner:** @MattC-BC (contract and catalog). Token mechanics ownership is D11.
+**Owner:** @MattC-BC (this plan). Who owns which parts of the library is D11, open.
 **Scope:** `packages/Angular/Generic/ui-components` (`@memberjunction/ng-ui-components`), expanding it roughly tenfold and rebuilding what exists to one set of principles; `packages/Angular/Generic/shared/src/lib/_tokens.scss`; `packages/ThemeEngine`; the gallery, catalog and agent-instruction tooling that ships with the package. Conversions land in whichever package holds the bespoke copy.
 **Related:**
 - [`plans/mj-elements.md`](mj-elements.md): the embeddable-widget runtime whose base layer is Lego's wave 0. See §7.
@@ -176,8 +176,8 @@ D1 and D2 are architectural and belong in the wave 0 spec's first section. D3 to
 | **D7** | Row | One component or several | One. The four examples differ only in content. A second component means the first has an opinion it shouldn't. |
 | **D8** | First public move | Wave 1 (visible, cheap) or wave 2 (the real contract test) | Run both in parallel. Show wave 1 first if one has to go first. |
 | **D9** | Package shape | (a) One barrel, as today. (b) Secondary entry points or chunk boundaries per primitive family, so a consumer that wants surface and button doesn't pay for the data grid. | **(b)**, decided in wave 0 before the catalog grows. See §7. |
-| **D10** | Relationship to the Explorer UI overhaul proposal's WS6 (component control surface) | (a) Two parallel streams. (b) Lego is the umbrella, WS6 becomes its restyle stream, and the overhaul keeps the token mechanics. | **(b)**, proposed. This needs a conversation with the overhaul's owners before anything is written down as decided. |
-| **D11** | Ownership | Open since August | **Proposed:** Matt owns the contract and the catalog. Token mechanics stay with the theme-engine owners under two principles: name things for what they are, and expose every value defaulting to today. Compositions belong to whoever needs one. To be confirmed with them. |
+| **D10** | Relationship to the Explorer UI overhaul proposal's WS6 (component control surface) | (a) Two parallel streams with a shared token layer. (b) One stream, with the restyle work and the token mechanics split between them. | **Open.** Nothing in this plan presumes the answer. It is a conversation with the overhaul's owners first, and the row gets a lean after that conversation, not before. |
+| **D11** | Ownership | Who owns the component contract, the catalog, the token mechanics, and the compositions | **Open since August.** The two principles everyone already works under (name things for what they are; expose every value defaulting to today) are the only thing settled. The split itself is a conversation with the theme-engine owners first. |
 
 ## 7. Relationship to MJ Elements (#5903)
 
@@ -193,7 +193,7 @@ D1 and D2 are architectural and belong in the wave 0 spec's first section. D3 to
 Two more things the Elements plan leaves to Lego:
 
 - **Theming contract.** The plan lists `theme` and `theme-tokens` as shared element attributes and stops. Those are the system and instance scopes of §4; the semantic scope (a role or tone a composition names) is not mentioned. The Elements host contract should defer to this plan for what a theme is, rather than define one.
-- **One catalog, not three.** The Elements manifest (tag, attributes, events, load policy), the UI overhaul proposal's generated `tokens.json` and `components.json` (not on `next` as of 2026-10-19), and Lego's machine-readable catalog describe the same components. They should be one generated artifact with three consumers. Plumbing, under D11.
+- **One catalog, not three.** The Elements manifest (tag, attributes, events, load policy), the UI overhaul proposal's generated `tokens.json` and `components.json` (not on `next` as of 2026-10-19), and Lego's machine-readable catalog describe the same components. They should be one generated artifact with three consumers. Plumbing; who owns it is part of D11.
 
 In the other direction, the Elements Phase 0 test page (several real elements on one plain HTML page that is not Explorer) is the same asset as Lego's wave 0 gate ("surface, layer, and row each rendered three radically different ways in a host that is not Explorer"). Build it once.
 
