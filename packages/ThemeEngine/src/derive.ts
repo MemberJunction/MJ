@@ -38,12 +38,16 @@ export interface DerivedTheme {
   contrast: ContrastReport;
 }
 
-/** Fixed (non-brand-derived) status ramp steps referenced by the semantic maps. */
+/**
+ * Fixed (non-brand-derived) status ramp steps referenced by the semantic maps.
+ * Dark `-text` uses the 300 step to match `[data-theme="dark"]` in `_tokens.scss` (MJ#4564).
+ * Keep the two in lockstep or ThemeStudio previews drift from the running app.
+ */
 const STATUS = {
-  successBg: '#f0fdf4', success: '#22c55e', successText: '#15803d', successText100: '#dcfce7',
-  warningBg: '#fffbeb', warning: '#f59e0b', warningText: '#b45309', warningText100: '#fef3c7',
-  errorBg: '#fef2f2', error: '#ef4444', errorText: '#b91c1c', errorText100: '#fee2e2', error400: '#f87171',
-  infoBg: '#eff6ff', info: '#3b82f6', infoText: '#1d4ed8', infoText100: '#dbeafe',
+  successBg: '#f0fdf4', success: '#22c55e', successText: '#15803d', successText300: '#86efac',
+  warningBg: '#fffbeb', warning: '#f59e0b', warningText: '#b45309', warningText300: '#fcd34d',
+  errorBg: '#fef2f2', error: '#ef4444', errorText: '#b91c1c', errorText300: '#fca5a5', error400: '#f87171',
+  infoBg: '#eff6ff', info: '#3b82f6', infoText: '#1d4ed8', infoText300: '#93c5fd',
 };
 
 /** Build the resolved semantic map for one mode from the generated primitive ramps. */
@@ -95,10 +99,10 @@ function resolveSemantics(
     '--mj-brand-accent-subtle': `color-mix(in srgb, ${accent[400]} 15%, transparent)`, '--mj-brand-on-accent': neutral[900],
     '--mj-brand-tertiary': tertiary[400], '--mj-brand-tertiary-hover': tertiary[300], '--mj-brand-tertiary-active': tertiary[200],
     '--mj-brand-tertiary-subtle': `color-mix(in srgb, ${tertiary[500]} 15%, transparent)`, '--mj-brand-on-tertiary': neutral[0],
-    '--mj-status-success': STATUS.success, '--mj-status-success-bg': `rgba(${rgbTriplet(STATUS.success)}, 0.15)`, '--mj-status-success-text': STATUS.successText100,
-    '--mj-status-warning': STATUS.warning, '--mj-status-warning-bg': `rgba(${rgbTriplet(STATUS.warning)}, 0.15)`, '--mj-status-warning-text': STATUS.warningText100,
-    '--mj-status-error': STATUS.error, '--mj-status-error-bg': `rgba(${rgbTriplet(STATUS.error)}, 0.15)`, '--mj-status-error-text': STATUS.errorText100,
-    '--mj-status-info': STATUS.info, '--mj-status-info-bg': `rgba(${rgbTriplet(STATUS.info)}, 0.15)`, '--mj-status-info-text': STATUS.infoText100,
+    '--mj-status-success': STATUS.success, '--mj-status-success-bg': `rgba(${rgbTriplet(STATUS.success)}, 0.15)`, '--mj-status-success-text': STATUS.successText300,
+    '--mj-status-warning': STATUS.warning, '--mj-status-warning-bg': `rgba(${rgbTriplet(STATUS.warning)}, 0.15)`, '--mj-status-warning-text': STATUS.warningText300,
+    '--mj-status-error': STATUS.error, '--mj-status-error-bg': `rgba(${rgbTriplet(STATUS.error)}, 0.15)`, '--mj-status-error-text': STATUS.errorText300,
+    '--mj-status-info': STATUS.info, '--mj-status-info-bg': `rgba(${rgbTriplet(STATUS.info)}, 0.15)`, '--mj-status-info-text': STATUS.infoText300,
   };
 }
 
