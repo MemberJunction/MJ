@@ -2,8 +2,9 @@
  * Primary-key evidence from a table's existing indexes (`TableDefinition.indexes`).
  *
  * A unique index is a guarantee from the database, not a statistic: its key values are distinct
- * whatever the data looks like, including on an empty table. PKDetector uses it as follows:
- * - a declared primary key becomes a candidate at fixed top confidence;
+ * whatever the data looks like, including on an empty table. A primary-key index counts as a unique
+ * index here: tables with a declared primary key never reach discovery's PK detection (their columns are
+ * already flagged isPrimaryKey from the same catalog). PKDetector uses the evidence as follows:
  * - a unique, unfiltered index on NOT NULL columns skips the statistical eligibility gate and is
  *   scored with a large index boost (naming, type, blacklist and position rules still apply, so a
  *   surrogate `id` still beats a natural-key unique index such as `email`);
@@ -15,16 +16,13 @@ import type { AutoDocIndex } from '../types/driver.js';
 import type { ColumnDefinition, TableDefinition } from '../types/state.js';
 
 /** How strongly the indexes back a key. */
-export type IndexKeyKind = 'DeclaredPrimaryKey' | 'UniqueNotNull' | 'UniqueNullable';
+export type IndexKeyKind = 'UniqueNotNull' | 'UniqueNullable';
 
-/** Index boost added to the confidence score for each kind (declared PKs use a fixed confidence). */
-export const INDEX_KEY_BOOST: Record<Exclude<IndexKeyKind, 'DeclaredPrimaryKey'>, number> = {
+/** Index boost added to the confidence score for each kind. */
+export const INDEX_KEY_BOOST: Record<IndexKeyKind, number> = {
   UniqueNotNull: 35,
   UniqueNullable: 15
 };
-
-/** Fixed confidence for a declared primary key. */
-export const DECLARED_PK_CONFIDENCE = 100;
 
 /** Confidence for a composite key backed by a unique index: NOT NULL columns, or nullable columns with no nulls. */
 export const UNIQUE_COMPOSITE_CONFIDENCE = { NotNull: 85, NoNullsObserved: 75 };
@@ -47,21 +45,14 @@ export function ClassifySingleColumnKey(
   table: Pick<TableDefinition, 'indexes'>,
   column: Pick<ColumnDefinition, 'name' | 'isNullable'>
 ): { Kind: IndexKeyKind; Index: AutoDocIndex } | undefined {
-  const indexes = KeyIndexesOn(table, [column.name]);
-  const declared = indexes.find((ix) => ix.IsPrimaryKey);
-  if (declared) {
-    return { Kind: 'DeclaredPrimaryKey', Index: declared };
-  }
-  const unique = indexes[0];
+  const unique = KeyIndexesOn(table, [column.name])[0];
   if (!unique) {
     return undefined;
   }
   return { Kind: column.isNullable ? 'UniqueNullable' : 'UniqueNotNull', Index: unique };
 }
 
-/** Multi-column key indexes on the table (declared primary keys first). */
+/** Multi-column key indexes on the table. */
 export function CompositeKeyIndexes(table: Pick<TableDefinition, 'indexes'>): AutoDocIndex[] {
-  return (table.indexes ?? [])
-    .filter((ix) => IsKeyIndex(ix) && ix.Columns.length > 1)
-    .sort((a, b) => Number(b.IsPrimaryKey) - Number(a.IsPrimaryKey));
+  return (table.indexes ?? []).filter((ix) => IsKeyIndex(ix) && ix.Columns.length > 1);
 }

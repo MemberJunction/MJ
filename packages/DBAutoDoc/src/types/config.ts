@@ -317,10 +317,10 @@ export interface RelationshipDiscoveryConfig {
   };
 
   /**
-   * Use existing primary-key and unique indexes as PK evidence (default true): a declared PK becomes a
-   * candidate at top confidence, a unique index on NOT NULL columns becomes a candidate even when the
-   * statistics can't show uniqueness (e.g. an empty table), and composite unique indexes are always
-   * considered. Needs `analysis.useExistingIndexes` (also default true).
+   * Use existing unique indexes as PK evidence for tables with no declared primary key (default true):
+   * a unique index on NOT NULL columns becomes a candidate even when the statistics can't show
+   * uniqueness (e.g. an empty table), and composite unique indexes are always considered.
+   * Needs `analysis.useExistingIndexes` (also default true).
    */
   indexBackedCandidates?: boolean;
 }

@@ -10,10 +10,9 @@ import { PKCandidate, PKEvidence, ColumnStatistics, CachedColumnStats } from '..
 import { RelationshipDiscoveryConfig } from '../types/config.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
 import {
-  ClassifySingleColumnKey, CompositeKeyIndexes, IndexKeyKind,
-  INDEX_KEY_BOOST, DECLARED_PK_CONFIDENCE, UNIQUE_COMPOSITE_CONFIDENCE
+  ClassifySingleColumnKey, CompositeKeyIndexes,
+  INDEX_KEY_BOOST, UNIQUE_COMPOSITE_CONFIDENCE
 } from './IndexKeyEvidence.js';
-import type { AutoDocIndex } from '../types/driver.js';
 
 export class PKDetector {
   constructor(
@@ -104,9 +103,6 @@ export class PKDetector {
       // Apply progressive discount: 2nd eligible gets 0.85x, 3rd 0.70x, etc.
       const discounts = [1.0, 0.85, 0.70, 0.55, 0.40];
       for (let i = 1; i < singleCols.length; i++) {
-        if (singleCols[i].confidence === DECLARED_PK_CONFIDENCE && singleCols[i].evidence.warnings.some(w => w.startsWith('Declared primary key'))) {
-          continue; // A declared primary key is authoritative wherever the column sits
-        }
         const discount = i < discounts.length ? discounts[i] : 0.40;
         const oldConf = singleCols[i].confidence;
         singleCols[i].confidence = Math.round(singleCols[i].confidence * discount);
@@ -248,10 +244,6 @@ export class PKDetector {
       this.statsCache.setColumnStats(cachedStats);
     }
 
-    if (indexKey?.Kind === 'DeclaredPrimaryKey') {
-      return this.declaredPrimaryKeyCandidate(schemaName, tableName, [column.name], cachedStats.totalRows, indexKey.Index, iteration);
-    }
-
     // A unique index on a NOT NULL column guarantees uniqueness whatever the sample shows (even on an empty table).
     const indexGuaranteesKey = indexKey?.Kind === 'UniqueNotNull';
     const uniqueness = indexGuaranteesKey ? 1.0 : cachedStats.uniqueness;
@@ -284,7 +276,7 @@ export class PKDetector {
     const dataPattern = cachedStats.dataPattern;
 
     // Calculate overall confidence
-    const indexBoost = indexKey ? INDEX_KEY_BOOST[indexKey.Kind as Exclude<IndexKeyKind, 'DeclaredPrimaryKey'>] : 0;
+    const indexBoost = indexKey ? INDEX_KEY_BOOST[indexKey.Kind] : 0;
     const confidence = this.calculatePKConfidence({
       uniqueness,
       nullCount: cachedStats.nullCount,
@@ -804,33 +796,8 @@ export class PKDetector {
     return this.config.indexBackedCandidates !== false;
   }
 
-  /** A declared primary key: fixed top confidence, no blacklist or scoring. */
-  private declaredPrimaryKeyCandidate(
-    schemaName: string,
-    tableName: string,
-    columns: string[],
-    totalRows: number,
-    index: AutoDocIndex,
-    iteration: number
-  ): PKCandidate {
-    console.log(`[PKDetector] ${tableName} [${columns.join(', ')}]: declared primary key ${index.IndexName}`);
-    return {
-      schemaName,
-      tableName,
-      columnNames: columns,
-      confidence: DECLARED_PK_CONFIDENCE,
-      evidence: {
-        uniqueness: 1.0, nullCount: 0, totalRows, dataPattern: columns.length > 1 ? 'composite' : 'unknown',
-        namingScore: 1.0, dataTypeScore: 1.0, warnings: [`Declared primary key: ${index.IndexName}`], backingIndex: index.IndexName
-      },
-      discoveredInIteration: iteration,
-      validatedByLLM: false,
-      status: 'candidate'
-    };
-  }
-
   /**
-   * Composite candidates from multi-column PK and unique indexes. A unique index allows repeated NULLs,
+   * Composite candidates from multi-column unique (and primary-key) indexes. A unique index allows repeated NULLs,
    * so every column must be NOT NULL, or nullable with no nulls in a non-empty table.
    */
   private indexBackedCompositeCandidates(schemaName: string, table: TableDefinition, iteration: number): PKCandidate[] {
@@ -842,10 +809,6 @@ export class PKDetector {
       const names = cols.map((c) => c.name);
       const stats = cols.map((c) => this.statsCache.getColumnStats(schemaName, table.name, c.name));
       const totalRows = stats.find((s) => s)?.totalRows ?? table.rowCount ?? 0;
-      if (ix.IsPrimaryKey) {
-        candidates.push(this.declaredPrimaryKeyCandidate(schemaName, table.name, names, totalRows, ix, iteration));
-        continue;
-      }
       const allNotNull = cols.every((c) => !c.isNullable);
       const noNullsObserved = totalRows > 0 && cols.every((c, i) => !c.isNullable || (stats[i] !== undefined && stats[i]!.nullCount === 0));
       if (!allNotNull && !noNullsObserved) {

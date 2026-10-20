@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PKDetector } from '../discovery/PKDetector';
 import { ColumnStatsCache } from '../discovery/ColumnStatsCache';
-import { ClassifySingleColumnKey, CompositeKeyIndexes, IsKeyIndex } from '../discovery/IndexKeyEvidence';
+import { ClassifySingleColumnKey, CompositeKeyIndexes, IsKeyIndex, INDEX_KEY_BOOST } from '../discovery/IndexKeyEvidence';
 import type { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver';
 import type { AutoDocIndex } from '../types/driver';
 import type { ColumnStatistics, PKCandidate } from '../types/discovery';
@@ -57,9 +57,9 @@ describe('IndexKeyEvidence', () => {
     expect(IsKeyIndex(index('uq_x', ['(expression)'], { HasExpressions: true }))).toBe(false);
   });
 
-  it('classifies a single column by its strongest backing index', () => {
-    const t = { indexes: [index('uq_code', ['Code']), index('pk_id', ['ID'], { IsPrimaryKey: true }), index('uq_pair', ['ID', 'Code'])] };
-    expect(ClassifySingleColumnKey(t, { name: 'id', isNullable: false })?.Kind).toBe('DeclaredPrimaryKey');
+  it('classifies a single column by its backing index; a primary-key index counts as unique', () => {
+    const t = { indexes: [index('uq_code', ['Code']), index('pk_id', ['ID'], { IsUnique: false, IsPrimaryKey: true }), index('uq_pair', ['ID', 'Code'])] };
+    expect(ClassifySingleColumnKey(t, { name: 'id', isNullable: false })).toMatchObject({ Kind: 'UniqueNotNull', Index: { IndexName: 'pk_id' } });
     expect(ClassifySingleColumnKey(t, { name: 'Code', isNullable: false })?.Kind).toBe('UniqueNotNull');
     expect(ClassifySingleColumnKey(t, { name: 'Code', isNullable: true })?.Kind).toBe('UniqueNullable');
     expect(ClassifySingleColumnKey(t, { name: 'Other', isNullable: false })).toBeUndefined();
@@ -97,19 +97,16 @@ describe('PKDetector with index evidence', () => {
     expect(found[0].columnNames).toEqual(['id']);
   });
 
-  it('a declared primary key gets top confidence and is not discounted for its position', async () => {
-    const specs: ColSpec[] = [{ name: 'legacy_id', rows: 50, distinct: 50 }, { name: 'record_no', rows: 50, distinct: 50 }];
-    const found = await detect(table('records', specs, [index('pk_records', ['record_no'], { IsPrimaryKey: true })]), specs);
-    const declared = found.find((c) => c.columnNames[0] === 'record_no');
-    expect(declared?.confidence).toBe(100);
-    expect(found[0].columnNames).toEqual(['record_no']);
-  });
-
-  it('adds a smaller boost for a unique index on a nullable column that has no nulls', async () => {
+  it('boosts a unique index on a nullable column that has no nulls', async () => {
     const specs: ColSpec[] = [{ name: 'code_key', type: 'varchar(10)', nullable: true, rows: 40, distinct: 40, samples: ['A1', 'B2'] }];
     const withIndex = await detect(table('codes', specs, [index('uq_code', ['code_key'])]), specs);
     const without = await detect(table('codes', specs), specs);
-    expect(withIndex[0].confidence).toBeGreaterThan(without[0].confidence);
+    expect(withIndex[0].confidence - without[0].confidence).toBe(INDEX_KEY_BOOST.UniqueNullable);
+  });
+
+  it('ranks the nullable boost below the NOT NULL one (NULLs can repeat in a unique index)', () => {
+    expect(INDEX_KEY_BOOST.UniqueNullable).toBeGreaterThan(0);
+    expect(INDEX_KEY_BOOST.UniqueNullable).toBeLessThan(INDEX_KEY_BOOST.UniqueNotNull);
   });
 
   it('considers composite unique indexes even when a surrogate key exists', async () => {
@@ -126,11 +123,9 @@ describe('PKDetector with index evidence', () => {
     expect(await detect(table('pairs', empty, [index('uq_ab', ['a_id', 'b_id'])]), empty)).toEqual([]);
   });
 
-  it('a declared composite primary key wins and demotes its member columns', async () => {
+  it('treats a composite primary-key index like a composite unique index', async () => {
     const specs: ColSpec[] = [{ name: 'order_id', rows: 10, distinct: 10 }, { name: 'product_id', rows: 10, distinct: 4 }];
-    const found = await detect(table('order_detail', specs, [index('pk_od', ['order_id', 'product_id'], { IsPrimaryKey: true })]), specs);
-    expect(found[0]).toMatchObject({ columnNames: ['order_id', 'product_id'], confidence: 100 });
-    const single = found.find((c) => c.columnNames.length === 1);
-    expect(single === undefined || single.confidence < 100).toBe(true);
+    const found = await detect(table('order_detail', specs, [index('pk_od', ['order_id', 'product_id'], { IsUnique: false, IsPrimaryKey: true })]), specs);
+    expect(found.find((c) => c.columnNames.length === 2)).toMatchObject({ columnNames: ['order_id', 'product_id'], confidence: 85 });
   });
 });
