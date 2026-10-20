@@ -211,7 +211,7 @@ export class AIPromptRunner extends BaseModelRunner {
     super();
     this._metadata =
       (this._provider as unknown as Metadata) ??
-      (typeof Metadata === 'function' ? new Metadata() : ({} as Metadata));
+      (typeof Metadata === 'function' ? new Metadata() : ({} as Metadata)); // global-provider-ok: constructor default fallback when no provider is bound; overridden when Provider is set
     this._templateEngine = TemplateEngineServer.Instance;
     this._executionPlanner = new ExecutionPlanner();
     this._jsonValidator = new JSONValidator();
