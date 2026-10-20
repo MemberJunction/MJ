@@ -257,6 +257,43 @@ describe('GenericDatabaseProvider Single-Flight RunView Coalescing & Bounded Con
         expect(provider.ExecutedSQL).toHaveLength(2);
     });
 
+    it('bypasses single-flight coalescing for ResultType: entity_object and never collides with ResultType: simple', async () => {
+        const entities = [createReadableEntity('Orders')];
+        const provider = new SingleFlightTestProvider(entities, 'shared-conn-entity-object');
+        const user = new UserInfo(null as unknown as IMetadataProvider, {
+            ID: 'U-1',
+            Email: 'u1@example.com',
+            UserRoles: [{ RoleID: 'role-ui' }],
+        });
+
+        // Verify canCoalesceRunViewInFlight returns false for entity_object
+        const canCoalesce = (provider as unknown as {
+            canCoalesceRunViewInFlight(p: RunViewParams): boolean;
+            buildSingleFlightRunViewKey(p: RunViewParams, u: UserInfo): string | null;
+        });
+        expect(canCoalesce.canCoalesceRunViewInFlight({ EntityName: 'Orders', ResultType: 'entity_object' })).toBe(false);
+        expect(canCoalesce.canCoalesceRunViewInFlight({ EntityName: 'Orders', ResultType: 'simple' })).toBe(true);
+        expect(canCoalesce.canCoalesceRunViewInFlight({ EntityName: 'Orders', ResultType: 'count_only' })).toBe(true);
+
+        // Verify single-flight keys distinguish ResultType values
+        const simpleKey = canCoalesce.buildSingleFlightRunViewKey({ EntityName: 'Orders', ResultType: 'simple' }, user);
+        const entityObjKey = canCoalesce.buildSingleFlightRunViewKey({ EntityName: 'Orders', ResultType: 'entity_object' }, user);
+        expect(simpleKey).toContain('|rt:simple|');
+        expect(entityObjKey).toContain('|rt:entity_object|');
+        expect(simpleKey).not.toBe(entityObjKey);
+
+        // Concurrent entity_object calls must each execute independently (not coalesced or shallow-cloned via {...row})
+        await Promise.all([
+            provider.RunSingleView({ EntityName: 'Orders', ResultType: 'entity_object' }, user),
+            provider.RunSingleView({ EntityName: 'Orders', ResultType: 'entity_object' }, user),
+            provider.RunSingleView({ EntityName: 'Orders', ResultType: 'simple' }, user),
+            provider.RunSingleView({ EntityName: 'Orders', ResultType: 'simple' }, user),
+        ]);
+
+        // 2 executions for the 2 entity_object calls + 1 coalesced execution for the 2 simple calls = 3 total
+        expect(provider.ExecutedSQL).toHaveLength(3);
+    });
+
     it('enforces MaxConcurrentViewsPerBatch = 8 on a 24-view batch while preserving exact result ordering', async () => {
         const entities = Array.from({ length: 24 }, (_, idx) => createReadableEntity(`Entity_${idx}`));
         const provider = new SingleFlightTestProvider(entities, 'batch-conn-24');

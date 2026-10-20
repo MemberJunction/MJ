@@ -2137,6 +2137,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (!params || countExecutor) {
             return false;
         }
+        if (params.ResultType && params.ResultType !== 'simple' && params.ResultType !== 'count_only') {
+            return false;
+        }
         if (params.SaveViewResults || params.ForceAuditLog) {
             return false;
         }
@@ -2185,7 +2188,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             return [
                 baseFingerprint,
                 `f:${fieldsKey}`,
-                `rt:${params.ResultType === 'count_only' ? 'count_only' : 'rows'}`,
+                `rt:${params.ResultType || 'simple'}`,
                 `uss:${params.UserSearchString ?? ''}`,
                 `vid:${params.ViewID ?? ''}`,
                 `vn:${params.ViewName ?? ''}`,

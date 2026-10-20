@@ -201,7 +201,10 @@ export const variablesLoggingMiddleware: MiddlewareFn<AppContext> = VariablesLog
  * Wrapping only the root operation fields reduces middleware invocations from ~15,000 per 500-row
  * `RunView` response down to 1.
  */
-export function ApplyRootVariablesLoggingMiddleware(schema: GraphQLSchema): GraphQLSchema {
+export function ApplyRootVariablesLoggingMiddleware(
+  schema: GraphQLSchema,
+  middleware: MiddlewareFn<AppContext> = VariablesLoggingMiddleware
+): GraphQLSchema {
   const rootTypes: Array<GraphQLObjectType | null | undefined> = [
     schema.getQueryType(),
     schema.getMutationType(),
@@ -221,7 +224,7 @@ export function ApplyRootVariablesLoggingMiddleware(schema: GraphQLSchema): Grap
             context,
             info,
           };
-          return VariablesLoggingMiddleware(action, async () => originalResolve(root, args, context, info));
+          return middleware(action, async () => originalResolve(root, args, context, info));
         };
       }
       if (field.subscribe) {
@@ -233,7 +236,7 @@ export function ApplyRootVariablesLoggingMiddleware(schema: GraphQLSchema): Grap
             context,
             info,
           };
-          return VariablesLoggingMiddleware(action, async () =>
+          return middleware(action, async () =>
             originalSubscribe ? originalSubscribe(root, args, context, info) : defaultFieldResolver(root, args, context, info)
           );
         };

@@ -299,3 +299,25 @@ module.exports = {
   },
 };
 ```
+
+---
+
+## Apples-to-Apples Scalability Benchmarks (`origin/next` vs 4-Pillar Architecture)
+
+Reproducible benchmark suite (`packages/MJServer/src/__tests__/scalabilityBenchmarks.test.ts`, executed via `MJ_RUN_SCALABILITY_BENCHMARKS=1`):
+
+| Pillar | Workload | Metric | `origin/next` Baseline | 4-Pillar Architecture | Improvement |
+|---|---|---|---|---|---|
+| **Pillar 1A** | `CacheInvalidation` Fan-Out ($U=1,000$, 4 roles, 100 saves) | Permission + RLS evaluations | 200,000 calls | 640 calls | **313x fewer evaluations** |
+| **Pillar 1A** | `CacheInvalidation` Fan-Out ($U=1,000$, 4 roles, 100 saves) | Fan-out CPU wall time | 70.55 ms | 19.23 ms | **3.7x faster** |
+| **Pillar 1A** | `CacheInvalidation` Fan-Out ($U=5,000$, 4 roles, 100 saves) | Permission + RLS evaluations | 1,000,000 calls | 640 calls | **1563x fewer evaluations** |
+| **Pillar 1A** | `CacheInvalidation` Fan-Out ($U=5,000$, 4 roles, 100 saves) | Fan-out CPU wall time | 303.52 ms | 107.41 ms | **2.8x faster** |
+| **Pillar 1B** | `PushStatusUpdates` ($U=2,000$ sessions, 500 chunks) | Filter invocations & `JSON.parse` calls | 1,000,000 filters / 1,000,500 `JSON.parse` | 500 filters / 500 `JSON.parse` | **2001x fewer `JSON.parse` calls** |
+| **Pillar 1B** | `PushStatusUpdates` ($U=2,000$ sessions, 500 chunks) | Routing + parse wall time | 187.89 ms | 0.88 ms | **213.7x faster** |
+| **Pillar 2A** | 1,000-row × 30-field GraphQL query (per query) | Middleware async wrapper calls | 30,001 calls/query | 1 call/query | **30,001x fewer async wrappers** |
+| **Pillar 2A** | 1,000-row × 30-field GraphQL query (10 runs) | Field resolution wall time | 60.22 ms (6.02 ms/query) | 6.22 ms (0.62 ms/query) | **9.7x faster** |
+| **Pillar 2B** | 5,000 per-request provider shells + queues | Array slot copies & RxJS Subjects | 95,000 copies / 10,000 Subjects (5.10 ms) | 0 copies (`Object.create`) / 0 Subjects (lazy) (2.21 ms) | **2.3x faster** |
+| **Pillar 2C** | `APIKeyEngine.ValidateAPIKey` (500 warm requests) | DB `RunView`s & `LastUsedAt` Saves | 1,000 `RunView`s + 500 Saves (578.8 ms) | 2 `RunView`s + 1 Save (1.33 ms) | **500x fewer DB reads & writes (435x faster)** |
+| **Pillar 3** | 100 concurrent identical `RunView` calls (live SQL Server) | Physical SQL queries executed | 100 SQL queries | 1 SQL query | **100x fewer SQL queries (99% DB load reduction)** |
+| **Pillar 3** | 100 concurrent identical `RunView` calls (live SQL Server) | Total burst wall time / p50 / p95 | 1349.7 ms (p50: 764.1 ms, p95: 1288.4 ms) | 329.5 ms (p50: 329.1 ms, p95: 329.3 ms) | **4.1x faster burst completion** |
+
