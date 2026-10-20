@@ -6,4 +6,4 @@ Whiteboard items gain an optional `Tag` (LXP P14.1). A host restyling the board 
 
 - `Tag?: string` on `WhiteboardItemBase`, persisted with the item and settable through an `UpdateItem` patch. No behavior attached.
 - The board appends `wb-tag-<slug>` to every item wrapper (box kinds, ink paths, connector groups): lower-cased, runs of non-alphanumerics become one dash, capped at 32 characters, blank tags yield no class. The static-class wrappers became `[class]` bindings for it.
-- Every `Whiteboard_Add*` tool takes an optional `tag`, and the compact scene view carries `tag` so the agent can tell a slot from a heading without re-reading content.
+- Every `Whiteboard_Add*` tool takes an optional `tag`, a new `Whiteboard_SetTag` tool re-tags or clears an existing item of any kind (so the agent can mark a step done later), and the compact scene view carries `tag` so the agent can tell a slot from a heading without re-reading content. A blank tag is stored as no tag.

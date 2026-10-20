@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { WhiteboardState, WhiteboardTagClass, WHITEBOARD_TAG_MAX_CHARS } from '../lib/whiteboard-state';
+import { NormalizeWhiteboardTag, WhiteboardState, WhiteboardTagClass, WHITEBOARD_TAG_MAX_CHARS } from '../lib/whiteboard-state';
 import { ApplyWhiteboardAgentTool, WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_NAMES } from '../lib/whiteboard-tools';
 
 /**
@@ -62,6 +62,31 @@ describe('WhiteboardState — Tag on items', () => {
     expect(state.GetItem(added.ID)?.Tag).toBe('heading');
   });
 
+  it('clearing a tag drops the key instead of persisting an empty string', () => {
+    const state = new WhiteboardState();
+    const added = state.AddItem({ Kind: 'sticky', X: 0, Y: 0, Text: 'hi', Tag: 'slot' }, 'user')!;
+    expect(state.UpdateItem(added.ID, { Tag: '' }, 'user')).toBe(true);
+    expect('Tag' in state.GetItem(added.ID)!).toBe(false);
+    expect(state.ToJSON()).not.toContain('"Tag"');
+  });
+
+  it('a blank or padded tag is normalized on the way in', () => {
+    const state = new WhiteboardState();
+    const blank = state.AddItem({ Kind: 'sticky', X: 0, Y: 0, Text: 'a', Tag: '   ' }, 'user')!;
+    const padded = state.AddItem({ Kind: 'sticky', X: 0, Y: 0, Text: 'b', Tag: '  heading ' }, 'user')!;
+    expect('Tag' in blank).toBe(false);
+    expect(padded.Tag).toBe('heading');
+    expect(NormalizeWhiteboardTag(undefined)).toBeUndefined();
+    expect(NormalizeWhiteboardTag(' x ')).toBe('x');
+  });
+
+  it('the class helper is memoized per tag (the board calls it per item per change-detection pass)', () => {
+    const first = WhiteboardTagClass('memo-check');
+    const second = WhiteboardTagClass('memo-check');
+    expect(second).toBe(first);
+    expect(first).toBe('wb-tag-memo-check');
+  });
+
   it('the compact scene view carries the tag, and omits it when unset', () => {
     const state = new WhiteboardState();
     const tagged = state.AddItem({ Kind: 'sticky', X: 0, Y: 0, Text: 'a', Tag: 'slot' }, 'agent')!;
@@ -104,5 +129,44 @@ describe('agent tools — the optional tag argument', () => {
     const state = new WhiteboardState();
     const result = JSON.parse(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.AddNote, JSON.stringify({ text: 'x', tag: '   ' })));
     expect(state.GetItem(result.itemId)?.Tag).toBeUndefined();
+  });
+
+  describe('Whiteboard_SetTag — re-tag an existing item of any kind', () => {
+    it('is registered with itemId required and tag optional', () => {
+      const def = WHITEBOARD_TOOL_DEFINITIONS.find((d) => d.Name === WHITEBOARD_TOOL_NAMES.SetTag);
+      expect(def).toBeDefined();
+      expect(def?.ParametersSchema['required']).toEqual(['itemId']);
+      expect((def?.ParametersSchema['properties'] as Record<string, unknown>)['tag']).toBeDefined();
+    });
+
+    it('tags a shape (StyleItem could not: it is sticky/text only)', () => {
+      const state = new WhiteboardState();
+      const shape = state.AddItem({ Kind: 'shape', Shape: 'rect', X: 0, Y: 0, W: 100, H: 40, Label: 'Step 1' }, 'agent')!;
+      const result = JSON.parse(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.SetTag, JSON.stringify({ itemId: shape.ID, tag: 'step-done' })));
+      expect(result.success).toBe(true);
+      expect(state.GetItem(shape.ID)?.Tag).toBe('step-done');
+    });
+
+    it('an empty or omitted tag clears it', () => {
+      const state = new WhiteboardState();
+      const note = state.AddItem({ Kind: 'sticky', X: 0, Y: 0, Text: 'x', Tag: 'slot' }, 'agent')!;
+      ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.SetTag, JSON.stringify({ itemId: note.ID }));
+      expect('Tag' in state.GetItem(note.ID)!).toBe(false);
+    });
+
+    it('fails cleanly on a missing itemId or an unknown item', () => {
+      const state = new WhiteboardState();
+      expect(JSON.parse(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.SetTag, JSON.stringify({ tag: 'x' }))).success).toBe(false);
+      expect(JSON.parse(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.SetTag, JSON.stringify({ itemId: 'nope-1', tag: 'x' }))).success).toBe(false);
+    });
+
+    it('is one undo step', () => {
+      const state = new WhiteboardState();
+      const note = state.AddItem({ Kind: 'sticky', X: 0, Y: 0, Text: 'x' }, 'user')!;
+      ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.SetTag, JSON.stringify({ itemId: note.ID, tag: 'slot' }));
+      expect(state.GetItem(note.ID)?.Tag).toBe('slot');
+      state.Undo();
+      expect(state.GetItem(note.ID)?.Tag).toBeUndefined();
+    });
   });
 });

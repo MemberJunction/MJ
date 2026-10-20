@@ -87,6 +87,15 @@ export interface WhiteboardItemBase {
 export const WHITEBOARD_TAG_MAX_CHARS = 32;
 
 /**
+ * A tag as stored on an item: trimmed, and `undefined` when blank — so clearing a tag drops the
+ * key instead of persisting `"Tag": ""`, and the scene view / class hook see one "unset" shape.
+ */
+export function NormalizeWhiteboardTag(tag: string | undefined | null): string | undefined {
+  const trimmed = tag?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/**
  * The wrapper class for an item's {@link WhiteboardItemBase.Tag}: `wb-tag-<slug>`, where the slug
  * is lower-cased, every run of characters outside `a-z0-9` becomes one dash, leading/trailing
  * dashes are dropped and the result is capped at {@link WHITEBOARD_TAG_MAX_CHARS}. An empty or
@@ -96,6 +105,25 @@ export function WhiteboardTagClass(tag: string | undefined | null): string {
   if (!tag) {
     return '';
   }
+  // Memoized: the board calls this from its template for every item on every change-detection
+  // pass, and a board has few distinct tags. Bounded so a stream of unique tags cannot grow it
+  // without limit; past the bound the map is simply dropped and rebuilt.
+  const hit = tagClassMemo.get(tag);
+  if (hit !== undefined) {
+    return hit;
+  }
+  const cls = computeTagClass(tag);
+  if (tagClassMemo.size >= TAG_CLASS_MEMO_MAX) {
+    tagClassMemo.clear();
+  }
+  tagClassMemo.set(tag, cls);
+  return cls;
+}
+
+const TAG_CLASS_MEMO_MAX = 512;
+const tagClassMemo = new Map<string, string>();
+
+function computeTagClass(tag: string): string {
   // The collapse is linear (the class excludes '-', so no run can backtrack). The edge trims
   // are index walks rather than `^-+|-+$` regexes: those backtrack polynomially on a long run of
   // dashes, and a tag is library input (agent tool arguments) — CodeQL js/polynomial-redos.
@@ -1227,6 +1255,7 @@ export class WhiteboardState {
     }
     this.beforeMutate();
     const item = { ...adding.Input, ID: this.nextId(adding.Input.Kind), Z: ++this.zCounter, Author: author } as WhiteboardItem;
+    WhiteboardState.normalizeTag(item);
     this.items.set(item.ID, item);
     this.record('add', item.ID, author, `added ${WhiteboardState.describe(item)}`);
     this.itemAdded.next({ Item: item, Author: author });
@@ -1266,12 +1295,25 @@ export class WhiteboardState {
         (target as Record<string, typeof value>)[key] = value;
       }
     }
+    if (effective.Tag !== undefined) {
+      WhiteboardState.normalizeTag(item);
+    }
     this.record('update', id, author, `updated ${WhiteboardState.describe(item)}`);
     this.itemUpdated.next({ Item: item, Operation: 'update', Author: author });
     if (isContent) {
       this.contentChanged.next({ Item: item, Patch: effective, Author: author });
     }
     return true;
+  }
+
+  /** Store a blank tag as "no tag" (see {@link NormalizeWhiteboardTag}). */
+  private static normalizeTag(item: WhiteboardItemBase): void {
+    const tag = NormalizeWhiteboardTag(item.Tag);
+    if (tag === undefined) {
+      delete item.Tag;
+    } else {
+      item.Tag = tag;
+    }
   }
 
   /** Whether a patch touches CONTENT fields (drives the ContentChanging/Changed pair). */

@@ -81,6 +81,7 @@ export const WHITEBOARD_TOOL_NAMES = {
   MoveItem: 'Whiteboard_MoveItem',
   RemoveItem: 'Whiteboard_RemoveItem',
   StyleItem: 'Whiteboard_StyleItem',
+  SetTag: 'Whiteboard_SetTag',
   AddPage: 'Whiteboard_AddPage',
   SwitchPage: 'Whiteboard_SwitchPage',
   RenamePage: 'Whiteboard_RenamePage'
@@ -282,6 +283,18 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
     }
   },
   {
+    Name: WHITEBOARD_TOOL_NAMES.SetTag,
+    Description: 'Set or clear the role tag of an existing item (any kind). The tag carries no behavior: the host styles items by it (e.g. mark a sequence step "step-done" once the user completes it). Pass an empty tag to clear.',
+    ParametersSchema: {
+      type: 'object',
+      properties: {
+        itemId: { type: 'string', description: 'ID of the item to tag.' },
+        tag: { type: 'string', description: 'The new role tag (e.g. "slot", "heading", "step-done"); empty or omitted clears it.' }
+      },
+      required: ['itemId']
+    }
+  },
+  {
     Name: WHITEBOARD_TOOL_NAMES.AddPage,
     Description: 'Create a NEW PAGE on the whiteboard and switch to it. Start a new page for a new topic, exercise or diagram instead of crowding the current board — pages keep prior work intact and the user can flip back any time. All item tools (notes, shapes, widgets, …) always target the page that is currently active.',
     ParametersSchema: {
@@ -456,6 +469,7 @@ export function ApplyWhiteboardAgentTool(state: WhiteboardState, toolName: strin
     case WHITEBOARD_TOOL_NAMES.MoveItem: return moveItem(state, args);
     case WHITEBOARD_TOOL_NAMES.RemoveItem: return removeItem(state, args);
     case WHITEBOARD_TOOL_NAMES.StyleItem: return styleItem(state, args);
+    case WHITEBOARD_TOOL_NAMES.SetTag: return setTag(state, args);
     case WHITEBOARD_TOOL_NAMES.AddPage: return addPage(state, args);
     case WHITEBOARD_TOOL_NAMES.SwitchPage: return switchPage(state, args);
     case WHITEBOARD_TOOL_NAMES.RenamePage: return renamePage(state, args);
@@ -473,6 +487,23 @@ function okPage(pageId: string, summary: string): string {
 /** The page list rendered into not-found errors so the model can self-correct. */
 function pageListText(state: WhiteboardState): string {
   return state.Pages.map((p) => `"${p.Name}"${p.Active ? ' (active)' : ''}`).join(', ');
+}
+
+function setTag(state: WhiteboardState, args: Record<string, unknown>): string {
+  const itemId = asString(args['itemId']);
+  if (!itemId) {
+    return fail('SetTag requires "itemId".');
+  }
+  if (!state.GetItem(itemId)) {
+    return fail(`SetTag: no item with id "${itemId}".`);
+  }
+  const tag = asString(args['tag'])?.trim() ?? '';
+  // ONE UpdateItem inside ONE batch — a single undo step and a single journal entry.
+  const applied = state.RunBatch(() => state.UpdateItem(itemId, { Tag: tag }, 'agent'));
+  if (!applied) {
+    return fail('The host application canceled this operation.');
+  }
+  return ok(itemId, tag ? `Tagged ${itemId} "${tag}".` : `Cleared the tag on ${itemId}.`);
 }
 
 function addPage(state: WhiteboardState, args: Record<string, unknown>): string {

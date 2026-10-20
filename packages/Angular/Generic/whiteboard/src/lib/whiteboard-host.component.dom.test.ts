@@ -465,8 +465,8 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
   describe('item Tag as a wrapper class', () => {
     it('a tagged sticky carries wb-tag-<slug> beside its kind classes; an untagged one carries no wb-tag-*', () => {
       const state = new WhiteboardState();
-      const tagged = state.AddItem({ Kind: 'sticky', X: 10, Y: 20, Text: 'fill me', Tag: 'Slot' }, 'agent')!;
-      const plain = state.AddItem({ Kind: 'sticky', X: 200, Y: 20, Text: 'hello' }, 'user')!;
+      state.AddItem({ Kind: 'sticky', X: 10, Y: 20, Text: 'fill me', Tag: 'Slot' }, 'agent');
+      state.AddItem({ Kind: 'sticky', X: 200, Y: 20, Text: 'hello' }, 'user');
       const f = render(null, state);
       const wrappers = Array.from(f.nativeElement.querySelectorAll('.bi.sticky')) as HTMLElement[];
       const taggedEl = wrappers.find((w) => w.textContent?.includes('fill me'));
@@ -474,7 +474,17 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
       expect(taggedEl?.classList.contains('wb-tag-slot')).toBe(true);
       expect(taggedEl?.classList.contains('sticky--sage')).toBe(true); // the kind/author classes survive
       expect(Array.from(plainEl?.classList ?? []).some((c) => c.startsWith('wb-tag-'))).toBe(false);
-      void tagged; void plain;
+    });
+
+    it('an ink path and a connector group carry the class too (SVG elements take the [class] binding)', () => {
+      const state = new WhiteboardState();
+      const a = state.AddItem({ Kind: 'sticky', X: 10, Y: 20, Text: 'a' }, 'user')!;
+      const b = state.AddItem({ Kind: 'sticky', X: 300, Y: 20, Text: 'b' }, 'user')!;
+      state.AddItem({ Kind: 'ink', Points: [{ X: 0, Y: 0 }, { X: 40, Y: 40 }], Color: '#f87171', StrokeWidth: 4, Tag: 'underline' }, 'user');
+      state.AddItem({ Kind: 'connector', FromItemID: a.ID, ToItemID: b.ID, FromPoint: null, ToPoint: null, Tag: 'flow' }, 'agent');
+      const f = render(null, state);
+      expect(f.nativeElement.querySelector('.ink-layer path.wb-tag-underline')).not.toBeNull();
+      expect(f.nativeElement.querySelector('.ink-layer g.wb-tag-flow')).not.toBeNull();
     });
 
     it('a tagged shape box carries the class too (static-class wrappers were converted to [class] bindings)', () => {
