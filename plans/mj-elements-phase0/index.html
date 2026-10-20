@@ -156,6 +156,16 @@
       const SINGLETON_PREFIX = '___SINGLETON__';
       const params = new URLSearchParams(location.search);
       document.documentElement.setAttribute('data-theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      // A connected run: ?api=<MJAPI origin>&rtkey=<realtime widget key>&supportkey=<support widget key> points the two MJ
+      // elements at a real server. Keys live in the URL for the run, never in this file. Applied before any bundle loads.
+      const api = params.get('api');
+      if (api) {
+        for (const id of ['rt-a', 'rt-b']) document.getElementById(id).setAttribute('api-url', api);
+        const mount = document.getElementById('support-mount');
+        mount.dataset.apiUrl = api;
+        if (params.get('rtkey')) for (const id of ['rt-a', 'rt-b']) document.getElementById(id).setAttribute('widget-key', params.get('rtkey'));
+        if (params.get('supportkey')) mount.dataset.widgetKey = params.get('supportkey');
+      }
       const supportVariant = params.get('support') === 'keepnames' ? 'keepnames' : null;
       const log = document.getElementById('log');
       const reportEl = document.getElementById('report');
@@ -402,7 +412,11 @@
       function elementRow(tag, variant) {
         return manifest.elements.find((e) => e.tag === tag && (e.variant || null) === (variant || null));
       }
+      let bundlesLoading = false;
       async function loadBundles() {
+        // Runs once: a second click (or a click racing an automated run) would interleave two sequences of steps.
+        if (bundlesLoading) { say('bundles already loading or loaded; reload the page to start over', 'missing'); return; }
+        bundlesLoading = true;
         snapshot('before any bundle');
         const order = [['mj-realtime-widget', null], ['mj-support-widget', supportVariant], ['mj-form', null], ['mj-orders-checkout', null], ['caliber-widget', null]];
         for (const [tag, variant] of order) {
@@ -414,9 +428,11 @@
             snapshot(`after ${row.entry}`);
           } catch (e) { say(e.message, 'bad'); }
         }
-        // The support loader's bootstrap awaits a session mint that cannot succeed here; mount one element by hand so the shadow DOM can be measured.
+        // The support loader's bootstrap mounts the element only after its session mint succeeds. With a real API that takes a
+        // moment; with none it never happens. Wait for it, then mount one by hand only if the loader did not, so the shadow DOM
+        // can be measured either way.
+        for (let i = 0; i < 16 && customElements.get('mj-support-widget') && !document.querySelector('mj-support-widget'); i++) await wait(500);
         if (customElements.get('mj-support-widget') && !document.querySelector('mj-support-widget')) {
-          await wait(500);
           const el = document.createElement('mj-support-widget');
           document.getElementById('support-mount').appendChild(el);
           await wait(100);
@@ -470,7 +486,7 @@
       }
       function report() {
         const final = snapshot('final');
-        const out = { page: location.href, userAgent: navigator.userAgent, csp: params.get('csp') === 'none' ? 'none' : 'header (strict, nonce-based)', supportVariant: supportVariant || 'as published (minified names)', order: params.get('order') || 'realtime-first', manifest, steps, errors, cspViolations: violations, summary: summarize(final) };
+        const out = { page: location.href.replace(/(rtkey|supportkey)=[^&]*/g, '$1=redacted'), userAgent: navigator.userAgent, csp: params.get('csp') === 'none' ? 'none' : 'header (strict, nonce-based)', supportVariant: supportVariant || 'as published (minified names)', order: params.get('order') || 'realtime-first', manifest, steps, errors, cspViolations: violations, summary: summarize(final) };
         window.__phase0 = out;
         reportEl.textContent = JSON.stringify(out, null, 2);
         say('report written to window.__phase0');
@@ -508,7 +524,7 @@
       document.getElementById('btn-transport').addEventListener('click', loadTransport);
       document.getElementById('btn-scheme').addEventListener('click', toggleScheme);
       document.getElementById('btn-report').addEventListener('click', report);
-      document.getElementById('mode').textContent = `csp=${params.get('csp') || 'header'} support=${supportVariant || 'published'} order=${params.get('order') || 'realtime-first'}${params.get('auto') ? ' auto' : ''}`;
+      document.getElementById('mode').textContent = `csp=${params.get('csp') || 'header'} support=${supportVariant || 'published'} order=${params.get('order') || 'realtime-first'}${params.get('auto') ? ' auto' : ''} api=${params.get('api') || 'none (closed port)'}`;
 
       fetch('bundles/manifest.json').then((r) => r.json()).then(async (m) => {
         manifest = m;

@@ -158,3 +158,54 @@ yellow for the same purpose; the probe reads computed values, so any distinct va
 
 The Claude in Chrome extension injects a `<style id="claude-agent-...">` into pages it drives; the probe ignores
 style elements with that id prefix so the head-style counts are the bundles' own.
+
+## The connected run (real MJAPI)
+
+Everything above runs with no server. For the post-connect checks in FINDINGS.md §4 the two MJ elements need a
+reachable MJAPI and a widget key; the three Open App elements still fail at their first request, since their APIs are
+their own.
+
+1. **A widget instance.** One `MJ: Conversation Widget Instances` row serves both elements when its `Modality` is
+   `Both`. It needs an application, a pinned agent and a guest role (the migration seeds a `Widget Guest` role), and
+   `AllowedOrigins` must contain the page's origin exactly (`http://localhost:8099`; the mint is fail-closed on the
+   `Origin` header). The key is any string in `PublicKey`; the convention is `pk_…`. The row used for the findings:
+
+   ```sql
+   INSERT INTO __mj.ConversationWidgetInstance (Name, PublicKey, ApplicationID, PinnedAgentID, GuestRoleID, AllowedOrigins, Modality, AuthStrategy, Status, SessionTTLMinutes, RateLimitPerMinute, VoiceMaxSessionMinutes)
+   VALUES (N'MJ Elements Phase 0 test page', N'pk_test_phase0_<random>', '<Chat application ID>', '<Sage agent ID>', '<Widget Guest role ID>', N'http://localhost:8099', N'Both', N'Anonymous', N'Active', 15, 30, 5);
+   ```
+
+2. **MJAPI with a public URL the server itself can reach.** The widget reuses the magic-link signing key, and the auth
+   provider fetches that key from `${MJAPI_PUBLIC_URL}/magic-link/jwks.json`. If `MJAPI_PUBLIC_URL` points anywhere the
+   server cannot fetch from (a tunnel that is down, a different deployment), every guest token fails with
+   `JwksError: Not Found` and GraphQL answers `Authentication failed`. `mj.config.cjs` needs `widget.enabled: true`
+   (it is, in this repo). Turbo's `start` task does not pass `MJAPI_PUBLIC_URL` through, so set it where the server
+   is started directly:
+
+   ```bash
+   cd packages/MJAPI && MJAPI_PUBLIC_URL=http://localhost:4000 pnpm start
+   ```
+
+3. **Check the mint from the shell** with a browser user agent (the mint rejects anything that looks like a bot with
+   the same 403 it uses for a bad origin):
+
+   ```bash
+   curl -s -A "Mozilla/5.0 (Macintosh) Chrome/155" -H "Content-Type: application/json" -H "Origin: http://localhost:8099" -d '{"widgetKey":"pk_test_phase0_…"}' http://localhost:4000/widget/session
+   ```
+
+   A `token` in the answer, and `{"data":{"__typename":"Query"}}` from `POST /` with `Authorization: Bearer <token>`,
+   means the page will connect.
+
+4. **Open the page with the API and key in the URL** (keys stay out of the files; saved reports redact them):
+
+   ```
+   http://localhost:8099/?api=http://localhost:4000&rtkey=pk_test_phase0_…&supportkey=pk_test_phase0_…&csp=none&support=keepnames
+   ```
+
+   Press "1. Load element bundles", then "2a. Start realtime call on A"; Chrome asks for the microphone. The support
+   widget mounts itself after its mint (the page waits up to eight seconds for that before mounting one by hand). Use
+   `support=keepnames`: as published, the support widget's loader fails on a real session (FINDINGS.md §4, first row).
+   Run it once more without `csp=none` for the nonce-CSP variant.
+
+The database must be at the branch's migrations; a stale one fails in the session janitor on `RecordingStatus` and
+is fixed by `mj migrate` (confirm no other session is using that database first).
