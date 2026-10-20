@@ -621,6 +621,32 @@ describe('TemplateEngineServer', () => {
             );
             expect(result2.Output).toBe('second');
         });
+
+        it('renders raw when autoescape is false and escapes by default', async () => {
+            const templateEntity = {
+                ID: 't-1',
+                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
+                GetParametersForContent: vi.fn().mockReturnValue([]),
+            } as never;
+            const content = { ID: 'tc-amp', TemplateText: 'Job Title: {{ Title }}' } as never;
+            const raw = await engine.RenderTemplate(templateEntity, content, { Title: 'Affineur & Owner' }, true, true, { autoescape: false });
+            const escaped = await engine.RenderTemplate(templateEntity, content, { Title: 'Affineur & Owner' }, true, true);
+            expect(raw.Output).toBe('Job Title: Affineur & Owner');
+            expect(escaped.Output).toBe('Job Title: Affineur &amp; Owner');
+        });
+
+        it('registers the template extensions on the raw environment', async () => {
+            const templateEntity = {
+                ID: 't-1',
+                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
+                GetParametersForContent: vi.fn().mockReturnValue([]),
+            };
+            mockGetAllRegistrations.mockReturnValue([{ Key: 'template', SubClass: EmbedExtensionStandIn }]);
+            const result = await engine.RenderTemplate(templateEntity as never, { ID: 'tc-ext', TemplateText: '{% template "Child" %}' } as never, {}, true, true, { autoescape: false });
+            mockGetAllRegistrations.mockReturnValue([]);
+            // the stand-in parses the tag; without the extension the compile fails with "unknown block tag"
+            expect(result.Message ?? '').not.toContain('unknown block tag');
+        });
     });
 
     describe('mergeDefaultValues', () => {
