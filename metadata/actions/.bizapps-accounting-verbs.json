@@ -1,0 +1,422 @@
+[
+  {
+    "fields": {
+      "Name": "CreateJournalEntry",
+      "Description": "Posts a balanced journal entry to the company's ERP. Routes to the plugin for the company's accounting connection (QuickBooks Online or Business Central), chosen by CompanyIntegrationID, else by IntegrationName, else the company's single active ERP connection. Every other input param is passed to that plugin unchanged, and the plugin's output params are returned.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
+      "DriverClass": "CreateJournalEntry",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-invoice"
+    },
+    "primaryKey": {
+      "ID": "9D34BFC8-8142-458A-AB26-128A71BB453B"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ Company whose ERP connection to use.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "3EDA3569-6ED5-4E06-8DE0-DC7CF05827BE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ID of the Company Integration (ERP connection) to use. Required when the company has more than one active connection for the same ERP. Must belong to CompanyID and be active.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5D455AE7-F9F4-4E02-BF1A-F0FCD0CC8EB7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntegrationName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ERP Integration name (e.g. 'QuickBooks Online' or 'Microsoft Dynamics 365 Business Central') used to pick the connection when CompanyIntegrationID is not given.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BCF9788A-3587-458A-8BA2-F15C4C7EBBAD"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "GetAccountBalances",
+      "Description": "Retrieves account balances from the company's ERP as of a given date. Routes to the plugin for the company's accounting connection (QuickBooks Online or Business Central), chosen by CompanyIntegrationID, else by IntegrationName, else the company's single active ERP connection. Every other input param is passed to that plugin unchanged, and the plugin's output params are returned.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
+      "DriverClass": "GetAccountBalances",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-balance-scale"
+    },
+    "primaryKey": {
+      "ID": "336DCA2F-29A4-48D8-8D65-75451613120C"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ Company whose ERP connection to use.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "F2418D28-A241-40E0-B71F-6FAA29A66B6C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ID of the Company Integration (ERP connection) to use. Required when the company has more than one active connection for the same ERP. Must belong to CompanyID and be active.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "435C84BF-D75D-46EB-998B-581BBFFD87E3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntegrationName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ERP Integration name (e.g. 'QuickBooks Online' or 'Microsoft Dynamics 365 Business Central') used to pick the connection when CompanyIntegrationID is not given.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EF26604D-5BEA-49D2-BD4F-671C010FE2CC"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "GetChartOfAccounts",
+      "Description": "Retrieves the chart of accounts from the company's ERP. Routes to the plugin for the company's accounting connection (QuickBooks Online or Business Central), chosen by CompanyIntegrationID, else by IntegrationName, else the company's single active ERP connection. Every other input param is passed to that plugin unchanged, and the plugin's output params are returned.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
+      "DriverClass": "GetChartOfAccounts",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-list"
+    },
+    "primaryKey": {
+      "ID": "F4EDA7E9-A5E9-4757-A88C-6B4B6D2FBF7E"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ Company whose ERP connection to use.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "5D5776E2-AFE8-4C21-8991-29D3EEAECEA9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ID of the Company Integration (ERP connection) to use. Required when the company has more than one active connection for the same ERP. Must belong to CompanyID and be active.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EBAC0905-BC9E-491A-BA85-70B7C7DEAACE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntegrationName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ERP Integration name (e.g. 'QuickBooks Online' or 'Microsoft Dynamics 365 Business Central') used to pick the connection when CompanyIntegrationID is not given.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "ADE67B8A-794B-40D1-954D-33431E7C0351"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "GetCustomers",
+      "Description": "Retrieves customers from the company's ERP. Routes to the plugin for the company's accounting connection (QuickBooks Online or Business Central), chosen by CompanyIntegrationID, else by IntegrationName, else the company's single active ERP connection. Every other input param is passed to that plugin unchanged, and the plugin's output params are returned.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
+      "DriverClass": "GetCustomers",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-users"
+    },
+    "primaryKey": {
+      "ID": "0C77F025-F2B0-4960-A9E4-47D8DF4BB653"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ Company whose ERP connection to use.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "47CB38E8-F7EA-4969-A292-164AC349039D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ID of the Company Integration (ERP connection) to use. Required when the company has more than one active connection for the same ERP. Must belong to CompanyID and be active.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "62B62CF2-A678-428E-BC7C-6C1FD9B577D7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntegrationName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ERP Integration name (e.g. 'QuickBooks Online' or 'Microsoft Dynamics 365 Business Central') used to pick the connection when CompanyIntegrationID is not given.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D3162B9A-6FD9-4B5D-A508-AFB5540BA058"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "GetDimensions",
+      "Description": "Retrieves dimensions and dimension values from the company's ERP. Routes to the plugin for the company's accounting connection (QuickBooks Online or Business Central), chosen by CompanyIntegrationID, else by IntegrationName, else the company's single active ERP connection. Every other input param is passed to that plugin unchanged, and the plugin's output params are returned.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
+      "DriverClass": "GetDimensions",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-sitemap"
+    },
+    "primaryKey": {
+      "ID": "BF140C0D-4E91-4632-8CB4-69A6F489F45F"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ Company whose ERP connection to use.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "146C563F-26C4-40BB-AF78-447958759429"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ID of the Company Integration (ERP connection) to use. Required when the company has more than one active connection for the same ERP. Must belong to CompanyID and be active.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "110A40C4-25ED-467F-BFCA-BF4D883A8144"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntegrationName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ERP Integration name (e.g. 'QuickBooks Online' or 'Microsoft Dynamics 365 Business Central') used to pick the connection when CompanyIntegrationID is not given.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "82EB8B43-7D2F-41BD-93A0-18B063C29934"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "GetGLEntries",
+      "Description": "Retrieves general ledger entries / transactions from the company's ERP. Routes to the plugin for the company's accounting connection (QuickBooks Online or Business Central), chosen by CompanyIntegrationID, else by IntegrationName, else the company's single active ERP connection. Every other input param is passed to that plugin unchanged, and the plugin's output params are returned.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
+      "DriverClass": "GetGLEntries",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-book"
+    },
+    "primaryKey": {
+      "ID": "B0F3B168-6970-42A9-A472-408FC2C3EDD1"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ Company whose ERP connection to use.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "7F4D6C30-62A8-42C7-AA6D-D19D8779DDF6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ID of the Company Integration (ERP connection) to use. Required when the company has more than one active connection for the same ERP. Must belong to CompanyID and be active.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F05EDF02-4B9D-4CCA-911B-7DA4155C4A94"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntegrationName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ERP Integration name (e.g. 'QuickBooks Online' or 'Microsoft Dynamics 365 Business Central') used to pick the connection when CompanyIntegrationID is not given.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AE0314B2-EC7B-4427-9196-37A5A81D3AF4"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "GetSalesInvoices",
+      "Description": "Retrieves sales invoices from the company's ERP. Routes to the plugin for the company's accounting connection (QuickBooks Online or Business Central), chosen by CompanyIntegrationID, else by IntegrationName, else the company's single active ERP connection. Every other input param is passed to that plugin unchanged, and the plugin's output params are returned.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Accounting&Parent=Business Apps",
+      "DriverClass": "GetSalesInvoices",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-invoice-dollar"
+    },
+    "primaryKey": {
+      "ID": "F65113F1-C44F-4151-98F4-857EB0ED94CE"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ Company whose ERP connection to use.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "E9060E9E-9FE9-4B3B-AD05-2E985D26E63B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ID of the Company Integration (ERP connection) to use. Required when the company has more than one active connection for the same ERP. Must belong to CompanyID and be active.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DAEEE173-C934-4044-8F84-DD9C49B0EFA0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntegrationName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ERP Integration name (e.g. 'QuickBooks Online' or 'Microsoft Dynamics 365 Business Central') used to pick the connection when CompanyIntegrationID is not given.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E5589A57-1310-4634-9D4B-DC15653D5075"
+          }
+        }
+      ]
+    }
+  }
+]
