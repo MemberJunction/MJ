@@ -64,7 +64,7 @@ export interface MjAppPackageEntry {
    */
   role?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /** See ResolvePackagePlatform in packages/OpenApp/Engine/src/manifest/package-platform.ts. */
-  platform?: 'node' | 'browser' | 'both';
+  platform?: 'node' | 'browser' | 'both';  // case-violation-ok-legacy-back-compat: mirrors the `platform` key of a member's mj-app.json, read off parsed JSON; a rename compiles and silently reads undefined
   startupExport?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
