@@ -11260,9 +11260,7 @@ The context is now within limits. Please retry your request with the recovered c
                 sa => this.isSubAgentConsultEnabledForSubAgent(agent, sa)
             );
             const subAgentPresetsAvailable = uniqueActiveSubAgents.some(
-                sa =>
-                    typeof AIEngine.Instance.GetAgentConfigurationPresets === 'function' &&
-                    AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true).length > 0
+                sa => AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true).length > 0
             );
 
             let parentConsults = false;
@@ -15823,7 +15821,6 @@ The context is now within limits. Please retry your request with the recovered c
             terminateAfter: subAgentRequest.terminateAfter,
             ...(subAgentRequest.resumeRunId ? { resumeRunId: subAgentRequest.resumeRunId } : {}),
             ...(subAgentRequest.presetName ? { presetName: subAgentRequest.presetName } : {}),
-            conversationMessages: params.conversationMessages,
             parentAgentHierarchy: this._agentHierarchy
         };
         
@@ -16665,7 +16662,6 @@ The context is now within limits. Please retry your request with the recovered c
                 terminateAfter: request.terminateAfter,
                 ...(request.resumeRunId ? { resumeRunId: request.resumeRunId } : {}),
                 ...(request.presetName ? { presetName: request.presetName } : {}),
-                conversationMessages: params.conversationMessages,
                 parentAgentHierarchy: this._agentHierarchy,
                 relationshipType: relationship ? 'related' : 'child'
             },
@@ -17142,7 +17138,6 @@ The context is now within limits. Please retry your request with the recovered c
             terminateAfter: subAgentRequest.terminateAfter,
             ...(subAgentRequest.resumeRunId ? { resumeRunId: subAgentRequest.resumeRunId } : {}),
             ...(subAgentRequest.presetName ? { presetName: subAgentRequest.presetName } : {}),
-            conversationMessages: params.conversationMessages,
             parentAgentHierarchy: this._agentHierarchy,
             relationshipType: 'related'
         };

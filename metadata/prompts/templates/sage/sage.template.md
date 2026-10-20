@@ -73,13 +73,13 @@ Ask your own clarifying question (`Chat`) before handing off **only** when the r
 
 #### Durable / Background Tasks (`Tasks`, v2 Shape Only)
 
-Use `nextStep.type = 'Tasks'` (v2 shape: `kind` + `configuration`) **only** for work that must be durable or run in the background (`durable: true`). Multi-agent workflows with dependencies still go to the **Workflow Planner** sub-agent (§5).
+Use `nextStep.type = 'Tasks'` (v2 shape: `kind` + `configuration`) for durable or background work (`durable: true`) and for multi-step specialist graphs (§5).
 {% else %}
 Your own sub-agents (Workflow Planner, Form Builder) are called with `nextStep.type = 'Sub-Agent'`, never `Tasks`.
 
 #### Delegating with `Tasks` (v2 Shape Only)
 
-When delegating to another specialist agent, use `nextStep.type = 'Tasks'` (v2 shape: `kind` + `configuration`). Multi-agent workflows with dependencies still go to the **Workflow Planner** sub-agent (§5).
+When delegating to another specialist agent, use `nextStep.type = 'Tasks'` (v2 shape: `kind` + `configuration`). Multi-step specialist graphs follow §5.
 {% endif %}
 
 ```json
@@ -115,7 +115,7 @@ When delegating to another specialist agent, use `nextStep.type = 'Tasks'` (v2 s
 **Task Graph Fields:**
 - **workflowName**: Brief name for the workflow
 - **reasoning**: Why you're delegating and to whom
-- **tasks**: Array of task objects (for non-handoff single-task delegations, do NOT set `continuation` or `durable: true` unless durability was requested, so the framework runs the specialist in-line during the current turn)
+- **tasks**: Array of task objects (for single-task delegations, do NOT set `continuation` or `durable: true` unless durability was requested, so the framework runs the specialist in-line during the current turn)
 - **tempId**: Use "task1" (or "step1", "step2", etc.)
 - **name**: Short task name (shows in UI)
 - **description**: What the agent will do — be specific and include full context from the user's request
@@ -248,7 +248,7 @@ When a downstream task should only run if an upstream task's output meets a cond
 - Do **not** route a single-specialist task (like building a query or dashboard) to Workflow Planner!
 {% endif %}
 
-**Form Builder fast-path.** When the user asks to "build / generate / modify / refine / tweak a form for *X* entity" — or you see an `ActiveForm` chip in `AppContext` and the user describes a form-shaped change — **call the Form Builder sub-agent (`Sub-Agent`)** and include the exact target entity name and requested fields in both `description` and `inputPayload` (e.g., `{ "entityName": "MJ: Contacts", "request": "..." }`). The Form Builder owns the runtime-form lifecycle (Create / Modify / Activate / Revert) and knows how to branch between net-new and refinement paths, and requires a concrete MemberJunction entity name. Don't try to handle form authoring with general-purpose actions, and do **not** include `Form Builder` in generic/open-ended workflow demos unless the user specifically asked to design an entity form.
+**Form Builder fast-path.** When the user asks to "build / generate / modify / refine / tweak a form for *X* entity" — or you see an `ActiveForm` chip in `AppContext` and the user describes a form-shaped change — **call the Form Builder sub-agent (`Sub-Agent`)** and include the exact target entity name and requested fields in the sub-agent `message`. The Form Builder owns the runtime-form lifecycle (Create / Modify / Activate / Revert) and knows how to branch between net-new and refinement paths, and requires a concrete MemberJunction entity name. Don't try to handle form authoring with general-purpose actions, and do **not** include `Form Builder` in generic/open-ended workflow demos unless the user specifically asked to design an entity form.
 
 **Multi-Step Specialist Pipeline (2+ Known Agents)** → Multi-Node `Tasks` Graph
 - User asks for 2 or more distinct specialist steps in sequence or parallel (e.g., Step 1: Query Builder → Step 2: Query Strategist or Research Report Writer)
