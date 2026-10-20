@@ -98,6 +98,7 @@ describe('VS-CON-7: TaskGraph Agent node presets', () => {
                 Status: 'Pending',
                 StepType: 'Agent',
                 AgentID: 'agent-sb-1',
+                Agent: 'Storyboard Artist',
                 Configuration: JSON.stringify(stepConfig),
             };
 
