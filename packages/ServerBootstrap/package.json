@@ -131,6 +131,7 @@
     "@memberjunction/external-data-source-sqlserver": "6.2.0-edge.4",
     "@memberjunction/external-data-sources": "6.2.0-edge.4",
     "@memberjunction/feature-pipelines": "6.2.0-edge.4",
+    "@memberjunction/feature-pipelines-engine": "6.2.0-edge.4",
     "@memberjunction/generic-database-provider": "6.2.0-edge.4",
     "@memberjunction/geo-core": "6.2.0-edge.4",
     "@memberjunction/integration-actions": "6.2.0-edge.4",
