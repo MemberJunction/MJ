@@ -254,7 +254,8 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
                 EntityName: 'MJ: Communication Logs',
                 OrderBy: 'MessageDate DESC',
                 MaxRows: 200,
-                ResultType: 'entity_object'
+                Fields: ['ID', 'Status', 'Direction', 'CommunicationProvider', 'CommunicationProviderMessageType', 'MessageDate', 'ErrorMessage'],
+                ResultType: 'simple'
             });
 
             if (result.Success) {
