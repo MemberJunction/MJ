@@ -17,12 +17,11 @@ on every task regardless of what you're touching**. Everything else loads on dem
 
 ## 🚨 CRITICAL RULES — VIOLATIONS ARE UNACCEPTABLE 🚨
 
-### 1. NO COMMITS WITHOUT EXPLICIT APPROVAL
-- **NEVER run `git commit` without the user explicitly asking you to**
-- **Each commit requires ONE-TIME explicit approval** — don't assume ongoing permission
-- **NEVER ask to commit** — wait for the user to request it
-- **ONLY commit what is staged** — never modify or add to staged changes
-- **NEVER commit work-in-progress** that isn't staged by the user
+### 1. SAFE COMMITS & PR WORKFLOW
+- **PR & branch tasks**: When asked to create, fix, or update a PR/branch, commit and push your changes to that branch
+- **Shared checkouts**: When not asked for a PR or commit, ask before running `git commit`
+- **Stage explicitly**: Use `git add <file>` for your task's files — **NEVER `git add -A`/`.`** or commit unrelated WIP
+- **NEVER commit or push directly to `next` or `main`**
 
 ### 2. NO DESTRUCTIVE GIT OPERATIONS WITHOUT EXPLICIT APPROVAL
 - **NEVER run `git checkout -- <file>` or `git restore <file>`** to discard changes without the user explicitly approving — even in bypass/auto-approve permission mode
@@ -93,6 +92,8 @@ pnpm mj test run "IT30 - Conversation Compaction (assembly layer)"   # single bu
 ```
 Unit tests passing is necessary but **not sufficient** — the integration tier catches the seams between packages that unit tests mock away. Run it after migrations + CodeGen have been applied. Full details, authoring rules, and the client-first transport doctrine: [`guides/INTEGRATION_TESTING_QUICKSTART.md`](guides/INTEGRATION_TESTING_QUICKSTART.md).
 
+**Repo-wide gates** — `npm run check:guards` and `npm run check:standards` must pass. Neither is a required check, so a red one merges and breaks `next` for every later PR. A hook runs both before `git push` / `gh pr create`.
+
 ---
 
 ## Always-true facts
@@ -126,6 +127,8 @@ After making code changes, **always compile the affected package** and fix all T
 **Migration folder**: the `migrations/v*/` folder must match **the major version in the migration's own filename** — `V…__v6.1.x__Name.sql` belongs in `migrations/v6/`, a `v5.x` file in `migrations/v5/`. Read the folder off the name you just chose; never off a number written down here, which goes stale at every era. Flyway scans `./migrations` recursively and reads the version from the filename, so a misfiled migration still runs — but it strands its PostgreSQL counterpart, which is paired per folder (`migrations/vN` ↔ `migrations-pg/vN`).
 
 **PostgreSQL is toolchain territory — do not hand-author it, and do not build tooling for it.** A feature PR ships the **T-SQL migration only**. Never write a `migrations-pg/**` counterpart, and never write a script that checks, generates, or gates PG parity. Converting T-SQL to PG is deterministic transpilation (`mj migrate convert`, the SQLConverter package, `/pg-migrate-v2`) run by the **build engineer at release time** — the same cadence as the consolidated metadata-sync migration. LLM-inferred PG SQL and one-off parity scripts are exactly what that toolchain exists to replace: they drift from the converter, gate feature PRs on work that is not theirs, and rot. If PG conversion looks wrong, fix the converter or tell the build engineer — do not route around it. Details: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
+
+**The API path isn't always at `/`.** MJAPI mounts every route under `MJAPI_BASE_PATH`; `GRAPHQL_ROOT_PATH` is only Apollo's path; `MJAPI_PUBLIC_URL` is where the world reaches MJAPI. Never derive one from another. Server routes and outward URLs go through `ApiRoute()` from `@memberjunction/server`, never `app.use('/x')` or a hand-built `${publicUrl}/x`. CI enforces it (`check:api-root` + a boot test). Rules: [`packages/MJAPI/CLAUDE.md`](packages/MJAPI/CLAUDE.md).
 
 **Record Changes**: MJ has built-in version control for all entities. Don't implement custom versioning.
 
@@ -190,6 +193,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 ```bash
 npm run check:ui          # design-token + button gates on changed CSS/SCSS (mirrors the PR gate)
 npm run check:standards   # every adopted MJ standard (see .mj-standards.json)
+npm run check:guards      # UUID, global-provider and primary-key source scanners (CI "Source guards")
 npm run check:esm         # native-ESM import guard for "type": "module" packages
 npm run check:claude-md   # instruction-file budget, link validity, and routing-table coverage
 npm run check:changeset   # changeset bump levels (local only — no CI gate enforces this one)

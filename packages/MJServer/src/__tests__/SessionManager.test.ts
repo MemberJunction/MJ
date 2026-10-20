@@ -29,6 +29,16 @@ vi.mock('@memberjunction/ai-agents', () => ({
     },
 }));
 
+// --- Mock the recording assembly scheduler so a close's assembly request is observable (#5294) ---
+const scheduleAssemblyMock = vi.fn();
+vi.mock('../realtimeSessions/RecordingAssemblyScheduler.js', () => ({
+    RecordingAssemblyScheduler: {
+        get Instance() {
+            return { ScheduleAssembly: scheduleAssemblyMock };
+        },
+    },
+}));
+
 // --- Mock RunView.FromMetadataProvider so channel sweeps and run-id lookups are controllable,
 //     while leaving the rest of @memberjunction/core intact. RunViews runs each view through runViewMock. ---
 const runViewMock = vi.fn();
@@ -135,6 +145,7 @@ beforeEach(() => {
     hostSessionClosedMock.mockResolvedValue(undefined);
     runViewMock.mockReset();
     runViewMock.mockResolvedValue({ Success: true, Results: [] });
+    scheduleAssemblyMock.mockReset();
     getSystemUserMock.mockReset();
     getSystemUserMock.mockReturnValue(undefined);
 });
@@ -563,6 +574,22 @@ describe('SessionManager.Heartbeat', () => {
         const ok = await mgr.Heartbeat('session-1', makeUser(), provider);
         expect(ok).toBe(false);
         expect(session.Save).not.toHaveBeenCalled();
+    });
+});
+
+describe('SessionManager.CloseSession — recording assembly (#5294)', () => {
+    it('CloseSession of a recorded session asks for its assembly now (the hidden-tab deferral ends with the call)', async () => {
+        const session = makeSessionEntity({ ID: 'session-1', Status: 'Active', RecordingStartedAt: new Date(0) });
+        const { provider } = makeProvider(() => session);
+        await new SessionManager().CloseSession('session-1', makeUser(), provider);
+        expect(scheduleAssemblyMock).toHaveBeenCalledWith('session-1', 0, false);
+    });
+
+    it('CloseSession of a session that was not recorded asks for no assembly', async () => {
+        const session = makeSessionEntity({ ID: 'session-1', Status: 'Active', RecordingStartedAt: null });
+        const { provider } = makeProvider(() => session);
+        await new SessionManager().CloseSession('session-1', makeUser(), provider);
+        expect(scheduleAssemblyMock).not.toHaveBeenCalled();
     });
 });
 

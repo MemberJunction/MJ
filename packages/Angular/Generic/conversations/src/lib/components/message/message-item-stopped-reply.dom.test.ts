@@ -6,8 +6,8 @@ import { MessageItemComponent } from './message-item.component';
  *
  * The time pill names the stop with the time the run ran ("Stopped · 0:44") and takes the
  * neutral `stopped` state rather than the blue `complete` one; a "N steps kept" line shows what
- * the run kept; and on the last message of a conversation the viewer may write to, a Continue
- * control sends the canned continuation through `SuggestedResponseSelected`, which the chat area
+ * the run kept; and on the last message of a conversation the viewer may write to, when the host
+ * allows stopping (`AllowStopRun`), a Continue control sends the canned continuation through `SuggestedResponseSelected`, which the chat area
  * sends as the next message and the run chain resumes. Constructed off the prototype, as the
  * other message-item specs are. (Co-located as .dom.test.ts because importing the component pulls
  * the Angular graph the node project can't load.)
@@ -59,6 +59,15 @@ describe('MessageItemComponent — a stopped reply', () => {
     const message = { ID: 'm1', Status: 'Complete', Role: 'AI' };
     expect(item({ message, AllMessages: [message, { ID: 'u2', Role: 'User' }] }).CanContinueStoppedRun).toBe(false);
     expect(item({ AgentRun: { ID: 'run-1', Status: 'Cancelled', CancellationReason: 'Timeout', Steps: [] } }).CanContinueStoppedRun).toBe(false);
+  });
+
+  it('offers no Continue when the host turns stopping off, but still shows the reply as stopped', () => {
+    const off = item({ AllowStopRun: false });
+    expect(off.CanContinueStoppedRun).toBe(false);
+    expect(off.IsStoppedRun).toBe(true);
+    expect(off.TimePillText).toBe('Stopped · 0:44');
+    off.OnContinueClick();
+    expect(sent).toHaveLength(0);
   });
 
   it('Continue sends the canned continuation as a suggested response, and does nothing when not offered', () => {

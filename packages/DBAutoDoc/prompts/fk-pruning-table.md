@@ -14,8 +14,20 @@ These FKs were identified by statistical analysis and/or LLM analysis. Some are 
 **NOTE**: FKs marked as **[LOCKED]** have very high confidence and CANNOT be removed. Only evaluate the unlocked ones.
 
 {% for fk in candidates %}
-{{ loop.index }}. {% if fk.locked %}**[LOCKED]** {% endif %}**{{ fk.sourceColumn }}** → {{ fk.targetSchema }}.{{ fk.targetTable }}.{{ fk.targetColumn }} (confidence: {{ fk.confidence }}%)
+{{ loop.index }}. {% if fk.locked %}**[LOCKED]** {% endif %}**{{ fk.sourceColumn }}** → {{ fk.targetSchema }}.{{ fk.targetTable }}.{{ fk.targetColumn }} (confidence: {{ fk.confidence }}%{% if fk.targetUniquelyIndexed === true %}; target column has a unique index{% elif fk.targetUniquelyIndexed === false %}; target column has no unique index{% endif %})
 {% endfor %}
+
+{% if existingIndexes and existingIndexes.length > 0 %}
+## Existing Indexes
+These indexes exist on this table in the database. Developers index the columns they join and filter on, so indexes are clues to keys even when none are declared:
+{% for ix in existingIndexes %}
+- {{ ix }}
+{% endfor %}
+
+*A UNIQUE index or PRIMARY KEY on non-null columns is strong evidence of the primary key (or an alternate key). A non-unique index led by an ID- or code-like column often marks a foreign key. Indexes are evidence, not proof — weigh them with names, statistics and value overlap. "(expression)" is a computed key part.*
+{% endif %}
+
+*A real FK target is normally unique. A target column with a unique index or primary key supports the FK; one without is weaker evidence (but the database may simply not declare it).*
 
 ## What to look for when proposing removals:
 
