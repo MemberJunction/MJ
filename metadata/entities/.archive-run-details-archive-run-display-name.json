@@ -1,0 +1,30 @@
+[
+  {
+    "_comments": [
+      "MJ: Archive Run Details.ArchiveRun is the related-name field for ArchiveRunID. It held the run's",
+      "StartedAt timestamp, so CodeGen's field categorization named it 'Archive Run Timestamp'. Since",
+      "Archive Runs is named by its ArchiveConfiguration instead (V202610190929__v6.2.x__Archive_StorageMode),",
+      "the field holds a configuration name, and CodeGen does not revisit a display name on a type change.",
+      "AutoUpdateDisplayName is turned off so the next categorization pass keeps this name."
+    ],
+    "fields": {
+      "Name": "MJ: Archive Run Details"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "DisplayName": "Archive Run",
+            "AutoUpdateDisplayName": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Archive Run Details&Name=ArchiveRun"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Archive Run Details"
+    }
+  }
+]

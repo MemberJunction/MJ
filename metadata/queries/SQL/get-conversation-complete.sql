@@ -18,6 +18,8 @@ SELECT
             ar.ID, 
             ar.AgentID,
             ar.Agent,
+            ar.ParentRunID,
+            ar.ContinuationDepth,
             ar.Status,
             ar.__mj_CreatedAt,
             ar.__mj_UpdatedAt,
@@ -27,6 +29,10 @@ SELECT
             ar.ConversationDetailID
         FROM [__mj].[vwAIAgentRuns] ar
         WHERE ar.ConversationDetailID = cd.ID
+        ORDER BY
+            CASE WHEN ar.ParentRunID IS NULL THEN 0 ELSE 1 END ASC,
+            ISNULL(ar.ContinuationDepth, 0) ASC,
+            ar.__mj_CreatedAt DESC
         FOR JSON PATH
     ) as AgentRunsJSON,
 

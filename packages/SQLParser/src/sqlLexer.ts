@@ -59,7 +59,8 @@ const DIGIT = /[0-9]/;
  * token, so joining the tokens' text reproduces the input.
  *
  * Recognizes string literals with doubled-quote escapes and the `N` prefix, double-quoted
- * identifiers, `--` line comments and nested block comments everywhere, and per dialect:
+ * identifiers, `--` line comments (ended by a CR or an LF) and nested block comments everywhere,
+ * and per dialect:
  * bracket or backtick identifiers when the dialect quotes identifiers that way, `E'…'` strings
  * with backslash escapes when {@link SQLParserDialect.SupportsEscapeStringLiterals} is set, and
  * dollar-quoted strings (`$$…$$`, `$tag$…$tag$`) when
@@ -114,9 +115,11 @@ function skipWhile(sql: string, i: number, test: (c: string) => boolean): number
     return j;
 }
 
+/** A line comment ends at a CR or an LF, as on SQL Server and PostgreSQL. */
 function skipLineComment(sql: string, i: number): number {
-    const nl = sql.indexOf('\n', i);
-    return nl === -1 ? sql.length : nl;
+    let j = i;
+    while (j < sql.length && sql[j] !== '\n' && sql[j] !== '\r') j++;
+    return j;
 }
 
 /** Block comments nest on both SQL Server and PostgreSQL. */

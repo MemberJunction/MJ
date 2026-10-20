@@ -46,6 +46,8 @@ import {
     RunQueriesWithCacheCheckResponse,
     RunQueryWithCacheCheckResult,
     QueryCacheAuthorization,
+    QueryDefinitionSignature,
+    RunQueryCacheStatus,
     QueryCategoryInfo,
     AggregateResult,
     AggregateValue,
@@ -78,19 +80,19 @@ import {
     QueryInfo,
 } from '@memberjunction/core';
 
-import { BytesToBase64, IsByteArray, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { BytesToBase64, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { SqlLoggingSessionImpl } from './SqlLogger.js';
+import { ApplyStatementTransforms, SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
-import { SQLParser, IsReadOnlyQuery, CheckAggregateExpression } from '@memberjunction/sql-parser';
+import { SQLParser, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
-import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from './saveTypes.js';
+import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from './saveTypes.js';
 import type { RecordChangePayload } from '@memberjunction/core';
 
 import {
@@ -111,6 +113,7 @@ import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-
 import { TransactionFrameTracker } from './TransactionFrameTracker';
 import { TransactionAffinity, type TransactionMembership } from './TransactionAffinity.js';
 import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
+import { ClientClauseScreen, type ClientClauseScreeningProvider } from './clientClauseScreen.js';
 import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -180,7 +183,7 @@ export class DoomedTransactionError extends Error {
     }
 }
 
-export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
+export abstract class GenericDatabaseProvider extends DatabaseProviderBase implements ClientClauseScreeningProvider {
     // Composition engine is now owned by RenderPipeline
 
     /**************************************************************************/
@@ -264,16 +267,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     private static _sqlLoggingSessionsKey: string = 'MJ_GenericDatabaseProvider_SqlLoggingSessions';
+    private static _cachedSqlLoggingSessions: Map<string, SqlLoggingSessionImpl> | null = null;
     private get _sqlLoggingSessions(): Map<string, SqlLoggingSessionImpl> {
+        if (GenericDatabaseProvider._cachedSqlLoggingSessions) {
+            return GenericDatabaseProvider._cachedSqlLoggingSessions;
+        }
         const g = MJGlobal.Instance.GetGlobalObjectStore();
         if (g) {
             if (!g[GenericDatabaseProvider._sqlLoggingSessionsKey]) {
                 g[GenericDatabaseProvider._sqlLoggingSessionsKey] = new Map<string, SqlLoggingSessionImpl>();
             }
-            return g[GenericDatabaseProvider._sqlLoggingSessionsKey];
+            GenericDatabaseProvider._cachedSqlLoggingSessions = g[GenericDatabaseProvider._sqlLoggingSessionsKey] as Map<string, SqlLoggingSessionImpl>;
+            return GenericDatabaseProvider._cachedSqlLoggingSessions;
         } else {
             throw new Error('No global object store available for SQL logging session');
         }
+    }
+
+    /**
+     * Fast O(1) check for whether any SQL logging sessions are currently active.
+     */
+    protected get HasActiveSqlLoggingSessions(): boolean {
+        return this._sqlLoggingSessions.size > 0;
     }
 
     /**
@@ -416,7 +431,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         if (hasVerboseSession) {
             console.log('=== SQL LOGGING DEBUG ===');
-            console.log(`Query to log: ${query.substring(0, 100)}...`);
+            console.log(`Query to log: ${ApplyStatementTransforms(query, allSessions).substring(0, 100)}...`);
             console.log(`Context user email: ${contextUser?.Email || 'NOT_PROVIDED'}`);
             console.log(`Active sessions count: ${this._sqlLoggingSessions.size}`);
 
@@ -533,6 +548,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         user: UserInfo,
         originatingEntityActionIDs?: string[],
     ): Promise<ActionResult[]> {
+        const engine = EntityActionEngineServer.Instance;
+        if (engine.Loaded && engine.GetActionsByEntityName(entity.EntityInfo.Name, 'Active').length === 0) {
+            return [];
+        }
         // FIRST STATEMENT, and deliberately before the first `await`. After-hooks are dispatched
         // fire-and-forget, and the moment this method yields, the save completes and `finalizeSave()`
         // reloads the entity — resetting every field's OldValue to its new value. A change context
@@ -544,8 +563,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // rolled-back save never fires it (see RunAfterCommit).
         const postCommitToken = this.CapturePostCommitToken();
         try {
-            const engine = EntityActionEngineServer.Instance;
-            await engine.Config(false, user);
+            if (!engine.Loaded) {
+                await engine.Config(false, user);
+            }
             const newRecord = entityChange.IsCreate;
             const baseTypeType = baseType === 'save' ? (newRecord ? 'Create' : 'Update') : 'Delete';
             const invocationType = baseType === 'validate' ? 'Validate' : before ? 'Before' + baseTypeType : 'After' + baseTypeType;
@@ -624,11 +644,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         try {
             if (baseType === 'delete') return; // delete not yet supported for AI actions
 
-            await AIEngine.Instance.Config(false, user);
+            const ai = AIEngine.Instance;
+            if (!ai.Loaded) {
+                await ai.Config(false, user);
+            }
 
             const actions = this.GetEntityAIActions(entity.EntityInfo, before);
             if (actions && actions.length > 0) {
-                const ai = AIEngine.Instance;
                 for (let i = 0; i < actions.length; i++) {
                     const a = actions[i];
                     if ((a.TriggerEvent === 'before save' && before) || (a.TriggerEvent === 'after save' && !before)) {
@@ -871,8 +893,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             processedRows = await this.AdjustDatetimeFields(processedRows, datetimeFields, entityInfo);
         }
 
-        // Step 2: Encryption decryption
-        const encryptedFields = entityInfo.Fields.filter((field) => field.Encrypt && field.EncryptionKeyID);
+        // Step 2: Encryption decryption — memoized per EntityInfo (like DatetimeFields/BinaryFields)
+        const encryptedFields = GenericDatabaseProvider.getEncryptedFields(entityInfo);
         if (encryptedFields.length === 0) return processedRows;
 
         const encryptionEngine = EncryptionEngine.Instance;
@@ -908,6 +930,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             return processedRow;
         }));
+    }
+
+    private static _encryptedFieldsCache = new WeakMap<EntityInfo, { fieldCount: number; fields: EntityFieldInfo[] }>();
+    private static getEncryptedFields(entityInfo: EntityInfo): EntityFieldInfo[] {
+        let entry = GenericDatabaseProvider._encryptedFieldsCache.get(entityInfo);
+        if (!entry || entry.fieldCount !== entityInfo.Fields.length) {
+            entry = {
+                fieldCount: entityInfo.Fields.length,
+                fields: entityInfo.Fields.filter((field) => field.Encrypt && field.EncryptionKeyID),
+            };
+            GenericDatabaseProvider._encryptedFieldsCache.set(entityInfo, entry);
+        }
+        return entry.fields;
     }
 
     /**
@@ -1336,6 +1371,53 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     ): SaveCallBinding;
 
     /**
+     * Builds the dialect-quoted, comma-separated column list for {@link EntityInfo.DatestampReturnFields}
+     * (primary key column(s) followed by `__mj_CreatedAt` and `__mj_UpdatedAt`) using {@link QuoteIdentifier}.
+     *
+     * Examples:
+     * - SQL Server: `[ID], [__mj_CreatedAt], [__mj_UpdatedAt]`
+     * - PostgreSQL: `"ID", "__mj_CreatedAt", "__mj_UpdatedAt"`
+     */
+    protected GetDatestampSelectColumnsSQL(entityInfo: EntityInfo): string {
+        const fields = entityInfo.DatestampReturnFields ?? entityInfo.PrimaryKeys ?? [];
+        return fields.map((f) => this.QuoteIdentifier(f.Name)).join(', ');
+    }
+
+    /**
+     * Resolves the compile-time vs. effective runtime {@link SaveReturnContext} for a save operation.
+     *
+     * Centralizes the `SaveReturnMode` decision logic in `GenericDatabaseProvider` so dialect providers
+     * (`SQLServerDataProvider`, `PostgreSQLDataProvider`, and future providers) never duplicate the
+     * rules for:
+     * - `spReturnMode`: the return shape compiled into the stored procedure / function (`EntityInfo.SaveReturnMode`).
+     * - `effectiveReturnMode`: the return shape requested for this call (`options?.SaveReturnMode ?? spReturnMode`).
+     * - `needsDatestampProjection`: `true` when the compiled routine returns the full row (`spReturnMode === 'full'`)
+     *   but the caller requested `'datestamps_only'` at runtime, requiring the provider to project the result down
+     *   to `datestampSelectColumnsSQL` before wire transmission.
+     */
+    protected ResolveSaveReturnContext(
+        entity: BaseEntity,
+        options?: EntitySaveOptions,
+    ): SaveReturnContext {
+        const spReturnMode = entity.EntityInfo.SaveReturnMode ?? 'full';
+        const effectiveReturnMode = options?.SaveReturnMode ?? spReturnMode;
+        const spReturnsDatestampsOnly = spReturnMode === 'datestamps_only';
+        const needsDatestampProjection = !spReturnsDatestampsOnly && effectiveReturnMode === 'datestamps_only';
+        const datestampSelectColumnsSQL = this.GetDatestampSelectColumnsSQL(entity.EntityInfo);
+        const routineSelectColumnsSQL = needsDatestampProjection ? datestampSelectColumnsSQL : '*';
+        const finalSelectColumnsSQL = effectiveReturnMode === 'datestamps_only' ? datestampSelectColumnsSQL : '*';
+        return {
+            spReturnMode,
+            effectiveReturnMode,
+            spReturnsDatestampsOnly,
+            needsDatestampProjection,
+            datestampSelectColumnsSQL,
+            routineSelectColumnsSQL,
+            finalSelectColumnsSQL,
+        };
+    }
+
+    /**
      * Wraps the bare SP-call binding with the dialect's result-capture
      * pattern. SQL Server emits `DECLARE @ResultTable + INSERT INTO @ResultTable EXEC + SELECT * FROM @ResultTable`;
      * PostgreSQL emits the bare `SELECT * FROM schema."fn"(...)`.
@@ -1344,6 +1426,24 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         binding: SaveCallBinding,
         entity: BaseEntity,
         spName: string,
+        options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
+    ): SaveSQLFragment;
+
+    /**
+     * Projects a save call's result set down to {@link SaveReturnContext.datestampSelectColumnsSQL}
+     * when a caller requests `SaveReturnMode: 'datestamps_only'` at runtime on an entity whose
+     * compiled stored procedure / function returns the full row (`returnContext.needsDatestampProjection === true`).
+     *
+     * - SQL Server captures `EXEC` into `DECLARE @ResultTable TABLE (...)` and emits
+     *   `SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;`.
+     * - PostgreSQL emits `SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM schema."fn"(...)`.
+     */
+    protected abstract ProjectSaveCallToDatestamps(
+        binding: SaveCallBinding,
+        entity: BaseEntity,
+        spName: string,
+        returnContext: SaveReturnContext,
     ): SaveSQLFragment;
 
     /**
@@ -1360,6 +1460,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         binding: SaveCallBinding,
         payload: RecordChangePayload,
         entity: BaseEntity,
+        options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
     ): SaveSQLFragment;
 
     /**
@@ -1395,10 +1497,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /** The entries of a save's parameter map whose fields this save actually changed. */
-    private changedFieldValues(entity: BaseEntity, fieldValues: Map<EntityFieldInfo, unknown>): Map<EntityFieldInfo, unknown> {
+    private changedFieldValues(
+        entity: BaseEntity,
+        fieldValues: Map<EntityFieldInfo, unknown>,
+        dirtyFields?: ReadonlySet<EntityFieldInfo>,
+    ): Map<EntityFieldInfo, unknown> {
         const changed = new Map<EntityFieldInfo, unknown>();
         for (const [f, value] of fieldValues) {
-            if (entity.GetFieldByName(f.Name)?.Dirty) changed.set(f, value);
+            const isDirty = dirtyFields ? dirtyFields.has(f) : !!entity.GetFieldByName(f.Name)?.Dirty;
+            if (isDirty) changed.set(f, value);
         }
         return changed;
     }
@@ -1424,6 +1531,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         // 1. Iterate fields, apply IsSPParameter + PK rules, coerce values.
         const fieldValueMap = new Map<EntityFieldInfo, unknown>();
+        const dirtyFields = isUpdate ? new Set<EntityFieldInfo>() : undefined;
         for (const f of entity.EntityInfo.Fields) {
             if (!f.IsSPParameter(isUpdate)) continue;
 
@@ -1462,6 +1570,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const coerced = this.CoerceSaveFieldValue(f, rawValue, isUpdate);
             if (coerced.kind === 'skip') continue;
             fieldValueMap.set(f, coerced.value);
+            if (dirtyFields && theField?.Dirty) {
+                dirtyFields.add(f);
+            }
         }
 
         // 2. Encrypt — between coercion and rendering, mutates the map in place.
@@ -1470,11 +1581,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // 3. Render the provider-specific binding.
         const binding = this.RenderSaveCallBinding(entity, fieldValueMap, isUpdate, spName);
 
-        // 4. Wrap with result capture. This is the "no-record-change" save
-        //    shape; we also keep it as simpleSQL so consumers (e.g.
-        //    DatabaseProviderBase's `simpleSQLFallback` flow) have a
-        //    record-change-free form to fall back to.
-        const baseSaveSQL = this.WrapSaveCallForResult(binding, entity, spName);
+        // 4. Resolve SaveReturnContext and wrap with result capture.
+        //    `unprojectedSaveSQL` is the bare SP/function call (kept for `simpleSQL` fallback so
+        //    SQL logging / migration replay never gets polluted with runtime datestamp projection wrappers).
+        //    When `returnContext.needsDatestampProjection` is true, `ProjectSaveCallToDatestamps`
+        //    projects the executed result down to `datestampSelectColumnsSQL`.
+        const returnContext = this.ResolveSaveReturnContext(entity, options);
+        const unprojectedSaveSQL = this.WrapSaveCallForResult(binding, entity, spName, undefined, {
+            ...returnContext,
+            effectiveReturnMode: returnContext.spReturnMode,
+            needsDatestampProjection: false,
+            routineSelectColumnsSQL: '*',
+            finalSelectColumnsSQL: returnContext.spReturnsDatestampsOnly ? returnContext.datestampSelectColumnsSQL : '*',
+        });
+        const baseSaveSQL = returnContext.needsDatestampProjection
+            ? this.ProjectSaveCallToDatestamps(binding, entity, spName, returnContext)
+            : unprojectedSaveSQL;
         let saveSQL = baseSaveSQL;
         // A CREATE's logged form is guarded on the primary key so a migration replay of
         // the recording converges on a database that already holds the row (#4503). An
@@ -1482,12 +1604,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // resets the target's other columns. A forced save (IgnoreDirtyState, e.g. MetadataSync's
         // `alwaysPush`) asked to re-impose the whole row, so it keeps the full-row form. Dialects
         // without a replay form log the plain save SQL.
-        const replaySQL = isNew
-            ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
-            : options?.IgnoreDirtyState
-              ? undefined
-              : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap));
-        const simpleSQL = replaySQL ?? baseSaveSQL.sql;
+        // Computed lazily and memoized so saves with SQL logging off skip replay/literal rendering.
+        let cachedSimpleSQL: string | undefined;
+        const computeSimpleSQL = (): string => {
+            if (cachedSimpleSQL === undefined) {
+                const replaySQL = isNew
+                    ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
+                    : options?.IgnoreDirtyState
+                      ? undefined
+                      : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap, dirtyFields));
+                // A statement that runs with parameters is logged in its literal form, which replays alone.
+                cachedSimpleSQL = replaySQL ?? unprojectedSaveSQL.literalSQL ?? unprojectedSaveSQL.sql;
+            }
+            return cachedSimpleSQL;
+        };
 
         // 5. Optionally wrap with record-change emission.
         let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
@@ -1496,18 +1626,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (this.ShouldTrackRecordChanges(entity.EntityInfo) && options?.SkipRecordChanges !== true) {
             const newData = entity.GetAll(false);
             const oldData = isUpdate ? entity.GetAll(true) : null;
-
-            // ISA propagation hook: capture the diff for SS subtype propagation.
-            // Returned via `extraData` so the SS subclass can consume it without re-diffing.
-            if (isUpdate && oldData) {
-                const diffChanges = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
-                if (diffChanges && Object.keys(diffChanges).length > 0) {
-                    overlappingChangeData = {
-                        changesJSON: JSON.stringify(diffChanges),
-                        changesDescription: this.CreateUserDescriptionOfChanges(diffChanges),
-                    };
-                }
-            }
 
             const payload = this.BuildRecordChangePayload(
                 newData,
@@ -1521,15 +1639,34 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 entity.CloneContext,
             );
             if (payload) {
-                saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity);
+                // ISA propagation hook: reuse the diff already computed by BuildRecordChangePayload
+                // for SS subtype propagation without running DiffObjects + JSON.stringify twice.
+                if (isUpdate && oldData && payload.changesJSON) {
+                    overlappingChangeData = {
+                        changesJSON: payload.changesJSON,
+                        changesDescription: payload.changesDescription,
+                    };
+                }
+                saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity, options, returnContext);
             }
         }
 
         const result: SaveSQLResult = {
             fullSQL: saveSQL.sql,
-            simpleSQL,
+            get simpleSQL(): string {
+                return computeSimpleSQL();
+            },
             parameters: saveSQL.parameters ?? null,
         };
+        if ('literalSQL' in saveSQL) {
+            Object.defineProperty(result, 'literalSQL', {
+                enumerable: true,
+                configurable: true,
+                get(): string | undefined {
+                    return saveSQL.literalSQL;
+                },
+            });
+        }
         if (overlappingChangeData) {
             (result as unknown as { extraData: Record<string, unknown> }).extraData = { overlappingChangeData };
         }
@@ -1897,6 +2034,46 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Throws unless a caller-supplied WHERE piece (ExtraFilter, OverrideExcludeFilter, a stored view
+     * WhereClause) stays inside the parentheses this provider puts around it, read with this
+     * provider's SQL dialect (see `IsBalancedSQLFragment`). The pieces are ANDed with row-level
+     * security, which also carries API-key row filters and guest scope; a piece that closes its
+     * parentheses early, such as `1=1) OR (1=1`, would leave those filters on one side of an OR the
+     * caller controls.
+     */
+    protected AssertClauseBalanced(clause: string, label: string, options?: BalancedFragmentOptions): void {
+        const check = IsBalancedSQLFragment(clause, this.Dialect, options);
+        if (!check.IsBalanced) {
+            throw new Error(`Invalid ${label}: ${check.Reason}`);
+        }
+    }
+
+    /**
+     * Applies {@link TransformExternalSQLClause} to a caller's ExtraFilter and checks the result with
+     * {@link AssertClauseBalanced}. When the transform changes the text and the filter is a chain of
+     * top-level AND terms, each term is transformed, checked and parenthesized on its own. A
+     * PreRunView hook that ANDs a server predicate (such as tenant scope) onto the caller's filter
+     * runs before this transform, so a rewrite that changes the caller's term cannot reach the
+     * hook's term.
+     */
+    protected PrepareExtraFilterSQL(extraFilter: string, entityInfo: EntityInfo): string {
+        if (!extraFilter) return '';
+        const transformed = this.TransformExternalSQLClause(extraFilter, entityInfo);
+        const terms = transformed === extraFilter ? null : SplitTopLevelAndTerms(extraFilter, this.Dialect);
+        if (!terms || terms.length < 2) {
+            this.AssertClauseBalanced(transformed, 'ExtraFilter');
+            return transformed;
+        }
+        return terms
+            .map((term) => {
+                const termSQL = this.TransformExternalSQLClause(term.trim(), entityInfo);
+                this.AssertClauseBalanced(termSQL, 'ExtraFilter');
+                return `(${termSQL})`;
+            })
+            .join(' AND ');
+    }
+
+    /**
      * Optionally wraps a view query with user view run logging.
      * SQL Server overrides to use spCreateUserViewRunWithDetail.
      * Default: returns null (no view run logging).
@@ -1992,11 +2169,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             // ── Parameters (transform user-provided SQL clauses for platform compatibility) ──
-            const extraFilter: string = this.TransformExternalSQLClause((params.ExtraFilter as string) || '', entityInfo);
+            const extraFilter: string = this.PrepareExtraFilterSQL((params.ExtraFilter as string) || '', entityInfo);
             const userSearchString: string = params.UserSearchString ?? '';
             const excludeUserViewRunID: string = params.ExcludeUserViewRunID ?? '';
             const overrideExcludeFilter: string = params.OverrideExcludeFilter ?? '';
             const saveViewResults: boolean = params.SaveViewResults ?? false;
+            this.AssertClauseFragmentIsSingleStatement(extraFilter, 'ExtraFilter');
+            this.AssertClauseFragmentIsSingleStatement(overrideExcludeFilter, 'OverrideExcludeFilter');
 
             // ── TOP / pagination mode ──
             // Keyset (AfterKey) takes precedence: validate now so failures are early, predictable,
@@ -2059,18 +2238,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // 1. View where clause
             if (viewEntity?.WhereClause && viewEntity.WhereClause.length > 0) {
                 const renderedWhere = await this.RenderViewWhereClause(viewEntity, user);
-                // SECURITY: a stored view WhereClause originates from a client save, so pass the
-                // rendered clause through the same screen ExtraFilter gets. The one exemption is
-                // CustomWhereClause views: those are admin-authored (MJUserViewEntityServer's save
-                // gate restricts setting/changing them to Owner-type users) and may legitimately
-                // contain constructs the screen blocks. Auto-generated clauses (FilterState /
-                // SmartFilter / nested {%UserView%} templates) always pass — the screen permits
-                // plain SELECT subqueries and blocks only stacked statements, DML, comments,
-                // UNION and WAITFOR.
+                // SECURITY: a stored view WhereClause originates from a client save, so the rendered
+                // clause passes the full client-clause screen (ScreenStoredViewWhereClause) and the
+                // keyword denylist ExtraFilter gets. The one exemption is CustomWhereClause views:
+                // those are admin-authored (MJUserViewEntityServer's save gate restricts setting/
+                // changing them to Owner-type users) and may legitimately contain constructs the
+                // screens block. Auto-generated clauses (FilterState / SmartFilter / nested
+                // {%UserView%} templates) are written against entity base views, which the screens
+                // permit when the running user reads each of those entities unscoped.
+                this.ScreenStoredViewWhereClause(viewEntity, renderedWhere, user);
                 const isCustomWhereClause = !!viewEntity.CustomWhereClause; // truthy — the DB may hand back true or 1
                 if (!isCustomWhereClause && !this.ValidateUserProvidedSQLClause(renderedWhere)) {
                     throw new Error(`Invalid view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}': contains one or more forbidden keywords`);
                 }
+                // CustomWhereClause views too: an unbalanced clause would take row-level security
+                // out of force for everyone who runs the view. Only their admin-written text may
+                // carry comments.
+                this.AssertClauseBalanced(renderedWhere, `view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}'`, {
+                    AllowComments: isCustomWhereClause,
+                });
                 whereSQL = `(${renderedWhere})`;
                 bHasWhere = true;
             }
@@ -2118,8 +2304,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // first column's value with a prior run — refuse rather than return the wrong rows.
                 this.assertSingleColumnPrimaryKey(entityInfo, 'ExcludeUserViewRunID / ExcludeDataFromAllPriorViewRuns');
                 let sExcludeSQL = `${this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name)} NOT IN (SELECT RecordID FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwUserViewRunDetails')} WHERE EntityID='${viewEntity?.EntityID}' AND`; // first-pk-ok: guarded above — view-run RecordID is a single bare key value, PrimaryKeys.length === 1 enforced
-                if (params.ExcludeDataFromAllPriorViewRuns === true)
+                if (params.ExcludeDataFromAllPriorViewRuns === true) {
+                    // SECURITY: the view ID is interpolated; a loaded view's ID is always a GUID.
+                    if (!IsValidUUID(String(viewEntity?.ID ?? '')))
+                        throw new Error(`ExcludeDataFromAllPriorViewRuns requires a saved view with a GUID ID`);
                     sExcludeSQL += ` UserViewID=${viewEntity?.ID})`;
+                }
                 else {
                     // SECURITY: excludeUserViewRunID is user-supplied (GraphQL input) and is
                     // interpolated directly into SQL here. Unlike ExtraFilter/OrderBy/
@@ -2136,6 +2326,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (overrideExcludeFilter.length > 0) {
                     if (!this.ValidateUserProvidedSQLClause(overrideExcludeFilter))
                         throw new Error(`Invalid OverrideExcludeFilter: ${overrideExcludeFilter}, contains one more for forbidden keywords`);
+                    this.AssertClauseBalanced(overrideExcludeFilter, 'OverrideExcludeFilter');
                     sExcludeSQL += ' OR (' + overrideExcludeFilter + ')';
                 }
                 whereSQL = bHasWhere ? `${whereSQL} AND (${sExcludeSQL})` : `(${sExcludeSQL})`;
@@ -2200,6 +2391,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const orderBy: string = rawOrderBy.length > 0
                 ? (usingKeyset || orderByIsPkFallback ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
                 : '';
+            if (orderBy.length > 0 && !usingKeyset && !orderByIsPkFallback) {
+                this.AssertClauseFragmentIsSingleStatement(orderBy, 'OrderBy');
+                // No caller OrderBy means the sort came from the saved view's stored sort state.
+                if (!params.OrderBy && viewEntity) this.ScreenStoredViewOrderBy(orderBy, user);
+            }
 
             // View run logging (SQL Server-specific, others return null)
             let userViewRunID = '';
@@ -2627,10 +2823,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // Note this restores the pre-#4392 screen for this path; it does not close the
             // unquoted-format hole, which the denylist never covered (`1) OR 1=1` carries no
             // forbidden keyword). Quoting `{0}` in the format is what actually closes that.
-            if (this.userSearchFieldsUseCustomFormat(entityInfo, deniedSearchFields) && !this.ValidateUserProvidedSQLClause(userSearchString)) {
+            //
+            // The screen reads the quote-doubled term, because that is the text `{0}` becomes.
+            if (this.userSearchFieldsUseCustomFormat(entityInfo, deniedSearchFields) && !this.ValidateUserProvidedSQLClause(safeUserSearchString)) {
                 throw new Error(
                     `Invalid User Search string: this entity has a field using UserSearchParamFormatAPI, ` +
-                    `which splices the term directly into SQL, and the term contains forbidden keywords.`,
+                    `which splices the term directly into SQL, and the term is not allowed there: it contains ` +
+                    `a forbidden keyword, a comment or a semicolon, or text that cannot be read as complete SQL ` +
+                    `tokens, such as an unbalanced quote or bracket.`,
                 );
             }
             const escapedTerm = this.escapeLikeTerm(safeUserSearchString);
@@ -2658,6 +2858,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 sUserSearchSQL = '(1=0)';
             }
         }
+        // A UserSearchParamFormatAPI format may splice the term outside quotes; the term must not end the statement there.
+        this.AssertClauseFragmentIsSingleStatement(sUserSearchSQL, 'UserSearchString');
         return sUserSearchSQL;
     }
 
@@ -2763,6 +2965,54 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (t !== 'nvarchar' && t !== 'varchar' && t !== 'char' && t !== 'nchar') return false;
         if (field.Length === -1) return false;
         return true;
+    }
+
+    /**************************************************************************/
+    // Client clause screening
+    /**************************************************************************/
+
+    /**
+     * SECURITY — refuses a statement separator or comment in a filter, sort or search fragment.
+     * Runs for every RunView caller, server-internal ones included, and cannot refuse a legitimate
+     * fragment. The full base-view screen runs at the client entry points; see {@link ClientClauseScreen}.
+     */
+    protected AssertClauseFragmentIsSingleStatement(clause: string, label: string): void {
+        ClientClauseScreen.AssertSingleStatementFragment(clause, label, this.Dialect);
+    }
+
+    /**
+     * SECURITY — the full client-clause screen ({@link ClientClauseScreen.AssertClauseUsesEntityBaseViews})
+     * against this provider's entities and dialect, with `contextUser` as the acting user. With
+     * `entityInfo`, the clause is screened in the form this provider runs a client clause for that
+     * entity ({@link TransformExternalSQLClause}). Server code that hands client SQL text to RunView
+     * outside the API entry points calls this: ad-hoc list sources (`ListOperations`) and the
+     * saved-view save gate (`MJUserViewEntityServer`).
+     */
+    public ScreenClientClause(clause: string | null | undefined, label: string, contextUser?: UserInfo, entityInfo?: EntityInfo): void {
+        const text = clause && entityInfo ? this.TransformExternalSQLClause(clause, entityInfo) : clause;
+        ClientClauseScreen.AssertClauseUsesEntityBaseViews(text, label, this.Entities, this.Dialect, contextUser);
+    }
+
+    /**
+     * SECURITY — screens a saved view's rendered WhereClause with the full client-clause screen.
+     * Any user who can save a view can write its WhereClause, directly or through FilterState or a
+     * Smart Filter. Exempt: a CustomWhereClause view loaded as an entity, whose clause only an Owner
+     * can set (MJUserViewEntityServer). The flag on any other object, such as one built from a
+     * request body, is not trusted. The exemption tests `instanceof BaseEntity`, so a second copy of
+     * `@memberjunction/core` in the process makes loaded custom views fail closed, not open.
+     */
+    protected ScreenStoredViewWhereClause(viewEntity: MJUserViewEntityExtended, renderedWhere: string, user: UserInfo): void {
+        if (viewEntity instanceof BaseEntity && !!viewEntity.CustomWhereClause) return; // truthy — the DB may hand back true or 1
+        this.AssertClauseFragmentIsSingleStatement(renderedWhere, 'view WhereClause');
+        this.ScreenClientClause(renderedWhere, 'view WhereClause', user);
+    }
+
+    /**
+     * SECURITY — screens the ORDER BY a saved view builds from its stored SortState / GridState with
+     * the full client-clause screen. Any user who can save a view can write those.
+     */
+    protected ScreenStoredViewOrderBy(orderBy: string, user: UserInfo): void {
+        this.ScreenClientClause(orderBy, 'OrderBy', user);
     }
 
     /**************************************************************************/
@@ -3287,7 +3537,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         let whereSQL = '';
         let bHasWhere = false;
 
-        const extraFilter = this.TransformExternalSQLClause((params.ExtraFilter as string) || '', entityInfo);
+        // PrepareExtraFilterSQL transforms and balance-checks the filter; the single-statement
+        // check then runs on the result, as on the main view path.
+        const extraFilter = this.PrepareExtraFilterSQL((params.ExtraFilter as string) || '', entityInfo);
+        this.AssertClauseFragmentIsSingleStatement(extraFilter, 'ExtraFilter');
         if (extraFilter.length > 0) {
             if (!this.ValidateUserProvidedSQLClause(extraFilter))
                 throw new Error(`Invalid Extra Filter: ${extraFilter}`);
@@ -3768,6 +4021,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (orderBy.length > 0) {
                 if (!this.ValidateUserProvidedSQLClause(orderBy))
                     throw new Error(`Invalid OrderBy clause: ${orderBy}`);
+                this.AssertClauseFragmentIsSingleStatement(orderBy, 'OrderBy');
                 sql += ` ORDER BY ${orderBy}`;
             }
 
@@ -3803,6 +4057,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const itemsWithoutValidationSQL: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
             const firstFetchWithValidation: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }> = [];
             const errorResults: RunQueryWithCacheCheckResult<T>[] = [];
+            const definitionHashes = new Map<number, string>();
 
             for (let i = 0; i < params.length; i++) {
                 const item = params[i];
@@ -3821,7 +4076,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     continue;
                 }
 
-                if (!item.cacheStatus) {
+                const definition = this.QueryDefinitionSignatureFor(query);
+                if (definition) {
+                    definitionHashes.set(i, definition.Hash);
+                }
+
+                if (!item.cacheStatus || this.clientSlotDefinitionDiffers(item.cacheStatus, definition)) {
+                    // No slot, or the client's slot holds rows of another definition of the query:
+                    // whatever CacheValidationSQL says about the data, those rows came from other SQL.
                     if (query.CacheValidationSQL) {
                         // First fetch for a validated query — run the validation status
                         // anyway so the fresh response is STAMPED with the validation
@@ -3882,7 +4144,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             ];
 
             const fullQueryResults = await Promise.all(fullQueryPromises);
-            const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
+            const allResults = [...errorResults, ...currentResults, ...fullQueryResults]
+                .map(result => result.status === 'error' || !definitionHashes.has(result.queryIndex)
+                    ? result
+                    : { ...result, definitionHash: definitionHashes.get(result.queryIndex) });
             allResults.sort((a, b) => a.queryIndex - b.queryIndex);
 
             return { success: true, results: allResults };
@@ -3915,12 +4180,40 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 resolvable: true,
                 authorized: !user || query.UserCanRun(user).canRun,
                 categoryPath: query.CategoryPath,
-                queryName: query.Name
+                queryName: query.Name,
+                queryId: query.ID,
+                definition: this.QueryDefinitionSignatureFor(query)
             };
         } catch (e) {
             LogStatusEx({ message: `ResolveQueryCacheAuthorization: resolution failed (${e instanceof Error ? e.message : String(e)}) — treating as unresolvable.`, verboseOnly: true });
             return { resolvable: false, authorized: false };
         }
+    }
+
+    /**
+     * The definition signature of `query` on this provider's platform: what a RunQuery cache slot
+     * of the query must have been written under to be served. Computed by `QueryEngine` from the
+     * same metadata this provider executes. Undefined when the engine cannot compute it, which
+     * disables the definition check for that read rather than failing it.
+     */
+    protected QueryDefinitionSignatureFor(query: MJQueryEntityExtended): QueryDefinitionSignature | undefined {
+        try {
+            return QueryEngine.Instance.GetDefinitionSignature(query.ID, this.PlatformKey as DatabasePlatform);
+        } catch (e) {
+            LogStatusEx({ message: `QueryDefinitionSignatureFor: could not compute the definition of query '${query.Name}' (${e instanceof Error ? e.message : String(e)}) — skipping the definition check.`, verboseOnly: true });
+            return undefined;
+        }
+    }
+
+    /**
+     * True when a client sent the definition hash its slot was written under and it is not this
+     * server's. A client that sends none (a release before the hash existed) gets no definition check.
+     */
+    private clientSlotDefinitionDiffers(cacheStatus: RunQueryCacheStatus, definition: QueryDefinitionSignature | undefined): boolean {
+        if (cacheStatus.definitionHash == null || !definition) {
+            return false;
+        }
+        return cacheStatus.definitionHash !== definition.Hash;
     }
 
     /**
@@ -4027,21 +4320,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const promises = items.map(async ({ index, query }) => {
             try {
                 const rows = await this.ExecuteSQL<Record<string, unknown>>(query.CacheValidationSQL!, undefined, undefined, contextUser);
-                if (rows && rows.length > 0) {
-                    const row = rows[0];
-                    results.set(index, {
-                        success: true,
-                        // Both spellings accepted. The shipped `CacheValidationSQL` field description tells authors
-                        // to return `TotalRows`, while this has only ever read `RowCount` — so a query written
-                        // from the documentation yields `Number(undefined)` = NaN, `NaN !== NaN` makes the slot
-                        // never validate, and NaN is then written back into the client's cache entry where `??`
-                        // cannot clear it. Silent, permanent degradation to always-refetch, with no error.
-                        rowCount: Number(row['RowCount'] ?? row['TotalRows']),
-                        maxUpdatedAt: row['MaxUpdatedAt'] ? new Date(String(row['MaxUpdatedAt'])).toISOString() : undefined,
-                    });
-                } else {
-                    results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
-                }
+                results.set(index, this.QueryCacheStatusFromRow(rows?.[0]));
             } catch (e) {
                 results.set(index, { success: false, errorMessage: e instanceof Error ? e.message : String(e) });
             }
@@ -4049,6 +4328,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         await Promise.all(promises);
         return results;
+    }
+
+    /**
+     * Reads the first row a query's CacheValidationSQL returned into a cache status. No row means
+     * an empty result: zero rows, no timestamp.
+     *
+     * Both spellings of the count are accepted. The shipped `CacheValidationSQL` field description
+     * tells authors to return `TotalRows`, while older queries return `RowCount`. Reading only one
+     * of them yields `Number(undefined)` = NaN for the other, `NaN !== NaN` makes the slot never
+     * validate, and NaN is then written back into the client's cache entry where `??` cannot clear
+     * it: a silent, permanent degradation to always-refetch, with no error. Platform providers that
+     * batch the validation SQL read their rows through this too.
+     */
+    protected QueryCacheStatusFromRow(row: Record<string, unknown> | undefined): { success: boolean; maxUpdatedAt?: string; rowCount?: number } {
+        if (!row) {
+            return { success: true, rowCount: 0, maxUpdatedAt: undefined };
+        }
+        const maxUpdatedAt = row['MaxUpdatedAt'];
+        return {
+            success: true,
+            rowCount: Number(row['RowCount'] ?? row['TotalRows']),
+            maxUpdatedAt: maxUpdatedAt
+                ? (maxUpdatedAt instanceof Date ? maxUpdatedAt : new Date(String(maxUpdatedAt))).toISOString()
+                : undefined,
+        };
     }
 
     /**
@@ -4612,7 +4916,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     protected async ExecuteAdhocQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         try {
             const validator = SQLExpressionValidator.Instance;
-            const validation = validator.validateFullQuery(params.SQL!);
+            const validation = validator.ValidateFullQuery(params.SQL!, this.PlatformKey);
             const statementCheck = IsReadOnlyQuery(params.SQL!, this.Dialect);
             if (!validation.valid || !statementCheck.IsReadOnly) {
                 return {
@@ -4818,6 +5122,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const cacheable = !params.SQL && ttlSeconds > 0 && LocalCacheManager.Instance.IsInitialized;
 
         let fingerprint: string | undefined;
+        let definition: QueryDefinitionSignature | undefined;
         if (cacheable) {
             // MaxRows/StartRow shape the result set, and the data source ID disambiguates slots.
             const fingerprintParams: Record<string, unknown> = {
@@ -4827,7 +5132,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 __eds: externalDataSourceID,
             };
             fingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(query.ID, query.Name, fingerprintParams, this.InstanceConnectionString, query.CategoryPath);
-            const cached = await LocalCacheManager.Instance.GetRunQueryResult(fingerprint); // TTL-enforced
+            definition = this.QueryDefinitionSignatureFor(query);
+            // TTL-enforced, and a miss when the slot was written under another definition of the query.
+            const cached = await LocalCacheManager.Instance.GetRunQueryResult(fingerprint, definition);
             if (cached) {
                 return {
                     QueryID: cached.queryId ?? query.ID,
@@ -4863,6 +5170,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // Fire-and-forget store with the data source's TTL (ms).
             LocalCacheManager.Instance.SetRunQueryResult(
                 fingerprint, query.Name, paginatedResult, '', totalRowCount, query.ID, ttlSeconds * 1000,
+                undefined, definition,
             ).catch(e => LogError(`External RunQuery cache write failed: ${e}`));
         }
         return { ...checked, Results: paginatedResult as RunQueryResult['Results'], RowCount: paginatedResult.length, TotalRowCount: totalRowCount };
@@ -5245,9 +5553,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Trim trailing spaces for fixed-width char fields (char/nchar pad with spaces on both SQL Server and PG)
             for (const field of entityInfo.Fields) {
-                if (field.TSType === EntityFieldTSType.String &&
-                    field.Type.toLowerCase().includes('char') &&
-                    !field.Type.toLowerCase().includes('varchar')) {
+                const isFixedWidth = field.FixedWidthColumn ?? (field.TSType === EntityFieldTSType.String && (field.Type.trim().toLowerCase() === 'char' || field.Type.trim().toLowerCase() === 'nchar'));
+                if (isFixedWidth) {
                     const val = ret[field.Name];
                     if (typeof val === 'string') ret[field.Name] = val.trimEnd();
                 }
@@ -6238,9 +6545,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const matches = data?.matches ?? [];
 
         const out: ScoredCandidate[] = [];
+        const seenRecordIds = new Set<string>();
         for (const m of matches) {
             const recordId = String(m.metadata?.['RecordID'] ?? '');
             if (!recordId) continue;
+            const normalizedKey = recordId.toLowerCase();
+            if (seenRecordIds.has(normalizedKey)) continue;
+            seenRecordIds.add(normalizedKey);
             out.push({
                 ID: recordId,
                 Score: m.score,

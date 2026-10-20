@@ -21,7 +21,8 @@ export const ECOSYSTEM_SOURCES = [
   { repo: 'Skyway', extraLinks: [] },
   { repo: 'Forge', extraLinks: [{ label: 'Forge Wiki', url: 'https://github.com/MemberJunction/Forge/wiki' }] },
   { repo: 'VSCode', extraLinks: [] },
-  { repo: 'bizapps-common', extraLinks: [] },
+  // BizApps are not listed here one by one: the ecosystem page links to the
+  // generated BizApps catalog (scripts/lib/bizapps-catalog.mjs) instead.
 ];
 
 /** Fetch card data for every ecosystem repo. Never throws. */
