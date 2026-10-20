@@ -2,11 +2,11 @@
 
 Measurements from `index.html` (see README.md) on 2026-10-19, in Chrome 155 on macOS (prefers-color-scheme: dark,
 so the page's shared tokens resolved to their dark values). The two MJ-resident elements were built from this repo
-at `d3903777ba` (MJ 6.2.0-edge.4). The support widget's browser bundle is not published anywhere and is produced by
+at `d3903777ba` (MJ 6.2.0-edge.4; a docs-only branch over `origin/next` `f95b0447c5`, so the package sources are `next`'s). The support widget's browser bundle is not published anywhere and is produced by
 neither its `build` script nor the publish workflow; "the `bundle:min` build" below means the bundle its own
 `bundle:min` script emits (minified, no keep-names), which is what a consumer following its README gets. The three
 Open App elements come from fresh clones of bizapps-forms `d665fce3`,
-bizapps-orders `514d09bf` and bizapps-caliber `0dbb43a7`, which take `@memberjunction/*` from npm at 6.1.x. Every
+bizapps-orders `514d09bf` and bizapps-caliber `0dbb43a7`, which take `@memberjunction/*` from npm at 6.1.6 (read from each clone's installed `@memberjunction/core`). Every
 "observed" cell below was read from a saved report or from `measure.mjs`; nothing is estimated.
 
 The host under test is the page's element stage: Georgia, its own text color (`--mj-status-info-text`, computed
@@ -190,7 +190,7 @@ Caliber carry none.
   own first-request error state, which is one real Angular-rendered view per element, so their bleed and layout rows
   cover that view only.
 - Two Angular runtimes of different versions on one page (§2.1): all four Angular elements booted side by side
-  (MJ and Forms at 21.2.22, Orders and Caliber at 21.1.3 per the plan; versions not re-read from the clones) with no
+  (MJ and Forms at 21.2.22, Orders and Caliber at 21.1.3, read from each clone's installed `@angular/core` on 2026-10-20) with no
   uncaught error, but nothing here exercises them past their first view.
 - The doubled-registry consequence (an entity object of the wrong copy or version) was inferred from `ClassFactory`'s
   priority rule, not provoked; provoking it needs a working MJAPI or a stub that lets one element reach `GetEntityObject`.

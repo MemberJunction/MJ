@@ -8,7 +8,7 @@ Sources read:
 - MJ, `packages/Angular/Generic/realtime-widget` (`src/session-entry.ts`, `src/lib/**`, `src/shell/**`),
   plus the overlay it renders from `packages/Angular/Generic/conversations/src/lib/components/realtime/`
   and the helper packages `realtime-media`, `realtime-channels`, `media-player`.
-- Orders, `/Users/matt/repos/bizapps-orders/packages/Angular` at `514d09bf`:
+- Orders, bizapps-orders `packages/Angular` at `514d09bf`:
   `scripts/checkout-element-entry.ts` and `src/lib/checkout-widget/`.
 
 Paths below are relative to those two roots. "Not verified" marks anything inferred rather than seen in code
