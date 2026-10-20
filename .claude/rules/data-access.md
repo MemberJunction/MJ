@@ -110,6 +110,18 @@ function gateCacheWrite(name: string, provider?: IMetadataProvider) {
 }
 ```
 
+The same holds when the provider goes **into an options object** rather than being called directly. An Angular component (`BaseAngularComponent` subclass) has a bound provider, `this.ProviderToUse`, so hand that one on:
+
+```typescript
+// ❌ WRONG — inside a component: the save goes to the default server, not this component's
+await op.Execute({ spec }, { provider: Metadata.Provider, user: this.CurrentUser });
+
+// ✅ CORRECT
+await op.Execute({ spec }, { provider: this.ProviderToUse, user: this.CurrentUser });
+```
+
+**Genuinely global code** (bootstrap, CLI, CodeGen, a singleton that registers itself as the default) marks the line with `// global-provider-ok: <specific reason>`. A `provider ?? Metadata.Provider` fallback needs no marker. Anything else fails `MultiProviderCompliance` (`npm run check:guards`).
+
 **Why this matters**: `LocalCacheManager.SetRunViewResult`, `BaseEntityEvent` consumers, `AuthorizationEvaluator`, and `BaseEngine.applyRemoteRecordData` all read per-provider state (entity flags, roles, current user). When they reach for `new Metadata()` in a multi-provider client, they read the wrong server's metadata and produce subtly wrong cache decisions, role evaluations, or entity instances. These are latent bugs that don't surface until parallel-server scenarios exist.
 
 **Metadata Info objects know their provider.** Providers construct every Info object as `new X(row, provider)`, and `BaseInfo.OwningProvider` keeps that back-reference (outside the instance, so it never serializes). Getters on an Info class that resolve sibling metadata — `EntityInfo.ChildEntities` / `ParentEntityInfo`, RLS filters, `QueryInfo.Fields`, `AuthorizationInfo.Roles` — go through `MetadataProviderFor(this)`, never `Metadata.Provider`. When you add such a getter, do the same, and when an Info class builds child Info objects, pass the provider on.

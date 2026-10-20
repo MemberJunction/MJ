@@ -142,7 +142,7 @@ class FailureHarness {
     public runs: FakeAgentRun[] = [];
     public steps: MockStepEntity[] = [];
     public runActionCallCount = 0;
-    public runAction: () => ActionResult = () => {
+    public runAction: (dispatched?: RunActionParams) => ActionResult = () => {
         this.runActionCallCount++;
         const ar = new ActionResult();
         ar.Success = true;
@@ -221,7 +221,7 @@ class FailureHarness {
                     ResultCodes: { Items: [] },
                 },
             ],
-            RunAction: async () => this.runAction(),
+            RunAction: async (dispatched: RunActionParams) => this.runAction(dispatched),
         };
     }
 
@@ -790,6 +790,35 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             await agent2.ExecuteSingleAction(params, { name: ACTION_NAME, params: { q: 'X' } }, actionEntity);
             const identical = await agent2.ExecuteSingleAction(params, { name: ACTION_NAME, params: { q: 'X' } }, actionEntity);
             expect((identical as CircuitBreakerActionResult).Reason).toBe('identical-arguments');
+        });
+    });
+
+    describe('ExecuteSingleAction argument coercion', () => {
+        it('coerces envelope-path arguments against the declared ValueSchema before dispatch', async () => {
+            const agent = new BaseAgent();
+            const actionEntity = {
+                ID: ACTION_ID,
+                Name: ACTION_NAME,
+                Params: { Items: [
+                    { Name: 'Width', Type: 'Input', ValueType: 'Scalar', IsArray: false, ValueSchemaObject: { type: 'integer' } },
+                    { Name: 'ShowGrid', Type: 'Input', ValueType: 'Scalar', IsArray: false, ValueSchemaObject: { type: 'boolean' } },
+                    { Name: 'Title', Type: 'Input', ValueType: 'Scalar', IsArray: false, ValueSchemaObject: null }
+                ] }
+            } as unknown as import('@memberjunction/actions-base').MJActionEntityExtended;
+            let received: Record<string, unknown> = {};
+            harness.runAction = (dispatched) => {
+                received = Object.fromEntries((dispatched?.Params ?? []).map((p) => [p.Name, p.Value]));
+                const ar = new ActionResult();
+                ar.Success = true;
+                ar.Message = 'ok';
+                ar.RunParams = new RunActionParams();
+                ar.RunParams.Action = actionEntity;
+                return ar;
+            };
+
+            await agent.ExecuteSingleAction(makeParams(), { name: ACTION_NAME, params: { Width: '640', ShowGrid: 'true', Title: '42' } }, actionEntity);
+
+            expect(received).toEqual({ Width: 640, ShowGrid: true, Title: '42' });
         });
     });
 

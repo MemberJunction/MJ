@@ -3120,7 +3120,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         const gateDecisions: GateDecisionRecord[] = [];
 
         for (const d of ordinary) {
-            if (d.Condition?.trim()) {
+            const cond = d.Condition?.trim();
+            if (cond && cond.toLowerCase() !== 'true' && cond !== '1 === 1' && cond !== '1 == 1') {
                 const decision = this.evaluateEdgeCondition(d, entityById, failureSemantics, invocation, decisions, debug);
                 if (decision.decided) {
                     gateDecisions.push({
@@ -3131,8 +3132,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                 }
                 if (decision.outcome === 'drop') { droppedInto.add(d.TaskID); continue; }
                 if (decision.outcome === 'hold') heldByCondition.add(d.TaskID);
+                stillReachable.add(d.TaskID);
             }
-            stillReachable.add(d.TaskID);
             liveEdges.push({
                 taskId: d.TaskID,
                 dependsOnTaskId: d.DependsOnTaskID,
@@ -4596,8 +4597,174 @@ export class TaskGraphDispatcher implements IShutdownable {
             }
         }
         if (inputPayload) {
-            Object.assign(merged, inputPayload);
+            const upstreamSnapshot = { ...merged };
+            const resolvedInput = this.resolveInputValue(inputPayload, upstreamSnapshot, true) as Record<string, unknown>;
+            return { ...merged, ...resolvedInput };
         }
         return merged;
+    }
+
+    /**
+     * Resolves LLM-authored template references (such as `{{output.task3.handle}}`, `{{output.summary}}`,
+     * or `@task1.output.rows`) inside `inputPayload` against the merged upstream dependency outputs so
+     * literal placeholder strings do not clobber real upstream values.
+     */
+    private resolveInputValue(
+        val: unknown,
+        upstream: Record<string, unknown>,
+        isRootObject: boolean = false,
+        topLevelKey?: string,
+    ): unknown {
+        if (typeof val === 'string') {
+            const singleMustache = val.match(/^\s*\{\{\s*([^{}]+?)\s*\}\}\s*$/);
+            const singleAtRef = val.match(/^\s*@([a-zA-Z0-9_-]+\.(?:output|payload)(?:\..+?)?)\s*$/i);
+            if (singleMustache || singleAtRef) {
+                const expr = singleMustache ? singleMustache[1] : singleAtRef![1];
+                if (this.isWholeUpstreamReference(expr, upstream)) {
+                    if (topLevelKey) {
+                        const existing = this.lookupCaseInsensitive(upstream, topLevelKey);
+                        if (existing !== undefined) {
+                            return existing;
+                        }
+                    }
+                    return { ...upstream };
+                }
+                const resolved = this.resolveUpstreamPath(expr, upstream);
+                if (resolved !== undefined) {
+                    return resolved;
+                }
+                if (topLevelKey) {
+                    const existing = this.lookupCaseInsensitive(upstream, topLevelKey);
+                    if (existing !== undefined) {
+                        return existing;
+                    }
+                }
+                return val;
+            }
+            if (val.includes('{{') && val.includes('}}')) {
+                return val.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (fullMatch, expr: string) => {
+                    const resolved = this.resolveUpstreamPath(expr, upstream);
+                    if (resolved === undefined || resolved === null) {
+                        return fullMatch;
+                    }
+                    return typeof resolved === 'object' ? JSON.stringify(resolved) : String(resolved);
+                });
+            }
+            return val;
+        }
+        if (Array.isArray(val)) {
+            return val.map((item) => this.resolveInputValue(item, upstream, false));
+        }
+        if (val && typeof val === 'object') {
+            const out: Record<string, unknown> = {};
+            for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+                out[k] = this.resolveInputValue(v, upstream, false, isRootObject ? k : undefined);
+            }
+            return out;
+        }
+        return val;
+    }
+
+    /**
+     * Returns true when `rawExpr` refers to an entire upstream task output object
+     * (e.g. `@task1.output`, `{{query_sales.output}}`, `{{output.task1}}`, `{{output}}`)
+     * rather than a specific property path within the output.
+     */
+    private isWholeUpstreamReference(rawExpr: string, upstream: Record<string, unknown>): boolean {
+        const normalized = rawExpr.trim().replace(/^@/, '');
+        if (/^(?:[a-zA-Z0-9_-]+\.)?(?:output|outputs|outputFromTask|taskOutput|taskOutputs|payload)$/i.test(normalized)) {
+            return true;
+        }
+        const m = normalized.match(/^(?:output|outputs|outputFromTask|taskOutput|taskOutputs|payload|result)\.([a-zA-Z0-9_-]+)$/i);
+        if (m) {
+            const key = m[1];
+            if (
+                this.lookupCaseInsensitive(upstream, key) === undefined &&
+                !(upstream.results && typeof upstream.results === 'object' && !Array.isArray(upstream.results) &&
+                    this.lookupCaseInsensitive(upstream.results as Record<string, unknown>, key) !== undefined)
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private resolveUpstreamPath(rawExpr: string, upstream: Record<string, unknown>): unknown {
+        let normalized = rawExpr.trim().replace(/^@/, '');
+        if (this.isWholeUpstreamReference(normalized, upstream)) {
+            return { ...upstream };
+        }
+        const taskOutputFieldMatch =
+            normalized.match(/^(?:output|outputs|outputFromTask|taskOutput|taskOutputs|payload|result)\.[a-zA-Z0-9_-]+\.(?:output|payload)\.(.+)$/i) ??
+            normalized.match(/^[a-zA-Z0-9_-]+\.(?:output|payload)\.(.+)$/i);
+        if (taskOutputFieldMatch) {
+            normalized = taskOutputFieldMatch[1];
+        } else {
+            normalized = normalized.replace(/^(?:output|outputs|outputFromTask|taskOutput|taskOutputs|payload|result)\./i, '');
+        }
+
+        const direct = this.walkObjectPath(upstream, normalized);
+        if (direct !== undefined) {
+            return direct;
+        }
+        if (upstream.results && typeof upstream.results === 'object' && !Array.isArray(upstream.results)) {
+            const fromResults = this.walkObjectPath(upstream.results as Record<string, unknown>, normalized);
+            if (fromResults !== undefined) {
+                return fromResults;
+            }
+        }
+        // Fallback when the first segment is a symbolic task ID (e.g. `output.create_report_doc.handle` or `outputFromTask.code1.summary`)
+        const firstDot = normalized.indexOf('.');
+        if (firstDot > 0) {
+            const firstSeg = normalized.slice(0, firstDot);
+            const rest = normalized.slice(firstDot + 1);
+            if (this.lookupCaseInsensitive(upstream, firstSeg) === undefined) {
+                const viaRest = this.walkObjectPath(upstream, rest);
+                if (viaRest !== undefined) {
+                    return viaRest;
+                }
+                if (upstream.results && typeof upstream.results === 'object' && !Array.isArray(upstream.results)) {
+                    const viaResultsRest = this.walkObjectPath(upstream.results as Record<string, unknown>, rest);
+                    if (viaResultsRest !== undefined) {
+                        return viaResultsRest;
+                    }
+                }
+            }
+        }
+        return undefined;
+    }
+
+    private walkObjectPath(root: Record<string, unknown>, dotPath: string): unknown {
+        const segments = dotPath.split('.').map((s) => s.trim()).filter(Boolean);
+        let current: unknown = root;
+        for (const seg of segments) {
+            if (!current || typeof current !== 'object' || Array.isArray(current)) {
+                return undefined;
+            }
+            const arrayMatch = seg.match(/^([^[\]]+)\[(\d+)\]$/);
+            if (arrayMatch) {
+                const arrVal = this.lookupCaseInsensitive(current as Record<string, unknown>, arrayMatch[1]);
+                if (!Array.isArray(arrVal)) {
+                    return undefined;
+                }
+                current = arrVal[Number(arrayMatch[2])];
+                continue;
+            }
+            current = this.lookupCaseInsensitive(current as Record<string, unknown>, seg);
+        }
+        return current;
+    }
+
+    private lookupCaseInsensitive(obj: Record<string, unknown>, key: string): unknown {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            return obj[key];
+        }
+        const lower = key.toLowerCase();
+        for (const [k, v] of Object.entries(obj)) {
+            if (k.toLowerCase() === lower) {
+                return v;
+            }
+        }
+        return undefined;
     }
 }

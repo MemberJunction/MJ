@@ -12,7 +12,6 @@
       {
         "fields": {
           "RubricID": "@parent:ID",
-          "Status": "Draft",
           "PassThreshold": 0.7,
           "NotApplicablePolicy": "NotAllowed",
           "ScoreDisplayMin": 0,

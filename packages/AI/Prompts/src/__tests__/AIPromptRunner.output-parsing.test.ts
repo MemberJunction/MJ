@@ -18,6 +18,7 @@ type ParseInternals = {
   parseDateOutput(s: string, skip: boolean, errs: ValidationErrorInfo[]): Date;
   parseObjectOutput(s: string, prompt: unknown, skip: boolean, clean: boolean, errs: ValidationErrorInfo[], run: unknown, params?: unknown): Promise<unknown>;
   validateAgainstSchema(parsed: unknown, outputExample: string, promptId: string): Promise<ValidationErrorInfo[]>;
+  parsesAsJSON(text: string): boolean;
   parseAndValidateResultEnhanced(
     modelResult: unknown, prompt: unknown, skipValidation: boolean, cleanValidationSyntax: boolean,
     currentPromptRun: unknown, params?: unknown
@@ -99,6 +100,18 @@ describe('parseObjectOutput', () => {
     expect(res).toEqual({ ok: true });
   });
 
+  // Output that starts with '{' or '[' is tried with a plain JSON.parse first; only when that fails
+  // does CleanJSON's recovery run, so recoverable output must still parse.
+  it('parses an object with surrounding whitespace on the direct-parse path', async () => {
+    const res = await priv(runner).parseObjectOutput('  \n{"a":[1,{"b":null}]}\n', prompt(), false, false, [], {});
+    expect(res).toEqual({ a: [1, { b: null }] });
+  });
+
+  it('still recovers output that starts with "{" but is not valid JSON (an extra closing brace)', async () => {
+    const res = await priv(runner).parseObjectOutput('{"ok":true}}', prompt(), false, false, [], {});
+    expect(res).toEqual({ ok: true });
+  });
+
   it('throws + records an error on invalid JSON when validation is on and repair is off', async () => {
     const errs: ValidationErrorInfo[] = [];
     await expect(priv(runner).parseObjectOutput('{broken', prompt(), false, false, errs, {})).rejects.toThrow();
@@ -125,6 +138,22 @@ describe('parseObjectOutput', () => {
     expect(Object.keys(res).sort()).toEqual(['age', 'items', 'name']);
     expect(res.name).toBe('John');
     expect(res.age).toBe(42);
+  });
+});
+
+describe('parsesAsJSON', () => {
+  it('accepts valid JSON, including with surrounding whitespace', () => {
+    expect(priv(runner).parsesAsJSON('{"a":1}')).toBe(true);
+    expect(priv(runner).parsesAsJSON('  [1, 2]  ')).toBe(true);
+  });
+
+  it('accepts output CleanJSON can recover even when it starts with "{"', () => {
+    expect(priv(runner).parsesAsJSON('{"a":1}}')).toBe(true);
+    expect(priv(runner).parsesAsJSON('```json\n{"a":1}\n```')).toBe(true);
+  });
+
+  it('rejects plain prose', () => {
+    expect(priv(runner).parsesAsJSON('The answer is forty-two.')).toBe(false);
   });
 });
 

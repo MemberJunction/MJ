@@ -218,4 +218,49 @@ describe('TaskGraphAgentRunner', () => {
             finalStep: 'Chat',
         });
     });
+
+    it('normalizes results/result, lifts nested results fields to top level, and populates succeeded on completed agent steps', async () => {
+        runAgent.mockResolvedValue({
+            success: true,
+            payload: {
+                code: 'output = { totalSales: 2703745, summary: "Sales exceeded $1M" };',
+                results: { totalSales: 2703745, summary: 'Sales exceeded $1M' },
+                iterations: 1,
+            },
+            agentRun: {
+                ID: 'cs-run-1',
+                Message: 'Calculated total sales across 19 quarters.',
+                FinalStep: 'Success',
+            },
+        });
+        const provider = {
+            GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+                if (entityName === 'MJ: AI Agents') {
+                    return { ID: 'qb-agent', Name: 'Codesmith Agent', Load: vi.fn().mockResolvedValue(true) };
+                }
+                return { Load: vi.fn().mockResolvedValue(false) };
+            }),
+        } as unknown as IMetadataProvider;
+
+        const runner = new TaskGraphAgentRunner();
+        const outcome = await runner.RunAgentForTask({
+            TaskID: 'task-cs-1',
+            AgentID: 'qb-agent',
+            SubmittingAgentRunID: null,
+            InputPayload: {},
+            DependencyOutputs: new Map(),
+            Provider: provider,
+            ContextUser: { ID: 'user-1' } as UserInfo,
+        });
+
+        expect(outcome.Success).toBe(true);
+        expect(outcome.Output).toMatchObject({
+            totalSales: 2703745,
+            summary: 'Sales exceeded $1M',
+            results: { totalSales: 2703745, summary: 'Sales exceeded $1M' },
+            result: { totalSales: 2703745, summary: 'Sales exceeded $1M' },
+            succeeded: true,
+        });
+    });
 });
+

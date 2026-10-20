@@ -23,6 +23,7 @@ import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
 import { AiVendorEffortChecks } from '../checks/ai-vendor-effort.checks';
+import { NativeToolCallingLiveChecks } from '../checks/native-tool-calling-live.checks';
 import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
@@ -147,6 +148,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
         ['ai-vendor-effort', AiVendorEffortChecks, 2],
+        ['native-tool-calling-live', NativeToolCallingLiveChecks, 4],
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
@@ -306,7 +308,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'entity-graph-client': 9,
         'entity-graph': 11,
         'entity-server-invariants': 9,
-        'entity-writes': 12,
+        'entity-writes': 13,
         'feature-pipeline-core': 9,
         'feature-value-only': 5,
         'field-rules-bulk-update': 3,
@@ -329,6 +331,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'metadata-consistency': 7,
         'metadata-sync-push': 10,
         'metadata-sync': 9,
+        'native-tool-calling-live': 4,
         'nested-transactions': 11,
         'open-app-teardown': 2,
         'performance-benchmark': 13,
@@ -410,7 +413,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(130);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(131);
     });
 });
 
@@ -529,6 +532,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'entity-writes.EW10',
         'entity-writes.EW11',
         'entity-writes.EW12',
+        'entity-writes.EW13',
         'entity-writes.EW2',
         'entity-writes.EW3',
         'entity-writes.EW5',
@@ -760,6 +764,10 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'agent-wire-callback.WC1',
         'agent-wire-callback.WC2',
         'fp-live-jobtitle.L1',
+        'native-tool-calling-live.NTC1',
+        'native-tool-calling-live.NTC2',
+        'native-tool-calling-live.NTC3',
+        'native-tool-calling-live.NTC4',
         'performance-benchmark.PB10',
         'performance-benchmark.PB11',
         'performance-benchmark.PB12',

@@ -1,8 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ContentChildren, TemplateRef, ElementRef, AfterViewChecked, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, type MJUserEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, CONVERSATIONS_FORK_AUTHORIZATION, CONVERSATIONS_FORKING_SETTING_KEY, UserInfoEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, type ConversationScope, type CreateForkInput, type MJConversationBranchEntity, type ForkPoint, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand } from "@memberjunction/ai-core-plus";
+import { UserInfo, RunView, RunQuery, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
+import { MJConversationEntity, MJConversationDetailEntity, type MJUserEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ShouldReplaceDetailAgentRun, CONVERSATIONS_FORK_AUTHORIZATION, CONVERSATIONS_FORKING_SETTING_KEY, UserInfoEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, WorkflowSaveOperation, type ConversationScope, type CreateForkInput, type MJConversationBranchEntity, type ForkPoint, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand, type WorkflowSpec, type TaskGraphSpec } from "@memberjunction/ai-core-plus";
 import { ActionableCommandRequest, UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -101,7 +101,7 @@ import {
   type MessageForkChip
 } from '../../utils/conversation-forks';
 import { DecideArtifactPanelAction, SnapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
-import { NormalizeUUID, UUIDsEqual, UUIDSet, IndexByUUID } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual, UUIDSet, IndexByUUID, IsValidUUID } from '@memberjunction/global';
 
 // PR 2c — Widget extension surface
 import { ChatSlotDirective, type MJChatSlotName } from '../../directives/chat-slot.directive';
@@ -1899,6 +1899,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.ShowProjectSelector = value;
   }
   public ShowArtifactPanel: boolean = false;
+  public SelectedTaskGraphPanel: { parentTaskId: string; workflowTitle: string } | null = null;
 
   /** @deprecated Use {@link ShowArtifactPanel}. */
   public get showArtifactPanel(): boolean {
@@ -3115,18 +3116,26 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       .pipe(takeUntil(this.destroy$))
       .subscribe((request: ActionableCommandRequest) => {
         const { command, conversationId } = request;
+        if (conversationId && !this.isActiveConversation(conversationId)) {
+          return;
+        }
         if (command.type === 'client:capture-data-snapshot') {
-          if (conversationId && !this.isActiveConversation(conversationId)) {
-            return;
-          }
           void this.handleCaptureDataSnapshotCommand(command);
           return;
         }
-        if (command.type === 'open:resource' && command.resourceType === 'Record' && command.entityName) {
-          if (conversationId && !this.isActiveConversation(conversationId)) {
+        if (command.type === 'open:resource') {
+          if (this.isConversationArtifactCommand(command)) {
+            if (this.OpenConversationArtifactForCommand(command)) {
+              return;
+            }
+          }
+          if (command.resourceType === 'Record' && command.entityName) {
+            this.emitOpenResourceRecord(command);
             return;
           }
-          this.emitOpenResourceRecord(command);
+          if (this.OverlayMode) {
+            this.handleOverlayOpenResourceCommand(command);
+          }
         }
       });
 
@@ -3534,6 +3543,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private resetConversationScopedViewState(): void {
     this.clearTurnTracking();
     this.ShowArtifactPanel = false;
+    this.SelectedTaskGraphPanel = null;
     this.SelectedArtifactId = null;
     this.SelectedVersionNumber = undefined;
     this.CanShareSelectedArtifact = false;
@@ -6178,19 +6188,30 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   private async addAgentRunToMap(conversationId: string | null | undefined, conversationDetailId: string, agentRunId: string, forceRefresh: boolean = false): Promise<MJAIAgentRunEntityExtended> {
     try {
+      const existingRun = this.AgentRunsByDetailId.get(conversationDetailId);
       // Always refresh if forced, or if not in map yet
-      if (forceRefresh || !this.AgentRunsByDetailId.has(conversationDetailId)) {
+      if (forceRefresh || !existingRun) {
         const md = this.ProviderToUse;
         const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.CurrentUser);
         if (await agentRun.Load(agentRunId)) {
           if (!this.isActiveConversation(conversationId)) {
             return agentRun;
           }
-          this.AgentRunsByDetailId.set(conversationDetailId, agentRun);
 
-          // Also update ConversationEngine's cache for other consumers
-          if (conversationId) {
-            ConversationEngine.Instance.SetAgentRunForDetail(conversationId, conversationDetailId, agentRun);
+          if (!existingRun || ShouldReplaceDetailAgentRun(existingRun, agentRun)) {
+            this.AgentRunsByDetailId.set(conversationDetailId, agentRun);
+
+            // Also update ConversationEngine's cache for other consumers
+            if (conversationId) {
+              ConversationEngine.Instance.SetAgentRunForDetail(conversationId, conversationDetailId, agentRun);
+            }
+          } else if (forceRefresh && !UUIDsEqual(existingRun.ID, agentRun.ID)) {
+            // A continuation synthesis run completed, but existingRun is the primary
+            // root orchestrating run — reload existingRun so its final status/timestamps are fresh.
+            await existingRun.Load(existingRun.ID);
+            if (conversationId) {
+              ConversationEngine.Instance.SetAgentRunForDetail(conversationId, conversationDetailId, existingRun);
+            }
           }
 
           // Force message list to re-render with updated agent run
@@ -6199,10 +6220,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           this.cdr.detectChanges();
 
         }
-        return agentRun;
+        return this.AgentRunsByDetailId.get(conversationDetailId) ?? agentRun;
       } 
       else {
-        return this.AgentRunsByDetailId.get(conversationDetailId)!;
+        return existingRun;
       }
     } catch (error) {
       console.error('Failed to load agent run for map:', error);
@@ -7241,6 +7262,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.SelectedVersionNumber = undefined;
     }
 
+    this.SelectedTaskGraphPanel = null;
     this.ShowArtifactPanel = true;
 
     // Load permissions for the selected artifact
@@ -7258,6 +7280,86 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /** @deprecated Use {@link OnArtifactClicked}. */
   async onArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
     return this.OnArtifactClicked(data);
+  }
+
+  public OnTaskGraphPanelRequested(data: { parentTaskId: string; workflowTitle?: string; workflowName?: string; isRunning?: boolean }): void {
+    if (!data?.parentTaskId) {
+      return;
+    }
+    if (this.SelectedTaskGraphPanel && UUIDsEqual(this.SelectedTaskGraphPanel.parentTaskId, data.parentTaskId)) {
+      this.OnCloseTaskGraphPanel();
+      return;
+    }
+    this.ShowArtifactPanel = false;
+    this.SelectedArtifactId = null;
+    this.SelectedTaskGraphPanel = {
+      parentTaskId: data.parentTaskId,
+      workflowTitle: data.workflowTitle || data.workflowName || 'Task Graph',
+    };
+    this.cdr.detectChanges();
+  }
+
+  public IsSavingTaskGraphWorkflow: boolean = false;
+
+  public OnCloseTaskGraphPanel(): void {
+    this.SelectedTaskGraphPanel = null;
+    this.resetArtifactPaneSizing();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Persists the currently displayed Task Graph in the chat side-panel as a reusable
+   * Draft Flow Agent workflow via {@link WorkflowSaveOperation} and opens the new
+   * `MJ: AI Agents` record.
+   */
+  public async OnSaveTaskGraphAsWorkflow(spec: TaskGraphSpec | null): Promise<void> {
+    if (!spec?.tasks?.length || this.IsSavingTaskGraphWorkflow) {
+      return;
+    }
+    this.IsSavingTaskGraphWorkflow = true;
+    this.cdr.detectChanges();
+    try {
+      const name =
+        spec.workflowName?.trim() ||
+        this.SelectedTaskGraphPanel?.workflowTitle?.trim() ||
+        'Saved Workflow';
+      const workflowSpec: WorkflowSpec = {
+        name,
+        description: `Saved from Conversation ${this.Conversation?.Name || this.ConversationId || ''}`.trim(),
+        status: 'Draft',
+        graph: { ...spec, workflowName: name },
+        triggers: [],
+      };
+      const op = new WorkflowSaveOperation();
+      const result = await op.Execute(
+        { spec: workflowSpec },
+        { provider: this.ProviderToUse, user: this.CurrentUser },
+      );
+      const output = result.Output;
+      if (!result.Success || !output?.success || !output.agentID) {
+        MJNotificationService.Instance.CreateSimpleNotification(
+          output?.errorMessage ?? result.ErrorMessage ?? 'Could not save workflow.',
+          'error',
+          5000,
+        );
+        return;
+      }
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `Saved workflow "${name}". Opening Flow Agent record…`,
+        'success',
+        3500,
+      );
+      this.OpenEntityRecord.emit({
+        entityName: 'MJ: AI Agents',
+        compositeKey: CompositeKey.FromID(output.agentID),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      MJNotificationService.Instance.CreateSimpleNotification(`Failed to save workflow: ${msg}`, 'error', 5000);
+    } finally {
+      this.IsSavingTaskGraphWorkflow = false;
+      this.cdr.detectChanges();
+    }
   }
 
   async OnArtifactCreated(data: {conversationId: string, conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {
@@ -7648,12 +7750,113 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.OnOpenEntityRecord(event);
   }
 
+  /**
+   * Returns true when an `open:resource` command refers to a conversation artifact or generated file
+   * (either explicitly via `resourceType: 'Artifact' | 'File'` or via `resourceType: 'Record'` with
+   * an artifact/file entity name).
+   */
+  private isConversationArtifactCommand(command: OpenResourceCommand): boolean {
+    const rt = (command.resourceType ?? '').trim().toLowerCase();
+    if (rt === 'artifact' || rt === 'file') {
+      return true;
+    }
+    if (rt === 'record' && command.entityName) {
+      const normalizedEntity = command.entityName.trim().toLowerCase();
+      return (
+        normalizedEntity === 'mj: artifacts' ||
+        normalizedEntity === 'artifacts' ||
+        normalizedEntity === 'mj: artifact versions' ||
+        normalizedEntity === 'artifact versions' ||
+        normalizedEntity === 'mj: files' ||
+        normalizedEntity === 'files'
+      );
+    }
+    return false;
+  }
+
+  /**
+   * Opens the matching (or most recent) artifact in the current conversation's artifact viewer panel.
+   * Returns true if a conversation artifact was found and opened.
+   */
+  public OpenConversationArtifactForCommand(command: OpenResourceCommand): boolean {
+    const rawTarget = String(command.resourceId ?? '').trim();
+    const labelTarget = String(command.label ?? '').trim().toLowerCase();
+    let latestArtifact: LazyArtifactInfo | null = null;
+    let matchedArtifact: LazyArtifactInfo | null = null;
+
+    for (const artifacts of this.ArtifactsByDetailId.values()) {
+      for (const item of artifacts) {
+        latestArtifact = item;
+        if (rawTarget && (UUIDsEqual(item.ArtifactId, rawTarget) || UUIDsEqual(item.ArtifactVersionId, rawTarget))) {
+          matchedArtifact = item;
+        } else if (rawTarget && (item.ArtifactName?.toLowerCase() === rawTarget.toLowerCase() || item.VersionName?.toLowerCase() === rawTarget.toLowerCase())) {
+          matchedArtifact = item;
+        } else if (!matchedArtifact && labelTarget && item.ArtifactName && labelTarget.includes(item.ArtifactName.toLowerCase())) {
+          matchedArtifact = item;
+        }
+      }
+    }
+
+    const chosen = matchedArtifact ?? latestArtifact;
+    if (!chosen) {
+      return false;
+    }
+    void this.OnArtifactClicked({
+      artifactId: chosen.ArtifactId,
+      versionId: chosen.ArtifactVersionId
+    });
+    return true;
+  }
+
+  /**
+   * Handles non-Record `open:resource` commands when rendered inside the floating chat overlay
+   * (`OverlayMode === true`), where `ChatConversationsResource` is not mounted.
+   */
+  private handleOverlayOpenResourceCommand(command: OpenResourceCommand): void {
+    const rt = (command.resourceType ?? '').trim().toLowerCase();
+    if (rt === 'report' || rt === 'dashboard') {
+      if (!this.OpenConversationArtifactForCommand(command)) {
+        MJNotificationService.Instance?.CreateSimpleNotification(
+          'No artifact found in this conversation to open.',
+          'info',
+          3500
+        );
+      }
+      return;
+    }
+    if (rt === 'app' || rt === 'navitem') {
+      const appName = rt === 'app' ? command.resourceId : command.entityName;
+      const navItemName = rt === 'navitem'
+        ? (command.resourceId || command.entityName || '')
+        : (command.entityName || command.resourceId || '');
+      let queryParams: Record<string, string> | undefined;
+      if (command.parameters && Object.keys(command.parameters).length > 0) {
+        queryParams = {};
+        for (const [k, v] of Object.entries(command.parameters)) {
+          if (v != null) {
+            queryParams[k] = String(v);
+          }
+        }
+      }
+      this.navigationRequest.emit({
+        navItemName,
+        appName,
+        queryParams
+      });
+    }
+  }
+
   /** Record `open:resource` buttons → same openEntityRecord chain as agent-run links. */
   private emitOpenResourceRecord(command: OpenResourceCommand): void {
     if (!command.entityName) return;
     const entity = this.ProviderToUse.EntityByName(command.entityName);
     if (!entity) {
       console.warn('open:resource: unknown entity', command.entityName);
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        `Unable to open record: unknown entity "${command.entityName}".`,
+        'info',
+        4000
+      );
       return;
     }
     const compositeKey = ConversationUtility.CompositeKeyFromOpenResource(
@@ -7662,8 +7865,35 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     );
     if (!compositeKey) {
       console.warn('open:resource: incomplete primary key', command.entityName, command);
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        `Unable to open ${command.entityName}: no record identifier was provided.`,
+        'info',
+        4000
+      );
       return;
     }
+
+    // Guard against LLM-emitted placeholder IDs (e.g., "<FileID from storage result>") or non-UUID strings
+    // on uniqueidentifier primary keys so we don't navigate to a broken form URL.
+    for (const kv of compositeKey.KeyValuePairs) {
+      const rawVal = String(kv.Value ?? '').trim();
+      const pkField = entity.PrimaryKeys.find(pk => pk.Name === kv.FieldName);
+      const isUuidPk = pkField?.Type?.toLowerCase() === 'uniqueidentifier';
+      const isPlaceholder = !rawVal || (rawVal.startsWith('<') && rawVal.endsWith('>'));
+      if (isPlaceholder || (isUuidPk && !IsValidUUID(rawVal))) {
+        if (this.OpenConversationArtifactForCommand(command)) {
+          return;
+        }
+        console.warn('open:resource: invalid or placeholder primary key value', command.entityName, kv);
+        MJNotificationService.Instance?.CreateSimpleNotification(
+          `Unable to open ${command.entityName}: invalid record ID "${rawVal}".`,
+          'info',
+          4000
+        );
+        return;
+      }
+    }
+
     this.OpenEntityRecord.emit({ entityName: command.entityName, compositeKey });
   }
 
@@ -8801,17 +9031,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
-    // `OrderBy __mj_CreatedAt DESC` puts the newest run first, so the first row seen for a detail
-    // in THIS pass wins — a retried message must reconcile against its latest run, not its first.
-    // Tracked per pass rather than by consulting the map, which usually already holds a run from
-    // an earlier pass and is cleared only on conversation load.
-    const seenDetailIds = new Set<string>();
+    // Select the preferred root primary orchestrating run per detail in THIS pass
+    // (prioritizing ParentRunID == null and ContinuationDepth == 0 over continuation
+    // synthesis runs, and newest __mj_CreatedAt among ties so retried messages use their latest run).
+    const chosenByDetailId = new Map<string, MJAIAgentRunEntityExtended>();
     for (const run of result.Results || []) {
       const detailId = run.ConversationDetailID;
-      if (!detailId || seenDetailIds.has(detailId)) {
+      if (!detailId) {
         continue;
       }
-      seenDetailIds.add(detailId);
+      const existing = chosenByDetailId.get(detailId);
+      if (ShouldReplaceDetailAgentRun(existing, run)) {
+        chosenByDetailId.set(detailId, run);
+      }
+    }
+    for (const [detailId, run] of chosenByDetailId.entries()) {
       this.AgentRunsByDetailId.set(detailId, run);
     }
     // New map reference so OnPush children re-read it.

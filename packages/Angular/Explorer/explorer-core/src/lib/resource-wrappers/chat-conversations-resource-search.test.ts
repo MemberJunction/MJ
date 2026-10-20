@@ -141,3 +141,110 @@ describe('ChatConversationsResource.OnSearchResultSelected', () => {
     expect(h.openMessage).not.toHaveBeenCalled();
   });
 });
+
+describe('ChatConversationsResource.handleActionableCommand (open:resource)', () => {
+  it('resolves kebab-case App slug ("data-explorer") to "Data Explorer" application and calls SwitchToApp', async () => {
+    const h = createHarness();
+    const open = h.resource as unknown as Record<string, unknown>;
+    const switchToApp = vi.fn().mockResolvedValue(undefined);
+    open['navigationService'] = {
+      SwitchToApp: switchToApp,
+      OpenNavItemByName: vi.fn().mockResolvedValue(null),
+    };
+    Object.defineProperty(h.resource, 'ProviderToUse', {
+      configurable: true,
+      get: () => ({
+        Applications: [
+          { ID: 'A1B2C3D4-0000-0000-0000-000000000001', Name: 'Data Explorer', Path: 'data-explorer' },
+        ],
+      }),
+    });
+
+    const handle = (h.resource as unknown as {
+      handleActionableCommand: (req: { command: Record<string, unknown> }) => void;
+    }).handleActionableCommand.bind(h.resource);
+
+    handle({
+      command: {
+        type: 'open:resource',
+        label: 'Open Data Explorer',
+        icon: 'fa-table',
+        resourceType: 'App',
+        resourceId: 'data-explorer',
+      },
+    });
+    await settle();
+
+    expect(switchToApp).toHaveBeenCalledWith(
+      'A1B2C3D4-0000-0000-0000-000000000001',
+      undefined,
+      undefined
+    );
+  });
+
+  it('finds a matching NavItem inside an application DefaultNavItems when target is a nav item', async () => {
+    const h = createHarness();
+    const open = h.resource as unknown as Record<string, unknown>;
+    const switchToApp = vi.fn().mockResolvedValue(undefined);
+    open['navigationService'] = {
+      SwitchToApp: switchToApp,
+      OpenNavItemByName: vi.fn().mockResolvedValue(null),
+    };
+    Object.defineProperty(h.resource, 'ProviderToUse', {
+      configurable: true,
+      get: () => ({
+        Applications: [
+          {
+            ID: 'A1B2C3D4-0000-0000-0000-000000000002',
+            Name: 'Home',
+            Path: 'home',
+            DefaultNavItems: JSON.stringify([{ Label: 'Data Explorer', Route: 'data-explorer' }]),
+          },
+        ],
+      }),
+    });
+
+    const handle = (h.resource as unknown as {
+      handleActionableCommand: (req: { command: Record<string, unknown> }) => void;
+    }).handleActionableCommand.bind(h.resource);
+
+    handle({
+      command: {
+        type: 'open:resource',
+        label: 'Open Data Explorer',
+        icon: 'fa-table',
+        resourceType: 'App',
+        resourceId: 'data-explorer',
+      },
+    });
+    await settle();
+
+    expect(switchToApp).toHaveBeenCalledWith(
+      'A1B2C3D4-0000-0000-0000-000000000002',
+      'Data Explorer',
+      undefined
+    );
+  });
+
+  it('delegates Artifact/File open:resource commands to ChatArea.OpenConversationArtifactForCommand', () => {
+    const h = createHarness();
+    const openArtifactForCommand = vi.fn().mockReturnValue(true);
+    (h.resource as unknown as Record<string, unknown>)['ChatArea'] = {
+      OpenConversationArtifactForCommand: openArtifactForCommand,
+    };
+
+    const handle = (h.resource as unknown as {
+      handleActionableCommand: (req: { command: Record<string, unknown> }) => void;
+    }).handleActionableCommand.bind(h.resource);
+
+    const cmd = {
+      type: 'open:resource',
+      label: 'Download CSV File',
+      resourceType: 'File',
+      resourceId: 'customers.csv',
+    };
+    handle({ command: cmd });
+
+    expect(openArtifactForCommand).toHaveBeenCalledWith(cmd);
+  });
+});

@@ -559,6 +559,29 @@ export interface AgentPlanModeFixture {
 }
 
 /**
+ * Shared fixture for the `native-tool-calling-live` bundle (live-model): the agents, prompts, the
+ * in-process Action and its params the lifecycle creates, plus the AI Agent Runs the checks spawn.
+ * Teardown purges the runs, then the fixture Action's execution logs, then deletes
+ * `CreatedRecords` in reverse creation order (FK-safe). The stock `Create SVG Chart` Action the chart
+ * agent calls is referenced read-only.
+ */
+export interface NativeToolCallingLiveFixture {
+    /** The agent whose one Action carries a ValueSchema on every param. */
+    ReportAgentID: string;
+    /** The agent that calls the stock `Create SVG Chart` Action, whose params carry backfilled ValueSchemas. */
+    ChartAgentID: string;
+    /** The in-process fixture Action the report agent calls. */
+    ReportActionID: string;
+    /** The report and chart agents' own prompts — where each check sets the native preference. */
+    ReportPromptID: string;
+    ChartPromptID: string;
+    /** Every record the lifecycle created, in creation order. */
+    CreatedRecords: Array<{ Entity: string; ID: string }>;
+    /** Every AI Agent Run the checks created. */
+    RunIds: string[];
+}
+
+/**
  * Accumulator fixture for the `agent-compaction-e2e` bundle (CE1–CE9): the fabricated conversation
  * histories (created INSIDE the checks, fabricate-then-observe) + the AI Agent Run IDs the live
  * turns spawn. Teardown deletes run steps → runs → conversation details → conversations (FK-safe).
@@ -708,6 +731,8 @@ export interface IntegrationCheckContext {
     AgentPlanModeFixture?: AgentPlanModeFixture;
     /** Accumulator fixture for the `agent-compaction-e2e` bundle (fabricate-then-observe). */
     AgentCompactionE2EFixture?: AgentCompactionE2EFixture;
+    /** Shared fixture for the `native-tool-calling-live` bundle (live-model). */
+    NativeToolCallingLiveFixture?: NativeToolCallingLiveFixture;
     /** Shared fixture for the `agent-memory-guards` bundle (live-model, marker-isolated). */
     AgentMemoryGuardsFixture?: AgentMemoryGuardsFixture;
     /** Shared fixture for the `agent-rag-search` bundle (split-tier: deterministic engine + live agent legs). */
