@@ -63,7 +63,7 @@ import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import { EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
-import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
+import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from '@memberjunction/generic-database-provider';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 
 import sql from 'mssql';
@@ -1299,16 +1299,18 @@ export class SQLServerDataProvider
    */
   private getDatestampEntityColumnsSQL(entityInfo: EntityInfo): string {
     return entityInfo.DatestampReturnFields
-      .map((f) => `[${f.Name}] ${f.SQLFullType} ${f.AllowsNull || f.IsVirtual ? 'NULL' : 'NOT NULL'}`)
+      .map((f) => `${this.QuoteIdentifier(f.Name)} ${f.SQLFullType} ${f.AllowsNull || f.IsVirtual ? 'NULL' : 'NOT NULL'}`)
       .join(',\n');
   }
 
   /**
-   * Returns the comma-separated bracketed column list for {@link EntityInfo.DatestampReturnFields},
-   * used when selecting only primary key(s) and datestamp columns from `@ResultTable`.
+   * Selects the `@ResultTable` column declarations matching the compiled stored procedure's
+   * return shape (`returnContext.spReturnsDatestampsOnly`).
    */
-  private getDatestampSelectColumnsSQL(entityInfo: EntityInfo): string {
-    return entityInfo.DatestampReturnFields.map((f) => `[${f.Name}]`).join(', ');
+  private getSaveResultTableColumnsSQL(entityInfo: EntityInfo, returnContext: SaveReturnContext): string {
+    return returnContext.spReturnsDatestampsOnly
+      ? this.getDatestampEntityColumnsSQL(entityInfo)
+      : this.getAllEntityColumnsSQL(entityInfo);
   }
 
   /** Entities already warned about base-after-virtual field-order skew — so we warn once, not every save. */
@@ -1637,16 +1639,44 @@ export class SQLServerDataProvider
    * shape: `DECLARE ... ; SET ... ; EXEC [schema].sp callArgs`. When
    * record-change tracking is on, this output is further wrapped by
    * `WrapSaveCallWithRecordChange`.
+   *
+   * When `returnContext.needsDatestampProjection` is true (either passed by
+   * `GenericDatabaseProvider.GenerateSaveSQL` or resolved from `options`),
+   * delegates to {@link ProjectSaveCallToDatestamps}.
    */
   protected override WrapSaveCallForResult(
     binding: SaveCallBinding,
     entity: BaseEntity,
     spName: string,
-    _options?: EntitySaveOptions,
+    options?: EntitySaveOptions,
+    returnContext?: SaveReturnContext,
   ): SaveSQLFragment {
+    const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
+    if (resolvedReturn.needsDatestampProjection) {
+      return this.ProjectSaveCallToDatestamps(binding, entity, spName, resolvedReturn);
+    }
     const saveBinding = this.asSaveBinding(binding, 'WrapSaveCallForResult');
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${saveBinding.callArgsSQL}`;
     return this.toSaveFragment(entity, `${this.renderDeclareSetHead(saveBinding)}${execSQL}`, saveBinding.parameters, saveBinding.recordSuffix);
+  }
+
+  /**
+   * Captures the stored procedure's output into `@ResultTable` and projects only
+   * `returnContext.datestampSelectColumnsSQL` (`SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;`)
+   * when a caller requests `SaveReturnMode: 'datestamps_only'` at runtime on an entity whose
+   * compiled stored procedure returns the full row.
+   */
+  protected override ProjectSaveCallToDatestamps(
+    binding: SaveCallBinding,
+    entity: BaseEntity,
+    spName: string,
+    returnContext: SaveReturnContext,
+  ): SaveSQLFragment {
+    const saveBinding = this.asSaveBinding(binding, 'ProjectSaveCallToDatestamps');
+    const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${saveBinding.callArgsSQL}`;
+    const resultTableColumnsSQL = this.getSaveResultTableColumnsSQL(entity.EntityInfo, returnContext);
+    const sql = `${this.renderDeclareSetHead(saveBinding)}DECLARE @ResultTable TABLE (\n    ${resultTableColumnsSQL}\n);\n\nINSERT INTO @ResultTable\n${execSQL};\n\nSELECT ${returnContext.datestampSelectColumnsSQL} FROM @ResultTable;`;
+    return this.toSaveFragment(entity, sql, saveBinding.parameters, saveBinding.recordSuffix);
   }
 
   /**
@@ -1654,10 +1684,10 @@ export class SQLServerDataProvider
    * `spCreateRecordChange_Internal` EXEC pattern. The CONCAT-built `@ID`
    * inline supports composite-key entities.
    *
-   * When `entity.EntityInfo.SaveReturnMode === 'datestamps_only'`, `@ResultTable` is declared
-   * with only the PK + datestamp columns emitted by the stored procedure. When the effective
-   * return mode (`options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode`) is
-   * `'datestamps_only'`, the final `SELECT` from `@ResultTable` returns only those columns.
+   * Consumes {@link SaveReturnContext} resolved by `GenericDatabaseProvider`:
+   * - `@ResultTable` column declarations match the compiled stored procedure's return mode
+   *   (`returnContext.spReturnsDatestampsOnly`).
+   * - The final `SELECT` from `@ResultTable` uses `returnContext.finalSelectColumnsSQL`.
    */
   protected override WrapSaveCallWithRecordChange(
     _saveSQL: SaveSQLFragment,
@@ -1665,6 +1695,7 @@ export class SQLServerDataProvider
     payload: RecordChangePayload,
     entity: BaseEntity,
     options?: EntitySaveOptions,
+    returnContext?: SaveReturnContext,
   ): SaveSQLFragment {
     const saveBinding = this.asSaveBinding(binding, 'WrapSaveCallWithRecordChange');
     const params = new SaveParameterCollector(saveBinding.parameters);
@@ -1679,14 +1710,9 @@ export class SQLServerDataProvider
     const recordChangeEXEC = this.renderRecordChangeEXEC(entity.EntityInfo.Name, '@ID', payload, params);
 
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${saveBinding.callArgsSQL}`;
-    const spReturnsDatestampsOnly = entity.EntityInfo.SaveReturnMode === 'datestamps_only';
-    const effectiveReturnMode = options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode;
-    const resultTableColumnsSQL = spReturnsDatestampsOnly
-      ? this.getDatestampEntityColumnsSQL(entity.EntityInfo)
-      : this.getAllEntityColumnsSQL(entity.EntityInfo);
-    const finalSelectSQL = effectiveReturnMode === 'datestamps_only'
-      ? `SELECT ${this.getDatestampSelectColumnsSQL(entity.EntityInfo)} FROM @ResultTable;`
-      : 'SELECT * FROM @ResultTable;';
+    const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
+    const resultTableColumnsSQL = this.getSaveResultTableColumnsSQL(entity.EntityInfo, resolvedReturn);
+    const finalSelectSQL = `SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM @ResultTable;`;
 
     const sql = `
                     ${saveBinding.preambleSQL}
