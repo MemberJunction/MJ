@@ -3295,6 +3295,15 @@ export class AIPromptRunner extends BaseModelRunner {
    * for "is this an envelope or plain prose?" under implicit control flow. Never throws.
    */
   private parsesAsJSON(text: string): boolean {
+    const trimmed = text.trimStart();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        JSON.parse(text);
+        return true;
+      } catch {
+        // Fall through to CleanJSON extraction
+      }
+    }
     try {
       JSON.parse(CleanJSON(text) ?? text);
       return true;
@@ -3569,8 +3578,18 @@ export class AIPromptRunner extends BaseModelRunner {
     let parsedResult: unknown;
     
     try {
-      // First attempt: Use CleanJSON to handle common JSON issues
-      parsedResult = JSON.parse(CleanJSON(rawOutput));
+      // Fast path: when rawOutput already begins with '{' or '[', try native JSON.parse
+      // directly before running CleanJSON's multi-pass regex extraction.
+      const trimmed = rawOutput.trimStart();
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+          parsedResult = JSON.parse(rawOutput);
+        } catch {
+          parsedResult = JSON.parse(CleanJSON(rawOutput));
+        }
+      } else {
+        parsedResult = JSON.parse(CleanJSON(rawOutput));
+      }
     } catch (jsonError) {
       // If attemptJSONRepair is enabled and we're dealing with object output
       if (params?.attemptJSONRepair && prompt.OutputType === 'object') {
