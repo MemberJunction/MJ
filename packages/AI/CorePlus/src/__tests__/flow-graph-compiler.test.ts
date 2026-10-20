@@ -3,7 +3,7 @@
  *
  * The compiler is pure, so every rule that decides whether a flow keeps its behaviour on the new
  * engine is testable here — before anything changes execution. The phase ORDER is what most of
- * these pin: exclusion → single entry → reachability → cycle rejection → emission. Each ordering
+ * these pin: exclusion → entry points → reachability → cycle rejection → emission. Each ordering
  * exists because the naive alternative silently runs work the flow never ran.
  */
 import { describe, it, expect } from 'vitest';
