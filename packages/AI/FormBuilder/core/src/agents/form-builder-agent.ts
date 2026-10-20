@@ -100,7 +100,7 @@ export class FormBuilderAgent extends BaseAgent {
         const payload = (previousDecision?.newPayload
             ?? previousDecision?.previousPayload
             ?? params.payload) as P;
-        return this.determineRoute<P>(payload);
+        return this.determineRoute<P>(payload, params);
     }
 
     /**
@@ -110,12 +110,12 @@ export class FormBuilderAgent extends BaseAgent {
      * routing and ignores the (never-produced) prompt result.
      */
     protected override async determineNextStep<P>(
-        _params: ExecuteAgentParams,
+        params: ExecuteAgentParams,
         _agentType: MJAIAgentTypeEntity,
         _promptResult: AIPromptRunResult,
         currentPayload: P,
     ): Promise<BaseAgentNextStep<P>> {
-        return this.determineRoute<P>(currentPayload);
+        return this.determineRoute<P>(currentPayload, params);
     }
 
     /**
@@ -123,7 +123,7 @@ export class FormBuilderAgent extends BaseAgent {
      * are exhaustive — exactly one always fires — so this always returns a step
      * and never needs to fall back to an LLM decision.
      */
-    private determineRoute<P>(currentPayload: P): BaseAgentNextStep<P> {
+    private determineRoute<P>(currentPayload: P, params?: ExecuteAgentParams): BaseAgentNextStep<P> {
         const payload = (currentPayload as unknown as FormBuilderPayload | undefined) ?? {};
 
         // Intercept 1 — Builder has run, terminate with its outcome.
@@ -197,10 +197,35 @@ export class FormBuilderAgent extends BaseAgent {
             newPayload: nextPayload as unknown as P,
             subAgent: {
                 name: DESIGNER_AGENT_NAME,
-                message: DESIGNER_MESSAGE,
+                message: this.buildDesignerMessage(params),
                 terminateAfter: false,  // Come back after Designer so we can route to Builder
             },
         };
+    }
+
+    /**
+     * Combines {@link DESIGNER_MESSAGE} with the incoming user/delegation request from
+     * `params.conversationMessages` so `Form Builder - Designer` always receives the target
+     * entity, fields, and layout instructions even when invoked via orchestrator delegation
+     * or a TaskGraph step.
+     */
+    private buildDesignerMessage(params?: ExecuteAgentParams): string {
+        const messages = params?.conversationMessages;
+        if (!Array.isArray(messages) || messages.length === 0) {
+            return DESIGNER_MESSAGE;
+        }
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const msg = messages[i];
+            if (!msg || msg.role !== 'user') {
+                continue;
+            }
+            const text = typeof msg.content === 'string' ? msg.content.trim() : '';
+            if (!text || text.includes('<mj-runtime-state>') || text.startsWith('[You delegated this task')) {
+                continue;
+            }
+            return `${DESIGNER_MESSAGE}\n\n## User / Orchestrator Request\n${text}`;
+        }
+        return DESIGNER_MESSAGE;
     }
 
     private designerOutputReady(p: FormBuilderPayload): boolean {

@@ -85,7 +85,7 @@ import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { SqlLoggingSessionImpl } from './SqlLogger.js';
+import { ApplyStatementTransforms, SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
@@ -431,7 +431,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         if (hasVerboseSession) {
             console.log('=== SQL LOGGING DEBUG ===');
-            console.log(`Query to log: ${query.substring(0, 100)}...`);
+            console.log(`Query to log: ${ApplyStatementTransforms(query, allSessions).substring(0, 100)}...`);
             console.log(`Context user email: ${contextUser?.Email || 'NOT_PROVIDED'}`);
             console.log(`Active sessions count: ${this._sqlLoggingSessions.size}`);
 
@@ -6469,9 +6469,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const matches = data?.matches ?? [];
 
         const out: ScoredCandidate[] = [];
+        const seenRecordIds = new Set<string>();
         for (const m of matches) {
             const recordId = String(m.metadata?.['RecordID'] ?? '');
             if (!recordId) continue;
+            const normalizedKey = recordId.toLowerCase();
+            if (seenRecordIds.has(normalizedKey)) continue;
+            seenRecordIds.add(normalizedKey);
             out.push({
                 ID: recordId,
                 Score: m.score,
