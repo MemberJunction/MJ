@@ -394,7 +394,8 @@ export interface VideoSpecValidationOptions {
 // Numeric Token Detection (§3.2, §10.2, reused by VS-RND-5)
 // ---------------------------------------------------------------------------
 
-const WRAPPING_PUNCTUATION_REGEX = /^[([{'"`“”‘’]+|[)\]}'"`“”‘’.,;:!?]+$/g;
+const LEADING_WRAPPING_PUNCTUATION = new Set(Array.from('([{\'"`“”‘’'));
+const TRAILING_WRAPPING_PUNCTUATION = new Set(Array.from(')]}\'"`“”‘’.,;:!?'));
 const FISCAL_QUARTER_REGEX = /^Q[1-4]$/i;
 const CALENDAR_YEAR_REGEX = /^(19\d\d|20\d\d)$/;
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -404,9 +405,204 @@ const NUMERIC_LITERAL_REGEX =
     /^[+\-\u2212]?[$€£¥]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[KMBTx%]|[mM]s|s)?$/i;
 const CURRENCY_PREFIX_NUMERIC_REGEX =
     /^[$€£¥][+\-\u2212]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?[KMBT%]?$/i;
-const GLOBAL_NUMERIC_RUN_REGEX =
-    /\d{4}-\d{2}-\d{2}|\d+\/\d+(?:\/\d+)?|[qQ][1-4]\b|v\d+(?:\.\d+)*|#\d+|\d+(?:st|nd|rd|th)\b|(?:[+\-\u2212]?[$€£¥]|[$€£¥][+\-\u2212]?|[+\-\u2212](?=\d))?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[KMBTx%]|[mM]s\b|s\b)?/g;
 const ON_SCREEN_PLACEHOLDER_REGEX = /\{([^{}]+)\}/g;
+
+function stripWrappingPunctuation(value: string): string {
+    let start = 0;
+    let end = value.length;
+    while (start < end && LEADING_WRAPPING_PUNCTUATION.has(value[start]!)) {
+        start++;
+    }
+    while (end > start && TRAILING_WRAPPING_PUNCTUATION.has(value[end - 1]!)) {
+        end--;
+    }
+    return value.slice(start, end);
+}
+
+function isAsciiDigit(ch: string | undefined): boolean {
+    return ch !== undefined && ch >= '0' && ch <= '9';
+}
+
+function isWordChar(ch: string | undefined): boolean {
+    if (ch === undefined) {
+        return false;
+    }
+    return (
+        (ch >= 'A' && ch <= 'Z') ||
+        (ch >= 'a' && ch <= 'z') ||
+        (ch >= '0' && ch <= '9') ||
+        ch === '_'
+    );
+}
+
+function isWordBoundaryAfter(text: string, idx: number): boolean {
+    return idx >= text.length || !isWordChar(text[idx]);
+}
+
+function isSignChar(ch: string | undefined): boolean {
+    return ch === '+' || ch === '-' || ch === '\u2212';
+}
+
+function isCurrencyChar(ch: string | undefined): boolean {
+    return ch === '$' || ch === '€' || ch === '£' || ch === '¥';
+}
+
+function readDigitRunEnd(text: string, start: number): number {
+    let idx = start;
+    while (idx < text.length && isAsciiDigit(text[idx])) {
+        idx++;
+    }
+    return idx;
+}
+
+function readNumericBodyEnd(text: string, digitStart: number, firstRunEnd: number): number {
+    const firstRunLen = firstRunEnd - digitStart;
+    let end = firstRunEnd;
+    if (firstRunLen >= 1 && firstRunLen <= 3) {
+        while (
+            end + 3 < text.length &&
+            text[end] === ',' &&
+            isAsciiDigit(text[end + 1]) &&
+            isAsciiDigit(text[end + 2]) &&
+            isAsciiDigit(text[end + 3])
+        ) {
+            end += 4;
+        }
+    }
+    if (end + 1 < text.length && text[end] === '.' && isAsciiDigit(text[end + 1])) {
+        end = readDigitRunEnd(text, end + 2);
+    }
+    if (end < text.length) {
+        const suffix = text[end]!;
+        if (
+            suffix === 'K' ||
+            suffix === 'M' ||
+            suffix === 'B' ||
+            suffix === 'T' ||
+            suffix === 'x' ||
+            suffix === '%'
+        ) {
+            end += 1;
+        } else if (
+            (suffix === 'm' || suffix === 'M') &&
+            end + 1 < text.length &&
+            text[end + 1] === 's' &&
+            isWordBoundaryAfter(text, end + 2)
+        ) {
+            end += 2;
+        } else if (suffix === 's' && isWordBoundaryAfter(text, end + 1)) {
+            end += 1;
+        }
+    }
+    return end;
+}
+
+function scanCandidateNumericRuns(text: string): Array<{ token: string; index: number }> {
+    const results: Array<{ token: string; index: number }> = [];
+    let i = 0;
+    while (i < text.length) {
+        const ch = text[i]!;
+
+        // [qQ][1-4]\b
+        if (
+            (ch === 'q' || ch === 'Q') &&
+            i + 1 < text.length &&
+            text[i + 1]! >= '1' &&
+            text[i + 1]! <= '4' &&
+            isWordBoundaryAfter(text, i + 2)
+        ) {
+            results.push({ token: text.slice(i, i + 2), index: i });
+            i += 2;
+            continue;
+        }
+
+        // v\d+(?:\.\d+)*
+        if (ch === 'v' && i + 1 < text.length && isAsciiDigit(text[i + 1])) {
+            let end = readDigitRunEnd(text, i + 1);
+            while (end + 1 < text.length && text[end] === '.' && isAsciiDigit(text[end + 1])) {
+                end = readDigitRunEnd(text, end + 2);
+            }
+            results.push({ token: text.slice(i, end), index: i });
+            i = end;
+            continue;
+        }
+
+        // #\d+
+        if (ch === '#' && i + 1 < text.length && isAsciiDigit(text[i + 1])) {
+            const end = readDigitRunEnd(text, i + 1);
+            results.push({ token: text.slice(i, end), index: i });
+            i = end;
+            continue;
+        }
+
+        // Digit-leading patterns: ISO date, slash idiom, ordinal, or unsigned numeric run
+        if (isAsciiDigit(ch)) {
+            const firstRunEnd = readDigitRunEnd(text, i);
+            if (
+                firstRunEnd - i === 4 &&
+                i + 10 <= text.length &&
+                text[i + 4] === '-' &&
+                isAsciiDigit(text[i + 5]) &&
+                isAsciiDigit(text[i + 6]) &&
+                text[i + 7] === '-' &&
+                isAsciiDigit(text[i + 8]) &&
+                isAsciiDigit(text[i + 9])
+            ) {
+                results.push({ token: text.slice(i, i + 10), index: i });
+                i += 10;
+                continue;
+            }
+
+            if (firstRunEnd + 1 < text.length && text[firstRunEnd] === '/' && isAsciiDigit(text[firstRunEnd + 1])) {
+                let slashEnd = readDigitRunEnd(text, firstRunEnd + 1);
+                if (slashEnd + 1 < text.length && text[slashEnd] === '/' && isAsciiDigit(text[slashEnd + 1])) {
+                    slashEnd = readDigitRunEnd(text, slashEnd + 1);
+                }
+                results.push({ token: text.slice(i, slashEnd), index: i });
+                i = slashEnd;
+                continue;
+            }
+
+            const ordSuffix = text.slice(firstRunEnd, firstRunEnd + 2);
+            if (
+                (ordSuffix === 'st' || ordSuffix === 'nd' || ordSuffix === 'rd' || ordSuffix === 'th') &&
+                isWordBoundaryAfter(text, firstRunEnd + 2)
+            ) {
+                results.push({ token: text.slice(i, firstRunEnd + 2), index: i });
+                i = firstRunEnd + 2;
+                continue;
+            }
+
+            const numEnd = readNumericBodyEnd(text, i, firstRunEnd);
+            results.push({ token: text.slice(i, numEnd), index: i });
+            i = numEnd;
+            continue;
+        }
+
+        // Sign or currency prefix followed by digits
+        let prefixEnd = -1;
+        if (isSignChar(ch) && i + 1 < text.length && isCurrencyChar(text[i + 1])) {
+            prefixEnd = i + 2;
+        } else if (isCurrencyChar(ch) && i + 1 < text.length && isSignChar(text[i + 1])) {
+            prefixEnd = i + 2;
+        } else if (isCurrencyChar(ch)) {
+            prefixEnd = i + 1;
+        } else if (isSignChar(ch) && i + 1 < text.length && isAsciiDigit(text[i + 1])) {
+            prefixEnd = i + 1;
+        }
+
+        if (prefixEnd !== -1 && prefixEnd < text.length && isAsciiDigit(text[prefixEnd])) {
+            const firstRunEnd = readDigitRunEnd(text, prefixEnd);
+            const numEnd = readNumericBodyEnd(text, prefixEnd, firstRunEnd);
+            results.push({ token: text.slice(i, numEnd), index: i });
+            i = numEnd;
+            continue;
+        }
+
+        i++;
+    }
+    return results;
+}
 
 /**
  * Determines whether a whitespace-delimited token represents a quantitative numeric,
@@ -425,7 +621,7 @@ const ON_SCREEN_PLACEHOLDER_REGEX = /\{([^{}]+)\}/g;
  *   - Ordinal / rank / version badges: `#1`, `1st`, `2nd`, `3rd`, `4th`, `v1.0`
  */
 export function IsNumericLiteralToken(rawToken: string): boolean {
-    const cleaned = rawToken.trim().replace(WRAPPING_PUNCTUATION_REGEX, '');
+    const cleaned = stripWrappingPunctuation(rawToken.trim());
     if (!cleaned) {
         return false;
     }
@@ -457,9 +653,9 @@ export function ExtractNumericLiteralTokens(text: string): string[] {
         return [];
     }
     const tokens: string[] = [];
-    for (const match of text.matchAll(GLOBAL_NUMERIC_RUN_REGEX)) {
-        const candidate = match[0];
-        const startIndex = match.index ?? 0;
+    for (const match of scanCandidateNumericRuns(text)) {
+        const candidate = match.token;
+        const startIndex = match.index;
 
         const isGluedLeft =
             (startIndex > 0 && ASCII_LETTER_REGEX.test(text[startIndex - 1])) ||

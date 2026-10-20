@@ -619,5 +619,53 @@ describe('critic-input pure builders', () => {
         expect(integrityCriterion?.IsGate).toBe(true);
         expect(integrityCriterion?.GateMinimumScore).toBe(0.6);
     });
-});
 
+    it('escapes backslashes before pipes in Markdown table cells', () => {
+        const spec: Partial<VideoGenerationSpec> = {
+            Beats: [
+                {
+                    Key: 'beat\\1|a',
+                    Label: 'Hook\\Label|One',
+                    StartSeconds: 0,
+                    EndSeconds: 4,
+                    EntryState: 'Start',
+                    ExitState: 'End',
+                    Purpose: 'Show C:\\temp\\file|pipe',
+                    OnScreenText: ['Path C:\\data|value'],
+                    DataRefs: [],
+                    AssetRefs: ['gen\\key|1'],
+                    LayoutNotes: { '16:9': 'Center' },
+                },
+            ],
+            Assets: {
+                Approved: [
+                    {
+                        Key: 'gen\\key|1',
+                        Kind: 'Image',
+                        FileID: 'f-1',
+                        Source: 'Generated',
+                        Provenance: 'Generated',
+                        Usage: 'Backdrop',
+                        MustUse: false,
+                        Generation: {
+                            ModelID: 'm-1',
+                            PromptRunID: 'pr-1',
+                            Prompt: 'Prompt with \\ and | characters',
+                            ReferenceKeys: [],
+                        },
+                    },
+                ],
+                Required: [],
+                NeverInvent: [],
+            },
+        };
+
+        const beatsTable = BuildBeatsTable(spec);
+        expect(beatsTable).toContain('beat\\\\1\\|a');
+        expect(beatsTable).toContain('Show C:\\\\temp\\\\file\\|pipe');
+
+        const genTable = BuildGeneratedAssetsTable(spec);
+        expect(genTable).toContain('gen\\\\key\\|1');
+        expect(genTable).toContain('Prompt with \\\\ and \\| characters');
+    });
+});

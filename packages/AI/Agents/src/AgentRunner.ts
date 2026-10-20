@@ -1087,7 +1087,11 @@ export class AgentRunner {
         targetLabel: string,
         refusalReason: string
     ): Promise<void> {
-        const cleanReason = refusalReason.replace(/\.+$/, '');
+        let end = refusalReason.length;
+        while (end > 0 && refusalReason.charCodeAt(end - 1) === 46) {
+            end--;
+        }
+        const cleanReason = refusalReason.slice(0, end);
         const handoffStep = this.findLatestHandoffStep(sourceResult);
         if (handoffStep) {
             try {

@@ -258,4 +258,14 @@ describe('FindContinuityAgentMessage and MessageMentionsAgent — handoff contin
         expect(MessageMentionsAgent(`@{"type":"user","id":"${MANAGER}","name":"Sage"} hi`, MANAGER, 'Sage')).toBe(false);
         expect(MessageMentionsAgent('Just a normal follow up', MANAGER, 'Sage')).toBe(false);
     });
+
+    it('MessageMentionsAgent scans 50,000 repeated @{| tokens in under 200 ms', () => {
+        const attack = '@{|'.repeat(50_000);
+        const start = performance.now();
+        const mentioned = MessageMentionsAgent(attack, MANAGER, 'Sage');
+        const elapsedMs = performance.now() - start;
+
+        expect(mentioned).toBe(false);
+        expect(elapsedMs).toBeLessThan(200);
+    });
 });

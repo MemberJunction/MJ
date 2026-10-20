@@ -712,6 +712,15 @@ describe('VideoStudio gates', () => {
             expect(afterRound2.Assets?.Generate?.[0]?.Status).toBe('Generated');
             expect(afterRound2.Assets?.Generate?.[0]?.RegenerationCount).toBe(1);
         });
+
+        it('parses ReadApprovalDecision on 50,000 repeated @form:{{ tokens in under 200 ms', () => {
+            const attack = '@form:{{'.repeat(50_000);
+            const start = performance.now();
+            const decision = ReadApprovalDecision(attack);
+            const elapsedMs = performance.now() - start;
+
+            expect(decision).toBe('Reject');
+            expect(elapsedMs).toBeLessThan(200);
+        });
     });
 });
-

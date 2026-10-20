@@ -1004,10 +1004,10 @@ export function ReadApprovalDecision(text: string | null | undefined): 'Approve'
     }
 
     // Also support literal @form:{...} syntax if passed directly
-    const literalFormMatch = text.match(/@form:\s*(\{[\s\S]*?\})/i);
-    if (literalFormMatch) {
+    const firstLiteralForm = findLiteralFormBlocks(text)[0];
+    if (firstLiteralForm) {
         try {
-            const parsed = JSON.parse(literalFormMatch[1]) as {
+            const parsed = JSON.parse(firstLiteralForm.jsonBody) as {
                 decision?: unknown;
                 fields?: Array<{ name?: string; value?: unknown }>;
             };
@@ -1037,7 +1037,7 @@ export function ReadApprovalDecision(text: string | null | undefined): 'Approve'
         const t = tokens[i];
         remaining = remaining.slice(0, t.startIndex) + remaining.slice(t.endIndex);
     }
-    remaining = remaining.replace(/@form:\s*\{[\s\S]*?\}/gi, '').trim();
+    remaining = stripLiteralFormBlocks(remaining).trim();
     if (!remaining) {
         return null;
     }
@@ -1056,6 +1056,56 @@ export function ReadApprovalDecision(text: string | null | undefined): 'Approve'
     }
 
     return /^approve/i.test(stripped) ? 'Approve' : 'Reject';
+}
+
+function isAsciiWhitespace(ch: string | undefined): boolean {
+    return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\f' || ch === '\v';
+}
+
+function findLiteralFormBlocks(text: string): Array<{ start: number; end: number; jsonBody: string }> {
+    const blocks: Array<{ start: number; end: number; jsonBody: string }> = [];
+    const lower = text.toLowerCase();
+    let searchFrom = 0;
+    while (searchFrom < text.length) {
+        const idx = lower.indexOf('@form:', searchFrom);
+        if (idx === -1) {
+            break;
+        }
+        let braceStart = idx + 6;
+        while (braceStart < text.length && isAsciiWhitespace(text[braceStart])) {
+            braceStart++;
+        }
+        if (braceStart >= text.length || text[braceStart] !== '{') {
+            searchFrom = braceStart;
+            continue;
+        }
+        const closeIdx = text.indexOf('}', braceStart + 1);
+        if (closeIdx === -1) {
+            break;
+        }
+        blocks.push({
+            start: idx,
+            end: closeIdx + 1,
+            jsonBody: text.slice(braceStart, closeIdx + 1),
+        });
+        searchFrom = closeIdx + 1;
+    }
+    return blocks;
+}
+
+function stripLiteralFormBlocks(text: string): string {
+    const blocks = findLiteralFormBlocks(text);
+    if (blocks.length === 0) {
+        return text;
+    }
+    let out = '';
+    let cursor = 0;
+    for (const block of blocks) {
+        out += text.slice(cursor, block.start);
+        cursor = block.end;
+    }
+    out += text.slice(cursor);
+    return out;
 }
 
 /**

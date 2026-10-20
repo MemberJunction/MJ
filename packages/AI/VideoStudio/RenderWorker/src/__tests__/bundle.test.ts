@@ -271,4 +271,20 @@ describe('bundle validation and staging', () => {
             await staged.Cleanup();
         }
     });
+
+    it('scans composition opening tags in linear time (< 200 ms) on 50,000 ! characters without closing >', async () => {
+        const { ResolveCompositionDuration, ResolveCompositionFps } = await import('../bundle.js');
+        const attackHtml = `<div data-composition-id=${'!'.repeat(50_000)}x`;
+        const bundle = createValidBundle({
+            Files: [{ Path: 'index.html', Content: attackHtml }],
+        });
+
+        const start = performance.now();
+        ValidateCompositionGeometryMatch(bundle, { Width: 1920, Height: 1080, DurationSeconds: 2 });
+        expect(ResolveCompositionFps(bundle, 30)).toBe(30);
+        expect(ResolveCompositionDuration(bundle, 5)).toBe(5);
+        const elapsedMs = performance.now() - start;
+
+        expect(elapsedMs).toBeLessThan(200);
+    });
 });

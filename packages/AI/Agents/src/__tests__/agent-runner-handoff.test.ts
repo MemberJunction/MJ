@@ -965,6 +965,56 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
                 { role: 'user', content: 'Original user turn' },
             ]);
         });
+
+        it('trims trailing periods in refused handoff reason in linear time (< 200 ms) on 50,000 dots followed by x', async () => {
+            const sourceRow = makeDetail('detail-source', BRANCH_1);
+            const provider = makeProvider([sourceRow]);
+            const runner = new AgentRunner(provider);
+
+            const attackTargetName = '.'.repeat(50_000) + 'x...';
+            mockResolveHandoffTarget.mockResolvedValueOnce({
+                Refusal: {
+                    Reason: 'NoRunPermission',
+                    Message: 'Refused',
+                },
+                Candidates: [],
+            });
+
+            const handoffStep = makeHandoffStep({ targetAgentId: targetAgent.ID, brief: 'Build storyboard' });
+            const sourceRun = {
+                ID: 'run-source-1',
+                Message: 'Initial reply',
+                Steps: [handoffStep as unknown as MJAIAgentRunStepEntityExtended],
+            } as unknown as MJAIAgentRunEntityExtended;
+
+            const start = performance.now();
+            await runner.FollowHandoffs({
+                params: {
+                    agent: sourceAgent,
+                    conversationMessages: [{ role: 'user', content: 'Hi' }],
+                    contextUser: USER,
+                },
+                sourceResult: {
+                    success: true,
+                    agentRun: sourceRun,
+                    handoff: {
+                        targetAgentId: targetAgent.ID,
+                        targetAgentName: attackTargetName,
+                        sourceAgentId: sourceAgent.ID,
+                        brief: 'Build storyboard',
+                        runStepId: handoffStep.ID,
+                    },
+                } as ExecuteAgentResult,
+                conversationId: CONV_ID,
+                sourceConversationDetailId: sourceRow.ID,
+            });
+            const elapsedMs = performance.now() - start;
+
+            expect(elapsedMs).toBeLessThan(200);
+            expect(sourceRow.Message).toContain(
+                `The current user does not have permission to run ${'.'.repeat(50_000)}x.`
+            );
+        });
     });
 
     describe('BaseAgent.runWithholdsHandoff guest/widget guard', () => {

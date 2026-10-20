@@ -194,9 +194,10 @@ function scanHtmlStaticIssues(
 ): CheckIssue[] {
     const issues: CheckIssue[] = [];
     const html = file.Content;
-    const htmlWithoutScriptsOrStyles = html
-        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, (m) => m.replace(/[^\n]/g, ' '))
-        .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, (m) => m.replace(/[^\n]/g, ' '));
+    const htmlWithoutScriptsOrStyles = blankOutHtmlTagBlocks(
+        blankOutHtmlTagBlocks(html, 'script'),
+        'style',
+    );
 
     for (const match of htmlWithoutScriptsOrStyles.matchAll(HTML_ASSET_ATTR_REGEX)) {
         const attrName = (match[1] ?? '').toLowerCase();
@@ -229,22 +230,18 @@ function scanHtmlStaticIssues(
         issues.push(...scanCssMissingAssets(styleContent, file.Path, line, knownPaths));
     }
 
-    for (const match of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
-        const block = match[1] ?? '';
-        const line = computeLineNumber(html, match.index ?? 0);
-        issues.push(...scanCssMissingAssets(block, file.Path, line, knownPaths));
+    for (const styleBlock of findHtmlTagBlocks(html, 'style')) {
+        const line = computeLineNumber(html, styleBlock.fullStart);
+        issues.push(...scanCssMissingAssets(styleBlock.body, file.Path, line, knownPaths));
     }
 
     const isHfScannedHtml = isHyperFramesLintedHtmlPath(file.Path);
-    for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
-        const fullMatch = match[0] ?? '';
-        const block = match[1] ?? '';
-        const bodyOffset = (match.index ?? 0) + fullMatch.indexOf(block);
-        const baseLine = computeLineNumber(html, bodyOffset);
-        issues.push(...scanJsMissingAssets(block, file.Path, baseLine, knownPaths));
+    for (const scriptBlock of findHtmlTagBlocks(html, 'script')) {
+        const baseLine = computeLineNumber(html, scriptBlock.bodyStart);
+        issues.push(...scanJsMissingAssets(scriptBlock.body, file.Path, baseLine, knownPaths));
         issues.push(
             ...scanJsNondeterministicApis(
-                block,
+                scriptBlock.body,
                 file.Path,
                 baseLine,
                 isHfScannedHtml,
@@ -411,20 +408,298 @@ function resolveBundleRelativeReference(fromFilePath: string, cleanRef: string):
     return stack.length > 0 ? stack.join('/') : null;
 }
 
+interface HtmlTokenSpan {
+    matchStart: number;
+    matchEnd: number;
+    fullToken: string;
+    tagName: string;
+    attrText: string;
+}
+
+function isAsciiAlphaChar(ch: string | undefined): boolean {
+    if (ch === undefined) {
+        return false;
+    }
+    return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
+}
+
+function isTagNameContinuationChar(ch: string | undefined): boolean {
+    if (ch === undefined) {
+        return false;
+    }
+    return (
+        isAsciiAlphaChar(ch) ||
+        (ch >= '0' && ch <= '9') ||
+        ch === ':' ||
+        ch === '-'
+    );
+}
+
+function isWordBoundaryChar(ch: string | undefined): boolean {
+    if (ch === undefined) {
+        return false;
+    }
+    return (
+        isAsciiAlphaChar(ch) ||
+        (ch >= '0' && ch <= '9') ||
+        ch === '_'
+    );
+}
+
+function findClosingTagEnd(
+    html: string,
+    lowerHtml: string,
+    tagLower: string,
+    fromIndex: number,
+): number {
+    const needle = `</${tagLower}`;
+    let pos = fromIndex;
+    while (pos < html.length) {
+        const idx = lowerHtml.indexOf(needle, pos);
+        if (idx === -1) {
+            return -1;
+        }
+        const afterName = idx + needle.length;
+        if (afterName < html.length && !isWordBoundaryChar(html[afterName])) {
+            const gtIdx = html.indexOf('>', afterName);
+            if (gtIdx === -1) {
+                return -1;
+            }
+            return gtIdx + 1;
+        }
+        pos = afterName;
+    }
+    return -1;
+}
+
+interface HtmlTagBlockSpan {
+    fullStart: number;
+    fullEnd: number;
+    bodyStart: number;
+    body: string;
+}
+
+function findHtmlTagBlocks(html: string, tagLower: 'script' | 'style'): HtmlTagBlockSpan[] {
+    const blocks: HtmlTagBlockSpan[] = [];
+    const lowerHtml = html.toLowerCase();
+    const openNeedle = `<${tagLower}`;
+    const closeNeedle = `</${tagLower}`;
+    let pos = 0;
+
+    while (pos < html.length) {
+        const openIdx = lowerHtml.indexOf(openNeedle, pos);
+        if (openIdx === -1) {
+            break;
+        }
+        const afterOpenName = openIdx + openNeedle.length;
+        if (afterOpenName >= html.length || isWordBoundaryChar(html[afterOpenName])) {
+            pos = afterOpenName;
+            continue;
+        }
+        const openGt = html.indexOf('>', afterOpenName);
+        if (openGt === -1) {
+            break;
+        }
+        const bodyStart = openGt + 1;
+        let closeSearch = bodyStart;
+        let matchedClose = false;
+        while (closeSearch < html.length) {
+            const closeIdx = lowerHtml.indexOf(closeNeedle, closeSearch);
+            if (closeIdx === -1) {
+                return blocks;
+            }
+            const afterCloseName = closeIdx + closeNeedle.length;
+            if (afterCloseName >= html.length || isWordBoundaryChar(html[afterCloseName])) {
+                closeSearch = afterCloseName;
+                continue;
+            }
+            const closeGt = html.indexOf('>', afterCloseName);
+            if (closeGt === -1) {
+                return blocks;
+            }
+            blocks.push({
+                fullStart: openIdx,
+                fullEnd: closeGt + 1,
+                bodyStart,
+                body: html.slice(bodyStart, closeIdx),
+            });
+            pos = closeGt + 1;
+            matchedClose = true;
+            break;
+        }
+        if (!matchedClose) {
+            break;
+        }
+    }
+    return blocks;
+}
+
+function blankOutHtmlTagBlocks(html: string, tagLower: 'script' | 'style'): string {
+    const blocks = findHtmlTagBlocks(html, tagLower);
+    if (blocks.length === 0) {
+        return html;
+    }
+    let out = '';
+    let cursor = 0;
+    for (const block of blocks) {
+        out += html.slice(cursor, block.fullStart);
+        for (let i = block.fullStart; i < block.fullEnd; i++) {
+            out += html.charCodeAt(i) === 10 ? '\n' : ' ';
+        }
+        cursor = block.fullEnd;
+    }
+    out += html.slice(cursor);
+    return out;
+}
+
+function scanHtmlTokens(html: string): HtmlTokenSpan[] {
+    const tokens: HtmlTokenSpan[] = [];
+    const lowerHtml = html.toLowerCase();
+    let scanPos = 0;
+    let noMoreCommentClose = false;
+    let noMoreScriptClose = false;
+    let noMoreStyleClose = false;
+
+    while (scanPos < html.length) {
+        const openIdx = html.indexOf('<', scanPos);
+        if (openIdx === -1) {
+            break;
+        }
+
+        if (html.startsWith('<!--', openIdx)) {
+            if (!noMoreCommentClose) {
+                const commentClose = html.indexOf('-->', openIdx + 4);
+                if (commentClose !== -1) {
+                    const matchEnd = commentClose + 3;
+                    tokens.push({
+                        matchStart: openIdx,
+                        matchEnd,
+                        fullToken: html.slice(openIdx, matchEnd),
+                        tagName: '',
+                        attrText: '',
+                    });
+                    scanPos = matchEnd;
+                    continue;
+                }
+                noMoreCommentClose = true;
+            }
+            const gtIdx = html.indexOf('>', openIdx + 2);
+            if (gtIdx === -1) {
+                break;
+            }
+            const matchEnd = gtIdx + 1;
+            tokens.push({
+                matchStart: openIdx,
+                matchEnd,
+                fullToken: html.slice(openIdx, matchEnd),
+                tagName: '',
+                attrText: '',
+            });
+            scanPos = matchEnd;
+            continue;
+        }
+
+        if (html.startsWith('<!', openIdx)) {
+            const gtIdx = html.indexOf('>', openIdx + 2);
+            if (gtIdx === -1) {
+                break;
+            }
+            const matchEnd = gtIdx + 1;
+            tokens.push({
+                matchStart: openIdx,
+                matchEnd,
+                fullToken: html.slice(openIdx, matchEnd),
+                tagName: '',
+                attrText: '',
+            });
+            scanPos = matchEnd;
+            continue;
+        }
+
+        const isClosing = html[openIdx + 1] === '/';
+        const nameStart = isClosing ? openIdx + 2 : openIdx + 1;
+        if (!isAsciiAlphaChar(html[nameStart])) {
+            scanPos = openIdx + 1;
+            continue;
+        }
+
+        let nameEnd = nameStart + 1;
+        while (nameEnd < html.length && isTagNameContinuationChar(html[nameEnd])) {
+            nameEnd++;
+        }
+        while (nameEnd > nameStart + 1 && (html[nameEnd - 1] === ':' || html[nameEnd - 1] === '-')) {
+            nameEnd--;
+        }
+        if (nameEnd < html.length && isWordBoundaryChar(html[nameEnd])) {
+            scanPos = openIdx + 1;
+            continue;
+        }
+
+        const gtIdx = html.indexOf('>', nameEnd);
+        if (gtIdx === -1) {
+            break;
+        }
+
+        const rawTagName = lowerHtml.slice(nameStart, nameEnd);
+        const attrText = html.slice(nameEnd, gtIdx);
+        const openTagEnd = gtIdx + 1;
+
+        if (!isClosing && rawTagName === 'script' && !noMoreScriptClose) {
+            const closeEnd = findClosingTagEnd(html, lowerHtml, 'script', openTagEnd);
+            if (closeEnd !== -1) {
+                tokens.push({
+                    matchStart: openIdx,
+                    matchEnd: closeEnd,
+                    fullToken: html.slice(openIdx, closeEnd),
+                    tagName: '',
+                    attrText: '',
+                });
+                scanPos = closeEnd;
+                continue;
+            }
+            noMoreScriptClose = true;
+        }
+
+        if (!isClosing && rawTagName === 'style' && !noMoreStyleClose) {
+            const closeEnd = findClosingTagEnd(html, lowerHtml, 'style', openTagEnd);
+            if (closeEnd !== -1) {
+                tokens.push({
+                    matchStart: openIdx,
+                    matchEnd: closeEnd,
+                    fullToken: html.slice(openIdx, closeEnd),
+                    tagName: '',
+                    attrText: '',
+                });
+                scanPos = closeEnd;
+                continue;
+            }
+            noMoreStyleClose = true;
+        }
+
+        tokens.push({
+            matchStart: openIdx,
+            matchEnd: openTagEnd,
+            fullToken: html.slice(openIdx, openTagEnd),
+            tagName: rawTagName,
+            attrText,
+        });
+        scanPos = openTagEnd;
+    }
+
+    return tokens;
+}
+
 function scanHtmlUnboundLiterals(
     html: string,
     filePath: string,
     allowedLiterals: Set<string>,
 ): CheckIssue[] {
     const issues: CheckIssue[] = [];
-    const tagOrBlockRegex =
-        /<!--[\s\S]*?-->|<!doctype[^>]*>|<![^>]*>|<script\b[^>]*>[\s\S]*?<\/script>|<style\b[^>]*>[\s\S]*?<\/style>|<\/?([a-zA-Z][a-zA-Z0-9:-]*)\b([^>]*)>/gi;
-
     const stack: Array<{ Tag: string; IsBound: boolean }> = [];
     let cursor = 0;
 
-    for (const match of html.matchAll(tagOrBlockRegex)) {
-        const matchStart = match.index ?? 0;
+    for (const token of scanHtmlTokens(html)) {
+        const { matchStart, matchEnd, fullToken, tagName, attrText } = token;
         if (matchStart > cursor) {
             const textChunk = html.slice(cursor, matchStart);
             const isCurrentlyBound = stack.length > 0 && stack[stack.length - 1]!.IsBound;
@@ -432,10 +707,6 @@ function scanHtmlUnboundLiterals(
                 collectTextLiteralIssues(textChunk, html, cursor, filePath, allowedLiterals, issues);
             }
         }
-
-        const fullToken = match[0] ?? '';
-        const tagName = (match[1] ?? '').toLowerCase();
-        const attrText = match[2] ?? '';
 
         if (tagName) {
             const isClosing = fullToken.startsWith('</');
@@ -455,7 +726,7 @@ function scanHtmlUnboundLiterals(
             }
         }
 
-        cursor = matchStart + fullToken.length;
+        cursor = matchEnd;
     }
 
     if (cursor < html.length) {
@@ -508,12 +779,26 @@ export function IsAllowedNumericLiteral(token: string, allowedLiterals: Readonly
     return isLiteralAllowed(token, allowedLiterals);
 }
 
+const ALLOWED_LITERAL_PUNCTUATION = new Set(Array.from('(),.;:!?'));
+
+function stripAllowedLiteralPunctuation(value: string): string {
+    let start = 0;
+    let end = value.length;
+    while (start < end && ALLOWED_LITERAL_PUNCTUATION.has(value[start]!)) {
+        start++;
+    }
+    while (end > start && ALLOWED_LITERAL_PUNCTUATION.has(value[end - 1]!)) {
+        end--;
+    }
+    return value.slice(start, end);
+}
+
 function isLiteralAllowed(token: string, allowedLiterals: ReadonlySet<string>): boolean {
     const trimmed = token.trim();
     if (allowedLiterals.has(trimmed)) {
         return true;
     }
-    const stripped = trimmed.replace(/^[(),.;:!?]+|[(),.;:!?]+$/g, '');
+    const stripped = stripAllowedLiteralPunctuation(trimmed);
     if (stripped.length > 0 && allowedLiterals.has(stripped)) {
         return true;
     }
@@ -533,12 +818,12 @@ function hasDataMjBoundAttribute(attrText: string): boolean {
 function decodeHtmlEntities(text: string): string {
     return text
         .replace(/&nbsp;/gi, ' ')
-        .replace(/&amp;/gi, '&')
         .replace(/&lt;/gi, '<')
         .replace(/&gt;/gi, '>')
         .replace(/&quot;/gi, '"')
         .replace(/&#39;/gi, "'")
-        .replace(/&minus;|&#8722;|&#x2212;/gi, '−');
+        .replace(/&minus;|&#8722;|&#x2212;/gi, '−')
+        .replace(/&amp;/gi, '&');
 }
 
 function isHyperFramesLintedHtmlPath(filePath: string): boolean {
@@ -551,9 +836,27 @@ function normalizeBundlePath(relPath: string): string {
 }
 
 function stripJsCommentsPreserveNewlines(js: string): string {
-    return js
-        .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '))
-        .replace(/\/\/[^\n]*/g, '');
+    let withoutBlockComments = '';
+    let cursor = 0;
+    while (cursor < js.length) {
+        const startIdx = js.indexOf('/*', cursor);
+        if (startIdx === -1) {
+            withoutBlockComments += js.slice(cursor);
+            break;
+        }
+        const endIdx = js.indexOf('*/', startIdx + 2);
+        if (endIdx === -1) {
+            withoutBlockComments += js.slice(cursor);
+            break;
+        }
+        withoutBlockComments += js.slice(cursor, startIdx);
+        const commentEnd = endIdx + 2;
+        for (let i = startIdx; i < commentEnd; i++) {
+            withoutBlockComments += js.charCodeAt(i) === 10 ? '\n' : ' ';
+        }
+        cursor = commentEnd;
+    }
+    return withoutBlockComments.replace(/\/\/[^\n]*/g, '');
 }
 
 function computeLineNumber(content: string, charIndex: number): number {

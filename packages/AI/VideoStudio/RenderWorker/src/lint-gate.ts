@@ -26,7 +26,6 @@ const CSS_IMPORT_REGEX = /@import\s+(?:url\(\s*)?(?:"([^"]*)"|'([^']*)'|([^)\s"'
 const JS_IMPORT_FROM_REGEX = /\b(?:import|export)\b[\s\S]*?\bfrom\s*(?:"([^"]*)"|'([^']*)')/g;
 const JS_SIDE_EFFECT_IMPORT_REGEX = /\bimport\s*(?:"([^"]*)"|'([^']*)')/g;
 const JS_DYNAMIC_IMPORT_REGEX = /\bimport\s*\(\s*(?:"([^"]*)"|'([^']*)'|`([^`$]*)`)\s*\)/g;
-const JS_STRING_LITERAL_REGEX = /"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|`((?:\\.|[^`\\])*)`/g;
 
 interface NetworkPatternRule {
     Regex: RegExp;
@@ -148,11 +147,78 @@ export function SortCheckIssues(issues: readonly CheckIssue[]): CheckIssue[] {
 }
 
 const HTML_SCRIPT_OPEN_TAG_REGEX = /<script\b([^>]*)>/gi;
-const HTML_SCRIPT_BLOCK_REGEX = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
 const HTML_SCRIPT_TAG_ATTRS_SYNTAX_REGEX =
     /^(?:\s+[^\s"'<>\/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*\/?$/;
 const HTML_SCRIPT_TAG_ATTR_REGEX = /\b(src|href|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/gi;
 const SCRIPT_OR_IMPORT_RAW_ALLOWLIST_REGEX = /^[A-Za-z0-9._@/-]+$/;
+
+function isWordBoundaryChar(ch: string | undefined): boolean {
+    if (ch === undefined) {
+        return false;
+    }
+    return (
+        (ch >= 'a' && ch <= 'z') ||
+        (ch >= 'A' && ch <= 'Z') ||
+        (ch >= '0' && ch <= '9') ||
+        ch === '_'
+    );
+}
+
+function findHtmlTagBlocks(
+    html: string,
+    tagLower: 'script' | 'style',
+): Array<{ fullStart: number; body: string }> {
+    const blocks: Array<{ fullStart: number; body: string }> = [];
+    const lowerHtml = html.toLowerCase();
+    const openNeedle = `<${tagLower}`;
+    const closeNeedle = `</${tagLower}`;
+    let pos = 0;
+
+    while (pos < html.length) {
+        const openIdx = lowerHtml.indexOf(openNeedle, pos);
+        if (openIdx === -1) {
+            break;
+        }
+        const afterOpenName = openIdx + openNeedle.length;
+        if (afterOpenName >= html.length || isWordBoundaryChar(html[afterOpenName])) {
+            pos = afterOpenName;
+            continue;
+        }
+        const openGt = html.indexOf('>', afterOpenName);
+        if (openGt === -1) {
+            break;
+        }
+        const bodyStart = openGt + 1;
+        let closeSearch = bodyStart;
+        let matchedClose = false;
+        while (closeSearch < html.length) {
+            const closeIdx = lowerHtml.indexOf(closeNeedle, closeSearch);
+            if (closeIdx === -1) {
+                return blocks;
+            }
+            const afterCloseName = closeIdx + closeNeedle.length;
+            if (afterCloseName >= html.length || isWordBoundaryChar(html[afterCloseName])) {
+                closeSearch = afterCloseName;
+                continue;
+            }
+            const closeGt = html.indexOf('>', afterCloseName);
+            if (closeGt === -1) {
+                return blocks;
+            }
+            blocks.push({
+                fullStart: openIdx,
+                body: html.slice(bodyStart, closeIdx),
+            });
+            pos = closeGt + 1;
+            matchedClose = true;
+            break;
+        }
+        if (!matchedClose) {
+            break;
+        }
+    }
+    return blocks;
+}
 
 function scanHtmlFile(file: RenderCompositionFile, authoredFilePaths: ReadonlySet<string>): CheckIssue[] {
     const issues: CheckIssue[] = [];
@@ -232,16 +298,14 @@ function scanHtmlFile(file: RenderCompositionFile, authoredFilePaths: ReadonlySe
         issues.push(...scanJsBlock(handlerJs, file.Path, line, authoredFilePaths));
     }
 
-    for (const match of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
-        const block = match[1] ?? '';
-        const line = computeLineNumber(html, match.index ?? 0);
-        issues.push(...scanCssBlock(block, file.Path, line));
+    for (const styleBlock of findHtmlTagBlocks(html, 'style')) {
+        const line = computeLineNumber(html, styleBlock.fullStart);
+        issues.push(...scanCssBlock(styleBlock.body, file.Path, line));
     }
 
-    for (const match of html.matchAll(HTML_SCRIPT_BLOCK_REGEX)) {
-        const block = match[2] ?? '';
-        const line = computeLineNumber(html, match.index ?? 0);
-        issues.push(...scanJsBlock(block, file.Path, line, authoredFilePaths));
+    for (const scriptBlock of findHtmlTagBlocks(html, 'script')) {
+        const line = computeLineNumber(html, scriptBlock.fullStart);
+        issues.push(...scanJsBlock(scriptBlock.body, file.Path, line, authoredFilePaths));
     }
 
     return issues;
@@ -286,6 +350,49 @@ function scanCssBlock(css: string, filePath: string, baseLine: number): CheckIss
     return issues;
 }
 
+function extractJsStringLiterals(js: string): Array<{ value: string; index: number }> {
+    const literals: Array<{ value: string; index: number }> = [];
+    const failedUntil: Record<string, number> = { '"': -1, "'": -1, '`': -1 };
+    let i = 0;
+    while (i < js.length) {
+        const ch = js[i]!;
+        if (ch === '\\') {
+            i += 2;
+            continue;
+        }
+        if ((ch === '"' || ch === "'" || ch === '`') && i >= failedUntil[ch]!) {
+            const quote = ch;
+            const startIdx = i;
+            let j = i + 1;
+            let closed = false;
+            while (j < js.length) {
+                const c = js[j]!;
+                if (c === '\\') {
+                    j += 2;
+                    continue;
+                }
+                if (c === quote) {
+                    literals.push({ value: js.slice(startIdx + 1, j), index: startIdx });
+                    i = j + 1;
+                    closed = true;
+                    break;
+                }
+                if (quote !== '`' && (c === '\r' || c === '\n')) {
+                    break;
+                }
+                j++;
+            }
+            if (!closed) {
+                failedUntil[quote] = j;
+                i++;
+            }
+            continue;
+        }
+        i++;
+    }
+    return literals;
+}
+
 function scanJsBlock(
     js: string,
     filePath: string,
@@ -318,12 +425,12 @@ function scanJsBlock(
         }
     }
 
-    for (const match of js.matchAll(JS_STRING_LITERAL_REGEX)) {
-        const literal = (match[1] ?? match[2] ?? match[3] ?? '').trim();
+    for (const match of extractJsStringLiterals(js)) {
+        const literal = match.value.trim();
         if (!looksLikeUrlOrTraversalInLiteral(literal)) {
             continue;
         }
-        const line = baseLine + computeLineNumber(js, match.index ?? 0) - 1;
+        const line = baseLine + computeLineNumber(js, match.index) - 1;
         const issue = checkUrlReference(literal, filePath, line, 'JS string literal');
         if (issue) {
             issues.push(issue);

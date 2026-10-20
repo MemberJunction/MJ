@@ -246,11 +246,19 @@ export async function ReadAssetBytes(
  * Sanitizes an asset or narration line key into a lowercase safe filename stem (`[a-z0-9-_]`).
  */
 export function SanitizeStageKey(key: string): string {
-    const cleaned = (key ?? '')
+    const normalized = (key ?? '')
         .trim()
         .toLowerCase()
-        .replace(/[^a-z0-9_-]+/g, '-')
-        .replace(/^-+|-+$/g, '');
+        .replace(/[^a-z0-9_-]+/g, '-');
+    let start = 0;
+    let end = normalized.length;
+    while (start < end && normalized.charCodeAt(start) === 45) {
+        start++;
+    }
+    while (end > start && normalized.charCodeAt(end - 1) === 45) {
+        end--;
+    }
+    const cleaned = normalized.slice(start, end);
     return cleaned || 'item';
 }
 

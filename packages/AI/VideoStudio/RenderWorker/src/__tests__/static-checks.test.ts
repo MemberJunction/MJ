@@ -243,5 +243,60 @@ describe('RunStaticChecks', () => {
             });
             expect(issues.filter((i) => i.Code === MJ_UNBOUND_LITERAL_SOURCE_CODE)).toEqual([]);
         });
+
+        it('recognizes </script >, </SCRIPT>, </script foo>, and </style > closing tags and does not double-unescape &amp;lt; or &amp;minus;', () => {
+            const bundle = makeBundle({
+                Files: [
+                    {
+                        Path: 'index.html',
+                        Content: [
+                            '<!doctype html>',
+                            '<html><head>',
+                            '<style>.a { width: 100px; background: url("missing.png"); }</style >',
+                            '</head><body>',
+                            '<script>var hidden1 = 999; setTimeout(function() {}, 10);</script >',
+                            '<script>var hidden2 = 888;</SCRIPT>',
+                            '<script>var hidden3 = 777;</script foo>',
+                            '<p>&amp;lt;tag&amp;gt; and &amp;minus;not-a-minus-sign</p>',
+                            '</body></html>',
+                        ].join('\n'),
+                    },
+                ],
+            });
+
+            const issues = RunStaticChecks(bundle);
+            // CSS missing.png inside <style>...</style > and setTimeout inside <script>...</script > are detected,
+            // while numbers 999, 888, 777 inside scripts are not treated as HTML text literals.
+            expect(issues.some((i) => i.Code === MJ_MISSING_ASSET_CODE)).toBe(true);
+            expect(issues.some((i) => i.Code === MJ_NONDETERMINISTIC_API_CODE)).toBe(true);
+            expect(issues.filter((i) => i.Code === MJ_UNBOUND_LITERAL_SOURCE_CODE)).toEqual([]);
+        });
+
+        it('completes in under 200 ms on 50,000 repeated <!--, 50,000 ! in IsAllowedNumericLiteral, and 50,000 repeated a/* in JS', async () => {
+            const { IsAllowedNumericLiteral } = await import('../checks/static-checks.js');
+
+            const commentAttackBundle = makeBundle({
+                Files: [{ Path: 'index.html', Content: '<!--'.repeat(50_000) }],
+            });
+            const t0 = performance.now();
+            expect(RunStaticChecks(commentAttackBundle)).toEqual([]);
+            expect(performance.now() - t0).toBeLessThan(200);
+
+            const bangToken = '!'.repeat(50_000) + 'x';
+            const allowed = new Set(['42']);
+            const t1 = performance.now();
+            expect(IsAllowedNumericLiteral(bangToken, allowed)).toBe(false);
+            expect(performance.now() - t1).toBeLessThan(200);
+
+            const jsAttackBundle = makeBundle({
+                Files: [
+                    { Path: 'index.html', Content: '<!doctype html><html><body></body></html>' },
+                    { Path: 'anim.js', Content: 'a/*'.repeat(50_000) },
+                ],
+            });
+            const t2 = performance.now();
+            expect(RunStaticChecks(jsAttackBundle)).toEqual([]);
+            expect(performance.now() - t2).toBeLessThan(200);
+        });
     });
 });

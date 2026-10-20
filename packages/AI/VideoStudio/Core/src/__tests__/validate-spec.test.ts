@@ -1245,6 +1245,16 @@ describe('RestoreStrippedFormatKeys', () => {
             '1:1': 'Square hero header',
         });
     });
+
+    it('processes pathological wrapping punctuation (50,000 ! + x) and long zero runs (50,000 0 + x) in under 200 ms', () => {
+        const bangAttack = '!'.repeat(50_000) + 'x';
+        const t0 = performance.now();
+        expect(IsNumericLiteralToken(bangAttack)).toBe(false);
+        expect(performance.now() - t0).toBeLessThan(200);
+
+        const zeroAttack = '0'.repeat(50_000) + 'x';
+        const t1 = performance.now();
+        expect(ExtractNumericLiteralTokens(zeroAttack)).toEqual(['0'.repeat(50_000) + 'x']);
+        expect(performance.now() - t1).toBeLessThan(200);
+    });
 });
-
-

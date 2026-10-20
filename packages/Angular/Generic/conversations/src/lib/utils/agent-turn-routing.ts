@@ -155,11 +155,23 @@ export function MessageMentionsAgent(
     const normalizedId = NormalizeUUID(agentId ?? '');
     const normalizedName = (agentName ?? '').trim().toLowerCase();
 
-    const tokenRegex = /@\{([^}]+)\}/g;
-    let match: RegExpExecArray | null;
-    while ((match = tokenRegex.exec(messageText)) !== null) {
+    let cursor = 0;
+    while (cursor < messageText.length) {
+        const openIdx = messageText.indexOf('@{', cursor);
+        if (openIdx === -1) {
+            break;
+        }
+        const closeIdx = messageText.indexOf('}', openIdx + 2);
+        if (closeIdx === -1) {
+            break;
+        }
+        const body = messageText.slice(openIdx + 2, closeIdx);
+        cursor = closeIdx + 1;
+        if (!body) {
+            continue;
+        }
         try {
-            const parsed = JSON.parse(`{${match[1]}}`) as { type?: string; id?: string; name?: string };
+            const parsed = JSON.parse(`{${body}}`) as { type?: string; id?: string; name?: string };
             if (parsed.type && parsed.type !== 'agent') {
                 continue;
             }

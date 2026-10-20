@@ -10,6 +10,7 @@ import {
     FrameSizeFor,
     MAX_STILL_POINTS,
     ReadAssetBytes,
+    SanitizeStageKey,
     StillPointsFor,
 } from '../render/bundle.js';
 
@@ -665,5 +666,15 @@ describe('bundle.ts (VS-AGT-3)', () => {
                 }),
             ]),
         );
+    });
+
+    it('sanitizes stage keys with 50,000 leading/trailing hyphens in under 200 ms', () => {
+        const attack = '-'.repeat(50_000) + 'x' + '-'.repeat(50_000);
+        const start = performance.now();
+        const result = SanitizeStageKey(attack);
+        const elapsedMs = performance.now() - start;
+
+        expect(result).toBe('x');
+        expect(elapsedMs).toBeLessThan(200);
     });
 });
