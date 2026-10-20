@@ -14,6 +14,7 @@ You are a metadata specialist for MemberJunction. Your task is to add a new AI m
      - Release date (exact date, not approximations)
      - Key features and capabilities
      - **Reasoning/Extended Thinking support** (for SupportsEffortLevel determination)
+     - **Native tool / function calling support**, and whether the API accepts a forced (named) `tool_choice` (for `ModelConfiguration.LLM` — see "Native Tool Calling" below)
      - Knowledge cutoff date
      - Performance benchmarks (for SpeedRank determination)
 
@@ -112,6 +113,49 @@ Rules of thumb:
 - Always state the cache basis in `Comments` (e.g. `"cache read 0.1x input; write 1.25x input (5-min TTL)"`) so the row is auditable.
 - Known schema limitations to note in Comments when relevant: the single write column can't express Anthropic's 1-hour TTL (2×); Gemini explicit-cache per-hour storage isn't modeled.
 
+## Native Tool Calling (`ModelConfiguration.LLM`) — REQUIRED for every LLM
+
+Every LLM record must state `ModelConfiguration.LLM.SupportsNativeToolCalling` explicitly, `true` or
+`false`. The native tool-calling gate treats a missing value as `false` and falls back to the envelope
+path with only a console warning, so a new model that replaces a supported one silently loses native
+tool calling. A unit test in `packages/AI/Core/src/__tests__/modelConfiguration.test.ts` fails when an
+LLM leaves the key unset.
+
+### How to determine it
+
+1. **Research the model.** Search the vendor's API docs for "function calling" / "tool use" / "tools"
+   for this exact model (and its API name). Note whether it supports parallel tool calls and whether
+   `tool_choice` can name a specific tool (a forced choice). Some models reject a forced choice
+   (Claude Opus 5.5, Sonnet 5.5, Fable 5.1).
+2. **Check the model's siblings** in `.ai-models.json` (same family, previous version). A new version
+   of a family that supports tools almost always does too. Copy the sibling's block.
+3. **Check each Inference Provider row's driver** in the "Driver Class Names by Vendor" table below.
+   A driver without tool support ignores `tools` entirely, even when the model supports them.
+
+### What to write
+
+- **Model supports tools** → the standard block on the model record:
+  ```json
+  "ModelConfiguration": {
+    "LLM": {
+      "SupportsNativeToolCalling": true,
+      "DefaultToNativeToolCalling": false,
+      "NativeControlFlow": "implicit",
+      "NativeToolResults": true
+    }
+  }
+  ```
+  Add `"SupportsForcedToolChoice": false` inside `LLM` when the API rejects a named `tool_choice`.
+  Leave `DefaultToNativeToolCalling` false unless the user asks otherwise; prompts opt in.
+- **Model does not support tools** (edit/completion-only models, small local models without a tool
+  template, custom bots) → `"ModelConfiguration": { "LLM": { "SupportsNativeToolCalling": false } }`.
+- **An Inference Provider row whose driver has no tool support** (marked ✗ in the driver table), on a
+  model that does support tools → add to that vendor row:
+  `"ModelConfiguration": { "LLM": { "SupportsNativeToolCalling": false } }`.
+  The vendor row overrides the model per key. A second test in `modelConfiguration.test.ts` fails when
+  an active vendor row on such a driver resolves to `true`.
+- If you cannot find evidence either way, say so to the user and ask. Do not leave the key out.
+
 ## Metadata JSON Template
 
 **IMPORTANT**: For new records, include a `primaryKey` with a CLI-`uuidgen` UUID but DO NOT include a `sync` section (populated by the release-time `mj sync push`). Do not author a Metadata_Sync migration.
@@ -126,7 +170,15 @@ Rules of thumb:
     "IsActive": true,
     "SpeedRank": {SpeedRank},
     "CostRank": {CostRank},
-    "InheritTypeModalities": true
+    "InheritTypeModalities": true,
+    "ModelConfiguration": {
+      "LLM": {
+        "SupportsNativeToolCalling": {true or false},
+        "DefaultToNativeToolCalling": false,
+        "NativeControlFlow": "implicit",
+        "NativeToolResults": true
+      }
+    }
   },
   "relatedEntities": {
     "MJ: AI Model Vendors": [
@@ -338,18 +390,35 @@ Before setting SupportsEffortLevel in metadata:
 12. **Include benchmark data** when available to justify PowerRank/SpeedRank assignments
 13. **Add new entries at the end** of the .ai-models.json array
 14. **Use ISO 8601 format** for timestamps in date fields: `YYYY-MM-DDTHH:MM:SS.sssZ`
+15. **State `ModelConfiguration.LLM.SupportsNativeToolCalling` on every LLM** (`true` or `false`, never absent), and set it `false` on any Inference Provider row whose driver has no tool support (see "Native Tool Calling")
 
 ## Driver Class Names by Vendor
 
-- **Anthropic**: `AnthropicLLM`
-- **OpenAI**: `OpenAILLM`
-- **Google/Gemini**: `GeminiLLM`
-- **Mistral**: `MistralLLM`
-- **Groq**: `GroqLLM`
-- **Cerebras**: `CerebrasLLM`
-- **x.ai**: `xAILLM`
-- **Alibaba Cloud**: `QwenLLM`
-- **Moonshot AI**: `KimiLLM`
+✓ = the driver implements native tool calling (its `SupportsTools` getter is true, directly or through
+the class it extends). ✗ = it ignores `tools`; a vendor row on it must carry
+`"ModelConfiguration": { "LLM": { "SupportsNativeToolCalling": false } }`. Confirm against the driver
+source when in doubt: `grep -rn "get SupportsTools" packages/AI/Providers`.
+
+- **Anthropic**: `AnthropicLLM` ✓
+- **OpenAI**: `OpenAILLM` ✓
+- **Google/Gemini**: `GeminiLLM` ✓ (Vertex AI: `VertexLLM` ✓)
+- **OpenRouter**: `OpenRouterLLM` ✓
+- **Groq**: `GroqLLM` ✓
+- **Cerebras**: `CerebrasLLM` ✓
+- **x.ai**: `xAILLM` ✓
+- **Zhipu**: `ZhipuLLM` ✓
+- **MiniMax**: `MiniMaxLLM` ✓
+- **DeepInfra**: `DeepInfraLLM` ✓
+- **SiliconFlow**: `SiliconFlowLLM` ✓
+- **Alibaba Cloud**: `QwenLLM` — no driver of this name ships in MJ's provider packages; check where it is registered before relying on it
+- **Moonshot AI**: `MoonshotLLM` / `KimiLLM` — likewise not in MJ's provider packages; check before relying on it
+- **Mistral**: `MistralLLM` ✗
+- **Fireworks**: `FireworksLLM` ✗
+- **Azure**: `AzureLLM` ✗
+- **AWS Bedrock**: `BedrockLLM` ✗
+- **LM Studio**: `LMStudioLLM` ✗
+- **Ollama**: `OllamaLLM` ✗
+- **Inception**: `InceptionLLM` ✗ (it overrides the OpenAI driver's support off)
 
 ## Adding New Vendors
 

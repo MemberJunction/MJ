@@ -237,4 +237,26 @@ describe('TaskGraphRunViewComponent (DOM)', () => {
         f.detectChanges();
         expect(settled).toBe(1);
     });
+
+    it('enables ShowVariables by default and opens the Step Inputs & Outputs inspector pane when a step is clicked', async () => {
+        const { provider } = graphProvider();
+        const f = render(provider, 'parent-1');
+        await settle(f);
+
+        expect(f.componentInstance.ShowVariables).toBe(true);
+        if (f.componentInstance.InvocationPaneOpen) {
+            f.componentInstance.OnToggleInvocation();
+            f.detectChanges();
+        }
+        expect(f.componentInstance.InvocationPaneOpen).toBe(false);
+
+        const node = f.componentInstance.Spec!.tasks.find((t) => t.tempId === 't1')!;
+        f.componentInstance.OnSelectionChanged(new TaskGraphSelectionChangedEventArgs(node));
+        f.detectChanges();
+
+        expect(f.componentInstance.InvocationPaneOpen).toBe(true);
+        expect(host(f).querySelector('.run-view-vars-step-name')?.textContent).toBe('Gather');
+        expect(host(f).querySelector('.run-view-vars-status')?.textContent).toBe('Complete');
+        expect(host(f).querySelector('mj-task-graph-variables')).toBeTruthy();
+    });
 });

@@ -45,6 +45,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
+import { AIEngine } from '@memberjunction/aiengine';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
 import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
@@ -1352,7 +1353,17 @@ export class TaskGraphService {
             context.ContextUser,
         );
 
-        const found = new Map((result.Results ?? []).map((r) => [r.Name, r.ID]));
+        const found = new Map<string, string>();
+        const engineLoaded = (AIEngine.Instance?.Agents?.length ?? 0) > 0;
+        for (const r of result.Results ?? []) {
+            if (engineLoaded && context.ContextUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
+                const permitted = await AIEngine.Instance.CanUserRunAgent(r.ID, context.ContextUser);
+                if (!permitted) {
+                    continue;
+                }
+            }
+            found.set(r.Name, r.ID);
+        }
         const missing = names.filter((n) => !found.has(n));
         if (missing.length > 0) {
             return {

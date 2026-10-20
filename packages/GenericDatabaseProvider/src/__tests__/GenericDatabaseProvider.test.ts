@@ -2988,6 +2988,39 @@ describe('GenericDatabaseProvider after-save dispatch captures the token before 
         await dispatched;
         expect(p.aiTokens).toEqual([expected]);
     });
+
+    it('entity actions when Loaded is true: runs Active actions without calling Config, and short-circuits when only Disabled actions exist', async () => {
+        const engine = EntityActionEngineServer.Instance;
+        const configSpy = vi.spyOn(engine, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(engine, 'Loaded', 'get').mockReturnValue(true);
+        vi.spyOn(engine, 'InvocationTypes', 'get').mockReturnValue([afterCreate] as never);
+        const byNameSpy = vi
+            .spyOn(engine, 'GetActionsByEntityName')
+            .mockImplementation((_name: string, status?: string) =>
+                status === 'Active' ? ([{ ID: 'ea-1', Status: 'Active' }] as never) : ([] as never),
+            );
+        vi.spyOn(engine, 'GetActionsByEntityNameAndInvocationType').mockReturnValue([{ ID: 'ea-1' }] as never);
+        vi.spyOn(EntityActionDispatchGuard.Instance, 'Dispatch').mockImplementation(async (_key, run) => {
+            await run();
+            return 'Ran';
+        });
+        const runSpy = vi.spyOn(engine, 'RunEntityAction').mockResolvedValue({ Success: true } as never);
+
+        const p = new DispatchProvider();
+        const results = await p.DispatchAfterSave();
+        expect(configSpy).not.toHaveBeenCalled();
+        expect(byNameSpy).toHaveBeenCalledWith('Widgets', 'Active');
+        expect(runSpy).toHaveBeenCalledTimes(1);
+        expect(results).toHaveLength(1);
+
+        runSpy.mockClear();
+        byNameSpy.mockImplementation((_name: string, status?: string) =>
+            status === 'Disabled' ? ([{ ID: 'ea-disabled', Status: 'Disabled' }] as never) : ([] as never),
+        );
+        const emptyResults = await p.DispatchAfterSave();
+        expect(emptyResults).toEqual([]);
+        expect(runSpy).not.toHaveBeenCalled();
+    });
 });
 
 describe('TransactionFrameTracker', () => {

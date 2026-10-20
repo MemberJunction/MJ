@@ -1069,3 +1069,190 @@ describe('AgentRunner.CheckForDuplicateVersion — non-numeric version guard (#4
         expect(params.ExtraFilter).toContain('VersionNumber=3');
     });
 });
+
+describe('AgentRunner.ProcessAgentArtifacts — payload title/description fallback & version naming', () => {
+    it('adopts payload.title and payload.interpretation onto both artifact header and version when directive name is omitted', async () => {
+        const artifact = makeEntity('art-1');
+        const version = makeEntity('ver-1');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(
+            makeResult({
+                payload: {
+                    title: 'Top 10 Customers by Total Spend',
+                    interpretation: 'Enterprise customers account for 74% of lifetime order value.',
+                    columns: [{ field: 'Customer' }],
+                    rows: [{ Customer: 'Acme Corp' }],
+                },
+            }),
+            'detail-1',
+            undefined,
+            contextUser,
+            provider
+        );
+
+        expect(artifact.Name).toBe('Top 10 Customers by Total Spend');
+        expect(artifact.Description).toBe('Enterprise customers account for 74% of lifetime order value.');
+        expect(version.Name).toBe('Top 10 Customers by Total Spend');
+        expect(version.Description).toBe('Enterprise customers account for 74% of lifetime order value.');
+    });
+
+    it('populates version.Name and version.Description when versioning an existing artifact', async () => {
+        const version = makeEntity('ver-2');
+        const { provider } = makeProvider(() => version, world({ owners: new Map([[TARGET_UUID.toLowerCase(), 'user-1']]) }));
+        const runner = new TestableAgentRunner(provider);
+        runner.MaxVersion = 1;
+
+        await runner.ProcessAgentArtifacts(
+            makeResult({
+                artifactDirective: {
+                    behavior: 'version-source',
+                    targetArtifactId: TARGET_UUID,
+                    name: 'Top 10 Customers — Q4 Only',
+                    description: 'Filtered to Q4 orders',
+                },
+            }),
+            'detail-2',
+            undefined,
+            contextUser,
+            provider
+        );
+
+        expect(version.ArtifactID).toBe(TARGET_UUID);
+        expect(version.VersionNumber).toBe(2);
+        expect(version.Name).toBe('Top 10 Customers — Q4 Only');
+        expect(version.Description).toBe('Filtered to Q4 orders');
+    });
+});
+
+import { LoopAgentType } from '../agent-types/loop-agent-type';
+import { QueryBuilderAgent } from '../query-builder-agent';
+
+describe('LoopAgentType.DetermineNextStep — artifactDirective forwarding', () => {
+    it('forwards artifactDirective on Chat, Success, and Sub-Agent steps', async () => {
+        const loopType = new LoopAgentType();
+
+        const chatStep = await loopType.DetermineNextStep(
+            {
+                success: true,
+                result: JSON.stringify({
+                    taskComplete: false,
+                    message: 'Here are your results.',
+                    artifactDirective: {
+                        behavior: 'create-new',
+                        name: 'Top 10 Customers by Total Spend',
+                        description: 'Ranks top customers by lifetime spend',
+                    },
+                    payloadChangeRequest: {
+                        replaceElements: {
+                            title: 'Top 10 Customers by Total Spend',
+                            columns: [{ field: 'Customer' }],
+                            rows: [{ Customer: 'Acme' }],
+                        },
+                    },
+                    nextStep: { type: 'Chat' },
+                }),
+            } as unknown as Parameters<LoopAgentType['DetermineNextStep']>[0],
+            {} as unknown as Parameters<LoopAgentType['DetermineNextStep']>[1],
+            {}
+        );
+
+        expect(chatStep.step).toBe('Chat');
+        expect(chatStep.artifactDirective).toEqual({
+            behavior: 'create-new',
+            name: 'Top 10 Customers by Total Spend',
+            description: 'Ranks top customers by lifetime spend',
+        });
+
+        const subAgentStep = await loopType.DetermineNextStep(
+            {
+                success: true,
+                result: JSON.stringify({
+                    taskComplete: false,
+                    artifactDirective: {
+                        behavior: 'version-source',
+                        targetArtifactId: 'A',
+                        name: 'Refined Dashboard',
+                    },
+                    nextStep: {
+                        type: 'Sub-Agent',
+                        subAgent: {
+                            name: 'Query Strategist',
+                            message: 'Filter by Q4',
+                            terminateAfter: false,
+                        },
+                    },
+                }),
+            } as unknown as Parameters<LoopAgentType['DetermineNextStep']>[0],
+            {} as unknown as Parameters<LoopAgentType['DetermineNextStep']>[1],
+            {}
+        );
+
+        expect(subAgentStep.step).toBe('Sub-Agent');
+        expect(subAgentStep.artifactDirective).toEqual({
+            behavior: 'version-source',
+            targetArtifactId: 'A',
+            name: 'Refined Dashboard',
+        });
+    });
+});
+
+describe('QueryBuilderAgent — single-table vs multi-table payload normalization', () => {
+    class TestableQueryBuilderAgent extends QueryBuilderAgent {
+        public normalize(payload: Record<string, unknown>, replaceElements: Record<string, unknown>): Record<string, unknown> {
+            return this.normalizePayloadFormat(payload, {
+                step: 'Success',
+                payloadChangeRequest: { replaceElements },
+            });
+        }
+    }
+
+    it('strips stale multi-table fields (tables, computations, interpretation) when transitioning to single-table', () => {
+        const agent = new TestableQueryBuilderAgent();
+        const prev = {
+            title: 'Executive Dashboard',
+            tables: [{ name: 't1', rows: [] }],
+            computations: [{ name: 'c1' }],
+            interpretation: 'Multi-table summary',
+        };
+        const next = {
+            source: 'query',
+            title: 'Top 10 Customers',
+            columns: [{ field: 'Name' }],
+            rows: [{ Name: 'Acme' }],
+            metadata: { sql: 'SELECT Name FROM vwCustomers' },
+        };
+        // Simulate merged payload where PayloadManager kept prev.tables alongside next.columns/rows
+        const merged = agent.normalize({ ...prev, ...next }, next);
+
+        expect(merged.tables).toBeUndefined();
+        expect(merged.computations).toBeUndefined();
+        expect(merged.interpretation).toBeUndefined();
+        expect(merged.columns).toEqual([{ field: 'Name' }]);
+        expect(merged.rows).toEqual([{ Name: 'Acme' }]);
+    });
+
+    it('strips stale single-table fields (columns, rows, metadata) when transitioning to multi-table', () => {
+        const agent = new TestableQueryBuilderAgent();
+        const prev = {
+            source: 'query',
+            title: 'Top 10 Customers',
+            columns: [{ field: 'Name' }],
+            rows: [{ Name: 'Acme' }],
+            metadata: { sql: 'SELECT Name FROM vwCustomers' },
+        };
+        const next = {
+            title: 'Executive Dashboard',
+            tables: [{ name: 't1', rows: [] }],
+        };
+        const merged = agent.normalize({ ...prev, ...next }, next);
+
+        expect(merged.columns).toBeUndefined();
+        expect(merged.rows).toBeUndefined();
+        expect(merged.metadata).toBeUndefined();
+        expect(merged.tables).toEqual([{ name: 't1', rows: [] }]);
+    });
+});
+
+

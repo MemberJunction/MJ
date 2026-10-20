@@ -31,6 +31,7 @@ import { LogError } from '@memberjunction/core';
 import { configInfo } from '../config.js';
 import { RealtimeSessionVerificationService } from './RealtimeSessionVerificationService.js';
 import { BuildVerifyConfirmHtml, BuildVerifyErrorHtml, BuildVerifyFailureHtml, BuildVerifySuccessHtml } from './verificationPages.js';
+import { ApiRoute } from '../apiRoot.js';
 
 /** Mount path of the public verify routes. Under `/realtime`, which is already reserved against server extensions. */
 export const REALTIME_VERIFY_MOUNT_PATH = '/realtime/verify';
@@ -79,7 +80,7 @@ export function CreateRealtimeVerifyRouter(
     // SAFE: renders the confirmation button. Never consumes the token (see the module header).
     router.get('/:token', limiter, (req: Request, res: Response) => {
         const token = typeof req.params.token === 'string' ? req.params.token : '';
-        sendPage(res, 200, BuildVerifyConfirmHtml(token, REALTIME_VERIFY_MOUNT_PATH));
+        sendPage(res, 200, BuildVerifyConfirmHtml(token, ApiRoute(REALTIME_VERIFY_MOUNT_PATH)));
     });
 
     // The side-effecting redemption, gated by a human gesture.

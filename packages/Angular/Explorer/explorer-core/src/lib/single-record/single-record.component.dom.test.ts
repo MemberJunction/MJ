@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, Directive, EventEmitter, Input, Output } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MJFormPresenterService } from '@memberjunction/ng-base-forms';
 import type { FormCompositionSnapshot } from '@memberjunction/ng-base-forms';
 import { NavigationService, SharedService } from '@memberjunction/ng-shared';
+import { BaseEntity, BaseEntityEvent, CompositeKey } from '@memberjunction/core';
+import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { SingleRecordComponent } from './single-record.component';
 
 /**
@@ -29,6 +31,24 @@ class EntityFormHostStub {
   @Output() Notification = new EventEmitter<unknown>();
   @Output() Dismissed = new EventEmitter<void>();
   @Output() FormCreated = new EventEmitter<unknown>();
+}
+
+/** Projects its content like the real <mj-alert>, so the banner's Close button renders. */
+@Component({
+  standalone: true,
+  selector: 'mj-alert',
+  template: '<div class="title">{{ Title }}</div><ng-content></ng-content><ng-content select="[actions]"></ng-content>',
+})
+class AlertStub {
+  @Input() Variant: unknown;
+  @Input() Title = '';
+  @Input() Message: unknown;
+}
+
+@Directive({ standalone: true, selector: '[mjButton]' })
+class ButtonStub {
+  @Input() Variant: unknown;
+  @Input() Size: unknown;
 }
 
 /** The shape SingleRecordComponent reads off a created form. */
@@ -58,7 +78,7 @@ function render(): {
   emitted: FormCompositionSnapshot[];
 } {
   TestBed.configureTestingModule({
-    imports: [EntityFormHostStub],
+    imports: [EntityFormHostStub, AlertStub, ButtonStub],
     declarations: [SingleRecordComponent],
     providers: [
       { provide: NavigationService, useValue: {} },
@@ -74,7 +94,7 @@ function render(): {
   fixture.componentInstance.CompositionChanged.subscribe((s) => emitted.push(s));
 
   fixture.detectChanges();
-  const host = fixture.debugElement.children[0].componentInstance as EntityFormHostStub;
+  const host = fixture.debugElement.query((el) => el.componentInstance instanceof EntityFormHostStub).componentInstance as EntityFormHostStub;
   return { fixture, host, emitted };
 }
 
@@ -128,5 +148,92 @@ describe('SingleRecordComponent (DOM) — composition snapshot', () => {
     form.CompositionChanged.emit(snapshot('after destroy'));
 
     expect(emitted).toEqual([]);
+  });
+});
+
+/** Raise a BaseEntity event on the global bus, as the providers do. */
+function raiseEntityEvent(args: Partial<BaseEntityEvent>): void {
+  MJGlobal.Instance.RaiseEvent({
+    event: MJEventType.ComponentEvent,
+    eventCode: BaseEntity.BaseEventCode,
+    args: { payload: null, baseEntity: null, type: 'other', ...args } as BaseEntityEvent,
+    component: {},
+  });
+}
+
+function remoteDelete(entityName: string, id: string): void {
+  raiseEntityEvent({
+    type: 'remote-invalidate',
+    entityName,
+    payload: { action: 'delete', primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: id }]) },
+  });
+}
+
+function renderRecord(id: string): ReturnType<typeof render> {
+  const rendered = render();
+  rendered.fixture.componentInstance.PrimaryKey = new CompositeKey([{ FieldName: 'ID', Value: id }]);
+  rendered.fixture.detectChanges();
+  return rendered;
+}
+
+function banner(fixture: ComponentFixture<SingleRecordComponent>): HTMLElement | null {
+  return (fixture.nativeElement as HTMLElement).querySelector('mj-alert');
+}
+
+describe('SingleRecordComponent (DOM) — record deleted by another user', () => {
+  it('shows a banner, and keeps the form, when another session deletes this record', () => {
+    const { fixture } = renderRecord('U-1');
+
+    remoteDelete('MJ: Users', 'u-1');
+    fixture.detectChanges();
+
+    expect(banner(fixture)?.textContent).toContain('This record was deleted by another user');
+    expect((fixture.nativeElement as HTMLElement).querySelector('mj-entity-form-host')).not.toBeNull();
+  });
+
+  it('ignores remote deletes of other records and remote saves of this one', () => {
+    const { fixture } = renderRecord('U-1');
+
+    remoteDelete('MJ: Users', 'U-2');
+    remoteDelete('MJ: Roles', 'U-1');
+    raiseEntityEvent({
+      type: 'remote-invalidate',
+      entityName: 'MJ: Users',
+      payload: { action: 'save', primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: 'U-1' }]) },
+    });
+    fixture.detectChanges();
+
+    expect(banner(fixture)).toBeNull();
+  });
+
+  it('leaves a delete made in this session to the shell (no banner)', () => {
+    const { fixture } = renderRecord('U-1');
+    const entity = { EntityInfo: { Name: 'MJ: Users' }, PrimaryKey: new CompositeKey([{ FieldName: 'ID', Value: 'U-1' }]) };
+
+    raiseEntityEvent({ type: 'delete', baseEntity: entity as unknown as BaseEntity });
+    fixture.detectChanges();
+
+    expect(banner(fixture)).toBeNull();
+  });
+
+  it('closes the tab from the banner', () => {
+    const { fixture } = renderRecord('U-1');
+    let dismissed = 0;
+    fixture.componentInstance.RecordDismissed.subscribe(() => dismissed++);
+
+    remoteDelete('MJ: Users', 'U-1');
+    fixture.detectChanges();
+    (banner(fixture)?.querySelector('button') as HTMLButtonElement).click();
+
+    expect(dismissed).toBe(1);
+  });
+
+  it('stops listening once destroyed', () => {
+    const { fixture } = renderRecord('U-1');
+    fixture.destroy();
+
+    remoteDelete('MJ: Users', 'U-1');
+
+    expect(fixture.componentInstance.DeletedRemotely).toBe(false);
   });
 });

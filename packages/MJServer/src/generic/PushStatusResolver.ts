@@ -189,7 +189,7 @@ export function StatusUpdatesFilter(data: {
   context: StatusUpdatesFilterContext | undefined;
 }): boolean {
   const { payload, args, context } = data;
-  if (payload.sessionId !== args.sessionId) {
+  if (payload.sessionId !== '*' && payload.sessionId !== args.sessionId) {
     return false;
   }
   const connectionUserId: string | undefined = context?.userPayload?.userRecord?.ID;

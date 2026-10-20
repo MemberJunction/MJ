@@ -169,4 +169,29 @@ describe('TaskGraphActionRunner: outputs must be storable', () => {
 
         expect(result).toMatchObject({ Success: true, Output: { AgentRunID: 'RUN-1' }, ActionLogID: 'LOG-2' });
     });
+
+    it('merges structured JSON Message properties into Output and aliases handle/Handle', async () => {
+        vi.mocked(ActionEngineServer.Instance.RunAction).mockResolvedValue({
+            Success: true,
+            Message: JSON.stringify({
+                message: 'Created new PDF document.',
+                handle: 'doc-handle-99',
+                documentType: 'pdf',
+                fileName: 'Sales_Demo_Report.pdf',
+            }),
+            Params: [],
+            LogEntry: { ID: 'LOG-3' },
+        } as never);
+
+        const result = await new TaskGraphActionRunner().RunActionForTask(baseRunParams({ DocumentType: 'pdf' }));
+
+        expect(result.Success).toBe(true);
+        expect(result.Output).toMatchObject({
+            handle: 'doc-handle-99',
+            Handle: 'doc-handle-99',
+            documentType: 'pdf',
+            fileName: 'Sales_Demo_Report.pdf',
+        });
+    });
 });
+

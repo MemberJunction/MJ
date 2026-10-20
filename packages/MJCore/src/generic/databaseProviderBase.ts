@@ -3,6 +3,7 @@ import { UserInfo } from "./securityInfo";
 import { EntityDependency, EntityFieldInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
 import { BaseEntity, BaseEntityResult, CloneContext, RecordChangePayload, RecordChangeSource, RestoreContext, SerializeCloneChangeContext } from "./baseEntity";
 import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
+import { EntitySaveReturnMode } from "./entityConfiguration";
 import { DispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
@@ -11,7 +12,7 @@ import { LogError } from "./logging";
 import { LocalCacheManager } from "./localCacheManager";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { FormatBinaryChangeValue, SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
+import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -38,6 +39,11 @@ export interface SaveSQLResult {
     simpleSQL?: string;
     /** Parameterized query values (e.g. [$1,$2] for PG). Null/undefined for inline SQL. */
     parameters?: unknown[] | null;
+    /**
+     * `fullSQL` with its parameter values written in as literals, when the provider runs it with
+     * parameters and can render it. Logged instead of `fullSQL`, and shown in error messages.
+     */
+    literalSQL?: string;
     /** Provider-specific extra data (e.g. overlapping-change data for ISA propagation) */
     extraData?: Record<string, unknown>;
 }
@@ -49,6 +55,8 @@ export interface DeleteSQLResult {
     fullSQL: string;
     simpleSQL?: string;
     parameters?: unknown[] | null;
+    /** See {@link SaveSQLResult.literalSQL}. */
+    literalSQL?: string;
 }
 
 /**
@@ -1235,8 +1243,23 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         // Always offer the record-change-free form to the SQL logger, not only when the
         // entity tracks record changes: it is also the replay-safe form of a create for
         // migration recordings (MemberJunction/MJ#4503). Execution still uses fullSQL.
-        if (sqlDetails.simpleSQL) {
-            opts.simpleSQLFallback = sqlDetails.simpleSQL;
+        if ('simpleSQL' in sqlDetails) {
+            Object.defineProperty(opts, 'simpleSQLFallback', {
+                enumerable: true,
+                configurable: true,
+                get(): string | undefined {
+                    return sqlDetails.simpleSQL || undefined;
+                },
+            });
+        }
+        if ('literalSQL' in sqlDetails) {
+            Object.defineProperty(opts, 'literalSQL', {
+                enumerable: true,
+                configurable: true,
+                get(): string | undefined {
+                    return sqlDetails.literalSQL || undefined;
+                },
+            });
         }
         return opts;
     }
@@ -1249,8 +1272,23 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             isMutation: true,
             description: `Delete ${entity.EntityInfo.Name}`,
         };
-        if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
-            opts.simpleSQLFallback = sqlDetails.simpleSQL;
+        if (entity.EntityInfo.TrackRecordChanges && 'simpleSQL' in sqlDetails) {
+            Object.defineProperty(opts, 'simpleSQLFallback', {
+                enumerable: true,
+                configurable: true,
+                get(): string | undefined {
+                    return sqlDetails.simpleSQL || undefined;
+                },
+            });
+        }
+        if ('literalSQL' in sqlDetails) {
+            Object.defineProperty(opts, 'literalSQL', {
+                enumerable: true,
+                configurable: true,
+                get(): string | undefined {
+                    return sqlDetails.literalSQL || undefined;
+                },
+            });
         }
         return opts;
     }
@@ -1282,27 +1320,27 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
     /**
      * Validates a user-provided SQL clause (WHERE, ORDER BY, etc.) to prevent SQL injection.
-     * Checks for forbidden keywords (INSERT, UPDATE, DELETE, EXEC, DROP, UNION, etc.)
-     * and dangerous patterns (comments, semicolons, xp_ prefix).
-     * String literals are stripped before validation to avoid false positives.
+     * The clause is read with this provider's SQL dialect. It is rejected when it contains a
+     * comment, text that cannot be read the way the database reads it, a forbidden keyword
+     * (INSERT, UPDATE, DELETE, EXEC, DROP, UNION, etc.), a semicolon, or an `xp_` name.
+     * String literals and quoted identifiers are not checked for keywords.
      *
      * @param clause The SQL clause to validate
      * @returns true if the clause is safe, false if it contains forbidden patterns
      */
     protected ValidateUserProvidedSQLClause(clause: string): boolean {
-        // Remove string literals to avoid false positives.
-        //
-        // 🚨 SECURITY: this uses the SHARED stripper in @memberjunction/global. It must match how
-        // SQL Server / PostgreSQL actually parse literals — see StripSQLStringLiterals for the full
-        // rationale and the backslash-escape bypass it exists to prevent. Do NOT inline a regex here;
-        // an inline copy is exactly how this screen and SQLExpressionValidator drifted apart before.
-        const clauseWithoutStrings = StripSQLStringLiterals(clause);
-        const lowerClause = clauseWithoutStrings.toLowerCase();
+        // 🚨 SECURITY: this uses the SHARED scanner in @memberjunction/global, which reads quotes,
+        // [bracket] and "double-quoted" identifiers, comments, and PostgreSQL E'…' and $$…$$ strings
+        // the way this provider's database does, and refuses text it cannot classify. Do NOT inline
+        // a regex here: this screen and SQLExpressionValidator must read SQL the same way.
+        const scan = ScanSQLForScreening(clause, this.PlatformKey);
+        if (!scan.Classified || scan.CommentCount > 0) return false;
+        const lowerClause = scan.Code.toLowerCase();
 
         const forbiddenPatterns: RegExp[] = [
             /\binsert\b/, /\bupdate\b/, /\bdelete\b/,
             /\bexec\b/, /\bexecute\b/, /\bdrop\b/,
-            /--/, /\/\*/, /\*\//, /\bunion\b/, /\bxp_/, /;/,
+            /--/, /\/\*/, /\*\//, /\bunion\b/, /;/,
             // Time-based blind injection vector — no legitimate filter/order-by clause uses WAITFOR.
             /\bwaitfor\b/,
         ];
@@ -1310,7 +1348,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         for (const pattern of forbiddenPatterns) {
             if (pattern.test(lowerClause)) return false;
         }
-        return true;
+        // Extended stored procedures are names, so a quoted name such as [xp_cmdshell] is checked too.
+        return !/\bxp_/.test(scan.CodeWithIdentifiers.toLowerCase());
     }
 
     /**
@@ -1369,6 +1408,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             const result = validator.validate(agg.expression, {
                 context: 'aggregate',
                 entityFields: fieldNames,
+                Dialect: this.PlatformKey,
             });
 
             if (!result.valid) {
@@ -1781,6 +1821,14 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
                 // Step 4: Generate provider-specific SQL
                 const sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user, options);
+                const effectiveReturnMode: EntitySaveReturnMode = options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode;
+                // Snapshot the entity's in-memory field values at the exact point SQL parameters were bound
+                // (before awaiting ExecuteSQL). If the caller mutates the entity in memory while an async
+                // save is in flight (e.g. BaseEntitySaveQueue pipelining an INSERT + UPDATE), merging
+                // post-await entity.GetAll() would falsely mark those in-flight mutations as clean/saved.
+                const preSaveValues: Record<string, unknown> | undefined = effectiveReturnMode === 'datestamps_only'
+                    ? (entity.GetAll() as Record<string, unknown>)
+                    : undefined;
 
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
@@ -1788,17 +1836,19 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     suspendRefresh();
 
                     const extraData = this.GetTransactionExtraData(entity);
-                    if (sqlDetails.simpleSQL) {
-                        extraData.simpleSQLFallback = sqlDetails.simpleSQL;
-                    }
+                    Object.defineProperty(extraData, 'simpleSQLFallback', {
+                        get: () => sqlDetails.simpleSQL,
+                        enumerable: true,
+                        configurable: true,
+                    });
                     extraData.entityName = entity.EntityInfo.Name;
 
                     entity.TransactionGroup.AddTransaction(
                         new TransactionItem(
                             entity,
                             entityResult.Type === 'create' ? 'Create' : 'Update',
-                            sqlDetails.fullSQL,
-                            sqlDetails.parameters ?? null,
+                            sqlDetails.literalSQL ?? sqlDetails.fullSQL,
+                            sqlDetails.literalSQL ? null : (sqlDetails.parameters ?? null),
                             extraData,
                             (transactionResult: Record<string, unknown>, success: boolean) => {
                                 resumeRefresh();
@@ -1806,7 +1856,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                 if (success && transactionResult) {
                                     this.OnAfterSaveExecute(entity, user, options, saveContext);
                                     entityResult.Success = true;
-                                    entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
+                                    const mergedResult: Record<string, unknown> = preSaveValues
+                                        ? { ...preSaveValues, ...transactionResult }
+                                        : transactionResult;
+                                    entityResult.NewValues = this.MapTransactionResultToNewValues(mergedResult);
                                 } else {
                                     entityResult.Success = false;
                                     entityResult.Message = 'Transaction Failed';
@@ -1840,20 +1893,28 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         this.OnAfterSaveExecute(entity, user, options, saveContext);
                         entityResult.Success = true;
 
+                        // In 'datestamps_only' mode, the SP/query returned only the PK and
+                        // __mj_CreatedAt/__mj_UpdatedAt columns. Merge those returned values
+                        // onto the pre-save snapshot so caller-set fields remain intact without
+                        // falsely marking concurrent in-flight mutations as clean.
+                        const mergedRow: Record<string, unknown> = preSaveValues
+                            ? { ...preSaveValues, ...result[0] }
+                            : result[0];
+
                         // OnSaveCompleted may return patch fields (e.g., updated lat/lng
                         // from geocoding) that need to be merged onto the SP result before
                         // the entity loads the data via finalizeSave().
                         const patches = await this.OnSaveCompleted(entity, sqlDetails, user, options, saveContext);
                         if (patches) {
-                            Object.assign(result[0], patches);
+                            Object.assign(mergedRow, patches);
                         }
 
-                        return result[0];
+                        return mergedRow;
                     } else {
                         if (bNewRecord)
-                            throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ${sqlDetails.fullSQL}`);
+                            throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
                         else
-                            throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ${sqlDetails.fullSQL}`);
+                            throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
                     }
                 }
             } else {
@@ -1930,8 +1991,12 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 entity.RaiseReadyForTransaction();
 
                 const extraData = this.GetTransactionExtraData(entity);
-                if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
-                    extraData.simpleSQLFallback = sqlDetails.simpleSQL;
+                if (entity.EntityInfo.TrackRecordChanges) {
+                    Object.defineProperty(extraData, 'simpleSQLFallback', {
+                        get: () => sqlDetails.simpleSQL,
+                        enumerable: true,
+                        configurable: true,
+                    });
                 }
                 extraData.entityName = entity.EntityInfo.Name;
 
@@ -1939,19 +2004,19 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     new TransactionItem(
                         entity,
                         'Delete',
-                        sqlDetails.fullSQL,
-                        sqlDetails.parameters ?? null,
+                        sqlDetails.literalSQL ?? sqlDetails.fullSQL,
+                        sqlDetails.literalSQL ? null : (sqlDetails.parameters ?? null),
                         extraData,
                         (transactionResult: Record<string, unknown>, success: boolean) => {
                             entityResult.EndedAt = new Date();
                             if (success && transactionResult) {
-                                this.OnAfterDeleteExecute(entity, user, options);
-                                for (const key of entity.PrimaryKeys) {
-                                    if (key.Value !== transactionResult[key.Name]) {
-                                        entityResult.Success = false;
-                                        entityResult.Message = 'Transaction failed to commit';
-                                    }
+                                // Same key check as the direct path, through the provider's own override
+                                // (PostgreSQL accepts its legacy `_result_id` shape there).
+                                if (!this.ValidateDeleteResult(entity, [transactionResult], entityResult)) {
+                                    entityResult.Success = false;
+                                    return;
                                 }
+                                this.OnAfterDeleteExecute(entity, user, options);
                                 entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
                                 entityResult.Success = true;
                             } else {
@@ -2671,6 +2736,11 @@ export interface ExecuteSQLOptions {
   isMutation?: boolean;
   /** Simple SQL fallback for loggers to emit logging of a simpler SQL statement that doesn't have extra functionality that isn't important for migrations or other logging purposes. */
   simpleSQLFallback?: string;
+  /**
+   * The statement with its parameter values written in as literals. A provider that supports it
+   * logs this in place of the parameterized statement and shows it in error messages.
+   */
+  literalSQL?: string;
   /**
    * Explicit driver handle (pool, client, or transaction). When set, the statement
    * bypasses the ambient transaction — required for teardown/probes after a doomed TX.

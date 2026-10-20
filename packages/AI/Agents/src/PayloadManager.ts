@@ -265,13 +265,11 @@ export class PayloadManager {
             };
         }
         
-        // Start with a deep clone of the parent payload
-        const result = _.cloneDeep(parentPayload || {});
         const counts = { additions: 0, updates: 0, deletions: 0 };
         
-        // Handle wildcard - merge everything
+        // Handle wildcard - merge everything (DeepMerge already returns a newly cloned object)
         if (upstreamPaths.includes('*')) {
-            const merged = this.DeepMerge(result, subAgentPayload);
+            const merged = this.DeepMerge((parentPayload || {}) as P, subAgentPayload);
             // Count changes
             this.countChanges(parentPayload, merged, counts);
             return {
@@ -283,6 +281,9 @@ export class PayloadManager {
             };
         }
         
+        // Start with a fast deep clone of the parent payload
+        const result = this.fastCloneDeep(parentPayload || {});
+
         // Check each path in the sub-agent payload
         const mergeResult = this.mergeAllowedPaths(result, subAgentPayload, upstreamPaths, subAgentName, verbose);
         
@@ -508,7 +509,7 @@ export class PayloadManager {
             const isOperationAllowed = this.isOperationAllowedForPath(actualPath, operation, upstreamPaths);
             
             if (isOperationAllowed) {
-                _.set(result as any, actualPath, _.cloneDeep(subAgentValue));
+                _.set(result as object, actualPath, this.fastCloneDeep(subAgentValue));
             } else {
                 // Only track if the sub-agent is trying to change the value
                 if (!_.isEqual(subAgentValue, originalValue)) {
@@ -945,6 +946,34 @@ export class PayloadManager {
         }
     }
 
+    private getPathPatternRegex(pathPattern: string): RegExp {
+        let compiled = this._pathPatternRegexCache.get(pathPattern);
+        if (compiled) {
+            return compiled;
+        }
+        if (pathPattern.includes('**')) {
+            const regexStr = pathPattern
+                .replace(/\\/g, '\\\\')
+                .replace(/\./g, '\\.')
+                .replace(/\*\*/g, '.*')
+                .replace(/\*/g, '[^.]+');
+            compiled = new RegExp(`^${regexStr}$`);
+        } else if (pathPattern.endsWith('.*')) {
+            const basePath = pathPattern.slice(0, -2);
+            const escapedBase = basePath.replace(/\\/g, '\\\\').replace(/\./g, '\\.');
+            compiled = new RegExp(`^${escapedBase}(\\..*)?$`);
+        } else {
+            const regexStr = pathPattern
+                .replace(/\\/g, '\\\\')
+                .replace(/\./g, '\\.')
+                .replace(/\*/g, '[^.]+')
+                .replace(/\[(\*|\d+)\]/g, '\\[(\\*|\\d+)\\]');
+            compiled = new RegExp(`^${regexStr}$`);
+        }
+        this._pathPatternRegexCache.set(pathPattern, compiled);
+        return compiled;
+    }
+
     /**
      * Checks if a path matches any of the allowed patterns.
      * 
@@ -959,37 +988,8 @@ export class PayloadManager {
             const pathPattern = parsedPattern.path;
             
             if (pathPattern === '*') return true;
-            
-            if (pathPattern.includes('**')) {
-                // Handle deep wildcards
-                const regex = pathPattern
-                    .replace(/\./g, '\\.')
-                    .replace(/\*\*/g, '.*')
-                    .replace(/\*/g, '[^.]+');
-                if (new RegExp(`^${regex}$`).test(normalizedPath)) {
-                    return true;
-                }
-            } else {
-                // Handle regular patterns
-                // Check if pattern ends with .* which means "everything under this path"
-                if (pathPattern.endsWith('.*')) {
-                    const basePath = pathPattern.slice(0, -2); // Remove the .*
-                    const escapedBase = basePath.replace(/\./g, '\\.');
-                    // Match the base path followed by a dot and anything after
-                    const regex = `^${escapedBase}(\\..*)?$`;
-                    if (new RegExp(regex).test(normalizedPath)) {
-                        return true;
-                    }
-                } else {
-                    // Handle other wildcard patterns
-                    const regex = pathPattern
-                        .replace(/\./g, '\\.')
-                        .replace(/\*/g, '[^.]+')
-                        .replace(/\[(\*|\d+)\]/g, '\\[(\\*|\\d+)\\]');
-                    if (new RegExp(`^${regex}$`).test(normalizedPath)) {
-                        return true;
-                    }
-                }
+            if (this.getPathPatternRegex(pathPattern).test(normalizedPath)) {
+                return true;
             }
         }
         
@@ -1014,32 +1014,7 @@ export class PayloadManager {
         
         for (const parsedPattern of parsedPatterns) {
             const pathPattern = parsedPattern.path;
-            let pathMatches = false;
-            
-            if (pathPattern === '*') {
-                pathMatches = true;
-            } else if (pathPattern.includes('**')) {
-                // Handle deep wildcards
-                const regex = pathPattern
-                    .replace(/\./g, '\\.')
-                    .replace(/\*\*/g, '.*')
-                    .replace(/\*/g, '[^.]+');
-                pathMatches = new RegExp(`^${regex}$`).test(normalizedPath);
-            } else {
-                // Handle regular patterns
-                if (pathPattern.endsWith('.*')) {
-                    const basePath = pathPattern.slice(0, -2);
-                    const escapedBase = basePath.replace(/\./g, '\\.');
-                    const regex = `^${escapedBase}(\\..*)?$`;
-                    pathMatches = new RegExp(regex).test(normalizedPath);
-                } else {
-                    const regex = pathPattern
-                        .replace(/\./g, '\\.')
-                        .replace(/\*/g, '[^.]+')
-                        .replace(/\[(\*|\d+)\]/g, '\\[(\\*|\\d+)\\]');
-                    pathMatches = new RegExp(`^${regex}$`).test(normalizedPath);
-                }
-            }
+            const pathMatches = pathPattern === '*' || this.getPathPatternRegex(pathPattern).test(normalizedPath);
             
             // If path matches, check if operation is allowed
             if (pathMatches && isOperationAllowed(parsedPattern, operation)) {
@@ -1108,28 +1083,103 @@ export class PayloadManager {
      */
     public DeepMerge<T = any>(destination: T | null | undefined, source: Partial<T> | null | undefined): T {
         if (!source) return destination as T;
-        if (!destination) return _.cloneDeep(source) as T;
-        
-        const result = _.cloneDeep(destination);
-        
-        for (const key in source) {
-            if (source.hasOwnProperty(key)) {
-                if (_.isObject(source[key]) && !_.isArray(source[key]) && _.isObject(result[key]) && !_.isArray(result[key])) {
-                    // Both are objects - recursive merge
-                    result[key] = this.DeepMerge(result[key], source[key]) as T[Extract<keyof T, string>];
-                } else {
-                    // Otherwise, source overwrites destination
-                    result[key] = _.cloneDeep(source[key]) as T[Extract<keyof T, string>];
-                }
+        if (!destination) return this.fastCloneDeep(source) as T;
+
+        const destObj = destination as Record<string, unknown>;
+        const srcObj = source as Record<string, unknown>;
+        const result: Record<string, unknown> = {};
+
+        for (const key of Object.keys(destObj)) {
+            if (!Object.prototype.hasOwnProperty.call(srcObj, key)) {
+                result[key] = this.fastCloneDeep(destObj[key]);
+            } else {
+                result[key] = undefined;
             }
         }
-        
-        return result;
+
+        for (const key of Object.keys(srcObj)) {
+            const srcVal = srcObj[key];
+            const destVal = destObj[key];
+            // Only plain objects merge key by key. A Date or class instance has no own keys to merge,
+            // so recursing would collapse it to `{}`; like an array or primitive, it replaces the
+            // destination value.
+            if (this.isPlainObject(srcVal) && this.isPlainObject(destVal)) {
+                result[key] = this.DeepMerge(destVal, srcVal);
+            } else {
+                result[key] = this.fastCloneDeep(srcVal);
+            }
+        }
+
+        return result as T;
     }
 
     /** @deprecated Use {@link DeepMerge}. */
     public deepMerge<T = any>(destination: T | null | undefined, source: Partial<T> | null | undefined): T {
         return this.DeepMerge(destination, source);
+    }
+
+    private _defaultAnalyzer = new PayloadChangeAnalyzer();
+    private _defaultDiffer = new DeepDiffer();
+    private _pathPatternRegexCache = new Map<string, RegExp>();
+
+    /** True for an object literal or `Object.create(null)` object: not an array, Date or class instance. */
+    private isPlainObject(value: unknown): value is Record<string, unknown> {
+        if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+            return false;
+        }
+        const proto = Object.getPrototypeOf(value);
+        return proto === Object.prototype || proto === null;
+    }
+
+    /**
+     * Fast deep-clone for JSON-like payload trees (plain objects, arrays, primitives),
+     * falling back to lodash `_.cloneDeep` for exotic instances (Date, Map, Set, etc.).
+     */
+    private fastCloneDeep<T>(value: T): T {
+        if (value === null || typeof value !== 'object') {
+            return value;
+        }
+        if (Array.isArray(value)) {
+            const len = value.length;
+            const copy = new Array(len);
+            for (let i = 0; i < len; i++) {
+                const item = value[i];
+                copy[i] = (item !== null && typeof item === 'object') ? this.fastCloneDeep(item) : item;
+            }
+            return copy as unknown as T;
+        }
+        if (this.isPlainObject(value)) {
+            const copy: Record<string, unknown> = {};
+            const keys = Object.keys(value);
+            for (let i = 0; i < keys.length; i++) {
+                const k = keys[i];
+                const val = (value as Record<string, unknown>)[k];
+                copy[k] = (val !== null && typeof val === 'object') ? this.fastCloneDeep(val) : val;
+            }
+            return copy as unknown as T;
+        }
+        return _.cloneDeep(value);
+    }
+
+    /**
+     * Returns true if any property key inside a changeRequest bucket contains '.' or '['
+     * (e.g. from TransformChangeRequestPaths).
+     */
+    private hasDottedKeys(obj: unknown): boolean {
+        if (!obj || typeof obj !== 'object') return false;
+        if (Array.isArray(obj)) {
+            for (let i = 0; i < obj.length; i++) {
+                if (this.hasDottedKeys(obj[i])) return true;
+            }
+            return false;
+        }
+        const keys = Object.keys(obj);
+        for (let i = 0; i < keys.length; i++) {
+            const k = keys[i];
+            if (k.includes('.') || k.includes('[')) return true;
+            if (this.hasDottedKeys((obj as Record<string, unknown>)[k])) return true;
+        }
+        return false;
     }
 
     /**
@@ -1169,11 +1219,16 @@ export class PayloadManager {
         // siblings of updateElements/newElements instead of inside them. This detects those
         // stray keys and moves them into the appropriate bucket so the changes aren't silently lost.
         if (!options?.ignoreStrayKeys) {
-            this.autoCorrectStrayKeys(changeRequest, originalPayload, warnings, options?.agentName);
+            this.autoCorrectStrayKeys(changeRequest, originalPayload, warnings, options?.agentName, options?.allowedPaths);
         }
 
-        const result = _.cloneDeep(originalPayload) || {} as P;
+        const result = this.fastCloneDeep(originalPayload) || {} as P;
         const counts = { additions: 0, updates: 0, deletions: 0 };
+        const requestHasDottedKeys =
+            this.hasDottedKeys(changeRequest.newElements) ||
+            this.hasDottedKeys(changeRequest.updateElements) ||
+            this.hasDottedKeys(changeRequest.removeElements) ||
+            this.hasDottedKeys(changeRequest.replaceElements);
 
         // Process all changes recursively
         this.processChangeRequest(
@@ -1184,7 +1239,8 @@ export class PayloadManager {
             counts,
             warnings,
             options?.allowedPaths,
-            blockedOperations
+            blockedOperations,
+            requestHasDottedKeys
         );
         
         // Log if requested and in verbose mode
@@ -1195,8 +1251,7 @@ export class PayloadManager {
         // Analyze changes if requested
         let analysis: PayloadAnalysisResult | undefined;
         if (options?.analyzeChanges !== false) { // Default to true
-            const analyzer = new PayloadChangeAnalyzer();
-            analysis = analyzer.analyzeChangeRequest(originalPayload, changeRequest, result);
+            analysis = this._defaultAnalyzer.AnalyzeChangeRequest(originalPayload, changeRequest, result);
             
             // Add analysis warnings to the main warnings array
             if (analysis.warnings.length > 0) {
@@ -1207,8 +1262,7 @@ export class PayloadManager {
         // Generate diff if requested
         let diff: DeepDiffResult | undefined;
         if (options?.generateDiff !== false) { // Default to true
-            const differ = new DeepDiffer();
-            diff = differ.diff(originalPayload, result);
+            diff = this._defaultDiffer.Diff(originalPayload, result);
         }
         
         return {
@@ -1259,19 +1313,21 @@ export class PayloadManager {
             to?: any;
             reason: string;
             timestamp: string;
-        }>
+        }>,
+        requestHasDottedKeys: boolean = false
     ): void {
         if (Array.isArray(target)) {
-            this.processArrayChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations);
+            this.processArrayChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations, requestHasDottedKeys);
         } else if (typeof target === 'object' && target !== null) {
-            this.processObjectChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations);
+            this.processObjectChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations, requestHasDottedKeys);
         }
     }
 
     /**
      * Detects and auto-corrects stray keys in a payloadChangeRequest.
      * LLMs sometimes place payload properties as siblings of updateElements/newElements
-     * instead of nesting them inside. This method moves those stray keys into the
+     * instead of nesting them inside, or wrap payload properties inside an alias object
+     * such as `setFields` / `setElements`. This method moves those stray keys into the
      * appropriate bucket (updateElements if the key exists on the payload, newElements if not).
      *
      * Only keys starting with a letter (a-z, A-Z) are considered — keys starting with
@@ -1282,9 +1338,14 @@ export class PayloadManager {
         changeRequest: AgentPayloadChangeRequest<any>,
         originalPayload: P,
         warnings: string[],
-        agentName?: string
+        agentName?: string,
+        allowedPaths?: string[]
     ): void {
         const recognizedKeys = new Set(['newElements', 'updateElements', 'replaceElements', 'removeElements', 'reasoning']);
+        const wrapperAliasKeys = new Set([
+            'setFields', 'setElements', 'createElements', 'addElements',
+            'modifyElements', 'patchElements', 'updates', 'fields', 'set', 'add'
+        ]);
         const strayKeys: string[] = [];
 
         for (const key of Object.keys(changeRequest)) {
@@ -1300,37 +1361,71 @@ export class PayloadManager {
 
         const prefix = agentName ? `[PayloadManager:${agentName}]` : '[PayloadManager]';
 
-        for (const key of strayKeys) {
-            const value = (changeRequest as any)[key];
-            const existsOnPayload = originalPayload && typeof originalPayload === 'object' && key in (originalPayload as any);
+        const placeKeyInBucket = (targetKey: string, targetValue: unknown, unwrappedFrom?: string): void => {
+            const existsOnPayload = originalPayload && typeof originalPayload === 'object' && targetKey in (originalPayload as Record<string, unknown>);
             const targetBucket = existsOnPayload ? 'updateElements' : 'newElements';
 
             // Ensure the target bucket exists
             if (!changeRequest[targetBucket]) {
-                (changeRequest as any)[targetBucket] = {};
+                (changeRequest as Record<string, unknown>)[targetBucket] = {};
             }
 
             // Deep-merge the stray value into the target bucket (don't overwrite existing explicit entries)
-            const bucket = (changeRequest as any)[targetBucket];
-            if (key in bucket) {
+            const bucket = (changeRequest as Record<string, Record<string, unknown>>)[targetBucket];
+            if (targetKey in bucket) {
                 // Existing explicit entry takes precedence — merge stray value underneath
-                if (typeof bucket[key] === 'object' && bucket[key] !== null &&
-                    typeof value === 'object' && value !== null &&
-                    !Array.isArray(bucket[key]) && !Array.isArray(value)) {
+                if (typeof bucket[targetKey] === 'object' && bucket[targetKey] !== null &&
+                    typeof targetValue === 'object' && targetValue !== null &&
+                    !Array.isArray(bucket[targetKey]) && !Array.isArray(targetValue)) {
                     // Deep merge: stray values fill in gaps, explicit values win
-                    bucket[key] = _.defaultsDeep(bucket[key], value);
+                    bucket[targetKey] = _.defaultsDeep(bucket[targetKey], targetValue);
                 }
                 // For primitives or mismatched types, explicit entry wins — skip
             } else {
-                bucket[key] = value;
+                bucket[targetKey] = targetValue;
             }
 
-            // Remove from top level
-            delete (changeRequest as any)[key];
-
-            const warningMsg = `${prefix} Auto-corrected stray key "${key}" in payloadChangeRequest — moved to ${targetBucket}`;
+            const warningMsg = unwrappedFrom
+                ? `${prefix} Auto-corrected stray key "${targetKey}" (unwrapped from "${unwrappedFrom}") in payloadChangeRequest — moved to ${targetBucket}`
+                : `${prefix} Auto-corrected stray key "${targetKey}" in payloadChangeRequest — moved to ${targetBucket}`;
             warnings.push(warningMsg);
             console.warn(`⚠️  ${warningMsg}`);
+        };
+
+        for (const key of strayKeys) {
+            const value = (changeRequest as Record<string, unknown>)[key];
+            const existsOnPayload = originalPayload && typeof originalPayload === 'object' && key in (originalPayload as Record<string, unknown>);
+            const isPlainObject = typeof value === 'object' && value !== null && !Array.isArray(value);
+
+            if (isPlainObject && !existsOnPayload) {
+                const innerEntries = Object.entries(value as Record<string, unknown>);
+                const isExplicitlyInAllowedPaths = Boolean(
+                    allowedPaths &&
+                    allowedPaths.some(p => p === key || p.startsWith(`${key}.`) || p.startsWith(`${key}:`))
+                );
+                const isAllowedDirectly = !allowedPaths || this.isOperationAllowedForPath(key, 'add', allowedPaths);
+                const isKnownWrapperAlias = wrapperAliasKeys.has(key) && !isExplicitlyInAllowedPaths;
+                const isDisallowedWrapperOfAllowedKeys = Boolean(
+                    allowedPaths &&
+                    !isAllowedDirectly &&
+                    innerEntries.length > 0 &&
+                    innerEntries.every(([ik]) =>
+                        this.isOperationAllowedForPath(ik, 'add', allowedPaths) ||
+                        this.isOperationAllowedForPath(ik, 'update', allowedPaths)
+                    )
+                );
+
+                if (isKnownWrapperAlias || isDisallowedWrapperOfAllowedKeys) {
+                    for (const [innerKey, innerValue] of innerEntries) {
+                        placeKeyInBucket(innerKey, innerValue, key);
+                    }
+                    delete (changeRequest as Record<string, unknown>)[key];
+                    continue;
+                }
+            }
+
+            placeKeyInBucket(key, value);
+            delete (changeRequest as Record<string, unknown>)[key];
         }
     }
 
@@ -1363,7 +1458,8 @@ export class PayloadManager {
             to?: unknown;
             reason: string;
             timestamp: string;
-        }>
+        }>,
+        requestHasDottedKeys: boolean = false
     ): void {
         const pathStr = path.join('.');
         
@@ -1371,6 +1467,7 @@ export class PayloadManager {
         const removeArray = pathStr ? _.get(changeRequest.removeElements, pathStr) : changeRequest.removeElements;
         const updateArray = pathStr ? _.get(changeRequest.updateElements, pathStr) : changeRequest.updateElements;
         const newArray = pathStr ? _.get(changeRequest.newElements, pathStr) : changeRequest.newElements;
+        const replaceArray = pathStr ? _.get(changeRequest.replaceElements, pathStr) : changeRequest.replaceElements;
         
         // Build a new array with all changes applied
         const newTargetArray: unknown[] = [];
@@ -1396,8 +1493,6 @@ export class PayloadManager {
                 if (typeof updateArray[i] === 'object' && typeof elementToAdd === 'object' && 
                     !Array.isArray(updateArray[i]) && !Array.isArray(elementToAdd) &&
                     updateArray[i] !== null && elementToAdd !== null) {
-                    // Deep merge for object elements - preserve existing properties
-                    elementToAdd = _.cloneDeep(elementToAdd);
                     // Create a synthetic change request with just this update
                     // The updateElements should be the object itself at the root level
                     const elementChangeRequest: AgentPayloadChangeRequest<any> = {
@@ -1411,18 +1506,22 @@ export class PayloadManager {
                         counts,
                         warnings,
                         allowedPaths,
-                        blockedOperations
+                        blockedOperations,
+                        requestHasDottedKeys
                     );
                 } else {
                     // For primitives or arrays, replace entirely (existing behavior)
                     elementToAdd = updateArray[i];
                     counts.updates++;
                 }
-            } else if (typeof elementToAdd === 'object' && elementToAdd !== null) {
-                // For objects/arrays that aren't being replaced, process nested changes
+            } else if (
+                typeof elementToAdd === 'object' &&
+                elementToAdd !== null &&
+                (requestHasDottedKeys || (removeArray && removeArray[i] !== undefined) || (replaceArray && replaceArray[i] !== undefined))
+            ) {
+                // For objects/arrays that aren't being replaced, process nested changes only when changes exist
                 // IMPORTANT: Don't pass newElements for existing array elements -
                 // newElements items should be appended to the array, not merged into existing items
-                elementToAdd = _.cloneDeep(elementToAdd);
                 const changeRequestWithoutNew: AgentPayloadChangeRequest<any> = {
                     updateElements: changeRequest.updateElements,
                     removeElements: changeRequest.removeElements,
@@ -1438,7 +1537,8 @@ export class PayloadManager {
                     counts,
                     warnings,
                     allowedPaths,
-                    blockedOperations
+                    blockedOperations,
+                    requestHasDottedKeys
                 );
             }
             
@@ -1490,7 +1590,8 @@ export class PayloadManager {
             to?: unknown;
             reason: string;
             timestamp: string;
-        }>
+        }>,
+        requestHasDottedKeys: boolean = false
     ): void {
         // Get all unique keys from change request
         const changeKeys = this.getChangeKeys(changeRequest, path);
@@ -1506,7 +1607,8 @@ export class PayloadManager {
                 counts,
                 warnings,
                 allowedPaths,
-                blockedOperations
+                blockedOperations,
+                requestHasDottedKeys
             );
         }
         
@@ -1531,19 +1633,22 @@ export class PayloadManager {
             }
         }
         
-        // Recurse into all existing keys for nested changes
-        for (const key of Object.keys(target)) {
-            if (!changeKeys.has(key) && typeof target[key] === 'object' && target[key] !== null) {
-                this.processChangeRequest(
-                    target[key],
-                    original ? original[key] : undefined,
-                    changeRequest,
-                    [...path, key],
-                    counts,
-                    warnings,
-                    allowedPaths,
-                    blockedOperations
-                );
+        // Only recurse into keys not in changeKeys if the changeRequest contains dotted/bracketed keys
+        if (requestHasDottedKeys) {
+            for (const key of Object.keys(target)) {
+                if (!changeKeys.has(key) && typeof target[key] === 'object' && target[key] !== null) {
+                    this.processChangeRequest(
+                        target[key],
+                        original ? original[key] : undefined,
+                        changeRequest,
+                        [...path, key],
+                        counts,
+                        warnings,
+                        allowedPaths,
+                        blockedOperations,
+                        requestHasDottedKeys
+                    );
+                }
             }
         }
     }
@@ -1567,7 +1672,8 @@ export class PayloadManager {
             to?: unknown;
             reason: string;
             timestamp: string;
-        }>
+        }>,
+        requestHasDottedKeys: boolean = false
     ): void {
         const pathStr = keyPath.join('.');
         
@@ -1705,7 +1811,8 @@ export class PayloadManager {
                     counts,
                     warnings,
                     allowedPaths,
-                    blockedOperations
+                    blockedOperations,
+                    requestHasDottedKeys
                 );
             } else {
                 // For primitives or type mismatches, replace the value
@@ -1751,7 +1858,8 @@ export class PayloadManager {
                 counts,
                 warnings,
                 allowedPaths,
-                blockedOperations
+                blockedOperations,
+                requestHasDottedKeys
             );
         } else if (newValue !== undefined && Array.isArray(newValue) && Array.isArray(target[key])) {
             // Handle array append: newElements has an array for an existing array key
@@ -1764,7 +1872,8 @@ export class PayloadManager {
                 counts,
                 warnings,
                 allowedPaths,
-                blockedOperations
+                blockedOperations,
+                requestHasDottedKeys
             );
         } else if (bothAreObjects) {
             // Handle object in newElements for existing object key
@@ -1777,7 +1886,8 @@ export class PayloadManager {
                 counts,
                 warnings,
                 allowedPaths,
-                blockedOperations
+                blockedOperations,
+                requestHasDottedKeys
             );
         }
     }
