@@ -200,14 +200,16 @@ export interface PredictiveStudioRunFeaturePipelineInput {
     dryRun?: boolean;
     /** Runtime scope override (selected rows / a view / list / filter), used instead of the stored scope. */
     scope?: PredictiveStudioFeaturePipelineScope;
+    /** Overwrite values a person entered on the pipeline's write-back targets, and retire their Human values (default false: they are kept). */
+    overwriteHumanValues?: boolean;
 }
 
 /** Output of `PredictiveStudio.RunFeaturePipeline` — the underlying Record Process run summary. */
 export interface PredictiveStudioRunFeaturePipelineOutput {
     /** Id of the persisted `MJ: Process Runs` row produced by the underlying Record Process. */
     processRunID?: string;
-    /** Run-level status (`Completed` / `Failed` / `Cancelled` / …). */
-    status: string;
+    /** Run-level status, as `MJ: Process Runs.Status` holds it. A refused run (e.g. a Feature Pipeline version not activated) is `Failed`, with `errorMessage` saying why. */
+    status: 'Pending' | 'Running' | 'Paused' | 'Completed' | 'Failed' | 'Cancelled';
     /** Records the run touched. */
     processed: number;
     /** Records whose features were written back (0 in dry-run). */
@@ -218,6 +220,8 @@ export interface PredictiveStudioRunFeaturePipelineOutput {
     error: number;
     /** Run-level error detail when `status` is not `Completed`. */
     errorMessage?: string;
+    /** A Feature Pipeline dry run only: why a real run would be refused (e.g. its version is not activated). Absent when the real run would go ahead. */
+    wouldRefuse?: string;
 }
 
 /**
@@ -852,18 +856,24 @@ export interface RecordProcessRunNowInput {
     recordProcessID: string;
     /** When set, processes just this single record instead of the configured scope. */
     singleRecordID?: string;
-    /** Compute the per-record changes WITHOUT writing (FieldRules work type) — powers the preview. */
+    /**
+     * Compute the per-record changes WITHOUT writing, for every work type: Infer, FieldRules and every write-back
+     * persist nothing, while an Action or Agent still runs and only its write-back is previewed. An Infer dry run over
+     * the stored scope previews the first 25 records. Powers the preview.
+     */
     dryRun?: boolean;
     /** Runtime scope override (selected rows / a view / list / filter), used instead of the stored Scope. */
     scope?: RecordProcessScopeOverride;
+    /** Overwrite values a person entered on the process's write-back targets, and retire their Human values (default false: they are kept). */
+    overwriteHumanValues?: boolean;
 }
 
 /** Output of `RecordProcess.RunNow` — the run summary. */
 export interface RecordProcessRunNowOutput {
     /** ID of the persisted `MJ: Process Runs` row. */
     processRunID?: string;
-    /** Run-level status (`Completed` / `Failed` / `Cancelled` / …). */
-    status: string;
+    /** Run-level status, as `MJ: Process Runs.Status` holds it. A refused run (e.g. a Feature Pipeline version not activated) is `Failed`, with `errorMessage` saying why. */
+    status: 'Pending' | 'Running' | 'Paused' | 'Completed' | 'Failed' | 'Cancelled';
     /** Records the run touched. */
     processed: number;
     /** Records that succeeded (in dry-run, records with a computed preview). */
@@ -874,6 +884,8 @@ export interface RecordProcessRunNowOutput {
     skipped: number;
     /** Run-level error detail when `status` is not `Completed`. */
     errorMessage?: string;
+    /** A Feature Pipeline dry run only: why a real run would be refused (e.g. its version is not activated). Absent when the real run would go ahead. */
+    wouldRefuse?: string;
 }
 
 /** Input for the task-graph control operations. */

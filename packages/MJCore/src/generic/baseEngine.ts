@@ -81,15 +81,12 @@ export class BaseEnginePropertyConfig extends BaseInfo {
 
     /**
      * When set to true, the engine will use the LocalCacheManager to cache results locally.
-     * On subsequent loads (unless forceRefresh is true), cached results will be returned
-     * immediately without hitting the server if they are still valid.
-     *
-     * This is useful for frequently-accessed, relatively-static data that doesn't need
-     * real-time freshness. The cache is automatically invalidated when entity data changes.
+     * On subsequent loads (unless forceRefresh is true), cached results will be validated
+     * via smart cache check and returned from local storage if still current.
      *
      * @default false
      */
-    CacheLocal?: boolean;
+    CacheLocal?: boolean = false;
 
     /**
      * Optional TTL (time-to-live) in milliseconds for locally cached results when CacheLocal is true.
@@ -998,7 +995,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
             if (event.type === 'delete' || event.type === 'save') {
                 const eName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
-                const matchingConfigs = this.Configs.filter((config: BaseEnginePropertyConfig) => {
+                const matchingConfigs = this._metadataConfigs.filter((config: BaseEnginePropertyConfig) => {
                     return config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === eName;
                 });
 
@@ -1069,7 +1066,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 return true; // No entity name, nothing to do
             }
 
-            const matchingConfigs = this.Configs.filter((config: BaseEnginePropertyConfig) => {
+            const matchingConfigs = this._metadataConfigs.filter((config: BaseEnginePropertyConfig) => {
                 return config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === entityName;
             });
 
@@ -1243,7 +1240,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
             if (!this._entityEventSubjects.has(entityName)) {
                 // Find matching config to get custom debounce time
-                const matchingConfig = this.Configs.find(c =>
+                const matchingConfig = this._metadataConfigs.find(c =>
                     c.EntityName?.trim().toLowerCase() === entityName
                 );
 
@@ -1327,7 +1324,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             const entityName = events[0].baseEntity.EntityInfo.Name.toLowerCase().trim();
             let refreshCount = 0;
 
-            for (const config of this.Configs) {
+            for (const config of this._metadataConfigs) {
                 if (config.AutoRefresh && config.Type === 'entity' && config.EntityName?.trim().toLowerCase() === entityName) {
                     const classified = events.map(e => ({ event: e, disposition: this.classifyEventForConfig(config, e) }));
                     const needingWork = classified.filter(c => c.disposition.action === 'refresh');
@@ -1942,6 +1939,32 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     protected CheckPermissionsOrSkipAll(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): BaseEnginePropertyConfig[] {
         if (configs.length === 0) return configs;
 
+        // First check whether any configured entity is missing from metadata altogether
+        // (e.g., an optional OpenApp engine registered in the bundle whose database schema
+        // is not installed in the target environment). Skip cleanly instead of firing N
+        // guaranteed-to-fail RunView calls and logging N error stack traces at startup.
+        const missingEntities = this.findMissingEntities(configs);
+        if (missingEntities.length > 0) {
+            LogStatusEx({
+                message: `${this.constructor.name}: Skipping ${configs.length} entity config(s) — entity metadata not installed for: ${missingEntities.join(', ')}`,
+                verboseOnly: true,
+                category: 'Cache',
+            });
+
+            for (const config of configs) {
+                if (config.AddToObject !== false) {
+                    (this as Record<string, unknown>)[config.PropertyName] = [];
+                }
+                this._dataMap.set(config.PropertyName, {
+                    entityName: config.EntityName,
+                    data: [],
+                    loadedSuccessfully: true,
+                });
+            }
+
+            return [];
+        }
+
         // Determine the user to check permissions for — on the client side contextUser
         // may be undefined, so fall back to the current logged-in user from Metadata.
         const user = contextUser || this.ProviderToUse?.CurrentUser;
@@ -1975,6 +1998,26 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
 
         return configs;
+    }
+
+    /**
+     * Returns entity names among `configs` that do not exist in the loaded metadata provider.
+     * Only checks when the metadata provider actually has entities loaded (`md.Entities.length > 0`)
+     * so unit tests with empty mock providers are unaffected.
+     */
+    private findMissingEntities(configs: BaseEnginePropertyConfig[]): string[] {
+        const md = this.ProviderToUse;
+        if (!md?.Entities || md.Entities.length === 0) {
+            return [];
+        }
+        const missing: string[] = [];
+        for (const config of configs) {
+            if (!config.EntityName) continue;
+            if (!md.EntityByName(config.EntityName)) {
+                missing.push(config.EntityName);
+            }
+        }
+        return missing;
     }
 
     /** The entity names among `configs` that `user` cannot read, per current metadata. */

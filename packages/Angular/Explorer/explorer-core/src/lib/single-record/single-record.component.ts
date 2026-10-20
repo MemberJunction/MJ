@@ -1,9 +1,10 @@
-import { Component, EventEmitter, inject, Input, OnDestroy, Output, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, inject, Input, OnDestroy, Output, ViewChild } from '@angular/core';
 import { CompositeKey, BaseEntity } from '@memberjunction/core';
 import { FormNavigationEvent, FormNotificationEvent, MJFormPresenterService, MjEntityFormHostComponent } from '@memberjunction/ng-base-forms';
 import type { BaseFormComponent, FormCompositionSnapshot } from '@memberjunction/ng-base-forms';
 import { Subscription } from 'rxjs';
-import { NavigationService, RecentAccessService, SharedService } from '@memberjunction/ng-shared';
+import { GetDeletedRecordFromEvent, NavigationService, RecentAccessService, RecordIdentityMatches, SafeDetectChanges, SharedService } from '@memberjunction/ng-shared';
+import { MJEvent, MJGlobal } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
@@ -106,6 +107,37 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
   private sharedService = inject(SharedService);
   private formPresenter = inject(MJFormPresenterService);
   private recentAccessService = new RecentAccessService();
+  private cdr = inject(ChangeDetectorRef);
+
+  /**
+   * True once another user (another session) has deleted the record shown here.
+   * The tab is NOT closed under the user — they may be reading it — so a banner
+   * says so and offers to close it. Deletes in this session are handled by the
+   * shell, which closes the tab outright.
+   */
+  public DeletedRemotely = false;
+
+  private remoteDeleteSub: Subscription | null = MJGlobal.Instance.GetEventListener()
+    .subscribe((event: MJEvent) => this.onGlobalEvent(event));
+
+  /** Close this record's tab (the remote-delete banner's Close button). */
+  OnCloseDeletedRecord(): void {
+    this.RecordDismissed.emit();
+  }
+
+  private onGlobalEvent(event: MJEvent): void {
+    if (this.DeletedRemotely) {
+      return;
+    }
+    const deleted = GetDeletedRecordFromEvent(event);
+    if (!deleted?.Remote || !this.PrimaryKey?.HasValue) {
+      return;
+    }
+    if (RecordIdentityMatches(this.entityName, this.PrimaryKey.ToURLSegment(), deleted)) {
+      this.DeletedRemotely = true;
+      SafeDetectChanges(this.cdr);
+    }
+  }
 
   /** Unblock the shell's first-resource-load gate (success or error). */
   OnLoadComplete(): void {
@@ -139,6 +171,8 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
   ngOnDestroy(): void {
     this.compositionSub?.unsubscribe();
     this.compositionSub = null;
+    this.remoteDeleteSub?.unsubscribe();
+    this.remoteDeleteSub = null;
   }
 
   /** Log access for existing records once the form's record is ready. */

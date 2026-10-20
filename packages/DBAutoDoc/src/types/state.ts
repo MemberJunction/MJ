@@ -161,6 +161,11 @@ export interface ColumnDefinition {
   isPrimaryKey: boolean;
   isForeignKey: boolean;
   foreignKeyReferences?: ForeignKeyReference;
+  /**
+   * Declared maximum length, in characters, of a character column. Undefined when unknown or
+   * unbounded (varchar(max), PostgreSQL varchar without a length).
+   */
+  maxLength?: number;
   checkConstraint?: string;
   defaultValue?: string;
   possibleValues?: any[];
@@ -203,6 +208,8 @@ export interface ForeignKeyReference {
   table: string;
   column: string;
   referencedColumn: string;
+  /** The constraint this column pair belongs to, when introspected. Groups the columns of a composite key. */
+  constraintName?: string;
 }
 
 /**

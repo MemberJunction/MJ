@@ -829,6 +829,21 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
+   * Go to the Home app's landing dashboard. Used where there is nowhere more
+   * specific to return to — e.g. a record loaded straight from a URL is
+   * deleted. Returns false when the deployment has no Home app (or the user
+   * cannot see it), so the caller can choose its own fallback.
+   */
+  async OpenHomeDashboard(): Promise<boolean> {
+    const homeApp = this.appManager.GetAppByName('Home');
+    if (!homeApp) {
+      return false;
+    }
+    await this.SwitchToAppHome(homeApp.ID);
+    return true;
+  }
+
+  /**
    * Take the user back to where they were when a record was opened (the
    * origin crumb's click path). Fidelity ladder:
    * 1. The exact source tab, if it's still open — reactivate it with all its

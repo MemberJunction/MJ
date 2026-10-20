@@ -173,4 +173,34 @@ describe('BaseEntitySaveQueue', () => {
         expect((await q.Flush()).failures).toBe(1);
         expect((await q.Flush()).failures).toBe(0);
     });
+
+    it('forwards saveReturnMode option to Insert, InsertAfter, and Update Save calls', async () => {
+        const q = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only' });
+        const observedOptions: { ignoreDirtyState: boolean | undefined; saveReturnMode: string | undefined }[] = [];
+        const createEntity = (id: string): BaseEntity => ({
+            ID: id,
+            EntityInfo: { Name: 'Fake' },
+            LatestResult: { CompleteMessage: '' },
+            Save: vi.fn(async (saveOptions?: { IgnoreDirtyState?: boolean; SaveReturnMode?: string }) => {
+                observedOptions.push({
+                    ignoreDirtyState: saveOptions?.IgnoreDirtyState,
+                    saveReturnMode: saveOptions?.SaveReturnMode,
+                });
+                return true;
+            }),
+        } as unknown as BaseEntity);
+
+        const prereq = createEntity('prereq-1');
+        const child = createEntity('child-1');
+        q.Insert(prereq);
+        q.InsertAfter(child, [prereq]);
+        q.Update(child);
+        await q.Flush();
+
+        expect(observedOptions).toEqual([
+            { ignoreDirtyState: false, saveReturnMode: 'datestamps_only' },
+            { ignoreDirtyState: false, saveReturnMode: 'datestamps_only' },
+            { ignoreDirtyState: true, saveReturnMode: 'datestamps_only' },
+        ]);
+    });
 });

@@ -1374,6 +1374,82 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             }
         },
     },
+    {
+        Id: `${BUNDLE}.PB14`,
+        Name: 'PB14: Phase 2 Regression Guards — Lazy BaseEntity _raw hydration on RunView entity_object & runtime options.SaveReturnMode datestamps_only on full-SP entities',
+        Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            const fx = requireFixture();
+            const rv = RunView.FromMetadataProvider(ctx.Provider);
+
+            // 1. Verify RunView({ ResultType: 'entity_object' }) keeps _fieldsHydrated === false during read-only access
+            const agentsRes = await rv.RunView<MJAIAgentEntityExtended>(
+                {
+                    EntityName: 'MJ: AI Agents',
+                    MaxRows: 10,
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                },
+                ctx.User
+            );
+            const agents = RequireRows(agentsRes, 'PB14: MJ: AI Agents entity_object load');
+            Assert(agents.length > 0, 'PB14: expected at least 1 AI Agent row');
+
+            for (const ag of agents) {
+                const nameVal = ag.Name;
+                const statusVal = ag.Status;
+                const allObj = ag.GetAll();
+                Assert(typeof nameVal === 'string' && nameVal.length > 0, 'PB14: expected Name via getter in _raw mode');
+                Assert(typeof statusVal === 'string', 'PB14: expected Status via getter in _raw mode');
+                AssertEqual(allObj.Name, nameVal, 'PB14: GetAll() returns Name in _raw mode');
+                const hydratedAfterRead = (ag as unknown as { _fieldsHydrated: boolean })._fieldsHydrated;
+                AssertEqual(
+                    hydratedAfterRead,
+                    false,
+                    `PB14: expected BaseEntity._fieldsHydrated to stay false after read-only Get()/GetAll() on '${nameVal}'`
+                );
+            }
+
+            // Trigger lazy hydration on the first entity via Set() and verify _fieldsHydrated flips to true
+            const firstAgent = agents[0];
+            const originalDesc = firstAgent.Description;
+            firstAgent.Set('Description', originalDesc);
+            const hydratedAfterSet = (firstAgent as unknown as { _fieldsHydrated: boolean })._fieldsHydrated;
+            AssertEqual(hydratedAfterSet, true, 'PB14: expected Set() to lazily hydrate EntityFields');
+
+            // 2. Verify runtime options.SaveReturnMode='datestamps_only' on an entity whose compiled SP is SaveReturnMode='full'
+            const conv = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);
+            AssertEqual(
+                conv.EntityInfo.SaveReturnMode,
+                'full',
+                'PB14: expected MJ: Conversations to have compiled SaveReturnMode="full"'
+            );
+            conv.NewRecord();
+            conv.Name = `PB14 Runtime DatestampsOnly (${fx.Marker})`;
+            conv.Description = 'Initial description';
+            conv.UserID = ctx.User.ID;
+
+            try {
+                const createSaved = await conv.Save({ SaveReturnMode: 'datestamps_only' });
+                Assert(createSaved, `PB14: Conversations create with runtime SaveReturnMode='datestamps_only' failed: ${conv.LatestResult?.CompleteMessage}`);
+                Assert(conv.IsSaved, 'PB14: conv.IsSaved should be true after create');
+                Assert(!!conv.__mj_CreatedAt, 'PB14: conv.__mj_CreatedAt populated from DB');
+                Assert(!!conv.__mj_UpdatedAt, 'PB14: conv.__mj_UpdatedAt populated from DB');
+                AssertEqual(conv.Name, `PB14 Runtime DatestampsOnly (${fx.Marker})`, 'PB14: in-memory Name preserved');
+                AssertEqual(conv.Dirty, false, 'PB14: conv.Dirty reset to false after create');
+
+                // Update with runtime SaveReturnMode='datestamps_only'
+                conv.Description = 'Updated description via datestamps_only';
+                const updateSaved = await conv.Save({ SaveReturnMode: 'datestamps_only' });
+                Assert(updateSaved, `PB14: Conversations update with runtime SaveReturnMode='datestamps_only' failed: ${conv.LatestResult?.CompleteMessage}`);
+                AssertEqual(conv.Description, 'Updated description via datestamps_only', 'PB14: updated Description preserved');
+                AssertEqual(conv.Dirty, false, 'PB14: conv.Dirty reset to false after update');
+            } finally {
+                if (conv.IsSaved && conv.ID) {
+                    await DeleteById('MJ: Conversations', conv.ID, ctx.Provider, ctx.User);
+                }
+            }
+        },
+    },
 ];
 
 for (const check of PerformanceBenchmarkChecks) {

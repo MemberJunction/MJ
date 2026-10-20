@@ -294,6 +294,7 @@ export abstract class BaseRealtimeClient {
     private stateChangeHandler?: (state: RealtimeClientState) => void;
     private errorHandler?: (error: RealtimeClientError) => void;
     private interruptionHandler?: () => void;
+    private userSpeechStartHandler?: () => void;
     private usageHandler?: (usage: RealtimeClientUsage) => void;
     private remoteVideoHandler?: (video: MediaVideoSource) => void;
     private trackHandler?: (track: RealtimeTrack) => void;
@@ -796,6 +797,16 @@ export abstract class BaseRealtimeClient {
     }
 
     /**
+     * Registers the single handler invoked when the provider's voice-activity detection saw
+     * the user start to speak. Fires once per detected onset and may fire again inside one
+     * turn after a pause; it carries no text. Unlike {@link OnInterruption}, it fires whether
+     * or not the model was speaking.
+     */
+    public OnUserSpeechStart(handler: () => void): void {
+        this.userSpeechStartHandler = handler;
+    }
+
+    /**
      * Registers the (single) usage handler.
      *
      * Emissions carry token **deltas** for the response/turn that just completed (see
@@ -881,6 +892,11 @@ export abstract class BaseRealtimeClient {
     /** Emits a true barge-in interruption to the registered handler (if any). */
     protected emitInterruption(): void {
         this.interruptionHandler?.();
+    }
+
+    /** Emits a user-speech-onset to the registered handler (if any). */
+    protected emitUserSpeechStart(): void {
+        this.userSpeechStartHandler?.();
     }
 
     /** Emits a usage update (token deltas for a completed response/turn) to the registered handler (if any). */

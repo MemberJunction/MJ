@@ -5,9 +5,9 @@
  */
 
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
-import { MJGlobal } from '@memberjunction/global';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
+import { CreateLLMInstance } from '../utils/llm-factory.js';
 import { BuildIndexHints, FormatIndexHint } from '../utils/index-hints.js';
 import { SeedContextExcerpt, SeedContextText } from '../utils/seed-context.js';
 import { SchemaDefinition } from '../types/state.js';
@@ -32,20 +32,10 @@ export class LLMDiscoveryValidator {
     /** The operator's seed context; paragraphs naming the target table are added to the prompt. */
     private seedContext?: SeedContextText
   ) {
-    // Create LLM instance using MJ ClassFactory
-    const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
-      BaseLLM,
-      aiConfig.provider,
-      aiConfig.apiKey
-    );
-
-    if (!llm) {
-      throw new Error(
-        `Failed to create LLM instance for provider: ${aiConfig.provider}. Check that the provider name matches a registered BaseLLM subclass.`
-      );
-    }
-
-    this.llm = llm;
+    // Resolve the provider name (e.g. 'gemini') to its driver class (e.g. 'GeminiLLM'), as the rest
+    // of DBAutoDoc does. Using the raw provider name as the registration key resolved to nothing and
+    // left a bare BaseLLM, so every validation call failed.
+    this.llm = CreateLLMInstance(aiConfig.provider, aiConfig.apiKey);
   }
 
   /**
