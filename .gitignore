@@ -272,3 +272,4 @@ dist-stricttmpl/
 # Local one-off verification scripts (e.g. scratch-4946-e2e.mjs). They read a local .env and
 # hard-coded test data, so they never belong in the repo.
 scratch-*.mjs
+gen-lang-client-0516550786-6a039e3b0346.json

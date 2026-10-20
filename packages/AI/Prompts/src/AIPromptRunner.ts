@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ChatMessageContentBlock, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration, CredentialScopeAllows, type AICredentialScope } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ChatMessageContentBlock, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration, CredentialScopeAllows, ResolveEffectiveModelConfiguration, type AICredentialScope } from '@memberjunction/ai';
 import {
   BaseModelRunner,
   type ExecutionBound,
@@ -1937,7 +1937,7 @@ export class AIPromptRunner extends BaseModelRunner {
     try {
       return ResolveNativeToolCalling({
         catalogConfiguration: this.catalogConfigurationFor(model, vendorId),
-        promptConfiguration: prompt.PromptConfigurationObject,
+        promptConfiguration: this.ResolveEffectivePromptConfiguration(prompt, params),
         promptModelConfiguration,
         // Action tools and control-flow tools are counted separately: under the hybrid the control
         // tools are stripped, so on their own they must not open the gate (spec §5).
@@ -1954,6 +1954,31 @@ export class AIPromptRunner extends BaseModelRunner {
     }
   }
 
+
+  /**
+   * The prompt layer of the native tool-calling cascade, with a hierarchical run's child prompt
+   * merged over its parent.
+   *
+   * An agent runs its agent type's system prompt as `prompt` and its own prompt as the first
+   * child, so the parent's bag alone describes the agent TYPE, not the agent. Native tool calling
+   * is a property of the agent's own prompt, so the child's bag sits between the parent and the
+   * selected `AIPromptModel` row: parent → child → row. The merge is per key, so an explicit value
+   * in the child (including `false`) overrides the parent, and an absent key inherits.
+   *
+   * @param prompt The prompt being run (the parent on a hierarchical run)
+   * @param params The caller's params — supplies the child prompts, if any
+   * @returns The merged prompt configuration, or null when neither layer sets one
+   */
+  protected ResolveEffectivePromptConfiguration(
+    prompt: MJAIPromptEntityExtended,
+    params: AIPromptParams
+  ): AIPromptConfiguration | null {
+    const childPrompt = params.childPrompts?.[0]?.childPrompt?.prompt;
+    return ResolveEffectiveModelConfiguration(
+      prompt.PromptConfigurationObject ?? null,
+      childPrompt?.PromptConfigurationObject ?? null
+    );
+  }
 
   /**
    * Returns the template data with `_NATIVE_TOOL_CALLING` and `_NATIVE_CONTROL_FLOW` set.
@@ -3295,6 +3320,15 @@ export class AIPromptRunner extends BaseModelRunner {
    * for "is this an envelope or plain prose?" under implicit control flow. Never throws.
    */
   private parsesAsJSON(text: string): boolean {
+    const trimmed = text.trimStart();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        JSON.parse(text);
+        return true;
+      } catch {
+        // Fall through to CleanJSON extraction
+      }
+    }
     try {
       JSON.parse(CleanJSON(text) ?? text);
       return true;
@@ -3569,8 +3603,18 @@ export class AIPromptRunner extends BaseModelRunner {
     let parsedResult: unknown;
     
     try {
-      // First attempt: Use CleanJSON to handle common JSON issues
-      parsedResult = JSON.parse(CleanJSON(rawOutput));
+      // Fast path: when rawOutput already begins with '{' or '[', try native JSON.parse
+      // directly before running CleanJSON's multi-pass regex extraction.
+      const trimmed = rawOutput.trimStart();
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+          parsedResult = JSON.parse(rawOutput);
+        } catch {
+          parsedResult = JSON.parse(CleanJSON(rawOutput));
+        }
+      } else {
+        parsedResult = JSON.parse(CleanJSON(rawOutput));
+      }
     } catch (jsonError) {
       // If attemptJSONRepair is enabled and we're dealing with object output
       if (params?.attemptJSONRepair && prompt.OutputType === 'object') {

@@ -35,7 +35,7 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 Filters: [],
             });
 
-            const output = this.buildOutput(result.Params);
+            const output = this.buildOutput(result.Params, result.Message);
             const unstorable = this.findUnstorableOutput(output);
             if (unstorable) {
                 const message =
@@ -90,14 +90,34 @@ export class TaskGraphActionRunner implements TaskActionRunner {
      * is exactly what the Demo workflow did: step 1 completed with an output payload of `{}` and
      * every downstream branch was skipped, with nothing anywhere reporting a problem.
      *
-     * Only `Output` and `Both` params are included. Echoing the inputs back would let a step's own
-     * parameters masquerade as its results, so an output mapping could "succeed" by reading the
-     * value the step was given rather than the one it produced.
+     * Only `Output` and `Both` params are included (plus any structured JSON object returned in
+     * `resultMessage`, such as `Create Document`'s `{ handle, documentType, fileName }`). Echoing
+     * `Input`-only params back would let a step's own parameters masquerade as its results, so an
+     * output mapping could "succeed" by reading the value the step was given rather than the one it
+     * produced.
      */
-    private buildOutput(actionParams: ActionParam[]): Record<string, unknown> {
+    private buildOutput(actionParams: ActionParam[], resultMessage?: string | null): Record<string, unknown> {
         const output: Record<string, unknown> = {};
+        if (typeof resultMessage === 'string') {
+            const trimmed = resultMessage.trim();
+            if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                try {
+                    const parsed: unknown = JSON.parse(trimmed);
+                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                        Object.assign(output, parsed as Record<string, unknown>);
+                    }
+                } catch {
+                    // Non-JSON prose message; ignore.
+                }
+            }
+        }
         for (const p of actionParams ?? []) {
             if (p.Type === 'Output' || p.Type === 'Both') output[p.Name] = p.Value;
+        }
+        if (typeof output.handle === 'string' && output.Handle === undefined) {
+            output.Handle = output.handle;
+        } else if (typeof output.Handle === 'string' && output.handle === undefined) {
+            output.handle = output.Handle;
         }
         return output;
     }

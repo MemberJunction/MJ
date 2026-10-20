@@ -241,7 +241,7 @@
 
     <!-- Messages Pane -->
     <div class="chat-messages-pane"
-      [class.full-width]="!showArtifactPanel"
+      [class.full-width]="!showArtifactPanel && !SelectedTaskGraphPanel"
       [class.hidden]="isArtifactPaneMaximized">
       @if (isLoadingConversation) {
         <!-- Loading State - checked FIRST to prevent empty state flash. The branch
@@ -427,7 +427,8 @@
               (LivenessCheckRequested)="OnLivenessCheckRequested($event)"
               (messagePinToggled)="onMessagePinToggled($event)"
               (beforeResponseFormSubmitted)="beforeResponseFormSubmitted.emit($event)"
-              (afterResponseFormSubmitted)="afterResponseFormSubmitted.emit($event)">
+              (afterResponseFormSubmitted)="afterResponseFormSubmitted.emit($event)"
+              (TaskGraphPanelRequested)="OnTaskGraphPanelRequested($event)">
             </mj-conversation-message-list>
 
             <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->
@@ -576,6 +577,63 @@
           (analyzeRequested)="OnAnalyzeArtifact($event)"
           (applyFormRequested)="OnApplyFormRequested($event)">
         </mj-artifact-viewer-panel>
+      </div>
+    }
+
+    <!-- Task Graph Run Viewer Pane -->
+    @if (SelectedTaskGraphPanel) {
+      @if (!isArtifactPaneMaximized) {
+        <div class="resize-handle" (mousedown)="onResizeStart($event)" (touchstart)="onResizeTouchStart($event)"></div>
+      }
+      <div class="chat-artifact-pane chat-task-graph-pane"
+        [style.width.%]="artifactPaneWidth"
+        [class.maximized]="isArtifactPaneMaximized">
+        <div class="task-graph-pane-header">
+          <div class="task-graph-pane-title-group">
+            <span class="task-graph-pane-icon">
+              <i class="fa-solid fa-diagram-project"></i>
+            </span>
+            <div class="task-graph-pane-titles">
+              <span class="task-graph-pane-title">{{ SelectedTaskGraphPanel.workflowTitle }}</span>
+              <span class="task-graph-pane-subtitle">Interactive Task Graph &amp; Step Inspector</span>
+            </div>
+          </div>
+          <div class="task-graph-pane-actions">
+            <button
+              type="button"
+              class="task-graph-pane-save-btn"
+              [disabled]="IsSavingTaskGraphWorkflow || !taskGraphRunView.Spec?.tasks?.length"
+              (click)="OnSaveTaskGraphAsWorkflow(taskGraphRunView.Spec)"
+              title="Save this task graph as a reusable Draft Flow Agent workflow">
+              <i class="fa-solid" [class.fa-spinner]="IsSavingTaskGraphWorkflow" [class.fa-spin]="IsSavingTaskGraphWorkflow" [class.fa-floppy-disk]="!IsSavingTaskGraphWorkflow"></i>
+              <span>{{ IsSavingTaskGraphWorkflow ? 'Saving…' : 'Save as Workflow' }}</span>
+            </button>
+            <button
+              type="button"
+              class="task-graph-pane-btn"
+              (click)="toggleMaximizeArtifactPane()"
+              [title]="isArtifactPaneMaximized ? 'Restore panel size' : 'Maximize panel'">
+              <i class="fa-solid" [class.fa-compress]="isArtifactPaneMaximized" [class.fa-expand]="!isArtifactPaneMaximized"></i>
+            </button>
+            <button
+              type="button"
+              class="task-graph-pane-btn"
+              (click)="OnCloseTaskGraphPanel()"
+              title="Close Task Graph panel">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+        <div class="task-graph-pane-body">
+          <mj-task-graph-run-view
+            #taskGraphRunView
+            [ParentTaskID]="SelectedTaskGraphPanel.parentTaskId"
+            [WorkflowName]="SelectedTaskGraphPanel.workflowTitle"
+            [LiveUpdates]="true"
+            [ShowVariables]="true"
+            [Height]="'100%'">
+          </mj-task-graph-run-view>
+        </div>
       </div>
     }
 
