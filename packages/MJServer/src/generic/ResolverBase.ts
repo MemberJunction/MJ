@@ -97,6 +97,141 @@ export class ResolverBase {
    * @param contextUser - Optional user context for decryption (required for encrypted fields)
    * @returns A new object in transport shape, or null when there is nothing to map
    */
+  /**
+   * Precomputed per-entity / per-request field-mapping plan shared across rows in
+   * {@link MapFieldNamesToCodeNames} and {@link ArrayMapFieldNamesToCodeNames}.
+   */
+  private buildFieldMappingPlan(
+    entityName: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+    deniedReadFields?: Set<string>,
+    recordChangeProjector?: RecordChangeFieldSecurityProjector
+  ): {
+    entityInfo: EntityInfo;
+    fieldsToProcess: Array<{ name: string; mappedFieldName: string; isDenied: boolean }>;
+    readableFields: string[] | null;
+    projector: RecordChangeFieldSecurityProjector | undefined;
+    encryptedFields: EntityFieldInfo[];
+    checkBinary: boolean;
+  } {
+    const md = provider ?? new Metadata();
+    const entityInfo = md.EntityByName(entityName);
+    if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
+
+    const denied = deniedReadFields ?? (
+      entityInfo.EnableFieldLevelSecurity && contextUser
+        ? entityInfo.GetDeniedReadFields(contextUser)
+        : null
+    );
+
+    const mapper = new FieldMapper();
+    const fieldsToProcess: Array<{ name: string; mappedFieldName: string; isDenied: boolean }> = [];
+    for (const f of entityInfo.Fields) {
+      const mappedFieldName = mapper.MapFieldName(f.CodeName);
+      const isDenied = Boolean(denied?.has(f.Name.trim().toLowerCase()));
+      if (isDenied || mappedFieldName !== f.Name) {
+        fieldsToProcess.push({ name: f.Name, mappedFieldName, isDenied });
+      }
+    }
+
+    const readableFields = this.BuildReadableFieldsTransportValue(entityInfo, denied);
+    const projector = contextUser && RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo)
+      ? (recordChangeProjector ?? new RecordChangeFieldSecurityProjector(md, contextUser))
+      : undefined;
+    const encryptedFields = entityInfo.EncryptedFields ?? [];
+    const checkBinary = entityInfo.HasBinaryFields !== false;
+
+    return {
+      entityInfo,
+      fieldsToProcess,
+      readableFields,
+      projector,
+      encryptedFields,
+      checkBinary,
+    };
+  }
+
+  /**
+   * Applies synchronous field renaming, FLS stripping, readable-fields transport stamping, and
+   * Record Changes payload projection for a single row using a precomputed mapping plan.
+   */
+  private mapRowSynchronously(
+    dataObject: Record<string, unknown> | null | undefined,
+    plan: ReturnType<ResolverBase['buildFieldMappingPlan']>
+  ): Record<string, unknown> | null {
+    if (!dataObject || Object.keys(dataObject).length === 0) {
+      return null;
+    }
+    let row: Record<string, unknown> = plan.checkBinary
+      ? ReplaceByteArraysWithBase64({ ...dataObject })
+      : { ...dataObject };
+
+    for (let i = 0; i < plan.fieldsToProcess.length; i++) {
+      const fp = plan.fieldsToProcess[i];
+      if (Object.prototype.hasOwnProperty.call(row, fp.name)) {
+        if (fp.isDenied) {
+          delete row[fp.name];
+          delete row[fp.mappedFieldName];
+        } else {
+          row[fp.mappedFieldName] = row[fp.name];
+          delete row[fp.name];
+        }
+      }
+    }
+
+    if (plan.readableFields) {
+      row[ReadableFieldsTransportKey] = plan.readableFields;
+    }
+
+    if (plan.projector) {
+      row = plan.projector.ProjectRow(row);
+    }
+
+    return row;
+  }
+
+  /**
+   * Decrypts or masks encrypted fields on a mapped row when `plan.encryptedFields.length > 0`.
+   */
+  private async decryptRowEncryptedFields(
+    row: Record<string, unknown>,
+    encryptedFields: EntityFieldInfo[],
+    contextUser?: UserInfo
+  ): Promise<void> {
+    for (const field of encryptedFields) {
+      const fieldName = field.CodeName;
+      const value = row[fieldName];
+
+      if (value === null || value === undefined) continue;
+
+      const engine = EncryptionEngine.Instance;
+      await engine.Config(false, contextUser);
+      const keyMarker = field.EncryptionKeyID ? engine.GetKeyByID(field.EncryptionKeyID)?.Marker : undefined;
+      if (typeof value === 'string' && IsValueEncrypted(value, keyMarker)) {
+        if (field.AllowDecryptInAPI) {
+          if (contextUser) {
+            try {
+              const decryptedValue = await engine.Decrypt(value, contextUser);
+              row[fieldName] = decryptedValue;
+            } catch (err) {
+              if (IsEncryptionKeyUnavailable(err)) {
+                ReportEncryptionKeyUnavailable(err);
+              } else {
+                LogError(`Failed to decrypt field ${fieldName} for API response: ${err}`);
+              }
+              row[fieldName] = ENCRYPTED_SENTINEL;
+            }
+          } else {
+            row[fieldName] = ENCRYPTED_SENTINEL;
+          }
+        } else if (!field.SendEncryptedValue) {
+          row[fieldName] = ENCRYPTED_SENTINEL;
+        }
+      }
+    }
+  }
+
   protected async MapFieldNamesToCodeNames(
     entityName: string,
     dataObject: any,
@@ -105,133 +240,15 @@ export class ResolverBase {
     deniedReadFields?: Set<string>,
     recordChangeProjector?: RecordChangeFieldSecurityProjector
   ): Promise<any> {
-    // Return null for empty objects (e.g. when no rows found due to RLS filtering)
     if (!dataObject || Object.keys(dataObject).length === 0) {
       return null;
     }
-    // Shallow copy up front so every write below lands on our object, never the caller's.
-    // Binary values are base64 strings everywhere above the providers; any byte array that still
-    // reaches a resolver (custom code, an external driver) is converted here, because GraphQL's
-    // String scalar cannot serialize a Buffer and would fail the whole response.
-    dataObject = ReplaceByteArraysWithBase64({ ...dataObject });
-
-    // for the given entity name provided, check to see if there are any fields
-    // where the code name is different from the field name, and for just those
-    // fields, iterate through the dataObject and REPLACE the property that has the field name
-    // with the CodeName, because we can't transfer those via GraphQL as they are not
-    // valid property names in GraphQL
-    {
-      const md = provider ?? new Metadata();
-      const entityInfo = md.EntityByName(entityName);
-      if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
-      // const fields = entityInfo.Fields.filter((f) => f.Name !== f.CodeName || f.Name.startsWith('__mj_'));
-      // FIELD-LEVEL SECURITY — this is the authoritative read boundary for every GraphQL
-      // return path (single-record resolvers, external-data-source loads, and anything else
-      // routed through here), sitting exactly where encryption masking already lives.
-      //
-      // The denied set is normally computed ONCE per (entity, user) by the caller and passed
-      // in: this method runs once per ROW, so resolving it here would cost fields x rows
-      // aggregations. We fall back to computing it when a caller doesn't supply it (the
-      // single-record resolvers, where "once per row" and "once per request" are the same
-      // thing) rather than failing open — a missing argument must never mean missing security.
-      const denied = deniedReadFields ?? (
-        entityInfo.EnableFieldLevelSecurity && contextUser
-          ? entityInfo.GetDeniedReadFields(contextUser)
-          : null
-      );
-
-      const mapper = new FieldMapper();
-      entityInfo.Fields.forEach((f) => {
-        if (dataObject.hasOwnProperty(f.Name)) {
-          // GraphQL doesn't allow us to pass back fields with __ so we are mapping our special field cases that start with __mj_ to _mj__ for transport - they are converted back on the other side automatically
-          const mappedFieldName = mapper.MapFieldName(f.CodeName);
-          if (denied?.has(f.Name.trim().toLowerCase())) {
-            // Omit entirely rather than nulling — a null is indistinguishable from a real
-            // null value, and the client should see the field as absent, not as empty.
-            // Both key shapes are removed because callers reach this method with rows keyed
-            // either way depending on whether mapping has already run.
-            delete dataObject[f.Name];
-            delete dataObject[mappedFieldName];
-            return;
-          }
-          if (mappedFieldName !== f.Name) {
-            dataObject[mappedFieldName] = dataObject[f.Name];
-            delete dataObject[f.Name];
-          }
-        }
-      });
-
-      // Field security, second half: say IN-BAND which fields this caller may read. Deleting the
-      // key above is not enough on its own — GraphQL emits every SELECTED field regardless, so a
-      // denied field the client asked for arrives as an explicit null it cannot tell apart from a
-      // genuine one. The client must not settle that from its own metadata: during the window
-      // after a permission change its copy disagrees with ours, and once metadata filtering lands
-      // (issue #3485) it may not hold the permission rows at all. Null for unrestricted callers,
-      // which is nearly every request.
-      const readableFields = this.BuildReadableFieldsTransportValue(entityInfo, denied);
-      if (readableFields) {
-        dataObject[ReadableFieldsTransportKey] = readableFields;
-      }
-
-      // Field security, third part — the audit trail. A 'MJ: Record Changes' row carries the old
-      // and new values of ANOTHER entity's fields, and its own EnableFieldLevelSecurity flag is
-      // off, so everything above is a no-op for it and the payload would flow out untouched. The
-      // projector recomputes the denied set against the entity each row is about; see
-      // RecordChangeFieldSecurityProjector for what each payload column gets.
-      //
-      // Same "a missing argument must never mean missing security" rule as the denied set above:
-      // the projector is normally built ONCE per request by the array caller and passed in, and
-      // we build one here when it wasn't — the single-record resolvers, where once-per-row and
-      // once-per-request are the same thing.
-      if (contextUser && RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo)) {
-        const projector = recordChangeProjector ?? new RecordChangeFieldSecurityProjector(md, contextUser);
-        dataObject = projector.ProjectRow(dataObject);
-      }
-
-      // Handle encrypted fields - data from raw SQL queries is still encrypted
-      const encryptedFields = entityInfo.EncryptedFields;
-      if (encryptedFields.length > 0) {
-        for (const field of encryptedFields) {
-          const fieldName = field.CodeName;
-          const value = dataObject[fieldName];
-
-          // Skip null/undefined values
-          if (value === null || value === undefined) continue;
-
-          // Check if value is encrypted (raw SQL returns encrypted values)
-          const engine = EncryptionEngine.Instance;
-          await engine.Config(false, contextUser);
-          const keyMarker = field.EncryptionKeyID ? engine.GetKeyByID(field.EncryptionKeyID)?.Marker : undefined;
-          if (typeof value === 'string' && IsValueEncrypted(value, keyMarker)) {
-            if (field.AllowDecryptInAPI) {
-              // Decrypt the value for the client
-              if (contextUser) {
-                try {
-                  const decryptedValue = await engine.Decrypt(value, contextUser);
-                  dataObject[fieldName] = decryptedValue;
-                } catch (err) {
-                  if (IsEncryptionKeyUnavailable(err)) {
-                    ReportEncryptionKeyUnavailable(err);
-                  } else {
-                    LogError(`Failed to decrypt field ${fieldName} for API response: ${err}`);
-                  }
-                  // On decryption failure, use sentinel for safety
-                  dataObject[fieldName] = ENCRYPTED_SENTINEL;
-                }
-              } else {
-                // No context user, can't decrypt - use sentinel
-                dataObject[fieldName] = ENCRYPTED_SENTINEL;
-              }
-            } else if (!field.SendEncryptedValue) {
-              // AllowDecryptInAPI=false and SendEncryptedValue=false - use sentinel
-              dataObject[fieldName] = ENCRYPTED_SENTINEL;
-            }
-            // else: AllowDecryptInAPI=false and SendEncryptedValue=true - keep encrypted value as-is
-          }
-        }
-      }
+    const plan = this.buildFieldMappingPlan(entityName, contextUser, provider, deniedReadFields, recordChangeProjector);
+    const mapped = this.mapRowSynchronously(dataObject as Record<string, unknown>, plan);
+    if (mapped && plan.encryptedFields.length > 0) {
+      await this.decryptRowEncryptedFields(mapped, plan.encryptedFields, contextUser);
     }
-    return dataObject;
+    return mapped;
   }
 
   /**
@@ -291,26 +308,17 @@ export class ResolverBase {
     if (!dataObjectArray || dataObjectArray.length === 0) {
       return dataObjectArray;
     }
-    // Resolve the field-security denied set ONCE for the whole array and pass it into the
-    // per-row mapper. MapFieldNamesToCodeNames runs once per row, so computing this inside
-    // the loop would be fields x rows aggregations — 40,000 for a 1,000-row x 40-column
-    // result, each re-scanning the user's roles and allocating. Gated on the entity-level
-    // flag so non-FLS entities (nearly all of them) don't even resolve the entity twice.
-    const md = provider ?? new Metadata();
-    const entityInfo = md.EntityByName(entityName);
-    const deniedReadFields = entityInfo?.EnableFieldLevelSecurity && contextUser
-      ? entityInfo.GetDeniedReadFields(contextUser)
-      : undefined;
-    // Record Changes payload security is resolved per DISTINCT target entity, and one array can
-    // span many — so the projector, which owns that memo, must outlive the row loop. Built once
-    // here for the same reason the denied set above is: GetDeniedReadFields walks every field on
-    // an entity and must never be called per row.
-    const recordChangeProjector = contextUser && RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo)
-      ? new RecordChangeFieldSecurityProjector(md, contextUser)
-      : undefined;
-    const mapped: any[] = [];
-    for (const element of dataObjectArray) {
-      mapped.push(await this.MapFieldNamesToCodeNames(entityName, element, contextUser, provider, deniedReadFields, recordChangeProjector));
+    // Precompute the entity lookup, FieldMapper plan, denied-fields set, readable-fields list,
+    // and Record Changes projector ONCE for the whole array rather than per row.
+    const plan = this.buildFieldMappingPlan(entityName, contextUser, provider);
+    const hasEncryptedFields = plan.encryptedFields.length > 0;
+    const mapped: Array<Record<string, unknown> | null> = new Array(dataObjectArray.length);
+    for (let i = 0; i < dataObjectArray.length; i++) {
+      const row = this.mapRowSynchronously(dataObjectArray[i] as Record<string, unknown>, plan);
+      if (row && hasEncryptedFields) {
+        await this.decryptRowEncryptedFields(row, plan.encryptedFields, contextUser);
+      }
+      mapped[i] = row;
     }
     return mapped;
   }
@@ -2101,13 +2109,24 @@ export class ResolverBase {
    * ASSUMES: `input` has an `OldValues___` property that is an array of Key/Value pairs representing
    * the pre-mutation values of the fields the client is updating.
    */
+  /**
+   * Resolves a field on `entityInfo` by `CodeName` or `Name` in $O(1)$ via `FieldByCodeName` /
+   * `FieldByName` when available on `EntityInfo`, falling back to `.Fields.find()` for test stubs.
+   */
+  private findEntityFieldByCodeNameOrName(entityInfo: EntityInfo, key: string): EntityFieldInfo | undefined {
+    if (typeof entityInfo.FieldByCodeName === 'function') {
+      return entityInfo.FieldByCodeName(key) ?? entityInfo.FieldByName(key);
+    }
+    return entityInfo.Fields.find((f) => f.CodeName === key || f.Name === key);
+  }
+
   protected async TestAndSetClientOldValuesToDBValues(input: any, clientNewValues: any, entityObject: BaseEntity, contextUser: UserInfo) {
     // we have OldValues, so we need to compare them to the values we just loaded from the DB
     const clientOldValues = {};
     // for each item in the oldValues array, add it to the clientOldValues object
     input.OldValues___.forEach((item) => {
       // we need to do a quick transform on the values to make sure they match the TS Type for the given field because item.Value will always be a string
-      const field = entityObject.EntityInfo.Fields.find((f) => f.CodeName === item.Key || f.Name === item.Key);
+      const field = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, item.Key);
       const val = this.ClientOldValueToFieldValue(field, item.Value);
       clientOldValues[item.Key] = val;
     });
@@ -2119,7 +2138,7 @@ export class ResolverBase {
     // now we need to compare clientOldValues and dbValues and have a new array that has entries for any differences and have FieldName, clientOldValue and dbValue as properties
     const dbDifferences = [];
     Object.keys(clientOldValues).forEach((key) => {
-      const f = entityObject.EntityInfo.Fields.find((f) => f.CodeName === key || f.Name === key);
+      const f = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, key);
       const dbVal = f && f.Name in dbValues ? dbValues[f.Name] : dbValues[key];
       let different = false;
       switch (typeof clientOldValues[key]) {
@@ -2172,7 +2191,7 @@ export class ResolverBase {
       // first step is to get clientNewValues into an object that is like clientOldValues, get the diff and then compare that diff to the differences array that shows diff between DB and ClientOld
       const clientDifferences = [];
       Object.keys(clientOldValues).forEach((key) => {
-        const f = entityObject.EntityInfo.Fields.find((f) => f.CodeName === key || f.Name === key);
+        const f = this.findEntityFieldByCodeNameOrName(entityObject.EntityInfo, key);
         if (key in clientNewValues && clientOldValues[key] !== clientNewValues[key] && f && f.AllowUpdateAPI && !f.IsPrimaryKey) {
           // only include updateable fields
           clientDifferences.push({
@@ -2185,7 +2204,8 @@ export class ResolverBase {
 
       // now we have clientDifferences which shows what the client thinks they are changing. And, we have the dbDifferences array that shows changes between the clientOldValues and the dbValues
       // if there is ANY overlap in the FIELDS that appear in both arrays, we need to log a warning but allow the save to continue
-      const overlap = clientDifferences.filter((cd) => dbDifferences.find((dd) => dd.FieldName === cd.FieldName));
+      const dbDiffFieldNames = new Set(dbDifferences.map((dd) => dd.FieldName));
+      const overlap = clientDifferences.filter((cd) => dbDiffFieldNames.has(cd.FieldName));
       if (overlap.length > 0) {
         const msg = {
           Message:

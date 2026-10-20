@@ -796,6 +796,36 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     this.navigationService.OpenNavItemByName('Conversations', params, chatApp?.ID);
   }
 
+  /** Handle app/nav-item navigation requests emitted from the floating chat overlay */
+  public async OnOverlayNavigationRequested(event: { navItemName: string; appName?: string; queryParams?: Record<string, string> }): Promise<void> {
+    const normalize = (v: string | null | undefined): string =>
+      String(v ?? '').toLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const apps = this.ProviderToUse?.Applications || [];
+    const targetApp = event.appName
+      ? apps.find(a =>
+          a.ID?.toLowerCase() === event.appName?.toLowerCase() ||
+          a.Name?.toLowerCase() === event.appName?.toLowerCase() ||
+          a.Path?.toLowerCase() === event.appName?.toLowerCase() ||
+          normalize(a.Name) === normalize(event.appName) ||
+          normalize(a.Path) === normalize(event.appName)
+        )
+      : undefined;
+
+    if (targetApp) {
+      const navHint = event.navItemName && normalize(event.navItemName) !== normalize(event.appName)
+        ? event.navItemName
+        : undefined;
+      await this.navigationService.SwitchToApp(targetApp.ID, navHint, event.queryParams);
+      return;
+    }
+
+    if (event.navItemName) {
+      await this.navigationService.OpenNavItemByName(event.navItemName, undefined, undefined, {
+        queryParams: event.queryParams
+      });
+    }
+  }
+
   /** Build and update the application context snapshot for AI agent awareness */
   private async updateAppContext(): Promise<void> {
     // Guard: this fires from BehaviorSubjects during early boot, before the provider is ready —

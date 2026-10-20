@@ -136,6 +136,7 @@ The task graph is submitted as `nextStep.type = 'Tasks'` in your response. Here 
 ```
 - Conditional edge expressions evaluate against the upstream task's execution result, with its payload exposed under `output` (plus `status`, `succeeded`, `failed`, `errorMessage`). Always prefix payload fields with `output.` (e.g., `output.someField`).
 - **Query Builder Output Shape**: `Query Builder` returns `{ query, rows, columns, metadata: { rowCount, executionTimeMs, sql } }`. When gating a downstream step on whether `Query Builder` returned rows, use `output.metadata.rowCount > 0` (or `output.rows.length > 0`) — **never** `output.resultCount` or `output.rowCount`.
+- **Codesmith Agent Output Shape & Capabilities**: `Codesmith Agent` runs JavaScript code (`Execute Code` only; it cannot generate images or files) and exposes `{ code, results, result, succeeded, message, ...topLevelFields }`. For conditional image generation, add a separate conditional step (`"kind": "Action"`, `"configuration": { "actionName": "Generate Image" }`, `"inputPayload": { "Prompt": "...", "Size": "1024x1024" }`) gated on the calculation (e.g., `output.totalSales > 1000000`). For report/document generation in a workflow, delegate to **`Research Report Writer`** rather than chaining low-level `Create Document` / `Add Document Content` / `Finalize Document` actions across separate tasks.
 
 **Parallel** - task2 and task3 have no dependencies on each other: both run simultaneously.
 ```json

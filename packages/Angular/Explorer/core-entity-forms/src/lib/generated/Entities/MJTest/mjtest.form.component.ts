@@ -22,7 +22,8 @@ export class MJTestFormComponent extends BaseFormComponent {
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTestRuns', sectionName: 'Test Runs', isExpanded: false },
-            { sectionKey: 'mJTestSuiteTests', sectionName: 'Test Suite Tests', isExpanded: false }
+            { sectionKey: 'mJTestSuiteTests', sectionName: 'Test Suite Tests', isExpanded: false },
+            { sectionKey: 'mJFeaturePipelineVersions', sectionName: 'Feature Pipeline Versions', isExpanded: false }
         ]);
     }
 }
