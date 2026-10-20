@@ -592,6 +592,9 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
                 this.onToolCallFrame(event as OAIProtocolFunctionCallArgumentsDone);
                 break;
             case 'input_audio_buffer.speech_started':
+                // Raised here, not in onSpeechStartedFrame: the websocket base (HuggingFace, xAI)
+                // overrides that hook without super, and xAI overrides it again, so an override can't drop it.
+                this.emitUserSpeechStart();
                 this.onSpeechStartedFrame();
                 break;
             case 'response.created': {

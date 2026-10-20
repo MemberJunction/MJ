@@ -1029,6 +1029,14 @@ export interface InputArtifact {
     name: string;
     typeName: string;
     content: string | Buffer;
+    /** Optional MJ: Artifacts record ID (UUID) when backed by a persisted artifact. */
+    artifactId?: string;
+    /** Optional MJ: Artifact Versions record ID (UUID) when backed by a persisted artifact version. */
+    versionId?: string;
+    /** Optional 1-based version number on the parent artifact (e.g., 1, 2, 3). */
+    versionNumber?: number;
+    /** Optional human-readable description of the artifact or version. */
+    description?: string;
     /** MIME type of the artifact content (e.g., 'application/pdf').
      *  Populated for file-backed artifacts from ArtifactVersion.MimeType. */
     mimeType?: string;
@@ -2141,6 +2149,10 @@ export type AgentContextData = {
     subAgentCount: number;
     /** Markdown formatted list of sub-agent names and descriptions */
     subAgentDetails: string;
+    /** Number of directly discoverable, user-runnable top-level agents preloaded into context */
+    availableAgentCount?: number;
+    /** Compact markdown formatted directory of user-runnable top-level agents (name + 1-line summary) */
+    availableAgentDetails?: string;
     /** Number of actions available to this agent */
     actionCount: number;
     /** Markdown formatted details of available actions (name, params, result codes) */
