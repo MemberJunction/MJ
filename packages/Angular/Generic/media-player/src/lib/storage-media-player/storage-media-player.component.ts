@@ -81,6 +81,7 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
       this._posterFileID = value;
       this._cachedPosterFileID = null;
       this._cachedPosterUrl = null;
+      this._cachedPosterExpiresAtMs = null;
       if (this._initialized) {
         void this.resolveTracks();
       }
@@ -92,6 +93,7 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
   private _posterFileID: string | null = null;
   private _cachedPosterFileID: string | null = null;
   private _cachedPosterUrl: string | null = null;
+  private _cachedPosterExpiresAtMs: number | null = null;
 
   /** Transcript cues forwarded to the generic player. */
   @Input() Transcript: MediaTranscriptCue[] | null = null;
@@ -173,7 +175,12 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
     let firstError: string | null = null;
 
     const posterFileId = this._posterFileID;
-    const needPoster = Boolean(posterFileId && (this._cachedPosterFileID !== posterFileId || !this._cachedPosterUrl));
+    const needPoster = Boolean(
+      posterFileId &&
+        (this._cachedPosterFileID !== posterFileId ||
+          !this._cachedPosterUrl ||
+          this.isCachedPosterExpired()),
+    );
     const [trackResults, posterResult] = await Promise.all([
       Promise.all(ids.map(id => MintMediaAccessUrl(this.ProviderToUse, id))),
       needPoster && posterFileId ? MintMediaAccessUrl(this.ProviderToUse, posterFileId) : Promise.resolve(null),
@@ -193,9 +200,17 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
       }
     }
 
-    if (posterFileId && posterResult && posterResult.Success && posterResult.Url) {
-      this._cachedPosterFileID = posterFileId;
-      this._cachedPosterUrl = posterResult.Url;
+    if (posterFileId && needPoster) {
+      if (posterResult && posterResult.Success && posterResult.Url) {
+        this._cachedPosterFileID = posterFileId;
+        this._cachedPosterUrl = posterResult.Url;
+        const parsedExpiry = posterResult.ExpiresAt ? Date.parse(posterResult.ExpiresAt) : NaN;
+        this._cachedPosterExpiresAtMs = Number.isFinite(parsedExpiry) ? parsedExpiry : null;
+      } else {
+        this._cachedPosterFileID = null;
+        this._cachedPosterUrl = null;
+        this._cachedPosterExpiresAtMs = null;
+      }
     }
 
     const firstVideoTrack = tracks.find(t => t.Kind === 'video');
@@ -208,6 +223,13 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
     this._accessError = tracks.length === 0 ? firstError : null;
     this._isLoading = false;
     this.cdr.markForCheck();
+  }
+
+  private isCachedPosterExpired(): boolean {
+    if (this._cachedPosterExpiresAtMs == null) {
+      return false;
+    }
+    return Date.now() >= this._cachedPosterExpiresAtMs;
   }
 
   /**

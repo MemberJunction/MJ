@@ -302,6 +302,16 @@ export function SumRecordedGenerationCost(spec: Partial<VideoGenerationSpec>): n
             total += EstimateLoadedGenerationCallCost(asset.Kind, durationSeconds);
         }
     }
+    const requests = Array.isArray(spec.Assets?.Generate) ? spec.Assets.Generate : [];
+    for (const request of requests) {
+        if (!request) {
+            continue;
+        }
+        const cost = request.Cost;
+        if (typeof cost === 'number' && Number.isFinite(cost) && cost >= 0) {
+            total += cost;
+        }
+    }
     return total;
 }
 

@@ -688,6 +688,22 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
             const handoffStep = makeHandoffStep({ targetAgentId: targetAgent.ID });
             const runInConvSpy = vi.spyOn(runner, 'RunAgentInConversation');
 
+            const sourceResult: ExecuteAgentResult = {
+                success: true,
+                agentRun: {
+                    ID: 'run-source-1',
+                    Message: 'Here is my analysis.',
+                    Steps: [handoffStep as unknown as MJAIAgentRunStepEntityExtended],
+                } as unknown as MJAIAgentRunEntityExtended,
+                handoff: {
+                    targetAgentId: targetAgent.ID,
+                    targetAgentName: 'Storyboard Artist',
+                    sourceAgentId: sourceAgent.ID,
+                    brief: 'Brief',
+                    runStepId: handoffStep.ID,
+                },
+            };
+
             const outcomes = await runner.FollowHandoffs({
                 params: {
                     agent: sourceAgent,
@@ -696,20 +712,7 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
                     handoffChain: [],
                     provider,
                 },
-                sourceResult: {
-                    success: true,
-                    agentRun: {
-                        ID: 'run-source-1',
-                        Steps: [handoffStep as unknown as MJAIAgentRunStepEntityExtended],
-                    } as unknown as MJAIAgentRunEntityExtended,
-                    handoff: {
-                        targetAgentId: targetAgent.ID,
-                        targetAgentName: 'Storyboard Artist',
-                        sourceAgentId: sourceAgent.ID,
-                        brief: 'Brief',
-                        runStepId: handoffStep.ID,
-                    },
-                },
+                sourceResult,
                 conversationId: CONV_ID,
                 sourceConversationDetailId: sourceRow.ID,
             });
@@ -721,9 +724,10 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
                 'The current user does not have permission to run Storyboard Artist.'
             );
             expect(handoffStep.Save).toHaveBeenCalledTimes(1);
-            expect(sourceRow.Message).toBe(
-                "Here is my analysis.\n\nI couldn't transfer you to Storyboard Artist: The current user does not have permission to run Storyboard Artist."
-            );
+            const expectedRefusalMessage =
+                "Here is my analysis.\n\nI couldn't transfer you to Storyboard Artist: The current user does not have permission to run Storyboard Artist.";
+            expect(sourceRow.Message).toBe(expectedRefusalMessage);
+            expect(sourceResult.agentRun?.Message).toBe(expectedRefusalMessage);
             expect(sourceRow.Message).not.toContain('Producer');
             expect(sourceRow.Message).not.toContain('Find Candidate Agents');
             expect(sourceRow.Save).toHaveBeenCalledTimes(1);
@@ -793,6 +797,7 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
                     success: true,
                     agentRun: {
                         ID: 'run-hop-1',
+                        Message: 'Hop 1 output.',
                         Steps: [hop1HandoffStep as unknown as MJAIAgentRunStepEntityExtended],
                     } as unknown as MJAIAgentRunEntityExtended,
                     handoff: {
@@ -833,6 +838,7 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
             expect(hop1HandoffStep.Status).toBe('Failed');
             expect(hop1HandoffStep.ErrorMessage).toContain('FK constraint failure');
             expect(rowB.Message).toContain("I couldn't transfer you to Producer:");
+            expect(outcomes[0].agentResult?.agentRun?.Message).toContain("I couldn't transfer you to Producer:");
         });
 
         it('does not overwrite a completed target row or double-call OnHopEnd when OnHopEnd throws', async () => {

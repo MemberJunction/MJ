@@ -19,6 +19,7 @@ import { BaseAgent } from '../base-agent';
 type InterceptAgent = {
     MediaOutputs: MediaOutput[];
     interceptLargeBinaryContent(actionParams: ActionParam[], actionEntity?: MJActionEntityExtended): ActionParam[];
+    resolveMediaPlaceholdersInPayload<T>(payload: T): T;
 };
 
 describe('MediaOutput persist field removal', () => {
@@ -80,5 +81,45 @@ describe('BaseAgent.interceptLargeBinaryContent — stored-only MediaOutput item
             note: '1 media item(s) extracted and will be displayed to the user automatically.',
         });
     });
+
+    it('resolves ${media:refId} placeholders for fileId-only MediaOutput items to media.fileId without leaving literal placeholders', () => {
+        const agent = new BaseAgent() as unknown as InterceptAgent;
+        const actionEntity = {
+            Params: {
+                Items: [{ Name: 'Videos', ValueType: 'MediaOutput' }],
+            },
+        } as unknown as MJActionEntityExtended;
+
+        agent.interceptLargeBinaryContent(
+            [
+                {
+                    Name: 'Videos',
+                    Type: 'Output',
+                    Value: [
+                        {
+                            modality: 'Video',
+                            mimeType: 'video/mp4',
+                            fileId: 'file-video-42',
+                            label: 'clip.mp4',
+                        } satisfies MediaOutput,
+                    ],
+                },
+            ],
+            actionEntity,
+        );
+
+        const refId = agent.MediaOutputs[0].refId!;
+        const resolved = agent.resolveMediaPlaceholdersInPayload({
+            clipFileId: `\${media:${refId}}`,
+            nested: [`Video stored at \${media:${refId}}`],
+        });
+
+        expect(resolved).toEqual({
+            clipFileId: 'file-video-42',
+            nested: ['Video stored at file-video-42'],
+        });
+        expect(JSON.stringify(resolved)).not.toContain('${media:');
+    });
 });
+
 

@@ -13,6 +13,7 @@ import {
     IsRequestAborted,
     ThrowIfAborted
 } from "@memberjunction/ai";
+import { IsValidBFLPollingUrl } from "./flux3-video.js";
 
 /**
  * Configuration for BFL API polling
@@ -568,12 +569,7 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     }
 
     private isValidBflPollingUrl(url: string): boolean {
-        try {
-            const parsed = new URL(url);
-            return parsed.protocol === 'https:' && parsed.hostname.toLowerCase().endsWith('.bfl.ai');
-        } catch {
-            return false;
-        }
+        return IsValidBFLPollingUrl(url, this._baseUrl);
     }
 
     private isFailureStatus(status: BFLResultResponse['status']): boolean {
@@ -689,6 +685,7 @@ export class FLUXImageGenerator extends BaseImageGenerator {
 export {
     FLUX3VideoGenerator,
     FLUX3_VIDEO_DIMENSIONS,
+    IsValidBFLPollingUrl,
     type FLUX3VideoAspectRatio,
     type FLUX3VideoResolution,
 } from './flux3-video.js';

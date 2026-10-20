@@ -650,13 +650,7 @@ export class FLUX3VideoGenerator extends BaseVideoGenerator {
     }
 
     private isValidBflPollingUrl(url: string): boolean {
-        try {
-            const parsed = new URL(url);
-            const host = parsed.hostname.toLowerCase();
-            return parsed.protocol === 'https:' && (host === 'bfl.ai' || host.endsWith('.bfl.ai'));
-        } catch {
-            return false;
-        }
+        return IsValidBFLPollingUrl(url, this._baseUrl);
     }
 
     private isHttpsUrl(url: string): boolean {
@@ -694,3 +688,25 @@ export class FLUX3VideoGenerator extends BaseVideoGenerator {
         };
     }
 }
+
+/**
+ * Returns true when `candidateUrl` is an `https:` URL whose hostname is `bfl.ai` / `*.bfl.ai`
+ * or whose origin matches the configured `https:` `baseUrl` origin.
+ */
+export function IsValidBFLPollingUrl(candidateUrl: string, baseUrl: string): boolean {
+    try {
+        const parsed = new URL(candidateUrl);
+        if (parsed.protocol !== 'https:') {
+            return false;
+        }
+        const host = parsed.hostname.toLowerCase();
+        if (host === 'bfl.ai' || host.endsWith('.bfl.ai')) {
+            return true;
+        }
+        const parsedBase = new URL(baseUrl);
+        return parsedBase.protocol === 'https:' && parsed.origin === parsedBase.origin;
+    } catch {
+        return false;
+    }
+}
+

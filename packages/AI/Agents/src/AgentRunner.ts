@@ -1075,9 +1075,16 @@ export class AgentRunner {
             }
         }
 
+        const notice = `I couldn't transfer you to ${targetLabel}: ${cleanReason}.`;
+        if (sourceResult.agentRun) {
+            const existingRunMessage = sourceResult.agentRun.Message ?? sourceRow?.Message;
+            sourceResult.agentRun.Message = existingRunMessage
+                ? `${existingRunMessage}\n\n${notice}`
+                : notice;
+        }
+
         if (sourceRow) {
             try {
-                const notice = `I couldn't transfer you to ${targetLabel}: ${cleanReason}.`;
                 sourceRow.Message = sourceRow.Message
                     ? `${sourceRow.Message}\n\n${notice}`
                     : notice;

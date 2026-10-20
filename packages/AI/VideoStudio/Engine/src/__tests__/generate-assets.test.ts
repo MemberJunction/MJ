@@ -1616,4 +1616,104 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
         expect(videoAsset?.Usage).toBe('Ambient geometric background loop behind Beat 1.');
         expect(videoAsset?.Usage).not.toContain('Play muted.');
     });
+
+    it('11. Spend cap counts failed paid calls (cap $10, two $9 estimates: first fails after runner call, second is refused by the cap and stays refused on a second pass)', async () => {
+        vi.spyOn(BrandKitEngine.Instance, 'GetEffectiveGenerationPolicy').mockReturnValue({
+            AllowGeneratedImages: true,
+            AllowGeneratedVideo: true,
+            AllowSyntheticPeople: false,
+            MaxGenerationCostPerRun: 10,
+        });
+        vi.spyOn(AIEngine.Instance, 'ModelCosts', 'get').mockReturnValue([
+            {
+                ID: 'cost-veo-per-sec-9',
+                ModelID: 'model-veo-3-1',
+                VendorID: 'vendor-google',
+                Status: 'Active',
+                ProcessingType: 'Realtime',
+                UnitTypeID: UNIT_TYPE_PER_SECOND_ID,
+                UnitType: 'Per Second',
+                InputPricePerUnit: 0,
+                OutputPricePerUnit: 1.5, // 6s * $1.50 = $9.00 estimate
+                Currency: 'USD',
+            } as unknown as MJAIModelCostEntity,
+            {
+                ID: 'cost-imagen-per-img-9',
+                ModelID: 'model-imagen-4',
+                VendorID: 'vendor-google',
+                Status: 'Active',
+                ProcessingType: 'Realtime',
+                UnitTypeID: UNIT_TYPE_PER_IMAGE_ID,
+                UnitType: 'Per Image',
+                InputPricePerUnit: 0,
+                OutputPricePerUnit: 9, // $9.00 estimate
+                Currency: 'USD',
+            } as unknown as MJAIModelCostEntity,
+        ]);
+
+        // Video first ($9 estimate) fails after runner call -> second ($9 image estimate) is refused by the $10 cap
+        const spec = makeFixtureSpec();
+        const { imageCalls, videoCalls, imageRunner, videoRunner } = createFakeRunners({
+            failVideo: true,
+        });
+
+        const pass1 = await GenerateRequestedAssets(spec, {
+            ContextUser: mockUser,
+            ImageRunner: imageRunner,
+            VideoRunner: videoRunner,
+        });
+
+        expect(videoCalls).toHaveLength(1);
+        expect(imageCalls).toHaveLength(0);
+        expect(pass1.Spec.Assets.Generate![0].Status).toBe('Blocked');
+        expect(pass1.Spec.Assets.Generate![0].BlockedReason).toContain('GenerationFailed');
+        expect(pass1.Spec.Assets.Generate![0].Cost).toBeCloseTo(9, 5);
+        expect(pass1.Spec.Assets.Generate![1].Status).toBe('Blocked');
+        expect(pass1.Spec.Assets.Generate![1].BlockedReason).toContain('SpendCapReached');
+        expect(SumRecordedGenerationCost(pass1.Spec)).toBeCloseTo(9, 5);
+
+        // Repair pass over pass1.Spec: SumRecordedGenerationCost counts the $9 on the blocked request so the second request cannot silently pay again
+        const pass2Runners = createFakeRunners();
+        const pass2 = await GenerateRequestedAssets(pass1.Spec, {
+            ContextUser: mockUser,
+            ImageRunner: pass2Runners.imageRunner,
+            VideoRunner: pass2Runners.videoRunner,
+        });
+        expect(pass2Runners.videoCalls).toHaveLength(0);
+        expect(pass2Runners.imageCalls).toHaveLength(0);
+        expect(pass2.Spec.Assets.Generate![1].Status).toBe('Blocked');
+        expect(pass2.Spec.Assets.Generate![1].BlockedReason).toContain('SpendCapReached');
+
+        // Image first ($9 estimate) fails after runner call -> second ($9 image estimate) is refused by the $10 cap
+        const imgSpec = makeFixtureSpec();
+        imgSpec.Assets.Generate = [
+            {
+                Key: 'img-1',
+                Kind: 'Image',
+                Purpose: 'Card 1',
+                Prompt: 'Abstract geometric card 1',
+                ReferenceKeys: [],
+            },
+            {
+                Key: 'img-2',
+                Kind: 'Image',
+                Purpose: 'Card 2',
+                Prompt: 'Abstract geometric card 2',
+                ReferenceKeys: [],
+            },
+        ];
+        const imgRunners = createFakeRunners({ failImage: true });
+        const imgPass = await GenerateRequestedAssets(imgSpec, {
+            ContextUser: mockUser,
+            ImageRunner: imgRunners.imageRunner,
+            VideoRunner: imgRunners.videoRunner,
+        });
+        expect(imgRunners.imageCalls).toHaveLength(1);
+        expect(imgPass.Spec.Assets.Generate![0].Status).toBe('Blocked');
+        expect(imgPass.Spec.Assets.Generate![0].BlockedReason).toContain('GenerationFailed');
+        expect(imgPass.Spec.Assets.Generate![0].Cost).toBeCloseTo(9, 5);
+        expect(imgPass.Spec.Assets.Generate![1].Status).toBe('Blocked');
+        expect(imgPass.Spec.Assets.Generate![1].BlockedReason).toContain('SpendCapReached');
+    });
 });
+

@@ -679,7 +679,9 @@ export class GraphQLFileStorageClient {
                 CreateMediaAccessToken(fileId: $fileId) {
                     Success
                     Url
+                    ExpiresAt
                     MimeType
+                    Peaks
                     ErrorMessage
                 }
             }
@@ -690,7 +692,9 @@ export class GraphQLFileStorageClient {
             const payload = result?.CreateMediaAccessToken as {
                 Success?: boolean;
                 Url?: string | null;
+                ExpiresAt?: string | null;
                 MimeType?: string | null;
+                Peaks?: number[] | null;
                 ErrorMessage?: string | null;
             } | undefined;
 
@@ -708,11 +712,18 @@ export class GraphQLFileStorageClient {
                 };
             }
 
-            return {
+            const tokenResult: CreateMediaAccessTokenClientResult = {
                 Success: true,
                 Url: payload.Url ?? undefined,
                 MimeType: payload.MimeType ?? undefined
             };
+            if (payload.ExpiresAt != null) {
+                tokenResult.ExpiresAt = payload.ExpiresAt;
+            }
+            if (Array.isArray(payload.Peaks)) {
+                tokenResult.Peaks = payload.Peaks;
+            }
+            return tokenResult;
         } catch (e) {
             const errorMsg = (e as Error).message ?? String(e);
             LogError(`Error creating media access token: ${errorMsg}`);
@@ -736,8 +747,12 @@ export interface CreateMediaAccessTokenClientResult {
     Success: boolean;
     /** Authenticated streaming/download URL for the file (`/media/<fileId>?token=...`) */
     Url?: string;
+    /** ISO-8601 expiration timestamp for the signed media access token */
+    ExpiresAt?: string;
     /** Resolved MIME content type of the file */
     MimeType?: string;
+    /** Optional precomputed waveform peaks (normalized `0..1`, one per bar) */
+    Peaks?: number[];
     /** Error message when `Success` is false */
     ErrorMessage?: string;
 }

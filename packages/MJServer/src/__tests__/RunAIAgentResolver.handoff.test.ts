@@ -264,14 +264,16 @@ describe('RunAIAgentResolver — FollowHandoffs & PubSub ordering', () => {
         const sageRun = {
             ID: 'run-sage',
             ConversationDetailID: 'detail-sage',
+            Message: 'Handing off to Director.',
             Steps: [],
-            GetAll: () => ({ ID: 'run-sage', ConversationDetailID: 'detail-sage', Agent: 'Sage' }),
+            GetAll: () => ({ ID: 'run-sage', ConversationDetailID: 'detail-sage', Agent: 'Sage', Message: 'Handing off to Director.' }),
         };
         const directorRun = {
             ID: 'run-director',
             ConversationDetailID: 'detail-director',
+            Message: 'Here is the completed 15s product launch teaser.',
             Steps: [],
-            GetAll: () => ({ ID: 'run-director', ConversationDetailID: 'detail-director', Agent: 'Director' }),
+            GetAll: () => ({ ID: 'run-director', ConversationDetailID: 'detail-director', Agent: 'Director', Message: 'Here is the completed 15s product launch teaser.' }),
         };
         const handoffPayload = {
             targetAgentId: 'agent-director',
@@ -376,6 +378,17 @@ describe('RunAIAgentResolver — FollowHandoffs & PubSub ordering', () => {
         expect(response.success).toBe(true);
         expect(hoisted.followHandoffs).toHaveBeenCalledTimes(1);
 
+        // Synchronous return value stays tied to the source detail so the sync client path does not
+        // overwrite the source detail with the target hop's message (VS-QA-3 item 5).
+        const returnedPayload = JSON.parse(response.result!) as {
+            agentRun?: { ID?: string; ConversationDetailID?: string; Message?: string };
+            handoff?: unknown;
+        };
+        expect(returnedPayload.agentRun?.ID).toBe('run-sage');
+        expect(returnedPayload.agentRun?.ConversationDetailID).toBe('detail-sage');
+        expect(returnedPayload.agentRun?.Message).toBe('Handing off to Director.');
+        expect(returnedPayload.handoff).toEqual(handoffPayload);
+
         expect(timeline).toEqual([
             'pubsub:progress:run-sage',
             'target-row-created:detail-director',
@@ -407,6 +420,71 @@ describe('RunAIAgentResolver — FollowHandoffs & PubSub ordering', () => {
 
         // Verify OnHopEnd triggered post-execution notifications for the hop
         expect(seams.sendFeedbackRequestNotification).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves mutated sourceResult.agentRun.Message (refusal notice) in returned and published results when FollowHandoffs refuses hop 0', async () => {
+        const publish = vi.fn().mockResolvedValue(undefined);
+        const pubSub = { publish } as unknown as PubSubEngine;
+        const { resolver } = makeResolver();
+
+        const sageRun: {
+            ID: string;
+            ConversationDetailID: string;
+            Message: string;
+            Steps: unknown[];
+            GetAll: () => Record<string, unknown>;
+        } = {
+            ID: 'run-sage',
+            ConversationDetailID: 'detail-sage',
+            Message: 'Here is my analysis.',
+            Steps: [],
+            // Simulate a GetAll() snapshot that captured the initial Message before recordRefusedHandoffOnSource mutated sageRun.Message
+            GetAll: () => ({ ID: 'run-sage', ConversationDetailID: 'detail-sage', Agent: 'Sage', Message: 'Here is my analysis.' }),
+        };
+        const handoffPayload = {
+            targetAgentId: 'agent-director',
+            targetAgentName: 'Director',
+            brief: 'Brief',
+        };
+
+        hoisted.runAgentInConversation.mockResolvedValue({
+            agentResult: {
+                success: true,
+                agentRun: sageRun,
+                handoff: handoffPayload,
+            } as unknown as ExecuteAgentResult,
+            agentResponseDetailId: 'detail-sage',
+            conversationId: 'conv-1',
+        });
+
+        const refusalNotice =
+            "Here is my analysis.\n\nI couldn't transfer you to Director: The current user does not have permission to run Director.";
+        hoisted.followHandoffs.mockImplementation(async (input: FollowHandoffsInput) => {
+            if (input.sourceResult.agentRun) {
+                input.sourceResult.agentRun.Message = refusalNotice;
+            }
+            return [];
+        });
+
+        const response = await resolver.RunAIAgentFromConversationDetail(
+            'detail-user', 'agent-sage', makeContext(), 'session-1', pubSub,
+        );
+
+        const returnedPayload = JSON.parse(response.result!) as {
+            agentRun?: { Message?: string };
+        };
+        expect(returnedPayload.agentRun?.Message).toBe(refusalNotice);
+
+        const envelopes = parseEnvelopes(publish);
+        const sourceComplete = envelopes.find(
+            (env) => (env.data as { type?: string; conversationDetailId?: string }).type === 'complete'
+                && (env.data as { conversationDetailId?: string }).conversationDetailId === 'detail-sage',
+        );
+        expect(sourceComplete).toBeDefined();
+        const publishedResult = JSON.parse((sourceComplete!.data as { result: string }).result) as {
+            agentRun?: { Message?: string };
+        };
+        expect(publishedResult.agentRun?.Message).toBe(refusalNotice);
     });
 
     it('publishes a failure completion frame for the failing hop and does not re-publish the source completion when a hop fails after OnHopStart', async () => {

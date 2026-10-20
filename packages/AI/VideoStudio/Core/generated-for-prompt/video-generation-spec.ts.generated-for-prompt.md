@@ -102,6 +102,7 @@ interface VideoAssetGenerationRequest {
     WantAudio?: boolean;  // Defaults to false (clip audio muted); set true to preserve ambient generator audio.
     Status?: VideoGenerationRequestStatus;  // Lifecycle status set by Pre-Production; absent means `'Pending'`.
     BlockedReason?: string;  // Reason code and explanation when `Status` is `'Blocked'` (`'<Code>: <Reason>'`).
+    Cost?: number;  // Spend in USD incurred by failed or blocked runner invocations on this request.
     RegenerationCount?: number;  // Number of times this request has been reset for regeneration after a Critic defect.
 }
 

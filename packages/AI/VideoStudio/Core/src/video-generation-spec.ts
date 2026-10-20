@@ -204,6 +204,8 @@ export interface VideoAssetGenerationRequest {
     Status?: VideoGenerationRequestStatus;
     /** Reason code and explanation when `Status` is `'Blocked'` (`'<Code>: <Reason>'`). */
     BlockedReason?: string;
+    /** Spend in USD incurred by failed or blocked runner invocations on this request. */
+    Cost?: number;
     /** Number of times this request has been reset for regeneration after a Critic defect. */
     RegenerationCount?: number;
 }

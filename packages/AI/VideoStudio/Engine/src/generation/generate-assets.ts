@@ -709,6 +709,15 @@ function markMatchingRequirementsSatisfied(
     }
 }
 
+class RunnerInvocationError extends Error {
+    public readonly ReportedCost?: number;
+
+    public constructor(message: string, reportedCost?: number) {
+        super(message);
+        this.ReportedCost = reportedCost;
+    }
+}
+
 async function runAndStoreImageAsset(params: {
     assetKey: string;
     prompt: string;
@@ -745,34 +754,15 @@ async function runAndStoreImageAsset(params: {
         ...(ctx.CancellationToken ? { CancellationToken: ctx.CancellationToken } : {}),
     };
 
-    const runResult = await imageRunner.RunImageGeneration(runParams);
-    if (!runResult.Success) {
-        throw new Error(runResult.ErrorMessage || 'AIImageGenerationRunner failed.');
+    let runResult: Awaited<ReturnType<typeof imageRunner.RunImageGeneration>>;
+    try {
+        runResult = await imageRunner.RunImageGeneration(runParams);
+    } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        throw new RunnerInvocationError(errMsg);
     }
 
-    const extracted = await extractGeneratedImageBuffer(runResult, ctx.CancellationToken);
-    const ext = MIME_TO_EXT[extracted.MimeType] ?? 'png';
-    const modelId = runResult.ModelID?.trim() || 'unknown';
-    const modelName = runResult.ModelName?.trim() || undefined;
     const promptRunId = runResult.PromptRunID?.trim() || '';
-
-    const fileId = await StoreFile({
-        Content: extracted.Bytes,
-        FileName: `generated-${assetKey}.${ext}`,
-        MimeType: extracted.MimeType,
-        Description: buildStoreDescription({
-            modelName,
-            modelId,
-            promptRunId: promptRunId || undefined,
-        }),
-        ContextUser: ctx.ContextUser,
-        StorageAccountID: ctx.StorageAccountID,
-        Provider: ctx.Provider,
-    });
-    if (!fileId) {
-        throw new Error(`StoreFile returned undefined for generated-${assetKey}.${ext}.`);
-    }
-
     const cost = await resolvePromptRunCost(
         promptRunId || undefined,
         undefined,
@@ -780,34 +770,68 @@ async function runAndStoreImageAsset(params: {
         ctx.Provider,
     );
 
-    const generationMeta: VideoAssetGenerationMetadata = {
-        ModelID: modelId,
-        PromptRunID: promptRunId,
-        Prompt: prompt,
-        ReferenceKeys: references.map((r) => r.Key),
-        ...(cost !== undefined ? { Cost: cost } : {}),
-    };
+    try {
+        if (!runResult.Success) {
+            throw new Error(runResult.ErrorMessage || 'AIImageGenerationRunner failed.');
+        }
 
-    const asset: VideoAsset = {
-        Key: assetKey,
-        Kind: 'Image',
-        FileID: fileId,
-        Source: buildSourceString(modelName, modelId),
-        Provenance: 'Generated',
-        Usage: usage,
-        MustUse: false,
-        Generation: generationMeta,
-    };
+        const extracted = await extractGeneratedImageBuffer(runResult, ctx.CancellationToken);
+        const ext = MIME_TO_EXT[extracted.MimeType] ?? 'png';
+        const modelId = runResult.ModelID?.trim() || 'unknown';
+        const modelName = runResult.ModelName?.trim() || undefined;
 
-    return {
-        Asset: asset,
-        Bytes: extracted.Bytes,
-        MimeType: extracted.MimeType,
-        Cost: cost,
-        ModelID: modelId,
-        ModelName: modelName,
-        PromptRunID: promptRunId,
-    };
+        const fileId = await StoreFile({
+            Content: extracted.Bytes,
+            FileName: `generated-${assetKey}.${ext}`,
+            MimeType: extracted.MimeType,
+            Description: buildStoreDescription({
+                modelName,
+                modelId,
+                promptRunId: promptRunId || undefined,
+            }),
+            ContextUser: ctx.ContextUser,
+            StorageAccountID: ctx.StorageAccountID,
+            Provider: ctx.Provider,
+        });
+        if (!fileId) {
+            throw new Error(`StoreFile returned undefined for generated-${assetKey}.${ext}.`);
+        }
+
+        const generationMeta: VideoAssetGenerationMetadata = {
+            ModelID: modelId,
+            PromptRunID: promptRunId,
+            Prompt: prompt,
+            ReferenceKeys: references.map((r) => r.Key),
+            ...(cost !== undefined ? { Cost: cost } : {}),
+        };
+
+        const asset: VideoAsset = {
+            Key: assetKey,
+            Kind: 'Image',
+            FileID: fileId,
+            Source: buildSourceString(modelName, modelId),
+            Provenance: 'Generated',
+            Usage: usage,
+            MustUse: false,
+            Generation: generationMeta,
+        };
+
+        return {
+            Asset: asset,
+            Bytes: extracted.Bytes,
+            MimeType: extracted.MimeType,
+            Cost: cost,
+            ModelID: modelId,
+            ModelName: modelName,
+            PromptRunID: promptRunId,
+        };
+    } catch (err) {
+        if (err instanceof RunnerInvocationError) {
+            throw err;
+        }
+        const errMsg = err instanceof Error ? err.message : String(err);
+        throw new RunnerInvocationError(errMsg, cost);
+    }
 }
 
 /**
@@ -1097,6 +1121,20 @@ export async function GenerateRequestedAssets(
                     Cost: imgOutcome.Cost,
                 });
             } catch (err) {
+                const reportedCost =
+                    err instanceof RunnerInvocationError ? err.ReportedCost : undefined;
+                const incurredCost =
+                    typeof reportedCost === 'number' ? reportedCost : estimatedImageCost;
+                spendSoFar += incurredCost;
+                if (typeof reportedCost === 'number') {
+                    passSpend += reportedCost;
+                }
+                const priorRequestCost =
+                    typeof request.Cost === 'number' && Number.isFinite(request.Cost)
+                        ? request.Cost
+                        : 0;
+                request.Cost = priorRequestCost + incurredCost;
+
                 const errMsg = err instanceof Error ? err.message : String(err);
                 const failedReason = `GenerationFailed: ${errMsg}`;
                 request.Status = 'Blocked';
@@ -1112,6 +1150,7 @@ export async function GenerateRequestedAssets(
                     Kind: 'Image',
                     Status: 'Blocked',
                     BlockedReason: failedReason,
+                    Cost: request.Cost,
                 });
             }
             continue;
@@ -1231,6 +1270,20 @@ export async function GenerateRequestedAssets(
                     ];
                     recordedReferenceKeys = [stillKey];
                 } catch (err) {
+                    const reportedCost =
+                        err instanceof RunnerInvocationError ? err.ReportedCost : undefined;
+                    const incurredCost =
+                        typeof reportedCost === 'number' ? reportedCost : estimatedStillCost;
+                    spendSoFar += incurredCost;
+                    if (typeof reportedCost === 'number') {
+                        passSpend += reportedCost;
+                    }
+                    const priorRequestCost =
+                        typeof request.Cost === 'number' && Number.isFinite(request.Cost)
+                            ? request.Cost
+                            : 0;
+                    request.Cost = priorRequestCost + incurredCost;
+
                     const errMsg = err instanceof Error ? err.message : String(err);
                     const failedReason = `GenerationFailed: ${errMsg}`;
                     request.Status = 'Blocked';
@@ -1246,6 +1299,7 @@ export async function GenerateRequestedAssets(
                         Kind: 'Video',
                         Status: 'Blocked',
                         BlockedReason: failedReason,
+                        Cost: request.Cost,
                     });
                     continue;
                 }
@@ -1299,9 +1353,17 @@ export async function GenerateRequestedAssets(
             ...(ctx.CancellationToken ? { CancellationToken: ctx.CancellationToken } : {}),
         };
 
+        let reportedVideoCost: number | undefined;
         try {
             const videoResult: AIVideoGenerationRunResult =
                 await videoRunner.RunGenerateVideo(videoRunParams);
+            const promptRunId = videoResult.PromptRunID?.trim() || '';
+            reportedVideoCost = await resolvePromptRunCost(
+                promptRunId || undefined,
+                videoResult.Cost,
+                ctx.ContextUser,
+                ctx.Provider,
+            );
             if (!videoResult.Success || !videoResult.Video?.Data?.length) {
                 throw new Error(
                     videoResult.ErrorMessage || 'AIVideoRunner returned no video bytes.',
@@ -1313,7 +1375,6 @@ export async function GenerateRequestedAssets(
             const ext = MIME_TO_EXT[videoMime] ?? 'mp4';
             const modelId = videoResult.ModelID?.trim() || 'unknown';
             const modelName = videoResult.ModelName?.trim() || undefined;
-            const promptRunId = videoResult.PromptRunID?.trim() || '';
 
             const fileId = await StoreFile({
                 Content: videoResult.Video.Data,
@@ -1340,12 +1401,7 @@ export async function GenerateRequestedAssets(
                     ? videoResult.Video.DurationSeconds
                     : durationSeconds;
 
-            const videoCost = await resolvePromptRunCost(
-                promptRunId || undefined,
-                videoResult.Cost,
-                ctx.ContextUser,
-                ctx.Provider,
-            );
+            const videoCost = reportedVideoCost;
 
             const generationMeta: VideoAssetGenerationMetadata = {
                 ModelID: modelId,
@@ -1397,6 +1453,18 @@ export async function GenerateRequestedAssets(
                 Cost: totalRequestCost,
             });
         } catch (err) {
+            const incurredVideoCost =
+                typeof reportedVideoCost === 'number' ? reportedVideoCost : estimatedVideoCost;
+            spendSoFar += incurredVideoCost;
+            if (typeof reportedVideoCost === 'number') {
+                passSpend += reportedVideoCost;
+            }
+            const priorRequestCost =
+                typeof request.Cost === 'number' && Number.isFinite(request.Cost)
+                    ? request.Cost
+                    : 0;
+            request.Cost = priorRequestCost + incurredVideoCost;
+
             const errMsg = err instanceof Error ? err.message : String(err);
             const failedReason = `GenerationFailed: ${errMsg}`;
             request.Status = 'Blocked';
@@ -1412,7 +1480,7 @@ export async function GenerateRequestedAssets(
                 Kind: 'Video',
                 Status: 'Blocked',
                 BlockedReason: failedReason,
-                Cost: stillCost,
+                Cost: request.Cost + (stillCost ?? 0),
             });
         }
     }

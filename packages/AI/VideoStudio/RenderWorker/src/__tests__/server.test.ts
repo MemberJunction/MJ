@@ -650,4 +650,57 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
         expect(kfResult.Frames).toHaveLength(3);
         expect(kfResult.Sheets?.length).toBe(1);
     });
+
+    it('starts execution timeout only after acquiring a concurrency slot for queued /render and non-render jobs', async () => {
+        let renderCallCount = 0;
+        const baseBackend = new FakeRenderBackend({ StepDelayMs: 30 });
+        const origRender = baseBackend.Render.bind(baseBackend);
+        baseBackend.Render = async (job, onProgress, signal) => {
+            renderCallCount += 1;
+            if (renderCallCount === 1) {
+                // First render takes ~150ms (5 steps * 30ms)
+                return origRender(job, onProgress, signal);
+            }
+            // Subsequent render is fast (~5ms total)
+            const fastBackend = new FakeRenderBackend({ StepDelayMs: 1 });
+            return fastBackend.Render(job, onProgress, signal);
+        };
+
+        const server = CreateRenderWorkerServer({
+            Backend: baseBackend,
+            Concurrency: 1,
+            NonRenderTimeoutMs: 60,
+        });
+        serversToClose.push(server);
+        const port = await server.Listen(0);
+        const renderUrl = `http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Render}`;
+        const checkUrl = `http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Check}`;
+
+        // Job 1 holds the sole concurrency slot for ~120ms
+        const job1Promise = fetch(renderUrl, {
+            method: 'POST',
+            body: JSON.stringify(createValidRenderRequest(undefined, 500)),
+        }).then(parseNdjsonStream);
+
+        // Give Job 1 a brief moment to acquire the slot
+        await new Promise((r) => setTimeout(r, 10));
+
+        // Job 2 (/render with TimeoutMs: 60) and Job 3 (/check with NonRenderTimeoutMs: 60)
+        // wait in queue longer than 60ms while Job 1 runs, but each executes in <15ms once acquired.
+        const job2Promise = fetch(renderUrl, {
+            method: 'POST',
+            body: JSON.stringify(createValidRenderRequest(undefined, 60)),
+        }).then(parseNdjsonStream);
+
+        const job3Promise = fetch(checkUrl, {
+            method: 'POST',
+            body: JSON.stringify({ Bundle: createCleanBundle(), Width: 1280, Height: 720 }),
+        });
+
+        const [events1, events2, checkRes] = await Promise.all([job1Promise, job2Promise, job3Promise]);
+        expect(events1.some((e) => e.Type === 'Result')).toBe(true);
+        expect(events2.some((e) => e.Type === 'Result')).toBe(true);
+        expect(checkRes.status).toBe(200);
+    });
 });
+

@@ -330,12 +330,6 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
         const preLintTimeoutMs = Math.min(nonRenderTimeoutMs, effectiveTimeout);
         activeTimeoutMs = preLintTimeoutMs;
 
-        let timeoutTimer = setTimeout(() => {
-            timedOut = true;
-            controller.abort();
-        }, preLintTimeoutMs);
-        timeoutTimer.unref();
-
         const onDisconnect = (): void => {
             if (!res.writableEnded) {
                 controller.abort();
@@ -344,11 +338,18 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
         req.once('aborted', onDisconnect);
         res.once('close', onDisconnect);
 
+        let timeoutTimer: NodeJS.Timeout | undefined;
         let heartbeatTimer: NodeJS.Timeout | undefined;
         let acquired = false;
         try {
             await semaphore.Acquire(controller.signal);
             acquired = true;
+
+            timeoutTimer = setTimeout(() => {
+                timedOut = true;
+                controller.abort();
+            }, preLintTimeoutMs);
+            timeoutTimer.unref();
 
             const preStage = await StageRenderBundle(body.Bundle, {
                 TempRoot: tempRoot,
@@ -451,7 +452,9 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
             if (heartbeatTimer !== undefined) {
                 clearInterval(heartbeatTimer);
             }
-            clearTimeout(timeoutTimer);
+            if (timeoutTimer !== undefined) {
+                clearTimeout(timeoutTimer);
+            }
             req.removeListener('aborted', onDisconnect);
             res.removeListener('close', onDisconnect);
             activeAbortControllers.delete(controller);
@@ -490,12 +493,6 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
                 : maxTimeoutMs,
         );
 
-        const timeoutTimer = setTimeout(() => {
-            timedOut = true;
-            controller.abort();
-        }, effectiveTimeout);
-        timeoutTimer.unref();
-
         const onDisconnect = (): void => {
             if (!res.writableEnded) {
                 controller.abort();
@@ -504,10 +501,16 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
         req.once('aborted', onDisconnect);
         res.once('close', onDisconnect);
 
+        let timeoutTimer: NodeJS.Timeout | undefined;
         let acquired = false;
         try {
             await semaphore.Acquire(controller.signal);
             acquired = true;
+            timeoutTimer = setTimeout(() => {
+                timedOut = true;
+                controller.abort();
+            }, effectiveTimeout);
+            timeoutTimer.unref();
             return await fn(controller.signal);
         } catch (err) {
             if (timedOut) {
@@ -518,7 +521,9 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
             }
             throw err;
         } finally {
-            clearTimeout(timeoutTimer);
+            if (timeoutTimer !== undefined) {
+                clearTimeout(timeoutTimer);
+            }
             req.removeListener('aborted', onDisconnect);
             res.removeListener('close', onDisconnect);
             activeAbortControllers.delete(controller);

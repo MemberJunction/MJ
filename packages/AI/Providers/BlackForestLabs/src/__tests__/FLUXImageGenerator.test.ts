@@ -522,5 +522,56 @@ describe('FLUXImageGenerator', () => {
       expect(result.errorMessage).toContain('at most 10 ReferenceImages');
       expect(mockFetch).not.toHaveBeenCalled();
     });
+
+    it('polls custom https baseUrl /get_result when polling_url is omitted and refuses foreign hosts', async () => {
+      const customGen = new FLUXImageGenerator('test-api-key', 'https://bfl-proxy.internal.example.com/v1');
+      const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: 'task-custom-1',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: 'task-custom-1',
+            status: 'Ready',
+            result: {
+              sample: 'https://delivery.us1.bfl.ai/results/custom.png',
+            },
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          headers: new Headers({ 'content-type': 'image/png' }),
+          arrayBuffer: async () =>
+            imageBytes.buffer.slice(imageBytes.byteOffset, imageBytes.byteOffset + imageBytes.byteLength),
+        });
+
+      const okRes = await customGen.GenerateImage({
+        model: 'flux-3-image',
+        prompt: 'Custom proxy test',
+      } as never);
+      expect(okRes.success).toBe(true);
+      expect(mockFetch.mock.calls[1][0]).toBe('https://bfl-proxy.internal.example.com/v1/get_result?id=task-custom-1');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 'task-foreign-1',
+          polling_url: 'https://evil.example.com/v1/get_result?id=task-foreign-1',
+        }),
+      });
+      const refusedRes = await customGen.GenerateImage({
+        model: 'flux-3-image',
+        prompt: 'Foreign host test',
+      } as never);
+      expect(refusedRes.success).toBe(false);
+      expect(refusedRes.errorMessage).toContain('Refusing to poll');
+    });
   });
 });
+

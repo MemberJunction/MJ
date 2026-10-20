@@ -190,8 +190,12 @@ export class RunAIAgentResolver extends ResolverBase {
 
         // Safely extract agent run data using GetAll() for proper serialization
         if (result.agentRun && typeof result.agentRun.GetAll === 'function') {
-            // Use GetAll() to get the full serialized object including extended properties
-            sanitized.agentRun = result.agentRun.GetAll();
+            // Use GetAll() to get the full serialized object including extended properties,
+            // preserving any in-memory Message update (such as a refused handoff notice).
+            sanitized.agentRun = {
+                ...result.agentRun.GetAll(),
+                ...(result.agentRun.Message !== undefined ? { Message: result.agentRun.Message } : {}),
+            };
         }
         else {
             // shouldn't ever get here
@@ -423,6 +427,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 p
             );
 
+            let handoffPublishedFinal = false;
             if (allowHandoff && result.handoff && conversationResult.conversationId && conversationResult.agentResponseDetailId) {
                 const outcomes = await agentRunner.FollowHandoffs({
                     params: { ...sourceParams, conversationMessages: parsedMessages },
@@ -486,18 +491,26 @@ export class RunAIAgentResolver extends ResolverBase {
                     };
                 }
                 if (lastOutcome?.agentResult) {
-                    result = lastOutcome.agentResult;
+                    const lastHopSanitized = JSON.stringify(this.sanitizeAgentResult(lastOutcome.agentResult));
+                    currentPublisher.PublishFinal(
+                        lastOutcome.agentResult,
+                        lastOutcome.agentResult.agentRun?.ConversationDetailID ?? lastOutcome.targetConversationDetailId,
+                        lastHopSanitized
+                    );
+                    handoffPublishedFinal = true;
                 }
             }
 
             const executionTime = Date.now() - startTime;
 
-            // Create sanitized payload for JSON serialization
+            // Create sanitized payload for JSON serialization (always tied to the source detail)
             const sanitizedResult = this.sanitizeAgentResult(result);
             const returnResult = JSON.stringify(sanitizedResult);
 
-            // Publish final events with enriched result data for fire-and-forget clients
-            currentPublisher.PublishFinal(result, result.agentRun?.ConversationDetailID, returnResult);
+            // Publish final events with enriched result data when no handoff hop already finalized via OnHopStart
+            if (!handoffPublishedFinal) {
+                currentPublisher.PublishFinal(result, result.agentRun?.ConversationDetailID, returnResult);
+            }
 
             // Log completion
             if (result.success) {

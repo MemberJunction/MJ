@@ -1486,6 +1486,9 @@ export class BaseAgent {
             if (media?.data) {
                 return `data:${media.mimeType};base64,${media.data}`;
             }
+            if (media?.fileId) {
+                return media.fileId;
+            }
             // Unknown refId — leave the placeholder in place rather than emit a broken
             // data URI. Defensive; this branch should not fire in normal flow.
             this.logStatus(`⚠️ Media reference '${refId}' not found in registry`, true);

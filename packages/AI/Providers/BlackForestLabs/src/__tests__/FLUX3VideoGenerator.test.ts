@@ -642,5 +642,51 @@ describe('FLUX3VideoGenerator', () => {
             expect(succeededJob.Usage?.cost).toBe(0.72);
             expect(succeededJob.Usage?.costCurrency).toBe('USD');
         });
+
+        it('polls custom https baseUrl /get_result fallback and refuses foreign hosts', async () => {
+            const customVideoGen = new FLUX3VideoGenerator(
+                'test-bfl-key',
+                'https://bfl-proxy.internal.example.com/v1',
+            );
+
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: () =>
+                    Promise.resolve({
+                        id: 'vid-custom-1',
+                        cost: 40,
+                    }),
+            });
+
+            const submitJob = await customVideoGen.GenerateVideo({
+                Prompt: 'Custom base URL fallback test',
+                Mode: 'TextToVideo',
+                DurationSeconds: 5,
+                AspectRatio: '16:9',
+                Quality: 'standard',
+            });
+            expect(submitJob.Status).toBe('Pending');
+            expect(submitJob.JobID).toBe(
+                'https://bfl-proxy.internal.example.com/v1/get_result?id=vid-custom-1',
+            );
+
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: () =>
+                    Promise.resolve({
+                        id: 'vid-custom-1',
+                        status: 'Generating',
+                    }),
+            });
+            const pollJob = await customVideoGen.GetVideoGenerationStatus(submitJob.JobID);
+            expect(pollJob.Status).toBe('Running');
+
+            const foreignPoll = await customVideoGen.GetVideoGenerationStatus(
+                'https://evil.example.com/v1/get_result?id=vid-custom-1',
+            );
+            expect(foreignPoll.Status).toBe('Failed');
+            expect(foreignPoll.ErrorMessage).toContain('Refusing to poll');
+        });
     });
 });
+
