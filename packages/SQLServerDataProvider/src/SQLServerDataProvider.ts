@@ -1549,17 +1549,33 @@ export class SQLServerDataProvider
    * shape: `DECLARE ... ; SET ... ; EXEC [schema].sp callArgs`. When
    * record-change tracking is on, this output is further wrapped by
    * `WrapSaveCallWithRecordChange`.
+   *
+   * When a caller passes `options.SaveReturnMode === 'datestamps_only'` on an
+   * entity whose compiled stored procedure still returns the full row
+   * (`entity.EntityInfo.SaveReturnMode === 'full'`), the `EXEC` output is
+   * captured into `@ResultTable` and projected down to `DatestampReturnFields`
+   * (`SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;`) so
+   * wide `NVARCHAR(MAX)` columns are stripped before TDS wire transmission.
    */
   protected override WrapSaveCallForResult(
     binding: SaveCallBinding,
     entity: BaseEntity,
     spName: string,
-    _options?: EntitySaveOptions,
+    options?: EntitySaveOptions,
   ): SaveSQLFragment {
     if (binding.kind !== 'mssql-declare-exec') {
       throw new Error(`SQLServerDataProvider.WrapSaveCallForResult: unexpected binding kind '${binding.kind}'`);
     }
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${binding.callArgsSQL}`;
+    const spReturnsDatestampsOnly = entity.EntityInfo.SaveReturnMode === 'datestamps_only';
+    const effectiveReturnMode = options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode;
+    if (!spReturnsDatestampsOnly && effectiveReturnMode === 'datestamps_only') {
+      const resultTableColumnsSQL = this.getAllEntityColumnsSQL(entity.EntityInfo);
+      const selectColumnsSQL = this.getDatestampSelectColumnsSQL(entity.EntityInfo);
+      return {
+        sql: `${this.renderDeclareSetHead(binding)}DECLARE @ResultTable TABLE (\n    ${resultTableColumnsSQL}\n);\n\nINSERT INTO @ResultTable\n${execSQL};\n\nSELECT ${selectColumnsSQL} FROM @ResultTable;`,
+      };
+    }
     return { sql: `${this.renderDeclareSetHead(binding)}${execSQL}` };
   }
 

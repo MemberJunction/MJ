@@ -3742,6 +3742,19 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * O(1) case-insensitive field lookup by `CodeName`. Uses the shared `_entityFieldIndexCache`
+     * index so GraphQL resolvers and mutation handlers can resolve client `CodeName` keys without
+     * linear `Fields.find(...)` scans.
+     *
+     * @param codeName field CodeName (matched case-insensitively, whitespace-trimmed)
+     * @returns the matching EntityFieldInfo, or undefined if not found
+     */
+    public FieldByCodeName(codeName: string): EntityFieldInfo | undefined {
+        const idx = this.FieldIndexByCodeName(codeName);
+        return idx >= 0 ? this._fields[idx] : undefined;
+    }
+
+    /**
      * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all.
      * In the case of a composite primary key, the PrimaryKey property will return the first field in the sequence of the primary key fields.
      *

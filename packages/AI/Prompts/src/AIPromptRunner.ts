@@ -475,7 +475,7 @@ export class AIPromptRunner extends BaseModelRunner {
           promptRun.ErrorDetails = error.message;
         }
         
-        const saveResult = await promptRun.Save();
+        const saveResult = await promptRun.Save({ SaveReturnMode: 'datestamps_only' });
         if (!saveResult) {
           this.logError(`Failed to save error to AIPromptRun: ${promptRun.LatestResult?.CompleteMessage || 'Unknown error'}`, {
             category: 'PromptRunSave',

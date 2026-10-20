@@ -261,6 +261,13 @@ export class EntityField {
     }
 
     /**
+     * True when the field has had no explicit write since construction or since {@link ResetNeverSetFlag}.
+     */
+    public get NeverSet(): boolean {
+        return this._neverSet;
+    }
+
+    /**
      * Returns true if the field is dirty, false otherwise. A field is considered dirty if the value is different from the old value. If the field is read only, it is never dirty.
      * A {@link NotLoaded} field is never dirty either — its in-memory state is a construction
      * artifact, not data, and nothing that was never loaded can have been changed.
@@ -3934,6 +3941,9 @@ export abstract class BaseEntity<T = unknown> {
      * ```
      */
     public FieldIsDirty(fieldName: string, ...more: string[]): boolean {
+        if (!this._fieldsHydrated && this._raw !== null && !this._parentEntity) {
+            return false;
+        }
         const names = more.length === 0 ? [fieldName] : [fieldName, ...more];
         for (const name of names) {
             if (this.GetFieldByName(name)?.Dirty === true) {
@@ -4211,25 +4221,29 @@ export abstract class BaseEntity<T = unknown> {
         // hydration. Cache data uses exact SQL column names so no case-insensitive scan needed.
         if (!this._fieldsHydrated && this._raw) {
             let value = this._raw[FieldName];
+            const fi = this._entityInfo?.FieldByName(FieldName);
+            if (value === undefined && fi) {
+                value = this._raw[fi.Name] !== undefined ? this._raw[fi.Name] : this._raw[fi.CodeName];
+            }
             if (value === undefined) return null;
             // Conversions mirror the hydrated path, and memoize into `_rawConverted` rather than
             // back into `_raw` — the row may be shared, frozen cache state. Fields needing no
             // conversion (the vast majority) never touch the memo at all, so the fast path stays
             // a single property read.
-            const fi = this._entityInfo?.FieldByName(FieldName);
+            const memoKey = fi ? fi.Name : FieldName;
             if (fi?.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
-                const memo = this._rawConverted?.get(FieldName);
+                const memo = this._rawConverted?.get(memoKey);
                 if (memo !== undefined) return memo;
                 const d = new Date(value);
-                this.memoizeRawConversion(FieldName, d);
+                this.memoizeRawConversion(memoKey, d);
                 return d;
             }
             // Mirror the EntityField.Value setter: rtrim padding for fixed-width string columns.
             if (typeof value === 'string' && fi?.FixedWidthColumn) {
-                const memo = this._rawConverted?.get(FieldName);
+                const memo = this._rawConverted?.get(memoKey);
                 if (memo !== undefined) return memo;
                 value = trimTrailingSpaces(value);
-                this.memoizeRawConversion(FieldName, value);
+                this.memoizeRawConversion(memoKey, value);
             }
             return value;
         }
@@ -4371,6 +4385,42 @@ export abstract class BaseEntity<T = unknown> {
      * @returns
      */
     public GetAll(oldValues: boolean = false, onlyDirtyFields: boolean = false): any {
+        // Raw-mode fast path: when loaded via LoadFromData and no field has been mutated yet,
+        // construct the output object directly from `_raw` + `EntityInfo.Fields` without
+        // allocating `EntityField` instances (`_fieldsHydrated` remains `false`).
+        if (!this._fieldsHydrated && this._raw && !this._parentEntity) {
+            if (onlyDirtyFields) {
+                return {};
+            }
+            const raw = this._raw;
+            const rawObj: Record<string, unknown> = {};
+            const entityFields = this._entityInfo?.Fields ?? [];
+            for (let i = 0; i < entityFields.length; i++) {
+                const fi = entityFields[i];
+                let val = raw[fi.Name] !== undefined ? raw[fi.Name] : raw[fi.CodeName];
+                if (val === undefined) continue; // NotLoaded fields are omitted
+                if (fi.TSType === EntityFieldTSType.Date && val !== null && (typeof val === 'string' || typeof val === 'number')) {
+                    const memo = this._rawConverted?.get(fi.Name);
+                    if (memo !== undefined) {
+                        val = memo;
+                    } else {
+                        val = new Date(val);
+                        this.memoizeRawConversion(fi.Name, val);
+                    }
+                } else if (typeof val === 'string' && fi.FixedWidthColumn) {
+                    const memo = this._rawConverted?.get(fi.Name);
+                    if (memo !== undefined) {
+                        val = memo;
+                    } else {
+                        val = trimTrailingSpaces(val);
+                        this.memoizeRawConversion(fi.Name, val);
+                    }
+                }
+                rawObj[fi.Name] = val;
+            }
+            return rawObj;
+        }
+
         let obj = {};
         for (let field of this.Fields) {
             // NotLoaded fields are OMITTED (D-3 decision): their in-memory state is a
@@ -4633,14 +4683,14 @@ export abstract class BaseEntity<T = unknown> {
             const raw = this._raw;
             for (let i = 0; i < this._fields.length; i++) {
                 const field = this._fields[i];
-                const value = raw[field.Name];
+                const value = raw[field.Name] !== undefined ? raw[field.Name] : raw[field.CodeName];
                 if (value !== undefined) {
                     if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
                         field.Value = new Date(value);
                     } else {
                         field.Value = value;
                     }
-                } else if (raw[field.CodeName] === undefined) {
+                } else {
                     field.MarkNotLoaded();
                 }
             }
@@ -5395,9 +5445,26 @@ export abstract class BaseEntity<T = unknown> {
             // In 'datestamps_only' mode, the database only returned PK + __mj_CreatedAt / __mj_UpdatedAt.
             // Merge those returned values onto the current in-memory values BEFORE init() wipes Fields,
             // so caller-set fields remain loaded and intact without a post-save BaseView SELECT.
-            const fieldData: Record<string, unknown> = (effectiveReturnMode === 'datestamps_only' && typeof rawFieldData === 'object' && !Array.isArray(rawFieldData))
-                ? { ...(this.GetAll() as Record<string, unknown>), ...rawFieldData }
-                : rawFieldData;
+            // When DatabaseProviderBase.Save already merged its pre-save snapshot (`__mj_preMerged`),
+            // reuse `rawFieldData` directly to avoid a redundant second `GetAll()` call.
+            let fieldData: Record<string, unknown>;
+            if (effectiveReturnMode === 'datestamps_only' && typeof rawFieldData === 'object' && !Array.isArray(rawFieldData)) {
+                if ((rawFieldData as { __mj_preMerged?: boolean }).__mj_preMerged) {
+                    fieldData = rawFieldData;
+                } else {
+                    const currentValues = this.GetAll() as Record<string, unknown>;
+                    if (saveSubType === 'create' || !this.IsSaved) {
+                        for (const f of this.EntityInfo.Fields) {
+                            if (f.IsVirtual && !f.IsPrimaryKey && !(f.Name in rawFieldData) && (currentValues[f.Name] === null || currentValues[f.Name] === undefined)) {
+                                delete currentValues[f.Name];
+                            }
+                        }
+                    }
+                    fieldData = { ...currentValues, ...rawFieldData };
+                }
+            } else {
+                fieldData = rawFieldData;
+            }
             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
             // IS-A GetAll() merges the parent, including parent virtuals this entity
             // does not own (e.g. OrderHeader on Event Order Line). Keep only columns
@@ -5940,14 +6007,28 @@ export abstract class BaseEntity<T = unknown> {
         // This is the dominant warm-load case (cache restore in TransformSimpleObjectToEntityObject
         // populating engine arrays of read-only data) and was previously the per-row bottleneck.
         const isPlainObject = data && typeof data === 'object' && !Array.isArray(data) && !(data instanceof Date);
+        const isFirstOrUnhydratedLoad =
+            (!this._fieldsHydrated && this._fields.length === 0) ||
+            (!this._recordLoaded && !this._everSaved && this._fields.every(f => f.NeverSet));
+        const hasCompanionPayload =
+            this.HasCompanions &&
+            isPlainObject &&
+            Array.isArray((data as Record<string, unknown>)[COMPANION_PAYLOAD_KEY]);
         const canTakeFastPath =
             isPlainObject &&
-            !this._fieldsHydrated &&
-            this._fields.length === 0 &&
+            isFirstOrUnhydratedLoad &&
             !this._parentEntity &&
-            !this.EntityInfo?.IsParentType;
+            !this.EntityInfo?.IsParentType &&
+            !hasCompanionPayload;
 
         if (canTakeFastPath) {
+            if (this._fieldsHydrated || this._fields.length > 0) {
+                this._fields = [];
+                this._fieldsHydrated = false;
+                this._fieldCache = null;
+                this._codeNameCache = null;
+            }
+            this._compositeKey = null;
             this._raw = data as Record<string, unknown>;
             // Drop any conversions memoized from a previously-loaded row — they describe the old
             // `_raw`, not this one. No isFrozen probe is needed: `Get()` never writes to `_raw`,
@@ -5959,7 +6040,7 @@ export abstract class BaseEntity<T = unknown> {
             const pks = this.EntityInfo?.PrimaryKeys ?? [];
             let allPksPresent = pks.length > 0;
             for (const pkInfo of pks) {
-                const v = this._raw[pkInfo.Name];
+                const v = this._raw[pkInfo.Name] !== undefined ? this._raw[pkInfo.Name] : this._raw[pkInfo.CodeName];
                 if (v === null || v === undefined) {
                     allPksPresent = false;
                     break;
