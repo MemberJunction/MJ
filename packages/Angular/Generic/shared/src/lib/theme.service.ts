@@ -35,6 +35,13 @@ export interface ThemeDefinition {
      * the first registered wins. Without one the default stays `'system'`. A single-brand host
      * registers its brand as the default instead of calling `SetTheme` on every login, which
      * fought `Initialize()`'s own resolution and wrote a preference the user never chose.
+     *
+     * Not the same axis as Theme Studio's org default (`MJ: Themes`.IsDefault): that one picks
+     * the org BRAND OVERLAY, registered via {@link ThemeService.RegisterBrandTheme} into the
+     * brand registry and layered under whatever base theme is active. This flag picks the BASE
+     * (picker) theme and never looks at the brand registry, so the two compose: a picker-only
+     * built-in default keeps the org overlay; a `CssUrl` default replaces it while selected, as
+     * any explicitly selected custom theme does.
      */
     IsDefault?: boolean;
 }

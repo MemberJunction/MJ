@@ -521,6 +521,10 @@ A host with ONE brand (a learner portal, a white-labelled product) should not lo
 
 Keep `CssUrl` themes for what they are good at: themes selected at RUNTIME (per-tenant overlays, user-installed themes), where a `<link>` swap is the point.
 
+**How this composes with Theme Studio.** Theme Studio's "Set default" sets `MJ: Themes`.`IsDefault`, the org-wide **brand overlay**: at login bootstrap the workspace initializer registers it with `RegisterBrandTheme()` and applies it with `ApplyBrandOverlay()`, layered under whatever base theme is active, and `Reset()` keeps it so it survives logout. `ThemeDefinition.IsDefault` is a different axis: it picks the **base** theme `Initialize()` applies when the user has no saved light/dark preference, and it never looks at the brand registry. A picker-only built-in default (the recipe above) keeps the org overlay layered on top; a `CssUrl` theme flagged default replaces the overlay while it is selected, exactly as any explicitly selected custom theme does today.
+
+**The login screen.** Neither flag reaches a cold load of the sign-in page: `Initialize()` runs after login, and the org overlay's CSS is a session Blob that the pre-paint script cannot restore (only its `data-theme-overlay` attribute is). Right after a logout the overlay is still live, so the sign-in page stays branded until a reload. Branding the sign-in page from first paint is what the compiled-in recipe (and Login Studio's page data) is for.
+
 ---
 
 ## Creating a Custom Theme
