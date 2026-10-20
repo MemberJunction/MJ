@@ -32,6 +32,9 @@ class MockStep {
   public OutputData: string | null = null;
   public PayloadAtStart: string | null = null;
   public PayloadAtEnd: string | null = null;
+  public FinalPayloadValidationResult: string | null = null;
+  public FinalPayloadValidationMessages: string | null = null;
+  public PromptRun: unknown = null;
   public LatestResult: { CompleteMessage: string } | null = null;
 
   public saveOptions: Array<{ IgnoreDirtyState?: boolean } | undefined> = []; // options seen per Save() call
@@ -454,4 +457,222 @@ describe('BaseAgent.finalizeAgentRun — pending-save drain + run status', () =>
     expect(order.indexOf('agentRun:save')).toBe(2);
   });
 });
+
+describe('BaseAgent guardrail & validation step saves — queue sequencing and OutputData preservation', () => {
+  const ctx = { ID: 'u1', Name: 'Tester' } as never;
+
+  it('checkExecutionGuardrails queues its update after the INSERT and finalizeStepEntity preserves guardrailExceeded in OutputData', async () => {
+    const log: string[] = [];
+    const step = new MockStep('s', log);
+    const { agent, pending } = makeAgent([step]);
+    const created = await internals(agent).createStepEntity({
+      stepType: 'Prompt',
+      stepName: 'Execute Agent Prompt',
+      contextUser: ctx,
+    });
+
+    const a = agent as unknown as {
+      hasExceededAgentRunGuardrails: () => Promise<{
+        exceeded: boolean;
+        type?: string;
+        limit?: number;
+        current?: number;
+        reason?: string;
+      }>;
+      checkExecutionGuardrails: (
+        params: Record<string, unknown>,
+        nextStep: Record<string, unknown>,
+        currentPayload: Record<string, unknown>,
+        agentRun: Record<string, unknown>,
+        currentStep: MockStep,
+      ) => Promise<Record<string, unknown>>;
+    };
+
+    a.hasExceededAgentRunGuardrails = vi.fn(async () => ({
+      exceeded: true,
+      type: 'MaxTokens',
+      limit: 1000,
+      current: 1500,
+      reason: 'Max tokens exceeded (1500 > 1000)',
+    }));
+
+    const modifiedStep = await a.checkExecutionGuardrails(
+      { agent: { ID: 'a1', Name: 'TestAgent' }, contextUser: ctx },
+      { step: 'Retry', terminate: false },
+      { status: 'running' },
+      { ID: 'run-1' },
+      created,
+    );
+
+    expect(modifiedStep.step).toBe('Failed');
+    expect(modifiedStep.terminate).toBe(true);
+
+    // Subsequent finalizeStepEntity with step outputData must NOT overwrite guardrailExceeded
+    await internals(agent).finalizeStepEntity(created, true, undefined, {
+      nextStep: modifiedStep,
+    });
+    await pending();
+
+    // All saves were sequenced (INSERT completes before queued UPDATEs)
+    expect(log[0]).toBe('s:start:1');
+    expect(log[1]).toBe('s:end:1');
+    const output = JSON.parse(created.OutputData as string) as Record<string, unknown>;
+    expect(output.guardrailExceeded).toMatchObject({
+      type: 'MaxTokens',
+      limit: 1000,
+      current: 1500,
+      reason: 'Max tokens exceeded (1500 > 1000)',
+    });
+    expect(output.nextStep).toBeDefined();
+  });
+
+  it('handleFinalPayloadValidationFailure queues validation fields via queueStepSave and preserves them across finalizeStepEntity', async () => {
+    const log: string[] = [];
+    const step = new MockStep('s', log);
+    const { agent, pending } = makeAgent([step]);
+    const created = await internals(agent).createStepEntity({
+      stepType: 'Prompt',
+      stepName: 'Execute Agent Prompt',
+      contextUser: ctx,
+    });
+
+    const a = agent as unknown as {
+      handleFinalPayloadValidationFailure: (
+        params: Record<string, unknown>,
+        nextStep: Record<string, unknown>,
+        currentPayload: Record<string, unknown>,
+        mode: string,
+        errorMessages: string[],
+        agentRun: Record<string, unknown>,
+        currentStep: MockStep,
+      ) => Promise<Record<string, unknown>>;
+    };
+
+    const resultStep = await a.handleFinalPayloadValidationFailure(
+      { agent: { ID: 'a1', Name: 'TestAgent', FinalPayloadValidationMaxRetries: 3 }, contextUser: ctx },
+      { step: 'Success', terminate: true },
+      { total: -1 },
+      'Fail',
+      ['total must be non-negative'],
+      { ID: 'run-1' },
+      created,
+    );
+
+    expect(resultStep.step).toBe('Failed');
+    expect(created.FinalPayloadValidationResult).toBe('Fail');
+    expect(created.FinalPayloadValidationMessages).toBe('total must be non-negative');
+
+    await internals(agent).finalizeStepEntity(created, true, undefined, { nextStep: resultStep });
+    await pending();
+
+    expect(log[0]).toBe('s:start:1');
+    expect(log[1]).toBe('s:end:1');
+    expect(created.FinalPayloadValidationResult).toBe('Fail');
+    expect(created.FinalPayloadValidationMessages).toBe('total must be non-negative');
+  });
+});
+
+describe('BaseAgent.compactMessage (AI Summary) — shared prompt runner, tree budget, and queued step saves', () => {
+  const ctx = { ID: 'u1', Name: 'Tester' } as never;
+
+  it('reuses _promptRunner, records usage in AgentTreeBudget, links PromptRun/TargetLogID, and queues Compaction step saves', async () => {
+    const log: string[] = [];
+    const step = new MockStep('compaction', log);
+    const { agent, pending } = makeAgent([step]);
+    const promptId = '11111111-2222-3333-4444-555555555555';
+    const promptRunId = '99999999-8888-7777-6666-555555555555';
+    const fakePromptEntity = { ID: promptId, Name: 'Compact Agent Message' };
+
+    const a = agent as unknown as {
+      _promptRunner: { ExecutePrompt: ReturnType<typeof vi.fn> };
+      _treeBudget?: {
+        totalPromptIterations: number;
+        totalTokens: number;
+        totalCost: number;
+        totalSteps: number;
+      };
+      compactMessage: (
+        message: Record<string, unknown>,
+        metadata: {
+          compactMode: 'First N Chars' | 'AI Summary';
+          compactLength: number;
+          compactPromptId: string;
+          originalLength: number;
+        },
+        params: Record<string, unknown>,
+      ) => Promise<string>;
+    };
+
+    const fakePromptRun = {
+      ID: promptRunId,
+      TokensPrompt: 120,
+      TokensCompletion: 30,
+      TotalCost: 0.0045,
+      Cost: 0.0045,
+    };
+
+    const executePromptMock = vi.fn(async (promptParams: { onPromptRunCreated?: (id: string) => Promise<void> }) => {
+      if (promptParams.onPromptRunCreated) {
+        await promptParams.onPromptRunCreated(promptRunId);
+      }
+      return {
+        success: true,
+        result: { summary: 'Concise summary of tool output.' },
+        promptRun: fakePromptRun,
+        promptTokens: 120,
+        completionTokens: 30,
+        cost: 0.0045,
+      };
+    });
+    a._promptRunner = { ExecutePrompt: executePromptMock };
+
+    const aiEngineMod = await import('@memberjunction/aiengine');
+    vi.spyOn(aiEngineMod.AIEngine, 'Instance', 'get').mockReturnValue({
+      Prompts: [fakePromptEntity],
+    } as never);
+
+    const summaryText = await a.compactMessage(
+      {
+        role: 'user',
+        content: 'Long action output '.repeat(50),
+        metadata: { messageType: 'action-result', turnAdded: 1, tokensSaved: 180 },
+      },
+      {
+        compactMode: 'AI Summary',
+        compactLength: 200,
+        compactPromptId: promptId,
+        originalLength: 950,
+      },
+      {
+        agent: { ID: 'a1', Name: 'TestAgent' },
+        contextUser: ctx,
+        conversationMessages: [],
+      },
+    );
+
+    await pending();
+
+    expect(executePromptMock).toHaveBeenCalledOnce();
+    expect(summaryText).toContain('Concise summary of tool output.');
+    expect(step.StepType).toBe('Compaction');
+    expect(step.StepNumber).toBe(1);
+    expect(step.TargetID).toBe(promptId);
+    expect(step.TargetLogID).toBe(promptRunId);
+    expect(step.PromptRun).toBe(fakePromptRun);
+    expect(step.Status).toBe('Completed');
+    expect(step.Success).toBe(true);
+    expect(internals(agent)._agentRun.Steps).toContain(step);
+
+    // INSERT completes before queued UPDATE(s)
+    expect(log[0]).toBe('compaction:start:1');
+    expect(log[1]).toBe('compaction:end:1');
+    expect(step.saveOptions.some((opt) => opt?.IgnoreDirtyState === true)).toBe(true);
+
+    // Tree budget reflects both the Compaction step and the prompt execution tokens/cost
+    expect(a._treeBudget?.totalSteps).toBe(1);
+    expect(a._treeBudget?.totalTokens).toBe(150);
+    expect(a._treeBudget?.totalCost).toBeCloseTo(0.0045, 6);
+  });
+});
+
 

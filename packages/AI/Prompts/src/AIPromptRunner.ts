@@ -810,18 +810,22 @@ export class AIPromptRunner extends BaseModelRunner {
       }
     }
 
-    // Update parent with selected arm's model and vendor
-    consolidatedPromptRun.ModelID = selectedResult.task.model.ID;
-    if (selectedResult.task.vendorId) {
-      consolidatedPromptRun.VendorID = selectedResult.task.vendorId;
-    } else if (selectedResult.task.promptModel?.VendorID) {
-      consolidatedPromptRun.VendorID = selectedResult.task.promptModel.VendorID;
+    // Update parent with selected arm's model and vendor (also re-applied inside applyConsolidatedFields
+    // so an in-flight INSERT reload on consolidatedPromptRun can never revert them).
+    const selectedModelId = selectedResult.task.model.ID;
+    const selectedVendorId = selectedResult.task.vendorId ?? selectedResult.task.promptModel?.VendorID;
+    consolidatedPromptRun.ModelID = selectedModelId;
+    if (selectedVendorId) {
+      consolidatedPromptRun.VendorID = selectedVendorId;
     }
 
-    // Ensure selectedResult child is marked WasSelectedResult = true
+    // Ensure selectedResult child is marked WasSelectedResult = true via the fire-and-forget prompt run queue
     if (selectedResult.promptRun) {
-      selectedResult.promptRun.WasSelectedResult = true;
-      await selectedResult.promptRun.Save();
+      const selectedRun = selectedResult.promptRun;
+      selectedRun.WasSelectedResult = true;
+      this._promptRunQueue.Update(selectedRun, () => {
+        selectedRun.WasSelectedResult = true;
+      });
     }
 
     // Calculate total tokens and costs from all parallel executions
@@ -865,6 +869,10 @@ export class AIPromptRunner extends BaseModelRunner {
       parallelResult.successCount > 0 ? 'Completed' : 'Failed';
 
     const applyConsolidatedFields = (): void => {
+      consolidatedPromptRun.ModelID = selectedModelId;
+      if (selectedVendorId) {
+        consolidatedPromptRun.VendorID = selectedVendorId;
+      }
       consolidatedPromptRun.CompletedAt = endTime;
       consolidatedPromptRun.ExecutionTimeMS = parallelResult.totalExecutionTimeMS;
       consolidatedPromptRun.Result = selectedResult.rawResult || '';
