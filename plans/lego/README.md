@@ -68,7 +68,7 @@ Re-measured 2026-10-19 against `origin/next` at `f95b0447c5`. Each command runs 
 | ThemeEngine seed fields / tokens derived from them | 8 / 59 | 10 / 56 | `packages/ThemeEngine/src/seeds.ts` interface fields; `git show origin/next:packages/ThemeEngine/src/derive.ts \| grep -oE "'--mj-[a-z0-9-]+'" \| sort -u \| wc -l` |
 | `::ng-deep` occurrences / files in `packages/Angular` | 498 / 81 | 506 / 83 | `git grep -o '::ng-deep' origin/next -- packages/Angular \| wc -l` |
 | Hex colour literals in `packages/Angular` `.scss` and `.css` | 1,133 | 711 (plus 1,539 six-digit hex in `.ts` outside tests) | `git grep -o -P '#[0-9a-fA-F]{3,8}(?![0-9a-zA-Z])' origin/next -- 'packages/Angular/**/*.scss' 'packages/Angular/**/*.css' \| wc -l` |
-| `<mj-empty-state` uses in `packages` | 570 | 613 | `git grep -o '<mj-empty-state' origin/next -- packages \| wc -l` |
+| `<mj-empty-state` grep hits in `packages` | 570 | 613 raw hits; about 560 are template uses (434 `.html`, 129 `.ts`), the rest are `.md` docs, `.css` selectors and tests | `git grep -o '<mj-empty-state' origin/next -- packages \| wc -l` |
 
 ### 3.2 Duplication and adoption
 
@@ -166,11 +166,11 @@ D1 and D2 are architectural and belong in the wave 0 spec's first section. D3 to
 
 | # | Question | Options | Lean |
 |---|---|---|---|
-| **D1** | Encapsulation and CSS layers | (a) Keep Angular's emulated encapsulation, so only exposed values reach consumers. (b) Ship primitives with encapsulation off and their CSS in a named `@layer`. | **(b)**. Without it, named parts and host-wins (ladder rungs 2 and 3) don't work, and Lego is a list someone had to think of in advance. Angular Material and PrimeNG both made this call. Today 0 of the library's 42 component files opt out of emulated encapsulation (§3.1). The realtime widget already ships light DOM plus `@layer mj-realtime-widget-defaults`, and §7 explains why the same answer is needed there. |
+| **D1** | Encapsulation and CSS layers | (a) Keep Angular's emulated encapsulation, so only exposed values reach consumers. (b) Ship primitives with encapsulation off and their CSS in a named `@layer`. | **(b)**. Without it, named parts and host-wins (ladder rungs 2 and 3) don't work, and Lego is a list someone had to think of in advance. Angular Material and PrimeNG both made this call. Today 0 of the library's 42 files declaring a component or directive (37 components, 8 directives) opt out of emulated encapsulation (§3.1). The realtime widget already ships light DOM plus `@layer mj-realtime-widget-defaults`, and §7 explains why the same answer is needed there. |
 | **D2** | Open axes in the real implementation | (a) Hardcode roles and tones as the demo does. (b) Map names to variables at runtime so a brand can add its own. | **(b)**. The component sets `--role-fill` from `--mj-<role>-fill` on the element; unknown roles fall back to the author's explicit emphasis. This is rule 1 of §4 applied to the implementation. |
 | **D3** | Badge, pill, chip, tag | One component with modes, or several | Two: badge is a static label with tone and treatment, chip is interactive. Pill and tag are shapes and uses, so pill becomes an exposed shape value. |
 | **D4** | Surface, card, panel | One, two, or three names | Two: surface is the primitive, card is surface with optional parts and the name people reach for. Panel is a surface in a layout slot. |
-| **D5** | Empty state | Extend `mj-empty-state` or replace it | Replace with a generic state region named for what it is, and make the old one a thin wrapper so the 613 uses (§3.1) don't move. |
+| **D5** | Empty state | Extend `mj-empty-state` or replace it | Replace with a generic state region named for what it is, and make the old one a thin wrapper so the roughly 560 template uses (613 raw hits, §3.1) don't move. |
 | **D6** | Table | CDK table, AG Grid, or both | A CDK-based primitive for the simple case; AG Grid stays as the data grid. Two table stories is the honest shape of the need. |
 | **D7** | Row | One component or several | One. The four examples differ only in content. A second component means the first has an opinion it shouldn't. |
 | **D8** | First public move | Wave 1 (visible, cheap) or wave 2 (the real contract test) | Run both in parallel. Show wave 1 first if one has to go first. |
