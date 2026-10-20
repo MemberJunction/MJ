@@ -36234,11 +36234,14 @@ export class MJContentSource_ {
     @Field({nullable: true, description: "Per-field provenance for the pipeline: for each well-known field, the confidence the winning stage had and which stage set it."}) 
     FieldConfidence?: string;
         
-    @Field(() => Boolean, {nullable: true, description: "Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Readiness is \"schedule due OR ForceDiscovery\", which is why there is no discovery status column to re-arm."}) 
+    @Field(() => Boolean, {nullable: true, description: "Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes, while scheduled runs select active pipeline sources directly."}) 
     ForceDiscovery?: boolean;
         
     @Field({nullable: true, description: "When this source was last walked by the Discover stage."}) 
     LastDiscoveredAt?: Date;
+
+    @Field({nullable: true, description: "When this source was last walked by a full Sync pass to reconcile removed items."}) 
+    LastSyncedAt?: Date;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -36333,6 +36336,9 @@ export class CreateMJContentSourceInput {
     @Field({ nullable: true })
     LastDiscoveredAt: Date | null;
 
+    @Field({ nullable: true })
+    LastSyncedAt: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -36393,6 +36399,9 @@ export class UpdateMJContentSourceInput {
 
     @Field({ nullable: true })
     LastDiscoveredAt?: Date | null;
+
+    @Field({ nullable: true })
+    LastSyncedAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -36714,9 +36723,6 @@ export class MJContentType_ {
     @MaxLength(100)
     ExtractorKey?: string;
         
-    @Field({nullable: true, description: "How this content type is recognised from a document's own structure, as JSON: {\"RootElements\":[\"rss\",\"feed\"],\"Namespaces\":[\"http://www.w3.org/2005/Atom\"]}. The matching is generic; what each type looks like is data."}) 
-    StructuralSignature?: string;
-        
     @Field({nullable: true}) 
     @MaxLength(50)
     AIModel?: string;
@@ -36775,9 +36781,6 @@ export class CreateMJContentTypeInput {
     @Field({ nullable: true })
     ExtractorKey: string | null;
 
-    @Field({ nullable: true })
-    StructuralSignature: string | null;
-
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -36823,9 +36826,6 @@ export class UpdateMJContentTypeInput {
 
     @Field({ nullable: true })
     ExtractorKey?: string | null;
-
-    @Field({ nullable: true })
-    StructuralSignature?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

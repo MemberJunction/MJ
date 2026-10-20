@@ -1,150 +1,59 @@
 /**
- * @fileoverview Resolving a file type, and what to do when nothing resolves one.
- *
- * File type often is not knowable before bytes are in hand, so this is a precedence question rather
- * than a lookup.
- *
- * The confidence each kind of evidence carries is NOT here: it comes from the run's resolved scale
- * via `FileTypeEvidenceConfidenceKey`, so a deployment can configure it. A constant here would have
- * been fixed at import time and silently ignored that configuration.
+ * @fileoverview Resolving a file type from whatever is known, and checking a plain-text read.
  *
  * @module @memberjunction/content-pipeline-base
  */
 
+import path from 'node:path';
+
 /** Where a resolved file type came from, most authoritative first. */
-export type FileTypeEvidence =
-    /** The source declared it at discovery. Treated as authoritative. */
-    | 'Declared'
-    /** Byte-level evidence unambiguously contradicting what was declared. */
-    | 'ByteCorrection'
-    /** A byte signature, where nothing was declared. */
-    | 'Signature'
-    /** A filename extension. */
-    | 'Extension'
-    /** The source's default type, when nothing about the item itself said anything. */
-    | 'SourceDefault';
+export type FileTypeEvidence = 'Declared' | 'ByteCorrection' | 'Signature' | 'Extension' | 'SourceDefault';
 
 /** A resolved file type and why. */
 export interface ResolvedFileType {
     /** The file type key, lowercased, e.g. `pdf`. Null when nothing resolved one. */
     FileType: string | null;
-    /** What resolved it. Null when nothing did. */
     Evidence: FileTypeEvidence | null;
 }
 
-/** What is known about a candidate before resolution. */
+/** What is known about an item before resolution. */
 export interface FileTypeInputs {
-    /** What the source said at discovery, if anything. */
+    /** What something said about this item specifically. */
     Declared?: string | null;
-    /** What a byte signature says, if anything matched. */
+    /** What a byte signature says. */
     Signature?: string | null;
-    /** Whether the signature evidence is unambiguous enough to override a declaration. */
+    /** Whether the signature may overrule a declaration. */
     SignatureIsUnambiguous?: boolean;
     /** The filename or URL to take an extension from. */
     FileName?: string | null;
-    /**
-     * The source's default file type — what an item inherits when it is created. Not a
-     * declaration: it says what the source mostly holds, not what this item is, so it answers only
-     * when the item's own bytes and name said nothing.
-     */
+    /** The source's default — answers only when nothing about the item said anything. */
     SourceDefault?: string | null;
 }
 
-/** Formats a plain-text read is a reasonable fallback for. */
-const TEXT_FORMATS = new Set(['txt', 'text', 'md', 'markdown', 'csv', 'tsv', 'json', 'xml', 'html', 'htm', 'yaml', 'yml']);
-
-/** Formats that are definitively not text, and route to multi-modal handling instead. */
-const NON_TEXT_FORMATS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff', 'svg', 'mp3', 'wav', 'ogg', 'flac', 'mp4', 'mov', 'avi', 'mkv', 'webm']);
-
 /**
- * Resolve a file type from whatever is known.
- *
- * Precedence, most authoritative first:
- * 1. **Declared by the source at discovery** — authoritative, not casually overridden.
- * 2. **A byte-level correction**, but only on unambiguous evidence contradicting the declaration.
- *    Ambiguous byte evidence leaves a declaration standing, because a source that states a type is
- *    usually right and a sniffer that is unsure is usually not.
- * 3. **Byte-signature sniffing**, when nothing was declared — an unambiguous signature only; an
- *    ambiguous one (a zip, which every Office Open XML file also is) yields to a named extension.
- * 4. **A filename extension**.
- * 5. **The source's default**, which describes the source rather than the item.
+ * Resolve a file type. Precedence: a declaration (unless unambiguous bytes contradict it), then an
+ * unambiguous signature, then the extension (which beats an ambiguous signature — every .xlsx is a
+ * zip), then the source's default.
  */
 export function ResolveFileType(inputs: FileTypeInputs): ResolvedFileType {
     const declared = normalize(inputs.Declared);
     const signature = normalize(inputs.Signature);
-
     if (declared) {
-        const contradicts = signature !== null && signature !== declared;
-        if (contradicts && inputs.SignatureIsUnambiguous === true) {
-            return { FileType: signature, Evidence: 'ByteCorrection' };
-        }
-        return { FileType: declared, Evidence: 'Declared' };
+        const corrected = signature !== null && signature !== declared && inputs.SignatureIsUnambiguous === true;
+        return corrected ? { FileType: signature, Evidence: 'ByteCorrection' } : { FileType: declared, Evidence: 'Declared' };
     }
-    const extension = extensionOf(inputs.FileName);
+    const extension = normalize(path.extname(inputs.FileName?.split(/[?#]/)[0] ?? '').slice(1));
     if (signature && (inputs.SignatureIsUnambiguous !== false || !extension)) {
         return { FileType: signature, Evidence: 'Signature' };
     }
-    // An ambiguous signature recognises a container without identifying what is in it — every
-    // .xlsx and .docx is a zip underneath — so a named extension says more than it does.
     if (extension) {
         return { FileType: extension, Evidence: 'Extension' };
     }
-    if (signature) {
-        return { FileType: signature, Evidence: 'Signature' };
-    }
     const sourceDefault = normalize(inputs.SourceDefault);
-    if (sourceDefault) {
-        return { FileType: sourceDefault, Evidence: 'SourceDefault' };
-    }
-    return { FileType: null, Evidence: null };
+    return sourceDefault ? { FileType: sourceDefault, Evidence: 'SourceDefault' } : { FileType: null, Evidence: null };
 }
 
-/** What Extract should do when a file type did not resolve to a extractor. */
-export type UnresolvedStrategy =
-    /** A recognized non-text signature: go down the multi-modal path, extractor or not. */
-    | 'MultiModal'
-    /** A recognized text format: use its matching extractor. */
-    | 'TextExtractor'
-    /** Nothing recognized it: attempt a sanity-checked plain-text read. */
-    | 'PlainTextFallback';
-
-/**
- * The three-way fallback for a file type with no matching extractor.
- *
- * A recognized non-text signature proceeds down the multi-modal path **regardless of whether a text
- * extractor exists for it** — "this is an image, not a document" is Extract doing its job, not Extract
- * failing.
- */
-export function ClassifyUnresolved(
-    fileType: string | null,
-    configured?: { TextFileTypes: ReadonlySet<string>; NonTextFileTypes: ReadonlySet<string> },
-): UnresolvedStrategy {
-    // What metadata says about a file type outranks the built-in lists: a deployment that marks a
-    // format as text has said something the framework could not know.
-    if (fileType && configured?.NonTextFileTypes.has(fileType)) {
-        return 'MultiModal';
-    }
-    if (fileType && configured?.TextFileTypes.has(fileType)) {
-        return 'TextExtractor';
-    }
-    if (fileType && NON_TEXT_FORMATS.has(fileType)) {
-        return 'MultiModal';
-    }
-    if (fileType && TEXT_FORMATS.has(fileType)) {
-        return 'TextExtractor';
-    }
-    return 'PlainTextFallback';
-}
-
-/**
- * Whether a plain-text fallback read produced something worth keeping.
- *
- * Checked **before** committing, so corrupted text is marked Failed rather than propagating
- * silently into tags, chunks and vectors — where it is far more expensive to notice.
- *
- * @param text The decoded text.
- * @param minimumPrintableRatio How much of it must be printable. Default 0.85.
- */
+/** Whether a plain-text fallback read is real text, so mojibake never reaches tags, chunks or vectors. */
 export function IsPlausibleText(text: string, minimumPrintableRatio = 0.85): boolean {
     if (text.length === 0) {
         return false;
@@ -164,39 +73,4 @@ export function IsPlausibleText(text: string, minimumPrintableRatio = 0.85): boo
 function normalize(value: string | null | undefined): string | null {
     const trimmed = value?.trim().toLowerCase();
     return trimmed ? trimmed : null;
-}
-
-/** The extension of a filename or URL, without the dot. */
-function extensionOf(fileName: string | null | undefined): string | null {
-    if (!fileName) {
-        return null;
-    }
-    const withoutQuery = fileName.split(/[?#]/)[0];
-    const lastSegment = withoutQuery.split('/').pop() ?? '';
-    const dot = lastSegment.lastIndexOf('.');
-    if (dot <= 0 || dot === lastSegment.length - 1) {
-        return null;
-    }
-    return lastSegment.slice(dot + 1).toLowerCase();
-}
-
-/**
- * Whether a run of bytes is text at all.
- *
- * Built on {@link IsPlausibleText} rather than beside it, so there is one answer to "is this text"
- * and one threshold to tune. A null byte short-circuits it: no text encoding this handles produces
- * one, and checking it first avoids decoding a large binary only to reject it.
- *
- * @param content The bytes to judge.
- * @param minimumPrintableRatio How much of the decoded result must be printable. Default 0.85.
- */
-export function LooksLikeText(content: Uint8Array, minimumPrintableRatio = 0.85): boolean {
-    if (content.length === 0) {
-        return false;
-    }
-    const sample = content.subarray(0, 4096);
-    if (sample.includes(0)) {
-        return false;
-    }
-    return IsPlausibleText(new TextDecoder('utf-8', { fatal: false }).decode(sample), minimumPrintableRatio);
 }

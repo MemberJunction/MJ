@@ -1,73 +1,60 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { RegisterClass } from '@memberjunction/global';
 import { ContentItemTagBridge } from '@memberjunction/tag-engine';
-import {
-    BaseContentClassifier,
-    ClassifyRequest,
-    ClassifyResult,
-    StageContext,
-    WorkingRecord,
-    WorkingRecordIdentity,
-} from '@memberjunction/content-pipeline-base';
+import type { AutotagKeyword } from '@memberjunction/content-autotagging';
+import { FatalStageError, StageContext, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
+import { ManagedPromptClassification, ManagedPromptClassifier } from '../ManagedPromptClassifier.js';
 import { TagStage } from '../stages/TagStage.js';
 import { SegmentStage } from '../stages/SegmentStage.js';
 
-let classifyImpl: (r: ClassifyRequest) => Promise<ClassifyResult> = async () => ({ Tags: [] });
+const keyword = (Tag: string, Weight = 0.5, extra: Partial<AutotagKeyword> = {}): AutotagKeyword => ({
+    Tag,
+    Weight,
+    ParentTag: null,
+    Reasoning: null,
+    ...extra,
+});
+const classified = (Keywords: AutotagKeyword[], extra: Partial<ManagedPromptClassification> = {}): ManagedPromptClassification => ({
+    Keywords,
+    PromptRunID: null,
+    IsValidContent: true,
+    ...extra,
+});
 
-@RegisterClass(BaseContentClassifier, 'test-classifier')
-class TestClassifier extends BaseContentClassifier {
-    public readonly Key = 'test-classifier';
-    public async Classify(request: ClassifyRequest): Promise<ClassifyResult> {
-        return classifyImpl(request);
-    }
-}
+let classifyImpl: (text: string, title: string | null) => Promise<ManagedPromptClassification> = async () => classified([]);
 
 /** Tag rows the stage saved, so a test can assert tagging actually persisted something. */
-export const savedTags: { ItemID: string; Tag: string; Weight?: number }[] = [];
+export const savedTags: { ItemID: string; Tag: string; Weight?: number; AIPromptRunID?: string; Reasoning?: string }[] = [];
 
 /**
- * A provider that records what the stage writes.
- *
- * Tagging's whole point is the rows it leaves behind, so a stub that cannot accept a write would
- * only re-prove the defect this replaced: tags computed, nothing saved.
+ * A provider that records what the stage writes. Tagging's whole point is the rows it leaves
+ * behind, so a stub that cannot accept a write would only re-prove "tags computed, nothing saved".
  */
 function recordingProvider() {
     return {
         RunView: async () => ({ Success: true, Results: [] as { ID: string }[] }),
         GetEntityObject: async () => {
             const row: Record<string, unknown> = {};
-            return {
+            const field = (name: string) => ({
+                get: () => row[name],
+                set: (v: unknown) => {
+                    row[name] = v;
+                },
+                enumerable: true,
+            });
+            const entity = {
                 NewRecord: () => true,
                 Save: async () => {
-                    savedTags.push({
-                        ItemID: row.ItemID as string,
-                        Tag: row.Tag as string,
-                        Weight: row.Weight as number | undefined,
-                    });
+                    savedTags.push({ ...row } as (typeof savedTags)[number]);
                     return true;
                 },
                 Delete: async () => true,
                 InnerLoad: async () => true,
-                get ItemID() {
-                    return row.ItemID as string;
-                },
-                set ItemID(v: string) {
-                    row.ItemID = v;
-                },
-                get Tag() {
-                    return row.Tag as string;
-                },
-                set Tag(v: string) {
-                    row.Tag = v;
-                },
-                get Weight() {
-                    return row.Weight as number;
-                },
-                set Weight(v: number) {
-                    row.Weight = v;
-                },
                 LatestResult: null,
             };
+            for (const name of ['ItemID', 'Tag', 'Weight', 'AIPromptRunID', 'Reasoning']) {
+                Object.defineProperty(entity, name, field(name));
+            }
+            return entity;
         },
     } as never;
 }
@@ -78,10 +65,6 @@ function contextWith(configuration: Record<string, unknown> = {}, signal?: Abort
         Provider: recordingProvider(),
         Configuration: configuration,
         IsTest: false,
-        Scope: 'Filter',
-        Attempt: 1,
-        MaxAttempts: 1,
-        IsReplay: false,
         Signal: signal ?? new AbortController().signal,
         ReportProgress: () => {},
         Log: { Info: () => {}, Warning: () => {}, Error: () => {} },
@@ -98,102 +81,90 @@ function item(text: string | null): WorkingRecord {
 }
 
 beforeEach(() => {
-    classifyImpl = async () => ({ Tags: [] });
-    vi.restoreAllMocks();
-    // Promoting tags into the taxonomy needs TagEngine and a database; what is covered here is the
-    // stage's own decisions, so the shared bridge is stubbed.
+    classifyImpl = async () => classified([]);
+    // The prompt and the taxonomy need AIEngine, TagEngine and a database; covered here are the
+    // stage's own decisions, so the classifier and the shared bridge are stubbed.
+    vi.spyOn(ManagedPromptClassifier.prototype, 'Classify').mockImplementation((text, title) => classifyImpl(text, title));
     vi.spyOn(ContentItemTagBridge.prototype, 'Bridge').mockResolvedValue(undefined);
     savedTags.length = 0;
 });
 
 describe('TagStage', () => {
-    it('delegates classification and records the tags', async () => {
-        classifyImpl = async () => ({ Tags: [{ Name: 'finance', Score: 0.9 }, { Name: 'policy' }] });
+    it('classifies and records the tags', async () => {
+        classifyImpl = async () => classified([keyword('finance', 0.9), keyword('policy')]);
         const record = item('some text');
-        const outcome = await new TagStage().Run(record, contextWith({ ClassifierKey: 'test-classifier' }));
+        const outcome = await new TagStage().Run(record, contextWith());
         expect(outcome.Status).toBe('Complete');
-        expect(record.GetExtension<{ Name: string }[]>('Tag', 'tags')).toHaveLength(2);
+        expect(record.GetExtension<AutotagKeyword[]>('Tag', 'tags')).toHaveLength(2);
     });
 
     it('SAVES the tags, rather than leaving them in the extension space', async () => {
-        // The defect this replaced: a successful Tag stage wrote tags nowhere, so the record went
-        // Complete and nothing was tagged.
-        classifyImpl = async () => ({ Tags: [{ Name: 'finance', Score: 0.9 }, { Name: 'policy' }] });
-        const record = item('some text');
-        await new TagStage().Run(record, contextWith({ ClassifierKey: 'test-classifier' }));
+        // The defect this replaced: a successful Tag stage wrote tags nowhere.
+        classifyImpl = async () => classified([keyword('finance', 0.9), keyword('policy')]);
+        await new TagStage().Run(item('some text'), contextWith());
         expect(savedTags.map((t) => t.Tag)).toEqual(['finance', 'policy']);
         expect(savedTags[0]).toMatchObject({ ItemID: 'ITEM-1', Weight: 0.9 });
     });
 
-    it('clamps a score outside 0-1 rather than storing it', async () => {
-        classifyImpl = async () => ({ Tags: [{ Name: 'odd', Score: 4 }] });
-        await new TagStage().Run(item('some text'), contextWith({ ClassifierKey: 'test-classifier' }));
-        expect(savedTags[0].Weight).toBe(1);
+    it('records the prompt run and the reasoning on a new tag, as the autotagger does', async () => {
+        classifyImpl = async () => classified([keyword('finance', 0.9, { Reasoning: 'central topic' })], { PromptRunID: 'run-1' });
+        await new TagStage().Run(item('some text'), contextWith());
+        expect(savedTags[0]).toMatchObject({ AIPromptRunID: 'run-1', Reasoning: 'central topic' });
     });
 
     it('saves nothing on a test run, which commits nothing by definition', async () => {
-        classifyImpl = async () => ({ Tags: [{ Name: 'finance' }] });
-        const context = { ...contextWith({ ClassifierKey: 'test-classifier' }), IsTest: true };
+        classifyImpl = async () => classified([keyword('finance')]);
+        const context = { ...contextWith(), IsTest: true };
         const outcome = await new TagStage().Run(item('some text'), context);
         expect(outcome.Status).toBe('Complete');
         expect(savedTags).toHaveLength(0);
     });
 
-    it('records which classifier ran', async () => {
-        const record = item('some text');
-        await new TagStage().Run(record, contextWith({ ClassifierKey: 'test-classifier' }));
-        expect(record.GetExtension<string>('Tag', 'classifierKey')).toBe('test-classifier');
+    it('keeps the existing tags when the model concludes nothing', async () => {
+        classifyImpl = async () => classified([], { IsValidContent: false });
+        const outcome = await new TagStage().Run(item('some text'), contextWith());
+        expect(outcome.Status).toBe('Skipped');
+        expect(outcome.Message).toContain('existing tags kept');
+        expect(savedTags).toHaveLength(0);
     });
 
     it('passes the title through as a signal', async () => {
         let sawTitle: string | null = 'unset';
-        classifyImpl = async (r) => {
-            sawTitle = r.Title;
-            return { Tags: [] };
+        classifyImpl = async (_text, title) => {
+            sawTitle = title;
+            return classified([]);
         };
         const record = item('some text');
         record.Propose('Title', 'Quarterly results', 6, 'Extract');
-        await new TagStage().Run(record, contextWith({ ClassifierKey: 'test-classifier' }));
+        await new TagStage().Run(record, contextWith());
         expect(sawTitle).toBe('Quarterly results');
     });
 
     it('writes tags to the EXTENSION space, not a well-known field', async () => {
-        classifyImpl = async () => ({ Tags: [{ Name: 'finance' }] });
+        classifyImpl = async () => classified([keyword('finance')]);
         const record = item('some text');
-        await new TagStage().Run(record, contextWith({ ClassifierKey: 'test-classifier' }));
+        await new TagStage().Run(record, contextWith());
         // Nothing durable is proposed: what a deployment does with tags is its own business.
         expect(record.ChangedFields).toEqual(['Text']);
     });
 
     it('skips a record with no text', async () => {
-        const outcome = await new TagStage().Run(item(null), contextWith({ ClassifierKey: 'test-classifier' }));
+        const outcome = await new TagStage().Run(item(null), contextWith());
         expect(outcome.Status).toBe('Skipped');
     });
 
-    it('falls back to the managed autotagging classifier when none is configured', async () => {
-        // A Tag stage that refuses to run until told which classifier to use is a stage nobody turns
-        // on. With no ClassifierKey it reaches for MJ's managed prompt — which here is unregistered
-        // in the test process, so it fails naming THAT rather than complaining about configuration.
-        // It reaches for MJ's managed prompt and genuinely tries to run it — which fails here only
-        // because the test provider is a stub. The point is which classifier it chose.
-        await expect(new TagStage().Run(item('text'), contextWith())).rejects.toThrow(
-            /Classifying with 'ContentAutotagging'/,
-        );
+    it('stays fatal when the classifier says so — a source with no content type will not grow one', async () => {
+        classifyImpl = async () => {
+            throw new FatalStageError('no tag bounds');
+        };
+        await expect(new TagStage().Run(item('text'), contextWith())).rejects.toBeInstanceOf(FatalStageError);
     });
 
-    it('is fatal when the configured classifier is not registered', async () => {
-        await expect(
-            new TagStage().Run(item('text'), contextWith({ ClassifierKey: 'nope' })),
-        ).rejects.toThrow(/is not registered/);
-    });
-
-    it('treats a classifier throwing as transient — it usually reached a model or service', async () => {
+    it('treats any other classifier failure as transient — it usually reached a model or service', async () => {
         classifyImpl = async () => {
             throw new Error('503 from the model');
         };
-        await expect(
-            new TagStage().Run(item('text'), contextWith({ ClassifierKey: 'test-classifier' })),
-        ).rejects.toThrow(/Classifying with/);
+        await expect(new TagStage().Run(item('text'), contextWith())).rejects.toThrow(/Classifying failed: 503/);
     });
 });
 

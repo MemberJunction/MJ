@@ -22,112 +22,37 @@ extractor('cascade-any', ['*']);
 
 describe('SelectExtractor — rung precedence', () => {
     it('takes an explicit override first', () => {
-        const selected = SelectExtractor({
-            FileType: 'pdf',
-            ExtractorKeyOverride: 'cascade-pdf',
-            SourceExtractorKey: 'cascade-any',
-        });
-        expect(selected).toMatchObject({ Key: 'cascade-pdf', From: 'Override' });
+        expect(SelectExtractor({ FileType: 'pdf', ExtractorKeyOverride: 'cascade-pdf', SourceExtractorKey: 'cascade-any' })?.Key).toBe('cascade-pdf');
     });
 
-    it('takes the highest-priority source candidate that supports the file type', () => {
-        const selected = SelectExtractor({
-            FileType: 'pdf',
-            SourceCandidates: [
-                { ExtractorKey: 'cascade-any', Priority: 1 },
-                { ExtractorKey: 'cascade-pdf', Priority: 10 },
-            ],
-        });
-        expect(selected).toMatchObject({ Key: 'cascade-pdf', From: 'SourceCandidate' });
+    it('takes the source before the content type', () => {
+        expect(SelectExtractor({ FileType: 'html', SourceExtractorKey: 'cascade-any', ContentTypeExtractorKey: 'cascade-html' })?.Key).toBe('cascade-any');
     });
 
-    it('falls to the source default when no candidate applies', () => {
-        const selected = SelectExtractor({
-            FileType: 'html',
-            SourceCandidates: [{ ExtractorKey: 'cascade-pdf', Priority: 10 }],
-            SourceExtractorKey: 'cascade-html',
-        });
-        expect(selected).toMatchObject({ Key: 'cascade-html', From: 'Source' });
+    it('takes the content type before the file type', () => {
+        expect(SelectExtractor({ FileType: 'pdf', ContentTypeExtractorKey: 'cascade-any', FileTypeExtractorKey: 'cascade-pdf' })?.Key).toBe('cascade-any');
     });
 
-    it('falls to the content-type default', () => {
-        const selected = SelectExtractor({ FileType: 'html', ContentTypeExtractorKey: 'cascade-html' });
-        expect(selected).toMatchObject({ From: 'ContentType' });
+    it("takes the file type's extractor from metadata when nothing else is set", () => {
+        expect(SelectExtractor({ FileType: 'csv', FileTypeExtractorKey: 'cascade-sheet' })?.Key).toBe('cascade-sheet');
     });
 
-    it('falls to the built-in last rung', () => {
-        const selected = SelectExtractor({ FileType: 'whatever', FallbackExtractorKey: 'cascade-any' });
-        expect(selected).toMatchObject({ From: 'Fallback' });
-    });
-
-    it('returns null when nothing applies anywhere', () => {
-        expect(SelectExtractor({ FileType: 'pdf', ByCapability: false })).toBeNull();
-        expect(SelectExtractor({ FileType: 'no-extractor-reads-this' })).toBeNull();
+    it('returns null when no rung applies, leaving Extract to its plain-text fallback', () => {
+        expect(SelectExtractor({ FileType: 'pdf' })).toBeNull();
     });
 });
 
-describe('SelectExtractor — metadata and capability rungs', () => {
-    it("takes the file type's extractor from metadata before looking for one by capability", () => {
-        const selected = SelectExtractor({ FileType: 'csv', FileTypeExtractorKey: 'cascade-sheet' });
-        expect(selected).toMatchObject({ Key: 'cascade-sheet', From: 'FileType' });
-    });
-
-    it('finds an extractor that NAMES the file type when nothing is configured — a PDF reads out of the box', () => {
-        expect(SelectExtractor({ FileType: 'pdf' })).toMatchObject({ Key: 'cascade-pdf', From: 'Capability' });
-    });
-
-    it('never picks a wildcard extractor by capability, which would claim every format', () => {
-        // 'cascade-any' sorts ahead of 'cascade-sheet' and claims '*'.
-        expect(SelectExtractor({ FileType: 'xlsx' })).toMatchObject({ Key: 'cascade-sheet' });
-    });
-
-    it('still prefers the content type over capability', () => {
-        const selected = SelectExtractor({ FileType: 'pdf', ContentTypeExtractorKey: 'cascade-any' });
-        expect(selected).toMatchObject({ Key: 'cascade-any', From: 'ContentType' });
-    });
-});
-
-describe('SelectExtractor — non-applicable candidates fall through', () => {
-    it('skips an OVERRIDE that does not support the file type', () => {
-        // The key behaviour: a rung that cannot handle this content is not applicable, and falls
-        // through exactly as an unset rung does — rather than being selected and then failing.
-        const selected = SelectExtractor({
-            FileType: 'html',
-            ExtractorKeyOverride: 'cascade-pdf',
-            SourceExtractorKey: 'cascade-html',
-        });
-        expect(selected).toMatchObject({ Key: 'cascade-html', From: 'Source' });
-    });
-
-    it('skips a higher-priority candidate that does not support the file type', () => {
-        // A source holding both PDFs and spreadsheets escalates its PDFs without that extractor
-        // having to handle anything else.
-        const selected = SelectExtractor({
-            FileType: 'xlsx',
-            SourceCandidates: [
-                { ExtractorKey: 'cascade-pdf', Priority: 100 },
-                { ExtractorKey: 'cascade-sheet', Priority: 1 },
-            ],
-        });
-        expect(selected).toMatchObject({ Key: 'cascade-sheet', From: 'SourceCandidate' });
+describe('SelectExtractor — non-applicable rungs fall through', () => {
+    it('skips an override that does not support the file type', () => {
+        expect(SelectExtractor({ FileType: 'html', ExtractorKeyOverride: 'cascade-pdf', SourceExtractorKey: 'cascade-html' })?.Key).toBe('cascade-html');
     });
 
     it('skips a source default that does not support the file type', () => {
-        const selected = SelectExtractor({
-            FileType: 'html',
-            SourceExtractorKey: 'cascade-pdf',
-            ContentTypeExtractorKey: 'cascade-html',
-        });
-        expect(selected).toMatchObject({ From: 'ContentType' });
+        expect(SelectExtractor({ FileType: 'html', SourceExtractorKey: 'cascade-pdf', ContentTypeExtractorKey: 'cascade-html' })?.Key).toBe('cascade-html');
     });
 
     it('skips a key nothing registered', () => {
-        const selected = SelectExtractor({
-            FileType: 'pdf',
-            ExtractorKeyOverride: 'never-registered',
-            SourceExtractorKey: 'cascade-pdf',
-        });
-        expect(selected).toMatchObject({ From: 'Source' });
+        expect(SelectExtractor({ FileType: 'pdf', ExtractorKeyOverride: 'never-registered', SourceExtractorKey: 'cascade-pdf' })?.Key).toBe('cascade-pdf');
     });
 
     it('matches file type case-insensitively', () => {

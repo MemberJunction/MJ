@@ -78,7 +78,11 @@ describe('ArchiveExtractor', () => {
     it('FAILS on bytes that are not an archive, rather than reporting an empty one as read', async () => {
         await expect(
             new ArchiveExtractor().Extract({ ...request(), Tuning: TUNING, Content: new TextEncoder().encode('not an archive') }),
-        ).rejects.toThrow(/not a zip, tar or gzip/);
+        ).rejects.toThrow();
+    });
+
+    it('refuses a file type it does not unpack', async () => {
+        await expect(new ArchiveExtractor().Extract({ ...request(), Tuning: TUNING, FileType: 'tar' })).rejects.toThrow(/not an archive format/);
     });
 
     it('declares the archive formats it handles, and not others', () => {
@@ -178,30 +182,8 @@ describe('HtmlExtractor', () => {
 });
 
 describe('real archive formats', () => {
-    const extract = (content: Uint8Array, parameters: Record<string, string> = {}, url = 'https://x.test/bundle') =>
-        new ArchiveExtractor().Extract({ ...request(), Tuning: TUNING, Content: content, Parameters: parameters, URL: url });
-
-    /** A minimal ustar archive. */
-    function tar(entries: { name: string; body: string }[]): Uint8Array {
-        const blocks: Uint8Array[] = [];
-        for (const entry of entries) {
-            const body = new TextEncoder().encode(entry.body);
-            const header = new Uint8Array(512);
-            header.set(new TextEncoder().encode(entry.name), 0);
-            header.set(new TextEncoder().encode(body.length.toString(8).padStart(11, '0')), 124);
-            header[156] = 0x30;
-            header.set(new TextEncoder().encode('ustar'), 257);
-            blocks.push(header, body, new Uint8Array((512 - (body.length % 512)) % 512));
-        }
-        blocks.push(new Uint8Array(1024));
-        const out = new Uint8Array(blocks.reduce((n, b) => n + b.length, 0));
-        let offset = 0;
-        for (const block of blocks) {
-            out.set(block, offset);
-            offset += block.length;
-        }
-        return out;
-    }
+    const extract = (content: Uint8Array, parameters: Record<string, string> = {}, url = 'https://x.test/bundle', fileType = 'zip') =>
+        new ArchiveExtractor().Extract({ ...request(), Tuning: TUNING, Content: content, Parameters: parameters, URL: url, FileType: fileType });
 
     it('unzips every file and skips directories', async () => {
         const zip = new JSZip();
@@ -213,17 +195,8 @@ describe('real archive formats', () => {
         expect(result.Blocks.find((b) => b.Key === 'b.html')?.FileType).toBe('html');
     });
 
-    it('reads a tar, and a gzipped tar', async () => {
-        const bytes = tar([{ name: 'one.txt', body: 'first' }, { name: 'two.md', body: '# second' }]);
-        for (const content of [bytes, new Uint8Array(gzipSync(bytes))]) {
-            const result = await extract(content);
-            expect(result.Blocks.map((b) => b.Key)).toEqual(['one.txt', 'two.md']);
-            expect(new TextDecoder().decode(result.Blocks[1].Content)).toBe('# second');
-        }
-    });
-
     it('treats a plain gzip as the one file it compresses, named from the archive', async () => {
-        const result = await extract(new Uint8Array(gzipSync('a,b\n1,2')), {}, 'https://x.test/report.csv.gz');
+        const result = await extract(new Uint8Array(gzipSync('a,b\n1,2')), {}, 'https://x.test/report.csv.gz', 'gz');
         expect(result.Blocks).toHaveLength(1);
         expect(result.Blocks[0].Key).toBe('report.csv');
         expect(result.Blocks[0].FileType).toBe('csv');
@@ -261,5 +234,46 @@ describe('real archive formats', () => {
         await expect(
             extract(await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' }), { MaxArchiveBytes: '1000' }),
         ).rejects.toThrow(/limit/);
+    });
+
+    it('shares ArchiveBudget across nested archives so inner archives cannot bypass MaxArchiveMembers or MaxArchiveBytes', async () => {
+        const zipA = new JSZip();
+        zipA.file('one.txt', 'alpha');
+        zipA.file('two.txt', 'beta');
+        const zipB = new JSZip();
+        zipB.file('three.txt', 'gamma');
+        zipB.file('four.txt', 'delta');
+
+        const budget = { RemainingMembers: 3, RemainingBytes: 1000, CurrentDepth: 1, MaxDepth: 3 };
+        await new ArchiveExtractor().Extract({
+            ...request(),
+            Tuning: TUNING,
+            ArchiveBudget: budget,
+            Content: await zipA.generateAsync({ type: 'uint8array' }),
+        });
+        expect(budget.RemainingMembers).toBe(1);
+
+        await expect(
+            new ArchiveExtractor().Extract({
+                ...request(),
+                Tuning: TUNING,
+                ArchiveBudget: budget,
+                Content: await zipB.generateAsync({ type: 'uint8array' }),
+            }),
+        ).rejects.toThrow(/over the limit of 1/);
+    });
+
+    it('enforces MaxArchiveDepth when CurrentDepth exceeds MaxDepth', async () => {
+        const zip = new JSZip();
+        zip.file('deep.txt', 'hello');
+        const budget = { RemainingMembers: 100, RemainingBytes: 10000, CurrentDepth: 4, MaxDepth: 3 };
+        await expect(
+            new ArchiveExtractor().Extract({
+                ...request(),
+                Tuning: TUNING,
+                ArchiveBudget: budget,
+                Content: await zip.generateAsync({ type: 'uint8array' }),
+            }),
+        ).rejects.toThrow(/Options\.Tuning\.MaxArchiveDepth/);
     });
 });

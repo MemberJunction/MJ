@@ -52,14 +52,14 @@ const storage = {
 
 function build(config: Partial<PipelineProcessorConfig> = {}): PipelineProcessor {
     return new PipelineProcessor(
-        { Stages: ['ProcTestStage'], IsTest: false, Scope: 'Filter', Configuration: {}, ...config },
+        { Stages: ['ProcTestStage'], IsTest: false, Configuration: {}, ...config },
         storage,
     );
 }
 
 const rsContext = { contextUser: {}, provider: {} } as never;
-function ref(hints?: Record<string, unknown>) {
-    return { EntityID: 'E1', RecordID: 'ID-1', ...(hints ? { Hints: hints } : {}) } as never;
+function ref() {
+    return { EntityID: 'E1', RecordID: 'ID-1' } as never;
 }
 
 beforeEach(() => {
@@ -124,47 +124,28 @@ describe('PipelineProcessor failure finality', () => {
         expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Failed', false);
     });
 
-    it('commits Failed for a transient failure in FILTER scope, which never retries', async () => {
+    it('commits Failed for a transient failure — a Record Set Processing run does not retry', async () => {
         behaviour = async () => Outcome.Retry('timeout');
-        await build({ Scope: 'Filter' }).ProcessRecord(ref(), rsContext);
+        const result = await build().ProcessRecord(ref(), rsContext);
         expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Failed', false);
+        expect((result.ResultPayload as { IsTransient: boolean }).IsTransient).toBe(true);
     });
 
-    it('leaves the status alone for a transient failure before the last queue attempt', async () => {
-        behaviour = async () => Outcome.Retry('timeout');
-        await build({ Scope: 'Queue' }).ProcessRecord(ref({ Attempt: 2, MaxAttempts: 5 }), rsContext);
-        expect(commit).not.toHaveBeenCalled();
-    });
-
-    it('commits Failed on the LAST queue attempt, so a dead-lettered record stops looking ready', async () => {
-        behaviour = async () => Outcome.Retry('timeout');
-        await build({ Scope: 'Queue' }).ProcessRecord(ref({ Attempt: 5, MaxAttempts: 5 }), rsContext);
-        expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Failed', false);
-    });
-
-    it('treats a thrown TransientStageError as retryable', async () => {
-        behaviour = async () => {
-            throw new TransientStageError('socket hang up');
-        };
-        await build({ Scope: 'Queue' }).ProcessRecord(ref({ Attempt: 1, MaxAttempts: 3 }), rsContext);
-        expect(commit).not.toHaveBeenCalled();
-    });
-
-    it('treats a thrown FatalStageError as final', async () => {
-        behaviour = async () => {
-            throw new FatalStageError('malformed');
-        };
-        await build({ Scope: 'Queue' }).ProcessRecord(ref({ Attempt: 1, MaxAttempts: 3 }), rsContext);
-        expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Failed', false);
-    });
-
-    it('treats a bare Error as fatal rather than retrying on a guess', async () => {
-        behaviour = async () => {
-            throw new Error('who knows');
-        };
-        const result = await build({ Scope: 'Queue' }).ProcessRecord(ref({ Attempt: 1, MaxAttempts: 3 }), rsContext);
-        expect(result.Status).toBe('Failed');
-        expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Failed', false);
+    it('classifies thrown stage errors: transient, fatal, and a bare Error as fatal', async () => {
+        for (const [error, transient] of [
+            [new TransientStageError('socket hang up'), true],
+            [new FatalStageError('malformed'), false],
+            [new Error('who knows'), false],
+        ] as const) {
+            commit.mockClear();
+            behaviour = async () => {
+                throw error;
+            };
+            const result = await build().ProcessRecord(ref(), rsContext);
+            expect(result.Status).toBe('Failed');
+            expect((result.ResultPayload as { IsTransient: boolean }).IsTransient).toBe(transient);
+            expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Failed', false);
+        }
     });
 });
 
@@ -187,20 +168,117 @@ describe('PipelineProcessor chained stages', () => {
     });
 });
 
-describe('PipelineProcessor cancellation', () => {
-    it('does not start a stage whose signal is already aborted', async () => {
-        const controller = new AbortController();
-        controller.abort();
-        let ran = false;
-        behaviour = async () => {
-            ran = true;
+@RegisterClass(BasePipelineStage, 'ProcTestSourceStage')
+class ProcTestSourceStage extends BasePipelineStage {
+    public readonly Name = 'ProcTestSourceStage';
+    public readonly Entity: WorkingRecordEntity = 'Content Source';
+    public readonly StatusField = null;
+    public async Run(record: WorkingRecord, context: StageContext): Promise<StageOutcome> {
+        return behaviour(record, context);
+    }
+}
+
+describe('PipelineProcessor Sync mode reconciliation and safeguards', () => {
+    const commitChild = vi.fn(async () => ({ RecordID: 'C-1', ColumnsWritten: [], Created: false }));
+    const syncStorage = {
+        Hydrator: () =>
+            ({
+                Hydrate: async () => new WorkingRecord(new WorkingRecordIdentity('Content Source', 'https://x.test', 'SRC-1')),
+            }) as unknown as WorkingRecordHydrator,
+        Committer: () => ({ Commit: commit, CommitChild: commitChild }) as unknown as WorkingRecordCommitter,
+    };
+
+    function syncContext(liveRows: { ID: string; URL: string; __mj_CreatedAt?: Date }[], markedIDs: string[]) {
+        return {
+            contextUser: {},
+            provider: {
+                EntityByName: () => ({ ID: 'E-ITEM' }),
+                RunView: async () => ({ Success: true, Results: liveRows }),
+                GetEntityObject: async () => ({
+                    InnerLoad: async (ck: { KeyValuePairs: { Value: string }[] }) => {
+                        markedIDs.push(ck.KeyValuePairs[0].Value);
+                        return true;
+                    },
+                    Set: () => {},
+                    Save: async () => true,
+                }),
+            },
+        } as never;
+    }
+
+    it('fails the source on a zero-yield Sync walk when live items exist', async () => {
+        const marked: string[] = [];
+        behaviour = async (r) => {
+            r.SetExtension('Discover', 'walkStartedAt', new Date('2026-10-15T12:00:00Z'));
             return Outcome.Complete();
         };
-        await build({ Scope: 'Queue' }).ProcessRecord(
-            ref({ Signal: controller.signal, Attempt: 1, MaxAttempts: 3 }),
-            rsContext,
+        const proc = new PipelineProcessor(
+            { Stages: ['ProcTestSourceStage'], IsTest: false, Configuration: { Mode: 'Sync' } },
+            syncStorage,
         );
-        expect(ran).toBe(false);
-        expect(commit).not.toHaveBeenCalled();
+        const result = await proc.ProcessRecord(
+            ref(),
+            syncContext([{ ID: 'I1', URL: 'https://x.test/a', __mj_CreatedAt: new Date('2026-10-15T10:00:00Z') }], marked),
+        );
+        expect(result.Status).toBe('Failed');
+        expect(result.ErrorMessage).toMatch(/0 items/);
+        expect(marked).toEqual([]);
+    });
+
+    it('fails the source when a Sync walk would remove more than MaxSyncRemovalShare of live items', async () => {
+        const marked: string[] = [];
+        behaviour = async (r) => {
+            r.SetExtension('Discover', 'walkStartedAt', new Date('2026-10-15T12:00:00Z'));
+            r.AddChild(new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/a')));
+            return Outcome.Complete();
+        };
+        const proc = new PipelineProcessor(
+            { Stages: ['ProcTestSourceStage'], IsTest: false, Configuration: { Mode: 'Sync' } },
+            syncStorage,
+        );
+        // 1 of 3 yielded -> 2 of 3 (66.7%) missing > default 50% MaxSyncRemovalShare
+        const result = await proc.ProcessRecord(
+            ref(),
+            syncContext(
+                [
+                    { ID: 'I1', URL: 'https://x.test/a', __mj_CreatedAt: new Date('2026-10-15T10:00:00Z') },
+                    { ID: 'I2', URL: 'https://x.test/b', __mj_CreatedAt: new Date('2026-10-15T10:00:00Z') },
+                    { ID: 'I3', URL: 'https://x.test/c', __mj_CreatedAt: new Date('2026-10-15T10:00:00Z') },
+                ],
+                marked,
+            ),
+        );
+        expect(result.Status).toBe('Failed');
+        expect(result.ErrorMessage).toMatch(/MaxSyncRemovalShare/);
+        expect(marked).toEqual([]);
+    });
+
+    it('marks missing pre-walk items for deletion when within MaxSyncRemovalShare and spares items created after walkStartedAt', async () => {
+        const marked: string[] = [];
+        behaviour = async (r) => {
+            r.SetExtension('Discover', 'walkStartedAt', new Date('2026-10-15T12:00:00Z'));
+            r.AddChild(new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/a')));
+            r.AddChild(new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/b')));
+            return Outcome.Complete();
+        };
+        const proc = new PipelineProcessor(
+            { Stages: ['ProcTestSourceStage'], IsTest: false, Configuration: { Mode: 'Sync' } },
+            syncStorage,
+        );
+        // 2 of 3 pre-walk items yielded -> 1 of 3 (33.3%) missing <= 50%; I4 was created after walkStartedAt so spared.
+        const result = await proc.ProcessRecord(
+            ref(),
+            syncContext(
+                [
+                    { ID: 'I1', URL: 'https://x.test/a', __mj_CreatedAt: new Date('2026-10-15T10:00:00Z') },
+                    { ID: 'I2', URL: 'https://x.test/b', __mj_CreatedAt: new Date('2026-10-15T10:00:00Z') },
+                    { ID: 'I3', URL: 'https://x.test/c', __mj_CreatedAt: new Date('2026-10-15T10:00:00Z') },
+                    { ID: 'I4', URL: 'https://x.test/d', __mj_CreatedAt: new Date('2026-10-15T13:00:00Z') },
+                ],
+                marked,
+            ),
+        );
+        expect(result.Status).toBe('Succeeded');
+        expect(marked).toEqual(['I3']);
     });
 });

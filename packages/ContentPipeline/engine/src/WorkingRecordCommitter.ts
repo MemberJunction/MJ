@@ -1,17 +1,15 @@
 /**
- * @fileoverview {@link WorkingRecordCommitter} — writes a working record's changes back.
- *
- * The other of the two places the pipeline touches a database.
+ * @fileoverview {@link WorkingRecordCommitter} — writes a working record's changes back. With the hydrator,
+ * the only place the pipeline touches the database.
  *
  * @module @memberjunction/content-pipeline
  */
 
-import { BaseEntity, CompositeKey, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
-import { WellKnownField, WorkingRecord, WorkingRecordEntity } from '@memberjunction/content-pipeline-base';
-
-import { HasContentChanged } from './ChildReconciliation.js';
+import { BaseEntity, CompositeKey, IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { KnowledgeHubMetadataEngine, MJContentFileTypeEntity, MJContentSourceEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
+import { FieldConfidenceMap, PipelineStageRequest, WellKnownField, WorkingRecord } from '@memberjunction/content-pipeline-base';
 import { GetEntityFieldMap, GetEntityName, GetStatusFields } from './EntityFieldMap.js';
-import { LookupResolver, UnresolvedLookupPolicy } from './LookupResolver.js';
 import { WhereEqual } from './Filters.js';
 
 /** Columns a child record inherits from whatever produced it. */
@@ -19,88 +17,101 @@ export type ChildCommitDefaults = Readonly<Record<string, unknown>>;
 
 /** What a commit did, for the run's detail row. */
 export interface CommitResult {
-    /** The record's primary key after the commit. */
     RecordID: string;
-    /** The columns actually written. */
     ColumnsWritten: readonly string[];
     /** Whether a row was created rather than updated. */
     Created: boolean;
 }
 
 /**
- * Writes the well-known fields that actually changed back to the real entity, through the standard
- * save path, and advances the record's status for the stage that ran.
- *
- * **A commit is safe to repeat.** A worker whose claim expired can finish its work after another
- * worker has picked the same record up; the queue refuses the late settle, but a commit already
- * written still lands. Writing the same resolved fields and status twice leaves the record correct,
- * which is why nothing here depends on the record's prior state.
+ * Columns owned by the pipeline framework or mapped from well-known fields. A driver or extractor may
+ * not overwrite these through `DiscoveredItem.Columns` / `ExtractResult.Columns` / `ContentBlock.Columns`.
+ */
+const FRAMEWORK_OWNED_COLUMNS: ReadonlySet<string> = new Set([
+    'ID',
+    'ContentSourceID',
+    'ContentItemID',
+    'ParentID',
+    'URL',
+    'Checksum',
+    'FieldConfidence',
+    'ExtractionStatus',
+    'TaggingStatus',
+    'SegmentationStatus',
+    'EmbeddingStatus',
+    'DeleteStatus',
+    'LastExtractedAt',
+    'LastTaggedAt',
+    'LastSegmentedAt',
+    'LastEmbeddedAt',
+    'LastDiscoveredAt',
+    'LastSyncedAt',
+    'VectorRecordID',
+    'FileID',
+    'ExtractorKey',
+    'ExtractorKeyOverride',
+    'EmbeddingModelID',
+    'Sequence',
+    'ForceDiscovery',
+    'Name',
+    'Text',
+    'Date',
+    'Modality',
+    'Decorator',
+    'ContentTypeID',
+    'ContentSourceTypeID',
+    'ContentFileTypeID',
+]);
+
+const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/i;
+
+/**
+ * Writes the well-known fields that changed, plus the stage's status, through the standard save path.
+ * A commit is safe to repeat: nothing here depends on the record's prior state.
  */
 export class WorkingRecordCommitter {
-    private readonly lookups: LookupResolver;
-
     constructor(
         private readonly provider: IMetadataProvider,
         private readonly contextUser: UserInfo,
-        unresolvedLookupPolicy: UnresolvedLookupPolicy = 'Skip',
-    ) {
-        this.lookups = new LookupResolver(provider, contextUser, unresolvedLookupPolicy);
-    }
+    ) {}
 
     /**
-     * Write a working record's changes.
-     *
-     * @param record The record to commit.
-     * @param statusField The status column for the stage that just ran.
-     * @param status What to set it to.
+     * Write a working record's changes and set `statusField` to `status`. Columns a stage set directly
+     * (`Pipeline.columns`) are always written; `Pipeline.completionColumns` only when the stage succeeded.
      */
-    public async Commit(
-        record: WorkingRecord,
-        statusField: string | null,
-        status: string,
-        succeeded = true,
-    ): Promise<CommitResult> {
+    public async Commit(record: WorkingRecord, statusField: string | null, status: string, succeeded = true): Promise<CommitResult> {
         const entityObject = await this.load(record);
         const created = !record.Identity.IsPersisted;
-        const { written, unresolved } = await this.applyChangedFields(record, entityObject);
-        // Columns a stage set directly rather than proposed — a durable copy's FileID, a checksum
-        // computed from the text that was just read. Nothing competes for these on confidence, and
-        // without this they were silently dropped on every parent commit.
+        const storedChecksum = this.readString(entityObject, 'Checksum');
+        const { written, unresolved, changedNonTextFields } = await this.applyChangedFields(record, entityObject);
+        const customWritten = this.applyCustomColumns(record, entityObject);
+        written.push(...customWritten);
         written.push(...this.applyColumns(record, entityObject));
         if (succeeded) {
-            // Columns that assert the stage finished — Discover clearing its one-shot. Written only
-            // on success, so a failure leaves the record still due rather than looking done.
             written.push(...this.applyColumns(record, entityObject, 'completionColumns'));
         }
-
-        if (statusField) {
-            entityObject.Set(statusField, status);
+        const resetConfidence = await this.reconcileExtractedContent(
+            record,
+            entityObject,
+            statusField,
+            status,
+            storedChecksum,
+            changedNonTextFields.length > 0 || customWritten.length > 0,
+            written,
+        );
+        if (statusField && this.hasField(entityObject, statusField)) {
+            this.writeColumn(entityObject, statusField, status);
             written.push(statusField);
         }
-
-        this.applyConfidence(record, entityObject, written, false, unresolved);
+        this.applyConfidence(record, entityObject, written, resetConfidence, unresolved);
         this.applyCompletionSignal(record, entityObject, statusField, written);
-
-        if (!(await entityObject.Save())) {
-            throw new Error(
-                `Failed to commit ${GetEntityName(record.Entity)} '${record.Identity.Key}': ` +
-                    this.describeFailure(entityObject),
-            );
-        }
-
-        const recordID = entityObject.Get('ID') as string;
-        record.Identity.RecordID = recordID;
-        record.ClearChanged();
-        return { RecordID: recordID, ColumnsWritten: written, Created: created };
+        return this.save(record, entityObject, written, created);
     }
 
     /**
-     * Commit a record produced by working on another one — Discover's found items, a splitting
-     * extractor's blocks.
-     *
-     * Differs from {@link Commit} only in what it links: a child carries whatever columns tie it to
-     * the record that produced it — a discovered item its source, an expanded item its parent item,
-     * a chunk its item.
+     * Commit a record another one produced (a discovered item, an archive member, a chunk). Re-runs
+     * produce the same records again, so a child is matched to its existing row by URL; an unchanged
+     * existing child is a no-op, and a changed one resets every downstream stage.
      */
     public async CommitChild(
         child: WorkingRecord,
@@ -108,124 +119,335 @@ export class WorkingRecordCommitter {
         statusField: string,
         status: string,
     ): Promise<CommitResult> {
-        // Re-discovery and re-extraction produce the same records again. Matching by URL is what
-        // turns that into an update rather than a duplicate — and what lets an unchanged record be
-        // a genuine no-op instead of a fresh row with a new identity, new chunks and new vectors.
         await this.matchExisting(child, parentDefaults);
         const created = !child.Identity.IsPersisted;
         const entityObject = await this.load(child);
+        const wasPendingDelete = !created && this.readColumn(entityObject, 'DeleteStatus') === 'Pending';
+        const storedDateBefore = this.readColumn(entityObject, 'Date');
+        const storedConfidence = created || wasPendingDelete ? {} : this.parseConfidence(this.readString(entityObject, 'FieldConfidence'));
         if (created) {
-            const defaults = {
-                ...parentDefaults,
-                ...(await this.inheritedColumns(child, parentDefaults)),
-                // Columns only the producing stage knows — a chunk's Sequence, say.
-                ...(child.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
-            };
-            for (const [column, value] of Object.entries(defaults)) {
-                if (value !== undefined && value !== null && entityObject.Fields.some((f) => f.Name === column)) {
-                    entityObject.Set(column, value);
-                }
+            await this.seedCreatedChild(child, entityObject, parentDefaults);
+        }
+        const { written, unresolved } = await this.applyChangedFields(child, entityObject, storedConfidence);
+        written.push(...this.applyCustomColumns(child, entityObject));
+        if (wasPendingDelete) {
+            this.writeColumn(entityObject, 'DeleteStatus', null);
+            written.push('DeleteStatus');
+        }
+        return this.finalizeChildCommit(
+            child,
+            entityObject,
+            statusField,
+            status,
+            created,
+            wasPendingDelete,
+            storedDateBefore,
+            written,
+            unresolved,
+            storedConfidence,
+        );
+    }
+
+    private async seedCreatedChild(child: WorkingRecord, entityObject: BaseEntity, parentDefaults: ChildCommitDefaults): Promise<void> {
+        this.applyValues(entityObject, {
+            ...parentDefaults,
+            ...(await this.inheritedColumns(child, parentDefaults)),
+            ...(child.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
+        });
+        const extractedHash = child.GetExtension<string>('Pipeline', 'checksum');
+        if (extractedHash && !child.GetExtension<Record<string, unknown>>('Pipeline', 'columns')?.Checksum) {
+            this.applyValues(entityObject, { Checksum: extractedHash });
+        }
+    }
+
+    /** Reconcile status transitions and downstream resets for a child record before saving. */
+    private async finalizeChildCommit(
+        child: WorkingRecord,
+        entityObject: BaseEntity,
+        statusField: string,
+        status: string,
+        created: boolean,
+        wasPendingDelete: boolean,
+        storedDateBefore: unknown,
+        written: string[],
+        unresolved: ReadonlySet<WellKnownField>,
+        storedConfidence: FieldConfidenceMap,
+    ): Promise<CommitResult> {
+        const request = child.GetExtension<PipelineStageRequest>('Pipeline', 'request');
+        if (created) {
+            this.writeColumn(entityObject, statusField, status);
+            written.push(statusField);
+            if (request === 'MetadataChanged' && this.hasField(entityObject, 'EmbeddingStatus')) {
+                this.writeColumn(entityObject, 'EmbeddingStatus', 'MetadataOnly');
+                written.push('EmbeddingStatus');
             }
+            this.applyConfidence(child, entityObject, written, false, unresolved);
+            this.applyCompletionSignal(child, entityObject, statusField, written);
+            return this.save(child, entityObject, written, true);
         }
-        const { written, unresolved } = await this.applyChangedFields(child, entityObject);
-
-        // An existing record whose content is unchanged is a no-op: re-running every downstream
-        // stage over identical content would burn a model call and a vector write to arrive at
-        // what is already stored.
-        const changed = this.contentChanged(child, entityObject);
-        if (!changed && !created) {
-            return { RecordID: entityObject.Get('ID') as string, ColumnsWritten: [], Created: false };
-        }
-        entityObject.Set(statusField, status);
-        written.push(statusField);
-        const rediscovered = changed && !created;
-        if (rediscovered) {
-            // Content moved on, so every downstream stage has to redo its work. Reset is flat, and
-            // reaches each stage's own status field directly.
-            written.push(...this.resetDownstream(child, entityObject, statusField));
-            // And record what it moved on TO. The producing stage's columns — the checksum above all
-            // — were applied only when the row was created, so a changed item kept its old checksum
-            // and looked changed again on every later walk.
-            written.push(...this.applyColumns(child, entityObject));
-        }
-        this.applyConfidence(child, entityObject, written, rediscovered, unresolved);
-        this.applyCompletionSignal(child, entityObject, statusField, written);
-
-        if (!(await entityObject.Save())) {
-            throw new Error(
-                `Failed to commit child ${GetEntityName(child.Entity)} '${child.Identity.Key}': ` +
-                    this.describeFailure(entityObject),
+        if (!this.hasContentSignal(child)) {
+            return this.commitDiscoveredExistingChild(
+                child,
+                entityObject,
+                statusField,
+                status,
+                wasPendingDelete,
+                storedDateBefore,
+                request,
+                written,
+                unresolved,
+                storedConfidence,
             );
         }
-        const recordID = entityObject.Get('ID') as string;
-        child.Identity.RecordID = recordID;
-        child.ClearChanged();
-        // `created` was decided before the write, by whether matchExisting found a row. Reporting a
-        // constant true made every re-discovery look like a brand-new item to anything counting.
+        return this.commitContentBearingExistingChild(
+            child,
+            entityObject,
+            statusField,
+            status,
+            wasPendingDelete,
+            request,
+            written,
+            unresolved,
+            storedConfidence,
+        );
+    }
+
+    /** Commit an existing child yielded by Discover without inline text or checksum. */
+    private async commitDiscoveredExistingChild(
+        child: WorkingRecord,
+        entityObject: BaseEntity,
+        statusField: string,
+        status: string,
+        wasPendingDelete: boolean,
+        storedDateBefore: unknown,
+        request: PipelineStageRequest | undefined,
+        written: string[],
+        unresolved: ReadonlySet<WellKnownField>,
+        storedConfidence: FieldConfidenceMap,
+    ): Promise<CommitResult> {
+        if (wasPendingDelete || request === 'Reprocess') {
+            return this.resetAndSaveDiscoveredChild(child, entityObject, statusField, status, wasPendingDelete, written, unresolved);
+        }
+        if (request === 'MetadataChanged') {
+            await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+            this.applyConfidence(child, entityObject, written, false, unresolved, storedConfidence);
+            return this.save(child, entityObject, written, false);
+        }
+        const isSyncWalk = child.GetExtension<boolean>('Pipeline', 'syncWalk') === true;
+        const dateChanged = child.ChangedFields.includes('Date') && !this.datesEqual(storedDateBefore, child.Get('Date'));
+        const currentStatus = this.readColumn(entityObject, statusField);
+        if (isSyncWalk && request !== 'Reextract' && (currentStatus === 'Complete' || currentStatus === 'Skipped')) {
+            if (written.length > 0) {
+                await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+            }
+            if (dateChanged) {
+                this.writeColumn(entityObject, statusField, status);
+                written.push(statusField);
+            } else if (written.length === 0) {
+                return { RecordID: this.readColumn(entityObject, 'ID') as string, ColumnsWritten: [], Created: false };
+            }
+            this.applyConfidence(child, entityObject, written, false, unresolved, storedConfidence);
+            return this.save(child, entityObject, written, false);
+        }
+        if (written.length > 0) {
+            await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+        }
+        this.writeColumn(entityObject, statusField, status);
+        written.push(statusField);
+        this.applyConfidence(child, entityObject, written, false, unresolved, storedConfidence);
+        this.applyCompletionSignal(child, entityObject, statusField, written);
+        return this.save(child, entityObject, written, false);
+    }
+
+    private async resetAndSaveDiscoveredChild(
+        child: WorkingRecord,
+        entityObject: BaseEntity,
+        statusField: string,
+        status: string,
+        clearChecksum: boolean,
+        written: string[],
+        unresolved: ReadonlySet<WellKnownField>,
+    ): Promise<CommitResult> {
+        if (clearChecksum && this.hasField(entityObject, 'Checksum') && this.readColumn(entityObject, 'Checksum') != null) {
+            this.writeColumn(entityObject, 'Checksum', null);
+            written.push('Checksum');
+        }
+        this.writeColumn(entityObject, statusField, status);
+        written.push(statusField, ...this.resetDownstream(child, entityObject, statusField));
+        this.applyConfidence(child, entityObject, written, true, unresolved);
+        this.applyCompletionSignal(child, entityObject, statusField, written);
+        return this.save(child, entityObject, written, false);
+    }
+
+    /** Commit an existing child that carries inline checksum or text (e.g. Entity driver, archive member). */
+    private async commitContentBearingExistingChild(
+        child: WorkingRecord,
+        entityObject: BaseEntity,
+        statusField: string,
+        status: string,
+        wasPendingDelete: boolean,
+        request: PipelineStageRequest | undefined,
+        written: string[],
+        unresolved: ReadonlySet<WellKnownField>,
+        storedConfidence: FieldConfidenceMap,
+    ): Promise<CommitResult> {
+        const changed = this.contentChanged(child, entityObject);
+        const forceReprocess = request === 'Reprocess';
+        if (!changed && !forceReprocess && !wasPendingDelete && request !== 'Reextract') {
+            if (written.length === 0 && request !== 'MetadataChanged') {
+                return { RecordID: this.readColumn(entityObject, 'ID') as string, ColumnsWritten: [], Created: false };
+            }
+            await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+            this.applyConfidence(child, entityObject, written, false, unresolved, storedConfidence);
+            return this.save(child, entityObject, written, false);
+        }
+        this.writeColumn(entityObject, statusField, status);
+        written.push(statusField);
+        const resetAll = changed || forceReprocess || wasPendingDelete;
+        if (resetAll) {
+            written.push(...this.resetDownstream(child, entityObject, statusField));
+            written.push(...this.applyColumns(child, entityObject));
+            const extractedHash = child.GetExtension<string>('Pipeline', 'checksum');
+            if (extractedHash && !child.GetExtension<Record<string, unknown>>('Pipeline', 'columns')?.Checksum) {
+                written.push(...this.applyValues(entityObject, { Checksum: extractedHash }));
+            }
+        }
+        this.applyConfidence(child, entityObject, written, resetAll, unresolved, storedConfidence);
+        this.applyCompletionSignal(child, entityObject, statusField, written);
+        return this.save(child, entityObject, written, false);
+    }
+
+    /**
+     * Compare the SHA-256 checksum produced by Extract against `ContentItem.Checksum`.
+     * Same hash leaves `TaggingStatus`/`SegmentationStatus` untouched (and promotes `EmbeddingStatus` to
+     * `MetadataOnly` when metadata changed); a changed hash writes `Checksum` and resets downstream stages.
+     */
+    private async reconcileExtractedContent(
+        record: WorkingRecord,
+        entityObject: BaseEntity,
+        statusField: string | null,
+        status: string,
+        storedChecksum: string | null,
+        metadataChanged: boolean,
+        written: string[],
+    ): Promise<boolean> {
+        const request = record.GetExtension<PipelineStageRequest>('Pipeline', 'request');
+        if (record.Entity !== 'Content Item' || statusField !== 'ExtractionStatus' || status !== 'Complete') {
+            if (request === 'MetadataChanged') {
+                await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+            }
+            return false;
+        }
+        const extractedChecksum = record.GetExtension<string>('Pipeline', 'checksum');
+        if (!extractedChecksum) {
+            return false;
+        }
+        const driverOwnsChecksum = storedChecksum !== null && !SHA256_HEX_PATTERN.test(storedChecksum);
+        if (!storedChecksum) {
+            written.push(...this.applyValues(entityObject, { Checksum: extractedChecksum }));
+            if (request === 'Reprocess') {
+                written.push(...this.resetDownstream(record, entityObject, statusField));
+                return true;
+            }
+            if (request === 'MetadataChanged') {
+                await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+            }
+            return false;
+        }
+        if ((driverOwnsChecksum || extractedChecksum === storedChecksum) && request !== 'Reprocess') {
+            if (metadataChanged || request === 'MetadataChanged') {
+                await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+            }
+            return false;
+        }
+        if (!driverOwnsChecksum) {
+            written.push(...this.applyValues(entityObject, { Checksum: extractedChecksum }));
+        }
+        written.push(...this.resetDownstream(record, entityObject, statusField));
+        return true;
+    }
+
+    /** Set `EmbeddingStatus = 'MetadataOnly'` on the item and any live embedded chunks when metadata changed. */
+    private async promoteEmbeddingToMetadataOnly(entityObject: BaseEntity, written: string[]): Promise<void> {
+        if (this.hasField(entityObject, 'EmbeddingStatus') && this.readColumn(entityObject, 'EmbeddingStatus') === 'Complete') {
+            this.writeColumn(entityObject, 'EmbeddingStatus', 'MetadataOnly');
+            written.push('EmbeddingStatus');
+        }
+        const itemID = this.hasField(entityObject, 'ExtractionStatus') ? this.readString(entityObject, 'ID') : null;
+        if (!itemID || typeof (this.provider as { RunView?: unknown })?.RunView !== 'function') {
+            return;
+        }
+        const chunks = await RunView.FromMetadataProvider(this.provider).RunView<BaseEntity>(
+            {
+                EntityName: 'MJ: Content Item Chunks',
+                ExtraFilter: WhereEqual({ ContentItemID: itemID, EmbeddingStatus: 'Complete', DeleteStatus: null }),
+                ResultType: 'entity_object',
+            },
+            this.contextUser,
+        );
+        if (!chunks.Success) {
+            LogError(`WorkingRecordCommitter: could not query chunks of '${itemID}' for MetadataOnly promotion: ${chunks.ErrorMessage}`);
+            return;
+        }
+        for (const chunk of chunks.Results) {
+            this.writeColumn(chunk, 'EmbeddingStatus', 'MetadataOnly');
+            if (!(await chunk.Save())) {
+                LogError(`WorkingRecordCommitter: could not mark chunk of '${itemID}' MetadataOnly: ${chunk.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        }
+    }
+
+    private async save(record: WorkingRecord, entityObject: BaseEntity, written: string[], created: boolean): Promise<CommitResult> {
+        const existingID = this.readString(entityObject, 'ID');
+        if (!created && written.length === 0 && existingID) {
+            record.ClearChanged();
+            return { RecordID: existingID, ColumnsWritten: [], Created: false };
+        }
+        if (!(await entityObject.Save())) {
+            throw new Error(`Failed to commit ${GetEntityName(record.Entity)} '${record.Identity.Key}': ${this.describeFailure(entityObject)}`);
+        }
+        const recordID = this.readColumn(entityObject, 'ID') as string;
+        record.Identity.RecordID = recordID;
+        record.ClearChanged();
         return { RecordID: recordID, ColumnsWritten: written, Created: created };
     }
 
+    /** True when the child carries inline content or a checksum to compare against stored values. */
+    private hasContentSignal(child: WorkingRecord): boolean {
+        const columnChecksum = child.GetExtension<Record<string, unknown>>('Pipeline', 'columns')?.Checksum;
+        const pipelineChecksum = child.GetExtension<string>('Pipeline', 'checksum');
+        const text = child.Get('Text');
+        return (
+            (typeof columnChecksum === 'string' && columnChecksum.length > 0) ||
+            (typeof pipelineChecksum === 'string' && pipelineChecksum.length > 0) ||
+            (typeof text === 'string' && text.length > 0)
+        );
+    }
+
     /**
-     * Whether a produced record's content differs from what is stored.
-     *
-     * The checksum is the change signal. Discover can compute one from a source listing without
-     * fetching anything, which is what makes an unchanged re-walk cheap: same checksum, no work.
-     *
-     * Comparing text instead — as this did — gets re-discovery backwards. Discover produces no
-     * text, so every re-walk looked "changed" and reset every item through the whole pipeline.
-     * Text remains the fallback for records produced by a stage that has text but no checksum,
-     * such as the blocks an archive expands into.
+     * Whether a produced record's content differs from what is stored. The checksum is the signal (Discover
+     * or Extract computes one); text is the fallback for records produced with text but no checksum.
+     * Neither means nothing says the content moved.
      */
     private contentChanged(child: WorkingRecord, entityObject: BaseEntity): boolean {
-        const proposedChecksum = this.proposedChecksum(child);
-        if (proposedChecksum !== null) {
-            const stored = entityObject.Get('Checksum');
-            // The shared helper, so the committer and the reconciler cannot drift on what
-            // "unchanged" means — it was written for this and never called.
-            return HasContentChanged(typeof stored === 'string' ? stored : null, proposedChecksum);
+        const checksum =
+            (child.GetExtension<Record<string, unknown>>('Pipeline', 'columns')?.Checksum as string | undefined) ??
+            child.GetExtension<string>('Pipeline', 'checksum');
+        if (typeof checksum === 'string' && checksum.length > 0) {
+            return this.readColumn(entityObject, 'Checksum') !== checksum;
         }
-        const proposedText = child.Get('Text');
-        if (typeof proposedText !== 'string' || proposedText.length === 0) {
-            // Neither a checksum nor text: nothing here says the content moved. Calling that
-            // "changed" reprocessed every such item on every walk — a crawl reports that a page
-            // exists, not what it holds. A source that can detect change supplies a checksum.
-            return false;
-        }
-        return entityObject.Get('Text') !== proposedText;
+        const text = child.Get('Text');
+        return typeof text === 'string' && text.length > 0 && this.readColumn(entityObject, 'Text') !== text;
     }
 
-    /** The checksum the producing stage computed, if it computed one. */
-    private proposedChecksum(child: WorkingRecord): string | null {
-        const columns = child.GetExtension<Record<string, unknown>>('Pipeline', 'columns');
-        const value = columns?.Checksum;
-        return typeof value === 'string' && value.length > 0 ? value : null;
-    }
-
-    /**
-     * Put every stage after this one back to `Pending`.
-     *
-     * Flat, not propagated: nothing guarantees each intermediate stage runs, and resetting a field
-     * nobody acts on is harmless while relying on a stage that never runs leaves the record stuck.
-     */
+    /** Put every later stage back to Pending — flat, so it never relies on an intermediate stage running. */
     private resetDownstream(child: WorkingRecord, entityObject: BaseEntity, statusField: string): string[] {
         const fields = GetStatusFields(child.Entity);
-        const from = fields.indexOf(statusField);
-        const written: string[] = [];
-        for (const field of fields.slice(from + 1)) {
-            if (entityObject.Fields.some((f) => f.Name === field)) {
-                entityObject.Set(field, 'Pending');
-                written.push(field);
-            }
-        }
-        return written;
+        const later = fields.slice(fields.indexOf(statusField) + 1);
+        return this.applyValues(entityObject, Object.fromEntries(later.map((f) => [f, 'Pending'])));
     }
 
-    /**
-     * Say what actually went wrong.
-     *
-     * `LatestResult.Message` is frequently empty while `Errors` holds the per-field validation
-     * failures, so reporting only the former turns every validation failure into 'unknown error'.
-     */
+    /** `LatestResult.Message` is often empty while `Errors` holds the per-field failures. */
     private describeFailure(entityObject: BaseEntity): string {
         const result = entityObject.LatestResult;
         const errors = (result?.Errors ?? [])
@@ -235,181 +457,229 @@ export class WorkingRecordCommitter {
     }
 
     /**
-     * Point a produced record at the row it already has, if it has one.
-     *
-     * Matching is by URL, used as an effectively unique identifier for a source-and-location
-     * combination even where it is not a literal URL. The hard requirement this places on whatever
-     * produced the record is that the identifier is **stable across re-runs** — an identifier
-     * derived from a timestamp or an array position makes every re-run look like a full churn.
+     * Point a produced Content Item at its existing row: first live (`DeleteStatus IS NULL`), then pending
+     * deletion (`DeleteStatus = 'Pending'`, so an item returning before Delete runs is revived rather than
+     * duplicated). A row with `DeleteStatus = 'Deleted'` is a tombstone and is never matched.
      */
     private async matchExisting(child: WorkingRecord, parentDefaults: ChildCommitDefaults): Promise<void> {
-        if (child.Identity.IsPersisted || !child.Identity.EphemeralID) {
-            return;
-        }
-        const filter = this.matchFilter(child, parentDefaults);
+        const filter = child.Identity.IsPersisted ? null : this.matchFilter(child, parentDefaults);
         if (!filter) {
             return;
         }
-        const rv = RunView.FromMetadataProvider(this.provider);
-        const result = await rv.RunView<{ ID: string }>(
-            { EntityName: GetEntityName(child.Entity), ExtraFilter: filter, OrderBy: '__mj_CreatedAt', MaxRows: 1 },
-            this.contextUser,
-        );
-        if (result.Success && result.Results.length > 0) {
-            child.Identity.RecordID = result.Results[0].ID;
+        const liveID = await this.findMatchingID(child.Entity, filter);
+        if (liveID) {
+            child.Identity.RecordID = liveID;
+            return;
+        }
+        const pendingFilter = this.pendingDeleteMatchFilter(child, parentDefaults);
+        if (pendingFilter) {
+            const pendingID = await this.findMatchingID(child.Entity, pendingFilter);
+            if (pendingID) {
+                child.Identity.RecordID = pendingID;
+            }
         }
     }
 
-    /**
-     * How a produced record is recognized as one that already exists.
-     *
-     * - A **Content Item** is identified by its URL within its source. A URL from one source must
-     *   never match a record from another, hence the scope. Only a live row matches: a URL that
-     *   comes back after its item was deleted gets a fresh row rather than binding to the tombstone
-     *   and staying deleted. Where a source holds several items under one URL — the older Entity
-     *   and LocalFS autotaggers did — the oldest is matched, deterministically; such a source is not
-     *   really a candidate for change detection, and its rows still get in.
-     * - A **Content Item Chunk** never matches. Re-segmenting mints new chunks and the processor
-     *   retires the old set, so a chunk's identity always means the same text.
-     */
-    private matchFilter(child: WorkingRecord, parentDefaults: ChildCommitDefaults): string | null {
-        if (child.Entity === 'Content Item Chunk') {
-            return null;
+    private async findMatchingID(entity: WorkingRecord['Entity'], extraFilter: string): Promise<string | null> {
+        const result = await RunView.FromMetadataProvider(this.provider).RunView<{ ID: string }>(
+            {
+                EntityName: GetEntityName(entity),
+                ExtraFilter: extraFilter,
+                OrderBy: '__mj_CreatedAt',
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            },
+            this.contextUser,
+        );
+        if (!result.Success) {
+            throw new Error(`Failed to match existing ${GetEntityName(entity)}: ${result.ErrorMessage}`);
         }
+        return result.Results[0]?.ID ?? null;
+    }
+
+    private matchFilter(child: WorkingRecord, parentDefaults: ChildCommitDefaults): string | null {
         const sourceID = parentDefaults.ContentSourceID;
-        if (typeof sourceID !== 'string' || !child.Identity.EphemeralID) {
+        if (child.Entity === 'Content Item Chunk' || typeof sourceID !== 'string' || !child.Identity.EphemeralID) {
             return null;
         }
         return WhereEqual({ ContentSourceID: sourceID, URL: child.Identity.EphemeralID, DeleteStatus: null });
     }
 
+    private pendingDeleteMatchFilter(child: WorkingRecord, parentDefaults: ChildCommitDefaults): string | null {
+        const sourceID = parentDefaults.ContentSourceID;
+        if (child.Entity === 'Content Item Chunk' || typeof sourceID !== 'string' || !child.Identity.EphemeralID) {
+            return null;
+        }
+        return WhereEqual({ ContentSourceID: sourceID, URL: child.Identity.EphemeralID, DeleteStatus: 'Pending' });
+    }
+
+    private applyColumns(record: WorkingRecord, entityObject: BaseEntity, extension: 'columns' | 'completionColumns' = 'columns'): string[] {
+        return this.applyValues(entityObject, record.GetExtension<Record<string, unknown>>('Pipeline', extension) ?? {});
+    }
+
     /**
-     * Write the columns a stage set directly.
-     *
-     * Only columns the entity actually has are written, so a stage can set something meaningful for
-     * one entity without breaking a pipeline that runs it over another.
+     * Validate and write custom columns from `Pipeline.customColumns`. Rejects framework-owned columns
+     * and unknown fields; returns only the columns whose stored value actually changed.
      */
-    private applyColumns(
-        record: WorkingRecord,
-        entityObject: BaseEntity,
-        extension: 'columns' | 'completionColumns' = 'columns',
-    ): string[] {
-        const columns = record.GetExtension<Record<string, unknown>>('Pipeline', extension);
-        if (!columns) {
+    private applyCustomColumns(record: WorkingRecord, entityObject: BaseEntity): string[] {
+        const custom = record.GetExtension<Record<string, unknown>>('Pipeline', 'customColumns');
+        if (!custom) {
             return [];
         }
         const written: string[] = [];
-        for (const [column, value] of Object.entries(columns)) {
-            if (value === undefined || value === null) {
-                continue;
+        for (const [column, value] of Object.entries(custom)) {
+            if (FRAMEWORK_OWNED_COLUMNS.has(column) || column.startsWith('__mj_')) {
+                throw new Error(
+                    `Column '${column}' on ${GetEntityName(record.Entity)} is owned by the pipeline framework and cannot be set via Columns`,
+                );
             }
-            if (entityObject.Fields.some((f) => f.Name === column)) {
-                entityObject.Set(column, value);
+            if (entityObject.Fields.length > 0 && !this.hasField(entityObject, column)) {
+                throw new Error(`Column '${column}' does not exist on ${GetEntityName(record.Entity)}`);
+            }
+            const previous = this.readColumn(entityObject, column);
+            const changed = value instanceof Date ? !this.datesEqual(previous, value) : previous !== value;
+            if (value !== undefined && changed) {
+                this.writeColumn(entityObject, column, value);
                 written.push(column);
             }
         }
         return written;
     }
 
-    /** Load the existing row, or start a new one for a record Discover has only just produced. */
+    /** Set each non-null value whose column this entity has; returns the columns written. */
+    private applyValues(entityObject: BaseEntity, values: Record<string, unknown>): string[] {
+        const written: string[] = [];
+        for (const [column, value] of Object.entries(values)) {
+            if (value !== undefined && value !== null && this.hasField(entityObject, column)) {
+                this.writeColumn(entityObject, column, value);
+                written.push(column);
+            }
+        }
+        return written;
+    }
+
+    /** Load the existing row, or start a new one for a record that has only just been produced. */
     private async load(record: WorkingRecord): Promise<BaseEntity> {
-        const entityObject = await this.provider.GetEntityObject<BaseEntity>(
-            GetEntityName(record.Entity),
-            this.contextUser,
-        );
-        if (record.Identity.IsPersisted) {
-            const recordID = record.Identity.RecordID as string;
-            if (!(await entityObject.InnerLoad(CompositeKey.FromID(recordID)))) { // first-pk-ok: MJ core content entity, single-column ID
-                throw new Error(
-                    `${GetEntityName(record.Entity)} record '${record.Identity.RecordID}' vanished before commit`,
-                );
+        const entityObject = await this.provider.GetEntityObject<BaseEntity>(GetEntityName(record.Entity), this.contextUser);
+        if (record.Identity.RecordID) {
+            if (!(await entityObject.InnerLoad(CompositeKey.FromID(record.Identity.RecordID)))) { // first-pk-ok: MJ core content entity, single-column ID
+                throw new Error(`${GetEntityName(record.Entity)} record '${record.Identity.RecordID}' vanished before commit`);
             }
         } else {
             entityObject.NewRecord();
-            if (record.Identity.EphemeralID && entityObject.Fields.some((f) => f.Name === 'URL')) {
-                entityObject.Set('URL', record.Identity.EphemeralID);
-            }
+            this.applyValues(entityObject, { URL: record.Identity.EphemeralID || null });
         }
         return entityObject;
     }
 
-    /**
-     * Columns a new child must carry that only its parent knows.
-     *
-     * A Content Item is required to name a content type, a source type and a file type, and the
-     * sensible default for all three is whatever its Content Source says — a stage producing items
-     * has no opinion about them and should not be made to invent one.
-     */
-    private async inheritedColumns(
-        child: WorkingRecord,
-        parentDefaults: ChildCommitDefaults,
-    ): Promise<Record<string, unknown>> {
+    /** A new Content Item takes its content type, source type and file type from its source. */
+    private async inheritedColumns(child: WorkingRecord, parentDefaults: ChildCommitDefaults): Promise<Record<string, unknown>> {
         const contentSourceID = parentDefaults.ContentSourceID;
         if (child.Entity !== 'Content Item' || typeof contentSourceID !== 'string') {
             return {};
         }
-        const source = await this.provider.GetEntityObject<BaseEntity>(
-            GetEntityName('Content Source'),
-            this.contextUser,
-        );
-        if (!(await source.InnerLoad(CompositeKey.FromID(contentSourceID)))) { // first-pk-ok: MJ core content entity, single-column ID
-            throw new Error(`Content Source '${contentSourceID}' could not be loaded to seed its items`);
-        }
+        const source = await this.contentSource(contentSourceID);
         return {
-            ContentTypeID: source.Get('ContentTypeID'),
-            ContentSourceTypeID: source.Get('ContentSourceTypeID'),
-            ContentFileTypeID: source.Get('ContentFileTypeID'),
+            ContentTypeID: source.ContentTypeID,
+            ContentSourceTypeID: source.ContentSourceTypeID,
+            ContentFileTypeID: source.ContentFileTypeID,
         };
     }
 
+    private async contentSource(contentSourceID: string): Promise<MJContentSourceEntity> {
+        const engine = KnowledgeHubMetadataEngine.Instance;
+        await engine.Config(false, this.contextUser, this.provider);
+        let source = engine.GetContentSourceByID(contentSourceID);
+        if (!source) {
+            await engine.Config(true, this.contextUser, this.provider);
+            source = engine.GetContentSourceByID(contentSourceID);
+        }
+        if (!source) {
+            throw new Error(`Content Source '${contentSourceID}' could not be loaded to seed its items`);
+        }
+        return source;
+    }
+
     /**
-     * Write only the well-known fields whose values changed, through the declared column map.
-     *
-     * @returns The columns written, and the fields whose lookup matched no row — those were NOT
-     *   written, so their confidence must not be recorded either (see {@link applyConfidence}).
+     * Write the changed well-known fields through the column map. Returns the columns written, any
+     * non-Text columns whose stored value changed, and the lookup fields whose name matched no row.
      */
     private async applyChangedFields(
         record: WorkingRecord,
         entityObject: BaseEntity,
-    ): Promise<{ written: string[]; unresolved: Set<WellKnownField> }> {
+        storedConfidence: FieldConfidenceMap = {},
+    ): Promise<{ written: string[]; unresolved: Set<WellKnownField>; changedNonTextFields: string[] }> {
         const map = GetEntityFieldMap(record.Entity);
         const written: string[] = [];
+        const changedNonTextFields: string[] = [];
         const unresolved = new Set<WellKnownField>();
         for (const field of record.ChangedFields) {
             const mapping = map[field];
-            if (!mapping) {
-                // The field has no column on this entity. Not an error: a stage may legitimately
-                // propose a field that only persists on a different entity.
+            const priorConfidence = storedConfidence[field];
+            if (!mapping || (priorConfidence && priorConfidence.Score > record.GetConfidence(field))) {
+                continue; // no column on this entity, or an existing higher-confidence stage already owns the field
+            }
+            const value = mapping.Kind === 'Lookup' ? await this.lookupID(mapping.LookupEntity, String(record.Get(field) ?? '')) : record.Get(field);
+            if (mapping.Kind === 'Lookup' && !value) {
+                unresolved.add(field);
                 continue;
             }
-            if (mapping.Kind === 'Lookup') {
-                // The working record carries a name; the column wants a foreign key. Resolve it,
-                // under whatever policy the deployment set for a name that matches nothing.
-                const id = await this.lookups.Resolve(
-                    mapping.LookupEntity ?? '',
-                    String(record.Get(field) ?? ''),
-                );
-                if (id) {
-                    entityObject.Set(mapping.Column, id);
-                    written.push(mapping.Column);
-                } else {
-                    unresolved.add(field);
+            const previous = this.readColumn(entityObject, mapping.Column);
+            const valueChanged =
+                mapping.Kind === 'Date'
+                    ? !this.datesEqual(previous, value)
+                    : mapping.Kind === 'Lookup' && typeof previous === 'string' && typeof value === 'string'
+                      ? !UUIDsEqual(previous, value)
+                      : previous !== value;
+            this.writeColumn(entityObject, mapping.Column, value);
+            if (valueChanged) {
+                written.push(mapping.Column);
+                if (field !== 'Text') {
+                    changedNonTextFields.push(mapping.Column);
                 }
-                continue;
             }
-            entityObject.Set(mapping.Column, record.Get(field));
-            written.push(mapping.Column);
         }
-        return { written, unresolved };
+        return { written, unresolved, changedNonTextFields };
+    }
+
+    /** A Content Type / Content File Type name or extension → its id (case-insensitive), refreshing once on cache miss. */
+    private async lookupID(entityName: string | undefined, name: string): Promise<string | null> {
+        const key = name.trim().toLowerCase();
+        if (!key) {
+            return null;
+        }
+        const engine = KnowledgeHubMetadataEngine.Instance;
+        await engine.Config(false, this.contextUser, this.provider);
+        let id = this.findLookupMatch(engine, entityName, key);
+        if (!id) {
+            await engine.Config(true, this.contextUser, this.provider);
+            id = this.findLookupMatch(engine, entityName, key);
+        }
+        if (!id) {
+            LogStatus(`WorkingRecordCommitter: no '${entityName}' row named '${name}'; leaving the column unset.`);
+        }
+        return id;
+    }
+
+    private findLookupMatch(engine: KnowledgeHubMetadataEngine, entityName: string | undefined, key: string): string | null {
+        if (entityName === 'MJ: Content Types') {
+            return engine.ContentTypes.find((r) => r.Name.trim().toLowerCase() === key)?.ID ?? null;
+        }
+        const bareKey = key.replace(/^\./, '');
+        const match = engine.ContentFileTypes.find((r: MJContentFileTypeEntity) => {
+            if (r.Name.trim().toLowerCase() === key || r.Name.trim().toLowerCase() === bareKey) {
+                return true;
+            }
+            const ext = r.FileExtension?.trim().replace(/^\./, '').toLowerCase();
+            return ext === bareKey;
+        });
+        return match?.ID ?? null;
     }
 
     /**
-     * Persist the provenance of every resolved field alongside the values.
-     *
-     * A field whose lookup matched nothing is left out. Its column still holds whatever it held — for
-     * a new item, the source's default — and recording the proposal's confidence against it would
-     * make that default read back as a confident declaration: an `.xlsx` on an "Other" source would
-     * then be routed as "Other" over its own extension.
+     * Persist each resolved field's provenance. Content that moved on clears it, so stages re-propose into an
+     * empty map rather than tying with — and losing to — their own stale result.
      */
     private applyConfidence(
         record: WorkingRecord,
@@ -417,47 +687,87 @@ export class WorkingRecordCommitter {
         written: string[],
         reset = false,
         unresolved: ReadonlySet<WellKnownField> = new Set(),
+        storedConfidence: FieldConfidenceMap = {},
     ): void {
-        if (!entityObject.Fields.some((f) => f.Name === 'FieldConfidence')) {
+        if (!this.hasField(entityObject, 'FieldConfidence')) {
             return;
         }
-        // Content that moved on invalidates every score earned against the old content. Clearing
-        // rather than merging is what lets the stages re-propose into an empty field map and win on
-        // their own merit — without it, a re-extraction ties with its own previous result at equal
-        // confidence, loses the tie, and the record is marked Complete holding stale text.
-        const confidence = record.ToFieldConfidence();
-        for (const field of unresolved) {
-            delete confidence[field];
+        if (reset) {
+            this.writeColumn(entityObject, 'FieldConfidence', null);
+            written.push('FieldConfidence');
+            return;
         }
-        entityObject.Set('FieldConfidence', reset ? null : JSON.stringify(confidence));
-        written.push('FieldConfidence');
+        const merged: FieldConfidenceMap = { ...storedConfidence };
+        for (const [field, entry] of Object.entries(record.ToFieldConfidence()) as [WellKnownField, NonNullable<FieldConfidenceMap[WellKnownField]>][]) {
+            if (unresolved.has(field)) {
+                continue;
+            }
+            const prior = merged[field];
+            if (!prior || entry.Score >= prior.Score) {
+                merged[field] = entry;
+            }
+        }
+        const serialized = JSON.stringify(merged);
+        if (this.readColumn(entityObject, 'FieldConfidence') !== serialized) {
+            this.writeColumn(entityObject, 'FieldConfidence', serialized);
+            written.push('FieldConfidence');
+        }
+    }
+
+    private parseConfidence(raw: string | null): FieldConfidenceMap {
+        if (!raw) {
+            return {};
+        }
+        try {
+            const parsed: unknown = JSON.parse(raw);
+            return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? (parsed as FieldConfidenceMap) : {};
+        } catch {
+            return {};
+        }
     }
 
     /**
-     * Honour the completion signal: set every downstream status so no later stage treats this
-     * record as ready.
-     *
-     * Only statuses still `Pending` are touched — a stage that genuinely ran and recorded `Failed`
-     * keeps that result, because the completion signal means "nothing further need happen", not
-     * "pretend everything succeeded".
+     * The completion signal: every other status still Pending becomes Skipped so no later stage picks the
+     * record up. A stage that ran and recorded Failed keeps that.
      */
-    private applyCompletionSignal(
-        record: WorkingRecord,
-        entityObject: BaseEntity,
-        statusField: string,
-        written: string[],
-    ): void {
+    private applyCompletionSignal(record: WorkingRecord, entityObject: BaseEntity, statusField: string | null, written: string[]): void {
         if (!record.IsComplete) {
             return;
         }
-        for (const field of GetStatusFields(record.Entity)) {
-            if (field === statusField || !entityObject.Fields.some((f) => f.Name === field)) {
-                continue;
+        const pending = GetStatusFields(record.Entity).filter(
+            (f) => f !== statusField && this.hasField(entityObject, f) && this.readColumn(entityObject, f) === 'Pending',
+        );
+        written.push(...this.applyValues(entityObject, Object.fromEntries(pending.map((f) => [f, 'Skipped']))));
+    }
+
+    private hasField(entityObject: BaseEntity, column: string): boolean {
+        return entityObject.Fields.some((f) => f.Name === column);
+    }
+
+    private readColumn(entityObject: BaseEntity, column: string): unknown {
+        return (entityObject as unknown as Record<string, unknown>)[column];
+    }
+
+    private readString(entityObject: BaseEntity, column: string): string | null {
+        const value = this.hasField(entityObject, column) ? this.readColumn(entityObject, column) : null;
+        return typeof value === 'string' && value.length > 0 ? value : null;
+    }
+
+    private writeColumn(entityObject: BaseEntity, column: string, value: unknown): void {
+        (entityObject as unknown as Record<string, unknown>)[column] = value;
+    }
+
+    private datesEqual(a: unknown, b: unknown): boolean {
+        const toMs = (v: unknown): number | null => {
+            if (v instanceof Date) return v.getTime();
+            if (typeof v === 'string' && v.length > 0) {
+                const n = new Date(v).getTime();
+                return Number.isNaN(n) ? null : n;
             }
-            if (entityObject.Get(field) === 'Pending') {
-                entityObject.Set(field, 'Skipped');
-                written.push(field);
-            }
-        }
+            return null;
+        };
+        const msA = toMs(a);
+        const msB = toMs(b);
+        return msA !== null && msB !== null && msA === msB;
     }
 }

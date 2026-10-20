@@ -14426,12 +14426,17 @@ export const MJContentSourceSchema = z.object({
         * * Display Name: Force Discovery
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Readiness is "schedule due OR ForceDiscovery", which is why there is no discovery status column to re-arm.`),
+        * * Description: Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Sources selected for a Discover run are always walked; ForceDiscovery guarantees selection for filters that key off it.`),
     LastDiscoveredAt: z.date().nullable().describe(`
         * * Field Name: LastDiscoveredAt
         * * Display Name: Last Discovered At
         * * SQL Data Type: datetimeoffset
         * * Description: When this source was last walked by the Discover stage.`),
+    LastSyncedAt: z.date().nullable().describe(`
+        * * Field Name: LastSyncedAt
+        * * Display Name: Last Synced At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this source last completed an exhaustive Sync discovery walk that reconciled removed items.`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type Name
@@ -14584,11 +14589,6 @@ export const MJContentTypeSchema = z.object({
         * * Display Name: Extractor Key
         * * SQL Data Type: nvarchar(100)
         * * Description: The default content extractor for items of this content type, beside SegmenterKey and CleanerKey. A per-type default has no home in a source's Configuration, and reading it from a run's Options would make it per-run.`),
-    StructuralSignature: z.string().nullable().describe(`
-        * * Field Name: StructuralSignature
-        * * Display Name: Structural Signature
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: How this content type is recognised from a document's own structure, as JSON: {"RootElements":["rss","feed"],"Namespaces":["http://www.w3.org/2005/Atom"]}. The matching is generic; what each type looks like is data.`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
         * * Display Name: AI Model Name
@@ -80554,7 +80554,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     * * Display Name: Force Discovery
     * * SQL Data Type: bit
     * * Default Value: 0
-    * * Description: Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Readiness is "schedule due OR ForceDiscovery", which is why there is no discovery status column to re-arm.
+    * * Description: Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Sources selected for a Discover run are always walked; ForceDiscovery guarantees selection for filters that key off it.
     */
     get ForceDiscovery(): boolean {
         return this.Get('ForceDiscovery');
@@ -80574,6 +80574,19 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
     set LastDiscoveredAt(value: Date | null) {
         this.Set('LastDiscoveredAt', value);
+    }
+
+    /**
+    * * Field Name: LastSyncedAt
+    * * Display Name: Last Synced At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this source last completed an exhaustive Sync discovery walk that reconciled removed items.
+    */
+    get LastSyncedAt(): Date | null {
+        return this.Get('LastSyncedAt');
+    }
+    set LastSyncedAt(value: Date | null) {
+        this.Set('LastSyncedAt', value);
     }
 
     /**
@@ -81128,19 +81141,6 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     }
     set ExtractorKey(value: string | null) {
         this.Set('ExtractorKey', value);
-    }
-
-    /**
-    * * Field Name: StructuralSignature
-    * * Display Name: Structural Signature
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: How this content type is recognised from a document's own structure, as JSON: {"RootElements":["rss","feed"],"Namespaces":["http://www.w3.org/2005/Atom"]}. The matching is generic; what each type looks like is data.
-    */
-    get StructuralSignature(): string | null {
-        return this.Get('StructuralSignature');
-    }
-    set StructuralSignature(value: string | null) {
-        this.Set('StructuralSignature', value);
     }
 
     /**

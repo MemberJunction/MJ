@@ -22,10 +22,6 @@ function contextWith(configuration: Record<string, unknown> = {}): StageContext 
         Provider: { EntityByName: () => undefined } as never,
         Configuration: configuration,
         IsTest: false,
-        Scope: 'Filter',
-        Attempt: 1,
-        MaxAttempts: 1,
-        IsReplay: false,
         Signal: new AbortController().signal,
         ReportProgress: () => {},
         Log: { Info: () => {}, Warning: () => {}, Error: () => {} },
@@ -84,7 +80,7 @@ describe('every other stage skips a pending-delete record', () => {
         const record = chunk();
         record.SetExtension('Pipeline', 'deleteStatus', 'Pending');
         const processor = new PipelineProcessor(
-            { Stages: ['NoOp'], IsTest: false, Scope: 'Filter', Configuration: {} },
+            { Stages: ['NoOp'], IsTest: false, Configuration: {} },
             storage(record),
         );
         const result = await processor.ProcessRecord(ref, rsContext);
@@ -95,7 +91,7 @@ describe('every other stage skips a pending-delete record', () => {
         const record = chunk();
         record.SetExtension('Pipeline', 'deleteStatus', 'Pending');
         const processor = new PipelineProcessor(
-            { Stages: ['Delete'], IsTest: false, Scope: 'Filter', Configuration: {} },
+            { Stages: ['Delete'], IsTest: false, Configuration: {} },
             storage(record),
         );
         const result = await processor.ProcessRecord(ref, rsContext);
@@ -104,7 +100,7 @@ describe('every other stage skips a pending-delete record', () => {
 
     it('runs normally for a record not marked', async () => {
         const processor = new PipelineProcessor(
-            { Stages: ['NoOp'], IsTest: false, Scope: 'Filter', Configuration: {} },
+            { Stages: ['NoOp'], IsTest: false, Configuration: {} },
             storage(chunk()),
         );
         const result = await processor.ProcessRecord(ref, rsContext);

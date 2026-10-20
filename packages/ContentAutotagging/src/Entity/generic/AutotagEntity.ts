@@ -1,12 +1,19 @@
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
 import { AutotagBase, AutotagProgressCallback } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
-import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError, EntityInfo, CompositeKey } from "@memberjunction/core";
+import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError, EntityInfo, CompositeKey, BaseEntity } from "@memberjunction/core";
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentItemTagEntity,
     MJEntityDocumentEntity, MJEntityRecordDocumentEntity,
-    MJTemplateEntityExtended, MJContentSourceEntity_IContentSourceConfiguration
+    MJTemplateEntityExtended, MJContentSourceEntity_IContentSourceConfiguration, KnowledgeHubMetadataEngine
 } from "@memberjunction/core-entities";
+import {
+    ConfidenceScale,
+    DiscoverRequest,
+    DiscoveredItem,
+    LocatorFetchRequest,
+    LocatorFetchResponse,
+} from "@memberjunction/content-pipeline-base";
 
 /**
  * Re-export the CodeGen-generated type for convenience within this file.
@@ -30,6 +37,8 @@ import { RunBudget } from "../../Engine/generic/RunBudget";
  */
 @RegisterClass(AutotagBase, 'AutotagEntity')
 export class AutotagEntity extends AutotagBase {
+    public override readonly SupportsExhaustiveWalk = true;
+
     private contextUser!: UserInfo;
     private engine!: AutotagBaseEngine;
     protected contentSourceTypeID!: string;
@@ -42,6 +51,8 @@ export class AutotagEntity extends AutotagBase {
     private sourceScopeContextMap = new Map<string, TagScopeContext | null>();
     /** Per-source budget tracker, keyed by normalized source ID */
     private sourceBudgetMap = new Map<string, RunBudget>();
+    /** Rows per page when the pipeline walks an entity. */
+    private static readonly DISCOVER_PAGE_SIZE = 500;
 
     public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[], provider?: IMetadataProvider): Promise<number> {
         if (provider) this._provider = provider;
@@ -393,18 +404,12 @@ export class AutotagEntity extends AutotagBase {
             return [];
         }
 
-        // Load the EntityDocument
-        const entityDocument = await this.loadEntityDocument(entityDocumentID);
-        if (!entityDocument) {
-            LogError(`AutotagEntity: EntityDocument ${entityDocumentID} not found for source "${contentSource.Name}"`);
+        const loaded = await this.loadTemplate(entityDocumentID, this.contextUser, this.ProviderToUse);
+        if (!loaded) {
+            LogError(`AutotagEntity: EntityDocument ${entityDocumentID} for source "${contentSource.Name}" is missing or has no template content`);
             return [];
         }
-
-        const templateText = await this.getTemplateText(entityDocument);
-        if (!templateText) {
-            LogError(`AutotagEntity: no template content found for EntityDocument "${entityDocument.Name}"`);
-            return [];
-        }
+        const { Document: entityDocument, TemplateText: templateText } = loaded;
 
         // Resolve the entity name from metadata
         const md = this.ProviderToUse;
@@ -486,41 +491,116 @@ export class AutotagEntity extends AutotagBase {
         return val('Name');
     }
 
-    /**
-     * Load an EntityDocument by ID using RunView.
-     */
-    private async loadEntityDocument(entityDocumentID: string): Promise<MJEntityDocumentEntity | null> {
-        const rv = new RunView();
-        const result = await rv.RunView<MJEntityDocumentEntity>({
-            EntityName: 'MJ: Entity Documents',
-            ExtraFilter: `ID='${entityDocumentID}'`,
-            ResultType: 'entity_object',
-            MaxRows: 1
-        }, this.contextUser);
-
-        if (result.Success && result.Results.length > 0) {
-            return result.Results[0];
+    /** An Entity Document and its template text, from the cached metadata; null when either is missing. */
+    private async loadTemplate(
+        entityDocumentID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<{ Document: MJEntityDocumentEntity; TemplateText: string } | null> {
+        await KnowledgeHubMetadataEngine.Instance.Config(false, contextUser, provider);
+        let document = KnowledgeHubMetadataEngine.Instance.GetEntityDocumentByID(entityDocumentID);
+        if (!document) {
+            await KnowledgeHubMetadataEngine.Instance.Config(true, contextUser, provider);
+            document = KnowledgeHubMetadataEngine.Instance.GetEntityDocumentByID(entityDocumentID);
         }
-        return null;
+        if (!document?.TemplateID) return null;
+        await TemplateEngineServer.Instance.Config(false, contextUser, provider);
+        const template = TemplateEngineServer.Instance.Templates.find(
+            (t: MJTemplateEntityExtended) => UUIDsEqual(t.ID, document.TemplateID)
+        );
+        const templateText = template?.Content[0]?.TemplateText;
+        return templateText ? { Document: document, TemplateText: templateText } : null;
     }
 
     /**
-     * Retrieves the template text from the EntityDocument's linked Template.
-     * Ensures TemplateEngineServer is configured before accessing Templates.
+     * Walk the source's entity for the pipeline, keyset-paged (or ordered `StartRow` for composite keys),
+     * filtering by `__mj_UpdatedAt > request.Since` when incremental discovery is requested and the entity
+     * has an `__mj_UpdatedAt` column.
      */
-    private async getTemplateText(entityDocument: MJEntityDocumentEntity): Promise<string | null> {
-        if (!entityDocument.TemplateID) return null;
-
-        // Ensure engine is loaded (no-op if already configured)
-        await TemplateEngineServer.Instance.Config(false, this.contextUser);
-
-        const template = TemplateEngineServer.Instance.Templates.find(
-            (t: MJTemplateEntityExtended) => UUIDsEqual(t.ID, entityDocument.TemplateID)
-        );
-        if (!template || template.Content.length === 0) {
-            return null;
+    public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
+        const { EntityInfo: entityInfo } = await this.pipelineTarget(request);
+        const rv = RunView.FromMetadataProvider(request.Provider);
+        // AfterKey needs a single-column key; a composite key falls back to StartRow with a deterministic OrderBy.
+        const keyset = entityInfo.PrimaryKeys.length === 1;
+        const orderBy = !keyset ? entityInfo.PrimaryKeys.map((pk) => `[${pk.Name}] ASC`).join(', ') : undefined;
+        const hasUpdatedAt = entityInfo.Fields.some((f) => f.Name === '__mj_UpdatedAt');
+        const extraFilter = request.Since && hasUpdatedAt ? `__mj_UpdatedAt > '${request.Since.toISOString()}'` : undefined;
+        let afterKey: CompositeKey | undefined;
+        for (let read = 0; ; ) {
+            const result = await rv.RunView<Record<string, unknown>>({
+                EntityName: entityInfo.Name,
+                ResultType: 'simple',
+                ...(extraFilter ? { ExtraFilter: extraFilter } : {}),
+                ...(keyset ? { AfterKey: afterKey } : { StartRow: read, OrderBy: orderBy }),
+                MaxRows: AutotagEntity.DISCOVER_PAGE_SIZE,
+            }, request.ContextUser);
+            if (!result.Success) {
+                throw new Error(`Could not read '${entityInfo.Name}': ${result.ErrorMessage ?? 'unknown error'}`);
+            }
+            for (const record of result.Results) {
+                if (request.Signal.aborted) return;
+                afterKey = CompositeKey.FromEntityRecord(entityInfo, record);
+                yield this.toDiscoveredItem(entityInfo, record, afterKey);
+            }
+            read += result.Results.length;
+            if (result.Results.length < AutotagEntity.DISCOVER_PAGE_SIZE) return;
+            request.ReportProgress(`read ${read} record(s)`);
         }
-        return template.Content[0].TemplateText;
+    }
+
+    /** One row as a discovered item, titled the way the autotagger names its Content Item. */
+    private toDiscoveredItem(entityInfo: EntityInfo, record: Record<string, unknown>, key: CompositeKey): DiscoveredItem {
+        const rawUpdatedAt = record.__mj_UpdatedAt;
+        const updatedAt = rawUpdatedAt instanceof Date
+            ? rawUpdatedAt
+            : typeof rawUpdatedAt === 'string' && rawUpdatedAt.length > 0
+              ? new Date(rawUpdatedAt)
+              : null;
+        const validDate = updatedAt && !Number.isNaN(updatedAt.getTime()) ? updatedAt : null;
+        const title = this.buildContentItemName(entityInfo, record);
+        return {
+            URL: key.ToCompactURLSegment(),
+            Fields: [
+                ...(title ? [{ Field: 'Title' as const, Value: title, Confidence: ConfidenceScale.DiscoveredTitle }] : []),
+                ...(validDate ? [{ Field: 'Date' as const, Value: validDate, Confidence: ConfidenceScale.DiscoveredDate }] : []),
+            ],
+        };
+    }
+
+    /** Render one record through the source's Entity Document — the same text the autotagger embeds. */
+    public async Fetch(request: LocatorFetchRequest): Promise<LocatorFetchResponse> {
+        const { EntityInfo: entityInfo, EntityDocumentID: documentID } = await this.pipelineTarget(request);
+        const loaded = documentID ? await this.loadTemplate(documentID, request.ContextUser, request.Provider) : null;
+        if (!loaded) {
+            throw new Error(`Entity Document '${documentID ?? ''}' is missing or has no template content`);
+        }
+        const record = await request.Provider.GetEntityObject<BaseEntity>(entityInfo.Name, request.ContextUser);
+        if (!(await record.InnerLoad(CompositeKey.FromURLSegment(entityInfo, request.URL)))) {
+            throw new Error(`${entityInfo.Name} record '${request.URL}' was not found`);
+        }
+        const text = await EntityDocumentTemplateParser.CreateInstance().Parse(
+            loaded.TemplateText, entityInfo.ID, record.GetAll(), request.ContextUser,
+        );
+        return { Content: new TextEncoder().encode(text ?? ''), ContentType: 'text/plain', ResolvedURL: `${request.URL}.txt` };
+    }
+
+    /** The source's entity and Entity Document: its type-specific settings, else its columns. */
+    private async pipelineTarget(request: DiscoverRequest | LocatorFetchRequest): Promise<{ EntityInfo: EntityInfo; EntityDocumentID: string | null }> {
+        await KnowledgeHubMetadataEngine.Instance.Config(false, request.ContextUser, request.Provider);
+        let source = KnowledgeHubMetadataEngine.Instance.GetContentSourceByID(request.ContentSourceID);
+        if (!source && (!request.Parameters.EntityID || !request.Parameters.EntityDocumentID)) {
+            await KnowledgeHubMetadataEngine.Instance.Config(true, request.ContextUser, request.Provider);
+            source = KnowledgeHubMetadataEngine.Instance.GetContentSourceByID(request.ContentSourceID);
+        }
+        const entityID = request.Parameters.EntityID || source?.EntityID;
+        if (!entityID) {
+            throw new Error('This Entity source names no entity. Set EntityID on the Content Source.');
+        }
+        const entityInfo = request.Provider.EntityByID(entityID);
+        if (!entityInfo) {
+            throw new Error(`Entity '${entityID}' is not in metadata`);
+        }
+        return { EntityInfo: entityInfo, EntityDocumentID: request.Parameters.EntityDocumentID || source?.EntityDocumentID || null };
     }
 
     /**

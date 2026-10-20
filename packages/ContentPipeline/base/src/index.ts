@@ -12,5 +12,3 @@ export * from './ConfidenceScale.js';
 export * from './PipelineTuning.js';
 export * from './discover/index.js';
 export * from './extract/index.js';
-export * from './tag/index.js';
-export * from './access/index.js';

@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-    ClassifyUnresolved,
-    IsPlausibleText,
-    ResolveFileType,
-} from '../extract/FileTypeResolution.js';
+import { IsPlausibleText, ResolveFileType } from '../extract/FileTypeResolution.js';
 
 describe('ResolveFileType — precedence', () => {
     it('treats a source declaration as authoritative', () => {
@@ -64,22 +60,6 @@ describe('ResolveFileType — precedence', () => {
 
     it('ignores a dotfile with no real extension', () => {
         expect(ResolveFileType({ FileName: '.gitignore' }).FileType).toBeNull();
-    });
-});
-
-describe('ClassifyUnresolved — the three-way fallback', () => {
-    it('routes a recognized non-text format to multi-modal, extractor or not', () => {
-        expect(ClassifyUnresolved('png')).toBe('MultiModal');
-        expect(ClassifyUnresolved('mp4')).toBe('MultiModal');
-    });
-
-    it('routes a recognized text format to its extractor', () => {
-        expect(ClassifyUnresolved('html')).toBe('TextExtractor');
-    });
-
-    it('routes anything unrecognized to the sanity-checked plain-text read', () => {
-        expect(ClassifyUnresolved('bizarre')).toBe('PlainTextFallback');
-        expect(ClassifyUnresolved(null)).toBe('PlainTextFallback');
     });
 });
 

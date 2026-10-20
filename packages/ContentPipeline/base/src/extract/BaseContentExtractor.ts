@@ -1,16 +1,26 @@
 /**
- * @fileoverview Content extractors — turning fetched bytes into text.
- *
- * A extractor is a driver class, registered by key and selected through a cascade. `ExtractorKey` names
- * one; `ExtractorKeyOverride` forces one.
+ * @fileoverview Content extractors: registered drivers that turn fetched bytes into text.
  *
  * @module @memberjunction/content-pipeline-base
  */
 
 import { MJGlobal } from '@memberjunction/global';
+import { PipelineStageRequest } from '../discover/SourceDriver.js';
 import { ResolvedPipelineTuning } from '../PipelineTuning.js';
 
-/** What the Extract stage has in hand when it asks a extractor to read. */
+/** Mutable tree-wide budget shared across a top-level archive and any nested archives unpacked inside it. */
+export interface ArchiveBudget {
+    /** Remaining members the archive tree may unpack. Decremented before each member is read. */
+    RemainingMembers: number;
+    /** Remaining uncompressed bytes the archive tree may unpack. Decremented as bytes are read. */
+    RemainingBytes: number;
+    /** Current archive nesting depth (1 for the top-level archive, incremented on each nested archive). */
+    CurrentDepth: number;
+    /** Maximum allowed nesting depth from `Tuning.MaxArchiveDepth`. */
+    MaxDepth: number;
+}
+
+/** What the Extract stage passes an extractor. */
 export interface ExtractRequest {
     /** The fetched bytes. */
     Content: Uint8Array;
@@ -20,87 +30,58 @@ export interface ExtractRequest {
     URL: string;
     /** The source's type-specific settings, already defaulted and validated. */
     Parameters: Readonly<Record<string, string>>;
-    /**
-     * The run's resolved tuning, from its Record Process's `Configuration.Tuning` — limits an
-     * extractor enforces, such as how far an archive may expand. Optional so an extractor called
-     * outside a run still works; an extractor that needs a limit and finds none must refuse.
-     */
+    /** The run's resolved tuning. An extractor that needs a limit and finds none must refuse. */
     Tuning?: ResolvedPipelineTuning;
-    /** Fires when the run is asked to stop. A extractor doing heavy work checks it. */
+    /** Shared tree-wide budget when unpacking an archive or a nested archive member. */
+    ArchiveBudget?: ArchiveBudget;
+    /** Fires when the run is asked to stop. */
     Signal: AbortSignal;
     /** Report progress during a long read. */
     ReportProgress(message: string): void;
 }
 
-/**
- * One semantically complete block of content a extractor produced.
- *
- * A extractor returning more than one block is how a single fetched artifact becomes several records —
- * an archive extractor unpacking a compressed file emits one block per member.
- */
+/** One block of extracted content. Several blocks (e.g. archive members) become several records. */
 export interface ContentBlock {
-    /**
-     * The block's text.
-     *
-     * Empty when the block is not text at all — see {@link Content}. A splitting extractor must not
-     * manufacture text it does not have: decoding arbitrary bytes as UTF-8 produces a string, but a
-     * string of mojibake, which then gets chunked, embedded and served as though it meant something.
-     */
+    /** The block's text. Empty for a non-text block (see {@link Content}); never decode arbitrary bytes into it. */
     Text: string;
-    /**
-     * The block's raw bytes, for a block that is not text.
-     *
-     * A extractor sets this instead of {@link Text} when it has unpacked something — a PDF or an image
-     * inside an archive — that needs its own extraction rather than a decode. The stage keeps the
-     * bytes and routes the block down the non-text path, the same one a non-text source record takes.
-     */
+    /** Raw bytes of a non-text block (e.g. a PDF inside an archive), which gets its own extraction. */
     Content?: Uint8Array;
-    /**
-     * A stable identity for this block within its parent, appended to the parent's URL to form the
-     * child's own. An archive member's path is the natural choice.
-     */
+    /** The block's identity within its parent (e.g. an archive member path), appended to the parent's URL. */
     Key?: string;
     /** A title the extractor could determine from the block's own structure. */
     Title?: string;
     /** How much the extractor trusts that title. Omitted means it has no opinion. */
     TitleConfidence?: number;
-    /**
-     * Force a specific extractor for this block, stamped by the extractor that produced it.
-     *
-     * This is how a splitting extractor routes one of its own children somewhere else — an archive
-     * extractor that knows a member is a spreadsheet does not make the cascade work it out again.
-     */
+    /** Forces an extractor for this block, set by the extractor that produced it. */
     ExtractorKeyOverride?: string;
     /** The block's file type, when a splitting extractor knows it differs from its parent's. */
     FileType?: string;
+    /** Extra or custom columns on `MJ: Content Items` for the child record this block produces. */
+    Columns?: Record<string, unknown>;
+    /** Explicit request for downstream pipeline work on the child record this block produces. */
+    Request?: PipelineStageRequest;
 }
 
-/** What a extractor returned. */
+/** What an extractor returned. */
 export interface ExtractResult {
-    /**
-     * The blocks read. One block is the ordinary case; several means this artifact becomes several
-     * records, linked to the one that produced them.
-     */
+    /** The blocks read. Several means this artifact becomes several linked records. */
     Blocks: ContentBlock[];
-    /**
-     * Whether the text is the result of a last-resort plain-text read rather than a extractor that
-     * understands the format. Recorded in provenance so a bad result can be traced to the fallback
-     * rather than blamed on a extractor that never ran.
-     */
+    /** True when the text came from the last-resort plain-text read. Recorded in provenance. */
     IsFallback?: boolean;
+    /** Extra or custom columns on `MJ: Content Items` for the item being extracted. */
+    Columns?: Record<string, unknown>;
+    /** Explicit request for downstream pipeline work on the item being extracted. */
+    Request?: PipelineStageRequest;
 }
 
 /**
- * A registered way of turning bytes into text.
- *
- * Selection is by what the content **is**, never by where it came from — a source type has no vote
- * in extractor choice, because the same source can hold several formats.
+ * A registered way of turning bytes into text, chosen by what the content is, never by its source type.
  *
  * @example
  * ```ts
- * @RegisterClass(BaseContentExtractor, 'pdf')
+ * @RegisterClass(BaseContentExtractor, 'Pdf')
  * export class PdfContentExtractor extends BaseContentExtractor {
- *     public readonly Key = 'pdf';
+ *     public readonly Key = 'Pdf';
  *     public readonly SupportedFileTypes = ['pdf'];
  *     public async Extract(request: ExtractRequest): Promise<ExtractResult> { ... }
  * }
@@ -110,13 +91,7 @@ export abstract class BaseContentExtractor {
     /** The registration key. Must match the key passed to `@RegisterClass`. */
     public abstract readonly Key: string;
 
-    /**
-     * The file types this extractor handles.
-     *
-     * A candidate that does not declare support for the resolved file type is treated as not
-     * applicable at every rung of the cascade, falling through exactly as an unset rung does. `'*'`
-     * declares support for anything, which only the built-in fallback should use.
-     */
+    /** The file types this extractor handles. `'*'` means any; only the built-in fallback should use it. */
     public abstract readonly SupportedFileTypes: readonly string[];
 
     /** Read the bytes. */

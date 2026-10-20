@@ -1,78 +1,39 @@
 /**
- * @fileoverview {@link PipelineProcessRunTracker} — opens a detail row when a record starts and
- * updates it in place, so a long-running record is visible while it is still running.
+ * @fileoverview {@link PipelineProcessRunTracker} — opens a Process Run Detail row when a record starts and
+ * updates it in place, so a long-running record is visible while it runs.
  *
- * **Why this is not a change to Record Set Processing.** `IProcessRunTracker` has no per-record
- * start hook — `GenericProcessRunTracker`'s own source says so ("Reliable/insert-before-fire mode is
- * a future enhancement — it needs a per-record start hook on `IProcessRunTracker`"). So the hook
- * lives on the pipeline side: {@link PipelineProcessor} calls {@link OpenDetail}, a method that
- * exists only on this class and not on the interface, before running any stage. When Record Set
- * Processing later calls the standard `RecordResult`, this tracker finalizes the already-open row
- * instead of inserting a new one — turning a single fire-and-forget insert into an open-then-update
- * pair.
- *
- * **This is the one seam the Work Queue replaces.** Once the queue exists, its delivery row *is*
- * live status and the detail row goes back to being written once, at the end. Swapping this tracker
- * out in the work type's registered tracker pairing is the whole change; no stage is affected.
+ * `IProcessRunTracker` has no per-record start hook, so the processor calls {@link OpenRecord} itself; when
+ * Record Set Processing later calls `RecordResult`, the open row is finalized instead of inserting a new one.
  *
  * @module @memberjunction/content-pipeline
  */
 
 import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { MJProcessRunDetailEntity } from '@memberjunction/core-entities';
-import {
-    ProcessRunMeta,
-    RecordRef,
-    RecordResult,
-    RunHandle,
-} from '@memberjunction/record-set-processor-base';
+import { UUIDMap } from '@memberjunction/global';
+import { ProcessRunMeta, RecordRef, RecordResult, RunHandle } from '@memberjunction/record-set-processor-base';
 import { GenericProcessRunTracker } from '@memberjunction/record-set-processor';
 import { ProgressReporter } from './PipelineProcessor.js';
 
-/** An open detail row and the progress accumulated against it. */
 interface OpenDetail {
     Detail: MJProcessRunDetailEntity;
     StageName: string;
     StartedAt: Date;
     Progress: string[];
-    /**
-     * The progress save currently in flight, if any.
-     *
-     * Progress saves are deliberately not awaited by the stage that reports progress — a stage
-     * should not be made to wait on telemetry. But the final save has to: two `Save()` calls racing
-     * on the same entity can land out of order, and the loser is the one carrying the result. The
-     * finalizer awaits this before writing.
-     */
+    /** The un-awaited progress save, which the final save must wait for so it is not overtaken. */
     InFlight?: Promise<unknown>;
 }
 
-/**
- * The pipeline's tracker: open a detail row on start, update it as the stage reports progress,
- * finalize it when the record settles.
- *
- * Constructed together with the processor by the work type's registered pairing so the two share a
- * direct object reference rather than being wired through Record Set Processing, which has no way
- * to pass one.
- */
+/** The pipeline's tracker, paired with its processor by the work type's registration. */
 export class PipelineProcessRunTracker extends GenericProcessRunTracker implements ProgressReporter {
-    /**
-     * Detail rows currently open, keyed by record identity.
-     *
-     * Safe as an in-memory map because `maxConcurrency` bounds how many records are in flight within
-     * a processor instance, and a processor instance is never shared across runs.
-     */
-    private readonly open = new Map<string, OpenDetail>();
-
+    /** Open rows by record key. One processor per run, bounded by `maxConcurrency`. */
+    private readonly open = new UUIDMap<OpenDetail>();
     private handle: RunHandle | null = null;
     private contextUser: UserInfo | null = null;
     private provider: IMetadataProvider | null = null;
     private entityID: string | null = null;
 
-    public override async BeginRun(
-        meta: ProcessRunMeta,
-        contextUser: UserInfo,
-        provider?: IMetadataProvider,
-    ): Promise<RunHandle> {
+    public override async BeginRun(meta: ProcessRunMeta, contextUser: UserInfo, provider?: IMetadataProvider): Promise<RunHandle> {
         const handle = await super.BeginRun(meta, contextUser, provider);
         this.handle = handle;
         this.contextUser = contextUser;
@@ -81,49 +42,29 @@ export class PipelineProcessRunTracker extends GenericProcessRunTracker implemen
         return handle;
     }
 
-    /**
-     * Open a detail row for a record about to be worked on.
-     *
-     * Awaited by the processor, so the row is on disk before the stage runs and the stage's very
-     * first progress report has a row to update. A failure is logged and swallowed by the caller —
-     * the record proceeds, just without live visibility.
-     */
+    /** Open a Pending detail row for a record about to run. A failure is logged, never thrown. */
     public async OpenRecord(key: string, stageName: string): Promise<void> {
         try {
             await this.openDetail(key, stageName);
         } catch (error) {
-            LogError(
-                `PipelineProcessRunTracker: could not open a detail row for '${key}': ` +
-                    `${error instanceof Error ? error.message : String(error)}`,
-            );
+            LogError(`PipelineProcessRunTracker: could not open a detail row for '${key}': ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
-    /** Append a progress line to the open detail row and save it, so status is visible live. */
+    /** Append a progress line to the record's open row. Not awaited: a stage never waits on telemetry. */
     public ReportProgress(key: string, message: string): void {
-        const entry = this.open.get(key);
+        const entry = this.open.Get(key);
         if (!entry) {
             return;
         }
         entry.Progress.push(`${new Date().toISOString()} ${message}`);
-        entry.Detail.ResultPayload = JSON.stringify({
-            Stage: entry.StageName,
-            Status: 'Running',
-            Progress: entry.Progress,
-        });
+        entry.Detail.ResultPayload = JSON.stringify({ Stage: entry.StageName, Status: 'Running', Progress: entry.Progress });
         entry.InFlight = entry.Detail.Save().catch((error: unknown) => {
-            LogError(
-                `PipelineProcessRunTracker: progress save failed for '${key}': ` +
-                    `${error instanceof Error ? error.message : String(error)}`,
-            );
+            LogError(`PipelineProcessRunTracker: progress save failed for '${key}': ${error instanceof Error ? error.message : String(error)}`);
         });
     }
 
-    /**
-     * Finalize the open row for this record, or fall back to the base tracker's insert when there
-     * is none — which happens when {@link OpenRecord} failed, or when something other than the
-     * pipeline processor produced the result.
-     */
+    /** Finalize the record's open row, or fall back to the standard insert when none was opened. */
     public override async RecordResult(
         handle: RunHandle,
         record: RecordRef,
@@ -131,77 +72,48 @@ export class PipelineProcessRunTracker extends GenericProcessRunTracker implemen
         contextUser: UserInfo,
         provider?: IMetadataProvider,
     ): Promise<void> {
-        const entry = this.open.get(record.RecordID);
+        const entry = this.open.Get(record.RecordID);
         if (!entry) {
             await super.RecordResult(handle, record, result, contextUser, provider);
             return;
         }
-        this.open.delete(record.RecordID);
-
-        // Let any in-flight progress save land first, so it cannot overwrite the result below.
+        this.open.Delete(record.RecordID);
         await entry.InFlight;
-
         const detail = entry.Detail;
         detail.Status = result.Status;
         detail.CompletedAt = new Date();
         detail.DurationMs = result.DurationMs ?? Date.now() - entry.StartedAt.getTime();
         detail.AttemptCount = result.AttemptCount ?? 1;
         detail.ErrorMessage = result.ErrorMessage ?? null;
-        detail.ResultPayload = JSON.stringify({
-            ...(typeof result.ResultPayload === 'object' && result.ResultPayload !== null
-                ? (result.ResultPayload as Record<string, unknown>)
-                : { Result: result.ResultPayload }),
-            Progress: entry.Progress,
-        });
+        const payload = typeof result.ResultPayload === 'object' && result.ResultPayload !== null
+            ? (result.ResultPayload as Record<string, unknown>)
+            : { Result: result.ResultPayload };
+        detail.ResultPayload = JSON.stringify({ ...payload, Progress: entry.Progress });
         if (!(await detail.Save())) {
-            LogError(
-                `PipelineProcessRunTracker: failed to finalize detail row for '${record.RecordID}': ` +
-                    `${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`,
-            );
+            LogError(`PipelineProcessRunTracker: failed to finalize detail row for '${record.RecordID}': ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
     }
 
-    /**
-     * Records the platform never handed to the processor — Discover's produced items, a splitting
-     * extractor's children — get one additional detail row each.
-     *
-     * `RecordID` is the child's real key once committed, or its ephemeral URL identity when the run
-     * is a test and nothing was committed.
-     */
-    public async RecordChildOutcome(
-        parentRecord: RecordRef,
-        childKey: string,
-        result: RecordResult,
-        childEntityID?: string,
-    ): Promise<void> {
+    /** One detail row for a record produced during the run (a discovered item, an archive member). */
+    public async RecordChildOutcome(parentRecord: RecordRef, childKey: string, result: RecordResult, childEntityID?: string): Promise<void> {
         if (!this.handle || !this.contextUser) {
             return;
         }
         await super.RecordResult(
             this.handle,
-            {
-                // The CHILD's entity, not the parent's. A Content Item produced by walking a Content
-                // Source is a Content Item; filing its detail row under the source's entity makes it
-                // unjoinable to the row it actually describes.
-                EntityID: childEntityID ?? parentRecord.EntityID,
-                RecordID: childKey,
-            },
+            { EntityID: childEntityID ?? parentRecord.EntityID, RecordID: childKey },
             result,
             this.contextUser,
             this.provider ?? undefined,
         );
     }
 
-    /** Create and save the `Pending` row, and remember it for the life of this record. */
     private async openDetail(key: string, stageName: string): Promise<void> {
-        if (!this.handle || !this.contextUser || this.open.has(key)) {
+        if (!this.handle || !this.contextUser || this.open.Has(key)) {
             return;
         }
         const provider = this.provider ?? Metadata.Provider;
-        const detail = await provider.GetEntityObject<MJProcessRunDetailEntity>(
-            'MJ: Process Run Details',
-            this.contextUser,
-        );
+        const detail = await provider.GetEntityObject<MJProcessRunDetailEntity>('MJ: Process Run Details', this.contextUser);
         const startedAt = new Date();
         detail.NewRecord();
         detail.ProcessRunID = this.handle.ProcessRunID as string;
@@ -214,6 +126,6 @@ export class PipelineProcessRunTracker extends GenericProcessRunTracker implemen
         if (!(await detail.Save())) {
             throw new Error(detail.LatestResult?.CompleteMessage ?? 'unknown error');
         }
-        this.open.set(key, { Detail: detail, StageName: stageName, StartedAt: startedAt, Progress: [] });
+        this.open.Set(key, { Detail: detail, StageName: stageName, StartedAt: startedAt, Progress: [] });
     }
 }

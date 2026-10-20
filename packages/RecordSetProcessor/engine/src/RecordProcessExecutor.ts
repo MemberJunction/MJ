@@ -59,16 +59,7 @@ export interface RunRecordProcessOptions {
     lastRunAt?: Date | null;
     /** Progress callback. */
     onProgress?: (progress: ProgressInfo) => void;
-    /**
-     * The tracker to record this run with. Defaults to `GenericProcessRunTracker`.
-     *
-     * A work type whose processor is paired with a tracker — one that writes live progress, or a
-     * detail row per produced child — has to be able to supply it HERE rather than by wrapping the
-     * executor, because the executor is what the scheduler and the on-change trigger call. Without
-     * this, a run triggered any way other than through the wrapper silently loses whatever the
-     * paired tracker records, which is the kind of difference nobody notices until the rows are
-     * missing.
-     */
+    /** The tracker to record this run with. Defaults to the work type's registered tracker, else `GenericProcessRunTracker`. */
     tracker?: IProcessRunTracker;
 }
 
@@ -106,9 +97,7 @@ export class RecordProcessExecutor {
             }
         }
 
-        // An injected tracker wins; otherwise a work type may supply the one its processor is paired
-        // with. Resolving it HERE rather than at each call site is what makes a scheduled run and an
-        // on-change run record the same thing a manual one does.
+        // Resolved here, not at each call site, so scheduled and on-change runs get the same tracker as manual ones.
         const tracker = options.tracker ?? this.resolveTracker(rp, options.dryRun);
 
         return RecordSetProcessor.Instance.Process({

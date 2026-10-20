@@ -12,63 +12,23 @@
 "@memberjunction/ng-core-entity-forms": minor
 "@memberjunction/ai-vectordb": minor
 "@memberjunction/ai-vectors-pinecone": minor
+"@memberjunction/ai-vectors-qdrant": minor
+"@memberjunction/ai-vectors-pgvector": minor
 "@memberjunction/network-utils": minor
 "@memberjunction/tag-engine": minor
 ---
 
-Add the content pipeline framework: a generic processor that runs registered stages over Content
-Sources, Items and Chunks through Record Set Processing's new `Pipeline Stage` work type.
+Add the content pipeline framework: Discover, Extract, Tag, Segment, Embed and Delete stages that run over
+Content Sources, Items and Chunks through Record Set Processing's new `Pipeline Stage` work type. One
+working record passes between stages, each well-known field carrying a confidence score so stages resolve
+a shared field on merit. Only the hydrator and committer touch the database, so a test run is the same
+code with commits withheld.
 
-One `WorkingRecord` passes from stage to stage, carrying each well-known field with a confidence
-score and the stage that set it, so two stages that know nothing about each other resolve a shared
-field on merit rather than by running order. Only hydrate and commit touch the database, which is
-what makes a test run the same code with commits withheld. Re-discovery turns on the item's
-checksum: an unchanged walk is a genuine no-op, and a changed one clears the field confidence so
-every later stage reconsiders the record from scratch.
-
-Stages orchestrate MemberJunction's existing machinery rather than paralleling it. Embed resolves
-its vector index, database, embedding model and dimensions from `MJ: Vector Indexes` and the
-Content Source's own cascade, then drives the registered `VectorDBBase` provider directly — so
-every provider MJ ships is usable, namespace routing comes from the provider, and the vector id it
-writes back is what later makes the vector deletable. Durable copies go to MJ Files against a
-configured File Storage Account; bytes never land in this database. Segmenting goes through
-`ai-segmentation` and reads the `SegmenterKey` cascade. Tagging runs MJ's managed Content
-Autotagging prompt and persists through the governed taxonomy into `MJ: Content Item Tags`.
-
-Where MJ has no existing registry, a driver contract remains: Access (opening a session against a
-source, with credentials from `MJ: Credentials` and sessions cached per source and role), Discover
-(walking a source) and content Extractors. The walks for the five shipped Content Source Types are
-lifted out of the autotagger so there is one implementation with two consumers, registered under
-the `DriverClass` each type already names.
-
-`@memberjunction/document-parsing` is new: one implementation of PDF, Word and spreadsheet parsing,
-shared by the Core Actions that expose file content and by the pipeline's extractors.
-
-Record Set Processing gains a way for a work type to pair a tracker with its processor, so a run
-records the same thing whether it was triggered on demand, on change or by the scheduler.
-
-Schema (all additive, on `__mj`): `FieldConfidence` on Content Source / Item / Chunk;
-`ExtractionStatus`, `SegmentationStatus`, `DeleteStatus`, `ExtractorKey`, `ExtractorKeyOverride`,
-`Modality`, `Date`, `Decorator` and `FileID` on Content Item; `Decorator` on Content Item Chunk;
-`ForceDiscovery` and `LastDiscoveredAt` on Content Source; `ExtractorKey` and
-`StructuralSignature` on Content Type; `ByteSignature`, `IsText` and `ExtractorKey` on Content File
-Type; `'Pipeline Stage'` on the Record Process `WorkType` CHECK constraint; and `'MetadataOnly'` on
-both `EmbeddingStatus` CHECK constraints. There is deliberately no unique index on (ContentSourceID,
-URL): the Entity and LocalFS autotaggers store many items under one URL, so matching by URL is done
-in code, and a source whose URLs are not unique is simply not a candidate for change detection.
-
-Where each record's vector lives is decided per record by `VectorRecordRouter`, which Embed and Delete
-share so a delete reaches the namespace the write used. It asks the provider for its directives
-through MJ's generic `GetSourceRecordFieldPaths` / `BuildProviderDirectives`, so routing tenants to
-their own namespaces is configuration on the index (`namespaceField`, including IS-A paths such as
-`ContentSourceID.OrganizationID`), and a layer above MJ that needs more registers its own router.
-`VectorDBBase.UpdateRecords` and `DeleteRecords` take the index and provider config as
-`CreateRecords` does; Pinecone's update is now awaited, namespace-routed and batched, which is what
-lets a metadata-only refresh leave the stored vector untouched. Re-segmenting supersedes every
-previous chunk; Delete removes a chunk's row outright unless some entity references it.
-
-`@memberjunction/tag-engine` gains `ContentItemTagBridge`, the content-tag-to-taxonomy promotion the
-autotagger and the pipeline now share. `@memberjunction/network-utils`' `SafeFetch` gains
-`StripHeadersOnCrossOriginRedirect`, which the pipeline uses so a source's credentials never follow a
-redirect to another host. Get File Content reads `.xlsx` again: `document-parsing` imports its
-parsers statically.
+The stages reuse what MJ already has. Discover and Extract call the Content Source Type's existing driver
+(new optional `Discover`, `Fetch` and `OpenSession` on `AutotagBase`); file-type detection reads
+`MJ: Content File Types` (new `ByteSignature`, `IsText`, `ExtractorKey` columns, seeded in metadata);
+durable copies go through `FileStorageEngine.UploadFile`; Tag, Embed and Delete share the autotagger's
+prompt helpers and its new `ContentVectorInfrastructure`, which also fixes a source or content type that
+names only a vector index being routed to a different index. Document parsing moves into
+`@memberjunction/document-parsing`, used by Get File Content and the pipeline. Record Set Processing gains
+a per-work-type tracker pairing, so scheduled and on-change runs record the same detail rows as manual ones.

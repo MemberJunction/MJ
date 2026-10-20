@@ -1,40 +1,24 @@
 /**
  * @fileoverview The stage contract — outcomes, failures, and the per-record context.
  *
- * These types are deliberately shaped as a structural superset of MemberJunction's Work Queue
- * handler contract (`WorkContext` / `WorkOutcome` / `TransientWorkError` / `FatalWorkError` in
- * `@memberjunction/work-queue-core`). The queue packages are not on `next`, so nothing here imports
- * them; the mapping is 1:1 and documented in this package's README, so the Record-Set-Processing →
- * Work Queue bridge, whenever it is written, is a thin adapter rather than a change to any stage.
+ * Named after MemberJunction's Work Queue handler contract (`Signal`, `Log`, transient vs fatal errors) so a
+ * future Record Set Processing → Work Queue bridge is a thin adapter rather than a change to any stage.
  *
  * @module @memberjunction/content-pipeline-base
  */
 
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { AccessArtifact } from './access/BaseAccessDriver.js';
+import { AccessArtifact } from './discover/SourceDriver.js';
 
 /** How a stage finished with one record. */
 export type StageOutcomeStatus = 'Complete' | 'Failed' | 'Skipped' | 'Retry';
 
-/**
- * The result of running a stage on one record.
- *
- * Construct these through the {@link Outcome} helpers rather than by hand, so the status and the
- * retry semantics cannot drift apart.
- */
+/** The result of running a stage on one record. Build these with {@link Outcome}. */
 export class StageOutcome {
-    /** How the stage finished. */
     public readonly Status: StageOutcomeStatus;
-
     /** Why, when the status is anything but `Complete`. Surfaces on the run's detail row. */
     public readonly Message: string | null;
-
-    /**
-     * Whether this failure can succeed on a later attempt.
-     *
-     * Only meaningful for `Failed` and `Retry`. A fatal failure is never retried; a transient one
-     * is retried with backoff in queue scope, and not at all in filter scope, which does not retry.
-     */
+    /** Whether a later attempt could succeed. */
     public readonly IsTransient: boolean;
 
     constructor(status: StageOutcomeStatus, message: string | null = null, isTransient = false) {
@@ -54,22 +38,17 @@ export const Outcome = {
     Skipped(message: string): StageOutcome {
         return new StageOutcome('Skipped', message);
     },
-    /** This will never succeed: malformed content, a permanent 404, a validation failure. */
+    /** This will never succeed: malformed content, a permanent 404. */
     Fatal(message: string): StageOutcome {
         return new StageOutcome('Failed', message, false);
     },
-    /** This might succeed later: a timeout, a rate limit, a database blip. */
+    /** This might succeed later: a timeout, a rate limit, a cancellation. */
     Retry(message: string): StageOutcome {
         return new StageOutcome('Retry', message, true);
     },
 } as const;
 
-/**
- * A failure a stage believes could succeed on a later attempt.
- *
- * Maps to the queue's `TransientWorkError`. In queue scope this is retried with backoff up to the
- * subscription's maximum attempts; in filter scope it is final, because filter scope does not retry.
- */
+/** A failure that could succeed on a later attempt. */
 export class TransientStageError extends Error {
     constructor(message: string, options?: { cause?: unknown }) {
         super(message, options);
@@ -77,10 +56,7 @@ export class TransientStageError extends Error {
     }
 }
 
-/**
- * A failure that will never succeed. Maps to the queue's `FatalWorkError`. Never retried; the
- * record's status field for this stage is committed `Failed` and the queue dead-letters it.
- */
+/** A failure that will never succeed. */
 export class FatalStageError extends Error {
     constructor(message: string, options?: { cause?: unknown }) {
         super(message, options);
@@ -88,93 +64,36 @@ export class FatalStageError extends Error {
     }
 }
 
-/** Where a stage's records came from, which is what decides retry semantics. */
-export type StageScope = 'Filter' | 'Queue';
-
-/**
- * What a stage is handed alongside the working record.
- *
- * Every member that has a Work Queue counterpart carries the same name and meaning, so a stage
- * written against this context behaves identically once the queue supplies the real values. Under
- * Record Set Processing the queue-shaped members take their degenerate values — `Attempt` and
- * `MaxAttempts` are 1, `IsReplay` is false, and `Signal` fires at page boundaries rather than in
- * flight, because Record Set Processing's cancel handshake is per-checkpoint.
- */
+/** What a stage is handed alongside the working record. */
 export interface StageContext {
-    /** The acting user. */
     ContextUser: UserInfo;
-
-    /**
-     * The owning provider. Use this for all data access rather than `new Metadata()`, per MJ's
-     * multi-provider rule.
-     */
+    /** The owning provider. Use it for all data access rather than `new Metadata()`. */
     Provider: IMetadataProvider;
-
-    /** Configuration carried by the source or the run. */
+    /** Configuration carried by the run (`Options` on the Record Process). */
     Configuration: Record<string, unknown>;
-
     /**
-     * Whether this run is a test.
-     *
-     * A stage's logic never branches on whether its output will be committed — that is the
-     * processor's business. What a stage legitimately does with this is record something a live run
-     * would never want at full volume: the actual extracted text, a full structural-detection
-     * breakdown.
+     * Whether this run is a test. A stage never branches its logic on this — committing is the
+     * processor's business — but may record extra detail a live run would not want.
      */
     IsTest: boolean;
-
-    /** Where this run's records came from. `Filter` never retries. */
-    Scope: StageScope;
-
-    /** Which attempt this is, 1-based. Always 1 in filter scope. */
-    Attempt: number;
-
-    /** The most attempts this record gets. Always 1 in filter scope. */
-    MaxAttempts: number;
-
-    /** True when the queue is re-delivering a record. Always false in filter scope. */
-    IsReplay: boolean;
-
     /**
-     * Fires when an operator asks the run to stop.
-     *
-     * A stage whose work on one record can run long checks this at points where stopping is safe
-     * and returns {@link Outcome.Retry} rather than throwing. A stage that never checks it runs to
-     * completion — cancellation cannot stop work the code does not pause for.
+     * Fires when the stage's time budget runs out. A stage doing long work checks it where stopping is
+     * safe and returns {@link Outcome.Retry}.
      */
     Signal: AbortSignal;
-
-    /**
-     * Report progress on long work. Free to call as often as a stage likes; this is how a
-     * long-running record becomes visible while it is still running.
-     */
+    /** Report progress on long work; it lands on the record's live status row. */
     ReportProgress(message: string): void;
-
-    /** Structured logging bound to this record's run. */
     Log: StageLogger;
-
     /**
-     * Open — or reuse — a session against a Content Source.
-     *
-     * On the context rather than built by each stage because a session belongs to the RUN, not to
-     * one step of it: Discover walking a source and Extract fetching an item from it are the same
-     * principal against the same source, and opening two sessions would pay twice for one
-     * credential exchange and double whatever rate limit the source applies.
-     *
-     * Returns null when the source needs no session, which is the ordinary case for a public site
-     * or a local directory — not an error and not worth logging.
+     * The source's session, opened once per run by its driver's `OpenSession` and shared by every stage.
+     * Null when the source needs none.
      */
-    ResolveAccess(contentSourceID: string, role?: string): Promise<AccessArtifact | null>;
+    ResolveAccess(contentSourceID: string): Promise<AccessArtifact | null>;
 }
 
-/** The logging surface a stage is given. Mirrors the queue's `WorkContext.Log`. */
+/** The logging surface a stage is given. */
 export interface StageLogger {
     Info(message: string, detail?: Record<string, unknown>): void;
     Warning(message: string, detail?: Record<string, unknown>): void;
     Error(message: string, detail?: Record<string, unknown>): void;
-}
-
-/** True on the final attempt, which is what decides whether a transient failure is final. */
-export function IsFinalAttempt(context: StageContext): boolean {
-    return context.Scope === 'Filter' || context.Attempt >= context.MaxAttempts;
 }

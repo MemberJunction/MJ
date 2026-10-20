@@ -1,16 +1,9 @@
 /**
- * @file ContentPipelineStartup.ts
- * Registers the `Pipeline Stage` Record Process work type, and the built-in stages and extractors, at
- * server boot.
+ * @fileoverview Registers the `Pipeline Stage` work type and the built-in stages and extractors at server boot.
+ * The stage and extractor classes register only as an import side effect, which a bundler may drop, so they
+ * are loaded explicitly here.
  *
- * Without this, a Record Process with `WorkType = 'Pipeline Stage'` fails with "unsupported
- * WorkType", and `BasePipelineStage.Resolve` returns null for every stage name:
- * {@link RegisterPipelineWorkType} only makes the processor available, and the stage classes are
- * only registered as a side effect of importing them — which a bundler is free to drop, since they
- * are never referenced directly.
- *
- * The same applies to the RecordProcess.RunNow override, which must load AFTER MJ's own to win
- * dispatch — hence the explicit side-effect import here.
+ * @module @memberjunction/content-pipeline
  */
 
 import { IMetadataProvider, IStartupSink, LogStatusEx, RegisterForStartup, UserInfo } from '@memberjunction/core';

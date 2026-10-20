@@ -1,18 +1,19 @@
 /**
- * @fileoverview Embed routes per record — and a layer above MJ decides how.
+ * @fileoverview Embed routes per record.
  *
  * A page is not guaranteed to belong to one source, so resolving one target from the first record
- * wrote two organizations' chunks into one index and namespace. These register a router at
- * VECTOR_RECORD_ROUTER — the same seam a deployment uses to route by tenant — and check that each
- * record lands where ITS route says.
+ * wrote two organizations' chunks into one index and namespace. These stub the shared resolver
+ * (`ContentVectorInfrastructure`) with an org-per-index policy and check that each record lands where
+ * its own route says, and that a record the provider refuses fails alone.
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { RegisterClass } from '@memberjunction/global';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { NormalizeUUID } from '@memberjunction/global';
 import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
 import type { EmbeddingRunParams, EmbeddingRunResult } from '@memberjunction/ai-prompts';
+import { ContentVectorInfrastructure, ResolvedVectorInfrastructure } from '@memberjunction/content-autotagging';
+import type { MJContentItemEntity } from '@memberjunction/core-entities';
 import { StageContext, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
 import { EmbedStage } from '../stages/EmbedStage.js';
-import { VECTOR_RECORD_ROUTER, VectorRecordRouter, VectorRoute, VectorRouteFailure } from '../VectorRouting.js';
 
 interface Written {
     index: string;
@@ -21,15 +22,14 @@ interface Written {
 }
 const written: Written[] = [];
 
-function target(index: string) {
+const orgOf = (item: MJContentItemEntity) => item.ContentSourceID.split('-')[0];
+
+function infrastructureFor(index: string): ResolvedVectorInfrastructure {
     return {
-        IndexName: index,
-        EmbeddingModelID: null,
-        Dimensions: null,
-        ProviderConfig: undefined,
-        Index: { ID: `${index}-id` },
-        Database: {
-            IsReadOnly: false,
+        indexName: index,
+        embeddingModelID: 'model',
+        embeddingModelName: 'model',
+        vectorDB: {
             CreateRecords: async (records: { id: string; providerTemporaryDirectives?: Record<string, unknown> }[]) => {
                 written.push({
                     index,
@@ -39,49 +39,47 @@ function target(index: string) {
                 return { success: true, message: '', data: null };
             },
         },
-    } as unknown as VectorRoute['Target'];
-}
-
-/** A deployment's router: chunks of org A go to index A, org B to index B, each in its own namespace. */
-@RegisterClass(VectorRecordRouter, VECTOR_RECORD_ROUTER)
-class TenantRouter extends VectorRecordRouter {
-    public override async Route(records: readonly WorkingRecord[]): Promise<Map<string, VectorRoute | VectorRouteFailure>> {
-        const routes = new Map<string, VectorRoute | VectorRouteFailure>();
-        for (const r of records) {
-            const org = r.Identity.Key.split('-')[0];
-            routes.set(
-                r.Identity.Key,
-                org === 'orphan'
-                    ? { Error: 'no organization for this record' }
-                    : {
-                          Target: target(`index-${org}`),
-                          Directives: { namespace: org },
-                          Item: { ID: `${org}-item`, ContentSourceID: `${org}-src`, Name: 'doc', GetAll: () => ({}) } as never,
-                      },
-            );
-        }
-        return routes;
-    }
+    } as unknown as ResolvedVectorInfrastructure;
 }
 
 function chunk(key: string): WorkingRecord {
     const r = new WorkingRecord(new WorkingRecordIdentity('Content Item Chunk', `u/${key}`, key));
     r.Propose('Text', `text of ${key}`, 6, 'Segment');
     r.SetExtension('Embed', 'operation', 'Full');
+    r.SetExtension('Pipeline', 'contentItemID', `${key.split('-')[0]}-item`);
     return r;
 }
 
+const item = (org: string) => ({ ID: `${org}-item`, ContentSourceID: `${org}-src`, ContentTypeID: 'ct', GetAll: () => ({}) });
 const context = {
     ContextUser: {},
-    Provider: { RunView: async () => ({ Success: true, Results: [] }), EntityByName: () => undefined },
+    Provider: {
+        RunView: async (p: { EntityName: string }) => ({
+            Success: true,
+            Results: p.EntityName === 'MJ: Content Items' ? ['a', 'b', 'orphan'].map(item) : [],
+        }),
+        EntityByName: () => undefined,
+    },
     Configuration: {},
     ReportProgress: () => {},
 } as unknown as StageContext;
 
 let original: typeof AIEmbeddingRunner.prototype.RunEmbedding;
+// beforeEach, not beforeAll: the shared config restores spies before every test.
+beforeEach(() => {
+    // One index per organization; the provider refuses the orphan's record (no tenant to route it to).
+    vi.spyOn(ContentVectorInfrastructure.prototype, 'GroupByInfrastructure').mockImplementation(async (items) => {
+        const groups = new Map<string, MJContentItemEntity[]>();
+        for (const i of items) groups.set(`m|index-${orgOf(i)}`, [...(groups.get(`m|index-${orgOf(i)}`) ?? []), i]);
+        return groups;
+    });
+    vi.spyOn(ContentVectorInfrastructure.prototype, 'Resolve').mockImplementation(async (key) => infrastructureFor(key.split('|')[1]));
+    vi.spyOn(ContentVectorInfrastructure.prototype, 'BuildDirectives').mockImplementation(async (items) => ({
+        Directives: new Map(items.map((i) => [NormalizeUUID(i.ID), { namespace: orgOf(i) }])),
+        Rejected: items.filter((i) => orgOf(i) === 'orphan').map((i) => ({ Item: i, Reason: 'no organization for this record' })),
+    }));
+});
 beforeAll(() => {
-    // Keep the router reachable: TenantRouter only registers if the class is referenced.
-    expect(TenantRouter).toBeDefined();
     original = AIEmbeddingRunner.prototype.RunEmbedding;
     AIEmbeddingRunner.prototype.RunEmbedding = async (p: EmbeddingRunParams): Promise<EmbeddingRunResult> => ({
         Success: true,
@@ -109,7 +107,7 @@ describe('Embed routes each record by its own route', () => {
         ]);
     });
 
-    it('fails a record the router rejects, alone — the rest of the page is written', async () => {
+    it('fails a record the provider rejects, alone — the rest of the page is written', async () => {
         written.length = 0;
         const outcomes = await new EmbedStage().Finalize!([chunk('a-1'), chunk('orphan-1')], context);
 

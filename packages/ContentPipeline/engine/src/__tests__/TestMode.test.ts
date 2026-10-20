@@ -61,12 +61,12 @@ const progress = {
 
 function build(config: Partial<PipelineProcessorConfig>): PipelineProcessor {
     return new PipelineProcessor(
-        { Stages: ['BudgetTestProducer'], IsTest: false, Scope: 'Filter', Configuration: {}, ...config },
+        { Stages: ['BudgetTestProducer'], IsTest: false, Configuration: {}, ...config },
         storage,
         progress,
     );
 }
-const rsContext = { contextUser: {}, provider: {} } as never;
+const rsContext = { contextUser: {}, provider: { EntityByName: () => undefined } } as never;
 const ref = { EntityID: 'E1', RecordID: 'ID-1' } as never;
 
 beforeEach(() => {
@@ -102,12 +102,9 @@ describe('the per-stage wall-clock budget', () => {
         expect(result.ErrorMessage).toContain('budget');
     });
 
-    it('does not commit a status for a budget-expired record', async () => {
-        await build({ Stages: ['BudgetTestSlow'], StageBudgetMs: 30, Scope: 'Queue' }).ProcessRecord(
-            { ...(ref as object), Hints: { Attempt: 1, MaxAttempts: 3 } } as never,
-            rsContext,
-        );
-        expect(commit).not.toHaveBeenCalled();
+    it('commits Failed, not Complete, for a budget-expired record', async () => {
+        await build({ Stages: ['BudgetTestSlow'], StageBudgetMs: 30 }).ProcessRecord(ref, rsContext);
+        expect(commit).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'Failed', false);
     });
 
     it('leaves a stage that finishes within budget alone', async () => {

@@ -18,13 +18,23 @@ const item = (text?: string) => {
     return r;
 };
 const chunk = () => new WorkingRecord(new WorkingRecordIdentity('Content Item Chunk', 'https://x.test/a#0'));
-const row = (stored: Record<string, unknown>, fields: string[]) => ({
-    Get: (c: string) => stored[c],
-    Set: (c: string, v: unknown) => {
-        stored[c] = v;
-    },
-    Fields: fields.map((Name) => ({ Name })),
-});
+const row = (stored: Record<string, unknown>, fields: string[]) =>
+    new Proxy(
+        {
+            Fields: fields.map((Name) => ({ Name })),
+        } as Record<string, unknown>,
+        {
+            get: (target, prop: string) => (prop in target ? target[prop] : stored[prop]),
+            set: (target, prop: string, value: unknown) => {
+                if (prop in target) {
+                    target[prop] = value;
+                } else {
+                    stored[prop] = value;
+                }
+                return true;
+            },
+        },
+    );
 
 describe('change detection', () => {
     it('is a no-op when the text is identical', () => {

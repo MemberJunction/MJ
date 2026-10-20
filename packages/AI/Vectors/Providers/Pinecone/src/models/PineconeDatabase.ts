@@ -237,7 +237,7 @@ export class PineconeDatabase extends VectorDBBase {
             if (hasPerRecordNamespace) {
                 const groups = new Map<string, VectorRecord[]>();
                 for (let i = 0; i < records.length; i++) {
-                    const ns = String(records[i].providerTemporaryDirectives?.['namespace'] ?? '');
+                    const ns = this.resolveNamespaceName(records[i].providerTemporaryDirectives, providerConfig);
                     const existing = groups.get(ns);
                     if (existing) { existing.push(stripped[i]); } else { groups.set(ns, [stripped[i]]); }
                 }
@@ -250,9 +250,7 @@ export class PineconeDatabase extends VectorDBBase {
 
             // Single-namespace path: use an explicit namespace from providerConfig,
             // or fall back to the index default (no namespace routing).
-            const directNamespace = typeof providerConfig?.['namespace'] === 'string'
-                ? providerConfig['namespace'] as string : undefined;
-            const target = directNamespace ? index.namespace(directNamespace) : index;
+            const target = this.namespaceFor(index, undefined, providerConfig);
             const result = await target.upsert(stripped);
             return this.wrapSuccessResponse(result);
         }
@@ -290,23 +288,14 @@ export class PineconeDatabase extends VectorDBBase {
         }
     }
 
-    /**
-     * Update one record — its values, its metadata, or its metadata alone.
-     *
-     * Awaited, and routed to the record's namespace exactly as {@link CreateRecords} routes a write:
-     * Pinecone updates are namespace-scoped, so an update sent to the default namespace for a
-     * namespaced vector fails rather than touching it.
-     */
+    /** Update one record, routed to its namespace like {@link CreateRecords}. */
     public async UpdateRecord(record: UpdateOptions, indexName?: string, providerConfig?: Record<string, unknown>): Promise<BaseResponse> {
         return this.UpdateRecords([record], indexName, providerConfig);
     }
 
     /**
-     * Update a batch of records.
-     *
-     * Pinecone has no bulk update, so each record is one call, grouped by namespace. A record with
-     * metadata and no values is a metadata-only update — the stored vector is left exactly as it is,
-     * which is the point: correcting what rides alongside a vector should not need a model call.
+     * Update records, one call each (Pinecone has no bulk update). Metadata without values updates
+     * the metadata only and leaves the stored vector as is.
      */
     public async UpdateRecords(records: UpdateOptions | UpdateOptions[], indexName?: string, providerConfig?: Record<string, unknown>): Promise<BaseResponse> {
         try {
@@ -316,6 +305,12 @@ export class PineconeDatabase extends VectorDBBase {
                 const target = this.namespaceFor(index, record.providerTemporaryDirectives, providerConfig);
                 // Directives are MJ-internal routing and must never reach the SDK.
                 const { providerTemporaryDirectives: _pd, ...update } = record;
+                if (update.values && update.values.length === 0) {
+                    delete update.values;
+                }
+                if (!update.values && update.metadata === undefined && !update.sparseValues) {
+                    continue;
+                }
                 await target.update(update as PineconeUpdateOptions);
             }
             return this.wrapSuccessResponse(null);
@@ -326,24 +321,26 @@ export class PineconeDatabase extends VectorDBBase {
         }
     }
 
-    /**
-     * The namespace a record lives in: its per-record directive, then the index's configured
-     * namespace, then the index default — the same precedence {@link CreateRecords} writes with.
-     */
-    private namespaceFor(index: Index, directives?: Record<string, unknown>, providerConfig?: Record<string, unknown>): Index {
+    /** Resolve the effective namespace name: per-record directive, then configured namespace, else empty string. */
+    private resolveNamespaceName(directives?: Record<string, unknown>, providerConfig?: Record<string, unknown>): string {
         const perRecord = directives?.['namespace'];
         if (perRecord != null && String(perRecord).length > 0) {
-            return index.namespace(String(perRecord));
+            return String(perRecord);
         }
         const configured = providerConfig?.['namespace'];
-        return typeof configured === 'string' && configured.length > 0 ? index.namespace(configured) : index;
+        return typeof configured === 'string' && configured.length > 0 ? configured : '';
+    }
+
+    /** A record's namespace: its directive, then the configured namespace, then the index default. */
+    private namespaceFor(index: Index, directives?: Record<string, unknown>, providerConfig?: Record<string, unknown>): Index {
+        const ns = this.resolveNamespaceName(directives, providerConfig);
+        return ns ? index.namespace(ns) : index;
     }
 
     public async DeleteRecord(record: VectorRecord, indexName?: string, providerConfig?: Record<string, unknown>): Promise<BaseResponse> {
         try{
             const index: Index = this.GetIndex(indexName ? { id: indexName } : undefined).data;
-            // Honor namespace routing — Pinecone deletes are namespace-scoped, so an unrouted delete
-            // of a namespaced vector silently no-ops.
+            // Pinecone deletes are namespace-scoped; an unrouted delete silently no-ops.
             const target = this.namespaceFor(index, record.providerTemporaryDirectives, providerConfig);
             const result = await target.deleteOne(record.id);
             return this.wrapSuccessResponse(result);
@@ -366,7 +363,7 @@ export class PineconeDatabase extends VectorDBBase {
             if (hasPerRecordNamespace) {
                 const groups = new Map<string, string[]>();
                 for (const record of records) {
-                    const ns = String(record.providerTemporaryDirectives?.['namespace'] ?? '');
+                    const ns = this.resolveNamespaceName(record.providerTemporaryDirectives, providerConfig);
                     const existing = groups.get(ns);
                     if (existing) { existing.push(record.id); } else { groups.set(ns, [record.id]); }
                 }

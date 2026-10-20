@@ -6,13 +6,19 @@ import { FieldValueCollection, IMetadataProvider, UserInfo, Metadata, RunView } 
 import { MJContentSourceEntity, MJContentItemEntity } from "@memberjunction/core-entities";
 import { OpenAI } from "openai";
 import path from 'path';
-import { ResolveConfidence } from '@memberjunction/content-pipeline-base';
-import { LocalFileSystemDiscoverDriver } from './LocalFileSystemDiscoverDriver';
+import {
+    ConfidenceScale,
+    DiscoverRequest,
+    DiscoveredItem,
+    LocatorFetchRequest,
+    LocatorFetchResponse,
+} from '@memberjunction/content-pipeline-base';
 import dotenv from 'dotenv';
 dotenv.config({ quiet: true })
 
 @RegisterClass(AutotagBase, 'AutotagLocalFileSystem')
 export class AutotagLocalFileSystem extends AutotagBase {
+    public override readonly SupportsExhaustiveWalk = true;
     private contextUser: UserInfo;
     private engine: AutotagBaseEngine;
     protected contentSourceTypeID: string
@@ -70,7 +76,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
                     }
                     else {
                         // No content items found to process
-                        console.log(`No content items found to process for content source: ${contentSource.Get('Name')}`);
+                        console.log(`No content items found to process for content source: ${contentSource.Name}`);
                     }
                 } 
                 else {
@@ -124,42 +130,72 @@ export class AutotagLocalFileSystem extends AutotagBase {
     public async SetNewAndModifiedContentItems(contentSourceParams: ContentSourceParams, lastRunDate: Date, contextUser: UserInfo): Promise<MJContentItemEntity[]> {
         const contentItems: MJContentItemEntity[] = []
 
-        // The walk itself lives in LocalFileSystemDiscoverDriver, so this and the content pipeline's
-        // Discover stage agree on what is in a directory. What stays here is what is specific to
-        // autotagging: deciding added-vs-modified against the last run date, and saving the row.
-        const driver = new LocalFileSystemDiscoverDriver();
-        for await (const item of driver.Discover({
-            ContentSourceID: contentSourceParams.contentSourceID,
-            URL: contentSourceParams.URL,
-            Parameters: {},
-            Configuration: {},
-            // The autotagger does not resolve fields on confidence, but the walk is shared, so it
-            // passes the defaults rather than making the driver cope with their absence.
-            Confidence: ResolveConfidence(undefined),
-            ContextUser: contextUser,
-            Provider: this.ProviderToUse,
-            Signal: new AbortController().signal,
-            ReportProgress: () => {},
-        })) {
-            const created = item.Extensions?.CreatedAt as Date | undefined;
-            const modified = item.Extensions?.ModifiedAt as Date | undefined;
-            // Each file is its own content item, so the params carry that file's path rather than
-            // the directory's — the previous code mutated the shared URL as it descended.
-            const params: ContentSourceParams = { ...contentSourceParams, URL: item.URL };
-            const touched = [created, modified].some((d) => d && new Date(d.toUTCString()) > lastRunDate);
+        for await (const { Path: filePath, Stats: stats } of this.walk(contentSourceParams.URL)) {
+            // Each file is its own content item, so the params carry that file's path, not the directory's.
+            const params: ContentSourceParams = { ...contentSourceParams, URL: filePath };
+            const touched = [stats.ctime, stats.mtime].some((d) => new Date(d.toUTCString()) > lastRunDate);
             if (!touched) {
                 continue;
             }
-            // Added-vs-modified is decided by whether this source already holds the file, not by its
-            // timestamps. CreatedAt comes from ctime, which moves on every write, so an edited file
-            // looked "added" and was inserted a second time beside the row it already had.
+            // Added-vs-modified by whether the row exists: ctime moves on every write, so it cannot say.
             if (await this.hasContentItem(params, contextUser)) {
-                contentItems.push(await this.SetModifiedContentItem(item.URL, params));
+                contentItems.push(await this.SetModifiedContentItem(filePath, params));
             } else {
-                contentItems.push(await this.SetAddedContentItem(item.URL, params));
+                contentItems.push(await this.SetAddedContentItem(filePath, params));
             }
         }
         return contentItems;
+    }
+
+    /** Walk the directory for the pipeline, skipping files older than `request.Since` when provided. */
+    public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
+        if (!request.URL || !fs.existsSync(request.URL)) {
+            throw new Error(`Local File System source path '${request.URL}' does not exist`);
+        }
+        for await (const { Path: filePath, Stats: stats } of this.walk(request.URL, request.Signal)) {
+            if (request.Since && stats.mtime <= request.Since && stats.ctime <= request.Since) {
+                continue;
+            }
+            const extension = path.extname(filePath).slice(1).toLowerCase();
+            yield {
+                URL: filePath,
+                Fields: [
+                    { Field: 'Title', Value: path.basename(filePath), Confidence: ConfidenceScale.DiscoveredTitle },
+                    { Field: 'Date', Value: stats.mtime, Confidence: ConfidenceScale.DiscoveredDate },
+                    ...(extension ? [{ Field: 'FileType' as const, Value: extension, Confidence: ConfidenceScale.DiscoveredFileType }] : []),
+                ],
+            };
+        }
+    }
+
+    /** Read a walked file. Confined to the source root: a locator is a row anyone with edit rights can change. */
+    public async Fetch(request: LocatorFetchRequest): Promise<LocatorFetchResponse> {
+        if (!request.SourceURL) {
+            throw new Error('This Local File System source has no root path, so no file can be read from it');
+        }
+        const root = await fs.promises.realpath(request.SourceURL);
+        const target = await fs.promises.realpath(path.resolve(root, request.URL));
+        const relative = path.relative(root, target);
+        if (relative === '' || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+            throw new Error(`'${request.URL}' is outside the source's root '${request.SourceURL}'`);
+        }
+        return { Content: new Uint8Array(await fs.promises.readFile(target)), ResolvedURL: target };
+    }
+
+    /** Every regular file under a directory, recursively, skipping symlinks and stopping when the signal fires. */
+    private async *walk(directory: string, signal?: AbortSignal): AsyncIterable<{ Path: string; Stats: fs.Stats }> {
+        for (const entry of fs.readdirSync(directory)) {
+            if (signal?.aborted) {
+                return;
+            }
+            const full = path.join(directory, entry);
+            const stats = fs.lstatSync(full);
+            if (stats.isDirectory()) {
+                yield* this.walk(full, signal);
+            } else if (stats.isFile()) {
+                yield { Path: full, Stats: stats };
+            }
+        }
     }
 
     /** Whether this source already has a content item for this file. */

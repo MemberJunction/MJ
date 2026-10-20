@@ -1,5 +1,6 @@
 /**
- * @fileoverview {@link PlainTextExtractor} — the built-in last rung of the extractor cascade.
+ * @fileoverview {@link PlainTextExtractor} — UTF-8 decoding, for a file type metadata routes to it.
+ * Formats no rung names get Extract's own sanity-checked plain-text read instead.
  *
  * @module @memberjunction/content-pipeline
  */
@@ -10,12 +11,7 @@ import { BaseContentExtractor, ExtractRequest, ExtractResult } from '@memberjunc
 /** The registered key. */
 export const PLAIN_TEXT_EXTRACTOR = 'PlainText';
 
-/**
- * Decodes bytes as UTF-8 text.
- *
- * Declares support for everything, which is appropriate only for the fallback rung — a extractor at any
- * other rung that claimed `'*'` would shadow more specific extractors below it.
- */
+/** Decodes bytes as UTF-8 text. Claims every file type, so it reads whatever it is named for. */
 @RegisterClass(BaseContentExtractor, PLAIN_TEXT_EXTRACTOR)
 export class PlainTextExtractor extends BaseContentExtractor {
     public readonly Key = PLAIN_TEXT_EXTRACTOR;

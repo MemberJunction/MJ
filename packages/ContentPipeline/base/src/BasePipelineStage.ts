@@ -1,6 +1,5 @@
 /**
- * @fileoverview {@link BasePipelineStage} — the class a stage extends, and the registry key it is
- * discovered by.
+ * @fileoverview {@link BasePipelineStage} — the class a stage extends, resolved by name through MJ's class factory.
  *
  * @module @memberjunction/content-pipeline-base
  */
@@ -10,45 +9,28 @@ import { StageContext, StageOutcome } from './Stage.types.js';
 import { WorkingRecord } from './WorkingRecord.js';
 import { WellKnownField, WorkingRecordEntity } from './WorkingRecord.types.js';
 
-/**
- * What a stage declares it touches.
- *
- * Nothing acts on this declaration today. It costs little and answers, without reading source, the
- * question this design exists to make answerable: what does inserting or removing this stage
- * actually touch.
- */
+/** What a stage reads and writes. Advisory: nothing enforces it. */
 export interface StageDeclaration {
-    /** Well-known fields the stage reads. */
     Reads: readonly WellKnownField[];
-    /** Well-known fields the stage writes. */
     Writes: readonly WellKnownField[];
-    /** Extension keys the stage reads, as `namespace.key`. */
+    /** Extension keys, as `namespace.key`. */
     ReadsExtensions: readonly string[];
-    /** Extension keys the stage writes, as `namespace.key`. */
     WritesExtensions: readonly string[];
 }
 
-/**
- * One record's result inside a batch finalize, paired with the record it belongs to.
- */
+/** One record's result from a batch {@link BasePipelineStage.Finalize}. */
 export interface FinalizeResult {
-    /** The record this outcome is for, identified by {@link WorkingRecord.Identity}'s key. */
+    /** The record's {@link WorkingRecord.Identity} key. */
     Key: string;
-    /** How that record finished. */
     Outcome: StageOutcome;
 }
 
 /**
- * A registered unit of pipeline work: one working record in, one out.
+ * A registered unit of pipeline work: one working record in, one outcome out. Adding a stage is writing a
+ * class and registering it — never editing a list.
  *
- * Stages are discovered by name through MJ's class factory, so the processor has no compiled-in
- * knowledge of which stages exist. Adding one means writing a class and registering it; it never
- * means editing a fixed list.
- *
- * **Cold start is the normal case.** In production a stage is always handed a record hydrated from
- * storage moments ago, with no other stage having run in the same call. A stage must therefore
- * produce correct output from whatever is actually present, and treat the absence of an optional
- * field as a legitimate input rather than an error.
+ * Cold start is the normal case: in production a stage gets a record hydrated moments ago, with no other
+ * stage having run in the same call, so a missing optional field is a legitimate input.
  *
  * @example
  * ```ts
@@ -57,103 +39,59 @@ export interface FinalizeResult {
  *     public readonly Name = 'Extract';
  *     public readonly Entity: WorkingRecordEntity = 'Content Item';
  *     public readonly StatusField = 'ExtractionStatus';
- *
- *     public async Run(record: WorkingRecord, context: StageContext): Promise<StageOutcome> {
- *         ...
- *     }
+ *     public async Run(record: WorkingRecord, context: StageContext): Promise<StageOutcome> { ... }
  * }
  * ```
  */
 export abstract class BasePipelineStage {
-    /** The registered name. Must match the key passed to `@RegisterClass`. */
+    /** The registered name; must match the `@RegisterClass` key. */
     public abstract readonly Name: string;
 
-    /** Which entity this stage runs over. */
+    /** The entity this stage runs over. */
     public abstract readonly Entity: WorkingRecordEntity;
 
     /**
-     * The column on {@link Entity} that says whether a record is ready for this stage — e.g.
-     * `ExtractionStatus`. The committer advances it, and a Record Process row's readiness filter
-     * reads it.
-     *
-     * `null` for a stage whose readiness is not a status column. Discover is the case: a source is
-     * ready when its schedule is due or someone set `ForceDiscovery`, and a completed walk clears
-     * that bit. A status column there would be a second mechanism for a decision the schedule
-     * already owns, and one that has to be re-armed by hand to run again.
+     * The status column the committer advances and a Record Process's filter reads (e.g. `ExtractionStatus`).
+     * `null` for Discover, which walks every source selected by the Record Process filter rather than advancing a status.
      */
     public abstract readonly StatusField: string | null;
 
-    /**
-     * The value {@link StatusField} takes when this stage succeeds.
-     *
-     * Almost every stage means 'Complete' by success, but the value belongs to the column, not to
-     * the pipeline: `DeleteStatus` is a two-value soft-delete marker whose success is 'Deleted',
-     * and writing 'Complete' into it violates its CHECK constraint. Stages whose status column has
-     * its own vocabulary override this.
-     */
+    /** The value {@link StatusField} takes on success. The vocabulary belongs to the column (`DeleteStatus` uses 'Deleted'). */
     public get CompleteStatus(): string {
         return 'Complete';
     }
 
-    /**
-     * The value {@link StatusField} takes when this stage ends Skipped or finally Failed, or `null`
-     * to leave the column as it is.
-     *
-     * Same reasoning as {@link CompleteStatus}: the vocabulary belongs to the column. `DeleteStatus`
-     * admits only Pending and Deleted, so a delete that could not finish has no value to record —
-     * it stays Pending, which is also what lets a later run, with the cause fixed, finish the job.
-     */
+    /** The value for a Skipped or finally Failed outcome, or `null` to leave the column alone. */
     public StatusForOutcome(outcome: 'Skipped' | 'Failed'): string | null {
         return outcome;
     }
 
-    /** What this stage reads and writes. Defaults to declaring nothing. */
     public get Declaration(): StageDeclaration {
         return { Reads: [], Writes: [], ReadsExtensions: [], WritesExtensions: [] };
     }
 
     /**
-     * Do this stage's work on one record.
-     *
-     * Return an outcome rather than throwing where the distinction matters; a thrown
-     * {@link TransientStageError} or {@link FatalStageError} is understood too, and any other throw
-     * is treated as fatal.
+     * Do this stage's work on one record. Return an outcome; a thrown {@link TransientStageError} or
+     * {@link FatalStageError} is understood too, and any other throw is treated as fatal.
      */
     public abstract Run(record: WorkingRecord, context: StageContext): Promise<StageOutcome>;
 
     /**
-     * Optional bulk step for a stage whose underlying operation is far cheaper in bulk — calling an
-     * external model once for fifty texts, writing fifty vectors in one call.
-     *
-     * When a stage implements this, per-record {@link Run} work stays light: hydrate, validate, and
-     * gather what the bulk call needs. `Finalize` then receives everything a page produced and
-     * returns a final outcome per record.
-     *
-     * Declaring a finalize is a property of the stage; whether it is used is decided by the run. A
-     * batch-capable stage that is not last in a chained test runs per-record, because a test needs
-     * the same correctness rather than the bulk efficiency.
+     * Optional bulk step for work far cheaper in bulk (one embedding call for fifty texts). `Run` then only
+     * gathers; `Finalize` gets the page's records and returns one outcome each. Used only when the stage is
+     * last in the run's list.
      */
     public Finalize?(records: readonly WorkingRecord[], context: StageContext): Promise<FinalizeResult[]>;
 
     /**
-     * Resolve a registered stage by name.
-     *
-     * Uses `TryCreateInstance` rather than `CreateInstance` deliberately. `CreateInstance` does not
-     * return null for an unregistered key — it falls back to `new BasePipelineStage()`, a hollow
-     * object whose abstract `Name` / `Entity` / `Run` are undefined. A typo in a Record Process
-     * row's stage list would then produce a stage that silently does nothing, and the failure would
-     * not surface until something called it. The same trap is documented on `BaseSegmenter.Resolve`.
-     *
-     * @returns The stage, or `null` when nothing is registered under that name.
+     * Resolve a registered stage, or `null`. Uses `TryCreateInstance` because `CreateInstance` falls back to a
+     * hollow base instance on an unknown key, which would make a typo in a Record Process silently do nothing.
      */
     public static Resolve(name: string): BasePipelineStage | null {
         if (!name || name.trim().length === 0) {
             return null;
         }
-        const result = MJGlobal.Instance.ClassFactory.TryCreateInstance<BasePipelineStage>(
-            BasePipelineStage,
-            name.trim(),
-        );
+        const result = MJGlobal.Instance.ClassFactory.TryCreateInstance<BasePipelineStage>(BasePipelineStage, name.trim());
         return result.Resolved ? result.Instance : null;
     }
 }

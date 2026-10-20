@@ -1,17 +1,5 @@
 /**
- * @fileoverview Extractors for the document formats a corpus is actually made of.
- *
- * Without these the framework could discover a PDF, keep it, and then have nothing to read it with —
- * which would make it strictly worse than the autotagger it replaces.
- *
- * The parsing itself is `@memberjunction/document-parsing`, which is also what the Core Actions
- * call — one implementation, two callers. Not the actions themselves: an action is a per-invocation
- * unit with its own params, result and run record, so calling one per content item would put an
- * action run between every document and its text.
- *
- * Each is a thin adapter: decode, hand to the library, return one block. Where a document has
- * natural internal divisions that deserve to be separate records — a spreadsheet's worksheets — it
- * returns several, and the framework's existing splitting behaviour does the rest.
+ * @fileoverview PDF, Word and spreadsheet extractors: thin adapters over `@memberjunction/document-parsing`.
  *
  * @module @memberjunction/content-pipeline
  */
@@ -39,19 +27,18 @@ export class PdfExtractor extends BaseContentExtractor {
     public async Extract(request: ExtractRequest): Promise<ExtractResult> {
         const parsed = await ParsePdf(request.Content);
         if (parsed.Text.length === 0) {
-            // A scanned PDF is images in a wrapper. Reporting no blocks is the truth; an empty block
-            // would read downstream as a successful extraction of a document that says nothing.
+            // A scanned PDF has no text; an empty block would read as a successful extraction.
             return { Blocks: [] };
         }
         return { Blocks: [{ Text: parsed.Text, ...(parsed.Title ? { Title: parsed.Title } : {}) }] };
     }
 }
 
-/** Reads text out of a Word document. */
+/** Reads text out of a Word document. `.docx` only: mammoth cannot read the binary `.doc` format. */
 @RegisterClass(BaseContentExtractor, WORD_EXTRACTOR)
 export class WordExtractor extends BaseContentExtractor {
     public readonly Key = WORD_EXTRACTOR;
-    public readonly SupportedFileTypes = ['docx', 'doc'];
+    public readonly SupportedFileTypes = ['docx'];
 
     public async Extract(request: ExtractRequest): Promise<ExtractResult> {
         const parsed = await ParseWord(request.Content);
@@ -59,18 +46,11 @@ export class WordExtractor extends BaseContentExtractor {
     }
 }
 
-/**
- * Reads a spreadsheet, one block per worksheet.
- *
- * Several blocks rather than one: worksheets are usually separate subjects, and concatenating them
- * produces a document whose chunks straddle unrelated material. The framework already turns several
- * blocks into several records, so this needs no special case of its own.
- */
+/** Reads a spreadsheet, one block per worksheet, since sheets are usually separate subjects. */
 @RegisterClass(BaseContentExtractor, SPREADSHEET_EXTRACTOR)
 export class SpreadsheetExtractor extends BaseContentExtractor {
     public readonly Key = SPREADSHEET_EXTRACTOR;
-    // Workbooks only. A .csv is text and reads as text: the parser is ExcelJS's .xlsx reader, which
-    // rejects a CSV as "not a zip", so claiming csv here failed every CSV a source held.
+    // Not csv: ExcelJS's .xlsx reader rejects a CSV as "not a zip".
     public readonly SupportedFileTypes = ['xlsx', 'xlsm'];
 
     public async Extract(request: ExtractRequest): Promise<ExtractResult> {
@@ -85,8 +65,7 @@ export class SpreadsheetExtractor extends BaseContentExtractor {
             }
             blocks.push({
                 Text: text,
-                // The sheet name as the key, so a re-extraction matches each sheet to the record it
-                // produced last time rather than creating a new one.
+                // Sheet name as key, so a re-extraction matches each sheet to its existing record.
                 Key: sheet.Name,
                 Title: sheet.Name,
             });

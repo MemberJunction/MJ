@@ -1,19 +1,6 @@
 /**
- * @fileoverview Turning document bytes into text.
- *
- * One implementation, used by the Core Actions that expose file content and by the content
- * pipeline's extractors. They were separate: the actions parsed with `pdf-parse`, `mammoth` and
- * `exceljs` inline, and anything else wanting the same text either invoked an action per document —
- * putting an action run between every file and its text — or re-wrote the parsing beside it.
- *
- * Deliberately free of MJ dependencies: parsing bytes needs no provider, no user and no metadata, so
- * anything that has bytes can use this, and it can be tested without standing up a database.
- *
- * The parsers are static default imports. `exceljs` is CommonJS, so under native ESM a dynamic
- * `import('exceljs')` exposes it only as `default` — `(await import('exceljs')).Workbook` is
- * undefined and every spreadsheet failed with "Workbook is not a constructor". The default import is
- * also how the Core Actions imported all three before this module existed, and keeps this package in
- * line with MJ's no-dynamic-import rule.
+ * @fileoverview Turns document bytes into text, for the Core Actions and the content pipeline.
+ * Free of MJ dependencies, so it needs no provider or database.
  *
  * @module @memberjunction/document-parsing
  */
@@ -30,13 +17,7 @@ export interface ParsedDocument {
     Title?: string;
     /** How many pages, for formats that have them. */
     Pages?: number;
-    /**
-     * The format's own metadata dictionary, as it stored it.
-     *
-     * Passed through rather than normalised: a PDF's Info dictionary is whatever its producer wrote,
-     * and a caller surfacing it to a user or a model wants what is actually there, not this module's
-     * opinion of which keys matter.
-     */
+    /** The format's own metadata dictionary, passed through as stored. */
     Info?: Record<string, unknown>;
     /** The format version the parser reported. */
     Version?: string;
@@ -58,13 +39,7 @@ export interface ParsedSheet {
     Rows: unknown[][];
 }
 
-/**
- * Extract the text of a PDF.
- *
- * A PDF that yields nothing is usually a scan — images in a wrapper — which is a real outcome rather
- * than a failure, so it returns empty text rather than throwing. The caller decides whether an
- * empty document is worth recording.
- */
+/** Extract the text of a PDF. A scanned PDF returns empty text rather than throwing. */
 export async function ParsePdf(bytes: Uint8Array | Buffer): Promise<ParsedDocument> {
     const parsed = await pdfParse(toBuffer(bytes));
     const title = typeof parsed.info?.Title === 'string' ? parsed.info.Title.trim() : '';
@@ -83,28 +58,13 @@ export async function ParseWord(bytes: Uint8Array | Buffer): Promise<ParsedDocum
     return { Text: result.value?.trim() ?? '' };
 }
 
-/**
- * Convert a Word document to HTML, keeping its structure.
- *
- * Separate from {@link ParseWord} because they answer different questions: raw text is what you
- * embed or classify, HTML is what you show someone or hand to something that cares about headings
- * and lists. Collapsing them would mean one caller always throwing away work the other needed.
- */
+/** Convert a Word document to HTML, keeping its structure. */
 export async function ParseWordToHtml(bytes: Uint8Array | Buffer): Promise<ParsedHtml> {
     const result = await mammoth.convertToHtml({ buffer: toBuffer(bytes) });
-    // The messages carry what the converter could not represent — an unsupported style, a dropped
-    // element. Returning them rather than the HTML alone is what lets a caller tell a faithful
-    // conversion from a lossy one.
     return { Html: result.value ?? '', Messages: result.messages ?? [] };
 }
 
-/**
- * Read a spreadsheet as worksheets of rows.
- *
- * Structure is preserved rather than flattened here, because the two callers want different things
- * from it: the action serialises it as JSON, and the pipeline turns each sheet into its own record.
- * Flattening in here would force one of them to parse the text back apart.
- */
+/** Read a spreadsheet as worksheets of rows. Use {@link SheetsToText} for flat text. */
 export async function ParseSpreadsheet(bytes: Uint8Array | Buffer): Promise<ParsedSheet[]> {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(toBuffer(bytes) as unknown as ExcelJS.Buffer);
@@ -124,13 +84,7 @@ export async function ParseSpreadsheet(bytes: Uint8Array | Buffer): Promise<Pars
     return sheets;
 }
 
-/**
- * Render parsed sheets as tab-separated text.
- *
- * For a caller that wants text rather than structure — embedding, say. Empty cells are dropped and
- * empty rows omitted, so a sparse sheet does not become a wall of tabs that means nothing to a
- * model and costs tokens to say so.
- */
+/** Render parsed sheets as tab-separated text, dropping empty cells and rows. */
 export function SheetsToText(sheets: readonly ParsedSheet[]): string {
     return sheets
         .map((sheet) =>
@@ -168,12 +122,8 @@ function cellToText(value: unknown): string {
 }
 
 /**
- * The bytes as a Buffer that owns its memory exactly.
- *
- * Not `Buffer.from(bytes)`: Node allocates small Buffers out of a shared 8 KB pool, and pdf.js reads
- * the whole underlying ArrayBuffer rather than the view it was given. A 1 KB PDF in a pooled slab was
- * parsed together with whatever else the slab held — a workbook's XML, in the run that caught it — and
- * failed with "bad XRef entry" depending only on what had been allocated before it.
+ * The bytes as a Buffer that owns its memory. Not `Buffer.from(bytes)`: pdf.js reads the whole
+ * underlying ArrayBuffer, so a slice of Node's shared pool fails with "bad XRef entry".
  */
 function toBuffer(bytes: Uint8Array | Buffer): Buffer {
     if (Buffer.isBuffer(bytes) && bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength) {

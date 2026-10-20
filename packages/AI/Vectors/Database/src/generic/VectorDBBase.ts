@@ -62,29 +62,15 @@ export abstract class VectorDBBase {
     abstract GetRecords(params: BaseRequestParams): BaseResponse  | Promise<BaseResponse>;
     abstract UpdateRecord(record: UpdateOptions, indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse  | Promise<BaseResponse>;
     /**
-     * Update stored records — values, metadata, or metadata alone.
-     *
-     * Accepts a batch as well as a single record. A provider that genuinely supports batch updates
-     * takes the array; older implementations accept only the single form and report a failure for
-     * an array, which a caller must treat as "not supported here" rather than as success.
-     *
-     * @param indexName - The index to update, as for {@link CreateRecords}.
-     * @param providerConfig - The parsed `VectorIndex.ProviderConfig`, as for {@link CreateRecords}.
+     * Update stored records (values and/or metadata). A provider without batch support fails on an
+     * array; treat that as "not supported", not success.
      */
     abstract UpdateRecords(records: UpdateOptions | UpdateOptions[], indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse  | Promise<BaseResponse>;
-    /**
-     * Delete one record.
-     *
-     * @param providerConfig - The parsed `VectorIndex.ProviderConfig`, so a delete reaches the same
-     *   place {@link CreateRecords} wrote to — per-record directives first, then this.
-     */
+    /** Delete one record, routed like {@link CreateRecords}: per-record directives, then `providerConfig`. */
     abstract DeleteRecord(record: VectorRecord, indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse  | Promise<BaseResponse>;
     /**
-     * Delete records.
-     *
-     * Routing must mirror {@link CreateRecords}: each record's `providerTemporaryDirectives`, then
-     * `providerConfig`. A namespace-scoped store reports success for an id that is not in the
-     * namespace it was asked about, so an unrouted delete silently removes nothing.
+     * Delete records, routed like {@link CreateRecords}. An unrouted delete in a namespace-scoped
+     * store reports success and removes nothing.
      */
     abstract DeleteRecords(records: VectorRecord[], indexName?: string, providerConfig?: Record<string, unknown>): BaseResponse  | Promise<BaseResponse>;
 

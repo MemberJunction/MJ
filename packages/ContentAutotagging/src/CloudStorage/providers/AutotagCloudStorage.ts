@@ -1,8 +1,16 @@
-import { RegisterClass } from '@memberjunction/global';
+import path from 'path';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJGlobal } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError } from '@memberjunction/core';
 import { MJContentItemEntity } from '@memberjunction/core-entities';
-import { FileStorageBase, StorageObjectMetadata } from '@memberjunction/storage';
+import { FileStorageBase, FileStorageEngine, StorageObjectMetadata } from '@memberjunction/storage';
+import {
+    ConfidenceScale,
+    DiscoverRequest,
+    DiscoveredItem,
+    LocatorFetchRequest,
+    LocatorFetchResponse,
+} from '@memberjunction/content-pipeline-base';
 import { AutotagBase, AutotagProgressCallback } from '../../Core';
 import { AutotagBaseEngine, ContentSourceParams } from '../../Engine';
 import { MJContentSourceEntity } from '@memberjunction/core-entities';
@@ -37,6 +45,8 @@ interface ICloudStorageSourceConfig {
  */
 @RegisterClass(AutotagBase, 'AutotagCloudStorage')
 export class AutotagCloudStorage extends AutotagBase {
+    public override readonly SupportsExhaustiveWalk = true;
+
     /** Maximum folder depth ListModifiedObjects will descend below PathPrefix. */
     private static readonly MAX_LIST_DEPTH = 16;
 
@@ -86,8 +96,7 @@ export class AutotagCloudStorage extends AutotagBase {
         const config = this.parseSourceConfig(contentSource);
         if (!config) return [];
 
-        const driver = this.createStorageDriver(config.FileStorageProviderKey);
-        if (!driver) return [];
+        const driver = await this.ResolveStorageDriver(config.FileStorageProviderKey, this.contextUser, this.ProviderToUse);
 
         const lastRunDate = await this.engine.getContentSourceLastRunDate(contentSource.ID, this.contextUser);
         const prefix = config.PathPrefix ?? '';
@@ -152,36 +161,89 @@ export class AutotagCloudStorage extends AutotagBase {
     }
 
     /**
-     * Create and return a storage driver via ClassFactory using the provider key.
+     * The storage driver for a provider key (ID, name or driver key): the provider's first File
+     * Storage Account through `FileStorageEngine.GetDriver` (credentialed), else the
+     * environment-configured driver registered under that key.
      */
-    private createStorageDriver(providerKey: string): FileStorageBase | null {
-        const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
-            FileStorageBase,
-            providerKey
+    public async ResolveStorageDriver(providerKey: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<FileStorageBase> {
+        const engine = FileStorageEngine.Instance;
+        await engine.Config(false, contextUser, provider);
+        const storageProvider = engine.Providers.find(
+            (p) => UUIDsEqual(p.ID, providerKey) || p.Name === providerKey || p.ServerDriverKey === providerKey,
         );
-        if (!driver) {
-            LogError(`AutotagCloudStorage: no storage driver registered for key "${providerKey}". Ensure the driver is loaded (e.g., import '@memberjunction/storage').`);
-            return null;
+        const account = storageProvider ? engine.GetAccountsByProviderID(storageProvider.ID)[0] : undefined;
+        if (account) {
+            return engine.GetDriver(account.ID, contextUser);
         }
-        if (!driver.IsConfigured) {
-            LogError(`AutotagCloudStorage: storage driver "${providerKey}" is not configured. Check environment variables or mj.config.cjs storage settings.`);
-            return null;
+        const driverKey = storageProvider?.ServerDriverKey ?? providerKey;
+        const driver = MJGlobal.Instance.ClassFactory.TryCreateInstance<FileStorageBase>(FileStorageBase, driverKey);
+        if (!driver.Resolved || !driver.Instance) {
+            throw new Error(`No storage driver is registered for "${driverKey}". Ensure '@memberjunction/storage' is loaded.`);
         }
-        return driver;
+        await driver.Instance.initialize();
+        if (!driver.Instance.IsConfigured) {
+            throw new Error(`Storage driver "${driverKey}" has no File Storage Account and no environment configuration.`);
+        }
+        return driver.Instance;
+    }
+
+    /** List the objects under `PathPrefix` for the pipeline, skipping objects older than `request.Since` when provided. */
+    public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
+        const driver = await this.ResolveStorageDriver(this.providerKeyOf(request), request.ContextUser, request.Provider);
+        // IncludeExtensions arrives as ".pdf,.docx" or a JSON array, flattened to a string either way.
+        const extensions = request.Parameters.IncludeExtensions?.replace(/[[\]"\s]/g, '').split(',').filter(Boolean);
+        for (const object of await this.listModifiedObjects(driver, request.Parameters.PathPrefix ?? '', request.Since ?? undefined, extensions)) {
+            if (request.Signal.aborted) {
+                return;
+            }
+            const extension = path.extname(object.name).slice(1).toLowerCase();
+            yield {
+                URL: object.fullPath,
+                Fields: [
+                    { Field: 'Title', Value: object.name, Confidence: ConfidenceScale.DiscoveredTitle },
+                    ...(object.lastModified ? [{ Field: 'Date' as const, Value: object.lastModified, Confidence: ConfidenceScale.DiscoveredDate }] : []),
+                    ...(extension ? [{ Field: 'FileType' as const, Value: extension, Confidence: ConfidenceScale.DiscoveredFileType }] : []),
+                ],
+            };
+        }
+    }
+
+    /** Read a listed object through the same provider, confined to `PathPrefix` when configured. */
+    public async Fetch(request: LocatorFetchRequest): Promise<LocatorFetchResponse> {
+        const objectPath = request.URL.replace(/^\/+/, '');
+        if (!objectPath || objectPath.split('/').some((seg) => seg === '..' || seg === '.')) {
+            throw new Error(`'${request.URL}' is not a valid cloud storage object key`);
+        }
+        const prefix = (request.Parameters.PathPrefix ?? '').replace(/^\/+|\/+$/g, '');
+        if (prefix && objectPath !== prefix && !objectPath.startsWith(`${prefix}/`)) {
+            throw new Error(`'${request.URL}' is outside the source's PathPrefix '${request.Parameters.PathPrefix}'`);
+        }
+        const driver = await this.ResolveStorageDriver(this.providerKeyOf(request), request.ContextUser, request.Provider);
+        const bytes = await driver.GetObject({ fullPath: request.URL });
+        return { Content: new Uint8Array(bytes), ResolvedURL: request.URL };
+    }
+
+    /** `FileStorageProviderKey`, the field the Cloud Storage type declares. */
+    private providerKeyOf(request: DiscoverRequest | LocatorFetchRequest): string {
+        const key = request.Parameters.FileStorageProviderKey;
+        if (!key) {
+            throw new Error('This Cloud Storage source names no storage provider. Set FileStorageProviderKey.');
+        }
+        return key;
     }
 
     /**
-     * List all objects in the storage driver that were modified after lastRunDate.
-     * Optionally filter by file extension.
+     * List every object under `prefix`, recursively — only those modified after `lastRunDate` when
+     * given, and only `includeExtensions` (with or without the dot) when given.
      */
     private async listModifiedObjects(
         driver: FileStorageBase,
         prefix: string,
-        lastRunDate: Date,
+        lastRunDate?: Date,
         includeExtensions?: string[]
     ): Promise<StorageObjectMetadata[]> {
         const extSet = includeExtensions?.length
-            ? new Set(includeExtensions.map(ext => ext.toLowerCase()))
+            ? new Set(includeExtensions.map(ext => (ext.startsWith('.') ? ext : `.${ext}`).toLowerCase()))
             : null;
 
         // Walk the tree under the prefix: ListObjects returns one level (objects + child prefixes), so
@@ -203,7 +265,7 @@ export class AutotagCloudStorage extends AutotagBase {
 
         return objects.filter(obj => {
             if (obj.isDirectory) return false;
-            if (obj.lastModified <= lastRunDate) return false;
+            if (lastRunDate && obj.lastModified <= lastRunDate) return false;
             if (extSet) {
                 const ext = this.getFileExtension(obj.name);
                 if (!extSet.has(ext)) return false;

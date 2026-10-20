@@ -1169,7 +1169,7 @@ import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
-// @memberjunction/content-autotagging (11 classes)
+// @memberjunction/content-autotagging (6 classes)
 import {
     AutotagBaseEngine,
     AutotagCloudStorage,
@@ -1177,11 +1177,6 @@ import {
     AutotagLocalFileSystem,
     AutotagRSSFeed,
     AutotagWebsite,
-    CloudStorageDiscoverDriver,
-    EntityDiscoverDriver,
-    LocalFileSystemDiscoverDriver,
-    RSSFeedDiscoverDriver,
-    WebsiteDiscoverDriver,
 } from '@memberjunction/content-autotagging';
 
 // @memberjunction/rubrics (11 classes)
@@ -1307,10 +1302,9 @@ import {
     RecordProcessRunNowServerOperation,
 } from '@memberjunction/record-set-processor';
 
-// @memberjunction/content-pipeline (18 classes)
+// @memberjunction/content-pipeline (15 classes)
 import {
     ArchiveExtractor,
-    ContentFetcher,
     DeleteContentItemStage,
     DeleteStage,
     DiscoverStage,
@@ -1318,14 +1312,12 @@ import {
     EmbedStage,
     ExtractStage,
     HtmlExtractor,
-    ManagedPromptClassifier,
     NoOpStage,
     PdfExtractor,
     PlainTextExtractor,
     SegmentStage,
     SpreadsheetExtractor,
     TagStage,
-    VectorRecordRouter,
     WordExtractor,
 } from '@memberjunction/content-pipeline';
 
@@ -2500,11 +2492,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AutotagLocalFileSystem,
     AutotagRSSFeed,
     AutotagWebsite,
-    CloudStorageDiscoverDriver,
-    EntityDiscoverDriver,
-    LocalFileSystemDiscoverDriver,
-    RSSFeedDiscoverDriver,
-    WebsiteDiscoverDriver,
     AgentRubricEvaluator,
     CreateRubricDraftAction,
     DecisionRubricEvaluator,
@@ -2524,15 +2511,15 @@ const CLASS_REGISTRATIONS_3: any[] = [
     FullTextSearchProvider,
     NoopReRanker,
     OpenAIReRanker,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     OpenSearchSearchProvider,
     SearchScopePermissionResolver,
     StorageSearchProvider,
     TagSearchProvider,
     TypesenseSearchProvider,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     VectorSearchProvider,
     VoyageReRanker,
     AISkillExportMarkdownServerOperation,
@@ -2593,7 +2580,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RecordProcessResumeRunServerOperation,
     RecordProcessRunNowServerOperation,
     ArchiveExtractor,
-    ContentFetcher,
     DeleteContentItemStage,
     DeleteStage,
     DiscoverStage,
@@ -2601,14 +2587,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     EmbedStage,
     ExtractStage,
     HtmlExtractor,
-    ManagedPromptClassifier,
     NoOpStage,
     PdfExtractor,
     PlainTextExtractor,
     SegmentStage,
     SpreadsheetExtractor,
     TagStage,
-    VectorRecordRouter,
     WordExtractor,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
@@ -2728,10 +2712,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
     AgentEvalDriver,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     DecisionEvalDriver,
     PromptEvalDriver,
     RubricCalibrationTestDriver,
@@ -2740,6 +2720,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     IntegrationTestDriver,
     BraveWebSearchProvider,
     DuckDuckGoWebSearchProvider,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     GoogleCustomSearchWebSearchProvider,
     PerplexityWebSearchProvider,
     TavilyWebSearchProvider,
@@ -2936,7 +2920,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1188;
+export const CLASS_REGISTRATIONS_COUNT = 1180;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

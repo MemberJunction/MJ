@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
 import { BasePipelineStage } from '../BasePipelineStage.js';
-import { FatalStageError, IsFinalAttempt, Outcome, StageContext, TransientStageError } from '../Stage.types.js';
+import { FatalStageError, Outcome, TransientStageError } from '../Stage.types.js';
 import { WorkingRecord } from '../WorkingRecord.js';
 import { WorkingRecordEntity } from '../WorkingRecord.types.js';
 
@@ -13,16 +13,6 @@ class TestNoOpStage extends BasePipelineStage {
     public async Run(): Promise<ReturnType<typeof Outcome.Complete>> {
         return Outcome.Complete();
     }
-}
-
-function contextWith(partial: Partial<StageContext>): StageContext {
-    return {
-        Scope: 'Filter',
-        Attempt: 1,
-        MaxAttempts: 1,
-        IsReplay: false,
-        ...partial,
-    } as StageContext;
 }
 
 describe('Outcome builders', () => {
@@ -40,20 +30,6 @@ describe('Outcome builders', () => {
 
     it('distinguishes Skipped from Failed — a genuine decline is not a failure', () => {
         expect(Outcome.Skipped('no text to segment').Status).toBe('Skipped');
-    });
-});
-
-describe('IsFinalAttempt', () => {
-    it('is always final in filter scope, which does not retry', () => {
-        expect(IsFinalAttempt(contextWith({ Scope: 'Filter', Attempt: 1, MaxAttempts: 5 }))).toBe(true);
-    });
-
-    it('is not final mid-way through a queue-scoped record', () => {
-        expect(IsFinalAttempt(contextWith({ Scope: 'Queue', Attempt: 2, MaxAttempts: 5 }))).toBe(false);
-    });
-
-    it('is final on the last queue attempt', () => {
-        expect(IsFinalAttempt(contextWith({ Scope: 'Queue', Attempt: 5, MaxAttempts: 5 }))).toBe(true);
     });
 });
 

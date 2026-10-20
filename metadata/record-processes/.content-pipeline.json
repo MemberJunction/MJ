@@ -3,7 +3,7 @@
     "entity": "MJ: Record Processes",
     "fields": {
       "Name": "Content Pipeline \u2014 Discover",
-      "Description": "Walks each Content Source that is due and records what it found as Content Items. Readiness is the source's schedule or its ForceDiscovery flag; a completed walk clears the flag and stamps LastDiscoveredAt, so there is no status to re-arm.",
+      "Description": "Walks each Content Source selected by the Record Process filter and records what it found as Content Items. Sources selected for a Discover run are always walked; a completed walk clears ForceDiscovery and stamps LastDiscoveredAt.",
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Sources",
       "Status": "Active",
       "WorkType": "Pipeline Stage",
@@ -24,6 +24,39 @@
     },
     "primaryKey": {
       "ID": "E4EAABE6-DDA0-4E00-BA9F-DE9880792606"
+    }
+  },
+  {
+    "entity": "MJ: Record Processes",
+    "fields": {
+      "Name": "Content Pipeline \u2014 Sync",
+      "Description": "Exhaustively walks each selected Content Source (ignoring LastDiscoveredAt), reconciles top-level items that were removed from the source by marking them DeleteStatus = 'Pending' for the Delete stage, and stamps both LastDiscoveredAt and LastSyncedAt on completion. Unscheduled by default.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Sources",
+      "Status": "Active",
+      "WorkType": "Pipeline Stage",
+      "ScopeType": "Filter",
+      "ScopeFilter": "ForceDiscovery = 1",
+      "OnChangeEnabled": false,
+      "ScheduleEnabled": false,
+      "OnDemandEnabled": true,
+      "SkipUnchanged": false,
+      "WatermarkStrategy": "Checksum",
+      "BatchSize": 25,
+      "MaxConcurrency": 1,
+      "Configuration": {
+        "Stages": [
+          "Discover"
+        ],
+        "Options": {
+          "Mode": "Sync",
+          "Tuning": {
+            "MaxSyncRemovalShare": 0.5
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "7963CF01-4D8E-4A21-98E2-87D36243F021"
     }
   },
   {
@@ -50,7 +83,8 @@
         "Options": {
           "Tuning": {
             "MaxArchiveMembers": 10000,
-            "MaxArchiveBytes": 536870912
+            "MaxArchiveBytes": 536870912,
+            "MaxArchiveDepth": 3
           }
         }
       }
@@ -220,7 +254,8 @@
         "Options": {
           "Tuning": {
             "MaxArchiveMembers": 10000,
-            "MaxArchiveBytes": 536870912
+            "MaxArchiveBytes": 536870912,
+            "MaxArchiveDepth": 3
           }
         }
       }

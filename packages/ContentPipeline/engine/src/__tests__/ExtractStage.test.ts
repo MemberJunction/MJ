@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
+import { HttpError } from '@memberjunction/network-utils';
 import {
     BaseContentExtractor,
     ExtractRequest,
@@ -9,9 +10,21 @@ import {
     WorkingRecord,
     WorkingRecordIdentity,
 } from '@memberjunction/content-pipeline-base';
+const fetchContent = vi.hoisted(() => vi.fn());
+vi.mock('../ContentFetcher.js', () => ({ FetchContent: fetchContent }));
+
 import { ExtractStage } from '../stages/ExtractStage.js';
-import { ContentFetcher } from '../ContentFetcher.js';
 import { ContentSourceConfigurationResolver } from '../ContentSourceConfigurationResolver.js';
+import type { DetectionRow } from '../DetectionCatalog.js';
+
+/** Detection rules as metadata supplies them: html read by the test extractor, media not text. */
+const FILE_TYPES: DetectionRow[] = [
+    { Name: 'HTML', FileExtension: '.html', ByteSignature: null, IsText: true, ExtractorKey: 'extract-html' },
+    { Name: 'PNG', FileExtension: '.png', ByteSignature: null, IsText: false, ExtractorKey: null },
+    { Name: 'MP3', FileExtension: '.mp3', ByteSignature: null, IsText: false, ExtractorKey: null },
+    { Name: 'MP4', FileExtension: '.mp4', ByteSignature: null, IsText: false, ExtractorKey: null },
+    { Name: 'ZIP', FileExtension: '.zip', ByteSignature: null, IsText: false, ExtractorKey: 'extract-zip' },
+];
 
 let blocks: ExtractResult = { Blocks: [{ Text: 'read by the html extractor', Title: 'Document title' }] };
 
@@ -24,16 +37,23 @@ class HtmlTestExtractor extends BaseContentExtractor {
     }
 }
 
+/** An archive standing in for zip: its members come back as bytes, as ArchiveExtractor's do. */
+@RegisterClass(BaseContentExtractor, 'extract-zip')
+class ZipTestExtractor extends BaseContentExtractor {
+    public readonly Key = 'extract-zip';
+    public readonly SupportedFileTypes = ['zip'];
+    public async Extract(_request: ExtractRequest): Promise<ExtractResult> {
+        const member = (key: string, text: string) => ({ Text: '', Key: key, FileType: key.split('.').pop(), Content: new TextEncoder().encode(text) });
+        return { Blocks: [member('page.html', '<html>x</html>'), member('photo.png', 'binary'), member('notes.bizarre', 'plain notes')] };
+    }
+}
+
 function contextWith(configuration: Record<string, unknown> = {}, signal?: AbortSignal): StageContext {
     return {
         ContextUser: {} as never,
         Provider: {} as never,
         Configuration: configuration,
         IsTest: false,
-        Scope: 'Filter',
-        Attempt: 1,
-        MaxAttempts: 1,
-        IsReplay: false,
         Signal: signal ?? new AbortController().signal,
         ReportProgress: () => {},
         Log: { Info: () => {}, Warning: () => {}, Error: () => {} },
@@ -46,10 +66,7 @@ function itemAt(url: string): WorkingRecord {
 }
 
 function stubFetch(text: string): void {
-    vi.spyOn(ContentFetcher.prototype, 'Fetch').mockResolvedValue({
-        Content: new TextEncoder().encode(text),
-        ResolvedURL: undefined,
-    });
+    fetchContent.mockResolvedValue({ Content: new TextEncoder().encode(text), ResolvedURL: undefined });
 }
 
 beforeEach(() => {
@@ -57,6 +74,8 @@ beforeEach(() => {
     // ContentType.ExtractorKey is read from the Knowledge Hub cache; no database here, so no rows.
     vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
     vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'GetContentSourceByID').mockReturnValue(undefined);
+    vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'ContentFileTypes', 'get').mockReturnValue(FILE_TYPES as never);
+    fetchContent.mockReset();
     blocks = { Blocks: [{ Text: 'read by the html extractor', Title: 'Document title' }] };
     vi.spyOn(ContentSourceConfigurationResolver.prototype, 'Resolve').mockResolvedValue({
         ContentSourceID: 'SRC-1',
@@ -64,17 +83,16 @@ beforeEach(() => {
         Settings: {},
         Parameters: {},
         Configuration: {},
-        DeclaredFields: [],
         Problems: [],
         IsValid: true,
     } as never);
 });
 
 describe('ExtractStage — reading', () => {
-    it('reads with the content-type default extractor and proposes the text', async () => {
+    it("reads with the file type's extractor from metadata and proposes the text", async () => {
         stubFetch('<html>body</html>');
         const record = itemAt('https://x.test/page.html');
-        const outcome = await new ExtractStage().Run(record, contextWith({ ContentTypeExtractorKey: 'extract-html' }));
+        const outcome = await new ExtractStage().Run(record, contextWith());
         expect(outcome.Status).toBe('Complete');
         expect(record.Get('Text')).toBe('read by the html extractor');
     });
@@ -82,7 +100,7 @@ describe('ExtractStage — reading', () => {
     it('proposes a title the extractor found in the document structure', async () => {
         stubFetch('<html>body</html>');
         const record = itemAt('https://x.test/page.html');
-        await new ExtractStage().Run(record, contextWith({ ContentTypeExtractorKey: 'extract-html' }));
+        await new ExtractStage().Run(record, contextWith());
         expect(record.Get('Title')).toBe('Document title');
     });
 
@@ -90,21 +108,21 @@ describe('ExtractStage — reading', () => {
         stubFetch('<html>body</html>');
         const record = itemAt('https://x.test/page.html');
         record.Propose('Title', 'From the listing', 9, 'Discover.RSS');
-        await new ExtractStage().Run(record, contextWith({ ContentTypeExtractorKey: 'extract-html' }));
+        await new ExtractStage().Run(record, contextWith());
         expect(record.Get('Title')).toBe('From the listing');
     });
 
     it('resolves file type from the URL extension when nothing was declared', async () => {
         stubFetch('<html>body</html>');
         const record = itemAt('https://x.test/page.html');
-        await new ExtractStage().Run(record, contextWith({ ContentTypeExtractorKey: 'extract-html' }));
+        await new ExtractStage().Run(record, contextWith());
         expect(record.Get('FileType')).toBe('html');
     });
 
     it('records which extractor actually ran', async () => {
         stubFetch('<html>body</html>');
         const record = itemAt('https://x.test/page.html');
-        await new ExtractStage().Run(record, contextWith({ ContentTypeExtractorKey: 'extract-html' }));
+        await new ExtractStage().Run(record, contextWith());
         expect(record.GetExtension<string>('Extract', 'extractorKey')).toBe('extract-html');
     });
 
@@ -112,7 +130,7 @@ describe('ExtractStage — reading', () => {
         stubFetch('<html></html>');
         blocks = { Blocks: [] };
         const record = itemAt('https://x.test/page.html');
-        const outcome = await new ExtractStage().Run(record, contextWith({ ContentTypeExtractorKey: 'extract-html' }));
+        const outcome = await new ExtractStage().Run(record, contextWith());
         expect(outcome.Status).toBe('Skipped');
     });
 });
@@ -124,7 +142,7 @@ describe('ExtractStage — an artifact that expands into other items', () => {
         stubFetch('<html>body</html>');
         blocks = { Blocks: [{ Text: 'first', Key: 'a' }, { Text: 'second', Key: 'b' }, { Text: 'third', Key: 'c' }] };
         const record = itemAt('https://x.test/bundle.html');
-        await new ExtractStage().Run(record, contextWith({ ContentTypeExtractorKey: 'extract-html' }));
+        await new ExtractStage().Run(record, contextWith());
         expect(record.Get('Text')).toBeNull();
         expect(record.Children).toHaveLength(3);
         expect(record.Children.map((c) => c.Identity.EphemeralID)).toEqual([
@@ -138,7 +156,7 @@ describe('ExtractStage — an artifact that expands into other items', () => {
         stubFetch('<html>body</html>');
         blocks = { Blocks: [{ Text: 'the whole document' }] };
         const record = itemAt('https://x.test/page.html');
-        await new ExtractStage().Run(record, contextWith({ ContentTypeExtractorKey: 'extract-html' }));
+        await new ExtractStage().Run(record, contextWith());
         expect(record.Get('Text')).toBe('the whole document');
         expect(record.Children).toHaveLength(0);
     });
@@ -149,7 +167,7 @@ describe('ExtractStage — an artifact that expands into other items', () => {
         blocks = { Blocks: [{ Text: 'first' }, { Text: 'second', Key: 'b' }] };
         const record = itemAt('https://x.test/page.html');
         record.Propose('Date', authored, 5, 'Discover.RSS');
-        await new ExtractStage().Run(record, contextWith({ ContentTypeExtractorKey: 'extract-html' }));
+        await new ExtractStage().Run(record, contextWith());
         expect(record.Children[0].Get('Date')).toBe(authored);
     });
 
@@ -157,8 +175,24 @@ describe('ExtractStage — an artifact that expands into other items', () => {
         stubFetch('<html>body</html>');
         blocks = { Blocks: [{ Text: 'first', Key: 'a' }, { Text: 'sheet', Key: 'b', ExtractorKeyOverride: 'extract-html' }] };
         const record = itemAt('https://x.test/page.html');
-        await new ExtractStage().Run(record, contextWith({ ContentTypeExtractorKey: 'extract-html' }));
-        expect(record.Children[1].GetExtension<string>('Extract', 'keyOverride')).toBe('extract-html');
+        await new ExtractStage().Run(record, contextWith());
+        expect(record.Children[1].GetExtension<string>('Pipeline', 'extractorKeyOverride')).toBe('extract-html');
+    });
+});
+
+describe('ExtractStage — archive members take the same path as any document', () => {
+    it('reads each member now: through its extractor, as non-text, or as plain text', async () => {
+        stubFetch('PK');
+        const record = itemAt('https://x.test/bundle.zip');
+        const outcome = await new ExtractStage().Run(record, contextWith());
+        expect(outcome.Status).toBe('Complete');
+        const [page, photo, notes] = record.Children;
+        expect(page.Get('Text')).toBe('read by the html extractor');
+        expect(page.GetExtension<string>('Extract', 'extractorKey')).toBe('extract-html');
+        // Non-text and no durable copies configured: closed out, never left Pending behind the container's URL.
+        expect(photo.Get('Modality')).toBe('image');
+        expect(photo.IsComplete).toBe(true);
+        expect(notes.Get('Text')).toBe('plain notes');
     });
 });
 
@@ -212,23 +246,50 @@ describe('ExtractStage — non-text content', () => {
 
 describe('ExtractStage — failure classification', () => {
     it('treats a 404 as fatal, because it will never succeed', async () => {
-        vi.spyOn(ContentFetcher.prototype, 'Fetch').mockRejectedValue(new Error('HTTP 404 Not Found'));
+        fetchContent.mockRejectedValue(new HttpError('Request failed with status code 404', { Status: 404, Url: 'https://x.test/gone.html', Method: 'GET' }));
         const record = itemAt('https://x.test/gone.html');
         await expect(new ExtractStage().Run(record, contextWith())).rejects.toThrow(/Cannot fetch/);
     });
 
     it('treats a network blip as transient', async () => {
-        vi.spyOn(ContentFetcher.prototype, 'Fetch').mockRejectedValue(new Error('socket hang up'));
+        fetchContent.mockRejectedValue(new Error('socket hang up'));
         const record = itemAt('https://x.test/page.html');
         await expect(new ExtractStage().Run(record, contextWith())).rejects.toThrow(/Fetching/);
     });
 
     it('does not fetch at all when already cancelled', async () => {
-        const fetchSpy = vi.spyOn(ContentFetcher.prototype, 'Fetch');
         const controller = new AbortController();
         controller.abort();
         const outcome = await new ExtractStage().Run(itemAt('https://x.test/a.html'), contextWith({}, controller.signal));
         expect(outcome.Status).toBe('Retry');
-        expect(fetchSpy).not.toHaveBeenCalled();
+        expect(fetchContent).not.toHaveBeenCalled();
+    });
+
+    it('expands a single-member archive into a child item and extracts its bytes rather than discarding them', async () => {
+        stubFetch('<html>wrapper</html>');
+        blocks = {
+            Blocks: [
+                {
+                    Text: '',
+                    Key: 'report.txt',
+                    FileType: 'bizarre',
+                    Content: new TextEncoder().encode('Single member content inside archive.'),
+                },
+            ],
+        };
+        const record = itemAt('https://x.test/single.html');
+        const outcome = await new ExtractStage().Run(record, contextWith());
+        expect(outcome.Status).toBe('Complete');
+        expect(record.Get('Text')).toBeNull();
+        expect(record.Children).toHaveLength(1);
+        expect(record.Children[0].Get('Text')).toBe('Single member content inside archive.');
+        expect(record.Children[0].GetExtension<string>('Pipeline', 'checksum')).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('computes a SHA-256 checksum for extracted text so the committer can detect unchanged re-extractions', async () => {
+        stubFetch('<html>body</html>');
+        const record = itemAt('https://x.test/page.html');
+        await new ExtractStage().Run(record, contextWith());
+        expect(record.GetExtension<string>('Pipeline', 'checksum')).toMatch(/^[0-9a-f]{64}$/);
     });
 });

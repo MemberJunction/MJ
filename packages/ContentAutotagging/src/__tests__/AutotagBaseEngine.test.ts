@@ -53,6 +53,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
   class MockRunView {
     RunView = mockRunViewFn;
     RunViews = mockRunViewsFn;
+    static FromMetadataProvider() {
+      return new MockRunView();
+    }
   }
   return {
     ...actual,
@@ -340,6 +343,7 @@ vi.mock('date-fns-tz', () => ({
 }));
 
 import { AutotagBaseEngine } from '../Engine/generic/AutotagBaseEngine';
+import { ContentVectorInfrastructure } from '../Engine/generic/ContentVectorInfrastructure';
 
 // Mock EntityInfo for 'MJ: Content Items', used by the strategy-driven metadata field resolution.
 // Field set covers each eligibility branch: PK+uuid (ID), plain strings (Name/Description/URL),
@@ -789,10 +793,10 @@ describe('AutotagBaseEngine', () => {
           ID: 'source-1',
           ContentSourceTypeID: 'type-1',
           ConfigurationObject: cfg,
-          // loadContentSourceAndTypeMaps calls GetAll() to build the infra map. Return null
-          // infra ids so the item falls back to the default (global) vector infrastructure that
+          // No infra pair, so the item falls back to the default (global) vector infrastructure that
           // setupVectorMocks provides.
-          GetAll: () => ({ EmbeddingModelID: null, VectorIndexID: null }),
+          EmbeddingModelID: null,
+          VectorIndexID: null,
         } as never);
       }
     }
@@ -1153,7 +1157,7 @@ describe('AutotagBaseEngine', () => {
     // A colocated provider keeps vectors in the application's own database: no credentials to present,
     // and it needs the active data-provider connection wired in before use. Both facts are only
     // knowable after instantiation, which is why the key check moved below it.
-    describe('createVectorDBInstance — colocated providers', () => {
+    describe('ContentVectorInfrastructure.CreateVectorDB — colocated providers', () => {
       /** Swap in a vector-DB double with the given colocated/key characteristics. */
       async function withVectorDB(shape: { SupportsColocatedQuery: boolean; RequiresAPIKey: boolean }, apiKey: string | null) {
         const { MJGlobal } = await import('@memberjunction/global');
@@ -1170,8 +1174,10 @@ describe('AutotagBaseEngine', () => {
         return { tryWire, createRecords };
       }
 
-      const create = (): VectorDBBase =>
-        (engine as unknown as { createVectorDBInstance: (k: string) => VectorDBBase }).createVectorDBInstance.call(engine, 'SQLServerVectorDatabase');
+      const create = (): Promise<VectorDBBase> =>
+        new ContentVectorInfrastructure({} as never, mockUser).CreateVectorDB(
+          { ID: 'vdb-local', Name: 'Local', ClassKey: 'SQLServerVectorDatabase', CredentialID: null } as never,
+        );
 
       afterEach(async () => {
         const { GetAIAPIKey } = await import('@memberjunction/ai');
@@ -1181,7 +1187,7 @@ describe('AutotagBaseEngine', () => {
       it('wires the host connection on every instance it creates', async () => {
         const { tryWire } = await withVectorDB({ SupportsColocatedQuery: true, RequiresAPIKey: false }, null);
 
-        create();
+        await create();
 
         // Without this the provider throws "requires a host connection" the first time it is used —
         // and it failed confusingly: CreateIndex logged and continued, then vectorization died later
@@ -1194,14 +1200,14 @@ describe('AutotagBaseEngine', () => {
 
         // Previously this threw before instantiation, so a colocated store could only be used by
         // inventing a meaningless AI_VENDOR_API_KEY__SQLServerVectorDatabase.
-        expect(() => create()).not.toThrow();
+        await expect(create()).resolves.toBeDefined();
       });
 
       it('never hands the constructor an empty key, because VectorDBBase rejects one', async () => {
         await withVectorDB({ SupportsColocatedQuery: true, RequiresAPIKey: false }, null);
         const { MJGlobal } = await import('@memberjunction/global');
 
-        create();
+        await create();
 
         // Not cosmetic. `VectorDBBase`'s constructor throws "API key cannot be empty" and colocated
         // providers do not override it, so passing '' would break the keyless case this supports —
@@ -1216,7 +1222,7 @@ describe('AutotagBaseEngine', () => {
 
         // The relaxation is scoped to providers that genuinely need no credentials — Pinecone and
         // friends must still fail loudly rather than attempt an unauthenticated call.
-        expect(() => create()).toThrow(/No API key found for vector DB SQLServerVectorDatabase/);
+        await expect(create()).rejects.toThrow(/No API key found for vector DB SQLServerVectorDatabase/);
       });
     });
 
@@ -1791,7 +1797,8 @@ describe('AutotagBaseEngine', () => {
           ID: 'source-1',
           ContentSourceTypeID: 'type-1',
           ConfigurationObject: { ChunkTextStorage: 'mixed' },
-          GetAll: () => ({ EmbeddingModelID: 'embed-model-1', VectorIndexID: SOURCE_INDEX.ID }),
+          EmbeddingModelID: 'embed-model-1',
+          VectorIndexID: SOURCE_INDEX.ID,
         };
       }
       /** Make the next reload find the late source (idempotent — a second reload adds nothing). */
@@ -1808,7 +1815,7 @@ describe('AutotagBaseEngine', () => {
         k.VectorIndexes.push(SOURCE_INDEX);
         // The content type IS cached (it predates the worker) and carries no infra of its own, so
         // a lost source override falls through to the default index.
-        k.ContentTypes.push({ ID: 'content-type-1', GetAll: () => ({ EmbeddingModelID: null, VectorIndexID: null }) });
+        k.ContentTypes.push({ ID: 'content-type-1', EmbeddingModelID: null, VectorIndexID: null });
       });
       afterEach(async () => {
         const k = await kh();

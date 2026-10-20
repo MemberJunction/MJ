@@ -1,134 +1,80 @@
 /**
- * @fileoverview {@link PipelineProcessor} — the one generic processor every pipeline stage runs
- * behind.
- *
- * Exactly one class implements Record Set Processing's processor contract for the pipeline. It is
- * built once per run with the Record Process row's configuration in hand, so it knows which stages
- * it is running before the first record arrives. Per record it hydrates, runs the stage, commits
- * unless this is a test, and returns the outcome. That is the entire piece of glue between the
- * platform's loop and a stage.
+ * @fileoverview {@link PipelineProcessor} — the one Record Set Processing processor every pipeline stage
+ * runs behind. Per record it hydrates, runs the configured stage(s), commits unless this is a test, and
+ * returns the outcome.
  *
  * @module @memberjunction/content-pipeline
  */
 
 import { IRecordProcessor, RecordProcessorContext, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import {
+    AccessArtifact,
     BasePipelineStage,
     FatalStageError,
-    IsFinalAttempt,
     Outcome,
+    ResolveTuning,
     StageContext,
     StageLogger,
     StageOutcome,
-    StageScope,
     TransientStageError,
     WorkingRecord,
     WorkingRecordEntity,
 } from '@memberjunction/content-pipeline-base';
-
-import { NormalizeUUID } from '@memberjunction/global';
-import { GetEntityName } from './EntityFieldMap.js';
+import { NormalizeUUID, UUIDMap } from '@memberjunction/global';
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { GetEntityName } from './EntityFieldMap.js';
 import { ChildCommitDefaults, WorkingRecordCommitter } from './WorkingRecordCommitter.js';
 import { WorkingRecordHydrator } from './WorkingRecordHydrator.js';
 import { ContentPipelineDeleteMarker } from './ContentPipelineDeleteMarker.js';
-import { ReconcileChildren } from './ChildReconciliation.js';
-import { AccessResolver } from './AccessResolver.js';
+import { ContentSourceConfigurationResolver } from './ContentSourceConfigurationResolver.js';
+import { DISCOVER_STAGE, IsSyncMode, ResolveSourceDriver } from './stages/DiscoverStage.js';
 import { WhereEqual } from './Filters.js';
 
-/** How a {@link PipelineProcessor} was configured for this run. */
+/** How a {@link PipelineProcessor} is configured for one run. */
 export interface PipelineProcessorConfig {
-    /**
-     * The stages to run, in order, by registered name.
-     *
-     * In production a Record Process names exactly one. A list is how a test run chains several:
-     * the processor runs them on the same working record, in memory, handing each stage's output
-     * straight to the next — no reload, no commit in between.
-     */
+    /** Stage names, in order. Production runs name one; a test run may chain several in memory. */
     Stages: readonly string[];
-    /** When true, no commit happens and the run reports what would have been written. */
+    /** When true nothing is committed; the run reports what would have been written. */
     IsTest: boolean;
-    /** Where this run's records come from, which decides retry semantics. */
-    Scope: StageScope;
-    /** Configuration carried by the source or the run, handed to each stage. */
+    /** Configuration handed to every stage. */
     Configuration: Record<string, unknown>;
-    /**
-     * Wall-clock budget per stage, per record, in milliseconds.
-     *
-     * Time-boxing extends the run budget the platform already has — a record cap, a delay between
-     * pages — with time. When a stage's budget runs out it stops and reports what it found, rather
-     * than hanging.
-     *
-     * Implemented by aborting the stage's stop signal, so **every stage that already honours
-     * cancellation is time-boxed without changing a line of its code**. A stage that never checks
-     * its signal runs to completion either way; time cannot stop work the code does not pause for.
-     */
+    /** Per-stage, per-record wall-clock budget in ms. Enforced by aborting the stage's signal. */
     StageBudgetMs?: number;
 }
 
-/** Extra per-record facts the queue supplies and a filter-scoped run does not have. */
-export interface PipelineRecordHints {
-    Attempt?: number;
-    MaxAttempts?: number;
-    IsReplay?: boolean;
-    Signal?: AbortSignal;
-}
-
-/**
- * Builds the two storage-touching helpers from the per-record context.
- *
- * Record Set Processing's work-type factory is handed configuration but no provider or acting user —
- * those arrive per record, on `RecordProcessorContext`. So these are resolved lazily rather than at
- * construction, and injecting them is also how the tests substitute doubles.
- */
+/** Builds the two storage-touching helpers per record; tests substitute doubles. */
 export interface StorageFactories {
     Hydrator(provider: IMetadataProvider, contextUser: UserInfo): WorkingRecordHydrator;
     Committer(provider: IMetadataProvider, contextUser: UserInfo): WorkingRecordCommitter;
 }
 
-/** The real pair, reading and writing through MemberJunction's standard save path. */
+/** The real pair, reading and writing through the standard save path. */
 export const DefaultStorageFactories: StorageFactories = {
     Hydrator: (provider, contextUser) => new WorkingRecordHydrator(provider, contextUser),
     Committer: (provider, contextUser) => new WorkingRecordCommitter(provider, contextUser),
 };
 
-/** One stage's stop signal on one record, and whether its time budget ran out. */
+/** Live per-record status, implemented by `PipelineProcessRunTracker`. */
+export interface ProgressReporter {
+    /** Open a record's status row before its stage starts. Failures are logged, never fatal. */
+    OpenRecord(key: string, stageName: string): Promise<void>;
+    ReportProgress(key: string, message: string): void;
+    /** One detail row for a record the platform never handed us (Discover's items, an archive's members). */
+    RecordChildOutcome?(parentRecord: RecordRef, childKey: string, result: RecordResult, childEntityID?: string): Promise<void>;
+}
+
 interface StageBudget {
     Signal: AbortSignal;
     Expired: boolean;
     Dispose(): void;
 }
 
-/** Reports a stage's progress while a record is still being worked on. */
-export interface ProgressReporter {
-    /**
-     * Open status for a record about to be worked on. Awaited, so the row exists before the stage
-     * starts and the stage's first progress report has somewhere to land. A rejection is swallowed
-     * by the caller: losing live visibility must never stop a record being processed.
-     */
-    OpenRecord(key: string, stageName: string): Promise<void>;
-    ReportProgress(key: string, message: string): void;
-    /**
-     * Record one outcome for a record the platform never handed to the processor — Discover's found
-     * items, a splitting extractor's blocks. Each gets its own detail row, which is what lets a
-     * Discover-into-Extract test show per-item results.
-     */
-    RecordChildOutcome?(
-        parentRecord: RecordRef,
-        childKey: string,
-        result: RecordResult,
-        childEntityID?: string,
-    ): Promise<void>;
-}
-
-/**
- * Runs configured stages over one record at a time.
- *
- * Constructed once per run by the registered work-type factory, which resolves the stage
- * instances up front so nothing is looked up per record.
- */
+/** Runs the configured stages over one record at a time. Built once per run. */
 export class PipelineProcessor implements IRecordProcessor {
     private readonly stages: BasePipelineStage[];
+
+    /** Present only when the last stage has a `Finalize`; Record Set Processing checks for it. */
+    public ProcessBatch?: (records: RecordRef[], context: RecordProcessorContext) => Promise<Map<string, RecordResult>>;
 
     constructor(
         private readonly config: PipelineProcessorConfig,
@@ -148,99 +94,9 @@ export class PipelineProcessor implements IRecordProcessor {
         if (this.stages.length === 0) {
             throw new Error('A pipeline Record Process must name at least one stage in its configuration.');
         }
-        const last = this.stages[this.stages.length - 1];
-        if (typeof last.Finalize === 'function') {
+        if (typeof this.lastStage.Finalize === 'function') {
             this.ProcessBatch = (records, context) => this.processBatch(records, context);
         }
-    }
-
-    /**
-     * Run the page per record, then hand everything the page produced to the last stage's finalize.
-     *
-     * A throw here fails every record in the page, which is Record Set Processing's contract — and
-     * the right behaviour, since a bulk call that failed tells us nothing about any individual
-     * record in it.
-     */
-    private async processBatch(
-        records: RecordRef[],
-        context: RecordProcessorContext,
-    ): Promise<Map<string, RecordResult>> {
-        const results = new Map<string, RecordResult>();
-        const working = new Map<string, WorkingRecord>();
-        const hydrator = this.storage.Hydrator(context.provider, context.contextUser);
-        const last = this.stages[this.stages.length - 1];
-
-        for (const record of records) {
-            const hints = (record as RecordRef & { Hints?: PipelineRecordHints }).Hints ?? {};
-            const started = Date.now();
-            try {
-                const hydrated = await hydrator.Hydrate(this.stages[0].Entity, record.RecordID);
-                if (this.isPendingDelete(hydrated)) {
-                    // The same gate the per-record path applies. Without it the batch path embedded
-                    // records that were marked for deletion while they sat in the queue.
-                    results.set(
-                        record.RecordID,
-                        this.toRecordResult(Outcome.Skipped('record is pending delete'), started, hints, null),
-                    );
-                    continue;
-                }
-                const outcome = await this.runStages(hydrated, context, hints, record.RecordID);
-                if (outcome.Status === 'Complete') {
-                    working.set(record.RecordID, hydrated);
-                } else {
-                    // Commit the outcome. Reporting it without writing a status left the record
-                    // Pending, so the next pass selected it again, and the one after that — a record
-                    // that always fails or is always skipped was reprocessed forever.
-                    const committed = await this.persistFinalized(hydrated, outcome, context);
-                    results.set(record.RecordID, this.toRecordResult(outcome, started, hints, committed));
-                }
-            } catch (error) {
-                results.set(record.RecordID, this.toRecordResult(this.classify(error), started, hints, null));
-            }
-        }
-
-        if (working.size > 0) {
-            const finalized = await last.Finalize!([...working.values()], this.buildBatchContext(context));
-            for (const { Key, Outcome: outcome } of finalized) {
-                const record = working.get(Key);
-                const committed = record ? await this.persistFinalized(record, outcome, context) : null;
-                results.set(Key, this.toRecordResult(outcome, Date.now(), {}, committed));
-            }
-        }
-        return results;
-    }
-
-    /** Commit a record the finalize settled, unless this is a test. */
-    private async persistFinalized(
-        record: WorkingRecord,
-        outcome: StageOutcome,
-        context: RecordProcessorContext,
-    ): Promise<string[] | null> {
-        if (this.config.IsTest) {
-            return null;
-        }
-        if (record.GetExtension<boolean>('Pipeline', 'purged')) {
-            return [];
-        }
-        const last = this.stages[this.stages.length - 1];
-        const status = this.statusFor(outcome, {}, last);
-        if (status === null) {
-            return null;
-        }
-        const committer = this.storage.Committer(context.provider, context.contextUser);
-        const result = await committer.Commit(record, last.StatusField, status, outcome.Status === 'Complete');
-        return [...result.ColumnsWritten];
-    }
-
-    /** A context for the finalize, which is per page rather than per record. */
-    private buildBatchContext(context: RecordProcessorContext): StageContext {
-        return this.buildContext(
-            this.stages[this.stages.length - 1],
-            context,
-            {},
-            'batch',
-            new AbortController().signal,
-        );
     }
 
     /** The resolved stages, in run order. */
@@ -248,331 +104,321 @@ export class PipelineProcessor implements IRecordProcessor {
         return this.stages;
     }
 
-    /**
-     * The optional batch seam, present **only** when the last stage implements a finalize.
-     *
-     * Record Set Processing calls this once per page instead of once per record, which is what lets
-     * a stage call an external model once for fifty texts rather than fifty times. A batch-capable
-     * stage that is not last in a chained test runs per-record instead: a test needs the same
-     * correctness, not the bulk efficiency.
-     *
-     * Declared as a property rather than a method so it is genuinely absent when it does not apply —
-     * Record Set Processing decides which path to take by checking whether it exists.
-     */
-    public ProcessBatch?: (
-        records: RecordRef[],
-        context: RecordProcessorContext,
-    ) => Promise<Map<string, RecordResult> | RecordResult[]>;
+    private get lastStage(): BasePipelineStage {
+        return this.stages[this.stages.length - 1];
+    }
 
-    /**
-     * Hydrate, run the configured stages, commit unless this is a test, return the outcome.
-     */
+    /** Hydrate, run the stages, commit children then the record (unless a test), return the outcome. */
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
         const started = Date.now();
-        const hints = (record as RecordRef & { Hints?: PipelineRecordHints }).Hints ?? {};
-        const key = record.RecordID;
-
         try {
-            const hydrator = this.storage.Hydrator(context.provider, context.contextUser);
-            const working = await hydrator.Hydrate(this.stages[0].Entity, record.RecordID);
+            const working = await this.storage.Hydrator(context.provider, context.contextUser).Hydrate(this.stages[0].Entity, record.RecordID);
             if (this.isPendingDelete(working)) {
-                // Every stage skips a record that is pending delete. Stages hydrate fresh, so a
-                // queued message for a record marked since it was queued is harmless.
-                return this.toRecordResult(
-                    Outcome.Skipped('record is pending delete'),
-                    started,
-                    hints,
-                    null,
-                    0,
-                    0,
-                );
+                return this.toRecordResult(Outcome.Skipped('record is pending delete'), started, null);
             }
-            let outcome = await this.runStages(working, context, hints, key);
-            // Children before the parent. The parent's commit is what says "done" — Discover's
-            // clears ForceDiscovery — so committing it first meant a child that failed, or a
-            // restart mid-loop, left items that were found and never created, with nothing to
-            // bring the source back round. Committing a child is idempotent (it matches its row by
-            // URL), so redoing the lot on the next attempt is safe.
+            let outcome = await this.runStages(working, context, record.RecordID);
+            let syncOrphans: Orphan[] = [];
+            if (outcome.Status === 'Complete' && working.Entity === 'Content Source' && IsSyncMode(this.config.Configuration)) {
+                const syncCheck = await this.evaluateSyncWalk(working, context);
+                if (syncCheck.Failure) {
+                    outcome = syncCheck.Failure;
+                } else {
+                    syncOrphans = syncCheck.Orphans;
+                }
+            }
+            // Children before the parent: the parent's commit says "done" (Discover clears ForceDiscovery),
+            // so a child that failed must leave the parent to be retried. Child commits are idempotent.
             let children = 0;
             if (outcome.Status === 'Complete') {
                 const persisted = await this.persistChildren(working, record, context);
                 children = persisted.Committed;
                 if (persisted.Failed > 0) {
-                    outcome = Outcome.Retry(
-                        `${persisted.Failed} of ${working.Children.length} produced record(s) could not be committed`,
-                    );
+                    outcome = Outcome.Retry(`${persisted.Failed} of ${working.Children.length} produced record(s) could not be committed`);
+                } else if (syncOrphans.length > 0 && !this.config.IsTest) {
+                    await this.markOrphansForDeletion(syncOrphans, context);
                 }
+            } else if (outcome.Status === 'Skipped') {
+                await this.sweepOrphans(working, context);
             }
-            const committed = await this.persist(working, outcome, hints, context);
-            return this.toRecordResult(outcome, started, hints, committed, children, working.Children.length);
+            const committed = await this.persist(working, outcome, context);
+            return this.toRecordResult(outcome, started, committed, children, working.Children.length);
         } catch (error) {
-            return this.toRecordResult(this.classify(error), started, hints, null, 0, 0);
+            return this.toRecordResult(this.classify(error), started, null);
+        }
+    }
+
+    /** Run the page per record, then hand the completed records to the last stage's `Finalize` in one call. */
+    private async processBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>> {
+        const results = new Map<string, RecordResult>();
+        const ready = new UUIDMap<{ RecordID: string; Working: WorkingRecord }>();
+        const hydrator = this.storage.Hydrator(context.provider, context.contextUser);
+        for (const record of records) {
+            const started = Date.now();
+            try {
+                const working = await hydrator.Hydrate(this.stages[0].Entity, record.RecordID);
+                if (this.isPendingDelete(working)) {
+                    results.set(record.RecordID, this.toRecordResult(Outcome.Skipped('record is pending delete'), started, null));
+                    continue;
+                }
+                const outcome = await this.runStages(working, context, record.RecordID);
+                if (outcome.Status === 'Complete') {
+                    ready.Set(record.RecordID, { RecordID: record.RecordID, Working: working });
+                } else {
+                    // Commit the non-Complete status too, or the record stays Pending and is selected forever.
+                    results.set(record.RecordID, this.toRecordResult(outcome, started, await this.persist(working, outcome, context)));
+                }
+            } catch (error) {
+                results.set(record.RecordID, this.toRecordResult(this.classify(error), started, null));
+            }
+        }
+        if (ready.Size > 0) {
+            await this.finalizeBatch(ready, results, context);
+        }
+        return results;
+    }
+
+    private async finalizeBatch(
+        ready: UUIDMap<{ RecordID: string; Working: WorkingRecord }>,
+        results: Map<string, RecordResult>,
+        context: RecordProcessorContext,
+    ): Promise<void> {
+        const started = Date.now();
+        const budget = this.startBudget();
+        try {
+            const workingList = [...ready.Values()].map((entry) => entry.Working);
+            const finalized = await this.lastStage.Finalize!(workingList, this.buildContext(this.lastStage, context, 'batch', budget.Signal));
+            for (const { Key, Outcome: rawOutcome } of finalized) {
+                const entry = ready.Get(Key);
+                const outcome =
+                    budget.Expired && rawOutcome.Status === 'Complete'
+                        ? Outcome.Retry(`${this.lastStage.Name} ran out of its ${this.config.StageBudgetMs}ms budget`)
+                        : rawOutcome;
+                const committed = entry ? await this.persist(entry.Working, outcome, context) : null;
+                results.set(entry?.RecordID ?? Key, this.toRecordResult(outcome, started, committed));
+            }
+        } catch (error) {
+            const outcome = this.classify(error);
+            for (const entry of ready.Values()) {
+                const committed = await this.persist(entry.Working, outcome, context).catch(() => null);
+                results.set(entry.RecordID, this.toRecordResult(outcome, started, committed));
+            }
+        } finally {
+            budget.Dispose();
         }
     }
 
     /**
-     * Run each configured stage, stopping at the first non-Complete.
-     *
-     * A chain does not always stay on the same record. Discover runs over a Content Source and
-     * produces Content Items; Extract runs over a Content Item. So when the next stage works on a
-     * different entity, it runs over what the previous stage just produced rather than over the
-     * record that produced them — otherwise a `[Discover, Extract]` test extracts the SOURCE's own
-     * URL, which is the one thing it is certainly not meant to do, and the chained scenario proves
-     * nothing.
-     *
-     * In a test run the children exist only in memory, which is exactly the case this matters for:
-     * nothing has been committed for a later stage to pick up by querying.
+     * Run each stage in order, stopping at the first non-Complete. A stage on a different entity than the
+     * previous one runs over what that stage produced — `[Discover, Extract]` extracts the discovered items.
      */
-    private async runStages(
-        working: WorkingRecord,
-        context: RecordProcessorContext,
-        hints: PipelineRecordHints,
-        key: string,
-    ): Promise<StageOutcome> {
+    private async runStages(working: WorkingRecord, context: RecordProcessorContext, key: string): Promise<StageOutcome> {
         let last: StageOutcome = Outcome.Complete();
         let current: WorkingRecord[] = [working];
         for (const stage of this.stages) {
-            const targets = this.targetsFor(stage, current);
+            const targets = current.filter((c) => c.Entity === stage.Entity);
             if (targets.length === 0) {
-                // The previous stage produced nothing of this stage's entity. Not a failure — a
-                // source that discovered no new items has nothing to extract.
-                return last;
-            }
-            if (targets.length > 1 || targets[0] !== working) {
-                last = await this.runStageOver(stage, targets, context, hints, key);
-                if (last.Status !== 'Complete') {
-                    return last;
-                }
-                current = targets.flatMap((t) => [...t.Children]);
-                continue;
+                return last; // nothing of this entity was produced — not a failure
             }
             await this.openStatus(key, stage.Name);
-            const budget = this.startBudget(hints.Signal);
-            const stageContext = this.buildContext(stage, context, hints, key, budget.Signal);
-            try {
-                if (stageContext.Signal.aborted) {
-                    return Outcome.Retry('cancelled before the stage started');
-                }
-                last = await stage.Run(working, stageContext);
-                if (budget.Expired && last.Status === 'Complete') {
-                    // The stage finished tidily after its budget ran out, so its result is partial.
-                    // Recording it as a completed pass would leave the record looking done.
-                    return Outcome.Retry(`${stage.Name} ran out of its ${this.config.StageBudgetMs}ms budget`);
-                }
-            } catch (error) {
-                return this.classify(error);
-            } finally {
-                budget.Dispose();
-            }
+            last = await this.runStageOver(stage, targets, context, key);
             if (last.Status !== 'Complete') {
                 return last;
             }
-            current = [...working.Children];
+            current = targets.flatMap((t) => [...t.Children]);
         }
         return last;
     }
 
     /**
-     * Which records this stage runs over.
-     *
-     * The ones matching its entity. The first stage always gets the record the run selected; a later
-     * stage on the same entity continues with it, and a later stage on a different entity picks up
-     * what was produced.
-     */
-    private targetsFor(stage: BasePipelineStage, candidates: readonly WorkingRecord[]): WorkingRecord[] {
-        return candidates.filter((c) => c.Entity === stage.Entity);
-    }
-
-    /**
-     * Run one stage over several produced records.
-     *
-     * One failure does not fail the others: a zip with one unreadable member should still yield the
-     * rest. The reported outcome is the worst of them, so the parent is not marked Complete when
-     * something below it was not.
+     * Run one stage over several records; one failure does not stop the rest, and the worst outcome is
+     * reported. Progress goes to the run's record (`key`), the only one with an open status row.
      */
     private async runStageOver(
         stage: BasePipelineStage,
         targets: readonly WorkingRecord[],
         context: RecordProcessorContext,
-        hints: PipelineRecordHints,
         key: string,
     ): Promise<StageOutcome> {
         let worst: StageOutcome = Outcome.Complete();
         for (const target of targets) {
-            const budget = this.startBudget(hints.Signal);
-            try {
-                if (budget.Signal.aborted) {
-                    return Outcome.Retry('cancelled before the stage started');
-                }
-                const outcome = await stage.Run(
-                    target,
-                    this.buildContext(stage, context, hints, target.Identity.Key, budget.Signal),
-                );
-                if (outcome.Status !== 'Complete' && worst.Status === 'Complete') {
-                    worst = outcome;
-                }
-            } catch (error) {
-                const classified = this.classify(error);
-                if (worst.Status === 'Complete') {
-                    worst = classified;
-                }
-            } finally {
-                budget.Dispose();
+            const outcome = await this.runOne(stage, target, context, key);
+            if (outcome.Status !== 'Complete' && worst.Status === 'Complete') {
+                worst = outcome;
             }
         }
-        await this.openStatus(key, stage.Name);
         return worst;
     }
 
-    /**
-     * A stop signal for one stage on one record: the run's own cancellation, plus the wall-clock
-     * budget when one is configured.
-     *
-     * Combining them here is what makes time-boxing free for every stage — the budget is simply
-     * another reason the signal fires, indistinguishable from an operator pressing stop.
-     */
-    private startBudget(runSignal: AbortSignal | undefined): StageBudget {
-        const controller = new AbortController();
-        const forward = () => controller.abort(runSignal?.reason);
-        if (runSignal?.aborted) {
-            controller.abort(runSignal.reason);
-        } else {
-            runSignal?.addEventListener('abort', forward, { once: true });
+    private async runOne(stage: BasePipelineStage, target: WorkingRecord, context: RecordProcessorContext, key: string): Promise<StageOutcome> {
+        const budget = this.startBudget();
+        try {
+            const outcome = await stage.Run(target, this.buildContext(stage, context, key, budget.Signal));
+            // Finishing tidily after the budget ran out is a partial result, not a completed pass.
+            return budget.Expired && outcome.Status === 'Complete'
+                ? Outcome.Retry(`${stage.Name} ran out of its ${this.config.StageBudgetMs}ms budget`)
+                : outcome;
+        } catch (error) {
+            return this.classify(error);
+        } finally {
+            budget.Dispose();
         }
+    }
 
-        const budget: StageBudget = {
-            Signal: controller.signal,
-            Expired: false,
-            Dispose: () => {
-                runSignal?.removeEventListener('abort', forward);
-                if (timer) {
-                    clearTimeout(timer);
-                }
-            },
-        };
-
+    /** A stop signal that fires when the configured per-stage budget runs out. */
+    private startBudget(): StageBudget {
+        const controller = new AbortController();
         const ms = this.config.StageBudgetMs;
+        const budget: StageBudget = { Signal: controller.signal, Expired: false, Dispose: () => clearTimeout(timer) };
         const timer = ms && ms > 0
             ? setTimeout(() => {
                   budget.Expired = true;
                   controller.abort(new Error(`stage budget of ${ms}ms exhausted`));
               }, ms)
-            : null;
+            : undefined;
         return budget;
     }
 
-    /**
-     * Open the record's status row, tolerating failure.
-     *
-     * Live visibility is a convenience; a tracker that cannot write must not take the record down
-     * with it.
-     */
     private async openStatus(key: string, stageName: string): Promise<void> {
-        if (!this.progress) {
-            return;
-        }
         try {
-            await this.progress.OpenRecord(key, stageName);
+            await this.progress?.OpenRecord(key, stageName);
         } catch (error) {
-            LogError(
-                `PipelineProcessor: could not open status for '${key}': ` +
-                    `${error instanceof Error ? error.message : String(error)}`,
-            );
+            LogError(`PipelineProcessor: could not open status for '${key}': ${messageOf(error)}`);
         }
     }
 
-    /**
-     * Commit, unless this is a test.
-     *
-     * A live run commits each record as the stage finishes with it; a test run withholds every
-     * commit and reports what would have happened instead. A stage's own code is identical either
-     * way, because "test" is purely the processor skipping this step.
-     */
-    private async persist(
-        working: WorkingRecord,
-        outcome: StageOutcome,
-        hints: PipelineRecordHints,
-        context: RecordProcessorContext,
-    ): Promise<string[] | null> {
+    /** Commit the record's status for the last stage, unless this is a test or the stage removed the row. */
+    private async persist(working: WorkingRecord, outcome: StageOutcome, context: RecordProcessorContext): Promise<string[] | null> {
         if (this.config.IsTest) {
             return null;
         }
         if (working.GetExtension<boolean>('Pipeline', 'purged')) {
-            // The stage removed the row itself; there is nothing left to write a status to.
             return [];
         }
-        const lastStage = this.stages[this.stages.length - 1];
-        const status = this.statusFor(outcome, hints, lastStage);
+        const status = this.statusFor(outcome);
         if (status === null) {
-            // A transient failure before the last attempt leaves the status at Pending — the record
-            // is still in the queue's hands, waiting out its backoff. Committing anything here
-            // would take it out of play.
             return null;
         }
         const committer = this.storage.Committer(context.provider, context.contextUser);
-        const result = await committer.Commit(working, lastStage.StatusField, status, outcome.Status === 'Complete');
+        const result = await committer.Commit(working, this.lastStage.StatusField, status, outcome.Status === 'Complete');
         return [...result.ColumnsWritten];
     }
 
-    /**
-     * Commit whatever the stage produced, and report one outcome per child.
-     *
-     * On a test run nothing is committed, so a child is reported under its ephemeral identity — the
-     * URL — which is exactly what makes a dry run of Discover readable.
-     */
+    /** Commit what the stage produced and report one outcome per child. A test reports children by URL. */
     private async persistChildren(
         working: WorkingRecord,
         record: RecordRef,
         context: RecordProcessorContext,
     ): Promise<{ Committed: number; Failed: number }> {
         if (working.Children.length === 0) {
+            await this.sweepOrphans(working, context);
             return { Committed: 0, Failed: 0 };
         }
         const committer = this.storage.Committer(context.provider, context.contextUser);
         const defaults = this.childDefaults(working);
         let committed = 0;
         let failed = 0;
-
         for (const child of working.Children) {
             const outcome = await this.persistOneChild(child, working, defaults, committer);
-            if (outcome.Status === 'Succeeded' && !this.config.IsTest) {
-                committed++;
-            } else if (outcome.Status === 'Failed') {
+            if (outcome.Status === 'Failed') {
                 failed++;
+            } else if (!this.config.IsTest) {
+                committed++;
             }
-            await this.progress?.RecordChildOutcome?.(
-                record,
-                child.Identity.Key,
-                outcome,
-                this.entityIDFor(child.Entity, context),
-            );
+            await this.progress?.RecordChildOutcome?.(record, child.Identity.Key, outcome, this.entityIDFor(child.Entity, context));
+            if (outcome.Status !== 'Failed' && child.Children.length > 0) {
+                if (typeof defaults.ContentSourceID === 'string' && !child.GetExtension<string>('Pipeline', 'contentSourceID')) {
+                    child.SetExtension('Pipeline', 'contentSourceID', defaults.ContentSourceID);
+                }
+                const nested = await this.persistChildren(child, record, context);
+                committed += nested.Committed;
+                failed += nested.Failed;
+            }
         }
-
         if (failed === 0) {
-            // Only a complete set of children says what no longer exists. Sweeping after a partial
-            // commit would mark live children as orphans because their commit failed.
+            // Only a complete set of children says what no longer exists.
             await this.sweepOrphans(working, context);
         }
         return { Committed: committed, Failed: failed };
     }
 
     /**
-     * The MJ entity id for a working-record entity, so a child's detail row is filed correctly.
-     *
-     * Undefined when it cannot be resolved, and the caller falls back to the parent's. Failing a
-     * record because a telemetry row would carry the wrong entity id would be a worse trade than
-     * the mis-filing it is trying to avoid.
+     * Evaluate a Sync walk against the source's live top-level items that existed when the walk started.
+     * Enforces the zero-yield and `MaxSyncRemovalShare` safeguards before anything is committed or marked.
      */
-    private entityIDFor(entity: WorkingRecordEntity, context: RecordProcessorContext): string | undefined {
-        try {
-            const name = GetEntityName(entity);
-            return context.provider.EntityByName(name)?.ID;
-        } catch {
-            return undefined;
+    private async evaluateSyncWalk(
+        working: WorkingRecord,
+        context: RecordProcessorContext,
+    ): Promise<{ Failure?: StageOutcome; Orphans: Orphan[] }> {
+        if (this.config.IsTest || !working.Identity.RecordID) {
+            return { Orphans: [] };
+        }
+        const live = await RunView.FromMetadataProvider(context.provider).RunView<{
+            ID: string;
+            URL: string;
+            __mj_CreatedAt?: Date | string;
+        }>(
+            {
+                EntityName: 'MJ: Content Items',
+                ExtraFilter: WhereEqual({ ContentSourceID: working.Identity.RecordID, ParentID: null, DeleteStatus: null }),
+                Fields: ['ID', 'URL', '__mj_CreatedAt'],
+                ResultType: 'simple',
+            },
+            context.contextUser,
+        );
+        if (!live.Success) {
+            return {
+                Failure: Outcome.Fatal(
+                    `Sync reconciliation could not query live items for source '${working.Identity.RecordID}': ${live.ErrorMessage}`,
+                ),
+                Orphans: [],
+            };
+        }
+        const walkStartedAt = working.GetExtension<Date>(DISCOVER_STAGE, 'walkStartedAt');
+        const existingBeforeWalk = live.Results.filter((row) => {
+            if (!walkStartedAt || !row.__mj_CreatedAt) {
+                return true;
+            }
+            const createdMs = row.__mj_CreatedAt instanceof Date ? row.__mj_CreatedAt.getTime() : new Date(row.__mj_CreatedAt).getTime();
+            return Number.isNaN(createdMs) || createdMs <= walkStartedAt.getTime();
+        });
+        if (existingBeforeWalk.length === 0) {
+            return { Orphans: [] };
+        }
+        if (working.Children.length === 0) {
+            return {
+                Failure: Outcome.Fatal(
+                    `Sync walk returned 0 items for source '${working.Identity.RecordID}' which has ${existingBeforeWalk.length} live item(s); refusing to mark existing items for deletion`,
+                ),
+                Orphans: [],
+            };
+        }
+        const produced = new Set(working.Children.map((c) => c.Identity.EphemeralID));
+        const missing = existingBeforeWalk.filter((r) => !produced.has(r.URL));
+        const maxShare = ResolveTuning(this.config.Configuration).MaxSyncRemovalShare;
+        const share = missing.length / existingBeforeWalk.length;
+        if (share > maxShare) {
+            return {
+                Failure: Outcome.Fatal(
+                    `Sync walk would remove ${missing.length} of ${existingBeforeWalk.length} live item(s) (${(share * 100).toFixed(1)}%), exceeding MaxSyncRemovalShare (${(maxShare * 100).toFixed(1)}%); refusing to mark items for deletion`,
+                ),
+                Orphans: [],
+            };
+        }
+        return { Orphans: missing.map((r) => ({ Entity: 'MJ: Content Items' as const, ID: r.ID })) };
+    }
+
+    private async markOrphansForDeletion(orphans: readonly Orphan[], context: RecordProcessorContext): Promise<void> {
+        const marker = new ContentPipelineDeleteMarker(context.provider, context.contextUser);
+        for (const orphan of orphans) {
+            await marker.MarkForDeletion(orphan.Entity, orphan.ID);
         }
     }
 
-    /** Commit one child and describe how it went, so a failure fails that child and not the batch. */
+    /** The MJ entity id for a child's detail row; undefined falls back to the parent's. */
+    private entityIDFor(entity: WorkingRecordEntity, context: RecordProcessorContext): string | undefined {
+        return context.provider.EntityByName(GetEntityName(entity))?.ID;
+    }
+
     private async persistOneChild(
         child: WorkingRecord,
         working: WorkingRecord,
@@ -587,7 +433,7 @@ export class PipelineProcessor implements IRecordProcessor {
                 Status: 'Succeeded',
                 AttemptCount: 1,
                 ResultPayload: {
-                    Stage: this.stages[this.stages.length - 1].Name,
+                    Stage: this.lastStage.Name,
                     ProducedBy: working.Identity.Key,
                     IsTest: this.config.IsTest,
                     URL: child.Identity.EphemeralID,
@@ -595,112 +441,61 @@ export class PipelineProcessor implements IRecordProcessor {
                 },
             };
         } catch (error) {
-            return {
-                Status: 'Failed',
-                AttemptCount: 1,
-                ErrorMessage: error instanceof Error ? error.message : String(error),
-            };
+            return { Status: 'Failed', AttemptCount: 1, ErrorMessage: messageOf(error) };
         }
     }
 
-    /**
-     * Sweep children the re-run no longer produces.
-     *
-     * Reconciliation is housekeeping. A record whose stage succeeded must not be failed because the
-     * orphan sweep could not run — the next re-extraction sweeps again.
-     */
+    /** Housekeeping: a failed sweep must not fail a record whose stage succeeded; the next run sweeps again. */
     private async sweepOrphans(working: WorkingRecord, context: RecordProcessorContext): Promise<void> {
+        if (this.config.IsTest || !working.Identity.RecordID || working.Entity !== 'Content Item') {
+            return; // Discover over a source adds; Sync over a source reconciles via evaluateSyncWalk.
+        }
+        if (typeof (context.provider as { RunView?: unknown })?.RunView !== 'function') {
+            return;
+        }
         try {
-            await this.removeOrphans(working, context);
+            const firstEntity = working.Children[0]?.Entity;
+            const isSegment = firstEntity === 'Content Item Chunk' || (!firstEntity && this.lastStage.StatusField === 'SegmentationStatus');
+            const isExtract = firstEntity === 'Content Item' || (!firstEntity && this.lastStage.StatusField === 'ExtractionStatus');
+            if (!isSegment && !isExtract) {
+                return;
+            }
+            const orphans = isSegment
+                ? await this.supersededChunks(working, context)
+                : await this.orphanedItems(working, context);
+            await this.markOrphansForDeletion(orphans, context);
         } catch (error) {
-            LogError(
-                `PipelineProcessor: orphan reconciliation failed for '${working.Identity.Key}': ` +
-                    `${error instanceof Error ? error.message : String(error)}`,
-            );
+            LogError(`PipelineProcessor: orphan reconciliation failed for '${working.Identity.Key}': ${messageOf(error)}`);
         }
     }
 
-    /**
-     * Mark children that the re-run no longer produces.
-     *
-     * Re-extracting a changed container yields a new set of blocks. A block matching an existing
-     * child updated it in place above; a child whose block has *gone* is an orphan, and leaving it
-     * would keep stale content — and its vectors — retrievable forever.
-     *
-     * Orphans are marked rather than deleted here, so removal goes through the Delete stage: that
-     * is where the outside-system cleanup lives, and routing through it keeps the removal
-     * idempotent and retryable rather than half-done on a crash.
-     */
-    private async removeOrphans(working: WorkingRecord, context: RecordProcessorContext): Promise<void> {
-        if (this.config.IsTest || !working.Identity.RecordID || working.Children.length === 0) {
-            return;
-        }
-        // A Discover run over a source is adding, not replacing, so it reconciles nothing.
-        if (working.Entity !== 'Content Item') {
-            return;
-        }
-        if (working.Children[0].Entity === 'Content Item Chunk') {
-            await this.removeSupersededChunks(working, context);
-            return;
-        }
-        if (working.Children[0].Entity !== 'Content Item') {
-            return;
-        }
-
-        const rv = RunView.FromMetadataProvider(context.provider);
-        const existing = await rv.RunView<{ ID: string; URL: string }>(
+    /** Child items a re-extraction no longer produces, matched by URL. */
+    private async orphanedItems(working: WorkingRecord, context: RecordProcessorContext): Promise<Orphan[]> {
+        const existing = await RunView.FromMetadataProvider(context.provider).RunView<{ ID: string; URL: string }>(
             {
                 EntityName: 'MJ: Content Items',
                 ExtraFilter: `${WhereEqual({ ParentID: working.Identity.RecordID })} AND (DeleteStatus IS NULL OR DeleteStatus <> 'Deleted')`,
+                Fields: ['ID', 'URL'],
+                ResultType: 'simple',
             },
             context.contextUser,
         );
         if (!existing.Success) {
-            return;
+            return [];
         }
-
-        const plan = ReconcileChildren(
-            existing.Results.map((r) => ({ RecordID: r.ID, URL: r.URL })),
-            working.Children.map((c) => ({ URL: c.Identity.EphemeralID })),
-        );
-        if (plan.Delete.length === 0) {
-            return;
-        }
-        const marker = new ContentPipelineDeleteMarker(context.provider, context.contextUser);
-        for (const orphan of plan.Delete) {
-            try {
-                await marker.MarkForDeletion('MJ: Content Items', orphan.RecordID);
-            } catch (error) {
-                LogError(
-                    `PipelineProcessor: could not mark orphaned child '${orphan.RecordID}': ` +
-                        `${error instanceof Error ? error.message : String(error)}`,
-                );
-            }
-        }
+        const produced = new Set(working.Children.map((c) => c.Identity.EphemeralID));
+        return existing.Results.filter((r) => !produced.has(r.URL)).map((r) => ({ Entity: 'MJ: Content Items' as const, ID: r.ID }));
     }
 
     /**
-     * Retire every chunk a re-segmentation replaced.
-     *
-     * Re-segmenting mints a fresh set of chunks rather than overwriting the old ones by position.
-     * Overwriting chunk N with different text kept its identity while changing what it said — so
-     * anything that recorded using chunk N now pointed at text it never saw — and a shorter result
-     * left the tail behind, still searchable, answering questions about content that no longer says
-     * what it says.
-     *
-     * The previous chunks are marked rather than deleted, so their vectors go through the Delete
-     * stage like everything else. Delete then removes a chunk's row outright unless something
-     * references it, in which case it stays as a tombstone and that history stays intact.
+     * Every live chunk a re-segmentation replaced. Re-segmenting mints fresh chunks rather than overwriting
+     * by position, so nothing that recorded chunk N ends up pointing at text it never saw.
      */
-    private async removeSupersededChunks(
-        working: WorkingRecord,
-        context: RecordProcessorContext,
-    ): Promise<void> {
+    private async supersededChunks(working: WorkingRecord, context: RecordProcessorContext): Promise<Orphan[]> {
         const current = new Set(
             working.Children.map((c) => c.Identity.RecordID).filter((id): id is string => !!id).map(NormalizeUUID),
         );
-        const rv = RunView.FromMetadataProvider(context.provider);
-        const live = await rv.RunView<{ ID: string }>(
+        const live = await RunView.FromMetadataProvider(context.provider).RunView<{ ID: string }>(
             {
                 EntityName: 'MJ: Content Item Chunks',
                 ExtraFilter: WhereEqual({ ContentItemID: working.Identity.RecordID, DeleteStatus: null }),
@@ -710,44 +505,20 @@ export class PipelineProcessor implements IRecordProcessor {
             context.contextUser,
         );
         if (!live.Success) {
-            return;
+            return [];
         }
-        const superseded = live.Results.filter((chunk) => !current.has(NormalizeUUID(chunk.ID)));
-        if (superseded.length === 0) {
-            return;
-        }
-        const marker = new ContentPipelineDeleteMarker(context.provider, context.contextUser);
-        for (const chunk of superseded) {
-            try {
-                await marker.MarkForDeletion('MJ: Content Item Chunks', chunk.ID);
-            } catch (error) {
-                LogError(
-                    `PipelineProcessor: could not mark superseded chunk '${chunk.ID}': ` +
-                        `${error instanceof Error ? error.message : String(error)}`,
-                );
-            }
-        }
+        return live.Results.filter((c) => !current.has(NormalizeUUID(c.ID))).map((c) => ({ Entity: 'MJ: Content Item Chunks' as const, ID: c.ID }));
     }
 
     /**
-     * What a child inherits from the record that produced it.
-     *
-     * A Content Item found by walking a source belongs to that source; a block split out of a
-     * Content Item belongs to the same source and names its parent.
+     * What a child inherits. An item found under a source belongs to it; a record produced from a Content
+     * Item is either a chunk (a slice of it, by ContentItemID) or a child item (a document it contained, by
+     * ParentID) — the committer writes only the columns the child's entity has.
      */
     private childDefaults(working: WorkingRecord): Record<string, unknown> {
         if (working.Entity === 'Content Source') {
             return { ContentSourceID: working.Identity.RecordID };
         }
-        // A Content Item produces two kinds of record, and the committer writes only the columns
-        // the child's entity actually has:
-        //   * chunks, which belong to it by ContentItemID — slices of this item's own text;
-        //   * child Content Items, when an artifact EXPANDS into other items: a zip extracting to
-        //     files, a CSV whose rows are links that each become an item. Those carry ParentID and
-        //     nest to arbitrary depth, so a zip inside a zip works without a special case.
-        //
-        // The distinction is whether the content is a *slice of this document* (chunk) or *a
-        // different document this one contained* (child item).
         return {
             ContentItemID: working.Identity.RecordID,
             ParentID: working.Identity.RecordID,
@@ -755,11 +526,7 @@ export class PipelineProcessor implements IRecordProcessor {
         };
     }
 
-    /**
-     * Whether this record is marked for removal.
-     *
-     * Delete itself is exempt, since skipping the record would mean never removing it.
-     */
+    /** Every stage but Delete skips a record that is pending delete. */
     private isPendingDelete(working: WorkingRecord): boolean {
         if (this.stages.some((s) => s.StatusField === 'DeleteStatus')) {
             return false;
@@ -773,11 +540,8 @@ export class PipelineProcessor implements IRecordProcessor {
     }
 
     /**
-     * The status a freshly produced record starts at.
-     *
-     * `Pending` for something only discovered — it still needs its text. `Complete` for an item that
-     * was produced *with* its text, which is the case for every item expanded out of a container:
-     * re-fetching its URL would return the container it came out of, not the member.
+     * Pending when it still needs its text; Complete when it was produced with it (an archive member —
+     * re-fetching its URL would return the archive); Skipped when marked complete with nothing to read.
      */
     private childStatus(child: WorkingRecord): string {
         if (child.Entity === 'Content Item Chunk') {
@@ -787,57 +551,54 @@ export class PipelineProcessor implements IRecordProcessor {
         if (typeof text === 'string' && text.length > 0) {
             return 'Complete';
         }
-        // Produced with the completion signal raised and no text: there is nothing for Extract to
-        // do, and leaving it Pending would have Extract fetch its URL — the container's.
         return child.IsComplete ? 'Skipped' : 'Pending';
     }
 
-    /**
-     * The status to commit for the stage that ran, or `null` to leave it alone.
-     *
-     * A failure is final when it is fatal, when it is transient on the last attempt, or when the
-     * run is filter-scoped — filter scope does not retry. Without the attempt number a
-     * dead-lettered record would still look ready and would be queued again indefinitely.
-     */
-    private statusFor(outcome: StageOutcome, hints: PipelineRecordHints, stage: BasePipelineStage): string | null {
+    /** The status to commit for the last stage, or `null` to leave it alone. */
+    private statusFor(outcome: StageOutcome): string | null {
         switch (outcome.Status) {
             case 'Complete':
-                return stage.CompleteStatus;
+                return this.lastStage.CompleteStatus;
             case 'Skipped':
-                return stage.StatusForOutcome('Skipped');
-            case 'Failed':
-            case 'Retry': {
-                const final =
-                    !outcome.IsTransient ||
-                    this.config.Scope === 'Filter' ||
-                    (hints.Attempt ?? 1) >= (hints.MaxAttempts ?? 1);
-                return final ? stage.StatusForOutcome('Failed') : null;
-            }
+                return this.lastStage.StatusForOutcome('Skipped');
+            default:
+                return this.lastStage.StatusForOutcome('Failed');
         }
     }
 
     /**
-     * This run's access resolver.
-     *
-     * Lazily built and held for the life of the processor, which is the life of the run. The
-     * sessions it caches are keyed per source AND per role, so two stages reading the same source as
-     * the same principal share one credential exchange.
+     * The source's session, opened once per run by its driver's `OpenSession` and shared by every stage.
+     * A failed open is evicted, so one outage does not poison the rest of the run.
      */
-    private access(context: RecordProcessorContext): AccessResolver {
-        this._access ??= new AccessResolver(context.provider, context.contextUser);
-        return this._access;
+    private resolveAccess(context: RecordProcessorContext, contentSourceID: string): Promise<AccessArtifact | null> {
+        let session = this.sessions.Get(contentSourceID);
+        if (!session) {
+            session = this.openSession(context, contentSourceID);
+            session.catch(() => this.sessions.Delete(contentSourceID));
+            this.sessions.Set(contentSourceID, session);
+        }
+        return session;
     }
-    private _access?: AccessResolver;
+    private readonly sessions = new UUIDMap<Promise<AccessArtifact | null>>();
+
+    private async openSession(context: RecordProcessorContext, contentSourceID: string): Promise<AccessArtifact | null> {
+        const resolved = await new ContentSourceConfigurationResolver(context.provider, context.contextUser).Resolve(contentSourceID);
+        const driver = resolved.DriverClass ? ResolveSourceDriver(resolved.DriverClass) : null;
+        if (!driver?.OpenSession) {
+            return null;
+        }
+        return driver.OpenSession({
+            ContentSourceID: contentSourceID,
+            URL: resolved.URL,
+            Parameters: resolved.Parameters,
+            Configuration: resolved.Configuration,
+            ContextUser: context.contextUser,
+            Provider: context.provider,
+        });
+    }
 
     /** Build the per-record context a stage sees. */
-    private buildContext(
-        stage: BasePipelineStage,
-        context: RecordProcessorContext,
-        hints: PipelineRecordHints,
-        key: string,
-        signal: AbortSignal,
-    ): StageContext {
-        const progress = this.progress;
+    private buildContext(stage: BasePipelineStage, context: RecordProcessorContext, key: string, signal: AbortSignal): StageContext {
         const logger: StageLogger = {
             Info: (message) => LogStatus(`[${stage.Name}] ${message}`),
             Warning: (message) => LogStatus(`[${stage.Name}] WARNING: ${message}`),
@@ -848,26 +609,14 @@ export class PipelineProcessor implements IRecordProcessor {
             Provider: context.provider,
             Configuration: this.config.Configuration,
             IsTest: this.config.IsTest,
-            Scope: this.config.Scope,
-            Attempt: hints.Attempt ?? 1,
-            MaxAttempts: hints.MaxAttempts ?? 1,
-            IsReplay: hints.IsReplay ?? false,
             Signal: signal,
-            ReportProgress: (message: string) => progress?.ReportProgress(key, message),
+            ReportProgress: (message: string) => this.progress?.ReportProgress(key, message),
             Log: logger,
-            // One resolver for the whole run, so every stage touching the same source shares its
-            // session rather than each opening its own.
-            ResolveAccess: (contentSourceID: string, role?: string) =>
-                this.access(context).Artifact(contentSourceID, role),
+            ResolveAccess: (contentSourceID: string) => this.resolveAccess(context, contentSourceID),
         };
     }
 
-    /**
-     * Turn a thrown error into an outcome.
-     *
-     * A bare `Error` is treated as fatal deliberately: a stage that has not thought about whether
-     * its failure is worth retrying should not have its records retried on a guess.
-     */
+    /** A bare `Error` is fatal: a stage that never said its failure is worth retrying is not retried on a guess. */
     private classify(error: unknown): StageOutcome {
         if (error instanceof TransientStageError) {
             return Outcome.Retry(error.message);
@@ -875,14 +624,12 @@ export class PipelineProcessor implements IRecordProcessor {
         if (error instanceof FatalStageError) {
             return Outcome.Fatal(error.message);
         }
-        return Outcome.Fatal(error instanceof Error ? error.message : String(error));
+        return Outcome.Fatal(messageOf(error));
     }
 
-    /** Translate a stage outcome into the shape Record Set Processing records. */
     private toRecordResult(
         outcome: StageOutcome,
         started: number,
-        hints: PipelineRecordHints,
         committed: string[] | null,
         childrenCommitted = 0,
         childrenProduced = 0,
@@ -891,10 +638,10 @@ export class PipelineProcessor implements IRecordProcessor {
         return {
             Status: status,
             DurationMs: Date.now() - started,
-            AttemptCount: hints.Attempt ?? 1,
+            AttemptCount: 1,
             ErrorMessage: status === 'Failed' ? (outcome.Message ?? undefined) : undefined,
             ResultPayload: {
-                Stage: this.stages[this.stages.length - 1].Name,
+                Stage: this.lastStage.Name,
                 Stages: this.stages.map((s) => s.Name),
                 Outcome: outcome.Status,
                 IsTransient: outcome.IsTransient,
@@ -906,4 +653,13 @@ export class PipelineProcessor implements IRecordProcessor {
             },
         };
     }
+}
+
+interface Orphan {
+    Entity: 'MJ: Content Items' | 'MJ: Content Item Chunks';
+    ID: string;
+}
+
+function messageOf(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }

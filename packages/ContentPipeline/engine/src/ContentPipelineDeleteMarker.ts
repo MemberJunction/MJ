@@ -1,18 +1,14 @@
 /**
- * @fileoverview {@link ContentPipelineDeleteMarker} — marking what depends on a deleted item.
- *
- * Deleting an item means deleting everything it produced: the chunks holding its text, and any
- * items it expanded into — a zip's members, a CSV's rows. Those are marked rather than removed
- * here, so each goes through the Delete stage itself and the removal stays idempotent and
- * retryable. Marking recurses naturally: a marked child item marks its own dependents when its turn
- * comes.
+ * @fileoverview {@link ContentPipelineDeleteMarker} — marking what depends on a deleted item (its
+ * chunks, and the items it expanded into) so each goes through the Delete stage itself.
  *
  * @module @memberjunction/content-pipeline
  */
 
-import { BaseEntity, CompositeKey, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { MJContentItemChunkEntity, MJContentItemEntity } from '@memberjunction/core-entities';
 
-import { PipelineEntityName } from './EntityFieldMap';
+import { PipelineEntityName } from './EntityFieldMap.js';
 import { WhereEqual } from './Filters.js';
 
 /** Marks a deleted item's dependents pending. */
@@ -47,18 +43,15 @@ export class ContentPipelineDeleteMarker {
             user,
         );
 
-        let marked = 0;
-        marked += await this.mark('MJ: Content Item Chunks', chunks.Results as { ID: string }[], user);
-        marked += await this.mark('MJ: Content Items', children.Results as { ID: string }[], user);
-        return marked;
+        if (!chunks.Success || !children.Success) {
+            // Thrown, not swallowed: the item's own delete must not complete with dependents unmarked.
+            throw new Error(`Loading the dependents of '${contentItemID}' failed: ${chunks.ErrorMessage || children.ErrorMessage}`);
+        }
+        const marked = await this.mark('MJ: Content Item Chunks', chunks.Results as { ID: string }[], user);
+        return marked + (await this.mark('MJ: Content Items', children.Results as { ID: string }[], user));
     }
 
-    /**
-     * Mark one record for deletion.
-     *
-     * Marking rather than removing is deliberate: the Delete stage owns the outside-system cleanup,
-     * and routing every removal through it keeps that cleanup in one place and makes it retryable.
-     */
+    /** Mark one record for deletion; the Delete stage then owns its outside-system cleanup. */
     public async MarkForDeletion(entityName: PipelineEntityName, recordID: string, contextUser?: UserInfo): Promise<boolean> {
         const user = contextUser ?? this.contextUser;
         if (!user) {
@@ -72,13 +65,15 @@ export class ContentPipelineDeleteMarker {
         let marked = 0;
         for (const row of rows) {
             try {
-                const entityObject = await this.provider.GetEntityObject<BaseEntity>(entityName, contextUser);
+                const entityObject = await this.provider.GetEntityObject<MJContentItemEntity | MJContentItemChunkEntity>(entityName, contextUser);
                 if (!(await entityObject.InnerLoad(CompositeKey.FromID(row.ID)))) { // first-pk-ok: MJ core content entity, single-column ID
                     continue;
                 }
-                entityObject.Set('DeleteStatus', 'Pending');
+                entityObject.DeleteStatus = 'Pending';
                 if (await entityObject.Save()) {
                     marked++;
+                } else {
+                    LogError(`ContentPipelineDeleteMarker: could not mark ${entityName} '${row.ID}': ${entityObject.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                 }
             } catch (error) {
                 // One unmarkable dependent must not stop the rest; the next Delete run picks it up.

@@ -426,35 +426,44 @@ export class QdrantDatabase extends VectorDBBase {
      * @returns A {@link BaseResponse} indicating success or failure.
      * @throws Never throws; errors are caught and returned as a failure response.
      */
-    public async UpdateRecord(record: UpdateOptions): Promise<BaseResponse> {
-        return this.UpdateRecords(record);
+    public async UpdateRecord(record: UpdateOptions, indexName?: string, providerConfig?: Record<string, unknown>): Promise<BaseResponse> {
+        return this.UpdateRecords(record, indexName, providerConfig);
     }
 
     /**
      * Update one or more records in a Qdrant collection.
      *
-     * Records with `values` are upserted (full point replacement). Records with only
-     * `metadata` (no `values`) are updated via `setPayload` to modify the payload
+     * Records with non-empty `values` are upserted (full point replacement). Records with only
+     * `metadata` (omitted or empty `values`) are updated via `setPayload` to modify the payload
      * without changing the vector.
      *
-     * @param records - Update options. Must include `data.collectionName`. For batch
-     *        operations, provide `data.records` as an array of individual update options.
-     *        For single-record updates, the top-level id/values/metadata are used.
+     * @param records - Update options or array of update options. Accepts `indexName` as the
+     *        second parameter, or legacy `data.collectionName` / `data.records` on a single object.
+     * @param indexName - Optional target collection name.
+     * @param _providerConfig - Optional provider configuration (unused by Qdrant).
      * @returns A {@link BaseResponse} indicating success or failure.
      * @throws Never throws; errors are caught and returned as a failure response.
      */
-    public async UpdateRecords(records: UpdateOptions): Promise<BaseResponse> {
+    public async UpdateRecords(
+        records: UpdateOptions | UpdateOptions[],
+        indexName?: string,
+        _providerConfig?: Record<string, unknown>,
+    ): Promise<BaseResponse> {
         try {
-            const data = records as UpdateOptions & { data?: { collectionName?: string; records?: UpdateOptions[] } };
-            const collectionName = data.data?.collectionName as string | undefined;
+            const single = Array.isArray(records) ? undefined : (records as UpdateOptions & { data?: { collectionName?: string; records?: UpdateOptions[] }; indexName?: string });
+            const collectionName = indexName || single?.data?.collectionName || single?.indexName;
 
             if (!collectionName) {
-                return this.wrapFailureResponse('collectionName is required in records.data for UpdateRecords');
+                return this.wrapFailureResponse('collectionName is required (via indexName or records.data.collectionName) for UpdateRecords');
             }
 
-            const recordsList: UpdateOptions[] = data.data?.records || [records];
+            const recordsList: UpdateOptions[] = Array.isArray(records)
+                ? records
+                : (single?.data?.records || [records]);
+            const hasValues = (r: UpdateOptions): boolean => Array.isArray(r.values) && r.values.length > 0;
+
             const points = recordsList
-                .filter((r) => r.values) // Only include records with vectors
+                .filter(hasValues)
                 .map((r) => ({
                     id: r.id,
                     vector: r.values!,
@@ -465,8 +474,8 @@ export class QdrantDatabase extends VectorDBBase {
                 await this._client.upsert(collectionName, { points });
             }
 
-            // For metadata-only updates (no vectors), use setPayload
-            const metadataOnlyRecords = recordsList.filter((r) => !r.values && r.metadata);
+            // For metadata-only updates (no vectors or empty values array), use setPayload
+            const metadataOnlyRecords = recordsList.filter((r) => !hasValues(r) && r.metadata);
             for (const r of metadataOnlyRecords) {
                 await this._client.setPayload(collectionName, {
                     payload: r.metadata as Record<string, unknown>,

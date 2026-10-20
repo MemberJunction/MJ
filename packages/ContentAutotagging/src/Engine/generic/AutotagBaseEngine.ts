@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IRunViewProvider, DatabaseProviderBase, Metadata, RunView, UserInfo, LogError, LogStatus, EntityInfo } from '@memberjunction/core'
-import { MJGlobal, UUIDsEqual, NormalizeUUID, RegisterClass, uuidv4 } from '@memberjunction/global'
+import { UUIDsEqual, NormalizeUUID, RegisterClass, uuidv4 } from '@memberjunction/global'
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentFileTypeEntity,
     MJContentProcessRunEntity, MJContentTypeEntity, MJContentSourceTypeEntity,
@@ -7,32 +7,44 @@ import {
     MJContentItemAttributeEntity, MJContentSourceTypeParamEntity,
     MJContentProcessRunEntity_IContentProcessRunConfiguration,
     MJContentItemDuplicateEntity,
-    MJEntityRecordDocumentEntity, MJContentItemChunkEntity, MJVectorIndexEntity
+    MJEntityRecordDocumentEntity, MJContentItemChunkEntity
 } from '@memberjunction/core-entities'
 import {
     ContentVectorMetadataBuilder,
+    ResolveContentVectorID,
     ResolveContentVectorStorageConfig,
     type ChunkTextStorage,
     type ResolvedVectorStorageConfig,
-    type VectorIDStrategy,
 } from './ContentVectorMetadata'
+import {
+    BuildProviderDirectives,
+    ContentVectorInfrastructure,
+    EnsureContentMetadataCached,
+    LoadContentItemTags,
+    UpsertVectorRecords,
+    type ResolvedVectorInfrastructure,
+} from './ContentVectorInfrastructure'
+import {
+    BuildAttributePrompt,
+    BuildContentAutotagPromptData,
+    GetContentAutotagPrompt,
+    NormalizeAutotagKeywords,
+    ResolveItemClassificationContext,
+    RunContentAutotagPrompt,
+} from './ContentAutotagPrompt'
 import { ContentSourceParams, ContentSourceTypeParams, ContentSourceTypeParamValue } from './content.types'
 import { RateLimiter } from './RateLimiter'
 import pdfParse from 'pdf-parse'
 import officeparser from 'officeparser'
 import * as fs from 'fs'
 import { ProcessRunParams, JsonObject, ContentItemProcessParams } from './process.types'
-import { ClassificationContextResolver, IContentSourceClassificationConfiguration } from './ClassificationContextResolver'
-import { FieldPathResolver } from './FieldPathResolver'
 import { toZonedTime } from 'date-fns-tz'
 import { HttpGet } from '@memberjunction/network-utils'
 import * as cheerio from 'cheerio'
 import crypto from 'crypto'
-import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai'
 import { AIEngine } from '@memberjunction/aiengine'
-import { AIPromptRunner, AIEmbeddingRunner } from '@memberjunction/ai-prompts'
+import { AIEmbeddingRunner } from '@memberjunction/ai-prompts'
 import type { EmbeddingRunResult } from '@memberjunction/ai-prompts'
-import { AIPromptParams } from '@memberjunction/ai-core-plus'
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus'
 import { TextChunker, ChunkTextParams } from '@memberjunction/ai-vectors'
 import {
@@ -40,47 +52,15 @@ import {
     FixedWindowSegmentationOptions,
     ResolveSegmenter,
 } from '@memberjunction/ai-segmentation'
-import { VectorDBBase, VectorRecord, BaseResponse } from '@memberjunction/ai-vectordb'
+import { VectorRecord, BaseResponse } from '@memberjunction/ai-vectordb'
 import { ContentItemTagBridge, TagEngine } from '@memberjunction/tag-engine'
 import { TagEngineBase } from '@memberjunction/tag-engine-base'
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities'
 
-/**
- * Resolved vector infrastructure for a specific (embeddingModel + vectorIndex) pair.
- * Items sharing the same pair are batched together for efficient processing.
- */
-export interface ResolvedVectorInfrastructure {
-    /**
-     * @deprecated Embedding goes through AIEmbeddingRunner, pinned to {@link embeddingModelID}. For
-     * older callers this is still a working driver, built on first read with the legacy
-     * environment-variable key.
-     */
-    embedding?: BaseEmbeddings;
-    vectorDB: VectorDBBase;
-    indexName: string;
-    embeddingModelName: string;
-    /**
-     * The embedding model (`MJ: AI Models.ID`). Every embedding call for this index pins it as
-     * `ModelID`, so the index only ever holds vectors from this model.
-     */
-    embeddingModelID: string;
-    /**
-     * Reduced embedding dimensions from `MJ: Vector Indexes.Dimensions`, when set. Passed to the
-     * embedding call so models that support it (e.g. text-embedding-3-*) produce shorter vectors.
-     * Undefined means the model's native dimensionality (matches PR #3175's entity-path behavior).
-     */
-    dimensions?: number;
-    /**
-     * Parsed `MJ: Vector Indexes.ProviderConfig` JSON — the opaque, provider-specific blob passed
-     * to the vector DB so drivers can read their own settings (e.g. Pinecone's `namespaceField`).
-     * Undefined when the index has no ProviderConfig or it is not valid JSON.
-     */
-    providerConfig?: Record<string, unknown>;
-}
-
 // The vector-storage types, the storage-config cascade and the metadata builder live in
-// ContentVectorMetadata, shared with the content pipeline's Embed stage so both write identical
-// vector metadata. They are re-exported from this package's root as before.
+// ContentVectorMetadata; infrastructure resolution, directives, upsert and tag loading in
+// ContentVectorInfrastructure; the tagging prompt in ContentAutotagPrompt. All are shared with the
+// content pipeline and re-exported from this package's root.
 
 /**
  * One embedding unit produced from a ContentItem: a slice of its text plus the id minted for the
@@ -308,7 +288,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
             // The source's classification config and the type's model / tag limits are read from the
             // KnowledgeHub cache per item; catch a source or type created after it loaded.
-            await this.ensureItemMetadataCached(batch, contextUser);
+            await EnsureContentMetadataCached(batch, contextUser, this.ProviderToUse);
 
             // Rate limit before each batch of parallel LLM calls.
             await this.LLMRateLimiter.Acquire();
@@ -506,21 +486,6 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
-     * Resolves the "Content Autotagging" prompt from the AIEngine cache.
-     * Throws if the prompt is not found or not active.
-     */
-    private getAutotagPrompt(): MJAIPromptEntityExtended {
-        const prompt = AIEngine.Instance.Prompts.find(p => p.Name === 'Content Autotagging');
-        if (!prompt) {
-            throw new Error('AI Prompt "Content Autotagging" not found. Ensure the prompt metadata has been synced to the database.');
-        }
-        if (prompt.Status !== 'Active') {
-            throw new Error(`AI Prompt "Content Autotagging" is not active (Status: ${prompt.Status})`);
-        }
-        return prompt;
-    }
-
-    /**
      * Optional taxonomy JSON string to inject into the autotagging prompt.
      * Set by the caller (e.g., AutotagEntity) before calling ExtractTextAndProcessWithLLM.
      * When set, the prompt template receives an `existingTaxonomy` variable containing
@@ -571,9 +536,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             // Format: "# RootTag\n## ChildTag\n### GrandChild"
             // LLM returns paths like "RootTag / ChildTag / GrandChild" for unambiguous matching
             if (TagEngine.Instance.Tags.length > 0) {
-                const tree = TagEngine.Instance.GetTaxonomyTree();
-                this.TaxonomyContext = this.buildTaxonomyMarkdown(tree);
-                LogStatus(`[TaxonomyBridge] Taxonomy context injected as markdown (${tree.length} root nodes, ${TagEngine.Instance.Tags.length} total tags)`);
+                this.TaxonomyContext = TagEngine.Instance.GetTaxonomyMarkdown();
+                LogStatus(`[TaxonomyBridge] Taxonomy context injected as markdown (${TagEngine.Instance.Tags.length} total tags)`);
             }
 
             // Set up the bridge callback — fires after each ContentItemTag is saved
@@ -600,47 +564,6 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
-     * Build a markdown-formatted taxonomy for LLM prompt injection.
-     * Uses heading levels for hierarchy depth (# for root, ## for child, etc.)
-     * so the LLM can return tag paths like "Root / Child / Grandchild".
-     */
-    private buildTaxonomyMarkdown(tree: Array<{ Name: string; Children: Array<unknown> }>): string {
-        const lines: string[] = [];
-        const renderNode = (node: { Name: string; Children: Array<unknown> }, depth: number, path: string): void => {
-            const prefix = '#'.repeat(Math.min(depth + 1, 6)); // Max 6 heading levels
-            const fullPath = path ? `${path} / ${node.Name}` : node.Name;
-            lines.push(`${prefix} ${node.Name}`);
-            if (node.Children && node.Children.length > 0) {
-                for (const child of node.Children) {
-                    renderNode(child as { Name: string; Children: Array<unknown> }, depth + 1, fullPath);
-                }
-            }
-        };
-        for (const root of tree) {
-            renderNode(root, 0, '');
-        }
-        return lines.join('\n');
-    }
-
-    /**
-     * Build the existing-taxonomy markdown from the LIVE TagEngine cache at the
-     * moment a prompt is constructed — NOT a once-per-run snapshot.
-     *
-     * TagEngine wraps the process-global TagEngineBase cache, which stays current
-     * as tags are created during the run (each tag Save fires BaseEntity events
-     * that update the shared cache). Reading it per item means every item sees the
-     * tags created by earlier items and can reuse / nest into them, so a real
-     * hierarchy emerges instead of a flat list of near-duplicates. (The old
-     * `TaxonomyContext` snapshot was built once and, on a from-empty run, never —
-     * leaving the LLM blind for the whole run.)
-     */
-    private getLiveTaxonomyMarkdown(): string | undefined {
-        const tags = TagEngine.Instance.Tags;
-        if (!tags || tags.length === 0) return undefined;
-        return this.buildTaxonomyMarkdown(TagEngine.Instance.GetTaxonomyTree());
-    }
-
-    /**
      * Bridge a ContentItemTag to the formal MJ Tag taxonomy.
      *
      * Delegates to {@link ContentItemTagBridge} in the tag engine, which the content pipeline's Tag
@@ -654,78 +577,22 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         await new ContentItemTagBridge(this.ProviderToUse).Bridge(contentItemTag, parentTagName, contextUser);
     }
 
-    /**
-     * Builds template data for the autotagging prompt from processing params and chunk context.
-     */
+    /** Template data for the autotagging prompt, for one chunk of an item. */
     private buildPromptData(
         params: ContentItemProcessParams,
         chunk: string,
         previousResults: JsonObject
     ): Record<string, unknown> {
-        const contentSourceType = this.GetContentSourceTypeName(params.contentSourceTypeID);
-        const additionalAttributePrompts = this.GetAdditionalContentTypePrompt(params.contentTypeID);
-        const hasPreviousResults = Object.keys(previousResults).length > 0;
-
-        // Check if this source type requires content type validation in the prompt
-        const sourceType = this.khEngine.GetContentSourceTypeByID(params.contentSourceTypeID);
-        const sourceConfig = sourceType?.ConfigurationObject;
-        const requiresContentType = sourceConfig?.RequiresContentType !== false;
-
-        return {
-            contentType: requiresContentType ? this.GetContentTypeName(params.contentTypeID) : undefined,
-            contentSourceType,
-            minTags: params.minTags,
-            maxTags: params.maxTags,
-            additionalAttributePrompts,
-            existingTaxonomy: this.getLiveTaxonomyMarkdown(),
-            classificationContext: params.classificationContext ?? undefined,
-            contentText: chunk,
-            previousResults: hasPreviousResults ? JSON.stringify(previousResults) : undefined,
-        };
-    }
-
-    /**
-     * Resolve the effective classification context for a content item by combining
-     * the org / content-type / source scopes via {@link ClassificationContextResolver}.
-     * Returns undefined when no scope supplies context. Best-effort: any failure is
-     * logged and treated as "no context" so the autotag run is never blocked.
-     */
-    private async resolveClassificationContext(
-        params: ContentItemProcessParams,
-        contextUser: UserInfo,
-    ): Promise<string | undefined> {
-        try {
-            const sourceConfig = this.getSourceClassificationConfig(params.contentSourceID);
-            return await ClassificationContextResolver.ResolveEffectiveContext(
-                sourceConfig,
-                params.contentTypeID,
-                this.ContentTypes,
-                contextUser,
-                this.ProviderToUse,
-            );
-        } catch (e) {
-            LogError(`[Autotag] Failed to resolve classification context for item ${params.contentItemID}: ${e instanceof Error ? e.message : String(e)}`);
-            return undefined;
-        }
-    }
-
-    /**
-     * Look up the parsed ContentSource configuration (with the classification-context
-     * extension keys) for a given source ID from the cached KnowledgeHub sources.
-     */
-    private getSourceClassificationConfig(
-        contentSourceID: string | undefined,
-    ): IContentSourceClassificationConfiguration | null {
-        if (!contentSourceID) {
-            return null;
-        }
-        const source = this.khEngine.GetContentSourceByID(contentSourceID);
-        if (!source) {
-            return null;
-        }
-        // ConfigurationObject is the CodeGen-generated typed accessor; the classification
-        // extension keys ride along in the same JSON and are surfaced via the extended interface.
-        return (source.ConfigurationObject as IContentSourceClassificationConfiguration | null) ?? null;
+        return BuildContentAutotagPromptData({
+            ContentSourceTypeID: params.contentSourceTypeID,
+            ContentTypeID: params.contentTypeID,
+            MinTags: params.minTags,
+            MaxTags: params.maxTags,
+            AttributePrompt: this.GetAdditionalContentTypePrompt(params.contentTypeID),
+            ClassificationContext: params.classificationContext,
+            ContentText: chunk,
+            PreviousResults: previousResults,
+        });
     }
 
     public async PromptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo): Promise<JsonObject> {
@@ -733,9 +600,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
         // Resolve the effective classification context once per item (async lookup);
         // buildPromptData reads it from params for each chunk.
-        params.classificationContext = await this.resolveClassificationContext(params, contextUser);
+        params.classificationContext = await ResolveItemClassificationContext(params.contentSourceID, params.contentTypeID, contextUser, this.ProviderToUse);
 
-        const prompt = this.getAutotagPrompt();
+        const prompt = GetContentAutotagPrompt();
         const tokenLimit = this.resolveTokenLimit(params.modelID);
         const chunks = await this.ChunkExtractedText(params.text, tokenLimit);
 
@@ -793,21 +660,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         LLMResults: JsonObject,
         contextUser: UserInfo
     ): Promise<JsonObject> {
-        const promptParams = new AIPromptParams();
-        promptParams.prompt = prompt;
-        promptParams.contextUser = contextUser;
-        promptParams.data = this.buildPromptData(params, chunk, LLMResults);
-        promptParams.skipValidation = false;
-        promptParams.attemptJSONRepair = true;
-        promptParams.additionalParameters = { temperature: 0.0 };
-
-        // If the ContentType specifies a preferred AI model, use it as a runtime override
-        if (params.modelID) {
-            promptParams.override = { modelId: params.modelID };
-        }
-
-        const runner = new AIPromptRunner();
-        const result = await runner.ExecutePrompt<JsonObject>(promptParams);
+        // ContentType.AIModelID, when set, overrides the prompt's own model.
+        const result = await RunContentAutotagPrompt<JsonObject>(prompt, this.buildPromptData(params, chunk, LLMResults), contextUser, params.modelID);
 
         if (!result.success) {
             LogError(`[Autotag] LLM failed for item ${params.contentItemID}: ${result.errorMessage ?? 'unknown error'}`);
@@ -1000,8 +854,6 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      */
     public async SaveContentItemTags(contentItemID: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
         const md = this.ProviderToUse;
-        const keywords = LLMResults.keywords;
-        if (!keywords || !Array.isArray(keywords)) return;
 
         // AIPromptRun lineage: the run that produced this keyword set was stashed on
         // LLMResults during chunk processing. Stamped on each ContentItemTag for audit.
@@ -1010,24 +862,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             ? rawPromptRunID
             : null;
 
-        // Normalize keywords — support both formats:
-        //   Old: ["keyword1", "keyword2"]
-        //   New: [{ tag: "keyword1", weight: 0.95 }, { tag: "keyword2", weight: 0.7 }]
-        //   New with parentTag: [{ tag: "keyword1", weight: 0.95, parentTag: "parent" }]
-        //   New with reasoning: [{ tag: "keyword1", weight: 0.95, reasoning: "why..." }]
-        const normalizedTags: Array<{ tag: string; weight: number; parentTag: string | null; reasoning: string | null }> = keywords.map((kw: unknown) => {
-            if (typeof kw === 'string') {
-                return { tag: kw, weight: 1.0, parentTag: null, reasoning: null };
-            }
-            const obj = kw as { tag?: string; keyword?: string; weight?: number; parentTag?: string; reasoning?: string; rationale?: string };
-            const rawReasoning = obj.reasoning ?? obj.rationale;
-            return {
-                tag: obj.tag || obj.keyword || String(kw),
-                weight: typeof obj.weight === 'number' ? Math.max(0, Math.min(1, obj.weight)) : 0.5,
-                parentTag: obj.parentTag ?? null,
-                reasoning: typeof rawReasoning === 'string' && rawReasoning.trim().length > 0 ? rawReasoning.trim() : null,
-            };
-        });
+        const normalizedTags = NormalizeAutotagKeywords(LLMResults.keywords);
 
         const BATCH_SIZE = 10;
         for (let i = 0; i < normalizedTags.length; i += BATCH_SIZE) {
@@ -1036,24 +871,24 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 const contentItemTag: MJContentItemTagEntity = await md.GetEntityObject<MJContentItemTagEntity>('MJ: Content Item Tags', contextUser);
                 contentItemTag.NewRecord();
                 contentItemTag.ItemID = contentItemID;
-                contentItemTag.Tag = item.tag;
-                contentItemTag.Weight = item.weight;
+                contentItemTag.Tag = item.Tag;
+                contentItemTag.Weight = item.Weight;
                 // Phase 4 lineage/audit — only set when available, both columns nullable.
                 if (aiPromptRunID) {
                     contentItemTag.AIPromptRunID = aiPromptRunID;
                 }
-                if (item.reasoning) {
-                    contentItemTag.Reasoning = item.reasoning;
+                if (item.Reasoning) {
+                    contentItemTag.Reasoning = item.Reasoning;
                 }
                 const saved = await contentItemTag.Save();
 
                 // Invoke taxonomy bridge callback if set
                 if (saved && this.OnContentItemTagSaved) {
                     try {
-                        await this.OnContentItemTagSaved(contentItemTag, item.parentTag, contextUser);
+                        await this.OnContentItemTagSaved(contentItemTag, item.ParentTag, contextUser);
                     } catch (bridgeError) {
                         const msg = bridgeError instanceof Error ? bridgeError.message : String(bridgeError);
-                        LogError(`Tag taxonomy bridge failed for tag "${item.tag}": ${msg}`);
+                        LogError(`Tag taxonomy bridge failed for tag "${item.Tag}": ${msg}`);
                     }
                 }
             }));
@@ -1310,12 +1145,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public GetAdditionalContentTypePrompt(contentTypeID: string): string {
-        const attrs = this._contentTypeAttributes.filter(a => UUIDsEqual(a.ContentTypeID, contentTypeID));
-        if (attrs.length === 0) return '';
-
-        return attrs.map(attr =>
-            `${attr.Prompt}. The data must be included in the above described JSON file in this key-value format:     { "${attr.Name}": (value of ${attr.Name} here)}`
-        ).join('\n');
+        return BuildAttributePrompt(this._contentTypeAttributes.filter(a => UUIDsEqual(a.ContentTypeID, contentTypeID)));
     }
 
     public GetContentItemDescription(contentSourceParams: ContentSourceParams): string {
@@ -1579,26 +1409,20 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         // Ensure AIEngine is loaded so we can resolve the embedding model
         await AIEngine.Instance.Config(false, contextUser);
 
-        // Load content sources + types for per-item infrastructure resolution
-        const { sourceMap, typeMap } = await this.loadContentSourceAndTypeMaps(eligible, contextUser);
-
         // Group items by their resolved (embeddingModelID + vectorIndexID) pair
-        const groups = this.groupItemsByInfrastructure(eligible, sourceMap, typeMap);
+        const infrastructure = new ContentVectorInfrastructure(this.ProviderToUse, contextUser);
+        const groups = await infrastructure.GroupByInfrastructure(eligible);
 
         // Load tags for all items in one query
-        const tagMap = await this.loadTagsForItems(eligible, contextUser);
+        const tagMap = await LoadContentItemTags(eligible.map(i => i.ID), this.ProviderToUse, contextUser);
 
         let vectorized = 0;
         let processed = 0;
         const allPromptRunIDs: string[] = [];
 
-        // One resolver per pass: dotted field paths declared by the vector driver
-        // ('<FKField>.<Field>') are batched and cached across every infra group below.
-        const pathResolver = new FieldPathResolver(this.ProviderToUse, contextUser, 'MJ: Content Items');
-
         for (const [groupKey, groupItems] of groups) {
-            const infra = await this.resolveGroupInfrastructure(groupKey, contextUser);
-            const groupResult = await this.vectorizeGroup(groupItems, infra, tagMap, batchSize, contextUser, pathResolver, (batchProcessed) => {
+            const infra = await infrastructure.Resolve(groupKey);
+            const groupResult = await this.vectorizeGroup(groupItems, infra, tagMap, batchSize, contextUser, infrastructure, (batchProcessed) => {
                 processed += batchProcessed;
                 onProgress?.(Math.min(processed, eligible.length), eligible.length);
             });
@@ -1629,7 +1453,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         tagMap: Map<string, string[]>,
         batchSize: number,
         contextUser: UserInfo,
-        pathResolver: FieldPathResolver,
+        infrastructure: ContentVectorInfrastructure,
         onBatchComplete: (count: number) => void
     ): Promise<{ vectorized: number; promptRunIDs: string[] }> {
         let vectorized = 0;
@@ -1641,7 +1465,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         // requires — such as a tenant-isolation field — is missing); rejected items are marked
         // Failed individually and excluded so they never poison the rest of the group. Recovery
         // after fixing the data: reset the item to Pending or use ForceReprocess.
-        const { directives, rejected } = await this.precomputeProviderDirectives(items, infra, pathResolver);
+        const { Directives: directives, Rejected } = await infrastructure.BuildDirectives(items, infra);
+        const rejected = Rejected.map(r => r.Item);
         if (rejected.length > 0) {
             LogError(`VectorizeContentItems: ${rejected.length} item(s) rejected by the vector provider's directive policy — marked Failed, remaining items proceed`);
             await this.updateEmbeddingStatusBatch(rejected, 'Failed', contextUser);
@@ -1695,7 +1520,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
             const records = this.buildVectorRecords(allChunks, runResult.Vectors, tagMap, infra, directives);
 
-            const batchSuccess = await this.upsertVectorRecords(records, infra);
+            const batchSuccess = (await UpsertVectorRecords(records, infra, this.VectorDBRateLimiter)).success;
             if (batchSuccess) {
                 vectorized += batch.length;
                 // Persist the vector-DB record identifiers back into MJ before the status save,
@@ -1770,7 +1595,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         // eligibility). Resolved once per batch — every chunk shares the same source entity.
         const contentItemEntity = this.ProviderToUse.EntityByName('MJ: Content Items');
         return allChunks.map((chunk, idx) =>
-            this.buildVectorRecord(chunk, vectors[idx], countByItem.get(chunk.item.ID) ?? 1, tagMap.get(chunk.item.ID), contentItemEntity, infra, directivesByItem)
+            this.buildVectorRecord(chunk, vectors[idx], countByItem.get(chunk.item.ID) ?? 1, tagMap.get(NormalizeUUID(chunk.item.ID)), contentItemEntity, infra, directivesByItem)
         );
     }
 
@@ -1788,7 +1613,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * @param tags               Resolved tag names for `chunk.item`, if any.
      * @param contentItemEntity  The 'MJ: Content Items' entity metadata, for display-field resolution.
      * @param infra              Resolved vector infrastructure (source of provider directives).
-     * @param directivesByItem   Directives precomputed per item ({@link precomputeProviderDirectives});
+     * @param directivesByItem   Directives precomputed per item ({@link ContentVectorInfrastructure.BuildDirectives});
      *                           when absent, directives are built inline (and a driver rejection throws).
      */
     protected buildVectorRecord(
@@ -1809,98 +1634,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         };
         const directives = directivesByItem
             ? directivesByItem.get(NormalizeUUID(chunk.item.ID))
-            : this.buildProviderDirectives(chunk.item, infra);
+            : BuildProviderDirectives(chunk.item, infra);
         if (directives) {
             record.providerTemporaryDirectives = directives;
         }
         return record;
-    }
-
-    /**
-     * Compute a vector record's per-record provider directives (e.g. Pinecone namespace) from the
-     * source content item and the index's ProviderConfig. Returns undefined when the index has no
-     * ProviderConfig — the common case — so no provider routing is applied and the base
-     * BuildProviderDirectives is not even invoked. The item's full field set (GetAll) is handed to
-     * the driver so it can read whatever field its config names (e.g. `namespaceField: 'OrganizationID'`).
-     * Directives are always derived from the parent ContentItem — the same source for a chunk's
-     * vector as for an item-level vector.
-     *
-     * When the driver declares source-record field paths (`GetSourceRecordFieldPaths` — e.g. a
-     * dotted path resolved from a related record), the caller pre-resolves the per-item values
-     * via {@link FieldPathResolver} and passes them in; each value is injected into the record
-     * under its full path key so the driver's plain `sourceRecord[path]` lookup works unchanged.
-     *
-     * MAY THROW: a driver is allowed to reject a record from `BuildProviderDirectives` (e.g. a
-     * mandatory routing value its config requires is missing). Batch callers go through
-     * {@link precomputeProviderDirectives}, which converts a throw into a per-record failure.
-     */
-    protected buildProviderDirectives(
-        item: MJContentItemEntity,
-        infra: ResolvedVectorInfrastructure,
-        resolvedFields?: Map<string, Record<string, unknown>>
-    ): Record<string, unknown> | undefined {
-        if (!infra.providerConfig) {
-            return undefined;
-        }
-        let sourceRecord = item.GetAll() as Record<string, unknown>;
-        const extra = resolvedFields?.get(NormalizeUUID(item.ID));
-        if (extra) {
-            sourceRecord = { ...sourceRecord, ...extra };
-        }
-        return infra.vectorDB.BuildProviderDirectives(sourceRecord, infra.providerConfig);
-    }
-
-    /**
-     * Resolve the source-record field paths the driver declares for this index, for a batch of
-     * items. Returns per-item bags of `{ pathKey: value }`, or undefined when the driver declares
-     * no paths. Deliberately generic — what a path's value MEANS (a Pinecone namespace, a shard
-     * key, a routing region...) is entirely the driver's business; the engine only resolves data.
-     */
-    private async resolveDriverFieldPaths(
-        items: MJContentItemEntity[],
-        infra: ResolvedVectorInfrastructure,
-        resolver: FieldPathResolver
-    ): Promise<Map<string, Record<string, unknown>> | undefined> {
-        if (!infra.providerConfig) return undefined;
-        const paths = infra.vectorDB.GetSourceRecordFieldPaths(infra.providerConfig);
-        if (!paths || paths.length === 0) return undefined;
-
-        const byItem = new Map<string, Record<string, unknown>>();
-        for (const path of paths) {
-            const values = await resolver.ResolveForItems(items, path);
-            for (const item of items) {
-                const key = NormalizeUUID(item.ID);
-                const bag = byItem.get(key) ?? {};
-                bag[path] = values.get(key);
-                byItem.set(key, bag);
-            }
-        }
-        return byItem;
-    }
-
-    /**
-     * Build directives for every item up front, converting a driver rejection (a throw from
-     * `BuildProviderDirectives`) into a per-record failure. Returns the directive map for the
-     * accepted items plus the rejected items — callers fail the rejected records individually
-     * (before any embedding spend) and proceed with the rest of the batch.
-     */
-    private async precomputeProviderDirectives(
-        items: MJContentItemEntity[],
-        infra: ResolvedVectorInfrastructure,
-        resolver: FieldPathResolver
-    ): Promise<{ directives: Map<string, Record<string, unknown> | undefined>; rejected: MJContentItemEntity[] }> {
-        const directives = new Map<string, Record<string, unknown> | undefined>();
-        const rejected: MJContentItemEntity[] = [];
-        const resolvedFields = await this.resolveDriverFieldPaths(items, infra, resolver);
-        for (const item of items) {
-            try {
-                directives.set(NormalizeUUID(item.ID), this.buildProviderDirectives(item, infra, resolvedFields));
-            } catch (e) {
-                LogError(`Vector provider rejected record ${item.ID}: ${e instanceof Error ? e.message : String(e)}`);
-                rejected.push(item);
-            }
-        }
-        return { directives, rejected };
     }
 
     /**
@@ -1917,12 +1655,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         config: ResolvedVectorStorageConfig,
         isItemLevel: boolean
     ): string {
-        if (config.vectorIDStrategy === 'hash') {
-            return isItemLevel
-                ? this.contentItemVectorID(chunk.item.ID)
-                : this.contentItemChunkVectorID(chunk.item.ID, chunk.chunkIndex);
-        }
-        return chunk.chunkID;
+        return ResolveContentVectorID(config, chunk.item.ID, isItemLevel, chunk.chunkIndex, chunk.chunkID);
     }
 
     /**
@@ -2195,9 +1928,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         if (!items) { stats.failed += toPurge.length; return; }
 
         const itemById = new Map(items.map(i => [NormalizeUUID(i.ID), i]));
-        const { sourceMap, typeMap } = await this.loadContentSourceAndTypeMaps(items, contextUser);
-        const itemGroups = this.groupItemsByInfrastructure(items, sourceMap, typeMap);
-        const pathResolver = new FieldPathResolver(this.ProviderToUse, contextUser, 'MJ: Content Items');
+        const infrastructure = new ContentVectorInfrastructure(this.ProviderToUse, contextUser);
+        const itemGroups = await infrastructure.GroupByInfrastructure(items);
 
         for (const [groupKey, groupItems] of itemGroups) {
             const groupItemIDs = new Set(groupItems.map(i => NormalizeUUID(i.ID)));
@@ -2206,7 +1938,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
             let infra: ResolvedVectorInfrastructure;
             try {
-                infra = await this.resolveGroupInfrastructure(groupKey, contextUser);
+                infra = await infrastructure.Resolve(groupKey);
             } catch (e) {
                 LogError(`PurgeDeletedChunks: infrastructure resolve failed for group ${groupKey}: ${e instanceof Error ? e.message : String(e)}`);
                 stats.failed += groupChunks.length;
@@ -2217,9 +1949,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             // route each removal correctly. Chunks whose parent the driver rejects can't have
             // their vectors targeted — they are left 'Pending' (counted failed) and retried after
             // the data is fixed; the rest of the group proceeds.
-            const { directives, rejected } = await this.precomputeProviderDirectives(groupItems, infra, pathResolver);
+            const { Directives: directives, Rejected: rejected } = await infrastructure.BuildDirectives(groupItems, infra);
             if (rejected.length > 0) {
-                const rejectedIDs = new Set(rejected.map(i => NormalizeUUID(i.ID)));
+                const rejectedIDs = new Set(rejected.map(r => NormalizeUUID(r.Item.ID)));
                 const blocked = groupChunks.filter(c => rejectedIDs.has(NormalizeUUID(c.ContentItemID)));
                 LogError(`PurgeDeletedChunks: ${blocked.length} chunk(s) rejected by the vector provider's directive policy — cannot target their vectors, left Pending`);
                 stats.failed += blocked.length;
@@ -2265,7 +1997,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             const item = itemById.get(NormalizeUUID(c.ContentItemID));
             const directives = directivesByItem
                 ? directivesByItem.get(NormalizeUUID(c.ContentItemID))
-                : (item ? this.buildProviderDirectives(item, infra) : undefined);
+                : (item ? BuildProviderDirectives(item, infra) : undefined);
             if (directives) {
                 record.providerTemporaryDirectives = directives;
             }
@@ -2273,7 +2005,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         });
         await this.VectorDBRateLimiter.Acquire();
         try {
-            const resp = await infra.vectorDB.DeleteRecords(records, infra.indexName);
+            const resp = await infra.vectorDB.DeleteRecords(records, infra.indexName, infra.providerConfig);
             if (!resp.success) LogError(`PurgeDeletedChunks: DeleteRecords failed for index ${infra.indexName}: ${resp.message}`);
             return resp.success;
         } catch (e) {
@@ -2359,10 +2091,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         if (!items) { stats.failed += chunks.length; return; }
 
         const itemById = new Map(items.map(i => [NormalizeUUID(i.ID), i]));
-        const { sourceMap, typeMap } = await this.loadContentSourceAndTypeMaps(items, contextUser);
-        const itemGroups = this.groupItemsByInfrastructure(items, sourceMap, typeMap);
-        const tagMap = await this.loadTagsForItems(items, contextUser);
-        const pathResolver = new FieldPathResolver(this.ProviderToUse, contextUser, 'MJ: Content Items');
+        const infrastructure = new ContentVectorInfrastructure(this.ProviderToUse, contextUser);
+        const itemGroups = await infrastructure.GroupByInfrastructure(items);
+        const tagMap = await LoadContentItemTags(items.map(i => i.ID), this.ProviderToUse, contextUser);
 
         for (const [groupKey, groupItems] of itemGroups) {
             const groupItemIDs = new Set(groupItems.map(i => NormalizeUUID(i.ID)));
@@ -2371,7 +2102,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
             let infra: ResolvedVectorInfrastructure;
             try {
-                infra = await this.resolveGroupInfrastructure(groupKey, contextUser);
+                infra = await infrastructure.Resolve(groupKey);
             } catch (e) {
                 LogError(`EmbedPendingChunks: infrastructure resolve failed for group ${groupKey}: ${e instanceof Error ? e.message : String(e)}`);
                 stats.failed += groupChunks.length;
@@ -2379,12 +2110,12 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             }
 
             // Provider directives are built per parent item BEFORE any embedding spend. Chunks
-            // whose parent the driver rejects (see precomputeProviderDirectives) are marked Failed
+            // whose parent the driver rejects (see ContentVectorInfrastructure.BuildDirectives) are marked Failed
             // individually; the rest of the group proceeds. Recovery: fix the data, reset the
             // rows to Pending.
-            const { directives, rejected } = await this.precomputeProviderDirectives(groupItems, infra, pathResolver);
+            const { Directives: directives, Rejected: rejected } = await infrastructure.BuildDirectives(groupItems, infra);
             if (rejected.length > 0) {
-                const rejectedIDs = new Set(rejected.map(i => NormalizeUUID(i.ID)));
+                const rejectedIDs = new Set(rejected.map(r => NormalizeUUID(r.Item.ID)));
                 const blocked = groupChunks.filter(c => rejectedIDs.has(NormalizeUUID(c.ContentItemID)));
                 LogError(`EmbedPendingChunks: ${blocked.length} chunk(s) rejected by the vector provider's directive policy — marked Failed, remaining chunks proceed`);
                 for (const c of blocked) {
@@ -2487,18 +2218,18 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             const record: VectorRecord = {
                 id: this.resolveChunkVectorID(e.chunk, config, false),
                 values: runResult.Vectors[idx],
-                metadata: this.buildVectorMetadata(e.chunk, false, tagMap.get(e.chunk.item.ID), config, contentItemEntity),
+                metadata: this.buildVectorMetadata(e.chunk, false, tagMap.get(NormalizeUUID(e.chunk.item.ID)), config, contentItemEntity),
             };
             const directives = directivesByItem
                 ? directivesByItem.get(NormalizeUUID(e.chunk.item.ID))
-                : this.buildProviderDirectives(e.chunk.item, infra);
+                : BuildProviderDirectives(e.chunk.item, infra);
             if (directives) {
                 record.providerTemporaryDirectives = directives;
             }
             return record;
         });
 
-        if (!await this.upsertVectorRecords(records, infra)) {
+        if (!(await UpsertVectorRecords(records, infra, this.VectorDBRateLimiter)).success) {
             stats.failed += embeddable.length; // left 'Pending' → retried on the next run
             return;
         }
@@ -2518,366 +2249,6 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             LogError(`EmbedPendingChunks: failed to mark chunk ${chunk.ID} embedded: ${chunk.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
         return saved;
-    }
-
-    /**
-     * Upsert vector records to the vector database in sub-batches with rate limiting.
-     * Returns true if all sub-batches succeeded.
-     */
-    private async upsertVectorRecords(
-        records: VectorRecord[],
-        infra: ResolvedVectorInfrastructure
-    ): Promise<boolean> {
-        const UPSERT_CHUNK = 50;
-        const upsertPromises: Promise<BaseResponse>[] = [];
-        for (let j = 0; j < records.length; j += UPSERT_CHUNK) {
-            const chunk = records.slice(j, j + UPSERT_CHUNK);
-            await this.VectorDBRateLimiter.Acquire();
-            // Pass the index's ProviderConfig so drivers can apply routing (e.g. Pinecone reads
-            // providerConfig.namespace, or per-record providerTemporaryDirectives set above).
-            upsertPromises.push(Promise.resolve(infra.vectorDB.CreateRecords(chunk, infra.indexName, infra.providerConfig)));
-        }
-        const responses = await Promise.all(upsertPromises);
-        let allSuccess = true;
-        for (const response of responses) {
-            if (!response.success) {
-                LogError(`VectorizeContentItems: upsert failed: ${response.message}`);
-                allSuccess = false;
-            }
-        }
-        return allSuccess;
-    }
-
-    /**
-     * Load content source and content type records for all unique source/type IDs
-     * referenced by the given items. Returns maps keyed by normalized ID.
-     *
-     * Every vectorization entry point (VectorizeContentItems, PurgeDeletedChunks,
-     * EmbedPendingChunks, vector dedup) builds its maps here, so this is where a stale
-     * KnowledgeHub cache is caught — see {@link ensureItemMetadataCached}. The per-item storage
-     * config ({@link resolveItemVectorStorageConfig}) reads the same cache later in the pass, so
-     * it sees the reloaded rows too.
-     */
-    private async loadContentSourceAndTypeMaps(
-        items: MJContentItemEntity[],
-        contextUser: UserInfo
-    ): Promise<{
-        sourceMap: Map<string, Record<string, unknown>>;
-        typeMap: Map<string, Record<string, unknown>>;
-    }> {
-        await this.ensureItemMetadataCached(items, contextUser);
-
-        const sourceIdSet = new Set(items.map(i => NormalizeUUID(i.ContentSourceID)));
-        const typeIdSet = new Set(items.map(i => NormalizeUUID(i.ContentTypeID)));
-
-        // Use KH engine cached data instead of RunView calls
-        const sourceMap = new Map<string, Record<string, unknown>>();
-        for (const src of this.khEngine.ContentSources) {
-            if (sourceIdSet.has(NormalizeUUID(src.ID))) {
-                sourceMap.set(NormalizeUUID(src.ID), src.GetAll());
-            }
-        }
-
-        const typeMap = new Map<string, Record<string, unknown>>();
-        for (const ct of this.ContentTypes) {
-            if (typeIdSet.has(NormalizeUUID(ct.ID))) {
-                typeMap.set(NormalizeUUID(ct.ID), ct.GetAll());
-            }
-        }
-
-        return { sourceMap, typeMap };
-    }
-
-    /**
-     * Make sure the KnowledgeHub cache holds every content source and content type these items
-     * reference, reloading it ONCE when it does not.
-     *
-     * ── A MISS HERE MEANS THE CACHE IS STALE ────────────────────────────────────────────────────
-     * Both ids are required foreign keys on the item, so the rows exist; a miss means the cache
-     * loaded before they did. That is the normal state of a long-running worker: unless Redis
-     * cross-server cache sync is configured, nothing tells this process about a source another
-     * process created after it booted. And the source row is not decoration. It carries the item's
-     * routing (its EmbeddingModelID / VectorIndexID override) and its storage config
-     * (VectorIDStrategy, ChunkTextStorage, VectorMetadata, VectorEntityName). Read from a stale
-     * cache, every one of those silently falls back to the content type's values or the hard-coded
-     * defaults, so the item is embedded into the wrong index with the wrong vector ids until the
-     * worker restarts, and its later re-runs then write different ids.
-     *
-     * One `Config(true)` reloads all six KnowledgeHub sets in a single batched, cache-bypassing
-     * round trip. It runs only on a miss, so a warm cache costs nothing beyond the set lookups, and
-     * at most once per call however many items miss.
-     *
-     * Never makes things worse: a failed reload is logged and the pass continues on whatever the
-     * cache holds, which is exactly the pre-reload behavior (content type → default cascade).
-     */
-    private async ensureItemMetadataCached(items: MJContentItemEntity[], contextUser: UserInfo): Promise<void> {
-        const uncached = this.findUncachedItemMetadata(items);
-        if (uncached.length === 0) return;
-
-        LogStatus(`[Autotag] KnowledgeHub cache is missing ${uncached.length} row(s) these items reference (created after it loaded) — reloading it once: ${uncached.join(', ')}`);
-        try {
-            await this.khEngine.Config(true, contextUser, this.ProviderToUse);
-        } catch (e) {
-            LogError(`[Autotag] KnowledgeHub cache reload failed: ${e instanceof Error ? e.message : String(e)}`);
-        }
-
-        const stillUncached = this.findUncachedItemMetadata(items);
-        if (stillUncached.length > 0) {
-            LogError(`[Autotag] ${stillUncached.length} row(s) still absent from the KnowledgeHub cache after a reload: ${stillUncached.join(', ')} — items referencing them fall back to their content type / default configuration`);
-        }
-    }
-
-    /** The distinct content source / content type ids these items reference that the KnowledgeHub cache does not hold. */
-    private findUncachedItemMetadata(items: MJContentItemEntity[]): string[] {
-        const uncached = new Set<string>();
-        for (const item of items) {
-            if (item.ContentSourceID && !this.khEngine.GetContentSourceByID(item.ContentSourceID)) {
-                uncached.add(`content source ${NormalizeUUID(item.ContentSourceID)}`);
-            }
-            if (item.ContentTypeID && !this.khEngine.GetContentTypeByID(item.ContentTypeID)) {
-                uncached.add(`content type ${NormalizeUUID(item.ContentTypeID)}`);
-            }
-        }
-        return [...uncached];
-    }
-
-    /**
-     * Resolve the (embeddingModelID, vectorIndexID) pair for a content item using
-     * the cascade: ContentSource override -> ContentType default -> null (global fallback).
-     */
-    private resolveItemInfrastructureIds(
-        item: MJContentItemEntity,
-        sourceMap: Map<string, Record<string, unknown>>,
-        typeMap: Map<string, Record<string, unknown>>
-    ): { embeddingModelID: string | null; vectorIndexID: string | null } {
-        const source = sourceMap.get(NormalizeUUID(item.ContentSourceID));
-        if (source) {
-            const srcEmbedding = source['EmbeddingModelID'] as string | null;
-            const srcVector = source['VectorIndexID'] as string | null;
-            if (srcEmbedding && srcVector) {
-                return { embeddingModelID: srcEmbedding, vectorIndexID: srcVector };
-            }
-        }
-
-        const contentType = typeMap.get(NormalizeUUID(item.ContentTypeID));
-        if (contentType) {
-            const typeEmbedding = contentType['EmbeddingModelID'] as string | null;
-            const typeVector = contentType['VectorIndexID'] as string | null;
-            if (typeEmbedding && typeVector) {
-                return { embeddingModelID: typeEmbedding, vectorIndexID: typeVector };
-            }
-        }
-
-        // Global fallback — will be resolved in resolveGroupInfrastructure
-        return { embeddingModelID: null, vectorIndexID: null };
-    }
-
-    /**
-     * Group items by their resolved (embeddingModelID + vectorIndexID) key.
-     * Items with the same pair share infrastructure and can be batched together.
-     */
-    private groupItemsByInfrastructure(
-        items: MJContentItemEntity[],
-        sourceMap: Map<string, Record<string, unknown>>,
-        typeMap: Map<string, Record<string, unknown>>
-    ): Map<string, MJContentItemEntity[]> {
-        const groups = new Map<string, MJContentItemEntity[]>();
-
-        for (const item of items) {
-            const { embeddingModelID, vectorIndexID } = this.resolveItemInfrastructureIds(item, sourceMap, typeMap);
-            const key = this.infraGroupKey(embeddingModelID, vectorIndexID);
-            const group = groups.get(key) ?? [];
-            group.push(item);
-            groups.set(key, group);
-        }
-
-        return groups;
-    }
-
-    /** Create a stable cache key for an (embeddingModelID, vectorIndexID) pair */
-    private infraGroupKey(embeddingModelID: string | null, vectorIndexID: string | null): string {
-        const e = embeddingModelID ? NormalizeUUID(embeddingModelID) : 'default';
-        const v = vectorIndexID ? NormalizeUUID(vectorIndexID) : 'default';
-        return `${e}|${v}`;
-    }
-
-    /**
-     * Resolve a group key into concrete infrastructure instances. For the 'default|default'
-     * key, falls back to the first active VectorIndex (original behavior).
-     */
-    private async resolveGroupInfrastructure(
-        groupKey: string,
-        contextUser: UserInfo
-    ): Promise<ResolvedVectorInfrastructure> {
-        const [embeddingPart, vectorPart] = groupKey.split('|');
-        const isDefault = embeddingPart === 'default' || vectorPart === 'default';
-
-        if (isDefault) {
-            return this.getDefaultVectorInfrastructure(contextUser);
-        }
-
-        return this.buildVectorInfrastructure(embeddingPart, vectorPart, contextUser);
-    }
-
-    /**
-     * Build infrastructure from explicit embeddingModelID and vectorIndexID.
-     * Looks up the vector index by ID and the embedding model from AIEngine.
-     */
-    private async buildVectorInfrastructure(
-        embeddingModelID: string,
-        vectorIndexID: string,
-        _contextUser: UserInfo
-    ): Promise<ResolvedVectorInfrastructure> {
-        const vectorIndex = AIEngine.Instance.GetVectorIndexByID(vectorIndexID);
-        if (!vectorIndex) {
-            throw new Error(`Vector index ${vectorIndexID} not found in AIEngine cache`);
-        }
-
-        return this.createInfrastructureFromIndex(vectorIndex, embeddingModelID);
-    }
-
-    /**
-     * Fallback: resolve infrastructure from the first available VectorIndex (original behavior).
-     */
-    private async getDefaultVectorInfrastructure(_contextUser: UserInfo): Promise<ResolvedVectorInfrastructure> {
-        const vectorIndexes = AIEngine.Instance.VectorIndexes;
-        if (vectorIndexes.length === 0) {
-            throw new Error('No vector indexes found — create one in the Configuration tab first');
-        }
-        const vectorIndex = vectorIndexes[0];
-        return this.createInfrastructureFromIndex(vectorIndex, vectorIndex.EmbeddingModelID);
-    }
-
-    /**
-     * Shared helper: given a VectorIndex and embedding model ID, resolve all driver instances
-     * needed for embedding + upsert, plus the index's Dimensions / parsed ProviderConfig (so the
-     * embed call and the upsert can honor reduced dimensions and provider routing). Uses AIEngine
-     * for Vector Databases.
-     */
-    private async createInfrastructureFromIndex(
-        vectorIndex: MJVectorIndexEntity,
-        embeddingModelID: string,
-    ): Promise<ResolvedVectorInfrastructure> {
-        const vectorDBEntity = AIEngine.Instance.VectorDatabases.find(db => UUIDsEqual(db.ID, vectorIndex.VectorDatabaseID));
-        if (!vectorDBEntity || !vectorDBEntity.ClassKey) {
-            throw new Error(`Vector database ${vectorIndex.VectorDatabaseID} not found in AIEngine cache`);
-        }
-        const vectorDBClassKey = vectorDBEntity.ClassKey;
-
-        const aiModel = this.findEmbeddingModel(embeddingModelID);
-        const driverClass = aiModel.DriverClass;
-        const embeddingModelName = aiModel.APIName ?? aiModel.Name;
-
-        const externalIndexName = AIEngine.Instance.GetProviderIndexName(vectorIndex);
-        LogStatus(`VectorizeContentItems: USING embedding model "${aiModel.Name}" (${driverClass}), vector DB "${vectorDBClassKey}", index "${externalIndexName}" (Vector Index "${vectorIndex.Name}")`);
-
-        const vectorDB = this.createVectorDBInstance(vectorDBClassKey);
-        const legacyEmbedding = this.legacyEmbeddingAccessor(driverClass);
-
-        return {
-            get embedding(): BaseEmbeddings | undefined {
-                return legacyEmbedding();
-            },
-            vectorDB,
-            indexName: externalIndexName,
-            embeddingModelName,
-            embeddingModelID,
-            dimensions: vectorIndex.Dimensions ?? undefined,
-            providerConfig: this.parseProviderConfig(vectorIndex.ProviderConfig),
-        };
-    }
-
-    /**
-     * Parse a VectorIndex's ProviderConfig JSON blob into an object for provider-specific routing
-     * (e.g. Pinecone's namespaceField). Mirrors the entity-vectorization pipeline's helper. Returns
-     * undefined for null/empty/invalid JSON — a bad blob is logged and treated as "no config" so it
-     * never blocks vectorization.
-     */
-    private parseProviderConfig(raw: string | null | undefined): Record<string, unknown> | undefined {
-        if (!raw) {
-            return undefined;
-        }
-        try {
-            const parsed = JSON.parse(raw) as unknown;
-            return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : undefined;
-        } catch {
-            LogError(`Invalid JSON in VectorIndex.ProviderConfig, ignoring`);
-            return undefined;
-        }
-    }
-
-    /** Find an embedding model by ID in AIEngine, with helpful error reporting */
-    private findEmbeddingModel(embeddingModelID: string): { DriverClass: string; APIName: string; Name: string } {
-        const aiModel = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, embeddingModelID));
-        if (!aiModel) {
-            const embModels = AIEngine.Instance.Models.filter(m => m.DriverClass?.includes('Embed') || m.Name?.includes('embed'));
-            LogError(`VectorizeContentItems: embeddingModelID ${embeddingModelID} NOT FOUND. Available: ${JSON.stringify(embModels.map(m => ({ id: m.ID, name: m.Name, driver: m.DriverClass })))}`);
-            throw new Error(`Embedding model ${embeddingModelID} not found in AIEngine — ensure AIEngine is configured`);
-        }
-        return aiModel;
-    }
-
-    /**
-     * Backs the deprecated `ResolvedVectorInfrastructure.embedding`: builds the driver the way this
-     * engine did before AIEmbeddingRunner, on first read only. Nothing in MJ reads it, so normally
-     * nothing is built. An empty key is fine for keyless drivers such as LocalEmbedding.
-     */
-    private legacyEmbeddingAccessor(driverClass: string): () => BaseEmbeddings | undefined {
-        let driver: BaseEmbeddings | undefined;
-        return () => {
-            driver ??= MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-                BaseEmbeddings, driverClass, GetAIAPIKey(driverClass) || ''
-            ) ?? undefined;
-            return driver;
-        };
-    }
-
-    /**
-     * Create a VectorDBBase instance for a given class key, wired for colocated storage where the
-     * provider supports it.
-     *
-     * The ordering is load-bearing. A **colocated** provider (SQLServerVectorDatabase, pgvector) keeps
-     * vectors in the application's own database: it has no credentials to present, and it needs the
-     * active data-provider connection handed to it before use or it throws "requires a host connection".
-     * Neither fact is knowable until the instance exists — so instantiate first, wire, and only then
-     * enforce the key, for providers that actually need one.
-     *
-     * Demanding a key up front made every colocated store unusable from this pipeline: callers had to
-     * invent a meaningless `AI_VENDOR_API_KEY__SQLServerVectorDatabase`, and even then the missing host
-     * connection failed later and confusingly — `CreateIndex` logged and continued, then vectorization
-     * died on a vector-database cache miss, which reads like bad metadata rather than a missing wire-up.
-     *
-     * This mirrors what the EntityDocument pipeline already does (`entityVectorSync.ts`), so the two
-     * vectorization paths now agree about colocated providers.
-     */
-    private createVectorDBInstance(classKey: string): VectorDBBase {
-        const apiKey = GetAIAPIKey(classKey);
-        // The sentinel is required, not cosmetic: `VectorDBBase`'s constructor rejects an empty key
-        // outright, and a colocated provider does not override it — so passing '' would throw
-        // "API key cannot be empty" for precisely the keyless case this method exists to support.
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(VectorDBBase, classKey, apiKey || 'colocated');
-        if (!instance) throw new Error(`Failed to create vector DB instance for ${classKey}`);
-
-        instance.TryWireColocatedHost(this.ProviderToUse);
-        if (!instance.SupportsColocatedQuery && instance.RequiresAPIKey && !apiKey) {
-            throw new Error(`No API key found for vector DB ${classKey} — set AI_VENDOR_API_KEY__${classKey} in .env`);
-        }
-        return instance;
-    }
-
-    /** SHA-1 deterministic vector ID for a content item */
-    private contentItemVectorID(contentItemId: string): string {
-        return crypto.createHash('sha1').update(`content-item_${contentItemId}`).digest('hex');
-    }
-
-    /**
-     * SHA-1 deterministic vector ID for a specific chunk of a content item, used only by the
-     * 'hash' {@link VectorIDStrategy} for multi-chunk items. It is deterministic on
-     * (contentItemId, chunkIndex), which is exactly what makes 'hash' unsafe with re-chunk +
-     * purge — a re-chunk that produces the same index reuses the id (documented on the config).
-     */
-    private contentItemChunkVectorID(contentItemId: string, chunkIndex: number): string {
-        return crypto.createHash('sha1').update(`content-item-chunk_${contentItemId}_${chunkIndex}`).digest('hex');
     }
 
     /**
@@ -2989,30 +2360,6 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return this._vectorMetadataBuilder;
     }
     private _vectorMetadataBuilder?: ContentVectorMetadataBuilder;
-
-    /** Load all tags for the given items in a single RunView call */
-    private async loadTagsForItems(
-        items: MJContentItemEntity[],
-        contextUser: UserInfo
-    ): Promise<Map<string, string[]>> {
-        const tagMap = new Map<string, string[]>();
-        const rv = new RunView();
-        const ids = items.map(i => `'${i.ID}'`).join(',');
-        const result = await rv.RunView<MJContentItemTagEntity>({
-            EntityName: 'MJ: Content Item Tags',
-            ExtraFilter: `ItemID IN (${ids})`,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        if (result.Success) {
-            for (const tag of result.Results) {
-                const existing = tagMap.get(tag.ItemID) ?? [];
-                existing.push(tag.Tag);
-                tagMap.set(tag.ItemID, existing);
-            }
-        }
-        return tagMap;
-    }
 
     // ---- Content Deduplication ----
 
@@ -3166,18 +2513,16 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         // Need AIEngine loaded to resolve embedding model
         await AIEngine.Instance.Config(false, contextUser);
 
-        // Load the content source + type maps for this single item
-        const { sourceMap, typeMap } = await this.loadContentSourceAndTypeMaps([contentItem], contextUser);
-
         // Resolve infrastructure for this item
-        const groups = this.groupItemsByInfrastructure([contentItem], sourceMap, typeMap);
+        const infrastructure = new ContentVectorInfrastructure(this.ProviderToUse, contextUser);
+        const groups = await infrastructure.GroupByInfrastructure([contentItem]);
         if (groups.size === 0) {
             LogStatus(`[Dedup] No vector infrastructure found for item ${contentItem.ID}, skipping vector dedup`);
             return;
         }
 
         const [groupKey] = groups.entries().next().value as [string, MJContentItemEntity[]];
-        const infra = await this.resolveGroupInfrastructure(groupKey, contextUser);
+        const infra = await infrastructure.Resolve(groupKey);
 
         // Embed the item's text
         const text = contentItem.Text.trim();

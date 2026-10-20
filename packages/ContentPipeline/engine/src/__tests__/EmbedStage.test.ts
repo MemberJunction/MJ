@@ -1,13 +1,11 @@
 /**
  * @fileoverview EmbedStage — the per-record step, and the decisions that are ours.
  *
- * The finalize now talks to MJ's own providers (`VectorDBBase` via `MJ: Vector Indexes`, and
- * `AIEmbeddingRunner`) rather than a pipeline-local writer contract. Standing all of that up in a
- * unit test would mean mocking most of MJ and proving only that the mocks agree with each other, so
- * what is covered here is what the stage actually decides: which operation a record gets, whether
- * there is anything to embed, which id a re-embed reuses, and what rides alongside the vector.
+ * Covered here is what the stage decides: which operation a record gets, whether there is anything
+ * to embed, which id a vector gets, and what rides alongside it. Routing is in EmbedRouting.test.ts.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { StageContext, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { EmbedContentItemStage, EmbedStage } from '../stages/EmbedStage.js';
@@ -24,10 +22,6 @@ function contextWith(configuration: Record<string, unknown> = {}): StageContext 
         Provider: {} as never,
         Configuration: configuration,
         IsTest: false,
-        Scope: 'Filter',
-        Attempt: 1,
-        MaxAttempts: 1,
-        IsReplay: false,
         Signal: new AbortController().signal,
         ReportProgress: () => {},
         Log: { Info: () => {}, Warning: () => {}, Error: () => {} },
@@ -49,7 +43,7 @@ function chunk(key: string, text: string | null, status?: string): WorkingRecord
 /** Reach the stage's private decisions without standing up a vector store. */
 function internals(stage: EmbedStage) {
     return stage as unknown as {
-        vectorIdFor(r: WorkingRecord): string;
+        vectorIdFor(r: WorkingRecord, item: unknown): string;
         textFor(r: WorkingRecord): string;
         BuildVectorMetadata(r: WorkingRecord, route: unknown, tags: string[], context: StageContext): Record<string, unknown>;
         operationFor(r: WorkingRecord): string;
@@ -102,14 +96,27 @@ describe('EmbedStage — the per-record step is light', () => {
 });
 
 describe('what Embed writes to the store', () => {
+    const owner = { ID: 'I1', ContentSourceID: 'S1', ContentTypeID: 'CT1' };
+
     it('reuses the id this record was stored under, so a re-embed replaces its vector', () => {
         const record = chunk('c1', 'text');
         record.SetExtension('Pipeline', 'vectorRecordID', 'previously-stored-id');
-        expect(internals(new EmbedStage()).vectorIdFor(record)).toBe('previously-stored-id');
+        expect(internals(new EmbedStage()).vectorIdFor(record, owner)).toBe('previously-stored-id');
     });
 
     it('falls back to the record key when nothing was stored before', () => {
-        expect(internals(new EmbedStage()).vectorIdFor(chunk('c1', 'text'))).toBe('c1');
+        expect(internals(new EmbedStage()).vectorIdFor(chunk('c1', 'text'), owner)).toBe('c1');
+    });
+
+    it("derives the autotagger's id under the 'hash' strategy, so both writers address the same vector", () => {
+        vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'GetContentSourceByID').mockReturnValue({
+            ConfigurationObject: { VectorIDStrategy: 'hash' },
+        } as never);
+        vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'GetContentTypeByID').mockReturnValue(undefined);
+        const record = chunk('c1', 'text');
+        record.SetExtension('Pipeline', 'sequence', 2);
+        const expected = createHash('sha1').update('content-item-chunk_I1_2').digest('hex');
+        expect(internals(new EmbedStage()).vectorIdFor(record, owner)).toBe(expected);
     });
 
     it('puts the decorator ahead of the text, so a chunk still reads in context', () => {
@@ -169,7 +176,7 @@ describe('Embed runs over items as well as chunks', () => {
 describe('the batch hook', () => {
     const processor = (stages: string[]) =>
         new PipelineProcessor(
-            { Stages: stages, IsTest: true, Scope: 'Filter', Configuration: {} },
+            { Stages: stages, IsTest: true, Configuration: {} },
             {
                 Hydrator: () => ({}) as WorkingRecordHydrator,
                 Committer: () => ({}) as WorkingRecordCommitter,

@@ -34,7 +34,7 @@
  * vectors through its chunks.
  */
 import { BaseEntity, CompositeKey, RunView } from '@memberjunction/core';
-import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckContext, IntegrationCheckRegistry, NamedCheck } from '@memberjunction/testing-integration';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -49,12 +49,13 @@ import {
     VectorRecord,
 } from '@memberjunction/ai-vectordb';
 import {
-    BaseDiscoverDriver,
+    ConfidenceScale,
     DiscoverRequest,
     DiscoveredItem,
     LocatorFetchRequest,
     LocatorFetchResponse,
 } from '@memberjunction/content-pipeline-base';
+import { AutotagBase } from '@memberjunction/content-autotagging';
 import { LoadContentPipelineStages, PipelineProcessor } from '@memberjunction/content-pipeline';
 import {
     KnowledgeHubMetadataEngine,
@@ -82,7 +83,7 @@ interface StoreLog {
 const Store: StoreLog = { Upserts: [], Updates: [], Deletes: [] };
 
 /** The documents the test source serves, by URL. Mutated by the checks to simulate change. */
-const Documents = new Map<string, { Text: string; Version: number }>();
+const Documents = new Map<string, { Text: string; ModifiedAt: Date }>();
 
 function namespaceOf(directives?: Record<string, unknown>, providerConfig?: Record<string, unknown>): string | null {
     const ns = directives?.['namespace'] ?? providerConfig?.['namespace'];
@@ -171,15 +172,27 @@ export class RecordingVectorDB extends VectorDBBase {
 }
 
 /** A source serving {@link Documents}: the walk lists them, the fetch reads them back. */
-@RegisterClass(BaseDiscoverDriver, DRIVER_KEY)
-export class InMemorySourceDriver extends BaseDiscoverDriver {
-    public readonly Key = DRIVER_KEY;
+@RegisterClass(AutotagBase, DRIVER_KEY)
+export class InMemorySourceDriver extends AutotagBase {
+    public override readonly SupportsExhaustiveWalk = true;
+
+    public async SetContentItemsToProcess(): Promise<never[]> {
+        return [];
+    }
+    public async Autotag(): Promise<number> {
+        return 0;
+    }
     public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
         for (const [url, doc] of Documents) {
+            if (request.Since && doc.ModifiedAt <= request.Since) {
+                continue;
+            }
             yield {
                 URL: url,
-                Checksum: `v${doc.Version}`,
-                Fields: [{ Field: 'Title', Value: url.split('/').pop() ?? url, Confidence: request.Confidence.DiscoveredTitle }],
+                Fields: [
+                    { Field: 'Title', Value: url.split('/').pop() ?? url, Confidence: ConfidenceScale.DiscoveredTitle },
+                    { Field: 'Date', Value: doc.ModifiedAt, Confidence: ConfidenceScale.DiscoveredDate },
+                ],
             };
         }
     }
@@ -203,6 +216,7 @@ interface BundleState {
     ItemIDs: string[];
     OrigRunEmbedding?: typeof AIEmbeddingRunner.prototype.RunEmbedding;
     FirstChunkIDs: string[];
+    InitialChecksumA?: string;
 }
 let S: BundleState;
 
@@ -223,7 +237,6 @@ function processor(stages: string[]): PipelineProcessor {
     return new PipelineProcessor({
         Stages: stages,
         IsTest: false,
-        Scope: 'Filter',
         // Small windows, so a few paragraphs make several chunks deterministically.
         Configuration: { SegmentationOptions: { MaxSegmentTokens: 40, OverlapTokens: 0 } },
     });
@@ -280,7 +293,7 @@ async function create<T extends BaseEntity>(ctx: IntegrationCheckContext, entity
     e.NewRecord();
     init(e);
     await save(e, entityName);
-    S.Created.push({ entity: entityName, id: e.Get('ID') as string });
+    S.Created.push({ entity: entityName, id: (e as unknown as { ID: string }).ID });
     return e;
 }
 
@@ -308,6 +321,8 @@ async function buildFixture(ctx: IntegrationCheckContext): Promise<void> {
         e.AIModelID = S.EmbeddingModelID;
         e.MinTags = 1;
         e.MaxTags = 5;
+        // The cascade takes a content type's index only together with its embedding model.
+        e.EmbeddingModelID = S.EmbeddingModelID;
         e.VectorIndexID = index.ID;
     });
     const source = await create<MJContentSourceEntity>(ctx, 'MJ: Content Sources', (e) => {
@@ -356,16 +371,16 @@ export const ContentPipelineChecks: NamedCheck[] = [
             AssertSameList(found.map((i) => i.URL ?? ''), [URL_A, URL_B], 'one item per document');
             S.ItemIDs = found.map((i) => i.ID);
             Assert(found.every((i) => i.ExtractionStatus === 'Pending'), 'discovered items wait for Extract');
-            Assert(found.every((i) => i.Checksum === 'v1'), 'each item carries the listing checksum');
 
             const source = (await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', `ID='${S.SourceID}'`))[0];
             AssertEqual(source.ForceDiscovery, false, 'a completed walk clears the one-shot');
-            console.log('      → CP1: 2 items discovered, ForceDiscovery cleared');
+            Assert(source.LastDiscoveredAt != null, 'a completed walk records LastDiscoveredAt');
+            console.log('      → CP1: 2 items discovered, ForceDiscovery cleared, LastDiscoveredAt set');
         },
     },
     {
         Id: 'content-pipeline.CP2',
-        Name: 'CP2: Extract reads each item through its own driver, and Segment splits it into chunks',
+        Name: 'CP2: Extract reads each item through its own driver, computes its SHA-256 content checksum, and Segment splits it into chunks',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             if (guardSkip('CP2')) return;
@@ -374,6 +389,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
 
             const a = await itemByURL(ctx, URL_A);
             Assert((a.Text ?? '').startsWith(SENTENCE.trim().split(' ')[0]), 'item A holds the text the driver served');
+            Assert(typeof a.Checksum === 'string' && a.Checksum.length === 64, 'Extract computes and persists a SHA-256 content checksum');
             const chunks = await liveChunks(ctx, a.ID);
             Assert(chunks.length > 2, `a long document segments into several chunks, got ${chunks.length}`);
             S.FirstChunkIDs = chunks.map((c) => c.ID);
@@ -405,7 +421,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
     },
     {
         Id: 'content-pipeline.CP4',
-        Name: 'CP4: an unchanged re-walk is a no-op — same checksum, nothing reset',
+        Name: 'CP4: an unchanged re-walk is a no-op — unmodified since LastDiscoveredAt, nothing reset',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             if (guardSkip('CP4')) return;
@@ -418,25 +434,35 @@ export const ContentPipelineChecks: NamedCheck[] = [
     },
     {
         Id: 'content-pipeline.CP5',
-        Name: 'CP5: a changed document re-extracts, saves its new checksum, and re-segmenting SUPERSEDES every old chunk',
+        Name: 'CP5: a changed document re-extracts, saves its new SHA-256 checksum, and re-segmenting SUPERSEDES every old chunk',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             if (guardSkip('CP5')) return;
-            Documents.set(URL_A, { Text: SENTENCE.repeat(3), Version: 2 });
+            const previousChecksum = (await itemByURL(ctx, URL_A)).Checksum;
+            await new Promise((r) => setTimeout(r, 5));
+            Documents.set(URL_A, { Text: SENTENCE.repeat(3), ModifiedAt: new Date() });
+            await new Promise((r) => setTimeout(r, 5));
             await run(ctx, ['Discover'], [S.SourceID]);
 
             let a = await itemByURL(ctx, URL_A);
-            AssertEqual(a.ExtractionStatus, 'Pending', 'a changed item is reset');
-            AssertEqual(a.Checksum, 'v2', 'the NEW checksum is saved, so the next walk does not see it as changed again');
+            AssertEqual(a.ExtractionStatus, 'Pending', 'a changed item yielded after Since is queued for Extract');
 
             await run(ctx, ['Extract'], [a.ID]);
+            a = await itemByURL(ctx, URL_A);
+            Assert(
+                typeof a.Checksum === 'string' && a.Checksum.length === 64 && a.Checksum !== previousChecksum,
+                'the NEW SHA-256 content checksum is saved by Extract',
+            );
+            AssertEqual(a.SegmentationStatus, 'Pending', 'content checksum change resets SegmentationStatus to Pending');
+
             await run(ctx, ['Segment'], [a.ID]);
             a = await itemByURL(ctx, URL_A);
             const all = await chunksOf(ctx, a.ID);
             const live = all.filter((c) => c.DeleteStatus == null);
             const pending = all.filter((c) => c.DeleteStatus === 'Pending');
+            const firstChunkSet = new UUIDSet(S.FirstChunkIDs);
             Assert(live.length > 0 && live.length < S.FirstChunkIDs.length, `fewer chunks after the edit (${live.length} < ${S.FirstChunkIDs.length})`);
-            Assert(live.every((c) => !S.FirstChunkIDs.includes(c.ID)), 'the new chunks are new rows, not old ones overwritten');
+            Assert(live.every((c) => !firstChunkSet.Has(c.ID)), 'the new chunks are new rows, not old ones overwritten');
             AssertSameList(pending.map((c) => c.ID).sort(), [...S.FirstChunkIDs].sort(), 'EVERY previous chunk is marked for deletion');
 
             await run(ctx, ['Discover'], [S.SourceID]);
@@ -458,7 +484,8 @@ export const ContentPipelineChecks: NamedCheck[] = [
             Assert(Store.Deletes.every((d) => UUIDsEqual(d.namespace ?? '', S.SourceID)), 'each delete was routed to the namespace the write used');
             const a = await itemByURL(ctx, URL_A);
             const left = await chunksOf(ctx, a.ID);
-            Assert(left.every((c) => !S.FirstChunkIDs.includes(c.ID)), 'nothing references the superseded chunks, so their rows are gone');
+            const firstChunkSet = new UUIDSet(S.FirstChunkIDs);
+            Assert(left.every((c) => !firstChunkSet.Has(c.ID)), 'nothing references the superseded chunks, so their rows are gone');
             console.log(`      → CP6: ${Store.Deletes.length} vectors removed in-namespace, rows purged`);
         },
     },
@@ -531,8 +558,9 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('content-pipeline', {
         S = { Skip: false, SkipReason: '', EmbeddingModelID: '', Prefix: `mj-cp-${Date.now()}`, SourceID: '', Created: [], ItemIDs: [], FirstChunkIDs: [] };
         LoadContentPipelineStages();
         Documents.clear();
-        Documents.set(URL_A, { Text: SENTENCE.repeat(40), Version: 1 });
-        Documents.set(URL_B, { Text: SENTENCE.repeat(8), Version: 1 });
+        const initialModifiedAt = new Date(Date.now() - 60_000);
+        Documents.set(URL_A, { Text: SENTENCE.repeat(40), ModifiedAt: initialModifiedAt });
+        Documents.set(URL_B, { Text: SENTENCE.repeat(8), ModifiedAt: initialModifiedAt });
         await AIEngine.Instance.Config(false, ctx.User, ctx.Provider);
         const model = AIEngine.Instance.VectorIndexes[0]?.EmbeddingModelID;
         if (!model) {

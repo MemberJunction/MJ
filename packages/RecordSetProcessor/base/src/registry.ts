@@ -13,8 +13,7 @@
  */
 
 import { BaseSingleton } from '@memberjunction/global';
-import { IProcessRunTracker } from './interfaces';
-import { IRecordProcessor } from './interfaces';
+import { IProcessRunTracker, IRecordProcessor } from './interfaces';
 
 /**
  * The per-run context handed to a registered factory. Carries the resolved Record Process fields the
@@ -40,14 +39,7 @@ export interface RecordProcessorBuildContext {
     RecordProcessName?: string;
     /** True when this is a dry-run (compute-only) pass — the factory should honor it when supported. */
     DryRun?: boolean;
-    /**
-     * The tracker this run will use, when the caller supplied one.
-     *
-     * Some processors are paired with a tracker: the processor reports progress and per-child
-     * outcomes, and the tracker is what turns those into rows. A factory that needs the pairing
-     * reads it here, so the pairing survives however the run was triggered. Absent when the caller
-     * supplied no tracker and the engine will use its default.
-     */
+    /** The run's tracker, when one was supplied, so a processor paired with its own tracker can reach it. */
     Tracker?: IProcessRunTracker;
     /**
      * The loaded Record Process record itself, as an opaque object. The engine passes the real
@@ -67,16 +59,8 @@ export interface RecordProcessorBuildContext {
 export type RecordProcessorFactory = (context: RecordProcessorBuildContext) => IRecordProcessor | null | undefined;
 
 /**
- * Builds the tracker a work type's processor is paired with.
- *
- * Some processors only half-work without their tracker: they report live progress and per-child
- * outcomes, and the tracker is what turns those into rows. Registering the pairing here is what
- * makes it survive every trigger — a scheduled run and an on-change run reach the executor directly,
- * and neither has any way to know a particular work type wanted a particular tracker. Without this
- * the pairing could only be established by wrapping the executor, which works for exactly the one
- * caller that uses the wrapper and silently loses the rows for all the others.
- *
- * Returning `undefined` leaves the engine's default tracker in place.
+ * Builds the tracker a work type's processor is paired with. Registered here so every trigger (manual,
+ * scheduled, on-change) gets it, not just callers that know to pass one. `undefined` keeps the default.
  */
 export type RecordProcessorTrackerFactory = (
     context: RecordProcessorBuildContext,
@@ -126,12 +110,7 @@ export class RecordProcessorRegistry extends BaseSingleton<RecordProcessorRegist
         this.factories.set(this.normalize(workType), factory);
     }
 
-    /**
-     * Register the tracker a work type's processor is paired with.
-     *
-     * Optional and independent of {@link Register}: a work type whose processor needs nothing beyond
-     * the default tracker simply does not call this.
-     */
+    /** Register the tracker a work type's processor is paired with. Optional, independent of {@link Register}. */
     public RegisterTracker(workType: string, factory: RecordProcessorTrackerFactory): void {
         if (!workType || !workType.trim()) {
             throw new Error('RecordProcessorRegistry.RegisterTracker: workType must be a non-empty string');

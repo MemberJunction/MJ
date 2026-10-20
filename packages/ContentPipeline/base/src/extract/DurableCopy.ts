@@ -1,15 +1,10 @@
 /**
- * @fileoverview Object keys for durable copies.
- *
- * There is deliberately no driver contract here. Where the bytes live is MJ's question, not the
- * pipeline's: `FileStorageBase` is the registry of places to put a file and a `MJ: Files` row is how
- * everything else in MJ finds one again. What IS the pipeline's business, and all that remains in
- * this file, is the rule about the key those bytes are written under.
+ * @fileoverview Object keys for durable copies. Storage itself is `FileStorageBase` and `MJ: Files`.
  *
  * @module @memberjunction/content-pipeline-base
  */
 
-/** Raised when an object key cannot be resolved. Deliberately not a soft failure — see below. */
+/** Raised when an object key cannot be resolved. */
 export class ObjectKeyResolutionError extends Error {
     constructor(message: string) {
         super(message);
@@ -18,23 +13,11 @@ export class ObjectKeyResolutionError extends Error {
 }
 
 /**
- * Resolve an object-key template against what is known about a record.
- *
- * **Fails closed.** Where several tenants run through shared infrastructure, isolation has to be
- * explicit in the key itself. A placeholder that cannot be resolved therefore raises rather than
- * being dropped or blanked — because the failure mode of carrying on is writing one tenant's bytes
- * to an unnamespaced path, which is far worse than not writing them at all.
+ * Resolve an object-key template against a record's values. Fails closed so one tenant's bytes are
+ * never written to an unnamespaced path.
  *
  * @param template e.g. `{OrganizationID}/{ContentSourceID}/{RecordID}-{Name}`
- * @param values The values available to substitute.
  * @throws {ObjectKeyResolutionError} when any placeholder is missing or empty.
- *
- * @example
- * ```ts
- * ResolveObjectKey('{TenantID}/{ContentSourceID}/{RecordID}', {
- *     TenantID: 'T1', ContentSourceID: 'S1', RecordID: 'R1',
- * }); // 'T1/S1/R1'
- * ```
  */
 export function ResolveObjectKey(template: string, values: Readonly<Record<string, string | null | undefined>>): string {
     const missing: string[] = [];

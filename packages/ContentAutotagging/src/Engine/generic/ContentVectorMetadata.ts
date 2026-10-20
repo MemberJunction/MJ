@@ -1,22 +1,11 @@
 /**
- * @fileoverview The metadata a content vector carries, built one way for every writer.
- *
- * Two things write content vectors: the autotagger and the content pipeline's Embed stage. Search
- * reads what they wrote and cannot tell them apart, so they must write the same thing — the same
- * identity keys, the same `VectorMetadata` field strategy, truncation and coercion, the same rule for
- * when the `Entity` key may be omitted. Two implementations would drift the moment either changed.
- * This module is the one implementation; both writers call it.
- *
- * Everything that shapes the result is metadata: `Configuration.VectorMetadata` (and
- * `VectorIDStrategy`, `ChunkTextStorage`, `VectorEntityName`) on the Content Source, falling back to
- * its Content Type. Changing what a vector carries is an edit to one of those rows.
- *
- * Self-contained by design: no engine state, only the provider it is handed — so a writer that is
- * not the autotagger depends on this, not on `AutotagBaseEngine`.
+ * @fileoverview Builds the metadata stored on a content vector. The autotagger and the content
+ * pipeline's Embed stage both call it, so search sees one shape from either writer.
  *
  * @module @memberjunction/content-autotagging
  */
 
+import crypto from 'crypto';
 import { EntityFieldInfo, EntityInfo, IMetadataProvider, LogError, LogStatus } from '@memberjunction/core';
 import { IsValidUUID, NormalizeUUID } from '@memberjunction/global';
 import {
@@ -26,39 +15,24 @@ import {
     MJContentTypeEntity,
 } from '@memberjunction/core-entities';
 
-/**
- * How a chunk's vector-DB record id is derived — `'recordId'` (the chunk's own PK, purge-safe) or
- * `'hash'` (deterministic, EntityDocument-parity). Derived from the generated JSONType interface so
- * it tracks the metadata definition.
- */
+/** How a chunk's vector id is derived: `'recordId'` (the chunk's PK) or `'hash'` (deterministic). */
 export type VectorIDStrategy = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['VectorIDStrategy']>;
-/**
- * Whether an item always embeds as chunk rows (`'alwaysChunk'`) or embeds as a single item-level
- * vector when it fits in one chunk (`'mixed'`). Derived from the generated JSONType interface.
- */
+/** `'alwaysChunk'` embeds chunk rows only; `'mixed'` embeds a one-chunk item as one item-level vector. */
 export type ChunkTextStorage = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['ChunkTextStorage']>;
-/** Vector-metadata shaping config (field strategy, per-field rules, curated toggles). Derived from the generated JSONType interface. */
+/** Vector-metadata shaping config (field strategy, per-field rules, toggles). */
 export type VectorMetadataConfig = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['VectorMetadata']>;
-/** Per-field vector-metadata rule (inclusion, truncation, StoreAs coercion). Derived from {@link VectorMetadataConfig}. */
+/** Per-field vector-metadata rule (inclusion, truncation, StoreAs). */
 export type VectorMetadataFieldConfig = NonNullable<VectorMetadataConfig['Fields']>[string];
-/** The entity a source declares its vectors to be. Derived from the generated JSONType interface. */
+/** The entity a source declares its vectors to be. */
 export type VectorEntityName = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['VectorEntityName']>;
 
-/**
- * Vector-storage behavior resolved for a single content item, from its ContentSource configuration
- * falling back to its ContentType defaults, then the documented defaults. Produced by
- * {@link ResolveContentVectorStorageConfig}.
- */
+/** Vector-storage settings for one item, from {@link ResolveContentVectorStorageConfig}. */
 export interface ResolvedVectorStorageConfig {
     vectorIDStrategy: VectorIDStrategy;
     chunkTextStorage: ChunkTextStorage;
     /** How vector metadata is shaped (undefined ⇒ the curated default set). */
     metadata?: VectorMetadataConfig;
-    /**
-     * The entity this source declares its vectors to be, from `ContentSource.Configuration`. Read only
-     * to decide whether the per-vector `Entity` key can be omitted; the value itself is never written
-     * to metadata, and search validates it at attribution time.
-     */
+    /** Used only to decide whether the `Entity` key can be omitted; never written to metadata. */
     vectorEntityName?: VectorEntityName;
 }
 
@@ -83,10 +57,7 @@ export interface ContentVectorTarget {
 const UNSTORABLE_METADATA_TYPES = new Set(['varbinary', 'image', 'binary', 'timestamp', 'rowversion']);
 /** SQL column types stored as JS numbers in vector metadata without an explicit StoreAs. */
 const NUMERIC_SQL_TYPES = new Set(['int', 'bigint', 'smallint', 'tinyint', 'float', 'real', 'decimal', 'numeric', 'money', 'smallmoney']);
-/**
- * The truncation limit when `VectorMetadata.DefaultTruncationLimit` sets none — the default the
- * JSONType documents. Set `DefaultTruncationLimit`, or a field's `TruncationLimit`, to change it.
- */
+/** Truncation limit when `VectorMetadata.DefaultTruncationLimit` is unset (the JSONType's documented default). */
 const DOCUMENTED_DEFAULT_TRUNCATION = 1000;
 
 /** The documented defaults when neither the ContentSource nor its ContentType configures storage. */
@@ -96,11 +67,7 @@ const DEFAULT_CHUNK_TEXT_STORAGE: ChunkTextStorage = 'alwaysChunk';
 /** The entity whose rows chunk-level vectors actually are. */
 const CHUNK_ENTITY_NAME = 'MJ: Content Item Chunks';
 
-/**
- * Resolve the vector-storage behavior for a content item using the cascade: ContentSource override
- * → ContentType default → documented default. Reads the typed `ConfigurationObject` accessors
- * CodeGen emits for each entity's Configuration JSONType.
- */
+/** Resolves an item's vector-storage settings: ContentSource → ContentType → documented default. */
 export function ResolveContentVectorStorageConfig(
     source: MJContentSourceEntity | undefined,
     contentType: MJContentTypeEntity | undefined,
@@ -111,35 +78,32 @@ export function ResolveContentVectorStorageConfig(
         vectorIDStrategy: srcCfg?.VectorIDStrategy ?? typeCfg?.VectorIDStrategy ?? DEFAULT_VECTOR_ID_STRATEGY,
         chunkTextStorage: srcCfg?.ChunkTextStorage ?? typeCfg?.ChunkTextStorage ?? DEFAULT_CHUNK_TEXT_STORAGE,
         metadata: srcCfg?.VectorMetadata ?? typeCfg?.VectorMetadata ?? undefined,
-        // Source only — deliberately NOT part of the ContentType cascade the other knobs use. The
-        // others describe HOW to store a vector, which a content type can sensibly default for every
-        // source that adopts it. This one asserts WHAT the vectors are, and it decides which entity's
-        // permissions search evaluates, so a type-level default would make that assertion on behalf of
-        // sources the type's author never saw — including ones storing their vectors at a different
-        // level, where the declaration would be wrong.
+        // Source only, no ContentType fallback: it picks which entity's permissions search checks.
         vectorEntityName: srcCfg?.VectorEntityName,
     };
 }
 
+/** A content vector's id: the record id under `'recordId'`, a SHA-1 of item (+ chunk index) under `'hash'`. */
+export function ResolveContentVectorID(
+    config: ResolvedVectorStorageConfig,
+    itemID: string,
+    isItemLevel: boolean,
+    chunkIndex: number,
+    recordID: string,
+): string {
+    if (config.vectorIDStrategy !== 'hash') {
+        return recordID;
+    }
+    const seed = isItemLevel ? `content-item_${itemID}` : `content-item-chunk_${itemID}_${chunkIndex}`;
+    return crypto.createHash('sha1').update(seed).digest('hex');
+}
+
 /**
- * Builds the metadata stored alongside a content vector. Mirrors the entity-vectorization pipeline's
- * decomposed shape, so each concern can be overridden independently by a subclass.
- *
- * `VectorMetadata.FieldStrategy` selects the field set:
- * - unset ⇒ the curated content default (source ids + Title / Description / URL);
- * - 'all' / 'include' / 'exclude' / 'explicit' ⇒ ContentItem fields resolved by
- *   {@link GetContentDisplayFields}, with per-field StoreAs coercion + truncation.
- *
- * The identity keys are chunk-aware; under 'explicit' only `Entity` is kept so content search results
- * stay labeled — unless the source declares its vector entity, in which case `Entity` gives way to
- * `ContentSourceID` and search resolves the name from the declaration. See
- * {@link CanOmitEntityMetadataKey} for the conditions and why each one exists.
- *
- * One instance per pass: it remembers which declarations it has already reported, so a refusal is
- * logged once rather than per vector.
+ * Builds the metadata stored alongside a content vector; `VectorMetadata.FieldStrategy` picks the
+ * field set (unset ⇒ curated default). Use one instance per pass so refusals are logged once.
  */
 export class ContentVectorMetadataBuilder {
-    /** Declarations already reported as unresolvable, so the warning is once per pass, not per vector. */
+    /** Declarations already reported as unresolvable. */
     private readonly unresolvableDeclarations = new Set<string>();
 
     constructor(protected readonly Provider: IMetadataProvider) {}
@@ -165,15 +129,12 @@ export class ContentVectorMetadataBuilder {
             const all = item.GetAll() as Record<string, unknown>;
             this.AddEntityIconMetadata(meta, contentItemEntity, metaCfg, explicit);
             this.AddUpdatedAtMetadata(meta, all, metaCfg, explicit);
-            // Display fields LAST so an explicitly-configured field (e.g. __mj_UpdatedAt with a
-            // StoreAs override) wins over the toggle-driven default value — matches the entity side.
+            // Display fields last so an explicitly configured field wins over the toggle default.
             this.AddStrategyDisplayFields(meta, all, contentItemEntity, metaCfg);
         }
 
         this.AddTagsMetadata(meta, tags, metaCfg, explicit);
 
-        // Optional embedded-text copy (surfaces as the search snippet). Off by default — external
-        // hydrators read the authoritative text from the row. Honored under every strategy.
         if (metaCfg?.IncludeText && target.Text) {
             meta['Text'] = target.Text.substring(0, this.DefaultTruncation(metaCfg));
         }
@@ -183,11 +144,8 @@ export class ContentVectorMetadataBuilder {
     }
 
     /**
-     * Add the identity/system keys. `Entity` is present unless the source declares its vector entity
-     * and {@link CanOmitEntityMetadataKey} allows dropping it, in which case `ContentSourceID` takes
-     * its place as the key search attributes through. Under 'explicit' the rest are omitted (minimal
-     * metadata); otherwise `RecordID` — plus `ContentItemID` / `Sequence` for chunk vectors — are
-     * included so an external hydrator can fetch the row(s).
+     * Adds the identity keys: `Entity` (or `ContentSourceID` when {@link CanOmitEntityMetadataKey}
+     * allows), plus `RecordID` / `ContentItemID` / `Sequence` except under 'explicit'.
      */
     protected AddContentSystemMetadata(
         meta: ContentVectorMetadata,
@@ -196,10 +154,7 @@ export class ContentVectorMetadataBuilder {
         config: ResolvedVectorStorageConfig,
     ): void {
         if (this.CanOmitEntityMetadataKey(config, explicit, target.IsItemLevel)) {
-            // The invariant that makes omission safe: a vector with no `Entity` key must still carry
-            // the key attribution resolves THROUGH, or the match reaches search with nothing to resolve
-            // and is discarded without being shown. Written unconditionally — a source configuring
-            // `ContentSourceID` in its own field list is applied later and so still wins.
+            // Without Entity, search attributes through this key; a match it cannot attribute is dropped.
             meta['ContentSourceID'] = target.Item.ContentSourceID;
             return;
         }
@@ -215,12 +170,8 @@ export class ContentVectorMetadataBuilder {
     }
 
     /**
-     * Last line of defence for the omission invariant: when `Entity` was dropped, the vector MUST leave
-     * here carrying a `ContentSourceID` search can actually resolve — a non-empty **string**.
-     *
-     * The promoted key is written before the strategy's own display fields, deliberately, so a source
-     * that configures `ContentSourceID` with its own rules wins — up to the point where a rule would
-     * break attribution (`StoreAs: 'boolean'` turns the id into `true`), and no further.
+     * When `Entity` was omitted, ensures `ContentSourceID` is still a non-empty string; a configured
+     * rule such as `StoreAs: 'boolean'` would otherwise break attribution.
      */
     protected EnforceAttributionKey(
         meta: ContentVectorMetadata,
@@ -245,19 +196,8 @@ export class ContentVectorMetadataBuilder {
     }
 
     /**
-     * Whether this vector may omit the `Entity` metadata key and let search resolve the entity from the
-     * source's declaration instead.
-     *
-     * Each condition closes a way attribution could otherwise fail, and attribution failure is not
-     * cosmetic: a match search cannot name is discarded by the permission filter, not returned unlabelled.
-     *
-     * - **`explicit` only.** The other strategies document a populated metadata set.
-     * - **A declaration must exist** and resolve to the chunk entity or a subtype of it.
-     * - **`'alwaysChunk'` only**, and **a chunk-level vector**: one declaration names one entity, and an
-     *   item-level vector is a row of a different one. (`'mixed'` emits both levels from one source.)
-     * - **`'recordId'` only.** Under `explicit` the `RecordID` key is dropped too, leaving the vector's
-     *   own id as the only pointer back to a row — the chunk id under `'recordId'`, a digest under
-     *   `'hash'` that resolves against no row.
+     * Whether this vector may omit `Entity` and let search resolve it from the source's declaration.
+     * Every condition must hold: a match search cannot attribute is dropped, not shown unlabelled.
      */
     protected CanOmitEntityMetadataKey(config: ResolvedVectorStorageConfig, explicit: boolean, isItemLevel: boolean): boolean {
         // Trimmed, because the reader trims before deciding whether a declaration exists.
@@ -275,13 +215,8 @@ export class ContentVectorMetadataBuilder {
     }
 
     /**
-     * Whether a declared entity name resolves in metadata — checked HERE, before the `Entity` key is
-     * dropped, and not left to the reader. Vectors written without `Entity` cannot be recovered by
-     * correcting the name later, only by a re-embed; keeping the key costs one redundant field. So this
-     * deliberately fails SAFE.
-     *
-     * It checks resolution and level only, not family membership — that refusal is the reader's
-     * security decision, which the write side must not be able to pre-approve.
+     * Whether a declared entity resolves and is chunk-level. Fails safe: vectors written without
+     * `Entity` can only be fixed by a re-embed. Family membership is left to the reader's security check.
      */
     protected DeclarationWillResolve(declared: string): boolean {
         const entity = this.Provider.EntityByName(declared);
@@ -301,9 +236,8 @@ export class ContentVectorMetadataBuilder {
     }
 
     /**
-     * Whether an entity IS-A {@link CHUNK_ENTITY_NAME} — itself, or a subtype somewhere up its IS-A
-     * chain. Walks `ParentID` through this builder's provider rather than `EntityInfo.ParentChain`,
-     * which resolves against the process-global provider.
+     * Whether an entity is {@link CHUNK_ENTITY_NAME} or a subtype. Walks `ParentID` through this
+     * builder's provider, not `EntityInfo.ParentChain`, which uses the global provider.
      */
     protected IsChunkLevelEntity(entity: EntityInfo): boolean {
         const visited = new Set<string>();
@@ -321,7 +255,7 @@ export class ContentVectorMetadataBuilder {
         return false;
     }
 
-    /** Report a refused declaration once per pass — this is evaluated per vector. */
+    /** Logs a refused declaration once per pass. */
     private refuseDeclarationOnce(declared: string, because: string): void {
         if (this.unresolvableDeclarations.has(declared)) {
             return;
@@ -360,10 +294,8 @@ export class ContentVectorMetadataBuilder {
     }
 
     /**
-     * Resolve which ContentItem fields go into metadata for the configured strategy. 'include' /
-     * 'explicit' take only fields explicitly marked Included (only unstorable binary types are
-     * refused); 'all' / 'exclude' take the conservative eligible set (no PKs, uniqueidentifiers,
-     * binary, or __mj_* fields) minus any marked Included:false.
+     * The ContentItem fields for the strategy: 'include'/'explicit' take fields marked Included;
+     * 'all'/'exclude' take the eligible set (no PKs, UUIDs, binary, __mj_*) minus Included:false.
      */
     protected GetContentDisplayFields(entityInfo: EntityInfo | undefined, metaCfg: VectorMetadataConfig | undefined): EntityFieldInfo[] {
         if (!entityInfo) return [];
@@ -448,10 +380,7 @@ export class ContentVectorMetadataBuilder {
         if (all['__mj_UpdatedAt'] && include) meta['__mj_UpdatedAt'] = String(all['__mj_UpdatedAt']);
     }
 
-    /**
-     * Add the item's Tags array. Tags aren't a ContentItem field (they're derived), so they're a toggle
-     * like icon/updatedAt: on by default (and under the curated default), opt-in under 'explicit'.
-     */
+    /** Add the item's tags: default on, opt-in under 'explicit'. */
     protected AddTagsMetadata(
         meta: ContentVectorMetadata,
         tags: readonly string[] | undefined,

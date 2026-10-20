@@ -20,14 +20,19 @@
                           SegmenterKey / CleanerKey / EmbeddingModelID) and on Content Item (what
                           ran), plus ExtractorKeyOverride (what was forced)
     * ForceDiscovery    — a one-shot "walk this source now", off-schedule
-    * LastDiscoveredAt  — when the source was last walked
+    * LastDiscoveredAt  — when the source was last walked by Discover (passed back as Since)
+    * LastSyncedAt      — when the source last completed a full Sync walk (reconciling removals)
     * well-known fields — Date, Decorator and Modality on Content Item, Decorator on Content Item
                           Chunk
     * FileID            — the durable copy of a fetched artifact, as an MJ File
 
-  Readiness for Discover is "schedule due OR ForceDiscovery", and a completed walk clears the bit.
-  There is deliberately no DiscoveryStatus: a status column has to be re-armed to run again, which
-  is a second mechanism for something the schedule already decides.
+  Scheduling is deployment-owned; the shipped Discover process selects ForceDiscovery = 1 and a
+  completed walk clears the bit, while the shipped Sync process selects sources whose LastSyncedAt
+  is due. There is deliberately no DiscoveryStatus column to re-arm.
+
+  ContentItem.Checksum holds the SHA-256 hex digest of the extracted text (or raw bytes for
+  non-text modality), written by the Extract stage using the same algorithm as the legacy
+  autotagger's GetChecksumFromText so existing rows match on upgrade without re-processing.
 
   There is deliberately no unique index on (ContentSourceID, URL). The Entity and LocalFS
   autotaggers have long stored many items under one URL, so the index cannot be created wherever
@@ -130,7 +135,8 @@ GO
 ALTER TABLE ${flyway:defaultSchema}.ContentSource ADD
     FieldConfidence NVARCHAR(MAX) NULL,
     ForceDiscovery BIT NOT NULL CONSTRAINT DF_ContentSource_ForceDiscovery DEFAULT (0),
-    LastDiscoveredAt DATETIMEOFFSET NULL;
+    LastDiscoveredAt DATETIMEOFFSET NULL,
+    LastSyncedAt DATETIMEOFFSET NULL;
 GO
 
 -- ---------------------------------------------------------------------------
@@ -151,13 +157,6 @@ ALTER TABLE ${flyway:defaultSchema}.ContentFileType ADD
     ByteSignature NVARCHAR(MAX) NULL,
     IsText BIT NULL,
     ExtractorKey NVARCHAR(100) NULL;
-GO
-
--- ---------------------------------------------------------------------------
--- Content Type — structural signatures
--- ---------------------------------------------------------------------------
-ALTER TABLE ${flyway:defaultSchema}.ContentType ADD
-    StructuralSignature NVARCHAR(MAX) NULL;
 GO
 
 -- ---------------------------------------------------------------------------
@@ -254,16 +253,22 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level2type = N'COLUMN', @level2name = 'FieldConfidence';
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Readiness is "schedule due OR ForceDiscovery", which is why there is no discovery status column to re-arm.',
+    @value = N'Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Scheduling is deployment-owned and the shipped Discover process selects ForceDiscovery = 1, which is why there is no discovery status column to re-arm.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = 'ContentSource',
     @level2type = N'COLUMN', @level2name = 'ForceDiscovery';
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'When this source was last walked by the Discover stage.',
+    @value = N'When this source was last walked by the Discover stage. Stamped with the time a completed walk started, and passed back as Since on subsequent incremental walks.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = 'ContentSource',
     @level2type = N'COLUMN', @level2name = 'LastDiscoveredAt';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'When this source last completed a full Sync walk (reconciling removals). Stamped with the time a completed sync walk started.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'ContentSource',
+    @level2type = N'COLUMN', @level2name = 'LastSyncedAt';
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
     @value = N'The default content extractor for items of this content type, beside SegmenterKey and CleanerKey. A per-type default has no home in a source''s Configuration, and reading it from a run''s Options would make it per-run.',
@@ -288,12 +293,6 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = 'ContentFileType',
     @level2type = N'COLUMN', @level2name = 'ExtractorKey';
-
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'How this content type is recognised from a document''s own structure, as JSON: {"RootElements":["rss","feed"],"Namespaces":["http://www.w3.org/2005/Atom"]}. The matching is generic; what each type looks like is data.',
-    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = 'ContentType',
-    @level2type = N'COLUMN', @level2name = 'StructuralSignature';
 
 
 
@@ -472,7 +471,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22'),
             'ForceDiscovery',
             'Force Discovery',
-            'Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Readiness is "schedule due OR ForceDiscovery", which is why there is no discovery status column to re-arm.',
+            'Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Sources selected for a Discover run are always walked; ForceDiscovery guarantees selection for filters that key off it.',
             'bit',
             1,
             1,
@@ -560,6 +559,69 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
          )
       END;
 
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a3f290c1-44d8-4a12-9b81-11820c993b77' OR (EntityID = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'LastSyncedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'a3f290c1-44d8-4a12-9b81-11820c993b77',
+            'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Sources
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22'),
+            'LastSyncedAt',
+            'Last Synced At',
+            'When this source last completed an exhaustive Sync discovery walk that reconciled removed items.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
       IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fe54d85e-203e-4115-b1e0-2b6d4cd0d165' OR (EntityID = 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'ExtractorKey')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
@@ -601,69 +663,6 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
             'The default content extractor for items of this content type, beside SegmenterKey and CleanerKey. A per-type default has no home in a source''s Configuration, and reading it from a run''s Options would make it per-run.',
             'nvarchar',
             200,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2a17b925-c728-4404-b629-85f76bad6343' OR (EntityID = 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'StructuralSignature')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '2a17b925-c728-4404-b629-85f76bad6343',
-            'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Types
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22'),
-            'StructuralSignature',
-            'Structural Signature',
-            'How this content type is recognised from a document''s own structure, as JSON: {"RootElements":["rss","feed"],"Namespaces":["http://www.w3.org/2005/Atom"]}. The matching is generic; what each type looks like is data.',
-            'nvarchar',
-            -1,
             0,
             0,
             1,
@@ -3918,7 +3917,9 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateContentSource]
     @FieldConfidence nvarchar(MAX) = NULL,
     @ForceDiscovery bit = NULL,
     @LastDiscoveredAt_Clear bit = 0,
-    @LastDiscoveredAt datetimeoffset = NULL
+    @LastDiscoveredAt datetimeoffset = NULL,
+    @LastSyncedAt_Clear bit = 0,
+    @LastSyncedAt datetimeoffset = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -3945,7 +3946,8 @@ BEGIN
                 [ScheduledJobID],
                 [FieldConfidence],
                 [ForceDiscovery],
-                [LastDiscoveredAt]
+                [LastDiscoveredAt],
+                [LastSyncedAt]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -3966,7 +3968,8 @@ BEGIN
                 CASE WHEN @ScheduledJobID_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledJobID, NULL) END,
                 CASE WHEN @FieldConfidence_Clear = 1 THEN NULL ELSE ISNULL(@FieldConfidence, NULL) END,
                 ISNULL(@ForceDiscovery, 0),
-                CASE WHEN @LastDiscoveredAt_Clear = 1 THEN NULL ELSE ISNULL(@LastDiscoveredAt, NULL) END
+                CASE WHEN @LastDiscoveredAt_Clear = 1 THEN NULL ELSE ISNULL(@LastDiscoveredAt, NULL) END,
+                CASE WHEN @LastSyncedAt_Clear = 1 THEN NULL ELSE ISNULL(@LastSyncedAt, NULL) END
             )
     END
     ELSE
@@ -3989,7 +3992,8 @@ BEGIN
                 [ScheduledJobID],
                 [FieldConfidence],
                 [ForceDiscovery],
-                [LastDiscoveredAt]
+                [LastDiscoveredAt],
+                [LastSyncedAt]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -4009,7 +4013,8 @@ BEGIN
                 CASE WHEN @ScheduledJobID_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledJobID, NULL) END,
                 CASE WHEN @FieldConfidence_Clear = 1 THEN NULL ELSE ISNULL(@FieldConfidence, NULL) END,
                 ISNULL(@ForceDiscovery, 0),
-                CASE WHEN @LastDiscoveredAt_Clear = 1 THEN NULL ELSE ISNULL(@LastDiscoveredAt, NULL) END
+                CASE WHEN @LastDiscoveredAt_Clear = 1 THEN NULL ELSE ISNULL(@LastDiscoveredAt, NULL) END,
+                CASE WHEN @LastSyncedAt_Clear = 1 THEN NULL ELSE ISNULL(@LastSyncedAt, NULL) END
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -4071,7 +4076,9 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateContentSource]
     @FieldConfidence nvarchar(MAX) = NULL,
     @ForceDiscovery bit = NULL,
     @LastDiscoveredAt_Clear bit = 0,
-    @LastDiscoveredAt datetimeoffset = NULL
+    @LastDiscoveredAt datetimeoffset = NULL,
+    @LastSyncedAt_Clear bit = 0,
+    @LastSyncedAt datetimeoffset = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -4093,7 +4100,8 @@ BEGIN
         [ScheduledJobID] = CASE WHEN @ScheduledJobID_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledJobID, [ScheduledJobID]) END,
         [FieldConfidence] = CASE WHEN @FieldConfidence_Clear = 1 THEN NULL ELSE ISNULL(@FieldConfidence, [FieldConfidence]) END,
         [ForceDiscovery] = ISNULL(@ForceDiscovery, [ForceDiscovery]),
-        [LastDiscoveredAt] = CASE WHEN @LastDiscoveredAt_Clear = 1 THEN NULL ELSE ISNULL(@LastDiscoveredAt, [LastDiscoveredAt]) END
+        [LastDiscoveredAt] = CASE WHEN @LastDiscoveredAt_Clear = 1 THEN NULL ELSE ISNULL(@LastDiscoveredAt, [LastDiscoveredAt]) END,
+        [LastSyncedAt] = CASE WHEN @LastSyncedAt_Clear = 1 THEN NULL ELSE ISNULL(@LastSyncedAt, [LastSyncedAt]) END
     WHERE
         [ID] = @ID
 
@@ -4246,9 +4254,7 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateContentType]
     @CleanerKey_Clear bit = 0,
     @CleanerKey nvarchar(100) = NULL,
     @ExtractorKey_Clear bit = 0,
-    @ExtractorKey nvarchar(100) = NULL,
-    @StructuralSignature_Clear bit = 0,
-    @StructuralSignature nvarchar(MAX) = NULL
+    @ExtractorKey nvarchar(100) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -4270,8 +4276,7 @@ BEGIN
                 [Configuration],
                 [SegmenterKey],
                 [CleanerKey],
-                [ExtractorKey],
-                [StructuralSignature]
+                [ExtractorKey]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -4287,8 +4292,7 @@ BEGIN
                 CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, NULL) END,
                 CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, NULL) END,
                 CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, NULL) END,
-                CASE WHEN @ExtractorKey_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKey, NULL) END,
-                CASE WHEN @StructuralSignature_Clear = 1 THEN NULL ELSE ISNULL(@StructuralSignature, NULL) END
+                CASE WHEN @ExtractorKey_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKey, NULL) END
             )
     END
     ELSE
@@ -4306,8 +4310,7 @@ BEGIN
                 [Configuration],
                 [SegmenterKey],
                 [CleanerKey],
-                [ExtractorKey],
-                [StructuralSignature]
+                [ExtractorKey]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -4322,8 +4325,7 @@ BEGIN
                 CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, NULL) END,
                 CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, NULL) END,
                 CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, NULL) END,
-                CASE WHEN @ExtractorKey_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKey, NULL) END,
-                CASE WHEN @StructuralSignature_Clear = 1 THEN NULL ELSE ISNULL(@StructuralSignature, NULL) END
+                CASE WHEN @ExtractorKey_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKey, NULL) END
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -4376,9 +4378,7 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateContentType]
     @CleanerKey_Clear bit = 0,
     @CleanerKey nvarchar(100) = NULL,
     @ExtractorKey_Clear bit = 0,
-    @ExtractorKey nvarchar(100) = NULL,
-    @StructuralSignature_Clear bit = 0,
-    @StructuralSignature nvarchar(MAX) = NULL
+    @ExtractorKey nvarchar(100) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -4395,8 +4395,7 @@ BEGIN
         [Configuration] = CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, [Configuration]) END,
         [SegmenterKey] = CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, [SegmenterKey]) END,
         [CleanerKey] = CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, [CleanerKey]) END,
-        [ExtractorKey] = CASE WHEN @ExtractorKey_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKey, [ExtractorKey]) END,
-        [StructuralSignature] = CASE WHEN @StructuralSignature_Clear = 1 THEN NULL ELSE ISNULL(@StructuralSignature, [StructuralSignature]) END
+        [ExtractorKey] = CASE WHEN @ExtractorKey_Clear = 1 THEN NULL ELSE ISNULL(@ExtractorKey, [ExtractorKey]) END
     WHERE
         [ID] = @ID
 
@@ -4583,13 +4582,14 @@ BEGIN
     DECLARE @MJContentSources_EntityDocumentID_FieldConfidence nvarchar(MAX)
     DECLARE @MJContentSources_EntityDocumentID_ForceDiscovery bit
     DECLARE @MJContentSources_EntityDocumentID_LastDiscoveredAt datetimeoffset
+    DECLARE @MJContentSources_EntityDocumentID_LastSyncedAt datetimeoffset
     DECLARE cascade_update_MJContentSources_EntityDocumentID_cursor CURSOR FOR
-        SELECT [ID], [Name], [ContentTypeID], [ContentSourceTypeID], [ContentFileTypeID], [URL], [EmbeddingModelID], [VectorIndexID], [Configuration], [EntityID], [EntityDocumentID], [SegmenterKey], [CleanerKey], [ScheduledJobID], [FieldConfidence], [ForceDiscovery], [LastDiscoveredAt]
+        SELECT [ID], [Name], [ContentTypeID], [ContentSourceTypeID], [ContentFileTypeID], [URL], [EmbeddingModelID], [VectorIndexID], [Configuration], [EntityID], [EntityDocumentID], [SegmenterKey], [CleanerKey], [ScheduledJobID], [FieldConfidence], [ForceDiscovery], [LastDiscoveredAt], [LastSyncedAt]
         FROM [${flyway:defaultSchema}].[ContentSource]
         WHERE [EntityDocumentID] = @ID
 
     OPEN cascade_update_MJContentSources_EntityDocumentID_cursor
-    FETCH NEXT FROM cascade_update_MJContentSources_EntityDocumentID_cursor INTO @MJContentSources_EntityDocumentIDID, @MJContentSources_EntityDocumentID_Name, @MJContentSources_EntityDocumentID_ContentTypeID, @MJContentSources_EntityDocumentID_ContentSourceTypeID, @MJContentSources_EntityDocumentID_ContentFileTypeID, @MJContentSources_EntityDocumentID_URL, @MJContentSources_EntityDocumentID_EmbeddingModelID, @MJContentSources_EntityDocumentID_VectorIndexID, @MJContentSources_EntityDocumentID_Configuration, @MJContentSources_EntityDocumentID_EntityID, @MJContentSources_EntityDocumentID_EntityDocumentID, @MJContentSources_EntityDocumentID_SegmenterKey, @MJContentSources_EntityDocumentID_CleanerKey, @MJContentSources_EntityDocumentID_ScheduledJobID, @MJContentSources_EntityDocumentID_FieldConfidence, @MJContentSources_EntityDocumentID_ForceDiscovery, @MJContentSources_EntityDocumentID_LastDiscoveredAt
+    FETCH NEXT FROM cascade_update_MJContentSources_EntityDocumentID_cursor INTO @MJContentSources_EntityDocumentIDID, @MJContentSources_EntityDocumentID_Name, @MJContentSources_EntityDocumentID_ContentTypeID, @MJContentSources_EntityDocumentID_ContentSourceTypeID, @MJContentSources_EntityDocumentID_ContentFileTypeID, @MJContentSources_EntityDocumentID_URL, @MJContentSources_EntityDocumentID_EmbeddingModelID, @MJContentSources_EntityDocumentID_VectorIndexID, @MJContentSources_EntityDocumentID_Configuration, @MJContentSources_EntityDocumentID_EntityID, @MJContentSources_EntityDocumentID_EntityDocumentID, @MJContentSources_EntityDocumentID_SegmenterKey, @MJContentSources_EntityDocumentID_CleanerKey, @MJContentSources_EntityDocumentID_ScheduledJobID, @MJContentSources_EntityDocumentID_FieldConfidence, @MJContentSources_EntityDocumentID_ForceDiscovery, @MJContentSources_EntityDocumentID_LastDiscoveredAt, @MJContentSources_EntityDocumentID_LastSyncedAt
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
@@ -4597,9 +4597,9 @@ BEGIN
         SET @MJContentSources_EntityDocumentID_EntityDocumentID = NULL
 
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateContentSource] @ID = @MJContentSources_EntityDocumentIDID, @Name = @MJContentSources_EntityDocumentID_Name, @ContentTypeID = @MJContentSources_EntityDocumentID_ContentTypeID, @ContentSourceTypeID = @MJContentSources_EntityDocumentID_ContentSourceTypeID, @ContentFileTypeID = @MJContentSources_EntityDocumentID_ContentFileTypeID, @URL = @MJContentSources_EntityDocumentID_URL, @EmbeddingModelID = @MJContentSources_EntityDocumentID_EmbeddingModelID, @VectorIndexID = @MJContentSources_EntityDocumentID_VectorIndexID, @Configuration = @MJContentSources_EntityDocumentID_Configuration, @EntityID = @MJContentSources_EntityDocumentID_EntityID, @EntityDocumentID_Clear = 1, @EntityDocumentID = @MJContentSources_EntityDocumentID_EntityDocumentID, @SegmenterKey = @MJContentSources_EntityDocumentID_SegmenterKey, @CleanerKey = @MJContentSources_EntityDocumentID_CleanerKey, @ScheduledJobID = @MJContentSources_EntityDocumentID_ScheduledJobID, @FieldConfidence = @MJContentSources_EntityDocumentID_FieldConfidence, @ForceDiscovery = @MJContentSources_EntityDocumentID_ForceDiscovery, @LastDiscoveredAt = @MJContentSources_EntityDocumentID_LastDiscoveredAt
+        EXEC [${flyway:defaultSchema}].[spUpdateContentSource] @ID = @MJContentSources_EntityDocumentIDID, @Name = @MJContentSources_EntityDocumentID_Name, @ContentTypeID = @MJContentSources_EntityDocumentID_ContentTypeID, @ContentSourceTypeID = @MJContentSources_EntityDocumentID_ContentSourceTypeID, @ContentFileTypeID = @MJContentSources_EntityDocumentID_ContentFileTypeID, @URL = @MJContentSources_EntityDocumentID_URL, @EmbeddingModelID = @MJContentSources_EntityDocumentID_EmbeddingModelID, @VectorIndexID = @MJContentSources_EntityDocumentID_VectorIndexID, @Configuration = @MJContentSources_EntityDocumentID_Configuration, @EntityID = @MJContentSources_EntityDocumentID_EntityID, @EntityDocumentID_Clear = 1, @EntityDocumentID = @MJContentSources_EntityDocumentID_EntityDocumentID, @SegmenterKey = @MJContentSources_EntityDocumentID_SegmenterKey, @CleanerKey = @MJContentSources_EntityDocumentID_CleanerKey, @ScheduledJobID = @MJContentSources_EntityDocumentID_ScheduledJobID, @FieldConfidence = @MJContentSources_EntityDocumentID_FieldConfidence, @ForceDiscovery = @MJContentSources_EntityDocumentID_ForceDiscovery, @LastDiscoveredAt = @MJContentSources_EntityDocumentID_LastDiscoveredAt, @LastSyncedAt = @MJContentSources_EntityDocumentID_LastSyncedAt
 
-        FETCH NEXT FROM cascade_update_MJContentSources_EntityDocumentID_cursor INTO @MJContentSources_EntityDocumentIDID, @MJContentSources_EntityDocumentID_Name, @MJContentSources_EntityDocumentID_ContentTypeID, @MJContentSources_EntityDocumentID_ContentSourceTypeID, @MJContentSources_EntityDocumentID_ContentFileTypeID, @MJContentSources_EntityDocumentID_URL, @MJContentSources_EntityDocumentID_EmbeddingModelID, @MJContentSources_EntityDocumentID_VectorIndexID, @MJContentSources_EntityDocumentID_Configuration, @MJContentSources_EntityDocumentID_EntityID, @MJContentSources_EntityDocumentID_EntityDocumentID, @MJContentSources_EntityDocumentID_SegmenterKey, @MJContentSources_EntityDocumentID_CleanerKey, @MJContentSources_EntityDocumentID_ScheduledJobID, @MJContentSources_EntityDocumentID_FieldConfidence, @MJContentSources_EntityDocumentID_ForceDiscovery, @MJContentSources_EntityDocumentID_LastDiscoveredAt
+        FETCH NEXT FROM cascade_update_MJContentSources_EntityDocumentID_cursor INTO @MJContentSources_EntityDocumentIDID, @MJContentSources_EntityDocumentID_Name, @MJContentSources_EntityDocumentID_ContentTypeID, @MJContentSources_EntityDocumentID_ContentSourceTypeID, @MJContentSources_EntityDocumentID_ContentFileTypeID, @MJContentSources_EntityDocumentID_URL, @MJContentSources_EntityDocumentID_EmbeddingModelID, @MJContentSources_EntityDocumentID_VectorIndexID, @MJContentSources_EntityDocumentID_Configuration, @MJContentSources_EntityDocumentID_EntityID, @MJContentSources_EntityDocumentID_EntityDocumentID, @MJContentSources_EntityDocumentID_SegmenterKey, @MJContentSources_EntityDocumentID_CleanerKey, @MJContentSources_EntityDocumentID_ScheduledJobID, @MJContentSources_EntityDocumentID_FieldConfidence, @MJContentSources_EntityDocumentID_ForceDiscovery, @MJContentSources_EntityDocumentID_LastDiscoveredAt, @MJContentSources_EntityDocumentID_LastSyncedAt
     END
 
     CLOSE cascade_update_MJContentSources_EntityDocumentID_cursor
@@ -4783,7 +4783,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityDocument] TO [cdp_Inte
                WHERE ID = 'CA08721A-94C6-4E6E-B028-51E4D70D79BB'
                AND AutoUpdateDefaultInView = 1;
 
-/* Set categories for 2 fields */
+/* Set categories for 1 fields */
 
 -- UPDATE Entity Field Category Info MJ: Content Types.ExtractorKey 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -4792,15 +4792,6 @@ SET
    GeneratedFormSection = 'Category'
 WHERE 
    ID = 'FE54D85E-203E-4115-B1E0-2B6D4CD0D165';
-
--- UPDATE Entity Field Category Info MJ: Content Types.StructuralSignature 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Advanced Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '2A17B925-C728-4404-B629-85F76BAD6343';
 
 /* Set categories for 6 fields */
 
@@ -5078,7 +5069,7 @@ SET
 WHERE 
    ID = '6AA4A7B1-1663-4C86-A61E-796603E138D7';
 
-/* Set categories for 3 fields */
+/* Set categories for 4 fields */
 
 -- UPDATE Entity Field Category Info MJ: Content Sources.FieldConfidence 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5104,4 +5095,12 @@ SET
    GeneratedFormSection = 'Category'
 WHERE 
    ID = '50E95077-8D9E-4B84-85B1-59FC267DB466';
+
+-- UPDATE Entity Field Category Info MJ: Content Sources.LastSyncedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Processing & Automation',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'A3F290C1-44D8-4A12-9B81-11820C993B77';
 

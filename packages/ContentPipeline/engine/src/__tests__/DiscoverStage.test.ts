@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
+import { AutotagBase } from '@memberjunction/content-autotagging';
 import {
-    BaseDiscoverDriver,
     DiscoverRequest,
     DiscoveredItem,
     StageContext,
@@ -19,10 +19,19 @@ let sawSignalAbortedAt: number | null = null;
 let abortAfterItem: { Index: number; Controller: AbortController } | null = null;
 /** Every request the driver was handed, so a test can assert what reached it. */
 const seenRequests: DiscoverRequest[] = [];
+let supportsExhaustiveWalk = false;
 
-@RegisterClass(BaseDiscoverDriver, 'TestDiscover')
-class TestDiscoverDriver extends BaseDiscoverDriver {
-    public readonly Key = 'TestDiscover';
+@RegisterClass(AutotagBase, 'TestDiscover')
+class TestDiscoverDriver extends AutotagBase {
+    public override get SupportsExhaustiveWalk(): boolean {
+        return supportsExhaustiveWalk;
+    }
+    public async SetContentItemsToProcess(): Promise<never[]> {
+        return [];
+    }
+    public async Autotag(): Promise<number> {
+        return 0;
+    }
     public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
         seenRequests.push(request);
         let index = 0;
@@ -43,7 +52,7 @@ class TestDiscoverDriver extends BaseDiscoverDriver {
 const progress: string[] = [];
 
 /** Sessions the stage asked for, so a test can assert it asked at all. */
-export const accessRequests: { ContentSourceID: string; Role?: string }[] = [];
+export const accessRequests: string[] = [];
 
 function contextWith(signal?: AbortSignal, access: AccessArtifact | null = null): StageContext {
     return {
@@ -51,15 +60,11 @@ function contextWith(signal?: AbortSignal, access: AccessArtifact | null = null)
         Provider: {} as never,
         Configuration: {},
         IsTest: false,
-        Scope: 'Filter',
-        Attempt: 1,
-        MaxAttempts: 1,
-        IsReplay: false,
         Signal: signal ?? new AbortController().signal,
         ReportProgress: (m: string) => progress.push(m),
         Log: { Info: () => {}, Warning: () => {}, Error: () => {} },
-        ResolveAccess: async (contentSourceID: string, role?: string) => {
-            accessRequests.push({ ContentSourceID: contentSourceID, Role: role });
+        ResolveAccess: async (contentSourceID: string) => {
+            accessRequests.push(contentSourceID);
             return access;
         },
     };
@@ -74,10 +79,10 @@ function stubResolver(overrides: Record<string, unknown> = {}): void {
     vi.spyOn(ContentSourceConfigurationResolver.prototype, 'Resolve').mockResolvedValue({
         ContentSourceID: 'SRC-1',
         URL: 'https://example.com',
-        Settings: { DiscoverDriverKey: 'TestDiscover' },
+        Settings: {},
+        DriverClass: 'TestDiscover',
         Parameters: {},
         Configuration: {},
-        DeclaredFields: [],
         Problems: [],
         IsValid: true,
         ...overrides,
@@ -184,13 +189,13 @@ describe('DiscoverStage — configuration failures are fatal', () => {
         await expect(new DiscoverStage().Run(sourceRecord(), contextWith())).rejects.toThrow(/Feed URL is required/);
     });
 
-    it('refuses a source naming no Discover driver', async () => {
-        stubResolver({ Settings: {} });
+    it('refuses a source whose type names no driver', async () => {
+        stubResolver({ DriverClass: null });
         await expect(new DiscoverStage().Run(sourceRecord(), contextWith())).rejects.toThrow(/No Discover driver/);
     });
 
     it('refuses a driver key nothing registered', async () => {
-        stubResolver({ Settings: { DiscoverDriverKey: 'NotRegistered' } });
+        stubResolver({ DriverClass: 'NotRegistered' });
         await expect(new DiscoverStage().Run(sourceRecord(), contextWith())).rejects.toThrow(/is not registered/);
     });
 
@@ -212,7 +217,7 @@ describe('discovery can need credentials too', () => {
         // session has to reach the walk and not only the later fetch of each item.
         accessRequests.length = 0;
         await new DiscoverStage().Run(sourceRecord(), contextWith());
-        expect(accessRequests).toEqual([{ ContentSourceID: 'SRC-1', Role: undefined }]);
+        expect(accessRequests).toEqual(['SRC-1']);
     });
 
     it('hands the artifact to the driver', async () => {
@@ -225,5 +230,38 @@ describe('discovery can need credentials too', () => {
     it('passes null through for a source that needs none, which is the ordinary case', async () => {
         await new DiscoverStage().Run(sourceRecord(), contextWith());
         expect(seenRequests.at(-1)?.Access).toBeNull();
+    });
+
+    it('passes the hydrated LastDiscoveredAt watermark as Since on incremental walks', async () => {
+        const lastDiscovered = new Date('2026-10-15T08:00:00Z');
+        const record = sourceRecord();
+        record.SetExtension('Pipeline', 'lastDiscoveredAt', lastDiscovered);
+        await new DiscoverStage().Run(record, contextWith());
+        expect(seenRequests.at(-1)?.Since).toBe(lastDiscovered);
+        const completion = record.GetExtension<Record<string, unknown>>('Pipeline', 'completionColumns');
+        expect(completion?.LastDiscoveredAt).toBeInstanceOf(Date);
+        expect(completion?.LastSyncedAt).toBeUndefined();
+    });
+
+    it('refuses a Sync walk when the driver does not support exhaustive walks', async () => {
+        const ctx = { ...contextWith(), Configuration: { Mode: 'Sync' } };
+        await expect(new DiscoverStage().Run(sourceRecord(), ctx)).rejects.toThrow(/SupportsExhaustiveWalk = false/);
+    });
+
+    it('passes Since = null and records LastSyncedAt when Sync runs over an exhaustive driver', async () => {
+        supportsExhaustiveWalk = true;
+        try {
+            const record = sourceRecord();
+            record.SetExtension('Pipeline', 'lastDiscoveredAt', new Date('2026-10-15T08:00:00Z'));
+            const ctx = { ...contextWith(), Configuration: { Mode: 'Sync' } };
+            const outcome = await new DiscoverStage().Run(record, ctx);
+            expect(outcome.Status).toBe('Complete');
+            expect(seenRequests.at(-1)?.Since).toBeNull();
+            const completion = record.GetExtension<Record<string, unknown>>('Pipeline', 'completionColumns');
+            expect(completion?.LastDiscoveredAt).toBeInstanceOf(Date);
+            expect(completion?.LastSyncedAt).toBeInstanceOf(Date);
+        } finally {
+            supportsExhaustiveWalk = false;
+        }
     });
 });
