@@ -1,5 +1,5 @@
 /**
- * metadata-consistency.checks.ts — the 'metadata-consistency' bundle (MC1–MC8): a READ-ONLY audit
+ * metadata-consistency.checks.ts — the 'metadata-consistency' bundle (MC1–MC9): a READ-ONLY audit
  * that compares MJ's entity metadata against the PHYSICAL database catalog.
  *
  * Zero fixtures, zero mutation, zero model calls — every check is a pure SELECT against
@@ -27,6 +27,7 @@
  *   MC5 field Sequences are gapless from 1, duplicate-free, and match base-view column order
  *   MC6 every physical core-schema field carries a non-empty Description (MS_Description)
  *   MC8 SchemaInfo coverage + casing agreement with the physical catalog
+ *   MC9 every List field default is a member of its own value list (metadata only, no catalog query)
  *
  * MC7 (DriverClass ↔ ClassFactory resolution) is intentionally NOT implemented — see the bundle
  * README note in the final report; a check that cannot distinguish "unresolvable DriverClass" from
@@ -35,7 +36,7 @@
  * Each check sweeps ALL entities, aggregates offenders, and reports a COUNT plus a bounded sample.
  */
 import type { EntityInfo, EntityFieldInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { RunView } from '@memberjunction/core';
+import { EntityFieldTSType, EntityFieldValueListType, RunView } from '@memberjunction/core';
 import type sql from 'mssql';
 import { Assert } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -634,7 +635,49 @@ function schemaOffenses(
     return offenses;
 }
 
-export const MetadataConsistencyChecks: NamedCheck[] = [MC1, MC2, MC3, MC4, MC5, MC6, MC8];
+// ── MC9: a List field's default is one of its own values ────────────────────────────────────
+
+/**
+ * Why the default of a `List` field must be an EXACT member of its value list, or null when it is.
+ *
+ * The value list comes from the column's CHECK constraint, so a default outside it is refused by
+ * that constraint whenever it fires — and `spCreate{Table}` applies it through
+ * `ISNULL(@Param, <default>)`, so it fires on every create that omits the field. The comparison is
+ * case-sensitive on purpose: SQL Server's collation would accept a case variant, but the generated
+ * TypeScript union and PostgreSQL's CHECK do not (MJ #3985).
+ */
+function defaultValueOffense(field: EntityFieldInfo): string | null {
+    const values = field.EntityFieldValues.map(v => v.Value);
+    const defaultValue = field.DefaultValue.trim();
+    const isMember = field.TSType === EntityFieldTSType.Number
+        ? values.some(v => Number(v) === Number(defaultValue))
+        : values.includes(defaultValue);
+    return isMember ? null : `default '${defaultValue}' not in [${values.join(', ')}]`;
+}
+
+const MC9: NamedCheck = {
+    Id: 'metadata-consistency.MC9',
+    Name: 'MC9: every List field default is a member of its own value list',
+    Fn: async (ctx: IntegrationCheckContext) => {
+        const offenders: string[] = [];
+        let compared = 0;
+        for (const entity of physicalEntities(ctx.Provider)) {
+            for (const field of entity.Fields) {
+                if (field.ValueListTypeEnum !== EntityFieldValueListType.List || !field.HasDefaultValue) {
+                    continue; // no closed list, or no default to check against it
+                }
+                compared++;
+                const offense = defaultValueOffense(field);
+                if (offense) {
+                    offenders.push(`${entity.Name}.${field.Name}: ${offense}`);
+                }
+            }
+        }
+        assertNoOffenders(offenders, 'MC9', 'List fields whose default is not in their value list', compared);
+    }
+};
+
+export const MetadataConsistencyChecks: NamedCheck[] = [MC1, MC2, MC3, MC4, MC5, MC6, MC8, MC9];
 
 for (const check of MetadataConsistencyChecks) {
     IntegrationCheckRegistry.Instance.Register(check);

@@ -66,6 +66,18 @@ SELECT CASE WHEN v IS NULL THEN NULL ELSE
 END
 $$;
 
+-- True when a stored default and the physical default differ. Normalized comparison first, so
+-- equivalent spellings (getutcdate()/now(), N'x'/'x'::text) do not churn. The normalizer lower-cases,
+-- so a second leg compares the quoted literal case-sensitively when BOTH sides carry one: without it
+-- a default changed only in case ('FIeld' -> 'field') never reaches metadata (MJ #3985).
+DROP FUNCTION IF EXISTS __mj."fnDefaultValueChanged"(TEXT, TEXT);
+CREATE OR REPLACE FUNCTION __mj."fnDefaultValueChanged"(stored TEXT, physical TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql IMMUTABLE AS $$
+SELECT __mj."fnNormalizeDefaultValue"(stored) IS DISTINCT FROM __mj."fnNormalizeDefaultValue"(physical)
+    OR COALESCE(substring(stored FROM '''([^'']*)''') <> substring(physical FROM '''([^'']*)'''), false)
+$$;
+
 -- Maps a pg_get_expr() default expression to MJ-canonical (SS-flavored) text
 -- for storage/emission. Unmappable expressions pass through unchanged — the
 -- normalizer above keeps them from churning metadata.
@@ -310,7 +322,7 @@ BEGIN
     sq."Scale"     AS new_scale,
     sq."AllowsNull" AS new_allows_null,
     -- only rewrite a stored default when it differs SEMANTICALLY
-    CASE WHEN __mj."fnNormalizeDefaultValue"(ef."DefaultValue") IS NOT DISTINCT FROM __mj."fnNormalizeDefaultValue"(sq."DefaultValue")
+    CASE WHEN NOT __mj."fnDefaultValueChanged"(ef."DefaultValue", sq."DefaultValue")
          THEN ef."DefaultValue" ELSE sq."DefaultValue" END AS new_default_value,
     (sq."AutoIncrement" <> 0) AS new_auto_increment,
     (sq."IsVirtual" <> 0)     AS new_is_virtual,
@@ -336,7 +348,7 @@ BEGIN
            OR ef."Scale" <> sq."Scale"
            OR ef."AllowsNull" <> sq."AllowsNull"
          ))
-      OR __mj."fnNormalizeDefaultValue"(ef."DefaultValue") IS DISTINCT FROM __mj."fnNormalizeDefaultValue"(sq."DefaultValue")
+      OR __mj."fnDefaultValueChanged"(ef."DefaultValue", sq."DefaultValue")
       OR ef."AutoIncrement" <> (sq."AutoIncrement" <> 0)
       OR ef."IsVirtual" <> (sq."IsVirtual" <> 0)
       -- Soft-FK guard: preserve soft FKs and respect AutoUpdateRelatedEntityInfo
@@ -360,7 +372,7 @@ BEGIN
       CASE WHEN (sq."IsVirtual" = 0 AND ef."Precision" <> sq."Precision") THEN 'Precision' END,
       CASE WHEN (sq."IsVirtual" = 0 AND ef."Scale" <> sq."Scale") THEN 'Scale' END,
       CASE WHEN (sq."IsVirtual" = 0 AND ef."AllowsNull" <> sq."AllowsNull") THEN 'AllowsNull' END,
-      CASE WHEN __mj."fnNormalizeDefaultValue"(ef."DefaultValue") IS DISTINCT FROM __mj."fnNormalizeDefaultValue"(sq."DefaultValue") THEN 'DefaultValue' END,
+      CASE WHEN __mj."fnDefaultValueChanged"(ef."DefaultValue", sq."DefaultValue") THEN 'DefaultValue' END,
       CASE WHEN ef."AutoIncrement" <> (sq."AutoIncrement" <> 0) THEN 'AutoIncrement' END,
       CASE WHEN ef."IsVirtual" <> (sq."IsVirtual" <> 0) THEN 'IsVirtual' END,
       CASE WHEN ef."IsComputed" <> (sq."IsComputed" <> 0) THEN 'IsComputed' END,

@@ -54,6 +54,9 @@ describe('T16 — Proc Definition Contract and Drift Guard (C1, §0.3, D16)', ()
       expect(newestContent).toContain('@IncludedSchemaNames');
       // 5. #uef_cols materialization
       expect(newestContent).toContain('#uef_cols');
+      // 6. DefaultValue change detection is case-sensitive (MJ #3985). Under the database's CI
+      //    collation a default changed only in case ('FIeld' -> 'field') never synced into metadata.
+      expect(newestContent).toMatch(/ef\.DefaultValue\)\),\s*''\)\s+COLLATE\s+\w+_CS_\w+\s+<>/i);
    });
 
    it('asserts PostgreSQLCodeGenProvider metadataSupportObjects contains twin guards', () => {
@@ -73,5 +76,10 @@ describe('T16 — Proc Definition Contract and Drift Guard (C1, §0.3, D16)', ()
 
       // 3. Included schemas parameter
       expect(sql!).toContain('p_IncludedSchemaNames');
+
+      // 4. DefaultValue change detection catches case-only changes — the twin of the SQL Server
+      //    COLLATE guard (MJ #3985). fnNormalizeDefaultValue lower-cases, so it cannot do this alone.
+      expect(sql!).toContain('CREATE OR REPLACE FUNCTION __mj."fnDefaultValueChanged"');
+      expect(sql!).not.toMatch(/fnNormalizeDefaultValue"\(ef\."DefaultValue"\)\s+IS (NOT )?DISTINCT FROM/i);
    });
 });

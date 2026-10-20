@@ -1194,17 +1194,52 @@ GO
 DROP PROC IF EXISTS [__mj].[spUpdateExistingEntityFieldsFromSchema]
 GO
 CREATE PROC [__mj].[spUpdateExistingEntityFieldsFromSchema]
-    @ExcludedSchemaNames NVARCHAR(MAX)
+    @ExcludedSchemaNames NVARCHAR(MAX),
+    @EntityIDs NVARCHAR(MAX) = NULL,
+    @IncludedSchemaNames NVARCHAR(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Step 1: Parse the excluded schema names into a table variable
     DECLARE @ExcludedSchemas TABLE (SchemaName NVARCHAR(255));
     INSERT INTO @ExcludedSchemas(SchemaName)
     SELECT TRIM(value) FROM STRING_SPLIT(@ExcludedSchemaNames, ',');
 
-    -- Step 2: Declare a table variable to store filtered rows
+    -- Materialize the optional entity scope list once
+    DECLARE @ScopedEntityIDs TABLE (EntityID UNIQUEIDENTIFIER PRIMARY KEY);
+    DECLARE @IsScoped BIT = 0;
+    IF @EntityIDs IS NOT NULL AND LEN(@EntityIDs) > 0
+    BEGIN
+        INSERT INTO @ScopedEntityIDs (EntityID)
+        SELECT DISTINCT TRY_CONVERT(UNIQUEIDENTIFIER, LTRIM(RTRIM(value)))
+        FROM STRING_SPLIT(@EntityIDs, ',')
+        WHERE LTRIM(RTRIM(value)) <> ''
+          AND TRY_CONVERT(UNIQUEIDENTIFIER, LTRIM(RTRIM(value))) IS NOT NULL;
+        IF EXISTS (SELECT 1 FROM @ScopedEntityIDs) SET @IsScoped = 1;
+    END
+
+    DECLARE @IncludedSchemas TABLE (SchemaName NVARCHAR(255) PRIMARY KEY);
+    DECLARE @HasInclude BIT = 0;
+    IF @IncludedSchemaNames IS NOT NULL AND LEN(LTRIM(RTRIM(@IncludedSchemaNames))) > 0
+    BEGIN
+        INSERT INTO @IncludedSchemas (SchemaName)
+        SELECT DISTINCT TRIM(value)
+        FROM STRING_SPLIT(@IncludedSchemaNames, ',')
+        WHERE TRIM(value) <> '';
+        IF EXISTS (SELECT 1 FROM @IncludedSchemas) SET @HasInclude = 1;
+    END
+
+    -- Materialize catalog-introspection views into #temp tables
+    IF OBJECT_ID('tempdb..#uef_cols') IS NOT NULL DROP TABLE #uef_cols;
+    SELECT * INTO #uef_cols FROM [__mj].vwSQLColumnsAndEntityFields
+        WHERE @IsScoped = 0 OR EntityID IN (SELECT EntityID FROM @ScopedEntityIDs);
+    IF OBJECT_ID('tempdb..#uef_fk') IS NOT NULL DROP TABLE #uef_fk;
+    SELECT * INTO #uef_fk FROM [__mj].vwForeignKeys;
+    IF OBJECT_ID('tempdb..#uef_pk') IS NOT NULL DROP TABLE #uef_pk;
+    SELECT * INTO #uef_pk FROM [__mj].vwTablePrimaryKeys;
+    IF OBJECT_ID('tempdb..#uef_uk') IS NOT NULL DROP TABLE #uef_uk;
+    SELECT * INTO #uef_uk FROM [__mj].vwTableUniqueKeys;
+
     DECLARE @FilteredRows TABLE (
         EntityID UNIQUEIDENTIFIER,
         EntityName NVARCHAR(500),
@@ -1229,7 +1264,6 @@ BEGIN
         IsUnique BIT
     );
 
-    -- Step 3: Populate the table variable with filtered rows
     INSERT INTO @FilteredRows
     SELECT
         e.ID as EntityID,
@@ -1251,78 +1285,72 @@ BEGIN
         fromSQL.Sequence,
         re.ID AS RelatedEntityID,
         fk.referenced_column AS RelatedEntityFieldName,
-        CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END AS IsPrimaryKey,
-        CASE 
-            WHEN pk.ColumnName IS NOT NULL THEN 1 
-            ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
+        -- Soft-PK guard: carry the FROZEN flags for soft-PK rows
+        CASE WHEN ef.IsSoftPrimaryKey = 1 THEN ef.IsPrimaryKey
+             WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END AS IsPrimaryKey,
+        CASE WHEN ef.IsSoftPrimaryKey = 1 THEN ef.IsUnique
+             WHEN pk.ColumnName IS NOT NULL THEN 1
+             ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
         END AS IsUnique
     FROM
         [__mj].EntityField ef
     INNER JOIN
-        vwSQLColumnsAndEntityFields fromSQL
-    ON
-        ef.EntityID = fromSQL.EntityID AND
-        ef.Name = fromSQL.FieldName
+        #uef_cols fromSQL
+        ON ef.EntityID = fromSQL.EntityID AND ef.Name = fromSQL.FieldName
     INNER JOIN
-        [__mj].Entity e 
-    ON
-        ef.EntityID = e.ID
+        [__mj].Entity e ON ef.EntityID = e.ID
     LEFT OUTER JOIN
-        vwForeignKeys fk
-    ON
-        ef.Name = fk.[column] AND
-        e.BaseTable = fk.[table] AND
-        e.SchemaName = fk.[schema_name]
-    LEFT OUTER JOIN 
-        [__mj].Entity re -- Related Entity
-    ON
-        re.BaseTable = fk.referenced_table AND
-        re.SchemaName = fk.[referenced_schema]
-    LEFT OUTER JOIN 
-        [__mj].vwTablePrimaryKeys pk
-    ON
-        e.BaseTable = pk.TableName AND
-        ef.Name = pk.ColumnName AND
-        e.SchemaName = pk.SchemaName
-    LEFT OUTER JOIN 
-        [__mj].vwTableUniqueKeys uk
-    ON
-        e.BaseTable = uk.TableName AND
-        ef.Name = uk.ColumnName AND
-        e.SchemaName = uk.SchemaName
+        #uef_fk fk
+        ON ef.Name = fk.[column]
+           AND e.BaseTable = fk.[table]
+           AND e.SchemaName = fk.[schema_name]
     LEFT OUTER JOIN
-        @ExcludedSchemas excludedSchemas
-    ON
-        e.SchemaName = excludedSchemas.SchemaName
+        [__mj].Entity re
+        ON re.BaseTable = fk.referenced_table AND re.SchemaName = fk.[referenced_schema]
+    LEFT OUTER JOIN
+        #uef_pk pk
+        ON e.BaseTable = pk.TableName AND ef.Name = pk.ColumnName AND e.SchemaName = pk.SchemaName
+    LEFT OUTER JOIN
+        #uef_uk uk
+        ON e.BaseTable = uk.TableName AND ef.Name = uk.ColumnName AND e.SchemaName = uk.SchemaName
+    LEFT OUTER JOIN
+        @ExcludedSchemas excludedSchemas ON e.SchemaName = excludedSchemas.SchemaName
     WHERE
         e.VirtualEntity = 0
-        AND excludedSchemas.SchemaName IS NULL -- Only include non-excluded schemas
-        AND ef.ID IS NOT NULL -- Only where we have already created EntityField records
+        AND excludedSchemas.SchemaName IS NULL
+        AND (@HasInclude = 0 OR e.SchemaName IN (SELECT SchemaName FROM @IncludedSchemas))
+        AND ef.ID IS NOT NULL
+        AND (@IsScoped = 0 OR e.ID IN (SELECT EntityID FROM @ScopedEntityIDs))
         AND (
-          -- this large filtering block includes ONLY the rows that have changes
           ISNULL(LTRIM(RTRIM(ef.Description)), '') <> ISNULL(LTRIM(RTRIM(IIF(ef.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX), fromSQL.Description), ef.Description))), '') OR
           ef.Type <> fromSQL.Type OR
           ef.Length <> fromSQL.Length OR
           ef.Precision <> fromSQL.Precision OR
           ef.Scale <> fromSQL.Scale OR
           ef.AllowsNull <> fromSQL.AllowsNull OR
-          ISNULL(LTRIM(RTRIM(ef.DefaultValue)), '') <> ISNULL(LTRIM(RTRIM(CONVERT(NVARCHAR(MAX), fromSQL.DefaultValue))), '') OR
+          -- Case-sensitive (MJ #3985): under the database's CI collation a default changed only in case
+          -- never synced, so spCreate and the generated types kept the old casing. The PostgreSQL twin
+          -- (CodeGenLib metadataSupportObjects.ts, fnDefaultValueChanged) gets the same fix.
+          ISNULL(LTRIM(RTRIM(ef.DefaultValue)), '') COLLATE Latin1_General_CS_AS <> ISNULL(LTRIM(RTRIM(CONVERT(NVARCHAR(MAX), fromSQL.DefaultValue))), '') OR
           ef.AutoIncrement <> fromSQL.AutoIncrement OR
           ef.IsVirtual <> fromSQL.IsVirtual OR
           ef.IsComputed <> fromSQL.IsComputed OR
           ef.Sequence <> fromSQL.Sequence OR
-          ISNULL(TRY_CONVERT(UNIQUEIDENTIFIER, ef.RelatedEntityID), '00000000-0000-0000-0000-000000000000') <> ISNULL(TRY_CONVERT(UNIQUEIDENTIFIER, re.ID), '00000000-0000-0000-0000-000000000000') OR -- Use TRY_CONVERT here
-          ISNULL(LTRIM(RTRIM(ef.RelatedEntityFieldName)), '') <> ISNULL(LTRIM(RTRIM(fk.referenced_column)), '') OR
-          ef.IsPrimaryKey <> CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END OR
-          ef.IsUnique <> CASE
+          -- Soft-FK guard: wrap RelatedEntity* predicates to respect AutoUpdateRelatedEntityInfo and IsSoftForeignKey
+          (ef.AutoUpdateRelatedEntityInfo = 1 AND ef.IsSoftForeignKey = 0 AND (
+              ISNULL(TRY_CONVERT(UNIQUEIDENTIFIER, ef.RelatedEntityID), '00000000-0000-0000-0000-000000000000') <> ISNULL(TRY_CONVERT(UNIQUEIDENTIFIER, re.ID), '00000000-0000-0000-0000-000000000000') OR
+              ISNULL(LTRIM(RTRIM(ef.RelatedEntityFieldName)), '') <> ISNULL(LTRIM(RTRIM(fk.referenced_column)), '')
+          )) OR
+          -- Soft-PK guard: soft-PK rows are never a PK/unique material change
+          (ef.IsSoftPrimaryKey = 0 AND ef.IsPrimaryKey <> CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END) OR
+          (ef.IsSoftPrimaryKey = 0 AND ef.IsUnique <> CASE
               WHEN pk.ColumnName IS NOT NULL THEN 1
               ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
-          END OR
+          END) OR
           -- Detect AllowUpdateAPI that needs clearing on virtual transition
           (ef.AllowUpdateAPI = 1 AND fromSQL.IsVirtual = 1 AND ef.IsVirtual = 0)
         );
 
-    -- Step 4: Perform the update using the table variable
     UPDATE ef
     SET
         ef.Description = IIF(fr.AutoUpdateDescription=1, fr.SQLDescription, ef.Description),
@@ -1336,25 +1364,23 @@ BEGIN
         ef.IsVirtual = fr.IsVirtual,
         ef.IsComputed = fr.IsComputed,
         ef.Sequence = fr.Sequence,
-        ef.RelatedEntityID = IIF(ef.AutoUpdateRelatedEntityInfo = 1, fr.RelatedEntityID, ef.RelatedEntityID), -- if AutoUpdate is not on, respect the current value
-        ef.RelatedEntityFieldName = IIF(ef.AutoUpdateRelatedEntityInfo = 1, fr.RelatedEntityFieldName, ef.RelatedEntityFieldName), -- if AutoUpdate is not on, respect the current value
+        -- Soft-FK guard: preserve soft FKs
+        ef.RelatedEntityID = IIF(ef.AutoUpdateRelatedEntityInfo = 1 AND ef.IsSoftForeignKey = 0, fr.RelatedEntityID, ef.RelatedEntityID),
+        ef.RelatedEntityFieldName = IIF(ef.AutoUpdateRelatedEntityInfo = 1 AND ef.IsSoftForeignKey = 0, fr.RelatedEntityFieldName, ef.RelatedEntityFieldName),
+        -- Soft-PK guard: preserve soft PKs
         ef.IsPrimaryKey = fr.IsPrimaryKey,
         ef.IsUnique = fr.IsUnique,
-        -- When a field transitions to virtual, it can no longer be written to.
-        -- IS-A parent fields are unaffected: they are created as virtual and
-        -- never go through a 0→1 transition in this SP.
         ef.AllowUpdateAPI = IIF(fr.IsVirtual = 1 AND ef.IsVirtual = 0, 0, ef.AllowUpdateAPI),
         ef.__mj_UpdatedAt = GETUTCDATE()
     FROM
         [__mj].EntityField ef
     INNER JOIN
-        @FilteredRows fr
-    ON
-        ef.ID = fr.EntityFieldID;
+        @FilteredRows fr ON ef.ID = fr.EntityFieldID;
 
-    -- Step 5: Return the modified rows
     SELECT * FROM @FilteredRows;
 END;
+GO
+GRANT EXECUTE ON [__mj].[spUpdateExistingEntityFieldsFromSchema] TO [cdp_Developer], [cdp_Integration];
 GO
  
 
