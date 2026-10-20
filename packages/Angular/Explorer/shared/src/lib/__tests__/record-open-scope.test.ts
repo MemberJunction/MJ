@@ -268,6 +268,39 @@ describe('NavigationService record opens — formMode', () => {
 });
 
 
+// A record tab opened from a URL keeps the URL's bare id ("123"), while
+// OpenEntityRecord looks it up by CompositeKey.ToURLSegment(), which always
+// carries the field ("ID|123"). Dedup must treat both as the same record, or a
+// second tab opens and a formMode request misses the tab the user is looking at.
+describe('NavigationService.findOpenRecordTab — record identity', () => {
+  function serviceWithTabs(tabs: Array<{ id: string; resourceRecordId: string; configuration: Record<string, unknown> }>) {
+    const service = Object.create(NavigationService.prototype) as NavigationService;
+    (service as unknown as Record<string, unknown>)['workspaceManager'] = { GetConfiguration: () => ({ tabs }) };
+    const find = (entity: string, id: string) =>
+      (service as unknown as { findOpenRecordTab(e: string, r: string): { id: string } | null }).findOpenRecordTab(entity, id);
+    return { find };
+  }
+  const recordTab = (id: string, recordId: string) => ({
+    id, resourceRecordId: recordId, configuration: { resourceType: 'Records', Entity: 'Widgets', recordId },
+  });
+
+  it('finds a tab opened with the bare id when looked up by the full segment', () => {
+    const { find } = serviceWithTabs([recordTab('tab-url', '123')]);
+    expect(find('Widgets', 'ID|123')).toEqual({ id: 'tab-url' });
+  });
+
+  it('finds a tab opened with the full segment when looked up by the same segment', () => {
+    const { find } = serviceWithTabs([recordTab('tab-open', 'ID|123')]);
+    expect(find('Widgets', 'ID|123')).toEqual({ id: 'tab-open' });
+  });
+
+  it('does not match a different record', () => {
+    const { find } = serviceWithTabs([recordTab('tab-url', '456')]);
+    expect(find('Widgets', 'ID|123')).toBeNull();
+  });
+});
+
+
 // ===================== Record origin chain (crumb ping-pong) =====================
 // Under the preview-tab model an in-record link CONSUMES the parent's tab, so
 // returning to the parent re-opens it rather than reactivating its tab. A

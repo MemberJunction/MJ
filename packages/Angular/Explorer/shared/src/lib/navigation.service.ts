@@ -11,6 +11,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import type { ResourceData } from '@memberjunction/core-entities';
 import { BaseResourceComponent } from './base-resource-component';
 import { ResolveMovedNavItem } from './moved-nav-items';
+import { RecordTabShowsRecord } from './record-delete';
 
 /**
  * Event emitted when query params change on a tab (e.g., from browser back/forward).
@@ -658,14 +659,15 @@ export class NavigationService implements OnDestroy {
     }, 0);
   }
 
-  /** Find an already-open tab showing this exact record (records-style dedup) */
+  /**
+   * Find an already-open tab showing this exact record (records-style dedup). Matched through
+   * RecordTabShowsRecord, not string equality: a tab opened from a URL keeps the URL's bare id
+   * while `recordId` here is `ToURLSegment()` ("ID|<id>"), so an exact compare missed the open
+   * tab and opened a second one for the same record.
+   */
   private findOpenRecordTab(entityName: string, recordId: string): { id: string } | null {
     const config = this.workspaceManager.GetConfiguration();
-    const match = config?.tabs.find(t =>
-      t.resourceRecordId === recordId &&
-      t.configuration?.['resourceType'] === RECORDS_RESOURCE_TYPE &&
-      t.configuration?.['Entity'] === entityName
-    );
+    const match = config?.tabs.find(t => RecordTabShowsRecord(t, { EntityName: entityName, RecordId: recordId }));
     return match ? { id: match.id } : null;
   }
 
