@@ -12,7 +12,7 @@
 
 import { createHash } from 'crypto';
 import { BaseEntity, LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString, IndexByUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
     ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID,
@@ -30,13 +30,17 @@ import { FileStorageEngine } from '@memberjunction/storage';
  */
 interface ArtifactVersionRow {
     VersionID: string;
+    ArtifactID?: string;
+    VersionNumber?: number;
     VersionName: string | null;
+    VersionDescription?: string | null;
     ContentMode: 'File' | 'Text';
     FileID: string | null;
     Content: string | null;
     MimeType: string | null;
     ForceToolsOnly: boolean | null;
     ArtifactName: string;
+    ArtifactDescription?: string | null;
     TypeName: string;
     ToolLibraryClass: string | null;
     DefaultDeliveryMode: 'Inline' | 'ToolsOnly' | null;
@@ -129,6 +133,9 @@ export class AgentRunner {
 
     /** Fallback artifact type for agent payloads when the agent declares no DefaultArtifactTypeID. */
     private static readonly JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
+
+    /** Artifact type for structured research report payloads containing `{ report: { html } }`. */
+    private static readonly RESEARCH_CONTENT_ARTIFACT_TYPE_ID = 'a7b8c9d0-e1f2-3a4b-5c6d-7e8f9a0b1c2d';
 
     /**
      * Max length of `MJ: Artifacts.Name` (`nvarchar(255)`).
@@ -1100,8 +1107,37 @@ export class AgentRunner {
 
         // Check agent's ArtifactCreationMode
         await AIEngine.Instance.Config(false, contextUser);
-        const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentRun.AgentID));
-        const creationMode = agent?.ArtifactCreationMode;
+        const agentsById = IndexByUUID(AIEngine.Instance.Agents);
+        let agent = agentsById.Get(agentRun.AgentID);
+        let creationMode = agent?.ArtifactCreationMode;
+
+        // When an orchestrator with ArtifactCreationMode='Never' or 'System Only' (or no
+        // DefaultArtifactTypeID, such as Sage) delegates a folded single-node task graph (or
+        // sub-agent step) to a specialist agent (such as Query Builder or Research Agent) that
+        // DOES produce user-visible artifacts, resolve the artifact creation mode and
+        // DefaultArtifactTypeID from the last completed Sub-Agent step's specialist agent so
+        // the specialist's deliverable artifact is persisted with the specialist's
+        // DefaultArtifactTypeID and visibility.
+        if ((creationMode === 'Never' || creationMode === 'System Only' || !agent?.DefaultArtifactTypeID) && agentRun?.Steps?.length) {
+            for (let i = agentRun.Steps.length - 1; i >= 0; i--) {
+                const step = agentRun.Steps[i];
+                if (step.StepType === 'Sub-Agent' && step.Success) {
+                    const subAgentId = step.TargetID || step.SubAgentRun?.AgentID;
+                    const delegatedAgent = subAgentId
+                        ? agentsById.Get(subAgentId)
+                        : undefined;
+                    if (
+                        delegatedAgent &&
+                        delegatedAgent.ArtifactCreationMode !== 'Never' &&
+                        (delegatedAgent.DefaultArtifactTypeID != null || delegatedAgent.ArtifactCreationMode === 'Always')
+                    ) {
+                        agent = delegatedAgent;
+                        creationMode = delegatedAgent.ArtifactCreationMode;
+                        break;
+                    }
+                }
+            }
+        }
 
         if (creationMode === 'Never') {
             LogStatus(`Skipping artifact creation - agent "${agent?.Name}" has ArtifactCreationMode='Never'`);
@@ -1189,7 +1225,7 @@ export class AgentRunner {
                     newVersionNumber = previousArtifact.versionNumber + 1;
                     LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
                 } else {
-                    const artifact = await this.createArtifactHeader(md, contextUser, agent, creationMode, directive);
+                    const artifact = await this.createArtifactHeader(md, contextUser, agent, creationMode, directive, payload);
                     artifactId = artifact.ID;
                     newVersionNumber = 1;
                     isNewArtifact = true;
@@ -1228,29 +1264,74 @@ export class AgentRunner {
             version.Content = serializedContent;
             version.UserID = contextUser.ID;
 
+            const directiveName = AgentRunner.safeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH);
+            const directiveDescription = AgentRunner.safeDirectiveText(directive?.description);
+            const payloadRecord = (typeof payload === 'object' && payload !== null && !Array.isArray(payload))
+                ? (payload as Record<string, unknown>)
+                : undefined;
+            const reportRecord = (typeof payloadRecord?.report === 'object' && payloadRecord.report !== null && !Array.isArray(payloadRecord.report))
+                ? (payloadRecord.report as Record<string, unknown>)
+                : undefined;
+            const synthesisRecord = (typeof payloadRecord?.synthesis === 'object' && payloadRecord.synthesis !== null && !Array.isArray(payloadRecord.synthesis))
+                ? (payloadRecord.synthesis as Record<string, unknown>)
+                : undefined;
+            const payloadName = AgentRunner.safeDirectiveText(
+                payloadRecord?.title ?? payloadRecord?.name ?? payloadRecord?.savedQueryName ?? reportRecord?.name,
+                AgentRunner.ARTIFACT_NAME_MAX_LENGTH
+            );
+            const payloadDescription = AgentRunner.safeDirectiveText(
+                payloadRecord?.description ?? payloadRecord?.interpretation ?? reportRecord?.description ?? synthesisRecord?.executiveSummary
+            );
+
+            if (directiveName || payloadName) {
+                version.Name = directiveName || payloadName || null;
+            }
+            if (directiveDescription || payloadDescription) {
+                version.Description = directiveDescription || payloadDescription || null;
+            }
+
             if (!(await version.Save())) {
                 throw new Error('Failed to save artifact version');
             }
 
             LogStatus(`Created artifact version ${newVersionNumber} (${version.ID})`);
 
-            // First version of a new artifact: adopt the extracted Name attribute unless the agent named it
-            if (isNewArtifact && newVersionNumber === 1 && !AgentRunner.safeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)) {
-                const nameAttr = (version as any).Attributes?.find((attr: any) =>
+            // First version of a new artifact: adopt the extracted Name/Description attribute (or payload title/description)
+            // unless the agent explicitly named/described it via artifactDirective.
+            if (isNewArtifact && newVersionNumber === 1 && (!directiveName || !directiveDescription)) {
+                const attrs = (version as unknown as { Attributes?: Array<{ StandardProperty?: string; Name?: string; Value?: string }> }).Attributes;
+                const nameAttr = attrs?.find((attr) =>
                     attr.StandardProperty === 'name' || attr.Name?.toLowerCase() === 'name'
                 );
+                const descAttr = attrs?.find((attr) =>
+                    attr.StandardProperty === 'description' || attr.Name?.toLowerCase() === 'description'
+                );
 
-                let extractedName = nameAttr?.Value?.trim();
-                if (extractedName && extractedName.toLowerCase() !== 'null') {
-                    extractedName = extractedName.replace(/^["']|["']$/g, '');
+                const cleanAttr = (val: string | undefined, maxLen?: number): string | undefined => {
+                    const trimmed = val?.trim();
+                    if (!trimmed || trimmed.toLowerCase() === 'null') {
+                        return undefined;
+                    }
+                    const unquoted = trimmed.replace(/^["']|["']$/g, '').trim();
+                    return AgentRunner.safeDirectiveText(unquoted, maxLen);
+                };
 
+                const resolvedName = !directiveName ? (cleanAttr(nameAttr?.Value, AgentRunner.ARTIFACT_NAME_MAX_LENGTH) || payloadName) : undefined;
+                const resolvedDescription = !directiveDescription ? (cleanAttr(descAttr?.Value) || payloadDescription) : undefined;
+
+                if (resolvedName || resolvedDescription) {
                     const artifact = await md.GetEntityObject<MJArtifactEntity>(
                         'MJ: Artifacts',
                         contextUser
                     );
 
                     if (await artifact.Load(artifactId)) {
-                        artifact.Name = extractedName;
+                        if (resolvedName) {
+                            artifact.Name = resolvedName;
+                        }
+                        if (resolvedDescription) {
+                            artifact.Description = resolvedDescription;
+                        }
                         if (await artifact.Save()) {
                             LogStatus(`Updated artifact name to: ${artifact.Name}`);
                         }
@@ -1485,7 +1566,8 @@ export class AgentRunner {
         contextUser: UserInfo,
         agent: (typeof AIEngine.Instance.Agents)[number] | undefined,
         creationMode: string | undefined,
-        directive: ArtifactDirective | undefined
+        directive: ArtifactDirective | undefined,
+        payload?: unknown
     ): Promise<MJArtifactEntity> {
         const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
 
@@ -1498,8 +1580,17 @@ export class AgentRunner {
         artifact.Description = AgentRunner.safeDirectiveText(directive?.description)
             || `Payload returned by ${agentName}`;
 
-        // Use agent's DefaultArtifactTypeID if available
-        artifact.TypeID = agent?.DefaultArtifactTypeID || AgentRunner.JSON_ARTIFACT_TYPE_ID;
+        // Use agent's DefaultArtifactTypeID if available; otherwise infer Research Content when
+        // the payload carries a non-empty report.html string (e.g., Research Report Writer).
+        const payloadObj = (typeof payload === 'object' && payload !== null && !Array.isArray(payload))
+            ? (payload as Record<string, unknown>)
+            : undefined;
+        const reportObj = (typeof payloadObj?.report === 'object' && payloadObj.report !== null && !Array.isArray(payloadObj.report))
+            ? (payloadObj.report as Record<string, unknown>)
+            : undefined;
+        const hasReportHtml = typeof reportObj?.html === 'string' && reportObj.html.trim().length > 0;
+        artifact.TypeID = agent?.DefaultArtifactTypeID
+            || (hasReportHtml ? AgentRunner.RESEARCH_CONTENT_ARTIFACT_TYPE_ID : AgentRunner.JSON_ARTIFACT_TYPE_ID);
 
         artifact.UserID = contextUser.ID;
         artifact.EnvironmentID = (contextUser as any).EnvironmentID || MJEnvironmentEntityExtended.DefaultEnvironmentID;
@@ -2396,10 +2487,18 @@ export class AgentRunner {
                         }
 
                         if (content) {
+                            const rawDescription = row.VersionDescription || row.ArtifactDescription;
+                            const cleanDescription = rawDescription && !rawDescription.startsWith('Payload returned by ')
+                                ? rawDescription
+                                : undefined;
                             inputArtifacts.push({
                                 name: artifactName,
                                 typeName,
                                 content,
+                                ...(row.ArtifactID ? { artifactId: row.ArtifactID } : {}),
+                                ...(row.VersionID ? { versionId: row.VersionID } : {}),
+                                ...(row.VersionNumber != null ? { versionNumber: row.VersionNumber } : {}),
+                                ...(cleanDescription ? { description: cleanDescription } : {}),
                                 mimeType: row.MimeType ?? undefined,
                                 ...(row.ToolLibraryClass ? { toolLibraryClass: row.ToolLibraryClass } : {}),
                                 deliveryMode: row.DefaultDeliveryMode ?? 'ToolsOnly',
