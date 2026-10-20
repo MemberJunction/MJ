@@ -1,0 +1,138 @@
+# MJ Elements Phase 0: the collision test page
+
+Phase 0 item 1 of [`plans/mj-elements.md`](../mj-elements.md) (PR #5903), and the wave 0 gate of
+[`plans/lego/README.md`](../lego/README.md) §7: every embeddable MJ custom element on one plain HTML
+page, with a probe that records what collides. It produces measurements only. Decisions D3 (light
+or shadow DOM) and D4 (icons) are taken in the Lego plan, not here.
+
+What is in the folder:
+
+| File | What it is |
+|---|---|
+| `index.html` | The page. No framework. Hostile host styles (from the support widget's `examples/two-widgets.html`), the five element tags, a host probe element, and an inline script that loads the bundles in order and snapshots singletons, zone.js, fonts, computed styles, layout and CSP nonces at every step. |
+| `serve.mjs` | A static file server for the folder. Needed because the bundles are ES modules, which Chrome will not load over `file://`. It sends the CSP as a header (nonce-based `script-src` and `style-src`, the production shape both MJ widget READMEs describe) and accepts the page's report at `POST /report`. Not an MJ server; nothing talks to MJAPI. |
+| `sync-bundles.mjs` | Copies built bundles from their repos into `bundles/` and writes `bundles/manifest.json`, which the page reads. Also compiles `bundles/tokens.css` from `ng-shared-generic`'s `_tokens.scss` (with the realtime widget package's sass), which styles the page's own chrome: the page uses MJ's semantic tokens and no literal colors, and takes them from the same source every MJ surface does rather than a copy that would drift. |
+| `measure.mjs` | Reads each bundle's esbuild metafile and prints sizes, where the bytes come from, and what two elements both carry. Writes `sizes.json`. |
+| `summarize-report.mjs` | Prints a saved report (`reports/*.json`) step by step, in the form FINDINGS.md cites. |
+| `FINDINGS.md` | One row per check: expected, observed, elements, evidence. Only what was observed with the bundles that were built. |
+| `.gitignore` | `bundles/` (including `tokens.css`), `reports/`, `sizes.json` and `serve.log` are generated and never committed. |
+
+## Running it
+
+```bash
+cd plans/mj-elements-phase0
+MJ_ROOT=../.. node sync-bundles.mjs   # after building the elements below; MJ_ROOT defaults to the repo this folder is in
+node measure.mjs                       # sizes and attribution, from the metafiles
+node serve.mjs                         # http://localhost:8099/
+```
+
+Then open the page in a browser and press the buttons in order, or let the query string drive it:
+
+| URL | What it does |
+|---|---|
+| `/?auto=1` | Loads every bundle present, starts the realtime call on A (accepting the consent notice), loads the support widget's MJ runtime chunk, toggles `color-scheme` twice, prints the report and saves it to `reports/`. |
+| `/?auto=1&csp=none` | Same, without the CSP header. |
+| `/?auto=1&support=keepnames` | Uses the support widget bundle built with `--keep-names` (see below) instead of the published shape. |
+| `/?auto=1&order=support-first` | Loads the support widget's MJ runtime before the realtime call, so the realtime bundle is the one that finds singletons already on the page. |
+| `/?auto=1&first=b` | Starts the call on instance B (no `csp-nonce` attribute, in a parent with no definite height) instead of A. |
+
+The report is also at `window.__phase0`. `node summarize-report.mjs reports/<file>.json` prints it readably.
+
+The page points every element at `http://localhost:9/`, a port nothing listens on, so each element's first
+network call fails fast and the page never needs MJAPI. That is enough for every check here: the realtime call
+code loads before it connects, and the support widget's runtime chunk is imported directly.
+
+## Building the two MJ elements (in this repo)
+
+```bash
+cd packages/Angular/Generic/realtime-widget && pnpm run build
+# emits dist/element/: mj-realtime-widget.js (shell, classic script), mj-realtime-widget-session.js (the call, ES module), chunks/, meta.json, sizes.json
+```
+
+```bash
+cd packages/Web/RealtimeWidget && pnpm run build
+# the browser bundle is NOT part of `build`; this is the package's own `bundle:min` line plus a metafile (quote the chunk-names glob in zsh):
+npx esbuild dist/embed.js --bundle --splitting --minify --format=esm --platform=browser --outdir=dist/embed-min --entry-names=mj-widget '--chunk-names=chunks/[name]-[hash]' --metafile=dist/embed-min/meta.json
+# the same with --keep-names, so its singleton keys match the realtime bundle's (the published shape has no keep-names; both are measured):
+npx esbuild dist/embed.js --bundle --splitting --minify --keep-names --format=esm --platform=browser --outdir=dist/embed-min-keepnames --entry-names=mj-widget '--chunk-names=chunks/[name]-[hash]' --metafile=dist/embed-min-keepnames/meta.json
+```
+
+Both package builds need the workspace's dists in place (ngc output of `ng-shared-generic`, `ng-ui-components`,
+`MJCore`, and so on). If a package build fails on a missing dist, run the root build first.
+
+## Adding the three Open App elements
+
+The bizapps repos are not in this checkout. Clone them beside it, build each element with its own script, then
+point `sync-bundles.mjs` at the clones. Commands below were read from each repo's `package.json` and build script on
+its `next` branch on 2026-10-19; check them against the clone before trusting them.
+
+```bash
+# Forms (public). <mj-form>: an IIFE at packages/Angular/dist/widget/mj-form.js, built by ngc + scripts/build-widget.mjs.
+gh repo clone MemberJunction/bizapps-forms ../bizapps-forms
+cd ../bizapps-forms && pnpm install && pnpm run build        # root turbo build; `pnpm run build:widget` rebuilds just the bundle afterwards
+```
+
+```bash
+# Orders (public). <mj-orders-checkout>: an ES module at packages/Angular/dist/checkout-element/main.js, built by ngc + scripts/build-checkout-element.mjs.
+gh repo clone MemberJunction/bizapps-orders ../bizapps-orders
+cd ../bizapps-orders && pnpm install && pnpm run build
+```
+
+```bash
+# Caliber (internal; needs org access). <caliber-widget>: an IIFE at packages/Angular/dist/widget/caliber-widget.js plus dist/widget/meta.json, built by ngc + scripts/build-widget.mjs.
+gh repo clone MemberJunction/bizapps-caliber ../bizapps-caliber
+cd ../bizapps-caliber && pnpm install && pnpm run build
+```
+
+Each root build expects a database (`pnpm run setup` prints the migrate and codegen steps). If a full build is more than
+the measurement needs, `cd packages/Angular && pnpm run build` in each clone builds only the Angular package and its
+element, once the clone's `pnpm install` has run.
+
+```bash
+BIZAPPS_FORMS=../bizapps-forms BIZAPPS_ORDERS=../bizapps-orders BIZAPPS_CALIBER=../bizapps-caliber node sync-bundles.mjs
+node measure.mjs
+```
+
+Metafiles: Caliber writes `dist/widget/meta.json`. Forms keeps the metafile in memory for its own guard
+(`assertNoServerOnlyInputs`) and does not write it; Orders does not request one. Without a metafile `measure.mjs`
+reports raw and gzip sizes only, no attribution. To attribute those two, add a `writeFileSync('dist/widget/meta.json',
+JSON.stringify(result.metafile))` next to the guard in Forms, and `metafile: true` plus the same write in Orders, in a
+local change that is not committed (or propose it upstream; Caliber's script is the pattern).
+
+Attributes: `index.html` gives `<mj-form slug>`, `<mj-orders-checkout slug csp-nonce>` and `<caliber-widget>` the
+attributes named in the plan's §2 table and Caliber's `smoke/widget/host/index.html` (`api-url`, `protocol-id`). Check
+each element's README for what it needs at upgrade time before reading its row in FINDINGS.md.
+
+## The page's own look
+
+Everything outside the element cards (header, controls, log, report) is styled with the `--mj-*` semantic tokens from
+`bundles/tokens.css`, light on `:root` and dark on `[data-theme="dark"]`; the page sets `data-theme` from
+`prefers-color-scheme` at load and the color-scheme toggle flips it, the way an MJ host would. The element cards are the
+host under test: a serif font, their own text color, `!important` button rules and a class name the realtime shell also
+uses, drawn from the same palette so the page stays readable (the support widget's `two-widgets.html` uses hotpink and
+yellow for the same purpose; the probe reads computed values, so any distinct value serves).
+
+## What the probe records, and how
+
+- **Singletons.** `window` keys starting with `___SINGLETON__` (`packages/MJGlobal/src/BaseSingleton.ts`), with the
+  constructor name, an identity number (so a reused instance is told apart from a replaced one), which copy of
+  `BaseSingleton` sits in its prototype chain, and for `MJGlobal` the length of its `ClassFactory` registration array
+  and any base class registered under two different class objects. An `instanceof` matrix checks the shared instance
+  against every `BaseSingleton` copy on the page.
+- **zone.js.** An accessor trap on `window.Zone` records the first assignment with the script that made it.
+- **Fonts.** `@font-face` rules in every stylesheet, adopted stylesheet and shadow root, `document.fonts`, and
+  families declared more than once.
+- **Style bleed.** Computed styles (font, color, background, border, text-transform, letter-spacing, color-scheme) of
+  the host probe, the host button, each realtime instance's buttons, the support widget's launcher inside its shadow
+  root, and the three Open App tags. The host's own `--mj-brand-primary` is read back to see whose cascade won.
+- **Layout.** Bounding heights of every element, including instance B and `<caliber-widget>` in parents with no
+  definite height.
+- **CSP nonces.** The nonce on every `<style>` the bundles add to `<head>`, on the realtime shell's style element (or
+  that it used `adoptedStyleSheets`), on preload links, and on the support widget's shadow `<style>`, plus every
+  `securitypolicyviolation` event.
+- **color-scheme.** The page's `color-scheme` is toggled `light dark` to `light` to `dark`; each element's computed
+  `color-scheme` and the realtime `data-theme` are recorded.
+- **Errors.** `window.error`, unhandled rejections and `console.error` since the previous step.
+
+The Claude in Chrome extension injects a `<style id="claude-agent-...">` into pages it drives; the probe ignores
+style elements with that id prefix so the head-style counts are the bundles' own.

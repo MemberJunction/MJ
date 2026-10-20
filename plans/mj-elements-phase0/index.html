@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <title>MJ Elements Phase 0: what collides on one page</title>
+  <!--
+    A plain host page with no framework. It puts every embeddable MJ element on one page and records what collides.
+    Serve it with `node serve.mjs` (ES-module bundles do not load over file://). The CSP comes from that server as
+    a header: nonce-based script-src and style-src, which is the production shape both MJ widget READMEs describe.
+    Add ?csp=none to the URL to run without it. The nonce below must match serve.mjs (NONCE).
+
+    Bundles come from ./bundles/, filled by `node sync-bundles.mjs` (see README.md). Nothing here is built.
+  -->
+  <!-- MJ's semantic tokens, compiled by sync-bundles.mjs from ng-shared-generic's _tokens.scss (light on :root, dark on [data-theme="dark"]). -->
+  <link rel="stylesheet" href="bundles/tokens.css" />
+  <style nonce="phase0page">
+    /* ── The page's own chrome: shared MJ tokens only, no literal colors. ─────────────────────────────────────
+       The fallbacks in var() exist so the page still reads if bundles/tokens.css has not been compiled yet. */
+    :root { color-scheme: light dark; }
+    html { background: var(--mj-bg-page, #f8fafc); }
+    body {
+      margin: 0; padding: var(--mj-space-6, 1.5rem) var(--mj-space-6, 1.5rem) 4rem;
+      font-family: var(--mj-font-family, system-ui, sans-serif); font-size: 14px; line-height: 1.5;
+      color: var(--mj-text-primary, #1f2937); background: var(--mj-bg-page, #f8fafc);
+    }
+    .page { max-width: 1480px; margin: 0 auto; }
+    header.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--mj-space-3, .75rem) var(--mj-space-4, 1rem); margin-bottom: var(--mj-space-4, 1rem); }
+    h1 { margin: 0; font-size: 1.35rem; font-weight: 600; letter-spacing: -0.01em; }
+    .sub { margin: 0; color: var(--mj-text-secondary, #4b5563); flex-basis: 100%; }
+    h2 { margin: 0 0 var(--mj-space-2, .5rem); font-size: .95rem; font-weight: 600; }
+    .mode { font-family: var(--mj-font-mono, ui-monospace, monospace); font-size: .75rem; color: var(--mj-text-muted, #6b7280); background: var(--mj-bg-surface-sunken, #f1f5f9); border: 1px solid var(--mj-border-subtle, #e5e7eb); border-radius: var(--mj-radius-sm, 4px); padding: .15rem .5rem; }
+
+    .controls { display: flex; flex-wrap: wrap; gap: var(--mj-space-2, .5rem); margin: 0 0 var(--mj-space-4, 1rem); }
+    .controls button {
+      font: inherit; font-weight: 500; cursor: pointer;
+      padding: .45rem .8rem; border-radius: var(--mj-radius-md, 8px);
+      color: var(--mj-text-primary, #1f2937); background: var(--mj-bg-surface, #fff); border: 1px solid var(--mj-border-default, #e5e7eb);
+      box-shadow: var(--mj-shadow-sm, none);
+    }
+    .controls button:hover { background: var(--mj-bg-surface-hover, #f3f4f6); border-color: var(--mj-border-strong, #d1d5db); }
+    .controls button:focus-visible { outline: 2px solid var(--mj-border-focus, #2563eb); outline-offset: 2px; }
+    .controls button.primary { color: var(--mj-text-inverse, #fff); background: var(--mj-brand-primary, #264faf); border-color: var(--mj-brand-primary, #264faf); }
+    .controls button.primary:hover { background: var(--mj-brand-primary-hover, #1d3f8c); }
+
+    .stage { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--mj-space-4, 1rem); }
+    .cell {
+      min-width: 0; padding: var(--mj-space-4, 1rem);
+      background: var(--mj-bg-surface, #fff); border: 1px solid var(--mj-border-default, #e5e7eb); border-radius: var(--mj-radius-lg, 12px); box-shadow: var(--mj-shadow-sm, none);
+    }
+    .cell small { display: block; margin-bottom: var(--mj-space-3, .75rem); font-size: .75rem; line-height: 1.45; color: var(--mj-text-muted, #6b7280); }
+    .cell small code { font-family: var(--mj-font-mono, ui-monospace, monospace); font-size: .7rem; background: var(--mj-bg-surface-sunken, #f1f5f9); padding: 0 .25rem; border-radius: var(--mj-radius-sm, 4px); }
+    .cell.missing { border-style: dashed; background: var(--mj-bg-surface-card, #f8fafc); }
+    .cell.missing h2 { color: var(--mj-text-muted, #6b7280); }
+    .cell.missing::after { content: 'needs bundle'; display: inline-block; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-status-warning-text, #92400e); background: var(--mj-status-warning-bg, #fffbeb); border-radius: var(--mj-radius-sm, 4px); padding: .1rem .4rem; }
+
+    .panel { margin-top: var(--mj-space-6, 1.5rem); }
+    pre {
+      margin: 0; padding: var(--mj-space-3, .75rem) var(--mj-space-4, 1rem); max-height: 28rem; overflow: auto; white-space: pre-wrap;
+      font: 12px/1.45 var(--mj-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+      color: var(--mj-text-primary, #1f2937); background: var(--mj-bg-surface-sunken, #f1f5f9); border: 1px solid var(--mj-border-subtle, #e5e7eb); border-radius: var(--mj-radius-md, 8px);
+    }
+    .ok { color: var(--mj-status-success-text, #15803d); }
+    .bad { color: var(--mj-status-error-text, #b91c1c); }
+    #log .missing { color: var(--mj-text-muted, #6b7280); border: 0; background: none; }
+
+    /* ── The host under test: deliberately hostile styles, confined to the element stage. ────────────────────
+       The shape is packages/Web/RealtimeWidget/examples/two-widgets.html's: a serif font, its own text color, !important
+       on every button and input, a class name the realtime shell also uses. The values are drawn from the token
+       palette instead of that file's hotpink and yellow, so the page stays readable; what the probe measures is whether
+       these declarations reach inside an element, and any distinct value shows that. A careless host page looks like
+       this; the elements must survive it and restyle none of it. The page chrome above is outside the stage so the
+       probe's host readings are not confused with the page's own styling. The stage also redefines one MJ token name
+       with a sentinel value, to see whose cascade wins. */
+    .stage { --mj-brand-primary: #00aa00; }
+    .stage { font-family: Georgia, serif; color: var(--mj-status-info-text, #1d4ed8); }
+    .stage .cell { background: var(--mj-bg-surface-card, #f8fafc); }
+    .stage button { color: var(--mj-status-info-text, #1d4ed8) !important; background: var(--mj-status-info-bg, #eff6ff) !important; border: 2px dashed var(--mj-status-info, #3b82f6) !important; }
+    .stage textarea, .stage input { text-transform: uppercase !important; }
+    .stage .mjw-btn { letter-spacing: 0.3em; }
+    /* Caliber's recorded failure: an element that sets height: 100% inside a parent with no definite height. This parent has none. */
+    .no-height { }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <h1>MJ Elements Phase 0: what collides on one page</h1>
+    <span class="mode" id="mode"></span>
+    <p class="sub">Every embeddable MJ element on one plain page. The cards are the hostile host under test (serif, its own colors, !important on every button); bundles load in order, and the log records singletons, zone.js, fonts, style bleed, layout and CSP nonces at every step.</p>
+  </header>
+
+  <div class="controls" aria-label="Page controls">
+    <button type="button" id="btn-load" class="primary">1. Load element bundles in order</button>
+    <button type="button" id="btn-start-a">2a. Start realtime call on A</button>
+    <button type="button" id="btn-start-b">2b. Start realtime call on B</button>
+    <button type="button" id="btn-transport">3. Load support widget transport (MJ runtime)</button>
+    <button type="button" id="btn-scheme">4. Toggle color-scheme (light dark / light / dark)</button>
+    <button type="button" id="btn-report">5. Snapshot and print report</button>
+  </div>
+
+  <section class="stage" aria-label="Elements">
+    <div class="cell">
+      <h2>&lt;mj-realtime-widget&gt; A</h2>
+      <small>bundles/mj-realtime-widget/mj-realtime-widget.js (classic script; the call code is an ES module fetched on start). Built in MJ: packages/Angular/Generic/realtime-widget, `pnpm run build`.</small>
+      <!-- api-url points at a port nothing listens on, so the call code loads and then fails fast on connect. -->
+      <mj-realtime-widget id="rt-a" api-url="http://localhost:9/" widget-key="pk_phase0_a" agent-name="Phase 0 A" preload="none" csp-nonce="phase0page" chrome="auto"></mj-realtime-widget>
+    </div>
+    <div class="cell no-height">
+      <h2>&lt;mj-realtime-widget&gt; B, in a parent with no definite height, no csp-nonce attribute, preload="eager"</h2>
+      <small>Same bundle, second instance. Its nonce must come from somewhere else on the page; its preload link shows which.</small>
+      <mj-realtime-widget id="rt-b" api-url="http://localhost:9/" widget-key="pk_phase0_b" agent-name="Phase 0 B" preload="eager" chrome="auto"></mj-realtime-widget>
+    </div>
+    <div class="cell">
+      <h2>&lt;mj-support-widget&gt;</h2>
+      <small>bundles/mj-support-widget/mj-widget.js (ES module). Built in MJ: packages/Web/RealtimeWidget, `pnpm run build` then the esbuild line in README.md. The loader mints a guest session before it mounts the element; with no server that fails, so the page mounts one by hand to measure the shadow DOM. Add ?support=keepnames for the keep-names build.</small>
+      <div id="support-mount" data-widget-key="pk_phase0" data-api-url="http://localhost:9/" data-title="Phase 0 support" data-greeting="Hostile host page"></div>
+    </div>
+    <div class="cell missing">
+      <h2>&lt;mj-form&gt;</h2>
+      <small>bundles/mj-form/mj-form.js: from bizapps-forms, the Forms element build (README.md). Not in this repo.</small>
+      <mj-form id="form" slug="phase0"></mj-form>
+    </div>
+    <div class="cell missing">
+      <h2>&lt;mj-orders-checkout&gt;</h2>
+      <small>bundles/mj-orders-checkout/main.js: from bizapps-orders, the checkout element build (README.md). Not in this repo. Orders reads its nonce off the first &lt;mj-orders-checkout&gt;, so this one carries one.</small>
+      <mj-orders-checkout id="orders" slug="phase0" csp-nonce="phase0page"></mj-orders-checkout>
+    </div>
+    <div class="cell missing no-height">
+      <h2>&lt;caliber-widget&gt;, in a parent with no definite height</h2>
+      <small>bundles/caliber-widget/caliber-widget.js: from bizapps-caliber (private), the widget build (README.md). Not in this repo.</small>
+      <caliber-widget id="caliber"></caliber-widget>
+    </div>
+    <div class="cell host">
+      <h2>Host probe</h2>
+      <small>A plain element outside every widget. If a bundle's document-level CSS changes its computed style, the element restyled the host.</small>
+      <p id="host-probe">The quick brown fox, in the host's own styles.</p>
+      <button type="button" class="mjw-btn" id="host-button">A host button that shares a class name with the realtime shell</button>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="Log">
+    <h2>Log</h2>
+    <pre id="log" aria-live="polite"></pre>
+  </section>
+  <section class="panel" aria-label="Report">
+    <h2>Report (JSON, also at window.__phase0)</h2>
+    <pre id="report"></pre>
+  </section>
+</div>
+
+  <script nonce="phase0page">
+    (function () {
+      'use strict';
+      const SINGLETON_PREFIX = '___SINGLETON__';
+      const params = new URLSearchParams(location.search);
+      document.documentElement.setAttribute('data-theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const supportVariant = params.get('support') === 'keepnames' ? 'keepnames' : null;
+      const log = document.getElementById('log');
+      const reportEl = document.getElementById('report');
+      const steps = [];
+      const errors = [];
+      const violations = [];
+      let manifest = null;
+      let zoneSeen = null;
+
+      // ── Recording ─────────────────────────────────────────────────────────────
+      function say(text, cls) {
+        const line = document.createElement('div');
+        if (cls) line.className = cls;
+        line.textContent = `${new Date().toISOString().slice(11, 23)}  ${text}`;
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+      }
+      window.addEventListener('error', (e) => errors.push({ kind: 'error', message: String(e.message), source: e.filename ? e.filename.split('/').slice(-2).join('/') : '' }));
+      window.addEventListener('unhandledrejection', (e) => errors.push({ kind: 'unhandledrejection', message: String(e.reason && e.reason.message ? e.reason.message : e.reason) }));
+      const originalError = console.error.bind(console);
+      console.error = (...args) => { errors.push({ kind: 'console.error', message: args.map((a) => (a && a.message) || String(a)).join(' ').slice(0, 300) }); originalError(...args); };
+      document.addEventListener('securitypolicyviolation', (e) => {
+        violations.push({ directive: e.violatedDirective, blocked: e.blockedURI, source: e.sourceFile ? e.sourceFile.split('/').slice(-2).join('/') : '', line: e.lineNumber, sample: (e.sample || '').slice(0, 80) });
+      });
+
+      // window.Zone: an accessor trap records the moment zone.js installs itself, and which script did it.
+      try {
+        let zoneValue;
+        Object.defineProperty(window, 'Zone', {
+          configurable: true,
+          enumerable: true,
+          get() { return zoneValue; },
+          set(v) { if (!zoneSeen) zoneSeen = { at: new Date().toISOString().slice(11, 23), step: steps.length, stack: (new Error().stack || '').split('\n').slice(2, 4).join(' | ').replace(/https?:\/\/[^/]+\//g, '') }; zoneValue = v; },
+        });
+      } catch (e) { say('could not trap window.Zone: ' + e.message, 'bad'); }
+
+      // ── Singletons ────────────────────────────────────────────────────────────
+      const identities = new WeakMap();
+      let nextIdentity = 1;
+      function identityOf(obj) {
+        if (!identities.has(obj)) identities.set(obj, nextIdentity++);
+        return identities.get(obj);
+      }
+      /** The BaseSingleton class in an instance's prototype chain, so instances can be grouped by which copy of MJGlobal made them. */
+      function baseSingletonOf(obj) {
+        let proto = Object.getPrototypeOf(obj);
+        while (proto && proto !== Object.prototype) {
+          const ctor = proto.constructor;
+          if (ctor && ctor.name === 'BaseSingleton') return ctor;
+          proto = Object.getPrototypeOf(proto);
+        }
+        // Minified bundles rename the class; fall back to the top-most non-Object prototype's constructor.
+        proto = Object.getPrototypeOf(obj);
+        let last = null;
+        while (proto && proto !== Object.prototype) { last = proto.constructor; proto = Object.getPrototypeOf(proto); }
+        return last;
+      }
+      function singletonSnapshot() {
+        const keys = Object.getOwnPropertyNames(window).filter((k) => k.startsWith(SINGLETON_PREFIX));
+        const copies = [];
+        const entries = keys.map((key) => {
+          const obj = window[key];
+          const base = obj && typeof obj === 'object' ? baseSingletonOf(obj) : null;
+          let copy = copies.indexOf(base);
+          if (copy === -1) { copies.push(base); copy = copies.length - 1; }
+          // MJGlobal's ClassFactory keeps every @RegisterClass registration in a private array; its length shows which registry a bundle's classes landed in.
+          const factory = obj && obj.ClassFactory && Array.isArray(obj.ClassFactory._registrations) ? obj.ClassFactory._registrations.length : null;
+          // Registrations whose base class NAME already exists under a different class object: two bundles registered against two copies of the same base class
+          // (BaseEntity, BaseEngine, ...) in one registry. The later registration auto-wins by priority, so the first bundle's lookups start returning the second bundle's classes.
+          let splitBases = null;
+          if (factory !== null) {
+            const byName = new Map();
+            for (const reg of obj.ClassFactory._registrations) {
+              const n = reg.BaseClass && reg.BaseClass.name;
+              if (!n) continue;
+              if (!byName.has(n)) byName.set(n, new Set());
+              byName.get(n).add(reg.BaseClass);
+            }
+            splitBases = Array.from(byName.entries()).filter(([, set]) => set.size > 1).map(([n, set]) => `${n} x${set.size}`);
+          }
+          return {
+            baseClassesWithTwoCopies: splitBases, key: key.slice(SINGLETON_PREFIX.length), ctor: obj && obj.constructor ? obj.constructor.name : typeof obj, identity: obj && typeof obj === 'object' ? identityOf(obj) : null, baseCopy: copy + 1, baseName: base ? base.name : null, classRegistrations: factory };
+        });
+        return { count: keys.length, baseSingletonCopies: copies.length, entries };
+      }
+      /** For a cross-bundle check: is the shared instance an `instanceof` every BaseSingleton copy on the page? */
+      function instanceofMatrix() {
+        const keys = Object.getOwnPropertyNames(window).filter((k) => k.startsWith(SINGLETON_PREFIX));
+        const bases = [];
+        for (const key of keys) {
+          const base = baseSingletonOf(window[key]);
+          if (base && !bases.includes(base)) bases.push(base);
+        }
+        if (bases.length < 2) return { copies: bases.length, note: bases.length === 0 ? 'no singletons yet' : 'one copy of BaseSingleton on the page; nothing to compare' };
+        const probeKeys = ['MJGlobal', 'ClassFactory', 'Metadata'].filter((k) => keys.includes(SINGLETON_PREFIX + k));
+        const rows = probeKeys.map((k) => ({ key: k, instanceofByCopy: bases.map((b) => window[SINGLETON_PREFIX + k] instanceof b) }));
+        return { copies: bases.length, rows };
+      }
+
+      // ── Fonts ─────────────────────────────────────────────────────────────────
+      function fontFaceRulesOf(sheets, where) {
+        const faces = [];
+        for (const sheet of sheets) {
+          let rules;
+          try { rules = sheet.cssRules; } catch (e) { faces.push({ where, family: '(cross-origin sheet, unreadable)', href: sheet.href }); continue; }
+          for (const rule of rules) {
+            if (rule instanceof CSSFontFaceRule) faces.push({ where, family: rule.style.getPropertyValue('font-family'), weight: rule.style.getPropertyValue('font-weight'), src: rule.style.getPropertyValue('src').slice(0, 40) });
+            if (rule.cssRules) for (const inner of rule.cssRules) if (inner instanceof CSSFontFaceRule) faces.push({ where, family: inner.style.getPropertyValue('font-family'), weight: inner.style.getPropertyValue('font-weight'), layer: rule.name || rule.cssText.slice(0, 30) });
+          }
+        }
+        return faces;
+      }
+      function shadowRoots() {
+        const roots = [];
+        for (const el of document.querySelectorAll('*')) if (el.shadowRoot) roots.push({ host: el.tagName.toLowerCase(), root: el.shadowRoot });
+        return roots;
+      }
+      function fontSnapshot() {
+        const faces = fontFaceRulesOf(document.styleSheets, 'document');
+        faces.push(...fontFaceRulesOf(document.adoptedStyleSheets || [], 'document adoptedStyleSheets'));
+        for (const { host, root } of shadowRoots()) {
+          faces.push(...fontFaceRulesOf(root.styleSheets, `shadow ${host}`));
+          faces.push(...fontFaceRulesOf(root.adoptedStyleSheets || [], `shadow ${host} adoptedStyleSheets`));
+        }
+        const loaded = [];
+        document.fonts.forEach((f) => loaded.push({ family: f.family, weight: f.weight, style: f.style, status: f.status }));
+        const seen = {};
+        for (const f of faces) { const k = `${f.family}|${f.weight || ''}`; seen[k] = (seen[k] || 0) + 1; }
+        const duplicates = Object.entries(seen).filter(([, n]) => n > 1).map(([k, n]) => ({ familyAndWeight: k, declarations: n }));
+        return { fontFaceRules: faces, documentFonts: loaded, duplicates };
+      }
+
+      // ── Styles, layout, nonces ────────────────────────────────────────────────
+      const PROPS = ['font-family', 'color', 'background-color', 'border-style', 'text-transform', 'letter-spacing', 'color-scheme'];
+      function computed(el) {
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        const out = {};
+        for (const p of PROPS) out[p] = cs.getPropertyValue(p);
+        return out;
+      }
+      function supportRoot() {
+        const el = document.querySelector('mj-support-widget');
+        return el && el.shadowRoot ? el.shadowRoot : null;
+      }
+      function styleSnapshot() {
+        const root = supportRoot();
+        const rtA = document.getElementById('rt-a');
+        const rtB = document.getElementById('rt-b');
+        return {
+          hostProbe: computed(document.getElementById('host-probe')),
+          hostButton: computed(document.getElementById('host-button')),
+          hostTokenBrandPrimary: getComputedStyle(document.querySelector('.stage')).getPropertyValue('--mj-brand-primary').trim(),
+          pageTokenBrandPrimary: getComputedStyle(document.documentElement).getPropertyValue('--mj-brand-primary').trim(),
+          realtimeA_startButton: computed(rtA && rtA.querySelector('.mjw-start')),
+          realtimeA_anyButton: computed(rtA && rtA.querySelector('button')),
+          realtimeB_anyButton: computed(rtB && rtB.querySelector('button')),
+          realtimeA_overlayText: computed(rtA && rtA.querySelector('mj-realtime-overlay, [class*="overlay"] p, .mjw-card p')),
+          supportShadow_launcher: computed(root && root.querySelector('button')),
+          supportShadow_hostElement: computed(document.querySelector('mj-support-widget')),
+          supportShadow_styleElements: root ? Array.from(root.querySelectorAll('style')).map((s) => ({ nonce: s.nonce || '', sheetRules: s.sheet ? s.sheet.cssRules.length : 'blocked or none' })) : null,
+          form: computed(document.getElementById('form')),
+          orders: computed(document.getElementById('orders')),
+          caliber: computed(document.getElementById('caliber')),
+        };
+      }
+      function layoutSnapshot() {
+        const h = (id) => { const el = document.getElementById(id); return el ? Math.round(el.getBoundingClientRect().height) : null; };
+        return { rtA: h('rt-a'), rtB_inNoHeightParent: h('rt-b'), rtB_parent: Math.round(document.getElementById('rt-b').parentElement.getBoundingClientRect().height), supportElement: (() => { const el = document.querySelector('mj-support-widget'); return el ? Math.round(el.getBoundingClientRect().height) : null; })(), form: h('form'), orders: h('orders'), caliber_inNoHeightParent: h('caliber') };
+      }
+      function nonceSnapshot() {
+        const headStyles = Array.from(document.head.querySelectorAll('style')).filter((s) => !(s.id || '').startsWith('claude-agent'));
+        const links = Array.from(document.querySelectorAll('link[rel="modulepreload"], link[rel="preload"]'));
+        return {
+          pageNonceOnScript: document.currentScript ? '(see attribute)' : (document.querySelector('script[nonce]') || {}).nonce || '',
+          headStyleCount: headStyles.length,
+          headStylesWithNonce: headStyles.filter((s) => s.nonce).length,
+          headStylesWithoutNonce: headStyles.filter((s) => !s.nonce).map((s) => (s.id || s.textContent.slice(0, 40)).trim()),
+          headStyleNonces: Array.from(new Set(headStyles.map((s) => s.nonce).filter(Boolean))),
+          realtimeShellStyleElement: (() => { const s = document.getElementById('mj-realtime-widget-shell-styles'); return s ? { present: true, nonce: s.nonce } : { present: false, note: 'shell used adoptedStyleSheets (needs no nonce)' }; })(),
+          documentAdoptedStyleSheets: (document.adoptedStyleSheets || []).length,
+          preloadLinks: links.map((l) => ({ rel: l.rel, href: l.getAttribute('href').split('/').slice(-1)[0], nonce: l.nonce || '' })),
+          cspViolationsSoFar: violations.length,
+        };
+      }
+      function schemeSnapshot() {
+        return { documentElementColorScheme: getComputedStyle(document.documentElement).colorScheme, inlineColorScheme: document.documentElement.style.colorScheme || '(meta: light dark)', prefersDark: matchMedia('(prefers-color-scheme: dark)').matches, realtimeA: getComputedStyle(document.getElementById('rt-a')).colorScheme, dataTheme: document.getElementById('rt-a').getAttribute('data-theme') };
+      }
+
+      let lastErrorCount = 0;
+      let lastViolationCount = 0;
+      function snapshot(label) {
+        const singletons = singletonSnapshot();
+        const previous = steps.length ? steps[steps.length - 1].singletons : { entries: [] };
+        const previousKeys = new Set(previous.entries.map((e) => e.key));
+        const added = singletons.entries.filter((e) => !previousKeys.has(e.key)).map((e) => e.key);
+        const identityChanged = singletons.entries.filter((e) => { const p = previous.entries.find((x) => x.key === e.key); return p && p.identity !== e.identity; }).map((e) => e.key);
+        const step = {
+          step: steps.length + 1,
+          label,
+          at: new Date().toISOString().slice(11, 23),
+          singletons: { count: singletons.count, baseSingletonCopies: singletons.baseSingletonCopies, addedByThisStep: added, identityChanged, instanceof: instanceofMatrix(), entries: singletons.entries },
+          zone: { present: typeof window.Zone !== 'undefined', firstSeen: zoneSeen },
+          fonts: fontSnapshot(),
+          styles: styleSnapshot(),
+          layout: layoutSnapshot(),
+          nonces: nonceSnapshot(),
+          colorScheme: schemeSnapshot(),
+          customElementsDefined: ['mj-realtime-widget', 'mj-support-widget', 'mj-form', 'mj-orders-checkout', 'caliber-widget'].filter((t) => customElements.get(t)),
+          bodyChildren: document.body.children.length,
+          headChildren: document.head.children.length,
+          // Which bundle files the page has fetched so far (serve.mjs sends them uncompressed, so encodedBodySize is the raw size).
+          fetched: (() => { const rows = performance.getEntriesByType('resource').filter((r) => r.name.includes('/bundles/')).map((r) => ({ file: r.name.split('/bundles/')[1], bytes: r.encodedBodySize })); return { files: rows.length, bytes: rows.reduce((n, r) => n + r.bytes, 0), list: rows }; })(),
+          newErrors: errors.slice(lastErrorCount),
+          newCspViolations: violations.slice(lastViolationCount),
+        };
+        lastErrorCount = errors.length;
+        lastViolationCount = violations.length;
+        steps.push(step);
+        say(`[${step.step}] ${label}: singletons ${singletons.count} (+${added.length}${identityChanged.length ? `, identity changed: ${identityChanged.join(',')}` : ''}), BaseSingleton copies ${singletons.baseSingletonCopies}, Zone ${step.zone.present ? 'present' : 'absent'}, @font-face rules ${step.fonts.fontFaceRules.length} (dup ${step.fonts.duplicates.length}), head styles ${step.nonces.headStyleCount} (no nonce: ${step.nonces.headStylesWithoutNonce.length}), CSP violations +${step.newCspViolations.length}, errors +${step.newErrors.length}`);
+        for (const v of step.newCspViolations) say(`    CSP blocked ${v.directive} from ${v.source || v.blocked}${v.sample ? ` "${v.sample}"` : ''}`, 'bad');
+        for (const e of step.newErrors) say(`    ${e.kind}: ${e.message}`, 'bad');
+        if (added.length) say(`    new singleton keys: ${added.join(', ')}`);
+        return step;
+      }
+
+      // ── Loading bundles ───────────────────────────────────────────────────────
+      function loadScript(src, asModule, nonce) {
+        return new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          if (asModule) s.type = 'module';
+          if (nonce) s.setAttribute('nonce', nonce);
+          s.src = src;
+          s.addEventListener('load', () => resolve(s));
+          s.addEventListener('error', () => reject(new Error(`failed to load ${src}`)));
+          document.body.appendChild(s);
+        });
+      }
+      function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
+      function elementRow(tag, variant) {
+        return manifest.elements.find((e) => e.tag === tag && (e.variant || null) === (variant || null));
+      }
+      async function loadBundles() {
+        snapshot('before any bundle');
+        const order = [['mj-realtime-widget', null], ['mj-support-widget', supportVariant], ['mj-form', null], ['mj-orders-checkout', null], ['caliber-widget', null]];
+        for (const [tag, variant] of order) {
+          const row = elementRow(tag, variant);
+          if (!row || !row.entry) { say(`${tag}: no bundle in bundles/ (needs ${row ? row.repo : tag}); skipped`, 'missing'); continue; }
+          try {
+            await loadScript(row.entry, row.module, null);
+            await wait(300);
+            snapshot(`after ${row.entry}`);
+          } catch (e) { say(e.message, 'bad'); }
+        }
+        // The support loader's bootstrap awaits a session mint that cannot succeed here; mount one element by hand so the shadow DOM can be measured.
+        if (customElements.get('mj-support-widget') && !document.querySelector('mj-support-widget')) {
+          await wait(500);
+          const el = document.createElement('mj-support-widget');
+          document.getElementById('support-mount').appendChild(el);
+          await wait(100);
+          snapshot('after mounting <mj-support-widget> by hand (loader bootstrap could not mint a session)');
+        }
+      }
+      async function startCall(id) {
+        const el = document.getElementById(id);
+        if (!el || typeof el.start !== 'function') { say(`${id}: element not upgraded, load the bundles first`, 'bad'); return; }
+        const phases = [];
+        const onPhase = (e) => phases.push(e.detail && e.detail.phase ? e.detail.phase : JSON.stringify(e.detail));
+        el.addEventListener('mj-phase-changed', onPhase);
+        el.addEventListener('mj-error', (e) => phases.push('error: ' + (e.detail && e.detail.message ? e.detail.message : JSON.stringify(e.detail)).slice(0, 120)));
+        say(`${id}.start() (loads the call code: Angular, zone.js, MJ core; then fails on connect)`);
+        try { await el.start(); } catch (e) { phases.push('start() rejected: ' + e.message); }
+        await wait(300);
+        // start() shows the consent notice first; the call code loads only after the visitor accepts it.
+        const begin = el.querySelector('.mjw-consent__begin');
+        if (begin) { begin.click(); say(`    ${id}: accepted the consent notice (clicked Begin); the call code loads now`); }
+        // Give the call code time to load and render, and the connect to fail.
+        await wait(6000);
+        el.removeEventListener('mj-phase-changed', onPhase);
+        const step = snapshot(`after ${id}.start()`);
+        step.realtimePhases = phases;
+        say(`    phases: ${phases.join(' > ')}`);
+      }
+      async function loadTransport() {
+        const row = elementRow('mj-support-widget', supportVariant);
+        if (!row || !row.lazy || !row.lazy.transport) { say('no support transport chunk in manifest', 'bad'); return; }
+        say(`import(${row.lazy.transport}) (the support widget's MJ runtime: conversations runtime, GraphQL provider)`);
+        try {
+          const mod = await import('./' + row.lazy.transport);
+          const Transport = mod.RuntimeWidgetTransport;
+          if (Transport) {
+            // Constructing it is what reaches MJ core (Metadata, MJGlobal); Initialize would need a session.
+            try { new Transport('http://localhost:9/'); } catch (e) { say('new RuntimeWidgetTransport threw: ' + e.message, 'bad'); }
+          }
+          await wait(500);
+        } catch (e) { say('import failed: ' + e.message, 'bad'); }
+        snapshot('after support transport chunk');
+      }
+      const schemes = ['light dark', 'light', 'dark'];
+      let schemeIndex = 0;
+      async function toggleScheme() {
+        schemeIndex = (schemeIndex + 1) % schemes.length;
+        document.documentElement.style.colorScheme = schemes[schemeIndex];
+        const dark = schemes[schemeIndex] === 'dark' || (schemes[schemeIndex] === 'light dark' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        await wait(300);
+        snapshot(`color-scheme: ${schemes[schemeIndex]}`);
+      }
+      function report() {
+        const final = snapshot('final');
+        const out = { page: location.href, userAgent: navigator.userAgent, csp: params.get('csp') === 'none' ? 'none' : 'header (strict, nonce-based)', supportVariant: supportVariant || 'as published (minified names)', order: params.get('order') || 'realtime-first', manifest, steps, errors, cspViolations: violations, summary: summarize(final) };
+        window.__phase0 = out;
+        reportEl.textContent = JSON.stringify(out, null, 2);
+        say('report written to window.__phase0');
+        fetch('/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(out) })
+          .then((r) => r.text()).then((t) => say('report saved by serve.mjs: ' + t)).catch(() => say('report not saved (serve.mjs not running?)', 'missing'));
+        return out;
+      }
+      function diffStyles(a, b) {
+        if (!a || !b) return null;
+        return Object.keys(a).filter((k) => k !== 'color-scheme' && a[k] !== b[k]).map((k) => `${k}: ${a[k]} -> ${b[k]}`);
+      }
+      function summarize(final) {
+        const first = steps[0];
+        const firstScheme = steps.findIndex((s) => s.label.startsWith('color-scheme'));
+        const beforeScheme = firstScheme > 0 ? steps[firstScheme - 1] : final;
+        return {
+          comparedAgainst: beforeScheme.label,
+          hostProbeDiff: diffStyles(first.styles.hostProbe, beforeScheme.styles.hostProbe),
+          hostButtonDiff: diffStyles(first.styles.hostButton, beforeScheme.styles.hostButton),
+          singletonKeysFinal: final.singletons.entries.map((e) => `${e.key} (copy ${e.baseCopy})`),
+          baseSingletonCopies: final.singletons.baseSingletonCopies,
+          instanceof: final.singletons.instanceof,
+          zoneFirstSeen: zoneSeen,
+          fontFaceDuplicates: final.fonts.duplicates,
+          hostTokenBrandPrimary: { before: first.styles.hostTokenBrandPrimary, after: final.styles.hostTokenBrandPrimary },
+          cspViolations: violations.length,
+          errors: errors.length,
+        };
+      }
+
+      // ── Wiring ────────────────────────────────────────────────────────────────
+      document.getElementById('btn-load').addEventListener('click', loadBundles);
+      document.getElementById('btn-start-a').addEventListener('click', () => startCall('rt-a'));
+      document.getElementById('btn-start-b').addEventListener('click', () => startCall('rt-b'));
+      document.getElementById('btn-transport').addEventListener('click', loadTransport);
+      document.getElementById('btn-scheme').addEventListener('click', toggleScheme);
+      document.getElementById('btn-report').addEventListener('click', report);
+      document.getElementById('mode').textContent = `csp=${params.get('csp') || 'header'} support=${supportVariant || 'published'} order=${params.get('order') || 'realtime-first'}${params.get('auto') ? ' auto' : ''}`;
+
+      fetch('bundles/manifest.json').then((r) => r.json()).then(async (m) => {
+        manifest = m;
+        say(`manifest: ${m.elements.filter((e) => e.entry).map((e) => e.folder).join(', ')} present; ${m.elements.filter((e) => !e.entry).map((e) => e.folder).join(', ')} missing`);
+        if (params.get('auto') && !window.__phase0Ran) {
+          window.__phase0Ran = true;
+          await loadBundles();
+          // ?order=support-first loads the support widget's MJ runtime before the realtime call, so the other bundle is the one that finds singletons already on the page.
+          if (params.get('order') === 'support-first') {
+            await loadTransport();
+            await startCall(params.get('first') === 'b' ? 'rt-b' : 'rt-a');
+          } else {
+            await startCall(params.get('first') === 'b' ? 'rt-b' : 'rt-a');
+            await loadTransport();
+          }
+          await toggleScheme();
+          await toggleScheme();
+          report();
+        }
+      }).catch((e) => say('bundles/manifest.json missing: run `node sync-bundles.mjs` (' + e.message + ')', 'bad'));
+    })();
+  </script>
+</body>
+</html>
