@@ -1,5 +1,6 @@
-# Project Lego: the MJ UI foundation
+# MJ UI Foundation (working name: Lego)
 
+**Working name:** Lego. The rest of this plan says Lego.
 **Status:** PROPOSED 2026-10-19. Wave 0 spec not started. Prototype gate not run.
 **Ask:** Matt, 2026-10-13. Every app built on MemberJunction should be able to rearrange, restyle, and build anything from any design, using MJ's own component library, without asking its permission. Today the library is about 40 finished widgets with no floor under them, so apps rebuild the floor themselves. Lego is the floor plus the catalog that goes on top of it, with every opinion shipped as a default rather than a wall.
 **Owner:** @MattC-BC (contract and catalog). Token mechanics ownership is D11.
