@@ -118,6 +118,7 @@ V[YYYYMMDDHHMM]__v[VERSION].x_[DESCRIPTION].sql
 3. **Schema changes only** - NO data manipulation beyond what's required for the schema change
 
 **NEVER INCLUDE IN MIGRATIONS:**
+- **Existence guards** — no `IF OBJECT_ID(...) IS NULL`, `IF COL_LENGTH(...) IS NULL`, `IF NOT EXISTS (SELECT … FROM sys.…)` or `DROP … IF EXISTS` around DDL or descriptions. Skyway runs each migration exactly once, so a guard only hides schema drift and complicates the PostgreSQL conversion. Use `CREATE OR ALTER` to replace a hand-written view or procedure. Enforced by the `migration-existence-guards` standard; see [`guides/SCHEMA_AND_CODE_AUTHORING_GUIDE.md`](../guides/SCHEMA_AND_CODE_AUTHORING_GUIDE.md), which also covers writing CHECK-list values for people (`'Opted In'`, not `'OptedIn'`).
 - **Metadata-record inserts via `*__Metadata_Sync.sql` migrations** — metadata changes (new AI models, prompts, agents, etc.) ship ONLY as declarative JSON under `/metadata/` (with CLI-`uuidgen` primaryKey UUIDs, no `sync` blocks). At release time the build engineer runs `mj sync push` against a clean DB at the last released version, generating ONE consolidated metadata-sync migration per build (SS + PG) and writing back the `sync` blocks. Do not hand-author per-PR sync migrations. See `metadata/CLAUDE.md` rule 1b.
 - View creation/updates (handled by CodeGen)
 - EntityField inserts/updates — **including `ValueListType` and `EntityFieldValue` rows** (handled by CodeGen)

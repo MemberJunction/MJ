@@ -24,6 +24,25 @@
           "handler"
         ]
       }
+    },
+    "migration-existence-guards": {
+      "Severity": "error",
+      "Roots": [
+        "migrations"
+      ],
+      "Options": {
+        "FromVersion": "202610210000"
+      }
+    },
+    "readable-status-values": {
+      "Severity": "warn",
+      "Roots": [
+        "migrations"
+      ],
+      "Options": {
+        "FromVersion": "202610210000",
+        "AllowedValues": []
+      }
     }
   }
 }
