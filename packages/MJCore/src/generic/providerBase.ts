@@ -2768,6 +2768,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
          * fingerprint string for every batch item.
          */
         fingerprintMap?: Map<number, string>;
+        /**
+         * Pre-resolved local cache entries keyed by client cache fingerprint, populated
+         * during prepareSmartCacheCheckParams so executeSmartCacheCheck can reuse the
+         * already-parsed results for 'current' items without a second IndexedDB read.
+         */
+        preResolvedCache?: Map<string, CachedRunViewResult | null>;
     };
 
     /**
@@ -3619,7 +3625,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             allCached: false, // Don't return cached directly - let server validate
             useSmartCacheCheck: true,
             smartCacheCheckParams,
-            cacheStatusMap: new Map()
+            cacheStatusMap: new Map(),
+            preResolvedCache: cacheMap,
         };
     }
 
@@ -3661,20 +3668,30 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }));
         }
 
-        // ── Batched cache pre-read for 'current' entries ──────────────────
-        // Each 'current' result needs its cached row data to materialize the response.
-        // Collect every fingerprint up front and issue ONE batched read instead of
-        // letting each per-param processor do its own GetRunViewResult call (~85
-        // serialized IDB transactions in the 8-engine warm-load case).
-        const currentFingerprints: string[] = [];
+        // ── Reuse pre-resolved cache map from prepareSmartCacheCheckParams ──
+        // prepareSmartCacheCheckParams already read all cacheable fingerprints from
+        // LocalCacheManager in a single batched IDB transaction. Reuse that map directly
+        // so 'current' entries don't trigger a second IDB transaction + JSON.parse pass.
+        // Only query LocalCacheManager for any 'current' fingerprint not already present
+        // in preResult.preResolvedCache (e.g., direct test invocations).
+        const preResolvedCache = preResult.preResolvedCache
+            ? new Map<string, CachedRunViewResult | null>(preResult.preResolvedCache)
+            : new Map<string, CachedRunViewResult | null>();
+        const missingFingerprints: string[] = [];
         for (const sr of response.results) {
             if (sr.status === 'current' && params[sr.viewIndex]) {
-                currentFingerprints.push(this.clientCacheFingerprint(params[sr.viewIndex]));
+                const fp = this.clientCacheFingerprint(params[sr.viewIndex]);
+                if (!preResolvedCache.has(fp)) {
+                    missingFingerprints.push(fp);
+                }
             }
         }
-        const preResolvedCache = currentFingerprints.length > 0
-            ? await LocalCacheManager.Instance.GetRunViewResults(currentFingerprints)
-            : new Map<string, CachedRunViewResult | null>();
+        if (missingFingerprints.length > 0) {
+            const fetched = await LocalCacheManager.Instance.GetRunViewResults(missingFingerprints);
+            for (const [k, v] of fetched) {
+                preResolvedCache.set(k, v);
+            }
+        }
 
         // Pre-build index Map for server results lookup — avoids O(N^2) .find() scans below.
         const serverResultsByViewIndex = new Map<number, RunViewWithCacheCheckResult<T>>();
@@ -5354,8 +5371,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         try {
             const user = await this.GetCurrentUser();
             if (user && this._localMetadata) {
+                const previousUserJson = this._localMetadata.CurrentUser
+                    ? JSON.stringify(this._localMetadata.CurrentUser)
+                    : null;
                 this._localMetadata.CurrentUser = user;
-                void this.SaveLocalMetadataToStorage();
+                // Only re-persist the full metadata snapshot when the user record or roles
+                // actually changed; on warm boots where CurrentUser is unchanged, skipping
+                // SaveLocalMetadataToStorage avoids a multi-MB JSON.stringify + gzip + IDB
+                // write pass on the main thread during startup.
+                if (previousUserJson !== JSON.stringify(user)) {
+                    void this.SaveLocalMetadataToStorage();
+                }
                 return user;
             }
         } catch (e) {
@@ -6576,17 +6602,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Used for compressed metadata storage/retrieval.
      */
     protected static arrayBufferToBase64(buffer: ArrayBuffer): string {
-        // Node encodes natively. The loop below concatenates one character per byte, building a rope
-        // the size of the payload that then has to be flattened.
+        // Node encodes natively. In browsers, process in 32KB chunks with spread to avoid
+        // building a character-by-character rope across multi-MB payloads.
         if (typeof Buffer !== 'undefined') {
             return Buffer.from(buffer).toString('base64');
         }
         const bytes = new Uint8Array(buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
+        const chunkSize = 0x8000;
+        const chunks: string[] = [];
+        for (let i = 0; i < bytes.byteLength; i += chunkSize) {
+            chunks.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
         }
-        return btoa(binary);
+        return btoa(chunks.join(''));
     }
 
     /**

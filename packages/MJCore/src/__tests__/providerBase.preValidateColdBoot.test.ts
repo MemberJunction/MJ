@@ -111,4 +111,25 @@ describe('ProviderBase preValidateAndRefresh after a cold boot', () => {
         // Both must start before either finishes (concurrent Promise.all execution)
         expect(events.slice(0, 2)).toEqual(['check:start', 'user:start']);
     });
+
+    it('RefreshCurrentUser skips SaveLocalMetadataToStorage when user is unchanged and saves when user changes', async () => {
+        const provider = new TestMetadataProvider();
+        await provider.Config(testConfig);
+
+        const saveSpy = vi.spyOn(provider, 'SaveLocalMetadataToStorage').mockResolvedValue(undefined);
+        const existingUser = provider.CurrentUser;
+
+        // 1. Unchanged user -> should NOT re-serialize and save full metadata
+        vi.spyOn(provider as never, 'GetCurrentUser' as never).mockResolvedValue(existingUser as never);
+        await provider.RefreshCurrentUser();
+        expect(saveSpy).not.toHaveBeenCalled();
+
+        // 2. Modified user -> SHOULD save updated metadata snapshot
+        const updatedUser = Object.assign(Object.create(Object.getPrototypeOf(existingUser)), existingUser, {
+            Name: 'Updated Name',
+        });
+        vi.spyOn(provider as never, 'GetCurrentUser' as never).mockResolvedValue(updatedUser as never);
+        await provider.RefreshCurrentUser();
+        expect(saveSpy).toHaveBeenCalledTimes(1);
+    });
 });
