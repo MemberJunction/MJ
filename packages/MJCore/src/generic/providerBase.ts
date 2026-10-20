@@ -2768,6 +2768,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
          * fingerprint string for every batch item.
          */
         fingerprintMap?: Map<number, string>;
+        /**
+         * Pre-resolved local cache entries keyed by client cache fingerprint, populated
+         * during prepareSmartCacheCheckParams so executeSmartCacheCheck can reuse the
+         * already-parsed results for 'current' items without a second IndexedDB read.
+         */
+        preResolvedCache?: Map<string, CachedRunViewResult | null>;
     };
 
     /**
@@ -3619,7 +3625,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             allCached: false, // Don't return cached directly - let server validate
             useSmartCacheCheck: true,
             smartCacheCheckParams,
-            cacheStatusMap: new Map()
+            cacheStatusMap: new Map(),
+            preResolvedCache: cacheMap,
         };
     }
 
@@ -3661,20 +3668,30 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }));
         }
 
-        // ── Batched cache pre-read for 'current' entries ──────────────────
-        // Each 'current' result needs its cached row data to materialize the response.
-        // Collect every fingerprint up front and issue ONE batched read instead of
-        // letting each per-param processor do its own GetRunViewResult call (~85
-        // serialized IDB transactions in the 8-engine warm-load case).
-        const currentFingerprints: string[] = [];
+        // ── Reuse pre-resolved cache map from prepareSmartCacheCheckParams ──
+        // prepareSmartCacheCheckParams already read all cacheable fingerprints from
+        // LocalCacheManager in a single batched IDB transaction. Reuse that map directly
+        // so 'current' entries don't trigger a second IDB transaction + JSON.parse pass.
+        // Only query LocalCacheManager for any 'current' fingerprint not already present
+        // in preResult.preResolvedCache (e.g., direct test invocations).
+        const preResolvedCache = preResult.preResolvedCache
+            ? new Map<string, CachedRunViewResult | null>(preResult.preResolvedCache)
+            : new Map<string, CachedRunViewResult | null>();
+        const missingFingerprints: string[] = [];
         for (const sr of response.results) {
             if (sr.status === 'current' && params[sr.viewIndex]) {
-                currentFingerprints.push(this.clientCacheFingerprint(params[sr.viewIndex]));
+                const fp = this.clientCacheFingerprint(params[sr.viewIndex]);
+                if (!preResolvedCache.has(fp)) {
+                    missingFingerprints.push(fp);
+                }
             }
         }
-        const preResolvedCache = currentFingerprints.length > 0
-            ? await LocalCacheManager.Instance.GetRunViewResults(currentFingerprints)
-            : new Map<string, CachedRunViewResult | null>();
+        if (missingFingerprints.length > 0) {
+            const fetched = await LocalCacheManager.Instance.GetRunViewResults(missingFingerprints);
+            for (const [k, v] of fetched) {
+                preResolvedCache.set(k, v);
+            }
+        }
 
         // Pre-build index Map for server results lookup — avoids O(N^2) .find() scans below.
         const serverResultsByViewIndex = new Map<number, RunViewWithCacheCheckResult<T>>();

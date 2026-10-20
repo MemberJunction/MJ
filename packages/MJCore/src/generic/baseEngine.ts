@@ -81,15 +81,16 @@ export class BaseEnginePropertyConfig extends BaseInfo {
 
     /**
      * When set to true, the engine will use the LocalCacheManager to cache results locally.
-     * On subsequent loads (unless forceRefresh is true), cached results will be returned
-     * immediately without hitting the server if they are still valid.
+     * On subsequent loads (unless forceRefresh is true), cached results will be validated
+     * via smart cache check and returned from local storage if still current.
      *
-     * This is useful for frequently-accessed, relatively-static data that doesn't need
-     * real-time freshness. The cache is automatically invalidated when entity data changes.
+     * Defaults to true because BaseEngine instances cache reference/metadata tables that
+     * benefit from local persistence across browser refreshes. Set explicitly to `false`
+     * to opt a specific config out of local caching.
      *
-     * @default false
+     * @default true
      */
-    CacheLocal?: boolean;
+    CacheLocal?: boolean = true;
 
     /**
      * Optional TTL (time-to-live) in milliseconds for locally cached results when CacheLocal is true.
