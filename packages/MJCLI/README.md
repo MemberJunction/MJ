@@ -535,7 +535,7 @@ mj app check-updates
 
 #### Private repositories
 
-Every first-party BizApp repository is private. GitHub answers **404, not 403**, for a repository
+Some BizApp repositories are private or internal (`bizapps-ats` is one). GitHub answers **404, not 403**, for a repository
 it will not show you, so an install without a credential fails as though the app or the version
 did not exist. Supply a token one of three ways:
 
