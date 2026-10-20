@@ -1652,7 +1652,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       }
       const resourceId = resourceCommand.resourceId;
       if (rt === 'artifact' || rt === 'file') {
-        if (this.ChatArea?.openConversationArtifactForCommand(resourceCommand)) {
+        if (this.ChatArea?.OpenConversationArtifactForCommand(resourceCommand)) {
           return;
         }
         if (resourceId && IsValidUUID(resourceId)) {
@@ -1663,7 +1663,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         return;
       }
       if (rt === 'report' || rt === 'dashboard') {
-        if (this.ChatArea?.openConversationArtifactForCommand(resourceCommand)) {
+        if (this.ChatArea?.OpenConversationArtifactForCommand(resourceCommand)) {
           return;
         }
         if (rt === 'dashboard' && resourceId && IsValidUUID(resourceId)) {

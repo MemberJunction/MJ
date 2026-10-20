@@ -1,6 +1,5 @@
 [
   {
-    "entity": "MJ: Scheduled Job Types",
     "fields": {
       "Name": "Integration Sync",
       "Description": "Executes a company integration sync, processing all configured entity maps to synchronize data between MemberJunction and the external system.",
