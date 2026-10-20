@@ -11,8 +11,9 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
-import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
+import { MJAIAgentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
+import { BuildActionToolSet, CoerceActionArguments, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
+import { DescribeValueSchemaInline, GetStoredValueSchema } from './native-tools/action-param-schema';
 import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
@@ -278,10 +279,14 @@ interface MemoryWriteSkip {
     Told: string;
 }
 
-/** A message a Prompt step recorded in its InputData, with its serialized form at the time it was recorded. */
+/** A message a Prompt step recorded in its InputData, with its content/metadata snapshot at the time it was recorded. */
 interface RecordedPromptMessage {
     Message: ChatMessage;
-    Serialized: string;
+    ContentRef: ChatMessage['content'];
+    MetadataRef: AgentChatMessageMetadata | undefined;
+    WasCompacted: boolean | undefined;
+    CanExpand: boolean | undefined;
+    IsExpired: boolean | undefined;
 }
 
 /**
@@ -2148,7 +2153,7 @@ export class BaseAgent {
                     this._agentRun.ErrorMessage = existing
                         ? `${existing}\n\n[Data Preloading Warning] ${warningMessage}`
                         : `[Data Preloading Warning] ${warningMessage}`;
-                    await this._agentRun.Save();
+                    await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
                 }
             } else {
                 // All sources loaded successfully
@@ -2549,7 +2554,9 @@ export class BaseAgent {
 
             // Inject scope-resolved prompt parts (role-faithful) for this agent's prompt, alongside
             // memory/RAG. Synchronous — parts are cached on AIEngine. Uses the same run scope.
+            const messagesBeforeParts = new Set(wrappedParams.conversationMessages);
             this.InjectScopedPromptParts(params.agent, wrappedParams.conversationMessages, runScope.EntityID, runScope.RecordID, runScope.Secondary);
+            await this.replaceScopedPartPlaceholders(wrappedParams.conversationMessages, messagesBeforeParts, params.contextUser);
 
             if (!config.success) {
                 this.logError(`Failed to load agent configuration: ${config.errorMessage}`, {
@@ -2669,7 +2676,7 @@ export class BaseAgent {
         if (this._agentRun) {
             this._agentRun.Status = 'Failed';
             this._agentRun.ErrorMessage = errorMessage;
-            await this._agentRun.Save();
+            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
         }
         throw new Error(errorMessage);
     }
@@ -3356,7 +3363,7 @@ export class BaseAgent {
             promptRun.Cancelled = false;
             promptRun.CacheHit = false;
 
-            if (!await promptRun.Save()) {
+            if (!await promptRun.Save({ SaveReturnMode: 'datestamps_only' })) {
                 this.logError(`Failed to create realtime AIPromptRun: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
                     agent: params.agent,
                     category: 'RealtimeSession'
@@ -4035,7 +4042,7 @@ export class BaseAgent {
                 },
             });
         }
-        if (!await promptRun.Save()) {
+        if (!await promptRun.Save({ SaveReturnMode: 'datestamps_only' })) {
             this.logError(`Failed to checkpoint realtime usage: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
                 category: 'RealtimeSession'
             });
@@ -4391,7 +4398,9 @@ export class BaseAgent {
      * primary prompt under the run's polymorphic scope (the SAME PrimaryScope/SecondaryScopes the
      * runtime threads for memory), and unshifts the assembled role-tagged messages onto
      * `conversationMessages`. In-memory + synchronous (parts are cached on `AIEngine`). No-op when
-     * the agent has no active prompt or no parts resolve for the scope.
+     * the agent has no active prompt or no parts resolve for the scope. System placeholders in the
+     * messages it adds are replaced afterwards ({@link replaceScopedPartPlaceholders}), so an override
+     * gets that too.
      */
     protected InjectScopedPromptParts(
         agent: MJAIAgentEntityExtended,
@@ -4418,6 +4427,26 @@ export class BaseAgent {
                 { primaryScopeEntityId, primaryScopeRecordId, secondaryScopes },
                 conversationMessages
             );
+        } catch (e) {
+            this.logError(e instanceof Error ? e : new Error(String(e)), { category: 'ScopedPromptParts' });
+        }
+    }
+
+    /**
+     * Replace system placeholders such as `{{ _CURRENT_DATE }}` in the messages that
+     * {@link InjectScopedPromptParts} added, meaning every message not in `before`. Part text is not a
+     * template: see {@link SystemPlaceholderManager.ReplaceAvailablePlaceholders} for what resolves.
+     * On failure the parts are kept as written.
+     */
+    private async replaceScopedPartPlaceholders(messages: ChatMessage[], before: ReadonlySet<ChatMessage>, contextUser?: UserInfo): Promise<void> {
+        const added = messages.filter(m => !before.has(m));
+        if (added.length === 0) return;
+        try {
+            const replaced = await SystemPlaceholderManager.ReplaceAvailablePlaceholders(added, { contextUser });
+            let next = 0;
+            for (let i = 0; i < messages.length; i++) {
+                if (!before.has(messages[i])) messages[i] = replaced[next++];
+            }
         } catch (e) {
             this.logError(e instanceof Error ? e : new Error(String(e)), { category: 'ScopedPromptParts' });
         }
@@ -4856,15 +4885,21 @@ export class BaseAgent {
      * 
      * @param {string} lastRunId - The ID of the last run to check
      * @param {UserInfo} [contextUser] - Optional user context
+     * @param {{ LastRunID?: string | null } | null} [preloadedLastRun] - Optional preloaded row for `lastRunId` (or null when already queried and not found) to avoid a duplicate RunView call
      * @private
      */
-    private async validateRunChain(lastRunId: string, contextUser?: UserInfo): Promise<void> {
+    private async validateRunChain(
+        lastRunId: string,
+        contextUser?: UserInfo,
+        preloadedLastRun?: { LastRunID?: string | null } | null
+    ): Promise<void> {
         const visitedRunIds = new Set<string>();
         visitedRunIds.add(this._agentRun!.ID); // Add current run ID
         
-        let currentRunId = lastRunId;
+        let currentRunId: string | null | undefined = lastRunId;
         const maxChainLength = 1000; // Reasonable limit to prevent infinite loops
         let chainLength = 0;
+        let rv: RunView | undefined;
         
         while (currentRunId) {
             // Check if we've seen this run ID before
@@ -4878,9 +4913,18 @@ export class BaseAgent {
             }
             
             visitedRunIds.add(currentRunId);
+
+            // Reuse the preloaded first-hop result when initializeAgentRun already queried lastRunId
+            if (chainLength === 1 && preloadedLastRun !== undefined) {
+                if (preloadedLastRun === null) {
+                    break;
+                }
+                currentRunId = preloadedLastRun.LastRunID;
+                continue;
+            }
             
             // Load the run to check its LastRunID
-            const rv = new RunView();
+            rv ??= new RunView();
             const result = await rv.RunView({
                 EntityName: 'MJ: AI Agent Runs',
                 ExtraFilter: `ID='${currentRunId}'`,
@@ -5934,6 +5978,20 @@ export class BaseAgent {
     }
 
     /**
+     * Per-instance memoization for runtime-state template delivery analysis and template-array indexing
+     * so multi-turn agent loops do not repeatedly scan template collections and strings on every turn.
+     * @private
+     */
+    private _lastRuntimeStateDeliveryCache: {
+        templateText: string;
+        markers: readonly string[];
+        delivery: 'trailing' | 'embedded' | 'unsupported';
+    } | null = null;
+    private _cachedTemplatesArrayRef: MJTemplateEntityExtended[] | null = null;
+    private _templateByIdMap: Map<string, MJTemplateEntityExtended> | null = null;
+    private _templateEngineConfiguredForRun = false;
+
+    /**
      * Decides, from the system prompt's UNRENDERED template text, whether the trailing runtime-state
      * fragment belongs on this request:
      *
@@ -5957,10 +6015,19 @@ export class BaseAgent {
         if (templateText === null) {
             return 'unknown';
         }
-        if (this.templateTextEmbedsVolatileState(templateText)) {
-            return 'embedded';
+        const markers = this.volatileTemplateMarkers;
+        if (
+            this._lastRuntimeStateDeliveryCache &&
+            this._lastRuntimeStateDeliveryCache.templateText === templateText &&
+            this._lastRuntimeStateDeliveryCache.markers === markers
+        ) {
+            return this._lastRuntimeStateDeliveryCache.delivery;
         }
-        return templateText.includes(`<${RUNTIME_STATE_TAG}>`) ? 'trailing' : 'unsupported';
+        const delivery: 'trailing' | 'embedded' | 'unsupported' = this.templateTextEmbedsVolatileState(templateText)
+            ? 'embedded'
+            : (templateText.includes(`<${RUNTIME_STATE_TAG}>`) ? 'trailing' : 'unsupported');
+        this._lastRuntimeStateDeliveryCache = { templateText, markers, delivery };
+        return delivery;
     }
 
     /**
@@ -5994,8 +6061,30 @@ export class BaseAgent {
             return null;
         }
         try {
-            await TemplateEngineServer.Instance.Config(false, contextUser);
-            const template = TemplateEngineServer.Instance.Templates?.find(t => UUIDsEqual(t.ID, prompt.TemplateID));
+            if (!this._agentRun || !this._templateEngineConfiguredForRun) {
+                await TemplateEngineServer.Instance.Config(false, contextUser);
+                if (this._agentRun) {
+                    this._templateEngineConfiguredForRun = true;
+                }
+            }
+            const templates = TemplateEngineServer.Instance.Templates;
+            if (!templates) {
+                return null;
+            }
+            let template: MJTemplateEntityExtended | undefined;
+            if (templates === this._cachedTemplatesArrayRef && this._templateByIdMap) {
+                template = this._templateByIdMap.get(NormalizeUUID(prompt.TemplateID));
+            } else {
+                this._cachedTemplatesArrayRef = templates;
+                const map = new Map<string, MJTemplateEntityExtended>();
+                for (const t of templates) {
+                    if (t?.ID) {
+                        map.set(NormalizeUUID(t.ID), t);
+                    }
+                }
+                this._templateByIdMap = map;
+                template = map.get(NormalizeUUID(prompt.TemplateID));
+            }
             return template?.GetHighestPriorityContent()?.TemplateText ?? null;
         } catch (e) {
             this.logError(e instanceof Error ? e : String(e), { category: 'RuntimeStateFragment', severity: 'warning' });
@@ -6829,11 +6918,14 @@ export class BaseAgent {
             // Validation passed
             this.logStatus(`✅ Final payload validation passed for agent ${agent.Name}`, true, params);
             
-            // Save success result to step
+            // Save success result to step via step save queue
             try {
                 currentStep.FinalPayloadValidationResult = 'Pass';
                 currentStep.FinalPayloadValidationMessages = null; // Clear any previous messages
-                await currentStep.Save();
+                this.queueStepSave(currentStep, (s) => {
+                    s.FinalPayloadValidationResult = 'Pass';
+                    s.FinalPayloadValidationMessages = null;
+                });
             } catch (error) {
                 this.logError(`Failed to save validation success result: ${error.message}`, {
                     category: 'PayloadValidation', 
@@ -6878,9 +6970,17 @@ export class BaseAgent {
     ): Promise<BaseAgentNextStep<P>> {
         const validationFeedback = `Final payload validation failed:\n${errorMessages.map((e, i) => `${i + 1}. ${e}`).join('\n')}`;
 
-        // Always save validation results to the new fields
+        // Always save validation results to the new fields via the step save queue
         try {
-            currentStep.FinalPayloadValidationMessages = errorMessages.join('; ');
+            const joinedMessages = errorMessages.join('; ');
+            currentStep.FinalPayloadValidationMessages = joinedMessages;
+            const queueValidationUpdate = (resultValue: MJAIAgentRunStepEntityExtended['FinalPayloadValidationResult']) => {
+                currentStep.FinalPayloadValidationResult = resultValue;
+                this.queueStepSave(currentStep, (s) => {
+                    s.FinalPayloadValidationMessages = joinedMessages;
+                    s.FinalPayloadValidationResult = resultValue;
+                });
+            };
             
             switch (mode) {
                 case 'Retry':
@@ -6893,8 +6993,7 @@ export class BaseAgent {
                         // Max retries exceeded, force to Fail
                         this.logStatus(`❌ Max validation retries (${maxRetries}) exceeded, forcing failure`, false, params);
                         
-                        currentStep.FinalPayloadValidationResult = 'Fail';
-                        await currentStep.Save();
+                        queueValidationUpdate('Fail');
                         
                         return {
                             ...nextStep,
@@ -6905,8 +7004,7 @@ export class BaseAgent {
                     }
                     
                     // Still have retries left
-                    currentStep.FinalPayloadValidationResult = 'Retry';
-                    await currentStep.Save();
+                    queueValidationUpdate('Retry');
                     
                     this.logStatus(`🔄 Validation retry ${this._validationRetryCount}/${maxRetries}`, true, params);
                     
@@ -6919,8 +7017,7 @@ export class BaseAgent {
 
                 case 'Fail':
                     // Convert success to error
-                    currentStep.FinalPayloadValidationResult = 'Fail';
-                    await currentStep.Save();
+                    queueValidationUpdate('Fail');
                     
                     return {
                         ...nextStep,
@@ -6933,16 +7030,14 @@ export class BaseAgent {
                     // Log warning but allow success
                     this.logStatus(`⚠️ WARNING: ${validationFeedback}`, false, params);
                     
-                    currentStep.FinalPayloadValidationResult = 'Warn';
-                    await currentStep.Save();
+                    queueValidationUpdate('Warn');
                     
                     return nextStep; // Return original success
 
                 default:
                     // Default to retry
                     this._validationRetryCount++;
-                    currentStep.FinalPayloadValidationResult = 'Retry';
-                    await currentStep.Save();
+                    queueValidationUpdate('Retry');
                     
                     return {
                         ...nextStep,
@@ -7184,20 +7279,27 @@ export class BaseAgent {
             // Log the guardrail violation
             this.logStatus(`⛔ Execution guardrail exceeded: ${guardrailResult.reason}`, false, params);
             
-            // Update the current step with guardrail information
+            // Update the current step with guardrail information via the step save queue
             try {
+                const guardrailExceeded = {
+                    type: guardrailResult.type,
+                    limit: guardrailResult.limit,
+                    current: guardrailResult.current,
+                    reason: guardrailResult.reason,
+                    timestamp: new Date().toISOString()
+                };
                 const outputData = currentStep.OutputData ? JSON.parse(currentStep.OutputData) : {};
                 currentStep.OutputData = JSON.stringify({
                     ...outputData,
-                    guardrailExceeded: {
-                        type: guardrailResult.type,
-                        limit: guardrailResult.limit,
-                        current: guardrailResult.current,
-                        reason: guardrailResult.reason,
-                        timestamp: new Date().toISOString()
-                    }
+                    guardrailExceeded
                 });
-                await currentStep.Save();
+                this.queueStepSave(currentStep, (s) => {
+                    const existingOutput = s.OutputData ? JSON.parse(s.OutputData) : {};
+                    s.OutputData = JSON.stringify({
+                        ...existingOutput,
+                        guardrailExceeded
+                    });
+                });
             } catch (error) {
                 this.logError(`Failed to save guardrail violation to step: ${error.message}`, {
                     category: 'Guardrails',
@@ -11857,8 +11959,12 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /** The model's arguments as the engine's input parameters. */
-    private toEngineActionParams(action: AgentAction): ActionParam[] {
-        return Object.entries(action.params || {}).map(([key, value]) => ({
+    private toEngineActionParams(action: AgentAction, actionEntity: MJActionEntityExtended): ActionParam[] {
+        // Coerced against each param's declared schema on every path — envelope, native and flow —
+        // so `"640"` reaches an integer param as 640 whichever protocol produced it. Harness
+        // stand-ins may build an Action literal without the related-record collection.
+        const coerced = CoerceActionArguments(actionEntity.Params?.Items ?? [], action.params);
+        return Object.entries(coerced).map(([key, value]) => ({
             Name: key,
             Value: value,
             Type: 'Input' as const
@@ -12022,7 +12128,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Execute the action and return the full ActionResult
             const result = await ActionEngineServer.Instance.RunAction({
                 Action: actionEntity,
-                Params: this.toEngineActionParams(action),
+                Params: this.toEngineActionParams(action, actionEntity),
                 ContextUser: contextUser,
                 Filters: [],
                 SkipActionLog: false,
@@ -12098,7 +12204,7 @@ The context is now within limits. Please retry your request with the recovered c
             Params: [],
             RunParams: {
                 Action: actionEntity,
-                Params: this.toEngineActionParams(action),
+                Params: this.toEngineActionParams(action, actionEntity),
                 ContextUser: contextUser,
                 Filters: [],
             },
@@ -12695,8 +12801,13 @@ The context is now within limits. Please retry your request with the recovered c
             parts.push('array');
         }
 
+        // A stored ValueSchema is the real type, so it replaces the coarse ValueType label — the
+        // same information the native tool declaration carries.
+        const valueSchema = GetStoredValueSchema(param);
         const vt = param.ValueType?.trim();
-        if (vt && vt !== 'Scalar' && vt !== 'Other') {
+        if (valueSchema) {
+            parts.push(DescribeValueSchemaInline(valueSchema));
+        } else if (vt && vt !== 'Scalar' && vt !== 'Other') {
             parts.push(vt);
         }
 
@@ -13192,6 +13303,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Handle autoPopulateLastRunPayload if requested
         let modifiedParams = params;
+        let preloadedLastRun: { LastRunID?: string | null } | null | undefined;
         if (params.lastRunId && params.autoPopulateLastRunPayload) {
             // Load the last run to get its FinalPayload
             const rv = new RunView();
@@ -13203,6 +13315,9 @@ The context is now within limits. Please retry your request with the recovered c
                 BypassCache: true
             }, params.contextUser);
             
+            if (lastRunResult.Success) {
+                preloadedLastRun = (lastRunResult.Results[0] as { LastRunID?: string | null } | undefined) ?? null;
+            }
             if (lastRunResult.Success && lastRunResult.Results.length > 0) {
                 const lastRun = lastRunResult.Results[0];
                 if (lastRun.FinalPayload) {
@@ -13228,6 +13343,7 @@ The context is now within limits. Please retry your request with the recovered c
         // Reset prompt turn counter for this execution
         this._promptTurnCount = 0;
         this._lastRecordedPromptStack = null;
+        this._templateEngineConfiguredForRun = false;
         this._heldDecisions = undefined;
         this._awaitingWorkflowTaskID = null;
 
@@ -13282,8 +13398,8 @@ The context is now within limits. Please retry your request with the recovered c
         
         // Set LastRunID for run chaining (different from ParentRunID)
         if (params.lastRunId) {
-            // Check for circular references in the run chain
-            await this.validateRunChain(params.lastRunId, params.contextUser);
+            // Check for circular references in the run chain (reusing preloadedLastRun when available)
+            await this.validateRunChain(params.lastRunId, params.contextUser, preloadedLastRun);
             
             this._agentRun.LastRunID = params.lastRunId;
         }
@@ -13332,8 +13448,19 @@ The context is now within limits. Please retry your request with the recovered c
         this._runScope = this.validatedRunScope(params);
         this.writeRunScope(params, this._runScope);
 
-        // Save the agent run
-        if (!await this._agentRun.Save()) {
+        // Initialize hierarchy tracking before resolvePlanModeGate (which reads _depth) so the
+        // Plan Mode gate lookup can run concurrently with persisting the agent run record.
+        this._agentHierarchy = params.parentAgentHierarchy
+            ? [...params.parentAgentHierarchy, params.agent.Name || 'Unknown Agent']
+            : [params.agent.Name || 'Unknown Agent'];
+        this._depth = params.parentDepth !== undefined ? params.parentDepth + 1 : 0;
+        this._parentStepCounts = params.parentStepCounts || [];
+
+        const planModeGatePromise = this.resolvePlanModeGate(params);
+
+        // Save the agent run while resolvePlanModeGate runs concurrently
+        if (!await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' })) {
+            await planModeGatePromise.catch(() => undefined);
             const errorMessage = JSON.stringify(CopyScalarsAndArrays(this._agentRun.LatestResult));
             throw new Error(`Failed to create agent run record: Details: ${errorMessage}`);
         }
@@ -13356,17 +13483,9 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
 
-        // Initialize hierarchy tracking
-        this._agentHierarchy = params.parentAgentHierarchy
-            ? [...params.parentAgentHierarchy, params.agent.Name || 'Unknown Agent']
-            : [params.agent.Name || 'Unknown Agent'];
-        this._depth = params.parentDepth !== undefined ? params.parentDepth + 1 : 0;
-        this._parentStepCounts = params.parentStepCounts || [];
-
-        // Resolve Plan Mode gate state for this run (must happen before the main loop starts —
-        // gatherPromptTemplateData/validateNextStep both read _planModeActive/_planApproved — and
-        // after _depth is set above, since the gate only applies to root agents).
-        const planModeGate = await this.resolvePlanModeGate(params);
+        // Await Plan Mode gate state for this run (must happen before the main loop starts —
+        // gatherPromptTemplateData/validateNextStep both read _planModeActive/_planApproved).
+        const planModeGate = await planModeGatePromise;
         this._planModeActive = planModeGate.active;
         this._planApproved = planModeGate.approved;
 
@@ -13574,7 +13693,13 @@ The context is now within limits. Please retry your request with the recovered c
         // A start or end payload that repeats an earlier step's end is stored as a pointer to that step.
         const payloadAtStart = this.serializePayloadAtStart(params.payloadAtStart);
         const payloadAtStartSource = this.findPayloadAtStartSource(payloadAtStart);
-        const payloadAtEnd = this.serializePayloadAtEnd(params.payloadAtEnd);
+        const payloadAtEnd = (
+            params.payloadAtEnd !== undefined &&
+            params.payloadAtEnd === params.payloadAtStart &&
+            this.hasDefaultPayloadSerializers()
+        )
+            ? payloadAtStart
+            : this.serializePayloadAtEnd(params.payloadAtEnd);
         const payloadAtEndSource = this.findPayloadAtEndSource(payloadAtEnd);
         // Populate the started fields via the shared single-source-of-truth helper. Instance-specific
         // concerns (hierarchy breadcrumb, InputData context, payload serialization) are computed here.
@@ -13753,6 +13878,36 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Returns true when neither `serializePayloadAtStart` nor `serializePayloadAtEnd` has been
+     * overridden by a subclass, allowing unchanged start payloads to be reused as end payloads
+     * without a second `JSON.stringify` pass.
+     */
+    private hasDefaultPayloadSerializers(): boolean {
+        return (
+            this.serializePayloadAtStart === BaseAgent.prototype.serializePayloadAtStart &&
+            this.serializePayloadAtEnd === BaseAgent.prototype.serializePayloadAtEnd
+        );
+    }
+
+    /**
+     * Resolves a step's start payload from its own `PayloadAtStart` or the step referenced by
+     * `PayloadAtStartSourceStepID`.
+     */
+    private resolveStepPayloadAtStart(step: MJAIAgentRunStepEntityExtended | undefined): string | null {
+        if (!step) {
+            return null;
+        }
+        if (step.PayloadAtStart != null) {
+            return step.PayloadAtStart;
+        }
+        if (step.PayloadAtStartSourceStepID) {
+            const source = this._agentRun?.Steps?.find(s => UUIDsEqual(s.ID, step.PayloadAtStartSourceStepID));
+            return source?.PayloadAtEnd ?? null;
+        }
+        return null;
+    }
+
+    /**
      * Resolves a step's end payload from its own `PayloadAtEnd` or the step referenced by
      * `PayloadAtEndSourceStepID`.
      */
@@ -13831,21 +13986,54 @@ The context is now within limits. Please retry your request with the recovered c
         messages: ChatMessage[] | undefined
     ): { conversationMessages: ChatMessage[]; conversationMessagesDelta?: true } {
         const nonVolatile = (messages ?? []).filter(m => (m as AgentChatMessage)?.metadata?.volatileState !== true);
-        const recorded = nonVolatile.map(m => ({ Message: m, Serialized: JSON.stringify(m) }));
         const previous = this._lastRecordedPromptStack;
+        const isExtension = previous !== null && BaseAgent.isAppendOnlyExtension(previous, nonVolatile);
+        const recorded: RecordedPromptMessage[] = new Array(nonVolatile.length);
+        for (let i = 0; i < nonVolatile.length; i++) {
+            if (isExtension && i < previous.length) {
+                recorded[i] = previous[i];
+            } else {
+                const m = nonVolatile[i];
+                const meta = (m as AgentChatMessage).metadata;
+                recorded[i] = {
+                    Message: m,
+                    ContentRef: m.content,
+                    MetadataRef: meta,
+                    WasCompacted: meta?.wasCompacted,
+                    CanExpand: meta?.canExpand,
+                    IsExpired: meta?.isExpired,
+                };
+            }
+        }
         this._lastRecordedPromptStack = recorded;
-        if (previous && BaseAgent.isAppendOnlyExtension(previous, recorded)) {
+        if (isExtension) {
             return { conversationMessages: nonVolatile.slice(previous.length), conversationMessagesDelta: true };
         }
         return { conversationMessages: nonVolatile };
     }
 
-    /** True when `current` starts with every message of `previous`, by reference and unchanged. @private */
-    private static isAppendOnlyExtension(previous: RecordedPromptMessage[], current: RecordedPromptMessage[]): boolean {
+    /** True when `current` starts with every message of `previous`, by reference and unchanged in place. @private */
+    private static isAppendOnlyExtension(previous: RecordedPromptMessage[], current: ChatMessage[]): boolean {
         if (current.length < previous.length) {
             return false;
         }
-        return previous.every((p, i) => current[i].Message === p.Message && current[i].Serialized === p.Serialized);
+        for (let i = 0; i < previous.length; i++) {
+            const p = previous[i];
+            const c = current[i];
+            if (c !== p.Message || c.content !== p.ContentRef) {
+                return false;
+            }
+            const meta = (c as AgentChatMessage).metadata;
+            if (
+                meta !== p.MetadataRef ||
+                meta?.wasCompacted !== p.WasCompacted ||
+                meta?.canExpand !== p.CanExpand ||
+                meta?.isExpired !== p.IsExpired
+            ) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -13862,18 +14050,39 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected async finalizeStepEntity(stepEntity: MJAIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
         try {
+            // Preserve any OutputData properties already stamped on the step prior to finalize
+            // (e.g. guardrailExceeded written by checkExecutionGuardrails during processNextStep).
+            let effectiveOutputData = outputData;
+            const existingRawOutputData = stepEntity.OutputData;
+            if (existingRawOutputData && outputData && typeof outputData === 'object') {
+                try {
+                    const parsedExisting = JSON.parse(existingRawOutputData) as Record<string, unknown>;
+                    if (parsedExisting && typeof parsedExisting === 'object' && !Array.isArray(parsedExisting)) {
+                        effectiveOutputData = {
+                            ...parsedExisting,
+                            ...outputData
+                        };
+                    }
+                } catch {
+                    // Leave effectiveOutputData as-is if existing OutputData is not a JSON object
+                }
+            }
+
             // Capture the completion timestamp NOW so the duration is accurate regardless of when the
             // mutation is actually applied/persisted.
             const finalizeOpts = {
                 success,
                 errorMessage,
-                outputData: outputData ? CopyScalarsAndArrays(outputData, true) : undefined,
+                outputData: effectiveOutputData ? CopyScalarsAndArrays(effectiveOutputData, true) : undefined,
                 completedAt: new Date(),
                 // Capture any TargetLogID already stamped on the entity (e.g. a prompt-run / sub-agent-run id
                 // set before finalize) so the post-INSERT re-apply restores it too — otherwise the INSERT's
                 // reload could leave it null on a fast step.
                 targetLogID: stepEntity.TargetLogID ?? undefined
             };
+            const finalPayloadValidationResult = stepEntity.FinalPayloadValidationResult;
+            const finalPayloadValidationMessages = stepEntity.FinalPayloadValidationMessages;
+
             // Deduplicate PayloadAtEnd against the latest earlier finished, saved step when unchanged.
             if (stepEntity.PayloadAtEnd != null) {
                 const endSource = this.findPayloadAtEndSource(stepEntity.PayloadAtEnd, stepEntity);
@@ -13899,6 +14108,15 @@ The context is now within limits. Please retry your request with the recovered c
             // its reload) lands so the force-persisted UPDATE never writes stale pre-finalize values. The
             // agent flow never blocks on this UPDATE.
             this.queueStepSave(stepEntity, (s) => {
+                if (finalizeOpts.outputData === undefined && existingRawOutputData != null) {
+                    s.OutputData = existingRawOutputData;
+                }
+                if (finalPayloadValidationResult !== undefined) {
+                    s.FinalPayloadValidationResult = finalPayloadValidationResult;
+                }
+                if (finalPayloadValidationMessages !== undefined) {
+                    s.FinalPayloadValidationMessages = finalPayloadValidationMessages;
+                }
                 finalizeAgentRunStep(s, finalizeOpts);
                 s.PayloadAtEnd = payloadAtEnd;
                 s.PayloadAtEndSourceStepID = payloadAtEndSourceStepID;
@@ -14584,7 +14802,8 @@ The context is now within limits. Please retry your request with the recovered c
             // cancellation check, before the next step, ends the run as Cancelled.
             if (params.cancellationToken?.aborted) {
                 if (stepEntity && payload) {
-                    stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
+                    stepEntity.PayloadAtEnd = (this.hasDefaultPayloadSerializers() ? this.resolveStepPayloadAtStart(stepEntity) : null)
+                        ?? this.serializePayloadAtEnd(payload);
                 }
 
                 await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
@@ -14602,7 +14821,8 @@ The context is now within limits. Please retry your request with the recovered c
                 // CRITICAL FIX: Preserve payload before finalizing step
                 // This matches the success path behavior where PayloadAtEnd is set before finalizeStepEntity
                 if (stepEntity && payload) {
-                    stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
+                    stepEntity.PayloadAtEnd = (this.hasDefaultPayloadSerializers() ? this.resolveStepPayloadAtStart(stepEntity) : null)
+                        ?? this.serializePayloadAtEnd(payload);
                 }
 
                 await this.finalizeStepEntity(stepEntity, false, promptResult.errorMessage);
@@ -14829,9 +15049,15 @@ The context is now within limits. Please retry your request with the recovered c
                 })
             };
             
-            // Set PayloadAtEnd with the final payload after changes
+            // Set PayloadAtEnd with the final payload after changes (reusing serialized start when payload was not modified)
             if (stepEntity && finalPayload) {
-                stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(finalPayload);
+                const canReuseStartPayload =
+                    !initialNextStep.payloadChangeRequest &&
+                    updatedNextStep.newPayload === undefined &&
+                    finalPayload === payload &&
+                    this.hasDefaultPayloadSerializers();
+                stepEntity.PayloadAtEnd = (canReuseStartPayload ? this.resolveStepPayloadAtStart(stepEntity) : null)
+                    ?? this.serializePayloadAtEnd(finalPayload);
             }
             
             // Update the agent run's current payload
@@ -14890,7 +15116,9 @@ The context is now within limits. Please retry your request with the recovered c
                 ? JSON.parse(existingEnd)
                 : (previousDecision?.newPayload || params.payload);
 
-            stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
+            stepEntity.PayloadAtEnd = existingEnd
+                ?? (this.hasDefaultPayloadSerializers() ? this.resolveStepPayloadAtStart(stepEntity) : null)
+                ?? this.serializePayloadAtEnd(payload);
             stepEntity.PayloadAtEndSourceStepID = null;
 
             // we had an error, don't throw the exception as that will kill our overall execution/run
@@ -15271,8 +15499,17 @@ The context is now within limits. Please retry your request with the recovered c
                 stepEntity.TargetLogID = subAgentResult.agentRun.ID;
                 // Set the SubAgentRun property for hierarchical tracking (transient related object)
                 stepEntity.SubAgentRun = subAgentResult.agentRun;
-                stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
                 // saving happens later by calling finalizeStepEntity()
+            }
+
+            // Set PayloadAtEnd once with the merged payload (reusing serialized start when sub-agent failed or payload was not replaced)
+            if (stepEntity) {
+                const canReuseStartPayload =
+                    mergedPayload === previousDecision?.newPayload &&
+                    !currentStepPayloadChangeResult &&
+                    this.hasDefaultPayloadSerializers();
+                stepEntity.PayloadAtEnd = (canReuseStartPayload ? this.resolveStepPayloadAtStart(stepEntity) : null)
+                    ?? this.serializePayloadAtEnd(mergedPayload);
             }
             
             // Check for cancellation after sub-agent execution
@@ -15323,11 +15560,6 @@ The context is now within limits. Please retry your request with the recovered c
                     payloadChangeResult: currentStepPayloadChangeResult
                 })
             }; 
-
-            // Set PayloadAtEnd with the merged payload
-            if (stepEntity) {
-                stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
-            }
 
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, subAgentResult.success,
@@ -19440,7 +19672,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for failed runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save();
+            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
         }
 
         return {
@@ -19491,7 +19723,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for cancelled runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save();
+            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
             AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
         }
         
@@ -19657,7 +19889,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens from all prompts and sub-agents
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            const ok = await this._agentRun.Save();
+            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
             }
@@ -20403,12 +20635,16 @@ The context is now within limits. Please retry your request with the recovered c
 
                 for (let i = 1; i < compactEndIndex; i++) {
                     const msg = messages[i] as AgentChatMessage;
+                    const metaWithLegacyFlag = msg?.metadata as (AgentChatMessageMetadata & { isCompacted?: boolean }) | undefined;
                     if (
                         !msg ||
                         msg.role === 'system' ||
-                        msg.metadata?.wasCompacted === true ||
-                        msg.metadata?.isConversationSummary === true ||
-                        msg.metadata?.volatileState === true
+                        metaWithLegacyFlag?.wasCompacted === true ||
+                        metaWithLegacyFlag?.isCompacted === true ||
+                        metaWithLegacyFlag?.isConversationSummary === true ||
+                        metaWithLegacyFlag?.volatileState === true ||
+                        Boolean(msg.toolCalls?.length) ||
+                        !this.IsVolatileResultMessage(msg)
                     ) {
                         continue;
                     }
@@ -20611,22 +20847,32 @@ The context is now within limits. Please retry your request with the recovered c
         );
 
         step.NewRecord();
-        step.AgentRunID = this._agentRun.ID;
-        step.StepType = 'Compaction';
-        step.Status = 'Running';
-        step.InputData = JSON.stringify({
-            stepName: 'Message Compaction',
-            description: `Compacting message using AI Summary (${message.metadata?.messageType || 'unknown'} from turn ${message.metadata?.turnAdded || 0})`,
-            messageType: message.metadata?.messageType,
-            turnAdded: message.metadata?.turnAdded,
-            originalLength: message.metadata?.originalLength ||
-                (typeof message.content === 'string' ? message.content.length : JSON.stringify(message.content).length),
-            compactMode: 'AI Summary',
-            promptId: prompt.ID,
-            promptName: prompt.Name
+        const stepNumber = (this._agentRun.Steps?.length || 0) + 1;
+        initAgentRunStep(step, {
+            AgentRunID: this._agentRun.ID,
+            StepNumber: stepNumber,
+            StepType: 'Compaction',
+            StepName: this.fitStepName(step, this.formatHierarchicalMessage('Message Compaction')),
+            TargetID: prompt.ID,
+            InputData: JSON.stringify({
+                stepName: 'Message Compaction',
+                description: `Compacting message using AI Summary (${message.metadata?.messageType || 'unknown'} from turn ${message.metadata?.turnAdded || 0})`,
+                messageType: message.metadata?.messageType,
+                turnAdded: message.metadata?.turnAdded,
+                originalLength: message.metadata?.originalLength ||
+                    (typeof message.content === 'string' ? message.content.length : JSON.stringify(message.content).length),
+                compactMode: 'AI Summary',
+                promptId: prompt.ID,
+                promptName: prompt.Name
+            })
         });
 
-        await step.Save();
+        this._stepSaveQueue.Insert(step);
+        if (Array.isArray(this._agentRun.Steps)) {
+            this._agentRun.Steps.push(step);
+        }
+        this.ensureTreeBudget(this._executeParams ?? params).totalSteps += 1;
+
         return step;
     }
 
@@ -20643,12 +20889,15 @@ The context is now within limits. Please retry your request with the recovered c
         step: MJAIAgentRunStepEntityExtended,
         result: AIPromptRunResult<{ summary: string }>,
         message: AgentChatMessage,
-        params: ExecuteAgentParams
+        _params: ExecuteAgentParams
     ): Promise<void> {
-        step.Status = result.success ? 'Completed' : 'Failed';
+        if (result.promptRun?.ID) {
+            step.TargetLogID = result.promptRun.ID;
+            step.PromptRun = result.promptRun;
+        }
         const promptTokens = result.promptTokens || 0;
         const completionTokens = result.completionTokens || 0;
-        step.OutputData = JSON.stringify({
+        const outputData = {
             success: result.success,
             summaryLength: result.result?.summary?.length || 0,
             tokensSaved: message.metadata?.tokensSaved || 0,
@@ -20656,13 +20905,10 @@ The context is now within limits. Please retry your request with the recovered c
             completionTokens,
             totalTokens: promptTokens + completionTokens,
             cost: result.cost
-        });
+        };
+        const errorMessage = result.success ? undefined : (result.errorMessage || 'AI Summary compaction failed');
 
-        if (!result.success) {
-            step.ErrorMessage = result.errorMessage || 'AI Summary compaction failed';
-        }
-
-        await step.Save();
+        await this.finalizeStepEntity(step, result.success, errorMessage, outputData);
     }
 
     /**
@@ -20737,9 +20983,13 @@ The context is now within limits. Please retry your request with the recovered c
                         AgentRun: this._agentRun,
                         ContextUser: params.contextUser,
                     }) ?? undefined;
+                    promptParams.onPromptRunCreated = async (promptRunId: string) => {
+                        step.TargetLogID = promptRunId;
+                        this.queueStepSave(step, (s) => { s.TargetLogID = promptRunId; });
+                    };
 
-                    const runner = new AIPromptRunner();
-                    const result = await runner.ExecutePrompt<{ summary: string }>(promptParams);
+                    const result = await this._promptRunner.ExecutePrompt<{ summary: string }>(promptParams);
+                    this.recordPromptUsageInTreeBudget(result.promptRun, result, params);
 
                     // Update step with result
                     await this.updateCompactionStep(step, result, message, params);

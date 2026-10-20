@@ -335,6 +335,23 @@ function lastSprocCall(name: string): unknown[] | undefined {
 // H1: Heartbeat extends the lease
 // ============================================================================
 
+describe('H0: the plugin runs on the provider the engine read the job with', () => {
+    it('hands the plugin the engine\'s provider in its context', async () => {
+        mockBase.ScheduledJobs = [makeJob()];
+        let provider: ScheduledJobExecutionContext['Provider'] | undefined;
+        createInstanceImpl = () => ({
+            Execute: async (context: ScheduledJobExecutionContext) => {
+                provider = context.Provider;
+                return { Success: true, Details: {} };
+            }
+        });
+        mockExecuteSQLQueue.push([{ Acquired: 1 }]);
+        mockExecuteSQLQueue.push([{ Released: 1 }]);
+        await SchedulingEngine.Instance.ExecuteScheduledJobs(mockUser as never);
+        expect(provider).toBe(mockBase.ProviderToUse);
+    });
+});
+
 describe('H1: heartbeat extends the lease via spExtendScheduledJobLease', () => {
     it('calls the extend sproc with the live token and a now+HEARTBEAT_LEASE_MS expectation', async () => {
         const engine = SchedulingEngine.Instance;

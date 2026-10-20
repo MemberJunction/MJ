@@ -111,8 +111,8 @@ class TestAssembler extends FeatureAssemblyExecutor {
 }
 
 const CTX: RecordProcessorContext = {
-  contextUser: undefined as unknown as UserInfo,
-  provider: undefined as unknown as IMetadataProvider,
+  ContextUser: undefined as unknown as UserInfo,
+  Provider: undefined as unknown as IMetadataProvider,
 };
 
 /** A member record carrying its data inline (as the engine pre-loads it). */
