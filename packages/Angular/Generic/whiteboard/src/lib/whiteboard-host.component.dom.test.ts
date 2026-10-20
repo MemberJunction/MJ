@@ -485,6 +485,23 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
       expect(f.componentInstance.PenColor).toBe('#f87171');
     });
 
+    it('membership is case-insensitive: an upper-case palette entry keeps a lower-case pen', () => {
+      const f = render();
+      f.componentInstance.PenColor = '#1d4ed8';
+      f.componentInstance.PenPalette = ['#1D4ED8', '#b91c1c'];
+      expect(f.componentInstance.PenColor).toBe('#1d4ed8');
+    });
+
+    it('blank and non-string entries are dropped; a palette with nothing usable reads as none', () => {
+      const f = render();
+      f.componentInstance.PenPalette = ['', ' #1d4ed8 ', 9] as unknown as string[];
+      expect(f.componentInstance.PenPalette).toEqual(['#1d4ed8']);
+      expect(f.componentInstance.PenColor).toBe('#1d4ed8');
+      f.componentInstance.PenPalette = ['', '  '] as unknown as string[];
+      expect(f.componentInstance.PenPalette).toBeNull();
+      expect(f.componentInstance.PenColor).toBe(DEFAULT_FIRST);
+    });
+
     it('a non-array reads as no palette, and the default palette comes back', () => {
       const f = render();
       f.componentInstance.PenPalette = ['#1d4ed8'];

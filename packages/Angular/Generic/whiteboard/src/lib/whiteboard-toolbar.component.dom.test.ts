@@ -159,6 +159,17 @@ describe('RealtimeWhiteboardToolbarComponent (DOM)', () => {
       expect(empty.componentInstance.PenColors.length).toBe(5);
     });
 
+    it('drops blank and non-string entries, trims the rest, and falls back when nothing survives', () => {
+      const dirty = renderComponentFixture(RealtimeWhiteboardToolbarComponent, {
+        inputs: { ActiveTool: 'pen', PenColors: ['', '  #111111 ', 42, null, '#222222'] as unknown as string[] },
+      });
+      expect(dirty.componentInstance.PenColors).toEqual(['#111111', '#222222']);
+      const nothing = renderComponentFixture(RealtimeWhiteboardToolbarComponent, {
+        inputs: { ActiveTool: 'pen', PenColors: ['', '   ', 7] as unknown as string[] },
+      });
+      expect(nothing.componentInstance.PenColors.length).toBe(5);
+    });
+
     it('keeps a frozen copy: mutating the bound array afterwards does not reach the toolbar', () => {
       const palette = ['#111111', '#222222'];
       const f = renderComponentFixture(RealtimeWhiteboardToolbarComponent, {
