@@ -667,6 +667,7 @@ Each provider also supports environment variable configuration. Environment vari
 | `STORAGE_GOOGLE_DRIVE_REFRESH_TOKEN` | OAuth refresh token |
 | `STORAGE_GOOGLE_DRIVE_REDIRECT_URI` | OAuth redirect URI |
 | `STORAGE_GDRIVE_ROOT_FOLDER_ID` | Root folder ID (optional) |
+| `STORAGE_GDRIVE_DRIVE_ID` | Shared Drive ID. Required for a service account to upload, since a service account has no storage quota of its own. Also the default root when no root folder is set. A credential record carries it as `driveID`. |
 | `STORAGE_GDRIVE_KEY_FILE` | Service account key file (legacy) |
 | `STORAGE_GDRIVE_CREDENTIALS_JSON` | Service account credentials JSON (legacy) |
 

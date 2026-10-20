@@ -84,9 +84,9 @@ class FakeAutoTrainer implements IModelAutoTrainer {
 }
 
 const CTX: RecordProcessorContext = {
-  contextUser: undefined as unknown as UserInfo,
-  provider: undefined as unknown as IMetadataProvider,
-  recordProcessID: 'rp-1',
+  ContextUser: undefined as unknown as UserInfo,
+  Provider: undefined as unknown as IMetadataProvider,
+  RecordProcessID: 'rp-1',
 };
 
 function record(id: string, tenure: number): RecordRef {

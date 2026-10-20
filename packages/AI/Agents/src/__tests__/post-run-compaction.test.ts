@@ -178,9 +178,13 @@ function buildLongMessages(count: number, bodyRepeats = 40): ChatMessage[] {
     ];
     for (let i = 1; i < count; i++) {
         messages.push({
-            role: i % 2 === 1 ? 'assistant' : 'user',
+            role: 'user',
             content: `Message #${i}: ` + 'Detailed tool output and intermediate analysis data. '.repeat(bodyRepeats),
-        });
+            metadata: {
+                turnAdded: i,
+                messageType: 'action-result',
+            },
+        } as AgentChatMessage);
     }
     return messages;
 }
@@ -304,7 +308,7 @@ describe('BaseAgent post-run compaction (compactAfterRun)', () => {
                 {
                     role: 'user',
                     content: 'Already compacted snippet',
-                    metadata: { wasCompacted: true },
+                    metadata: { messageType: 'action-result', wasCompacted: true },
                 },
                 {
                     role: 'user',
@@ -317,8 +321,9 @@ describe('BaseAgent post-run compaction (compactAfterRun)', () => {
                     metadata: { volatileState: true },
                 },
                 {
-                    role: 'assistant',
-                    content: 'Normal older message that should be compacted. '.repeat(40),
+                    role: 'user',
+                    content: 'Volatile action result that should be compacted. '.repeat(40),
+                    metadata: { messageType: 'action-result', turnAdded: 1 },
                 },
                 { role: 'user', content: 'Recent 1' },
                 { role: 'assistant', content: 'Recent 2' },
@@ -340,6 +345,63 @@ describe('BaseAgent post-run compaction (compactAfterRun)', () => {
             expect(messages[2].content).toBe('Already compacted snippet');
             expect(messages[3].content).toBe('Prior conversation summary '.repeat(50));
             expect(messages[4].content).toBe('<mj-runtime-state>volatile</mj-runtime-state>');
+            expect(messages[5].metadata?.wasCompacted).toBe(true);
+            expect(String(messages[5].content)).toContain('[Compacted:');
+        });
+
+        it('skips non-volatile user/assistant conversational messages, messages with toolCalls, and legacy isCompacted messages', async () => {
+            const plainUserContent = 'User conversational follow-up '.repeat(30);
+            const plainAssistantContent = 'Assistant conversational reply '.repeat(30);
+            const toolCallAssistantContent = 'Calling search tool '.repeat(30);
+            const legacyCompactedContent = 'Legacy compacted action output '.repeat(30);
+            const volatileSubAgentContent = 'Sub-agent detailed result payload '.repeat(40);
+
+            const messages: AgentChatMessage[] = [
+                { role: 'user', content: 'Initial user goal' },
+                { role: 'user', content: plainUserContent },
+                { role: 'assistant', content: plainAssistantContent },
+                {
+                    role: 'assistant',
+                    content: toolCallAssistantContent,
+                    toolCalls: [{ id: 'call-1', type: 'function', function: { name: 'search', arguments: '{}' } }],
+                    metadata: { messageType: 'action-result' },
+                },
+                {
+                    role: 'user',
+                    content: legacyCompactedContent,
+                    metadata: { messageType: 'action-result', isCompacted: true } as AgentChatMessage['metadata'],
+                },
+                {
+                    role: 'user',
+                    content: volatileSubAgentContent,
+                    metadata: { messageType: 'sub-agent-result', turnAdded: 2 },
+                },
+                { role: 'user', content: 'Recent 1' },
+                { role: 'assistant', content: 'Recent 2' },
+                { role: 'user', content: 'Recent 3' },
+                { role: 'assistant', content: 'Recent 4' },
+            ];
+
+            const params = createFakeParams(messages, {
+                enabled: true,
+                messageCountThreshold: 6,
+                extractMemories: false,
+            });
+            const run = createFakeAgentRun(true);
+
+            await agent.InvokeRunPostRunCompaction(params, run);
+
+            // Indices 1..4 are untouched
+            expect(messages[1].content).toBe(plainUserContent);
+            expect(messages[1].metadata?.wasCompacted).toBeUndefined();
+            expect(messages[2].content).toBe(plainAssistantContent);
+            expect(messages[2].metadata?.wasCompacted).toBeUndefined();
+            expect(messages[3].content).toBe(toolCallAssistantContent);
+            expect(messages[3].metadata?.wasCompacted).toBeUndefined();
+            expect(messages[4].content).toBe(legacyCompactedContent);
+            expect(messages[4].metadata?.wasCompacted).toBeUndefined();
+
+            // Index 5 (volatile sub-agent-result) is compacted
             expect(messages[5].metadata?.wasCompacted).toBe(true);
             expect(String(messages[5].content)).toContain('[Compacted:');
         });
