@@ -5371,8 +5371,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         try {
             const user = await this.GetCurrentUser();
             if (user && this._localMetadata) {
+                const previousUserJson = this._localMetadata.CurrentUser
+                    ? JSON.stringify(this._localMetadata.CurrentUser)
+                    : null;
                 this._localMetadata.CurrentUser = user;
-                void this.SaveLocalMetadataToStorage();
+                // Only re-persist the full metadata snapshot when the user record or roles
+                // actually changed; on warm boots where CurrentUser is unchanged, skipping
+                // SaveLocalMetadataToStorage avoids a multi-MB JSON.stringify + gzip + IDB
+                // write pass on the main thread during startup.
+                if (previousUserJson !== JSON.stringify(user)) {
+                    void this.SaveLocalMetadataToStorage();
+                }
                 return user;
             }
         } catch (e) {
@@ -6593,17 +6602,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Used for compressed metadata storage/retrieval.
      */
     protected static arrayBufferToBase64(buffer: ArrayBuffer): string {
-        // Node encodes natively. The loop below concatenates one character per byte, building a rope
-        // the size of the payload that then has to be flattened.
+        // Node encodes natively. In browsers, process in 32KB chunks with spread to avoid
+        // building a character-by-character rope across multi-MB payloads.
         if (typeof Buffer !== 'undefined') {
             return Buffer.from(buffer).toString('base64');
         }
         const bytes = new Uint8Array(buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
+        const chunkSize = 0x8000;
+        const chunks: string[] = [];
+        for (let i = 0; i < bytes.byteLength; i += chunkSize) {
+            chunks.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
         }
-        return btoa(binary);
+        return btoa(chunks.join(''));
     }
 
     /**
