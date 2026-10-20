@@ -749,23 +749,33 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
 
     private async submitTemplateContents(template: MJTemplateEntity, toSave: MJTemplateContentEntity[]): Promise<boolean> {
         const tg = await this._metadata.CreateTransactionGroup();
-        for (const content of toSave) {
-            content.TransactionGroup = tg;
-            // Inside a transaction group Save() only queues the row; false here means it was
-            // refused before queueing (e.g. validation).
-            if (!(await content.Save())) {
-                this.reportSaveFailure(template, this.describeContentFailure(content));
-                return false;
+        try {
+            for (const content of toSave) {
+                content.TransactionGroup = tg;
+                // Inside a transaction group Save() only queues the row; false here means it was
+                // refused before queueing (e.g. validation).
+                if (!(await content.Save())) {
+                    this.reportSaveFailure(template, this.describeContentFailure(content));
+                    return false;
+                }
+            }
+            if (await tg.Submit()) {
+                return true;
+            }
+            const failed = toSave.filter(c => c.LatestResult && !c.LatestResult.Success);
+            this.reportSaveFailure(template, failed.length > 0
+                ? failed.map(c => this.describeContentFailure(c)).join('; ')
+                : 'the transaction was rejected');
+            return false;
+        } finally {
+            // A row that keeps this group would send its next Delete() into a completed group, which
+            // reports success without sending anything (the version would come back on reload).
+            for (const content of toSave) {
+                if (content.TransactionGroup === tg) {
+                    content.TransactionGroup = null;
+                }
             }
         }
-        if (await tg.Submit()) {
-            return true;
-        }
-        const failed = toSave.filter(c => c.LatestResult && !c.LatestResult.Success);
-        this.reportSaveFailure(template, failed.length > 0
-            ? failed.map(c => this.describeContentFailure(c)).join('; ')
-            : 'the transaction was rejected');
-        return false;
     }
 
     private describeContentFailure(content: MJTemplateContentEntity): string {

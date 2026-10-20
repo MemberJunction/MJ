@@ -295,6 +295,19 @@ describe('TemplateEditorComponent — content ownership (MJ#4754)', () => {
         expect(logged).toContain('c1');
     });
 
+    it('detaches the submitted transaction group from the rows it saved', async () => {
+        // A row that keeps a completed group sends its next Delete() into that dead group (MJ#4763 review, F6).
+        const edited = makeContent('c1', { Dirty: true });
+        const { provider } = makeProvider({ runView: async () => viewResult([edited]) });
+        const editor = createEditor(provider).componentInstance;
+        editor.Template = makeTemplate();
+        await editor.LoadTemplateContents();
+
+        expect(await editor.SaveTemplateContents()).toBe(true);
+
+        expect((edited as unknown as { TransactionGroup: unknown }).TransactionGroup).toBeNull();
+    });
+
     it('saves the rows the user edited through the transaction group', async () => {
         const saveSpy = vi.fn(async () => true);
         const edited = makeContent('c1', { Dirty: true, Save: saveSpy });

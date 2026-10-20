@@ -196,6 +196,33 @@ describe('MJTemplateFormComponentExtended.SaveRecord persists the editor content
     expect(form.formContext.validationErrors?.some(e => e.Source === 'TypeID')).toBe(true);
   });
 
+  it('detaches the submitted transaction group from the template and every content it carried', async () => {
+    // A member that keeps a completed group routes its next Save()/Delete() into that dead group:
+    // the editor's version delete then "succeeds" with no request sent (MJ#4763 review, F6).
+    const template = makeTemplate();
+    const content = makeNewContent();
+    const form = makeForm(template, fakeEditor([content]), new FakeTransactionGroup());
+
+    expect(await form.SaveRecord(false)).toBe(true);
+
+    expect(content.savedUnder, 'the content was saved inside the group').not.toBeNull();
+    expect(template.TransactionGroup, 'the template no longer points at the submitted group').toBeNull();
+    expect(content.TransactionGroup, 'the content no longer points at the submitted group').toBeNull();
+  });
+
+  it('detaches the group even when the submit fails, so a retry is not queued into it', async () => {
+    const template = makeTemplate();
+    const content = makeNewContent();
+    const failing = new FakeTransactionGroup();
+    failing.Submit = async () => { failing.submitCalls++; return false; };
+    const form = makeForm(template, fakeEditor([content]), failing);
+
+    expect(await form.SaveRecord(false)).toBe(false);
+
+    expect(template.TransactionGroup).toBeNull();
+    expect(content.TransactionGroup).toBeNull();
+  });
+
   it('saves a template on its own when the editor has nothing pending', async () => {
     const template = makeTemplate();
     const tg = new FakeTransactionGroup();
