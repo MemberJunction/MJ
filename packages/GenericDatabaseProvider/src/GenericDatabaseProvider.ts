@@ -2090,6 +2090,33 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Maximum number of concurrent database view executions allowed within a single
+     * {@link InternalRunViews} batch. Prevents large `RunViews` batches from exhausting
+     * the connection pool in a single tick. Set to 0 or Infinity to disable the cap.
+     * Default: 8.
+     */
+    public static MaxConcurrentViewsPerBatch: number = 8;
+
+    /**
+     * Process-wide single-flight coalescing registry for in-flight read-only RunView executions.
+     * When multiple concurrent requests (across any per-request provider instance on the same
+     * server process) execute an identical non-transactional RunView simultaneously, only the
+     * first caller queries the database; joiners await the same promise and receive a shallow-cloned
+     * result object and Results array.
+     */
+    private static readonly _inFlightRunViews = new Map<string, {
+        promise: Promise<RunViewResult<unknown>>;
+        hasJoiners: boolean;
+    }>();
+
+    /**
+     * Number of currently in-flight coalesced RunView executions across this process.
+     */
+    public static get InFlightRunViewCount(): number {
+        return GenericDatabaseProvider._inFlightRunViews.size;
+    }
+
+    /**
      * Shared InternalRunView implementation.
      * Handles: view resolution, permissions, field selection, WHERE clause building
      * (view + extra filter + user search + exclude + RLS), ORDER BY, pagination,
@@ -2100,12 +2127,168 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Determines whether a RunView invocation is eligible for process-wide single-flight
+     * coalescing across concurrent requests.
+     */
+    protected canCoalesceRunViewInFlight(
+        params: RunViewParams | null | undefined,
+        countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
+    ): boolean {
+        if (!params || countExecutor) {
+            return false;
+        }
+        if (params.SaveViewResults || params.ForceAuditLog) {
+            return false;
+        }
+        if (this.IsCallerInAmbientTransaction() || this.CurrentTransactionDepth > 0 || this.HasPhysicalTransaction) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Builds the deterministic single-flight key for an in-flight RunView execution.
+     * Includes connection string, entity/view identity, filter, orderBy, fields, resultType,
+     * pagination/keyset cursor, aggregates, and effective user role/row-filter security context.
+     */
+    protected buildSingleFlightRunViewKey(params: RunViewParams, contextUser?: UserInfo): string | null {
+        try {
+            const user = contextUser ?? this.CurrentUser;
+            if (!user) {
+                return null;
+            }
+            const entityInfo = params.EntityName ? this.EntityByName(params.EntityName) : undefined;
+            if (entityInfo?.AuditViewRuns && (params.ViewID || params.ViewName || params.ViewEntity)) {
+                return null;
+            }
+            const baseFingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
+                params,
+                this.InstanceConnectionString,
+            );
+            const fieldsKey = params.Fields && params.Fields.length > 0
+                ? [...params.Fields].map(f => f.trim().toLowerCase()).sort().join(',')
+                : '*';
+            const rlsClause = entityInfo && typeof entityInfo.GetEffectiveRowFilterWhereClause === 'function'
+                ? entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '')
+                : `user:${user.ID ?? ''}`;
+            const roleKey = user.UserRoles && user.UserRoles.length > 0
+                ? user.UserRoles.map(r => (r.RoleID ?? '').trim().toLowerCase()).sort().join(',')
+                : `user:${user.ID ?? ''}`;
+            const aggregatesKey = params.Aggregates && params.Aggregates.length > 0
+                ? JSON.stringify(params.Aggregates)
+                : '';
+            const afterKey = params.AfterKey ? params.AfterKey.ToConcatenatedString() : '';
+            const ve = params.ViewEntity as MJUserViewEntityExtended | undefined;
+            const viewEntityKey = ve
+                ? `${ve.ID ?? ''}:${ve.WhereClause ?? ''}:${ve.SmartFilterWhereClause ?? ''}`
+                : '';
+            return [
+                baseFingerprint,
+                `f:${fieldsKey}`,
+                `rt:${params.ResultType === 'count_only' ? 'count_only' : 'rows'}`,
+                `uss:${params.UserSearchString ?? ''}`,
+                `vid:${params.ViewID ?? ''}`,
+                `vn:${params.ViewName ?? ''}`,
+                `ve:${viewEntityKey}`,
+                `exRun:${params.ExcludeUserViewRunID ?? ''}`,
+                `exAll:${params.ExcludeDataFromAllPriorViewRuns ? '1' : '0'}`,
+                `ovEx:${params.OverrideExcludeFilter ?? ''}`,
+                `igMax:${params.IgnoreMaxRows ? '1' : '0'}`,
+                `max:${params.MaxRows ?? ''}`,
+                `start:${params.StartRow ?? ''}`,
+                `after:${afterKey}`,
+                `ds:${params.DataSource ?? ''}`,
+                `agg:${aggregatesKey}`,
+                `roles:${roleKey}`,
+                `rls:${rlsClause}`,
+            ].join('|');
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Shallow-clones a shared single-flight RunViewResult and its row objects so concurrent
+     * callers cannot mutate each other's result arrays or row properties in place.
+     */
+    protected cloneSingleFlightRunViewResult<T>(result: RunViewResult<unknown>): RunViewResult<T> {
+        if (!result) {
+            return result as RunViewResult<T>;
+        }
+        return {
+            ...result,
+            Results: Array.isArray(result.Results)
+                ? result.Results.map(row => (row && typeof row === 'object' ? ({ ...(row as Record<string, unknown>) } as T) : (row as T)))
+                : [],
+            AggregateResults: result.AggregateResults
+                ? result.AggregateResults.map(a => ({ ...a }))
+                : undefined,
+        };
+    }
+
+    /**
+     * Returns true when an identical read-only RunView is already in flight in the process-wide
+     * single-flight registry. Used by {@link InternalRunViews} so duplicate views in a batch can
+     * join an active query immediately without consuming a concurrency slot.
+     */
+    protected hasInFlightSingleFlightView(params: RunViewParams, contextUser?: UserInfo): boolean {
+        if (!this.canCoalesceRunViewInFlight(params)) {
+            return false;
+        }
+        const key = this.buildSingleFlightRunViewKey(params, contextUser);
+        return !!key && GenericDatabaseProvider._inFlightRunViews.has(key);
+    }
+
+    /**
      * The body of {@link InternalRunView}. `countExecutor`, when supplied, replaces the
      * direct execution of a `count_only` view's COUNT query — {@link InternalRunViews} uses
      * it to coalesce an all-`count_only` batch into one statement (see countOnlyBatch.ts).
      * Everything before that step — permissions, RLS, filter screening — is unchanged.
      */
     protected async RunViewCore<T = unknown>(
+        params: RunViewParams,
+        contextUser?: UserInfo,
+        countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
+    ): Promise<RunViewResult<T>> {
+        const singleFlightKey = this.canCoalesceRunViewInFlight(params, countExecutor)
+            ? this.buildSingleFlightRunViewKey(params, contextUser)
+            : null;
+
+        if (singleFlightKey) {
+            const existing = GenericDatabaseProvider._inFlightRunViews.get(singleFlightKey);
+            if (existing) {
+                existing.hasJoiners = true;
+                const shared = await existing.promise;
+                return this.cloneSingleFlightRunViewResult<T>(shared);
+            }
+
+            const entry: {
+                promise: Promise<RunViewResult<unknown>>;
+                hasJoiners: boolean;
+            } = {
+                promise: null as unknown as Promise<RunViewResult<unknown>>,
+                hasJoiners: false,
+            };
+
+            const executionPromise = this.executeRunViewCore<unknown>(params, contextUser, countExecutor)
+                .finally(() => {
+                    if (GenericDatabaseProvider._inFlightRunViews.get(singleFlightKey) === entry) {
+                        GenericDatabaseProvider._inFlightRunViews.delete(singleFlightKey);
+                    }
+                });
+            entry.promise = executionPromise;
+            GenericDatabaseProvider._inFlightRunViews.set(singleFlightKey, entry);
+
+            const result = await executionPromise;
+            return entry.hasJoiners
+                ? this.cloneSingleFlightRunViewResult<T>(result)
+                : (result as RunViewResult<T>);
+        }
+
+        return this.executeRunViewCore<T>(params, contextUser, countExecutor);
+    }
+
+    private async executeRunViewCore<T = unknown>(
         params: RunViewParams,
         contextUser?: UserInfo,
         countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
@@ -2569,8 +2752,60 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (IsCoalescibleCountBatch(params)) {
             return this.RunCoalescedCountBatch<T>(params, contextUser);
         }
-        const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
-        return Promise.all(promises);
+        if (params.length === 0) {
+            return [];
+        }
+        const limit = GenericDatabaseProvider.MaxConcurrentViewsPerBatch;
+        if (!limit || !Number.isFinite(limit) || limit <= 0 || params.length <= limit) {
+            const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
+            return Promise.all(promises);
+        }
+
+        const results = new Array<RunViewResult<T>>(params.length);
+        const started = new Array<boolean>(params.length).fill(false);
+        const joinerPromises: Promise<void>[] = [];
+        let cursor = 0;
+
+        const attachInFlightDuplicates = (fromIndex: number): void => {
+            if (typeof this.hasInFlightSingleFlightView !== 'function') {
+                return;
+            }
+            for (let j = fromIndex; j < params.length; j++) {
+                if (!started[j] && this.hasInFlightSingleFlightView(params[j], contextUser)) {
+                    started[j] = true;
+                    const joinIdx = j;
+                    joinerPromises.push(
+                        this.InternalRunView<T>(params[joinIdx], contextUser).then((res) => {
+                            results[joinIdx] = res;
+                        }),
+                    );
+                }
+            }
+        };
+
+        const runWorker = async (): Promise<void> => {
+            while (cursor < params.length) {
+                const idx = cursor++;
+                if (started[idx]) {
+                    continue;
+                }
+                started[idx] = true;
+                const viewPromise = this.InternalRunView<T>(params[idx], contextUser);
+                attachInFlightDuplicates(idx + 1);
+                results[idx] = await viewPromise;
+            }
+        };
+
+        const workerCount = Math.min(limit, params.length);
+        const workers: Promise<void>[] = [];
+        for (let w = 0; w < workerCount; w++) {
+            workers.push(runWorker());
+        }
+        await Promise.all(workers);
+        if (joinerPromises.length > 0) {
+            await Promise.all(joinerPromises);
+        }
+        return results;
     }
 
     /**
