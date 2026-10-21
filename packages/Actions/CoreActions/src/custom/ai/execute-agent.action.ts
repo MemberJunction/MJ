@@ -1,7 +1,7 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { LogError, type BaseEntity } from '@memberjunction/core';
+import { LogError, Metadata, ProjectEntityValueRowsForUser, type BaseEntity, type RecordChangeMetadataSource, type UserInfo } from '@memberjunction/core';
 import { ChatMessage } from '@memberjunction/ai';
 import { ExecuteAgentResult, MJAIAgentEntityExtended, type AgentRunAudience, type ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
@@ -92,7 +92,7 @@ export class ExecuteAgentAction extends BaseAction {
             // ---- Expose outputs for downstream action consumers ----
             this.setOutputParam(params, 'AgentRunID', runResult.agentRun?.ID ?? null);
             this.setOutputParam(params, 'Payload', runResult.payload ?? null);
-            this.setOutputParam(params, 'AgentResult', this.toStorableAgentResult(runResult));
+            this.setOutputParam(params, 'AgentResult', this.toStorableAgentResult(runResult, params));
 
             if (runResult.success) {
                 return {
@@ -223,17 +223,30 @@ export class ExecuteAgentAction extends BaseAction {
      * `memoryContext` when the agent injects memory — whose event plumbing is circular, so passing
      * any of them through fails the task after the agent has already run. Their field values carry
      * the same information; the entities themselves stay in-process.
+     *
+     * The values are projected for the action's caller, who receives them. The notes and examples
+     * come from the AI engine's cache, which is loaded as the system user, so they are full width
+     * whoever runs the action; without the projection a field the caller may not read would reach
+     * them here and in the action log.
      */
-    private toStorableAgentResult(runResult: ExecuteAgentResult) {
+    private toStorableAgentResult(runResult: ExecuteAgentResult, params: RunActionParams) {
         const { memoryContext } = runResult;
+        const provider = params.Provider ?? new Metadata();
+        const toRows = (entities: BaseEntity[]) => this.rowsForCaller(entities, provider, params.ContextUser);
         return {
             ...runResult,
-            agentRun: runResult.agentRun?.GetAll() ?? null,
+            agentRun: runResult.agentRun ? toRows([runResult.agentRun])[0] : null,
             memoryContext: memoryContext && {
-                notes: memoryContext.notes.map((note: BaseEntity) => note.GetAll()),
-                examples: memoryContext.examples.map((example: BaseEntity) => example.GetAll())
+                notes: toRows(memoryContext.notes),
+                examples: toRows(memoryContext.examples)
             }
         };
+    }
+
+    /** Field values of `entities` (all of one entity type), without the fields `user` may not read. */
+    private rowsForCaller(entities: BaseEntity[], provider: RecordChangeMetadataSource, user: UserInfo | undefined): Record<string, unknown>[] {
+        const rows: Record<string, unknown>[] = entities.map((entity) => entity.GetAll());
+        return ProjectEntityValueRowsForUser(provider, entities[0]?.EntityInfo, rows, user) ?? rows;
     }
 
     // ------------------------------------------------------------------------
