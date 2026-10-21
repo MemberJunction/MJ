@@ -11,7 +11,7 @@
  */
 
 import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
-import { ChatMessage, ChatToolCall } from '@memberjunction/ai';
+import { ChatMessage, ChatReasoningBlock, ChatToolCall } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
@@ -639,6 +639,11 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
         toolCalls: ChatToolCall[];
         /** Whether results go back as native tool-result turns — the runner's recorded decision. */
         sendResultsNatively: boolean;
+        /**
+         * The provider's reasoning blocks from the turn, replayed with the call turn so the model
+         * keeps its reasoning across the tool loop. Opaque to the loop.
+         */
+        reasoning?: ChatReasoningBlock[];
     };
     /** On the payload-only Retry, the call id of the `payload_change_request` being answered. */
     payloadToolCallId?: string;

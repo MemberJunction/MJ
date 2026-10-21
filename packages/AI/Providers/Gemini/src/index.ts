@@ -4,7 +4,7 @@
 import { GoogleGenAI, ApiError, Content, Part, Blob, FileData, FunctionDeclaration, FunctionCallingConfigMode, ToolConfig, ToolListUnion, GenerateContentResponseUsageMetadata, ThinkingConfig } from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
 import { AcceptsCustomSampling } from "./geminiSampling";
 import { GeminiThinkingFallback, ResolveGeminiThinkingConfig } from "./geminiThinking";
@@ -58,6 +58,9 @@ const GEMINI_INJECTED_CALL_THOUGHT_SIGNATURE = 'skip_thought_signature_validator
  * on capture, compared on replay, and a foreign signature is replaced with the placeholder.
  */
 const THOUGHT_SIGNATURE_ORIGIN_KEY = 'thoughtSignatureOrigin';
+
+/** The `provider` this driver (and Vertex, which extends it) stamps on its {@link ChatReasoningBlock}s. */
+const GEMINI_REASONING_PROVIDER = 'gemini';
 
 /**
  * The user turn Gemini is given when a conversation would otherwise open with a model turn.
@@ -317,9 +320,11 @@ export class GeminiLLM extends BaseLLM {
                 throw new Error(`Content blocked by model: ${finishReason}${blockedCategories ? ` - ${blockedCategories}` : ''}`);
             }
 
-            const rawContent = candidate.content?.parts?.find(part => part.text && !part.thought)?.text || '';
+            // Every visible text part, not only the first: a turn can split its answer across parts.
+            const rawContent = (candidate.content?.parts ?? []).filter(part => part.text && !part.thought).map(part => part.text).join('');
             const thinking = (candidate.content?.parts ?? []).filter(part => part.thought && part.text).map(part => part.text).join('');
             const toolCalls = this.extractToolCalls(candidate.content?.parts, this.thoughtSignatureOrigin(modelName));
+            const reasoning = GeminiLLM.extractReasoning(candidate.content?.parts, this.thoughtSignatureOrigin(modelName));
 
             // Check if we got empty content despite no blocking. A native tool call IS output, and a
             // forced/clean tool-call turn legitimately carries no text at all — so tool calls
@@ -375,7 +380,8 @@ export class GeminiLLM extends BaseLLM {
                             role: 'assistant',
                             content: content,
                             thinking: thinkingContent || undefined,
-                            toolCalls: toolCalls
+                            toolCalls: toolCalls,
+                            ...(reasoning ? { reasoning } : {})
                         },
                         // Normalize the tool-call case and Gemini's "tried to call a tool but the call was
                         // unreadable" case; every other reason keeps Gemini's own value.
@@ -1245,6 +1251,54 @@ export class GeminiLLM extends BaseLLM {
     }
 
     /**
+     * A turn's thought parts and signed text parts, as replayable reasoning.
+     *
+     * Thought parts are kept with their signature when they have one. Text parts are kept only when
+     * at least one of them is signed, and then all of them, in order — the replay rebuilds the
+     * turn's text from these blocks, so each signature lands back on the text it was minted for.
+     * Function-call signatures travel on the calls themselves (see {@link extractToolCalls}).
+     *
+     * @param parts The candidate's content parts
+     * @param signatureOrigin Where this response's signatures validate (see {@link thoughtSignatureOrigin})
+     * @returns The blocks, or undefined when the turn had nothing to replay
+     */
+    private static extractReasoning(parts: Part[] | undefined, signatureOrigin: string): ChatReasoningBlock[] | undefined {
+        const all = parts ?? [];
+        const signature = (part: Part) => (part.thoughtSignature ? { signature: part.thoughtSignature } : {});
+        const blocks: ChatReasoningBlock[] = all
+            .filter((part) => part.thought && part.text)
+            .map((part) => ({ provider: GEMINI_REASONING_PROVIDER, kind: 'thought', text: part.text, ...signature(part), origin: signatureOrigin }));
+        const textParts = all.filter((part) => part.text && !part.thought && !part.functionCall);
+        if (textParts.some((part) => part.thoughtSignature)) {
+            blocks.push(...textParts.map((part): ChatReasoningBlock =>
+                ({ provider: GEMINI_REASONING_PROVIDER, kind: 'signed_text', text: part.text, ...signature(part), origin: signatureOrigin })));
+        }
+        return blocks.length > 0 ? blocks : undefined;
+    }
+
+    /**
+     * The parts that replay a model turn's own reasoning: its thought parts, and — when its text
+     * parts were signed and the message text is still exactly theirs — those text parts with their
+     * signatures. `text` is undefined when the message's content should be mapped as usual: no
+     * signed text, or text that was changed after the turn (compaction), which a signature would
+     * no longer match. Blocks from another provider, or signed where this request is not going,
+     * are dropped — a foreign signature is a hard 400.
+     */
+    private static reasoningPartsForReplay(message: ChatMessage, signatureOrigin: string | undefined): { thoughts: Part[]; text?: Part[] } {
+        const usable = (message.reasoning ?? []).filter((block) =>
+            block.provider === GEMINI_REASONING_PROVIDER
+            && !(signatureOrigin !== undefined && block.origin !== undefined && block.origin !== signatureOrigin));
+        const toPart = (block: ChatReasoningBlock, thought: boolean): Part =>
+            ({ text: block.text ?? '', ...(thought ? { thought: true } : {}), ...(block.signature ? { thoughtSignature: block.signature } : {}) });
+        const thoughts = usable.filter((block) => block.kind === 'thought').map((block) => toPart(block, true));
+        const signedText = usable.filter((block) => block.kind === 'signed_text');
+        const textMatches = typeof message.content === 'string'
+            && signedText.length > 0
+            && signedText.map((block) => block.text ?? '').join('').trim() === message.content.trim();
+        return { thoughts, text: textMatches ? signedText.map((block) => toPart(block, false)) : undefined };
+    }
+
+    /**
      * Maps one MJ message to a Gemini history entry.
      *
      * @param message The message to map
@@ -1252,7 +1306,10 @@ export class GeminiLLM extends BaseLLM {
      *   call's thought signature from anywhere else is swapped for the placeholder.
      */
     public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage, signatureOrigin?: string): Content {
-        const parts = GeminiLLM.MapMJContentToGeminiParts(message.content);
+        // A model turn replays its own thoughts first, then its text, then its calls — the order
+        // Gemini produced them in.
+        const replay = message.role === 'assistant' ? GeminiLLM.reasoningPartsForReplay(message, signatureOrigin) : { thoughts: [] };
+        const parts = [...replay.thoughts, ...(replay.text ?? GeminiLLM.MapMJContentToGeminiParts(message.content))];
 
         // An assistant turn that called tools must replay those calls as `functionCall` parts so the
         // `functionResponse` parts that follow have something to pair with.

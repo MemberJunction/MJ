@@ -5988,9 +5988,13 @@ export class AIPromptRunner {
     // 'Running' INSERT + its finalizeSave reload land), so the reload can never revert them and the
     // chained UPDATE persists the finalized state — the "stuck at Running" race is structurally
     // impossible. The execution flow does NOT await the save.
-    this._promptRunQueue.Update(promptRun, () =>
-      this.applyFinalizedPromptRunFields(promptRun, prompt, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts, cumulativeTokens),
-    );
+    this._promptRunQueue.Update(promptRun, () => {
+      // Re-applied inside the post-INSERT task: it was set on the record before the INSERT's
+      // finalizeSave reload landed, and that reload reverts it to NULL on any call that returns
+      // faster than the INSERT. Set early too (see executeSinglePrompt), for in-memory readers.
+      promptRun.ToolCallingMode = GetToolCallingMode(modelResult) ?? null;
+      this.applyFinalizedPromptRunFields(promptRun, prompt, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts, cumulativeTokens);
+    });
   }
 
   /**

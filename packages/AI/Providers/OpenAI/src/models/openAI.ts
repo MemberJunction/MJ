@@ -887,6 +887,9 @@ export class OpenAILLM extends BaseLLM {
                     } as ChatCompletionUserMessageParam;
                 
                 case 'assistant':
+                    // `m.reasoning` is not replayed: Chat Completions has no field for reasoning
+                    // items, so a reasoning model's thinking does not carry across tool turns here.
+                    // That needs the Responses API, which this driver does not use yet.
                     return {
                         role: 'assistant' as const,
                         // OpenAI wants null, not '', when the turn is carried entirely by tool calls.
