@@ -51,6 +51,7 @@ import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEn
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
+import type { AgentToolDefinition } from '../native-tools/agent-tools';
 import { FINISH_IF_MODE_WARNING_SHOWN_MAX, FINISH_IF_MODE_WARNINGS_REMEMBERED } from '../finish-if-mode-warnings';
 import { LogErrorEx, LogStatus } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
@@ -158,6 +159,7 @@ interface AgentRow {
     MaxIterationsPerRun: number | null;
     AgentTypePromptParams: string | null;
     OwnerUserID: string | null;
+    TypeConfiguration: string | null;
 }
 
 /** ActionParam-shaped record used by the scripted action results. */
@@ -457,6 +459,7 @@ function makeAgentRow(overrides: Partial<AgentRow> = {}): AgentRow {
         MaxIterationsPerRun: null,
         AgentTypePromptParams: null,
         OwnerUserID: null,
+        TypeConfiguration: null,
         ...overrides,
     };
 }
@@ -2732,3 +2735,378 @@ describe('BaseAgent.Execute — agent.AgentTypePromptParams task graph gate & fo
     });
 });
 
+
+describe('BaseAgent.Execute — agent-local tools: write, a failing edit, a successful edit', () => {
+    type DocPayload = { doc?: string };
+    type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
+
+    /** `write_doc` / `edit_doc`, the shape of a write/edit agent: state lives in the payload. */
+    const docTools: AgentToolDefinition<DocPayload>[] = [
+        {
+            Name: 'write_doc',
+            Description: 'Call this to write the whole document.',
+            InputSchema: { type: 'object', properties: { content: { type: 'string' } }, required: ['content'] },
+            Execute: async (args) => ({ Content: 'Document written.', IsError: false, PayloadChange: { newElements: { doc: String(args.content) } } })
+        },
+        {
+            Name: 'edit_doc',
+            Description: 'Call this to replace one exact passage of the document.',
+            InputSchema: { type: 'object', properties: { old_string: { type: 'string' }, new_string: { type: 'string' } }, required: ['old_string', 'new_string'] },
+            Execute: async (args, context) => {
+                const doc = context.CurrentPayload.doc ?? '';
+                const oldString = String(args.old_string);
+                if (!doc.includes(oldString)) {
+                    return { Content: `old_string not found: '${oldString}'`, IsError: true };
+                }
+                return { Content: 'Edit applied.', IsError: false, PayloadChange: { updateElements: { doc: doc.replace(oldString, String(args.new_string)) } } };
+            }
+        }
+    ];
+
+    class DocAgent extends HarnessAgent {
+        protected override GetAgentTools(): AgentToolDefinition[] {
+            return docTools as AgentToolDefinition[];
+        }
+    }
+
+    /** A native turn calling one of the agent's tools, results going back natively. */
+    function llmToolCall(id: string, name: string, args: Record<string, unknown>): AIPromptRunResult {
+        const chatResult = {
+            success: true,
+            data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: [{ id, name, arguments: args }] } }] },
+        } as unknown as AIPromptRunResult['chatResult'];
+        RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'Native', controlFlow: 'envelope', toolResults: true });
+        return { success: true, result: { result: null } as unknown as string, rawResult: '', chatResult };
+    }
+
+    function makeDocAgent(script: Array<(params: AIPromptParams, callIndex: number) => AIPromptRunResult>) {
+        const agent = new DocAgent();
+        const runner = new ScriptedPromptRunner(script);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        return { agent, runner };
+    }
+
+    /** The tool turn answering the assistant turn that made `callId`. */
+    function answerTo(messages: AgentChatMessage[], callId: string): ToolBlock[] {
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === callId));
+        const next = messages[at + 1];
+        expect(next?.role).toBe('tool');
+        return next.content as unknown as ToolBlock[];
+    }
+
+    it('applies each change in order, returns the failed edit to the model as an error, and logs a Tool step per call', async () => {
+        const { agent, runner } = makeDocAgent([
+            () => llmToolCall('call_write', 'write_doc', { content: '# Report\nHello world' }),
+            () => llmToolCall('call_bad_edit', 'edit_doc', { old_string: 'Goodbye', new_string: 'Hi' }),
+            () => llmToolCall('call_edit', 'edit_doc', { old_string: 'Hello', new_string: 'Hi' }),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect((result.payload as DocPayload).doc).toBe('# Report\nHi world');
+
+        const toolSteps = harness.steps.filter((s) => s.StepType === 'Tool');
+        expect(toolSteps.map((s) => [s.StepName, s.Success])).toEqual([
+            ['Agent Tool: write_doc', true],
+            ['Agent Tool: edit_doc', false],
+            ['Agent Tool: edit_doc', true],
+        ]);
+
+        const messages = params.conversationMessages as AgentChatMessage[];
+        expect(answerTo(messages, 'call_write')).toEqual([expect.objectContaining({ toolCallId: 'call_write', isError: false, content: 'Document written.' })]);
+        expect(answerTo(messages, 'call_bad_edit')).toEqual([expect.objectContaining({ toolCallId: 'call_bad_edit', isError: true, content: "old_string not found: 'Goodbye'" })]);
+        expect(answerTo(messages, 'call_edit')).toEqual([expect.objectContaining({ toolCallId: 'call_edit', isError: false })]);
+        // No retry or recap message rides along with the results.
+        expect(messages.some((m) => typeof m.content === 'string' && m.content.includes('Retrying due to'))).toBe(false);
+
+        // The turn after the failed edit saw the document exactly as the write left it.
+        expect(injectedPayload(runner.Calls[2])?.doc).toBe('# Report\nHello world');
+    });
+
+    it('rejects a change outside PayloadSelfWritePaths and tells the model, leaving the payload untouched', async () => {
+        harness.agent = makeAgentRow({ PayloadSelfWritePaths: JSON.stringify(['notes']) });
+        const { agent } = makeDocAgent([
+            () => llmToolCall('call_write', 'write_doc', { content: 'Hello' }),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect((result.payload as DocPayload | undefined)?.doc).toBeUndefined();
+        const answer = answerTo(params.conversationMessages as AgentChatMessage[], 'call_write');
+        expect(answer[0].isError).toBe(true);
+        expect(answer[0].content).toContain('may not write');
+        expect(harness.steps.find((s) => s.StepType === 'Tool')?.Success).toBe(false);
+    });
+
+    it('reports a tool that throws as an error result instead of failing the run', async () => {
+        const throwing: AgentToolDefinition = {
+            Name: 'explode', Description: 'Call this to fail.', InputSchema: { type: 'object', properties: {} },
+            Execute: async () => { throw new Error('disk full'); }
+        };
+        class ThrowingAgent extends HarnessAgent {
+            protected override GetAgentTools(): AgentToolDefinition[] {
+                return [throwing];
+            }
+        }
+        const agent = new ThrowingAgent();
+        (agent as unknown as AgentInternals)._promptRunner = new ScriptedPromptRunner([
+            () => llmToolCall('call_x', 'explode', {}),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(answerTo(params.conversationMessages as AgentChatMessage[], 'call_x')).toEqual([
+            expect.objectContaining({ isError: true, content: 'The tool failed: disk full' })
+        ]);
+    });
+
+    /** An implicit-control-flow turn with several calls, results going back natively. */
+    function llmImplicitCalls(calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>): AIPromptRunResult {
+        const chatResult = {
+            success: true,
+            data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: calls } }] },
+        } as unknown as AIPromptRunResult['chatResult'];
+        RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'NativeImplicit', controlFlow: 'implicit', toolResults: true });
+        return { success: true, result: { result: null } as unknown as string, rawResult: '', chatResult, promptRun: { ToolCallingMode: 'NativeImplicit' } as unknown as MJAIPromptRunEntity };
+    }
+
+    it('with relaxed turn shapes, a failed write declines the complete_task that came after it', async () => {
+        harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { RelaxedTurnShapes: true } }) });
+        const { agent, runner } = makeDocAgent([
+            () => llmImplicitCalls([
+                { id: 'call_bad_edit', name: 'edit_doc', arguments: { old_string: 'Goodbye', new_string: 'Hi' } },
+                { id: 'call_done', name: 'complete_task', arguments: { message: 'Edited.' } }
+            ]),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        const answers = answerTo(params.conversationMessages as AgentChatMessage[], 'call_done');
+        expect(answers.map((b) => [b.toolCallId, b.isError])).toEqual([['call_bad_edit', true], ['call_done', true]]);
+        expect(answers[1].content).toMatch(/A write on this turn failed/);
+        expect(params.conversationMessages.some((m) => typeof m.content === 'string' && m.content.includes('Task complete'))).toBe(false);
+    });
+
+    it('with relaxed turn shapes, a write that succeeds lets the complete_task after it end the run', async () => {
+        harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { RelaxedTurnShapes: true } }) });
+        const { agent, runner } = makeDocAgent([
+            () => llmImplicitCalls([
+                { id: 'call_write', name: 'write_doc', arguments: { content: 'Hello' } },
+                { id: 'call_done', name: 'complete_task', arguments: { message: 'Written.' } }
+            ]),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(1);
+        expect((result.payload as DocPayload).doc).toBe('Hello');
+    });
+});
+
+describe('BaseAgent.Execute — native-only control plane: framework capabilities as tools', () => {
+    type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
+
+    function llmToolCall(id: string, name: string, args: Record<string, unknown>): AIPromptRunResult {
+        const chatResult = {
+            success: true,
+            data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: [{ id, name, arguments: args }] } }] },
+        } as unknown as AIPromptRunResult['chatResult'];
+        RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'NativeImplicit', controlFlow: 'implicit', toolResults: true });
+        return { success: true, result: { result: null } as unknown as string, rawResult: '', chatResult, promptRun: { ToolCallingMode: 'NativeImplicit' } as unknown as MJAIPromptRunEntity };
+    }
+
+    it('declares scratchpad_write, asks for the tools-only prompt, and applies a scratchpad write made on a tool-call turn', async () => {
+        harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { NativeOnly: true } }) });
+        const { agent, runner } = makeAgent([
+            () => llmToolCall('call_pad', 'scratchpad_write', { notes: 'Sales DB starts in 2019.' }),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls[0].tools?.map((t) => t.name)).toContain('scratchpad_write');
+        expect(runner.Calls[0].data?._NATIVE_ONLY_REQUESTED).toBe(true);
+        const scratchpad = (agent as unknown as { _scratchpadManager: { GetNotes(): string } })._scratchpadManager;
+        expect(scratchpad.GetNotes()).toBe('Sales DB starts in 2019.');
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_pad'));
+        expect(messages[at + 1].role).toBe('tool');
+        expect(messages[at + 1].content as unknown as ToolBlock[]).toEqual([expect.objectContaining({ toolCallId: 'call_pad', isError: false })]);
+        expect(harness.steps.some((s) => s.StepType === 'Tool' && s.StepName === 'Agent Tool: scratchpad_write')).toBe(true);
+    });
+
+    it('runs a memory_write made on a tool-call turn through the memory write path, and answers the call with its outcome', async () => {
+        harness.agent = makeAgentRow({ AllowMemoryWrite: true, TypeConfiguration: JSON.stringify({ NativeControl: { NativeOnly: true } }) });
+        const { agent, runner } = makeAgent([
+            () => llmToolCall('call_mem', 'memory_write', { note: 'The user reports revenue in EUR.', type: 'Preference', scopeHint: 'user' }),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const writes: Array<{ note: string; type: string; scopeHint?: string }> = [];
+        (agent as unknown as { _memoryWriteManager: { Clear: () => void; ExecuteWrite: (w: { note: string; type: string; scopeHint?: string }) => Promise<{ disposition: string }> } })
+            ._memoryWriteManager = { Clear: () => undefined, ExecuteWrite: async (w) => { writes.push(w); return { disposition: 'created' }; } };
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls[0].tools?.map((t) => t.name)).toContain('memory_write');
+        expect(writes).toEqual([{ note: 'The user reports revenue in EUR.', type: 'Preference', scopeHint: 'user' }]);
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_mem'));
+        expect(messages[at + 1].content as unknown as ToolBlock[]).toEqual([expect.objectContaining({ toolCallId: 'call_mem', isError: false, content: 'created' })]);
+        expect(harness.steps.some((s) => s.StepType === 'Tool' && s.StepName === 'Agent Tool: memory_write' && s.Success === true)).toBe(true);
+    });
+
+    it('declares no memory_write for a native-only agent that may not write memory', async () => {
+        harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { NativeOnly: true } }) });
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        await agent.Execute(makeParams());
+
+        expect(runner.Calls[0].tools?.map((t) => t.name) ?? []).not.toContain('memory_write');
+    });
+
+    it('declares no framework tools for an agent that did not opt in', async () => {
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        await agent.Execute(makeParams());
+
+        expect(runner.Calls[0].tools?.map((t) => t.name) ?? []).not.toContain('scratchpad_write');
+        expect(runner.Calls[0].data?._NATIVE_ONLY_REQUESTED).toBeUndefined();
+    });
+});
+
+describe('BaseAgent.Execute — one native turn that acts and then asks or completes', () => {
+    type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
+    const okAction = () => { harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null }); };
+
+    /** An implicit-control-flow turn with several native calls. */
+    function llmCalls(calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>): AIPromptRunResult {
+        const chatResult = {
+            success: true,
+            data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: calls } }] },
+        } as unknown as AIPromptRunResult['chatResult'];
+        RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'NativeImplicit', controlFlow: 'implicit', toolResults: true });
+        return { success: true, result: { result: null } as unknown as string, rawResult: '', chatResult, promptRun: { ToolCallingMode: 'NativeImplicit' } as unknown as MJAIPromptRunEntity };
+    }
+    const actionCall = { id: 'call_act', name: SanitizeToolName(ACTION_NAME), arguments: { foo: 'bar' } };
+    const relaxed = () => { harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { RelaxedTurnShapes: true } }) }); };
+
+    it('by default runs nothing and asks again, answering every call with the reason', async () => {
+        okAction();
+        const { agent, runner } = makeAgent([
+            () => llmCalls([actionCall, { id: 'call_ask', name: 'ask_user', arguments: { message: 'Which region?' } }]),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(harness.runActionCalls).toHaveLength(0);
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_ask'));
+        const answers = messages[at + 1].content as unknown as ToolBlock[];
+        expect(answers.map((b) => [b.toolCallId, b.isError])).toEqual([['call_act', true], ['call_ask', true]]);
+        expect(answers[1].content).toMatch(/ask_user must be the only call/);
+    });
+
+    it('with relaxed turn shapes, runs the Action and answers ask_user as not run', async () => {
+        relaxed();
+        okAction();
+        const { agent, runner } = makeAgent([
+            () => llmCalls([actionCall, { id: 'call_ask', name: 'ask_user', arguments: { message: 'Which region?' } }]),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(harness.runActionCalls).toHaveLength(1);
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_ask'));
+        const answers = messages[at + 1].content as unknown as ToolBlock[];
+        expect(answers.find((b) => b.toolCallId === 'call_act')?.isError).toBe(false);
+        expect(answers.find((b) => b.toolCallId === 'call_ask')?.content).toMatch(/read their results/);
+    });
+
+    it('with relaxed turn shapes, runs the Action and answers complete_task as not run, so the model completes after reading the result', async () => {
+        relaxed();
+        okAction();
+        const { agent, runner } = makeAgent([
+            () => llmCalls([actionCall, { id: 'call_done', name: 'complete_task', arguments: { message: 'Done' } }]),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(harness.runActionCalls).toHaveLength(1);
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_done'));
+        const answers = messages[at + 1].content as unknown as ToolBlock[];
+        expect(answers.find((b) => b.toolCallId === 'call_act')?.isError).toBe(false);
+        expect(answers.find((b) => b.toolCallId === 'call_done')).toEqual(expect.objectContaining({ isError: true }));
+        expect(messages[at + 2]?.role).not.toBe('tool');
+        expect(answers.find((b) => b.toolCallId === 'call_done')?.content).toMatch(/read their results/);
+        // Both answers sit directly behind the call turn, before anything else.
+        expect(messages[at + 1].role).toBe('tool');
+    });
+});
+
+describe('BaseAgent.Execute — a failed native action carries its guidance in its own error result', () => {
+    type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
+
+    it('puts the failure guidance inside the is_error tool result and sends no separate guidance message', async () => {
+        harness.runAction = () => ({ Success: false, Message: 'boom — downstream system unavailable', Params: [], Result: { ResultCode: 'FAILED' }, LogEntry: null });
+        const { agent } = makeAgent([
+            () => llmNativeActionCall('call_1', true),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_1'));
+        const result = (messages[at + 1].content as unknown as ToolBlock[]).find((b) => b.toolCallId === 'call_1');
+        expect(result?.isError).toBe(true);
+        expect(result?.content).toContain('boom — downstream system unavailable');
+        expect(result?.content).toContain(`Action '${ACTION_NAME}'`);
+        expect(messages.some((m) => typeof m.content === 'string' && m.content.includes('Action Execution Failure Guidance'))).toBe(false);
+    });
+
+    it('keeps the separate guidance message when results go back as markdown', async () => {
+        harness.runAction = () => ({ Success: false, Message: 'boom', Params: [], Result: { ResultCode: 'FAILED' }, LogEntry: null });
+        const { agent } = makeAgent([
+            () => llmNativeActionCall('call_1', false),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        expect(params.conversationMessages.some((m) => typeof m.content === 'string' && m.content.includes('Action Execution Failure Guidance'))).toBe(true);
+    });
+});

@@ -15,7 +15,11 @@ import { MJAIAgentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity, M
 import { BuildActionToolSet, CoerceActionArguments, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { DescribeValueSchemaInline, GetStoredValueSchema } from './native-tools/action-param-schema';
 import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
-import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
+import { TurnToolCallingMode } from './native-tools/turn-mode';
+import { NATIVE_CONTROL_TEMPLATE_DATA, NATIVE_ONLY_TEMPLATE_FLAG, ResolveNativeControlConfig, type NativeControlConfig } from './native-tools/native-control-config';
+import type { AgentToolContext, AgentToolDefinition, AgentToolResult } from './native-tools/agent-tools';
+import { BuildFrameworkTools, type FrameworkToolAvailability, type FrameworkToolHost } from './native-tools/framework-tools';
+import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactAnsweredToolCallArguments, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID, ResolvePayloadAtEnd } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
@@ -88,6 +92,7 @@ import {
     MessageLifecycleEvent,
     AgentChatMessage,
     AgentChatMessageMetadata,
+    AgentToolCallRequest,
     AIModelSelectionInfo,
     ConversationUtility,
     ActionChange,
@@ -119,6 +124,7 @@ import {
     SkillAvailabilityPurpose,
     ArtifactDirective,
     AgentDecisionRequest,
+    AgentScratchpad,
     AgentDecisionResult,
     AgentDecisionAnswerSummary,
     AgentFinishIf,
@@ -337,6 +343,11 @@ export interface ActionResultCrushConfig {
      * applies. Opt in per agent type via the `crushCodeLang` prompt param or a subclass override.
      */
     codeLang: CodeLang | undefined;
+    /**
+     * Actions whose results are never crushed, by Action name — large exact payloads such as code
+     * or specifications the model must read verbatim. Set with the `uncrushedActions` prompt param.
+     */
+    exemptActions?: ReadonlySet<string>;
 }
 
 /** One failed loop iteration (ForEach or While), or a loop that failed before its first iteration. */
@@ -1685,6 +1696,12 @@ export class BaseAgent {
      * "Run Ad-hoc Query". Left undefined on the envelope path so the loop can tell the two apart.
      */
     protected _nativeToolBindings: ReadonlyMap<string, NativeToolBinding> | undefined;
+    /** Results of the agent-tool calls the current prompt step ran, waiting for their call turn to be replayed. */
+    private _pendingAgentToolResults: { results: NativeToolResult[] } | undefined;
+    /** conversation_tool calls made on the current prompt turn, for the per-turn cap. */
+    private _conversationToolTurn: { turn: number; count: number } | undefined;
+    /** The parsed native control configuration, and the `TypeConfiguration` it was parsed from. */
+    private _nativeControl: { source: string | null; config: NativeControlConfig } | undefined;
     /** the model turn whose assistant call message has already been replayed into history (by reference). */
     private _lastNativeTurnAppended: BaseAgentNextStep['nativeTurn'] | undefined;
 
@@ -5191,7 +5208,7 @@ export class BaseAgent {
      */
     protected recordToolCallingInstrumentation(stepEntity: MJAIAgentRunStepEntityExtended, promptResult: AIPromptRunResult): void {
         try {
-            const mode = promptResult?.promptRun?.ToolCallingMode;
+            const mode = TurnToolCallingMode(promptResult);
             if (mode) {
                 stepEntity.ToolCallingMode = mode;
             }
@@ -5262,17 +5279,25 @@ export class BaseAgent {
      * action results as ONE tool turn — a tool_result block per call, paired by id — when the
      * turn's results go back natively; otherwise the markdown user message as before. An action that
      * cannot be paired with a call id keeps the markdown message for itself.
+     *
+     * A failed action's guidance (from `failureGuidance`) rides inside its own error result, where
+     * the model reads it as part of that call's outcome rather than as a separate instruction.
+     *
+     * @returns The summaries answered as native tool results — the caller still owes the rest any
+     *   guidance, as a message
      */
     protected appendActionResults(
         params: ExecuteAgentParams,
         summaries: ActionResultSummary[],
         resultsMessage: string,
         metadata: AgentChatMessageMetadata | undefined,
-        previousDecision: BaseAgentNextStep
-    ): void {
+        previousDecision: BaseAgentNextStep,
+        failureGuidance?: ReadonlyMap<ActionResultSummary, string>
+    ): ReadonlySet<ActionResultSummary> {
+        const answered = new Set<ActionResultSummary>();
         if (!previousDecision.nativeTurn?.sendResultsNatively) {
             params.conversationMessages.push({ role: 'user', content: resultsMessage, metadata } as AgentChatMessage);
-            return;
+            return answered;
         }
         const unpaired = [...(previousDecision.actions ?? [])];
         const results: NativeToolResult[] = [...this.payloadToolResult(previousDecision)];
@@ -5284,19 +5309,22 @@ export class BaseAgent {
                 orphans.push(summary);
                 continue;
             }
+            const guidance = failureGuidance?.get(summary);
             results.push({
                 toolCallId: action.toolCallId,
                 toolName: SanitizeToolName(summary.actionName),
-                content: this.formatActionResultsAsMarkdown([summary]),
+                content: this.formatActionResultsAsMarkdown([summary]) + (guidance ? `\n\n${guidance}` : ''),
                 isError: !summary.success
             });
+            answered.add(summary);
         }
         if (results.length > 0) {
-            params.conversationMessages.push(BuildToolResultTurn(results, metadata) as AgentChatMessage);
+            this.pushToolResultTurn(params, BuildToolResultTurn(results, metadata) as AgentChatMessage);
         }
         if (orphans.length > 0) {
             params.conversationMessages.push({ role: 'user', content: `Action results:\n${this.formatActionResultsAsMarkdown(orphans)}`, metadata } as AgentChatMessage);
         }
+        return answered;
     }
 
     /**
@@ -5323,19 +5351,60 @@ export class BaseAgent {
         }
         // Only the most recent assistant call turn can still be open — anything earlier was
         // answered by its own branch or closed by a previous pass through here.
-        let at = -1;
-        for (let i = messages.length - 1; i >= 0; i--) {
-            const candidate = messages[i] as AgentChatMessage;
-            if (candidate.role === 'assistant' && candidate.toolCalls?.length) {
-                at = i;
-                break;
-            }
-        }
+        const at = BaseAgent.lastToolCallTurnIndex(messages);
         if (at < 0) {
             return;
         }
+        const answered = BaseAgent.toolCallIdsAnsweredAfter(messages, at);
+        // A call with no id cannot be paired by any provider, so it cannot be answered here
+        // either — `extractOpenAICompatibleToolCalls` substitutes '' when a host omits the id.
+        const unanswered = ((messages[at] as AgentChatMessage).toolCalls ?? [])
+            .filter((call) => !!call.id && !answered.has(call.id));
+        if (unanswered.length === 0) {
+            return;
+        }
+        const synthetic = BuildToolResultTurn(
+            unanswered.map((call) => ({
+                toolCallId: call.id,
+                toolName: call.name,
+                content: 'Not executed — the agent did not run this call on this turn. See the message that follows.',
+                isError: true
+            })),
+            { turnAdded: this._promptTurnCount, messageType: 'action-result' }
+        ) as AgentChatMessage;
+        BaseAgent.insertToolResultsAfterCallTurn(messages, at, synthetic);
+    }
+
+    /**
+     * Appends a tool turn answering the latest call turn. When that call turn is already followed
+     * by a tool turn — declined calls, or agent-tool results, answered first — the results join it,
+     * because Anthropic takes every result for a call turn from the one message that follows it.
+     */
+    protected pushToolResultTurn(params: ExecuteAgentParams, results: AgentChatMessage): void {
+        const messages = params.conversationMessages;
+        const at = BaseAgent.lastToolCallTurnIndex(messages);
+        if (at >= 0 && at === messages.length - 2 && messages[at + 1].role === 'tool') {
+            BaseAgent.insertToolResultsAfterCallTurn(messages, at, results);
+            return;
+        }
+        messages.push(results);
+    }
+
+    /** The index of the most recent assistant turn that made tool calls, or -1. */
+    private static lastToolCallTurnIndex(messages: ChatMessage[]): number {
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const candidate = messages[i] as AgentChatMessage;
+            if (candidate.role === 'assistant' && candidate.toolCalls?.length) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** The call ids that already have a `tool_result` in some message after the call turn. */
+    private static toolCallIdsAnsweredAfter(messages: ChatMessage[], callTurnIndex: number): Set<string> {
         const answered = new Set<string>();
-        for (let i = at + 1; i < messages.length; i++) {
+        for (let i = callTurnIndex + 1; i < messages.length; i++) {
             const content = messages[i].content;
             if (!Array.isArray(content)) {
                 continue;
@@ -5346,22 +5415,25 @@ export class BaseAgent {
                 }
             }
         }
-        // A call with no id cannot be paired by any provider, so it cannot be answered here
-        // either — `extractOpenAICompatibleToolCalls` substitutes '' when a host omits the id.
-        const unanswered = ((messages[at] as AgentChatMessage).toolCalls ?? [])
-            .filter((call) => !!call.id && !answered.has(call.id));
-        if (unanswered.length === 0) {
+        return answered;
+    }
+
+    /**
+     * Places a tool turn immediately after the assistant turn whose calls it answers.
+     *
+     * Anthropic requires every result for a call turn in the single message that follows it, and
+     * OpenAI requires the call turn to be followed by its tool messages — so a result appended after
+     * a retry message that already sits behind the call is rejected by both. When the message right
+     * after the call turn is already a tool turn, the results merge into it instead of opening a
+     * second one.
+     */
+    private static insertToolResultsAfterCallTurn(messages: ChatMessage[], callTurnIndex: number, results: AgentChatMessage): void {
+        const adjacent = messages[callTurnIndex + 1];
+        if (adjacent?.role === 'tool' && Array.isArray(adjacent.content) && Array.isArray(results.content)) {
+            messages[callTurnIndex + 1] = { ...adjacent, content: [...adjacent.content, ...results.content] };
             return;
         }
-        params.conversationMessages.push(BuildToolResultTurn(
-            unanswered.map((call) => ({
-                toolCallId: call.id,
-                toolName: call.name,
-                content: 'Not executed — the agent did not run this call on this turn. See the message that follows.',
-                isError: true
-            })),
-            { turnAdded: this._promptTurnCount, messageType: 'action-result' }
-        ) as AgentChatMessage);
+        messages.splice(callTurnIndex + 1, 0, results);
     }
 
     /**
@@ -5396,7 +5468,11 @@ export class BaseAgent {
             AIEngine.Instance.AgentActions.filter((aa) => UUIDsEqual(aa.AgentID, params.agent.ID))
         );
         const subAgents = this.getEffectiveSubAgentsForValidation(params.agent.ID);
-        if (actions.length === 0 && subAgents.length === 0) {
+        const agentTools = this.GetAgentTools(params);
+        const control = this.getNativeControlConfig(params);
+        // A native-only agent declares its control and framework tools even with no Actions or
+        // sub-agents: tools are its only way to act.
+        if (actions.length === 0 && subAgents.length === 0 && agentTools.length === 0 && !control.NativeOnly) {
             return;
         }
         try {
@@ -5405,10 +5481,21 @@ export class BaseAgent {
             // set — Actions plus the control-flow tools (one per sub-agent, payload_change_request,
             // ask_user) — and NAMES the control ones. The runner keeps them only when the selected
             // model's LLM.NativeControlFlow resolves to 'implicit'; a hybrid model never sees them.
-            const toolSet = BuildNativeToolSet(actionSet, subAgents);
+            const frameworkTools = control.NativeOnly
+                ? BuildFrameworkTools(this.frameworkToolHost(params), this.frameworkToolAvailability(promptParams, params))
+                : [];
+            const toolSet = BuildNativeToolSet(actionSet, subAgents, control, agentTools, frameworkTools);
+            if (control.NativeOnly && promptParams.data) {
+                // The template renders the tools-only prompt when this is set AND the runner resolves implicit control flow.
+                promptParams.data[NATIVE_ONLY_TEMPLATE_FLAG] = true;
+                promptParams.data[NATIVE_CONTROL_TEMPLATE_DATA] = { Terminal: control.Terminal, PayloadChangeTool: control.PayloadChangeTool, AskUser: control.AskUser };
+            }
             promptParams.tools = toolSet.tools;
             promptParams.controlFlowToolNames = toolSet.controlToolNames;
             promptParams.toolChoice = this.resolveToolChoiceForTurn(params);
+            // Independent calls in one turn are how the strongest models work; every provider that
+            // has the switch defaults it on, and this keeps it on where a provider's default differs.
+            promptParams.parallelToolCalls ??= true;
             this._nativeToolBindings = toolSet.byToolName;
         } catch (error) {
             // A tool-name collision is a metadata problem and a hard error at build time — but it
@@ -5416,6 +5503,230 @@ export class BaseAgent {
             // agent still does today. Surface it loudly and continue without tools.
             LogError(`Agent '${params.agent.Name}': could not declare native tools — ${error instanceof Error ? error.message : String(error)}`);
         }
+    }
+
+    /**
+     * The agent's own native tools — tools that read and write this agent's state, such as
+     * `write_section` / `edit_section`. None by default; a driver class overrides this.
+     *
+     * Declared beside the agent's Actions whenever the run declares native tools, and dispatched in
+     * every native mode. Each call runs as a `Tool` run step, in the order the model made the calls,
+     * and its {@link AgentToolResult.PayloadChange} is applied before the next call runs. See
+     * {@link AgentToolDefinition} for the contract.
+     *
+     * @param params The run parameters
+     * @returns The tools to declare this turn
+     */
+    protected GetAgentTools(params: ExecuteAgentParams): AgentToolDefinition[] {
+        return [];
+    }
+
+    /**
+     * Which framework capabilities a native-only agent gets as tools this turn — the same gates the
+     * hybrid prompt applies to the matching envelope fields and their documentation.
+     */
+    private frameworkToolAvailability(promptParams: AIPromptParams, params: ExecuteAgentParams): FrameworkToolAvailability {
+        const p = promptParams.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+        return {
+            // Each gate matches the one that renders the tool's docs, so a tool is never taught but undeclared.
+            Scratchpad: p?.includeScratchpadDocs !== false,
+            MemoryWrites: p?.includeMemoryWritesDocs !== false && this.memoryWriteSkip(params) === null,
+            ArtifactTools: p?.includeArtifactToolsDocs !== false && this._artifactToolManager.HasArtifacts(),
+            ConversationTools: p?.includeConversationToolsDocs !== false && this._conversationToolManager.IsAvailable,
+            Decisions: this.DecisionsEnabled(p) && p?.includeDecisionsDocs !== false
+        };
+    }
+
+    /** The capabilities behind the framework tools, bound to this run. */
+    private frameworkToolHost(params: ExecuteAgentParams): FrameworkToolHost {
+        return {
+            ApplyScratchpad: (changes) => this.applyScratchpadFromTool(changes),
+            WriteMemory: (note, type, scopeHint) => this.writeMemoryFromTool({ note, type, scopeHint }, params),
+            RunArtifactTool: (artifactId, tool, input) => this.runArtifactToolFromTool({ artifactId, tool, input }),
+            RunConversationTool: (tool, input) => this.runConversationToolFromTool(tool, input),
+            RunDecisions: (requests, payload) => this.runDecisionsFromTool(requests, payload, params)
+        };
+    }
+
+    private applyScratchpadFromTool(changes: AgentScratchpad): string {
+        this._scratchpadManager.ApplyScratchpadChanges(changes);
+        this._scratchpadManager.EnforceTaskLimit(50);
+        return `Scratchpad updated. ${this._scratchpadManager.GetTaskSummary()}`.trim();
+    }
+
+    private async writeMemoryFromTool(write: MemoryWriteRequest, params: ExecuteAgentParams): Promise<AgentToolResult> {
+        const skip = this.memoryWriteSkip(params);
+        if (skip) {
+            return { Content: `Not saved: ${skip.Told}.`, IsError: true };
+        }
+        const result = await this._memoryWriteManager.ExecuteWrite(write, this.memoryWriteOptions(params));
+        const failed = result.disposition === 'error' || result.disposition === 'rejected-type';
+        return { Content: `${result.disposition}${result.reason ? `: ${result.reason}` : ''}`, IsError: failed };
+    }
+
+    private async runArtifactToolFromTool(call: ArtifactToolCall): Promise<AgentToolResult> {
+        const stored = await this._artifactToolManager.ExecuteSingleToolCall(call);
+        return stored.result.success
+            ? { Content: this.capStandaloneToolResultText(RenderToolResultData(stored.result.data)), IsError: false }
+            : { Content: stored.result.errorMessage ?? `Artifact tool '${call.tool}' failed.`, IsError: true };
+    }
+
+    private async runConversationToolFromTool(tool: string, input: Record<string, unknown>): Promise<AgentToolResult> {
+        const name = ConversationToolNames.find((n) => n === tool);
+        if (!name) {
+            return { Content: `'${tool}' is not a conversation tool. Use one of: ${ConversationToolNames.join(', ')}.`, IsError: true };
+        }
+        // The same per-turn cap the envelope's conversationToolCalls has; summarizeRange is a model call.
+        if (this._conversationToolTurn?.turn !== this._promptTurnCount) {
+            this._conversationToolTurn = { turn: this._promptTurnCount, count: 0 };
+        }
+        if (++this._conversationToolTurn.count > MAX_CONVERSATION_TOOL_CALLS_PER_TURN) {
+            return { Content: `Skipped — per-turn cap of ${MAX_CONVERSATION_TOOL_CALLS_PER_TURN} conversation tool calls reached. Call it again on your next turn.`, IsError: true };
+        }
+        const ran = await this._conversationToolManager.ExecuteSingleToolCall({ tool: name, input: input as ConversationToolCall['input'] });
+        return ran.result.success
+            ? { Content: this.capStandaloneToolResultText(RenderToolResultData(ran.result.data)), IsError: false }
+            : { Content: ran.result.errorMessage ?? `Conversation tool '${tool}' failed.`, IsError: true };
+    }
+
+    private async runDecisionsFromTool(requests: AgentDecisionRequest[], payload: object, params: ExecuteAgentParams): Promise<AgentToolResult> {
+        const results = await this.executeDecisionRequestsAsSteps(requests, payload, this._agentTypePromptParams, params);
+        return { Content: JSON.stringify(results), IsError: results.length > 0 && results.every((r) => !r.success) };
+    }
+
+    /**
+     * Runs the turn's agent-tool calls in order, each as its own `Tool` run step, threading the
+     * payload through them so successive edits compose.
+     *
+     * @param calls The calls, in the order the model made them
+     * @param payload The payload before the first call
+     * @param params The run parameters
+     * @returns The payload after the last call, and one result per call, in call order
+     */
+    protected async executeAgentToolCallsAsSteps<P>(
+        calls: AgentToolCallRequest[],
+        payload: P,
+        params: ExecuteAgentParams
+    ): Promise<{ payload: P; results: NativeToolResult[] }> {
+        let current = payload;
+        const results: NativeToolResult[] = [];
+        for (const call of calls) {
+            // A cancelled run stops between calls; the calls it never reached are answered as not run.
+            if (params.cancellationToken?.aborted) {
+                results.push({ toolCallId: call.toolCallId, toolName: call.toolName, content: 'Not executed: the run was cancelled.', isError: true });
+                continue;
+            }
+            const outcome = await this.executeAgentToolCallAsStep(call, current, params);
+            current = outcome.payload;
+            results.push(outcome.result);
+        }
+        return { payload: current, results };
+    }
+
+    /** One agent-tool call as a `Tool` run step: run it, apply its payload change, record both. */
+    private async executeAgentToolCallAsStep<P>(
+        call: AgentToolCallRequest,
+        payload: P,
+        params: ExecuteAgentParams
+    ): Promise<{ payload: P; result: NativeToolResult }> {
+        const step = await this.createStepEntity({
+            stepType: 'Tool',
+            stepName: `Agent Tool: ${call.toolName}`,
+            contextUser: params.contextUser,
+            inputData: { tool: call.toolName, arguments: call.arguments },
+            payloadAtStart: payload
+        });
+        // Whatever fails below, the step is finalized and the call answered — never left Running.
+        let outcome: { payload: P; content: string; isError: boolean } = { payload, content: '', isError: true };
+        try {
+            const ran = await this.runAgentTool(call, payload, params);
+            // payload_change_request keeps its single-call behaviour: the allowed parts apply.
+            const partial = this._nativeToolBindings?.get(call.toolName)?.kind === 'payloadChange';
+            const applied = !ran.IsError && ran.PayloadChange
+                ? this.applyAgentToolPayloadChange(payload, ran.PayloadChange, params, partial)
+                : { payload, error: undefined };
+            outcome = { payload: applied.payload, content: applied.error ?? ran.Content, isError: ran.IsError || applied.error !== undefined };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            LogError(`Agent '${params.agent?.Name}': applying agent tool '${call.toolName}' failed: ${message}`);
+            outcome = { payload, content: `The tool's change could not be applied: ${message}. Nothing was changed.`, isError: true };
+        } finally {
+            step.PayloadAtEnd = this.serializePayloadAtEnd(outcome.payload);
+            await this.finalizeStepEntity(step, !outcome.isError, outcome.isError ? outcome.content : undefined,
+                { tool: call.toolName, content: outcome.content, isError: outcome.isError });
+        }
+        return { payload: outcome.payload, result: { toolCallId: call.toolCallId, toolName: call.toolName, content: outcome.content, isError: outcome.isError } };
+    }
+
+    /** Calls the tool's handler; an undeclared tool or a thrown error becomes an error result. */
+    private async runAgentTool<P>(call: AgentToolCallRequest, payload: P, params: ExecuteAgentParams): Promise<AgentToolResult<P>> {
+        const binding = this._nativeToolBindings?.get(call.toolName);
+        if (binding?.kind === 'payloadChange') {
+            // One of several payload writes on a turn, run in call order with the agent's own tools.
+            return { Content: 'Payload change applied.', IsError: false, PayloadChange: call.arguments as AgentPayloadChangeRequest<P> };
+        }
+        if (binding?.kind !== 'agentTool') {
+            return { Content: `'${call.toolName}' is not one of this agent's tools.`, IsError: true };
+        }
+        try {
+            // A copy: the tool changes state through its PayloadChange, which PayloadSelfWritePaths
+            // checks — an edit made in place on the live payload would bypass that check.
+            const context: AgentToolContext<P> = { CurrentPayload: this.cloneSubAgentPayload(payload), Params: params, ContextUser: params.contextUser };
+            return await (binding.definition as AgentToolDefinition<P>).Execute(call.arguments, context);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            LogError(`Agent '${params.agent?.Name}': agent tool '${call.toolName}' threw: ${message}`);
+            return { Content: `The tool failed: ${message}`, IsError: true };
+        }
+    }
+
+    /**
+     * Applies an agent tool's payload change through PayloadManager, under the agent's
+     * `PayloadSelfWritePaths`. A change that touches a path the agent may not write is rejected
+     * whole — a partial write would leave the payload in a state the tool never described — and
+     * the reason goes back to the model as the call's error result.
+     *
+     * @param partial Apply the allowed parts and report the rest, as a single `payload_change_request`
+     *   on a turn always has; the model wrote that change itself, path by path
+     */
+    private applyAgentToolPayloadChange<P>(payload: P, change: AgentPayloadChangeRequest<P>, params: ExecuteAgentParams, partial = false): { payload: P; error?: string } {
+        const allowedPaths = params.agent.PayloadSelfWritePaths
+            ? JSON.parse(params.agent.PayloadSelfWritePaths)
+            : this.getDefaultPayloadSelfWritePaths();
+        const changeResult = this._payloadManager.applyAgentChangeRequest(payload, change, {
+            validateChanges: true,
+            logChanges: true,
+            agentName: params.agent.Name,
+            allowedPaths,
+            verbose: params.verbose === true || IsVerboseLoggingEnabled()
+        });
+        const blocked = changeResult.blockedOperations ?? [];
+        if (blocked.length > 0) {
+            const paths = [...new Set(blocked.map((b) => b.path))].join(', ');
+            return partial
+                ? { payload: changeResult.result, error: `Applied, except the paths this agent may not write: ${paths}.` }
+                : { payload, error: `Not applied: this agent may not write ${paths}. Nothing was changed.` };
+        }
+        return { payload: changeResult.result };
+    }
+
+    /**
+     * Answers the turn's agent-tool calls, directly after the call turn the loop just replayed. When
+     * the turn's results do not go back natively, the results become one user message instead.
+     */
+    private appendAgentToolResults(params: ExecuteAgentParams, step: BaseAgentNextStep): void {
+        const pending = this._pendingAgentToolResults;
+        this._pendingAgentToolResults = undefined;
+        if (!pending || pending.results.length === 0) {
+            return;
+        }
+        const metadata: AgentChatMessageMetadata = { turnAdded: this._promptTurnCount, messageType: 'action-result' };
+        if (step.nativeTurn?.sendResultsNatively && this._lastNativeTurnAppended === step.nativeTurn) {
+            this.pushToolResultTurn(params, BuildToolResultTurn(pending.results, metadata) as AgentChatMessage);
+            return;
+        }
+        const lines = pending.results.map((r) => `### ${r.toolName}${r.isError ? ' (failed)' : ''}\n${r.content}`);
+        params.conversationMessages.push({ role: 'user', content: `Tool results:\n\n${lines.join('\n\n')}`, metadata } as AgentChatMessage);
     }
 
     /**
@@ -5444,14 +5755,44 @@ export class BaseAgent {
      * address them. That belongs to the prompt, and is why the native-mode Actions section names
      * the cases explicitly.
      *
+     * **A text-terminal agent** (`NativeControl.Terminal: 'text'`) declares no `complete_task`: its
+     * answer is the plain-text reply, and its state changes went through its own tools on earlier
+     * turns. Its final turn is `'none'`, which asks for exactly that reply.
+     *
      * Subclasses may narrow this further; the base contract is that a forced terminal choice must
      * never be relaxed to `'auto'` on a turn the framework has already decided is terminal.
      *
      * @param params The run parameters, for the per-run iteration override
-     * @returns `{ name: 'complete_task' }` on the final permitted iteration, otherwise `'auto'`
+     * @returns On the final permitted iteration, `{ name: 'complete_task' }`, or `'none'` for a
+     *   text-terminal agent; otherwise `'auto'`
      */
     protected resolveToolChoiceForTurn(params: ExecuteAgentParams): ChatToolChoice {
-        return this.isFinalPermittedIteration(params) ? { name: COMPLETE_TASK_TOOL } : 'auto';
+        if (!this.isFinalPermittedIteration(params)) {
+            return 'auto';
+        }
+        return this.getNativeControlConfig(params).Terminal === 'text' ? 'none' : { name: COMPLETE_TASK_TOOL };
+    }
+
+    /**
+     * The agent's native control configuration — which control tools it declares and how its run
+     * ends — from the `NativeControl` block of its `TypeConfiguration`. Defaults when there is none.
+     *
+     * Parsed once per distinct configuration; anything unusable is logged once and falls back to its
+     * default, so a typo never fails a run.
+     *
+     * @param params The run parameters, for the agent
+     */
+    protected getNativeControlConfig(params: ExecuteAgentParams): NativeControlConfig {
+        const source = params.agent?.TypeConfiguration ?? null;
+        if (this._nativeControl && this._nativeControl.source === source) {
+            return this._nativeControl.config;
+        }
+        const { Config, Problems } = ResolveNativeControlConfig(source);
+        for (const problem of Problems) {
+            LogError(`Agent '${params.agent?.Name}': ${problem}`);
+        }
+        this._nativeControl = { source, config: Config };
+        return Config;
     }
 
     /**
@@ -5528,6 +5869,12 @@ export class BaseAgent {
         promptParams.contextUser = params.contextUser;
         // Last gate before the history goes back to the model: no tool call may be left dangling.
         this.reconcileUnansweredToolCalls(params);
+        if (this.getNativeControlConfig(params).CompactToolArguments) {
+            const compacted = CompactAnsweredToolCallArguments(params.conversationMessages as AgentChatMessage[]);
+            if (compacted > 0) {
+                this.logStatus(`[NativeTools] Compacted the large arguments of ${compacted} older tool call(s)`, true, params);
+            }
+        }
         promptParams.conversationMessages = params.conversationMessages;
         promptParams.verbose = params.verbose; // Pass through verbose flag
 
@@ -5585,6 +5932,10 @@ export class BaseAgent {
             promptParams.data['_ARTIFACTS_ENABLED'] = this.isArtifactSupportEnabled(params.agent);
             if (artifactToolsEnabled && this._artifactToolManager.HasArtifacts()) {
                 promptParams.data['_ARTIFACT_MANIFEST'] = this._artifactToolManager.ToManifestString();
+                if (this.getNativeControlConfig(params).NativeOnly) {
+                    // The native-only prompt (picked at render time) names the artifact_tool tool instead of artifactToolCalls.
+                    promptParams.data['_ARTIFACT_MANIFEST_NATIVE'] = this._artifactToolManager.ToManifestString({ nativeTools: true });
+                }
                 promptParams.data['_ARTIFACT_TOOLS'] = this._artifactToolManager.GetToolDocumentation();
                 promptParams.data['_ARTIFACT_TOOL_SUMMARY'] = this._artifactToolManager.GetSummary();
                 this.logStatus(`[ArtifactTools] Injected manifest into prompt: ${this._artifactToolManager.GetSummary()}`, true, params);
@@ -5598,6 +5949,9 @@ export class BaseAgent {
             const conversationToolsEnabled = agentTypePromptParams?.includeConversationToolsDocs !== false;
             if (conversationToolsEnabled && this._conversationToolManager.IsAvailable) {
                 promptParams.data['_CONVERSATION_TOOLS'] = this._conversationToolManager.GetToolDocumentation();
+                if (this.getNativeControlConfig(params).NativeOnly) {
+                    promptParams.data['_CONVERSATION_TOOLS_NATIVE'] = this._conversationToolManager.GetToolDocumentation(true);
+                }
             }
 
             // Enable the memory-writes response field + docs only for agents that opted in
@@ -8580,12 +8934,14 @@ The context is now within limits. Please retry your request with the recovered c
 
         // the model's own call turn goes into history before anything answers it.
         this.appendNativeAssistantTurn(params, guardrailCheckedStep);
+        // the agent's own tools already ran in the prompt step; their results answer first.
+        this.appendAgentToolResults(params, guardrailCheckedStep);
 
         // if we need to retry make sure we add the retry message to the conversation messages
         if (guardrailCheckedStep.step === 'Retry' && guardrailCheckedStep.payloadToolCallId && guardrailCheckedStep.nativeTurn?.sendResultsNatively) {
             // A payload-only turn, or a complete_task that failed Success validation, is answered as a
             // tool result for that call — the feedback is what the model reads next.
-            params.conversationMessages.push(BuildToolResultTurn([{
+            this.pushToolResultTurn(params, BuildToolResultTurn([{
                 toolCallId: guardrailCheckedStep.payloadToolCallId,
                 toolName: this.nativeToolNameForCall(guardrailCheckedStep, guardrailCheckedStep.payloadToolCallId),
                 content: guardrailCheckedStep.retryInstructions || 'Payload change applied.',
@@ -8593,23 +8949,89 @@ The context is now within limits. Please retry your request with the recovered c
             }], { turnAdded: this._promptTurnCount, messageType: 'action-result' }) as AgentChatMessage);
         } else if (guardrailCheckedStep.step === 'Success' && guardrailCheckedStep.payloadToolCallId && guardrailCheckedStep.nativeTurn?.sendResultsNatively) {
             // complete_task ended the run: answer the call so the history never ends on a dangling tool_use.
-            params.conversationMessages.push(BuildToolResultTurn([{
+            this.pushToolResultTurn(params, BuildToolResultTurn([{
                 toolCallId: guardrailCheckedStep.payloadToolCallId,
                 toolName: this.nativeToolNameForCall(guardrailCheckedStep, guardrailCheckedStep.payloadToolCallId),
                 content: 'Task complete.',
                 isError: false
             }], { turnAdded: this._promptTurnCount, messageType: 'action-result' }) as AgentChatMessage);
-        } else if (guardrailCheckedStep.step === 'Retry' && (guardrailCheckedStep.message || guardrailCheckedStep.errorMessage || guardrailCheckedStep.retryInstructions)) {
-            params.conversationMessages.push({
-                role: 'user',
-                content: `Retrying due to: ${guardrailCheckedStep.retryInstructions || guardrailCheckedStep.message || guardrailCheckedStep.errorMessage}`
-            });
-        }   
+        } else if (guardrailCheckedStep.step === 'Retry') {
+            const reason = guardrailCheckedStep.retryInstructions || guardrailCheckedStep.message || guardrailCheckedStep.errorMessage;
+            if (reason && !this.answerNativeRetryTurn(params, guardrailCheckedStep, reason)) {
+                params.conversationMessages.push({
+                    role: 'user',
+                    content: `Retrying due to: ${reason}`
+                });
+            }
+        }
 
         // Return the next step directly - execution handling is done in execute NextStep
         return guardrailCheckedStep;
     }
  
+    /**
+     * Answers a retried native tool-call turn in the protocol itself: every call gets an `is_error`
+     * result carrying the retry reason, and no user message follows.
+     *
+     * The call turn was just replayed by `appendNativeAssistantTurn`, so the result turn lands
+     * directly behind it — the adjacency Anthropic and OpenAI both require. Calls the turn already
+     * answered (its agent tools ran and reported) keep their results; the rest join that tool turn.
+     * Returns false when the turn's results do not go back natively, or no call is left to answer;
+     * the caller then sends the reason as a user message, and `reconcileUnansweredToolCalls`
+     * closes any call still open.
+     */
+    private answerNativeRetryTurn(params: ExecuteAgentParams, step: BaseAgentNextStep, reason: string): boolean {
+        const turn = step.nativeTurn;
+        const messages = params.conversationMessages;
+        const at = turn?.sendResultsNatively ? BaseAgent.lastToolCallTurnIndex(messages) : -1;
+        if (!turn || at < 0) {
+            return false;
+        }
+        const answered = BaseAgent.toolCallIdsAnsweredAfter(messages, at);
+        const calls = turn.toolCalls.filter((call) => !!call.id && !answered.has(call.id));
+        if (calls.length === 0) {
+            return false;
+        }
+        BaseAgent.insertToolResultsAfterCallTurn(messages, at, BuildToolResultTurn(
+            calls.map((call) => ({
+                toolCallId: call.id,
+                toolName: call.name,
+                content: `Not executed. ${reason}`,
+                isError: true
+            })),
+            { turnAdded: this._promptTurnCount, messageType: 'action-result' }
+        ) as AgentChatMessage);
+        return true;
+    }
+
+    /**
+     * A turn that wrote and then asked or completed, where a write failed: the question or
+     * completion is declined, and the turn becomes a plain "go again" Retry. The model made that
+     * call expecting its writes to land, so it reads the failure and decides again.
+     *
+     * @returns The step to process — `step` itself when nothing failed or it is not terminal
+     */
+    private declineTerminalAfterFailedWrite<P>(step: BaseAgentNextStep<P>, results: NativeToolResult[]): BaseAgentNextStep<P> {
+        const terminal = (step.step === 'Success' || step.step === 'Chat') && step.nativeTurn;
+        if (!terminal || !results.some((r) => r.isError && step.agentToolCalls?.some((c) => c.toolCallId === r.toolCallId))) {
+            return step;
+        }
+        const call = step.nativeTurn?.toolCalls.find((c) => {
+            const kind = this._nativeToolBindings?.get(c.name)?.kind;
+            return kind === 'complete' || kind === 'askUser';
+        });
+        if (call?.id) {
+            results.push({
+                toolCallId: call.id, toolName: call.name, isError: true,
+                content: `Not executed. A write on this turn failed (see its result). Fix it, then call ${call.name} again.`
+            });
+        }
+        return {
+            ...step, step: 'Retry', terminate: false, payloadToolCallId: undefined,
+            message: undefined, responseForm: undefined, retryInstructions: undefined
+        };
+    }
+
     /** The tool name the model used for a call on this turn — `payload_change_request` when it cannot be found. */
     private nativeToolNameForCall(step: BaseAgentNextStep, toolCallId: string): string {
         return step.nativeTurn?.toolCalls.find((c) => c.id === toolCallId)?.name ?? 'payload_change_request';
@@ -9765,6 +10187,21 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @protected
      */
+    /** Where and for whom a memory write lands — shared by the envelope field and the native tool. */
+    private memoryWriteOptions(params: ExecuteAgentParams): Parameters<MemoryWriteManager['ExecuteWrite']>[1] {
+        return {
+            agentId: params.agent.ID,
+            contextUser: params.contextUser,
+            agentRunId: this._agentRun?.ID,
+            conversationId: this._agentRun?.ConversationID || undefined,
+            conversationDetailId: params.conversationDetailId,
+            userId: params.userId || params.contextUser?.ID,
+            companyId: params.companyId,
+            verbose: params.verbose,
+            provider: this.ProviderToUse,
+        };
+    }
+
     protected async executeMemoryWritesAsSteps(
         writes: MemoryWriteRequest[],
         params: ExecuteAgentParams,
@@ -9782,17 +10219,7 @@ The context is now within limits. Please retry your request with the recovered c
                 },
             });
 
-            const result = await this._memoryWriteManager.ExecuteWrite(write, {
-                agentId: params.agent.ID,
-                contextUser: params.contextUser,
-                agentRunId: this._agentRun?.ID,
-                conversationId: this._agentRun?.ConversationID || undefined,
-                conversationDetailId: params.conversationDetailId,
-                userId: params.userId || params.contextUser?.ID,
-                companyId: params.companyId,
-                verbose: params.verbose,
-                provider: this.ProviderToUse,
-            });
+            const result = await this._memoryWriteManager.ExecuteWrite(write, this.memoryWriteOptions(params));
 
             const failed = result.disposition === 'error' || result.disposition === 'rejected-type';
             await this.finalizeStepEntity(
@@ -12255,8 +12682,9 @@ The context is now within limits. Please retry your request with the recovered c
             if (typed.role === 'assistant' && typed.toolCalls?.length) {
                 const answered = typed.toolCalls.every((call) => call.id && resolved.has(call.id));
                 if (!answered) {
-                    // Demote to prose rather than send a call this window never answers.
-                    const { toolCalls: _dropped, ...rest } = typed;
+                    // Demote to prose rather than send a call this window never answers. Its reasoning
+                    // goes too: the signatures were minted for the turn with its calls.
+                    const { toolCalls: _dropped, reasoning: _reasoning, ...rest } = typed;
                     kept.push({ ...rest, content: typed.content || '[tool call omitted for context management]' } as ChatMessage);
                     continue;
                 }
@@ -12894,11 +13322,12 @@ The context is now within limits. Please retry your request with the recovered c
             lines.push(`## ${a.actionName} ${marker}`);
             lines.push(`**Result:** ${a.resultCode} — ${a.message || '(no message)'}`);
 
-            // Format output params as bullet list
+            // Format output params as bullet list. An exempt action's values go out verbatim.
             if (a.params && a.params.length > 0) {
+                const crush = !this._actionResultCrush?.exemptActions?.has(a.actionName);
                 lines.push('**Output:**');
                 for (const p of a.params) {
-                    lines.push(`• \`${p.Name}\`: ${this.formatParamValueForResult(p.Value)}`);
+                    lines.push(`• \`${p.Name}\`: ${this.formatParamValueForResult(p.Value, 0, crush)}`);
                 }
             }
 
@@ -12965,7 +13394,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns Formatted string
      * @private
      */
-    private formatParamValueForResult(value: unknown, maxLength: number = 0): string {
+    private formatParamValueForResult(value: unknown, maxLength: number = 0, crush: boolean = true): string {
         if (value === null || value === undefined) {
             return '`null`';
         }
@@ -12980,11 +13409,11 @@ The context is now within limits. Please retry your request with the recovered c
             // safe no-op on non-JSON (crushParamValue's internal JSON.parse failure is
             // caught and returns null) — then opt-in AST code reduction (SQL/TS), then pass
             // through (optionally length-capped).
-            const crushedJson = this.crushParamValue(value);
+            const crushedJson = crush ? this.crushParamValue(value) : null;
             if (crushedJson !== null) {
                 return crushedJson;
             }
-            const crushedCode = this.crushCodeValue(value);
+            const crushedCode = crush ? this.crushCodeValue(value) : null;
             if (crushedCode !== null) {
                 return crushedCode;
             }
@@ -12994,7 +13423,7 @@ The context is now within limits. Please retry your request with the recovered c
         // Objects/arrays: compact JSON (no pretty-printing), optionally structurally
         // compressed via context-crush when crushing is enabled and the value is large.
         const stringValue = JSON.stringify(value);
-        const crushed = this.crushParamValue(stringValue);
+        const crushed = crush ? this.crushParamValue(stringValue) : null;
         if (crushed !== null) {
             return crushed;
         }
@@ -13020,7 +13449,9 @@ The context is now within limits. Please retry your request with the recovered c
         const requestedLang = agentTypePromptParams?.crushCodeLang;
         const codeLang: CodeLang | undefined =
             requestedLang === 'sql' || requestedLang === 'typescript' ? requestedLang : undefined;
-        return { threshold: BaseAgent.ACTION_RESULT_CRUSH_THRESHOLD, maxChars: undefined, codeLang };
+        const uncrushed = agentTypePromptParams?.uncrushedActions;
+        const exemptActions = new Set(Array.isArray(uncrushed) ? uncrushed.filter((name): name is string => typeof name === 'string') : []);
+        return { threshold: BaseAgent.ACTION_RESULT_CRUSH_THRESHOLD, maxChars: undefined, codeLang, exemptActions };
     }
 
     /**
@@ -14943,7 +15374,7 @@ The context is now within limits. Please retry your request with the recovered c
             });
             
             // Determine next step using agent type, this doesn't validate, just gets the LLM response and then we can process payload changes
-            const initialNextStep = await this.determineNextStep<P>(params, config.agentType, promptResult, payload);
+            let initialNextStep = await this.determineNextStep<P>(params, config.agentType, promptResult, payload);
             
             // Apply payload changes if provided
             const isUnmodifiedInheritedPayload = payload === params.payload;
@@ -14999,6 +15430,20 @@ The context is now within limits. Please retry your request with the recovered c
                 // reverts or blocks a change; the agent reads the result on its next turn.
                 const payloadCheckParams = promptParams.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
                 await this.checkPayloadChangesWhenOn(changeResult, initialNextStep, promptResult, payloadCheckParams, params);
+            }
+
+            // Run the agent's own tool calls (zero turn cost — processed inline), in order, after any
+            // same-turn payload_change_request. Their results answer the calls once the call turn is
+            // replayed in processNextStep.
+            this._pendingAgentToolResults = undefined;
+            const declined: NativeToolResult[] = (initialNextStep.declinedToolCalls ?? [])
+                .map((d) => ({ toolCallId: d.toolCallId, toolName: d.toolName, content: `Not executed. ${d.reason}`, isError: true }));
+            if (initialNextStep.agentToolCalls?.length || declined.length) {
+                const ran = await this.executeAgentToolCallsAsSteps(initialNextStep.agentToolCalls ?? [], finalPayload, params);
+                finalPayload = ran.payload;
+                const results = [...ran.results, ...declined];
+                initialNextStep = this.declineTerminalAfterFailedWrite(initialNextStep, results);
+                this._pendingAgentToolResults = { results };
             }
 
             // Apply scratchpad changes if provided (zero turn cost — processed inline)
@@ -15706,7 +16151,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (previousDecision?.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
                 // the delegate_to_* call is answered as a tool result.
-                params.conversationMessages.push(BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
+                this.pushToolResultTurn(params, BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
                     toolCallId: subAgentRequest.toolCallId,
                     toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
                     content: resultMessage,
@@ -16411,7 +16856,7 @@ The context is now within limits. Please retry your request with the recovered c
         const pairable = nativeResults ? allExecutions.filter((e) => !!e.request.toolCallId) : [];
         const unpairable = allExecutions.filter((e) => !pairable.includes(e));
         if (pairable.length > 0) {
-            params.conversationMessages.push(BuildToolResultTurn([
+            this.pushToolResultTurn(params, BuildToolResultTurn([
                 ...this.payloadToolResult(previousDecision),
                 ...pairable.map((e) => ({
                     toolCallId: e.request.toolCallId as string,
@@ -16731,7 +17176,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (previousDecision.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
                 // the delegate_to_* call is answered as a tool result (same as the child path).
-                params.conversationMessages.push(BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
+                this.pushToolResultTurn(params, BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
                     toolCallId: subAgentRequest.toolCallId,
                     toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
                     content: relatedResultMessage,
@@ -17322,7 +17767,14 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (addConversationMessage) {
                 // Add user message with results and optional metadata
-                this.appendActionResults(params, actionSummaries, resultsMessage, metadata, previousDecision); // results as a tool turn or the markdown user message
+                // Failure guidance, so the model does not repeatedly loop on broken tools. Not when the breaker
+                // is bypassed for this step: there is then no model in the loop to act on it (Flow, ForEach,
+                // While, pipeline), and the directive would only pollute the history.
+                const failureGuidance = failedActions.length > 0 && actionOptions?.skipCircuitBreaker !== true
+                    ? new Map(failedActions.map((f) => [f, this.formatActionFailureDirective(f)] as const))
+                    : undefined;
+                // results as a tool turn or the markdown user message; a natively answered failure carries its guidance
+                const answeredNatively = this.appendActionResults(params, actionSummaries, resultsMessage, metadata, previousDecision, failureGuidance);
 
                 // Surface explicit AI directives from action results as a separate instruction message.
                 // Actions that need the AI to follow specific instructions (not just acknowledge data)
@@ -17340,11 +17792,10 @@ The context is now within limits. Please retry your request with the recovered c
                     });
                 }
 
-                // Surface failure guidance for failed actions so the model does not repeatedly loop on broken
-                // tools. Not when the breaker is bypassed for this step: there is then no model in the loop to
-                // act on it (Flow, ForEach, While, pipeline), and the directive would only pollute the history.
-                if (failedActions.length > 0 && actionOptions?.skipCircuitBreaker !== true) {
-                    const failureText = failedActions.map(f => this.formatActionFailureDirective(f)).join('\n\n');
+                // Guidance for any failure not answered as a native tool result goes in a message of its own.
+                const unanswered = failureGuidance ? failedActions.filter((f) => !answeredNatively.has(f)) : [];
+                if (failureGuidance && unanswered.length > 0) {
+                    const failureText = unanswered.map((f) => failureGuidance.get(f)).join('\n\n');
 
                     params.conversationMessages.push({
                         role: 'user',
