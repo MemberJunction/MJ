@@ -1,8 +1,7 @@
 /**
  * fls-closeout-pending.checks.ts — the 'fls-closeout-pending' bundle (server transport): checks
- * written against DECIDED field-level security behaviour whose implementation had not landed when
- * they were authored. Its IT record ships parked (`Status: "Skip"` in the deterministic suite);
- * run it by name once the behaviour lands, then un-park it.
+ * written against DECIDED field-level security behaviour before its implementation landed. The
+ * behaviour has landed and the bundle runs in the deterministic suite.
  *
  *   Server cache segmented by field-security fingerprint, as row-level security already is
  *     PC1  a restricted user's cold miss does not narrow the result an unrestricted user then gets
@@ -18,9 +17,8 @@
  *     PQ4  a query whose role list includes the restricted caller's role runs for that caller: the role-list
  *          grant bypasses field-level security by design
  *
- * When this bundle lands as passing, `fls-enforcement` FLS11 and FLS23 must be revisited: they pin
- * the September design's SHARED full-width slot ("the reader is served from the writer-warmed slot
- * with zero new cache writes"), which segmentation replaces. PC2 asserts the opposite on purpose.
+ * `fls-enforcement` FLS11 asserts the same segmented behaviour from the ordinary-read side: the
+ * reader's identical read after a writer warm-up writes its own segment.
  *
  * FIXTURE. The `fls-enforcement` fixture plus the close-out tightenings (Reader.Email Deny). The
  * saved queries are created in Setup under a throwaway category with the AI enrichment step skipped
@@ -33,7 +31,7 @@ import { Assert, IntegrationCheckRegistry } from '@memberjunction/testing-integr
 import type { NamedCheck, IntegrationCheckContext, FlsFixture } from '@memberjunction/testing-integration';
 import { SEEDED_FLS_ENTITY, SEED_FIXTURES_COMMAND, FLS_READER_DENIED_FIELD } from '@memberjunction/testing-integration';
 import { QueryEngine } from '@memberjunction/core-entities';
-import type { MJQueryCategoryEntity, MJQueryEntity, MJQueryPermissionEntity } from '@memberjunction/core-entities';
+import type { MJEntityFieldEntity, MJQueryCategoryEntity, MJQueryEntity, MJQueryPermissionEntity } from '@memberjunction/core-entities';
 import { SchemaOf, FlsEntity, SetupFlsEnforcementFixture, TeardownFlsEnforcementFixture } from './fls-enforcement.checks';
 import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 import {
@@ -194,25 +192,49 @@ export async function CheckPc2RestrictedNeverServedWide(ctx: IntegrationCheckCon
     AssertValuesWithheld(asReader, FLS_READER_DENIED_FIELD, r.Markers.Email, 'PC2 reader after the writer warmed the request');
 }
 
+/**
+ * Runs `fn` with the denied column in the entity's user-search field set. A default install
+ * searches no column of the fixture entity, so the column is added through the entity path for
+ * the duration of the check and its stored setting is restored afterwards.
+ */
+async function withDeniedColumnSearchable(ctx: IntegrationCheckContext, fn: () => Promise<void>): Promise<void> {
+    const field = FlsEntity(ctx).Fields.find(f => f.Name === FLS_READER_DENIED_FIELD);
+    Assert(field != null, `PC3: '${FLS_READER_DENIED_FIELD}' must be a field of '${SEEDED_FLS_ENTITY}'`);
+    if (field!.IncludeInUserSearchAPI) {
+        return fn();
+    }
+    const row = await ctx.Provider.GetEntityObject<MJEntityFieldEntity>('MJ: Entity Fields', ctx.User);
+    Assert(await row.Load(field!.ID), `PC3: loading the '${FLS_READER_DENIED_FIELD}' field row failed`);
+    const autoUpdate = row.AutoUpdateIncludeInUserSearchAPI;
+    row.IncludeInUserSearchAPI = true;
+    Assert(await row.Save(), `PC3: making '${FLS_READER_DENIED_FIELD}' searchable failed: ${row.LatestResult?.CompleteMessage ?? ''}`);
+    try {
+        await ctx.Provider.Refresh();
+        await fn();
+    } finally {
+        row.IncludeInUserSearchAPI = false;
+        row.AutoUpdateIncludeInUserSearchAPI = autoUpdate;
+        await row.Save().catch(() => false);
+        await ctx.Provider.Refresh().catch(() => undefined);
+    }
+}
+
 /** PC3 — a search that matches a row only through a denied column returns it to the unrestricted user and never to the reader. */
 export async function CheckPc3SearchRowSetIsolated(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'PC3');
     if (!r) return;
-    const searchable = FlsEntity(ctx).Fields.find(f => f.Name === FLS_READER_DENIED_FIELD)?.IncludeInUserSearchAPI;
-    if (!searchable) {
-        console.warn(`  ⚠ ${BUNDLE}.PC3 SKIPPED — '${FLS_READER_DENIED_FIELD}' is not in the user-search field set on this database`);
-        return;
-    }
-    const tag = `pc3-${Date.now()}`;
-    const search = (user: UserInfo) => new RunView().RunView<{ ID: string }>(
-        { EntityName: SEEDED_FLS_ENTITY, UserSearchString: r.Markers.Email, ExtraFilter: ColdFilter(tag), Fields: ['ID'], ResultType: 'simple' }, user);
-    const asWriter = await search(r.Fx.Writer!);
-    Assert(asWriter.Success && asWriter.Results.some(row => UUIDsEqual(row.ID, r.Fx.FixtureEmployeeID!)),
-        `PC3 precondition: the writer's search on the fixture's ${FLS_READER_DENIED_FIELD} must find it: ${asWriter.ErrorMessage}`);
-    const asReader = await search(r.Fx.Reader!);
-    Assert(asReader.Success, `PC3: the reader's search must run: ${asReader.ErrorMessage}`);
-    Assert(!asReader.Results.some(row => UUIDsEqual(row.ID, r.Fx.FixtureEmployeeID!)),
-        'LEAK: PC3: the reader received a row that matched only through a column they are denied (the row set reveals the value)');
+    await withDeniedColumnSearchable(ctx, async () => {
+        const tag = `pc3-${Date.now()}`;
+        const search = (user: UserInfo) => new RunView().RunView<{ ID: string }>(
+            { EntityName: SEEDED_FLS_ENTITY, UserSearchString: r.Markers.Email, ExtraFilter: ColdFilter(tag), Fields: ['ID'], ResultType: 'simple' }, user);
+        const asWriter = await search(r.Fx.Writer!);
+        Assert(asWriter.Success && asWriter.Results.some(row => UUIDsEqual(row.ID, r.Fx.FixtureEmployeeID!)),
+            `PC3 precondition: the writer's search on the fixture's ${FLS_READER_DENIED_FIELD} must find it: ${asWriter.ErrorMessage}`);
+        const asReader = await search(r.Fx.Reader!);
+        Assert(asReader.Success, `PC3: the reader's search must run: ${asReader.ErrorMessage}`);
+        Assert(!asReader.Results.some(row => UUIDsEqual(row.ID, r.Fx.FixtureEmployeeID!)),
+            'LEAK: PC3: the reader received a row that matched only through a column they are denied (the row set reveals the value)');
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────── RunQuery
@@ -277,7 +299,7 @@ export async function CheckPq4RoleListGrantBypasses(ctx: IntegrationCheckContext
         `PQ4: a query granted to the reader's role must run for the reader (role-list grants bypass field-level security): ${asReader.ErrorMessage}`);
 }
 
-/** The 'fls-closeout-pending' bundle (server transport; parked until its behaviour lands). */
+/** The 'fls-closeout-pending' bundle (server transport; cache segmentation and saved-query field security). */
 export const FlsCloseoutPendingChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.PC1`, Name: 'PC1 (pending cache segmentation): a restricted user\'s cold miss does not narrow the result an unrestricted user then gets', Fn: CheckPc1RestrictedMissDoesNotNarrow },
     { Id: `${BUNDLE}.PC2`, Name: 'PC2 (pending cache segmentation): a restricted user is never served an unrestricted user\'s slot — the read writes its own segment and carries no denied value', Fn: CheckPc2RestrictedNeverServedWide },

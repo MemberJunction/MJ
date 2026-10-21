@@ -15,8 +15,8 @@
  *   CW7  REST get and REST runView (an entity_object request is answered as simple rows) carry no denied value
  *   CW8  REST create and update carrying a denied key and an unknown key are refused with the SAME wording;
  *        an allowed REST update's response carries no denied value
- *   CW9  over the wire, an unknown column in a filter is refused with the denied column's wording, and
- *        OverrideExcludeFilter naming a denied column is refused
+ *   CW9  over the wire, an unknown column in a filter is refused with the denied column's wording, and a
+ *        raw RunDynamicView whose OverrideExcludeFilter names a denied column is refused
  *
  * IDENTITIES. Per-user enforcement over the wire is only observable through per-user authentication
  * (see `fls-enforcement-client`): this bundle reuses that bundle's fixture (`SetupFlsClientFixture`),
@@ -58,7 +58,8 @@ import {
 } from './fls-closeout-shared';
 
 const BUNDLE = 'fls-closeout-client';
-const MARKER = '(mj-integration-test fls-closeout-client)';
+/** Tags the rows this bundle creates; short, because the whole last name must fit in 50 characters. */
+const MARKER = '(mjit fls-cw)';
 /** How long Setup waits for MJAPI to honour a freshly minted key over REST (its scope cache has a ~60s envelope). */
 const REST_READY_TIMEOUT_MS = 120_000;
 const REST_READY_POLL_MS = 5_000;
@@ -222,7 +223,10 @@ async function sendTransactionGroup(provider: GraphQLDataProvider, items: Transa
 
 /** A create payload for a new employee with a unique last name, plus `extra` keys. */
 function newEmployeeValues(companyID: string, label: string, extra: Record<string, string>): { LastName: string; Values: Record<string, string> } {
-    const lastName = `${label} ${Date.now().toString(36)} ${MARKER}`;
+    // Employee.LastName holds 50 characters: a longer value fails client validation before any
+    // request is sent, which would make a create check pass or fail for the wrong reason.
+    const unique = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const lastName = `${label.slice(0, 20)} ${unique} ${MARKER}`;
     return {
         LastName: lastName,
         Values: { FirstName: 'CloseoutWire', LastName: lastName, CompanyID: companyID, Email: `it-fls-cw-${Date.now()}@integration.test`, ...extra },
@@ -311,6 +315,14 @@ async function denyTitleForMulti(ctx: IntegrationCheckContext, fx: FlsClientFixt
     state.TitleRuleID = await SetFieldRuleOverWire(ctx, FLS_DENY_READ_FIELD, FLS_DENIER_ROLE, { Read: 'Deny', Update: 'No Access', Create: 'No Access' });
     await WaitForWirePropagation(fx.MultiProvider!,
         rows => rows.length > 0 && rows.every(row => !(FLS_DENY_READ_FIELD in row)), 'Title stripped from the multi user\'s results');
+    // The server now enforces the rule, but the multi connection still holds the metadata it
+    // loaded before it: refresh it, so the client knows which fields to leave out of its writes.
+    await fx.MultiProvider!.Refresh();
+    const entity = fx.MultiProvider!.EntityByName(SEEDED_FLS_ENTITY);
+    const denied = entity?.GetDeniedReadFields(fx.MultiProvider!.CurrentUser!) ?? new Set<string>();
+    if (!denied.has(FLS_DENY_READ_FIELD.toLowerCase())) {
+        throw new Error(`the multi connection's refreshed metadata does not deny '${FLS_DENY_READ_FIELD}'`);
+    }
 }
 
 /** Mints the raw keys REST needs and waits until REST honours them. */
@@ -482,7 +494,8 @@ export async function CheckCw6ClientTransactionGroupCreate(ctx: IntegrationCheck
     emp.CompanyID = state.CompanyID!;
     emp.Email = created.Values['Email'];
     emp.TransactionGroup = tg;
-    await emp.Save();
+    const queued = await emp.Save();
+    Assert(queued, `CW6: queuing the create in the transaction group must succeed: ${emp.LatestResult?.CompleteMessage ?? ''}`);
     const submitted = await tg.Submit();
     const rows = await storedRowsWithLastName(created.LastName);
     r.Fx.CreatedEmployeeIDs.push(...rows.map(row => row.ID));
@@ -567,6 +580,33 @@ async function wireRunViewRefusal(provider: IMetadataProvider, params: Record<st
     return message;
 }
 
+const RUN_DYNAMIC_VIEW_QUERY = `
+    query RunDynamicView($input: RunDynamicViewInput!) {
+        RunDynamicView(input: $input) { Success ErrorMessage RowCount }
+    }
+`;
+
+/**
+ * Sends a raw RunDynamicView carrying `overrideExcludeFilter`; returns the refusal text, and throws
+ * if the request ran. The client library never sends OverrideExcludeFilter on an entity-name
+ * request, but any API caller can, so the raw document is what the server must refuse.
+ */
+async function rawOverrideExcludeFilterRefusal(provider: GraphQLDataProvider, overrideExcludeFilter: string): Promise<string> {
+    let succeeded = false;
+    let message = '';
+    try {
+        const data = (await provider.ExecuteGQL(RUN_DYNAMIC_VIEW_QUERY, {
+            input: { EntityName: SEEDED_FLS_ENTITY, ExtraFilter: '', OverrideExcludeFilter: overrideExcludeFilter, ResultType: 'simple' },
+        })) as { RunDynamicView?: { Success: boolean; ErrorMessage?: string | null } } | null;
+        succeeded = data?.RunDynamicView?.Success === true;
+        message = data?.RunDynamicView?.ErrorMessage ?? '';
+    } catch (e) {
+        message = wireErrorText(e);
+    }
+    Assert(!succeeded, 'CW9 OverrideExcludeFilter: the raw request must be refused over the wire, but it ran');
+    return message;
+}
+
 /** CW9 — over the wire: an unknown column gets the denied column's wording; OverrideExcludeFilter on a denied column is refused. */
 export async function CheckCw9WireFilterGate(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CW9');
@@ -575,7 +615,7 @@ export async function CheckCw9WireFilterGate(ctx: IntegrationCheckContext): Prom
     const denied = await wireRunViewRefusal(reader, { ExtraFilter: `${FLS_READER_DENIED_FIELD} LIKE '%@%'` }, 'CW9 denied column');
     const unknown = await wireRunViewRefusal(reader, { ExtraFilter: `${UNKNOWN_FIELD} LIKE '%@%'` }, 'CW9 unknown column');
     AssertDeniedEqualsUnknown(denied, FLS_READER_DENIED_FIELD, unknown, UNKNOWN_FIELD, FieldSecurityDenialMessage, SEEDED_FLS_ENTITY, 'CW9 wire ExtraFilter');
-    const override = await wireRunViewRefusal(reader, { OverrideExcludeFilter: `${FLS_READER_DENIED_FIELD} LIKE '%@%'` }, 'CW9 OverrideExcludeFilter');
+    const override = await rawOverrideExcludeFilterRefusal(reader as GraphQLDataProvider, `${FLS_READER_DENIED_FIELD} LIKE '%@%'`);
     Assert(override.includes(FieldSecurityDenialMessage(FLS_READER_DENIED_FIELD, SEEDED_FLS_ENTITY)),
         `CW9: OverrideExcludeFilter naming a denied column must be refused with the ambiguous wording, got '${override}'`);
     AssertValuePresent(await storedFixtureRow(r.Fx), FLS_READER_DENIED_FIELD, r.Markers.Email, 'CW9 stored row (control)');

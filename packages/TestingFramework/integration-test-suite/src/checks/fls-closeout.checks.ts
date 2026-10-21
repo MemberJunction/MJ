@@ -531,6 +531,9 @@ export async function CheckCo11DatasetItemFilterRefused(ctx: IntegrationCheckCon
 /** One audit row's payload columns. */
 interface AuditRow { ID: string; ChangesJSON?: string; ChangesDescription?: string; FullRecordJSON?: string }
 
+/** The audit row columns CO12 reads. */
+const AUDIT_PAYLOAD_FIELDS = ['ID', 'ChangesJSON', 'ChangesDescription', 'FullRecordJSON'] as const;
+
 /** CO12 — a ViewID-only read of the audit trail projects each row's payload against the entity it is about. */
 export async function CheckCo12RecordChangesViewIDProjected(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO12');
@@ -550,7 +553,10 @@ export async function CheckCo12RecordChangesViewIDProjected(ctx: IntegrationChec
         const view = await saveFixtureView(ctx, RECORD_CHANGES_ENTITY,
             `EntityID = '${FlsEntity(ctx).ID}' AND RecordID LIKE '%${r.Fx.FixtureEmployeeID}%'`, true);
         const read = async (user: UserInfo) => {
-            const res = await new RunView().RunView<AuditRow>({ ViewID: view.ID, ResultType: 'simple', BypassCache: true }, user);
+            // A fixture view has no saved columns, so a ViewID read would select only the key;
+            // name the payload columns explicitly (still a ViewID-only request, no EntityName).
+            const res = await new RunView().RunView<AuditRow>(
+                { ViewID: view.ID, Fields: [...AUDIT_PAYLOAD_FIELDS], ResultType: 'simple', BypassCache: true }, user);
             Assert(res.Success, `CO12: the ViewID read as ${user.Email} failed: ${res.ErrorMessage}`);
             return res.Results;
         };
