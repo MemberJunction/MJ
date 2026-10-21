@@ -1,5 +1,64 @@
 # @memberjunction/ng-dashboard-viewer
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- a750fa5: Security hardening across three surfaces.
+  - **TestQuerySQL authorizes the read** (critical). The resolver ran caller-supplied raw SQL on the read-only pool with only the `query:test` API-key scope check, which is a no-op for JWT users. It now applies the same two guards as `ExecuteAdhocQuery`: scope-limited principals (magic-link sessions) are refused outright, and the RENDERED SQL — composition, inline dependencies and Nunjucks templates resolved with the same inputs the execution spec will use — must read only entity base views the caller can read unscoped (CanRead, no row-level filter, no denied fields) via `assertFullQueryUsesReadableEntityViews`, with `RequireReadStatement` enforced at render time.
+  - **Integration webhook goes through the SSRF guard.** `IntegrationDiscoveryResolver.sendWebhook` posted to the caller-supplied webhook URL with bare `fetch`; it now uses `SafeFetch` from `@memberjunction/network-utils`, which validates the URL and every redirect hop resolves to a public address.
+  - **Dashboard WebURL panels embed http(s) only.** The WebURL part handed any stored URL to `bypassSecurityTrustResourceUrl`, so a `javascript:` URL in a shared dashboard panel would execute in viewers' browsers (the iframes use `allow-same-origin`). The URL is now parsed and must be `http:` or `https:`; anything else renders the part's error state instead of an iframe.
+
+- d1b1958: Follow-up hardening and unit tests for TestQuerySQL and dashboard WebURL panels:
+  - **SQLParser niladic user functions (`@memberjunction/sql-parser`)**: Support standard SQL niladic user functions (`CURRENT_USER`, `SESSION_USER`, `SYSTEM_USER`) without parentheses in both `TransactSQL` and `PostgresQL` dialects and round-trip via `ToSQL()` without `()`, fixing `TestQuerySQL` read-only authorization (`RRC5`) on queries selecting `CURRENT_USER`.
+  - **TestQuerySQLResolver (`@memberjunction/server`)**: Pass `OriginalSQL: input.SQL` to `RenderPipeline.Run`, use `context.userPayload?.userRecord`, and add unit tests covering read-only authorization and niladic user functions.
+  - **WebURLPartComponent (`@memberjunction/ng-dashboard-viewer`)**: Reset `ErrorMessage` on reload, clear `loadCheckTimeout` in `cleanup()`, add `rel="noopener noreferrer"` on external panel links, and add unit test coverage.
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [83486cf]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [8b62f8c]
+- Updated dependencies [c7418dc]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ng-shared-generic@6.2.0-edge.5
+  - @memberjunction/ng-ui-components@6.2.0-edge.5
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.5
+  - @memberjunction/ng-artifacts@6.2.0-edge.5
+  - @memberjunction/ng-base-types@6.2.0-edge.5
+  - @memberjunction/ng-map-view@6.2.0-edge.5
+  - @memberjunction/ng-query-viewer@6.2.0-edge.5
+  - @memberjunction/ng-trees@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Minor Changes
