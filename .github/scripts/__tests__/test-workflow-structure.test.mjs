@@ -12,7 +12,9 @@ import { readWorkflow, readJobNames, readJobNeeds, readJobSteps } from './lib/wo
 const WORKFLOW_TEXT = readWorkflow();
 
 /** The lanes whose outcome the gate must consume. */
-const LANES = ['guards', 'build', 'test', 'esm-guard'];
+// `changes` is a lane too: when it fails, build/test/esm-guard skip, and only its own result
+// keeps the gate from reading those skips as a pass.
+const LANES = ['changes', 'guards', 'build', 'test', 'esm-guard'];
 
 describe('test.yml — job graph', () => {
     const jobs = readJobNames();
@@ -57,6 +59,14 @@ describe('test.yml — job graph', () => {
         // every PR restores from, so cleanup must run on failure and cancellation too.
         const cleanupBlock = WORKFLOW_TEXT.split(/^ {2}cleanup:$/m)[1].split(/^ {2}[a-z-]+:$/m)[0];
         expect(cleanupBlock).toMatch(/if: always\(\)/);
+    });
+
+    it('the cleanup job runs whenever build ran, since build is what saves the run cache', () => {
+        // cleanup skips only when build was skipped (nothing was saved). If it stopped depending
+        // on build, `needs.build.result` would be empty and it would never run at all.
+        expect(readJobNeeds('cleanup')).toContain('build');
+        const cleanupBlock = WORKFLOW_TEXT.split(/^ {2}cleanup:$/m)[1].split(/^ {2}[a-z-]+:$/m)[0];
+        expect(cleanupBlock).toMatch(/if: always\(\) && needs\.build\.result != 'skipped'/);
     });
 });
 
