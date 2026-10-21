@@ -754,6 +754,8 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // ========================================
 
   private _visualConfig: GridVisualConfig = {};
+  private _effectiveVisualConfig: Required<GridVisualConfig> = { ...DEFAULT_VISUAL_CONFIG };
+  private _effectiveVisualConfigSource: GridVisualConfig | null = null;
   /**
    * Visual configuration for the grid appearance.
    * Allows customization of header styles, row colors, cell formatting, and more.
@@ -762,6 +764,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   @Input()
   set VisualConfig(value: GridVisualConfig) {
     this._visualConfig = value || {};
+    this._effectiveVisualConfigSource = null;
     this.applyVisualConfig();
   }
   get VisualConfig(): GridVisualConfig {
@@ -769,10 +772,15 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   /**
-   * Get the effective visual config (user config merged with defaults)
+   * Get the effective visual config (user config merged with defaults).
+   * Memoized on `_visualConfig` reference to avoid allocating a new object on every change-detection pass.
    */
   get EffectiveVisualConfig(): Required<GridVisualConfig> {
-    return { ...DEFAULT_VISUAL_CONFIG, ...this._visualConfig };
+    if (this._effectiveVisualConfigSource !== this._visualConfig) {
+      this._effectiveVisualConfigSource = this._visualConfig;
+      this._effectiveVisualConfig = { ...DEFAULT_VISUAL_CONFIG, ...this._visualConfig };
+    }
+    return this._effectiveVisualConfig;
   }
 
   /** @deprecated Use {@link EffectiveVisualConfig}. */
@@ -1301,26 +1309,60 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return this.gridStateDescribesCurrentEntity() ? this._gridState?.aggregates : undefined;
   }
 
+  private _cardAggregatesCache: ViewGridAggregate[] = [];
+  private _cardAggregatesKey = '';
+  private _columnAggregatesCache: ViewGridAggregate[] = [];
+  private _columnAggregatesKey = '';
+
+  private buildAggregatesCacheKey(expressions: ViewGridAggregate[] | undefined, displayType: 'card' | 'column'): string {
+    if (!expressions || expressions.length === 0) {
+      return '';
+    }
+    return expressions
+      .filter(a => a.enabled !== false && a.displayType === displayType)
+      .map(a => `${a.id ?? a.expression}:${a.label ?? ''}:${a.order ?? 0}:${a.column ?? ''}`)
+      .join('|');
+  }
+
   /**
    * Returns enabled aggregates configured for card display.
+   * Memoized by expression signature so template bindings do not allocate a new array
+   * or trigger `AggregatePanelComponent.ngOnChanges` on unrelated change-detection passes.
    */
   public get CardAggregates(): ViewGridAggregate[] {
     const config = this.effectiveAggregatesConfig;
-    if (!config?.expressions) return [];
-    return config.expressions
-      .filter(a => a.enabled !== false && a.displayType === 'card')
-      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    const expressions = config?.expressions;
+    if (!expressions || expressions.length === 0) {
+      return this._cardAggregatesCache.length === 0 ? this._cardAggregatesCache : (this._cardAggregatesCache = []);
+    }
+    const key = this.buildAggregatesCacheKey(expressions, 'card');
+    if (key !== this._cardAggregatesKey) {
+      this._cardAggregatesKey = key;
+      this._cardAggregatesCache = expressions
+        .filter(a => a.enabled !== false && a.displayType === 'card')
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+    }
+    return this._cardAggregatesCache;
   }
 
   /**
    * Returns enabled aggregates configured for column footer display.
+   * Memoized by expression signature to avoid per-CD array allocation and sorting.
    */
   public get ColumnAggregates(): ViewGridAggregate[] {
     const config = this.effectiveAggregatesConfig;
-    if (!config?.expressions) return [];
-    return config.expressions
-      .filter(a => a.enabled !== false && a.displayType === 'column')
-      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    const expressions = config?.expressions;
+    if (!expressions || expressions.length === 0) {
+      return this._columnAggregatesCache.length === 0 ? this._columnAggregatesCache : (this._columnAggregatesCache = []);
+    }
+    const key = this.buildAggregatesCacheKey(expressions, 'column');
+    if (key !== this._columnAggregatesKey) {
+      this._columnAggregatesKey = key;
+      this._columnAggregatesCache = expressions
+        .filter(a => a.enabled !== false && a.displayType === 'column')
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+    }
+    return this._columnAggregatesCache;
   }
 
   /**
@@ -5598,14 +5640,47 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // Public Getters
   // ========================================
 
+  private _visibleRowsCache: GridRowData[] = [];
+  private _visibleRowsKey = '';
+  private _visibleColumnStatesCache: ColumnRuntimeState[] = [];
+  private _visibleColumnStatesKey = '';
+
+  /**
+   * Returns the currently loaded grid rows.
+   * Memoized on map size and boundary keys so repeated change-detection checks reuse the same array instance.
+   */
   get VisibleRows(): GridRowData[] {
-    return Array.from(this._rowDataMap.values());
+    const size = this._rowDataMap.size;
+    if (size === 0) {
+      return this._visibleRowsCache.length === 0 ? this._visibleRowsCache : (this._visibleRowsCache = []);
+    }
+    let firstKey = '';
+    let lastKey = '';
+    for (const k of this._rowDataMap.keys()) {
+      if (!firstKey) firstKey = k;
+      lastKey = k;
+    }
+    const key = `${size}:${firstKey}:${lastKey}`;
+    if (key !== this._visibleRowsKey || this._visibleRowsCache.length !== size) {
+      this._visibleRowsKey = key;
+      this._visibleRowsCache = Array.from(this._rowDataMap.values());
+    }
+    return this._visibleRowsCache;
   }
 
+  /**
+   * Returns visible column runtime states sorted by display order.
+   * Memoized on column visibility and order signature to prevent per-CD array allocation and sorting.
+   */
   get VisibleColumnStates(): ColumnRuntimeState[] {
-    return this._columnStates
-      .filter(c => c.visible)
-      .sort((a, b) => a.order - b.order);
+    const key = this._columnStates.map(c => `${c.config.field}:${c.visible ? 1 : 0}:${c.order}`).join('|');
+    if (key !== this._visibleColumnStatesKey) {
+      this._visibleColumnStatesKey = key;
+      this._visibleColumnStatesCache = this._columnStates
+        .filter(c => c.visible)
+        .sort((a, b) => a.order - b.order);
+    }
+    return this._visibleColumnStatesCache;
   }
 }
 
