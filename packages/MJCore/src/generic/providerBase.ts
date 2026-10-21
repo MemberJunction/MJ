@@ -2956,7 +2956,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const user = this.CurrentUser;
         if (!user || !params.EntityName) return '';
         const entity = this.EntityByName(params.EntityName);
-        if (!entity?.EnableFieldLevelSecurity) return '';
+        if (!entity?.FieldLevelSecurityApplies) return '';
         const denied = entity.GetDeniedReadFields(user);
         if (denied.size === 0) return '';
         return entity.Fields
@@ -3076,7 +3076,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return;
         }
         const entity = this.EntityByName(params.EntityName);
-        if (!entity?.EnableFieldLevelSecurity) {
+        if (!entity?.FieldLevelSecurityApplies) {
             return; // the overwhelmingly common case — one boolean, no allocation
         }
         const denied = entity.GetDeniedReadFields(contextUser);
@@ -3161,7 +3161,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return rows;
         }
         const entity = this.EntityByName(params.EntityName);
-        if (!entity?.EnableFieldLevelSecurity) {
+        if (!entity?.FieldLevelSecurityApplies) {
             return rows;
         }
         const denied = entity.GetDeniedReadFields(contextUser);

@@ -33,10 +33,12 @@ import { CompositeKey } from '../generic/compositeKey';
 import { UserInfo, UserRoleInfo, RecordDependency } from '../generic/securityInfo';
 import { WellKnownUserSource } from '../generic/wellKnownUserSource';
 
-import { EntityInfo, RecordMergeRequest, RecordMergeResult, FieldPermissionAccess } from '../generic/entityInfo';
+import { EntityInfo, EntityFieldPermissionInfo, RecordMergeRequest, RecordMergeResult, FieldPermissionAccess, FieldPermissionRuleVerbs, IsRestrictingFieldRule } from '../generic/entityInfo';
 import { TransactionGroupBase } from '../generic/transactionGroup';
 import { RunViewParams } from '../views/runView';
 import { BaseEntity } from '../generic/baseEntity';
+import { DatabaseProviderBase } from '../generic/databaseProviderBase';
+import { Metadata } from '../generic/metadata';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
 import { ClearAllDataHooks } from '../generic/dataHooks';
 import { RegisterClassEx, UUIDsEqual } from '@memberjunction/global';
@@ -1063,5 +1065,302 @@ describe('Denied fields whose Name is not a valid identifier', () => {
 
         expect(provider.applyProjection([{ ID: '1', Base_Salary: 250000 }], viewParams(), hr)[0].Base_Salary).toBe(250000);
         expect(provider.applyProjection([{ ID: '1', 'Base Salary': 250000 }], viewParams(), hr)[0]['Base Salary']).toBe(250000);
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// IS-A inheritance — a child's mirror of a parent field obeys the parent's rules
+//
+// An IS-A child carries each ancestor's fields as mirror fields of its own, read from the same
+// row. When enforcement asked only the child's own flag (off on nearly every child), a role
+// denied a field on the parent read it through the child's RunView, load and GetAll().
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('IS-A inheritance of field rules', () => {
+    const PEOPLE_ID = 'B0000000-0000-0000-0000-000000000001';
+    const CONTACTS_ID = 'B0000000-0000-0000-0000-000000000002';
+    const KEY_CONTACTS_ID = 'B0000000-0000-0000-0000-000000000003';
+    const UNSECURED_ROOT_ID = 'B0000000-0000-0000-0000-000000000004';
+    const UNSECURED_CHILD_ID = 'B0000000-0000-0000-0000-000000000005';
+
+    const bothRoles = (entityId: string) => [HR_ROLE_ID, INTERN_ROLE_ID].map(roleId => (
+        { EntityID: entityId, RoleID: roleId, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true }
+    ));
+
+    function entityInit(
+        id: string, name: string, parentId: string | null, enableFLS: boolean,
+        fields: Record<string, unknown>[]
+    ): Record<string, unknown> {
+        return {
+            ID: id, Name: name, ParentID: parentId, SchemaName: 'dbo', BaseTable: name.replace(/\s/g, ''),
+            BaseView: `vw${name.replace(/\s/g, '')}`, IncludeInAPI: true, AllowCreateAPI: true, AllowUpdateAPI: true,
+            AllowDeleteAPI: true, EnableFieldLevelSecurity: enableFLS, Permissions: bothRoles(id),
+            Fields: [
+                { ID: `${id}-id`, EntityID: id, Sequence: 1, Name: 'ID', Entity: name, Type: 'uniqueidentifier', IsPrimaryKey: true },
+                ...fields.map((f, i) => ({ EntityID: id, Entity: name, Type: 'nvarchar', Sequence: i + 2, ...f })),
+            ],
+        };
+    }
+
+    /** People: Phone is HR-only; Email is readable by the intern but not updatable or creatable. */
+    const peopleFields = [
+        { ID: 'p-name', Name: 'Name', EntityFieldPermissions: openTo('p-name') },
+        { ID: 'p-phone', Name: 'Phone', EntityFieldPermissions: openTo('p-phone', [HR_ROLE_ID]) },
+        {
+            ID: 'p-email', Name: 'Email',
+            EntityFieldPermissions: [
+                ...openTo('p-email', [HR_ROLE_ID]),
+                { ID: 'p-email-intern', EntityFieldID: 'p-email', RoleID: INTERN_ROLE_ID, ReadAccess: ALLOW, UpdateAccess: NONE, CreateAccess: NONE },
+            ],
+        },
+    ];
+    /** A child's mirrors of the People fields: same names, no rules of their own. */
+    const mirrors = (prefix: string) => ['Name', 'Phone', 'Email'].map(n => ({ ID: `${prefix}-${n.toLowerCase()}`, Name: n }));
+
+    function build(contactsFLS = false, contactsFieldExtras: Record<string, unknown>[] = []): EntityInfo[] {
+        return [
+            new EntityInfo(entityInit(PEOPLE_ID, 'People', null, true, peopleFields)),
+            new EntityInfo(entityInit(CONTACTS_ID, 'Sales Contacts', PEOPLE_ID, contactsFLS, [
+                ...mirrors('c'), { ID: 'c-score', Name: 'LeadScore' }, ...contactsFieldExtras,
+            ])),
+            new EntityInfo(entityInit(KEY_CONTACTS_ID, 'Key Contacts', CONTACTS_ID, false, [
+                ...mirrors('k'), { ID: 'k-score', Name: 'LeadScore' }, { ID: 'k-tier', Name: 'Tier' },
+            ])),
+            new EntityInfo(entityInit(UNSECURED_ROOT_ID, 'Plain Parents', null, false, [{ ID: 'u-phone', Name: 'Phone' }])),
+            new EntityInfo(entityInit(UNSECURED_CHILD_ID, 'Plain Children', UNSECURED_ROOT_ID, false, [{ ID: 'uc-phone', Name: 'Phone' }])),
+        ];
+    }
+
+    let provider: TestProvider;
+    let previousProvider: IMetadataProvider;
+    const byName = (name: string) => provider.EntityByName(name)!;
+    const intern = () => buildUser([INTERN_ROLE_ID]);
+    const hr = () => buildUser([HR_ROLE_ID]);
+
+    function seed(entities: EntityInfo[]): void {
+        provider = new TestProvider();
+        provider.seedEntities(entities);
+        Metadata.Provider = provider; // ParentEntityInfo resolves through the global provider
+    }
+
+    beforeEach(() => {
+        previousProvider = Metadata.Provider;
+        seed(build());
+    });
+    afterEach(() => {
+        Metadata.Provider = previousProvider;
+    });
+
+    describe('FieldLevelSecurityApplies', () => {
+        it('is true on the entity that has the flag on', () => {
+            expect(byName('People').FieldLevelSecurityApplies).toBe(true);
+        });
+        it('is true on a child whose own flag is off when its parent has it on', () => {
+            expect(byName('Sales Contacts').EnableFieldLevelSecurity).toBe(false);
+            expect(byName('Sales Contacts').FieldLevelSecurityApplies).toBe(true);
+        });
+        it('is true two levels down', () => {
+            expect(byName('Key Contacts').FieldLevelSecurityApplies).toBe(true);
+        });
+        it('is false when no entity in the chain has it on', () => {
+            expect(byName('Plain Parents').FieldLevelSecurityApplies).toBe(false);
+            expect(byName('Plain Children').FieldLevelSecurityApplies).toBe(false);
+        });
+    });
+
+    describe('denied sets on a child with its own flag off', () => {
+        it('REGRESSION: denies the parent-denied field on the child', () => {
+            expect([...byName('Sales Contacts').GetDeniedReadFields(intern())]).toEqual(['phone']);
+        });
+        it('denies it two levels down, through a middle entity whose flag is also off', () => {
+            expect([...byName('Key Contacts').GetDeniedReadFields(intern())]).toEqual(['phone']);
+        });
+        it('denies nothing to a role the parent allows', () => {
+            expect(byName('Sales Contacts').GetDeniedReadFields(hr()).size).toBe(0);
+        });
+        it('carries update and create denials as well as read', () => {
+            const contacts = byName('Sales Contacts');
+            expect([...contacts.GetDeniedUpdateFields(intern())].sort()).toEqual(['email', 'phone']);
+            expect([...contacts.GetDeniedCreateFields(intern())].sort()).toEqual(['email', 'phone']);
+        });
+        it('never denies the child\'s own fields — the child has no rules to apply', () => {
+            expect(byName('Sales Contacts').GetDeniedReadFields(intern()).has('leadscore')).toBe(false);
+        });
+        it('answers the single-field predicates the same way', () => {
+            const contacts = byName('Sales Contacts');
+            expect(contacts.IsFieldReadableByUser('Phone', intern())).toBe(false);
+            expect(contacts.IsFieldUpdatableByUser('Email', intern())).toBe(false);
+            expect(contacts.IsFieldReadableByUser('Email', intern())).toBe(true);
+        });
+        it('denies nothing when no entity in the chain has field security on', () => {
+            expect(byName('Plain Children').GetDeniedReadFields(intern()).size).toBe(0);
+        });
+    });
+
+    describe('a child with its own flag on as well', () => {
+        it('keeps the parent\'s denial even where the child\'s own rows allow the mirror', () => {
+            // The child has its own flag on and rows opening every one of its fields to both roles.
+            const openField = (id: string, name: string) => ({ ID: id, Name: name, EntityFieldPermissions: openTo(id) });
+            const contacts = new EntityInfo(entityInit(CONTACTS_ID, 'Sales Contacts', PEOPLE_ID, true, [
+                openField('c-name', 'Name'), openField('c-phone', 'Phone'),
+                openField('c-email', 'Email'), openField('c-score', 'LeadScore'),
+            ]));
+            seed(build().map(e => (e.ID === CONTACTS_ID ? contacts : e)));
+            expect([...byName('Sales Contacts').GetDeniedReadFields(intern())]).toEqual(['phone']);
+        });
+        it('still applies its own rules to its own fields', () => {
+            seed(build(true));
+            // The child's fields carry no rows here, so on an enabled entity they are all denied.
+            expect(byName('Sales Contacts').GetDeniedReadFields(hr()).has('leadscore')).toBe(true);
+        });
+    });
+
+    describe('enforcement points gate on the inherited rules', () => {
+        const contactsView = (extra: Partial<RunViewParams> = {}): RunViewParams =>
+            ({ EntityName: 'Sales Contacts', ...extra }) as RunViewParams;
+
+        it('REGRESSION: RunView projection strips the parent-denied column from child rows', () => {
+            const rows = [{ ID: '1', Name: 'Ada', Phone: '555-0100', Email: 'a@x.test', LeadScore: 7 }];
+            expect(provider.applyProjection(rows, contactsView(), intern())).toEqual([
+                { ID: '1', Name: 'Ada', Email: 'a@x.test', LeadScore: 7 },
+            ]);
+        });
+        it('the predicate gate rejects a filter on the parent-denied field through the child', () => {
+            expect(() => provider.assertPredicates(contactsView({ ExtraFilter: "Phone = '555-0100'" }), intern())).toThrow();
+        });
+        it('the predicate gate allows the same filter to a role the parent allows', () => {
+            expect(() => provider.assertPredicates(contactsView({ ExtraFilter: "Phone = '555-0100'" }), hr())).not.toThrow();
+        });
+    });
+
+    describe('only mirrored fields inherit a denial', () => {
+        /** People with a `Base Salary` column (CodeName `Base_Salary`) that only HR may read. */
+        function buildWithSalary(childFields: Record<string, unknown>[]): EntityInfo[] {
+            const people = new EntityInfo(entityInit(PEOPLE_ID, 'People', null, true, [
+                ...peopleFields,
+                { ID: 'p-salary', Name: 'Base Salary', EntityFieldPermissions: openTo('p-salary', [HR_ROLE_ID]) },
+            ]));
+            const contacts = new EntityInfo(entityInit(CONTACTS_ID, 'Sales Contacts', PEOPLE_ID, false, [...mirrors('c'), ...childFields]));
+            return [people, contacts];
+        }
+
+        it('REGRESSION: a child\'s own field named like a denied parent field\'s CodeName stays readable', () => {
+            seed(buildWithSalary([{ ID: 'c-own-salary', Name: 'Base_Salary' }]));
+            const denied = byName('Sales Contacts').GetDeniedReadFields(intern());
+            expect(denied.has('base_salary')).toBe(false);
+            expect(byName('Sales Contacts').IsFieldReadableByUser('Base_Salary', intern())).toBe(true);
+        });
+        it('the child\'s mirror of that parent field is denied under both its Name and CodeName', () => {
+            seed(buildWithSalary([{ ID: 'c-salary', Name: 'Base Salary' }]));
+            const denied = byName('Sales Contacts').GetDeniedReadFields(intern());
+            expect(denied.has('base salary')).toBe(true);
+            expect(denied.has('base_salary')).toBe(true);
+        });
+    });
+
+    describe('the denied-set memo', () => {
+        /** The intern's People.Phone rule, made readable so the test can tighten it in place. */
+        function internPhoneRule(entity: EntityInfo) {
+            const phone = entity.Fields.find(f => f.Name === 'Phone')!;
+            const rule = new EntityFieldPermissionInfo({
+                ID: 'p-phone-intern', EntityFieldID: phone.ID, RoleID: INTERN_ROLE_ID, ReadAccess: ALLOW, UpdateAccess: NONE, CreateAccess: NONE,
+            });
+            phone.FieldPermissions.push(rule);
+            return rule;
+        }
+
+        it('REGRESSION: an in-place Allow to Deny edit takes effect once the entity is invalidated', () => {
+            const people = byName('People');
+            const rule = internPhoneRule(people);
+            const user = intern();
+            expect(people.GetDeniedReadFields(user).has('phone')).toBe(false);
+            rule.ReadAccess = DENY; // same number of rules and fields: a count-based key cannot see this
+            people.InvalidateFieldSecurityCache();
+            expect(people.GetDeniedReadFields(user).has('phone')).toBe(true);
+        });
+        it('invalidating an ancestor invalidates the child\'s memo too', () => {
+            const people = byName('People');
+            const rule = internPhoneRule(people);
+            const user = intern();
+            expect(byName('Key Contacts').GetDeniedReadFields(user).has('phone')).toBe(false);
+            rule.ReadAccess = DENY;
+            people.InvalidateFieldSecurityCache();
+            expect(byName('Key Contacts').GetDeniedReadFields(user).has('phone')).toBe(true);
+        });
+        it('a rebuilt ancestor is seen by a child built before it', () => {
+            const contacts = byName('Sales Contacts');
+            const user = intern();
+            expect(contacts.GetDeniedReadFields(user).has('phone')).toBe(true);
+            const reopened = new EntityInfo(entityInit(PEOPLE_ID, 'People', null, true, [
+                { ID: 'p-name', Name: 'Name', EntityFieldPermissions: openTo('p-name') },
+                { ID: 'p-phone', Name: 'Phone', EntityFieldPermissions: openTo('p-phone') },
+                { ID: 'p-email', Name: 'Email', EntityFieldPermissions: openTo('p-email') },
+            ]));
+            provider.seedEntities([reopened, ...provider.Entities.filter(e => e.ID !== PEOPLE_ID)]);
+            expect(contacts.GetDeniedReadFields(user).has('phone')).toBe(false);
+        });
+        it('REGRESSION: a role swapped in place on the same user object is seen', () => {
+            const people = byName('People');
+            const user = hr();
+            expect(people.GetDeniedReadFields(user).has('phone')).toBe(false);
+            user.UserRoles[0] = new UserRoleInfo({ UserID: user.ID, RoleID: INTERN_ROLE_ID, Role: 'Intern' });
+            expect(people.GetDeniedReadFields(user).has('phone')).toBe(true);
+        });
+    });
+
+    describe('record names on a child', () => {
+        type RecordNameGate = { CanUserReadRecordName(entity: EntityInfo, user?: UserInfo): boolean };
+        /** The provider's real gate, run on a bare instance: it reads nothing but the entity it is given. */
+        const canReadRecordName = (entity: EntityInfo, user?: UserInfo): boolean =>
+            (Object.create(DatabaseProviderBase.prototype) as RecordNameGate).CanUserReadRecordName(entity, user);
+
+        function seedWithHrOnlyName(): void {
+            seed([
+                new EntityInfo(entityInit(PEOPLE_ID, 'People', null, true, [
+                    { ID: 'p-name', Name: 'Name', IsNameField: true, EntityFieldPermissions: openTo('p-name', [HR_ROLE_ID]) },
+                ])),
+                new EntityInfo(entityInit(CONTACTS_ID, 'Sales Contacts', PEOPLE_ID, false, [
+                    { ID: 'c-name', Name: 'Name', IsNameField: true }, { ID: 'c-score', Name: 'LeadScore' },
+                ])),
+            ]);
+        }
+
+        it('REGRESSION: CanUserReadRecordName withholds a child\'s name when the parent denies the name field', () => {
+            seedWithHrOnlyName();
+            expect(canReadRecordName(byName('Sales Contacts'), intern())).toBe(false);
+            expect(canReadRecordName(byName('Sales Contacts'), undefined)).toBe(false);
+        });
+        it('CanUserReadRecordName allows the child\'s name to a role the parent allows', () => {
+            seedWithHrOnlyName();
+            expect(canReadRecordName(byName('Sales Contacts'), hr())).toBe(true);
+        });
+    });
+
+    describe('parent chain resolution', () => {
+        it('REGRESSION: a chain read before the parent resolves is not kept', () => {
+            const all = build();
+            const contacts = all.find(e => e.ID === CONTACTS_ID)!;
+            seed(all.filter(e => e.ID !== PEOPLE_ID)); // the parent is not loaded yet
+            expect(contacts.FieldLevelSecurityApplies).toBe(false);
+            provider.seedEntities(all);
+            expect(contacts.FieldLevelSecurityApplies).toBe(true);
+            expect(contacts.GetDeniedReadFields(intern()).has('phone')).toBe(true);
+        });
+    });
+});
+
+describe('IsRestrictingFieldRule', () => {
+    const rule = (ReadAccess: string, UpdateAccess = 'No Access', CreateAccess = 'No Access') =>
+        ({ ReadAccess, UpdateAccess, CreateAccess }) as FieldPermissionRuleVerbs;
+
+    it('REGRESSION: reads a Deny under any case or surrounding whitespace, as the aggregation does', () => {
+        expect(IsRestrictingFieldRule(rule('deny'))).toBe(true);
+        expect(IsRestrictingFieldRule(rule('Allow', ' DENY '))).toBe(true);
+        expect(IsRestrictingFieldRule(rule('Allow', 'Allow', 'dEnY'))).toBe(true);
+    });
+    it('is false for Allow, No Access, unknown values and a missing rule', () => {
+        expect(IsRestrictingFieldRule(rule('allow', 'no access', 'Allow'))).toBe(false);
+        expect(IsRestrictingFieldRule(rule('Denied'))).toBe(false);
+        expect(IsRestrictingFieldRule(null)).toBe(false);
     });
 });

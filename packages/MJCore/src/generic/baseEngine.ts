@@ -1930,6 +1930,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // now, break up the configs into two chunks, datasets and views of entities so we can load all the views in a single network call via RunViews()
         const entityConfigs = this._metadataConfigs.filter(c => c.Type === 'entity');
         const datasetConfigs = this._metadataConfigs.filter(c => c.Type === 'dataset');
+        this.WarnAboutFieldSecuredEntities(entityConfigs);
 
         // All-or-nothing permission check: if the user lacks read access on ANY
         // entity config, skip ALL entity configs for this engine. Returns the
@@ -1942,6 +1943,37 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
         // Register cross-server cache change callbacks for entity configs
         this.RegisterCacheChangeCallbacks(entityConfigs);
+    }
+
+    /** Engine-class and entity pairs already warned about by {@link WarnAboutFieldSecuredEntities}. */
+    private static _fieldSecurityWarned: Set<string> = new Set();
+
+    /**
+     * On a server, says once per engine class and entity when an entity this engine caches has
+     * field-level security (its own, or an IS-A ancestor's). Changes nothing about the load.
+     *
+     * A server-side engine loads as the system user (see {@link ResolveContextUser}), so its
+     * cache holds every column, including ones some users are denied. That is correct for a
+     * process-wide cache, and it makes every path that hands engine data to a person responsible
+     * for projecting it to that person first.
+     */
+    protected WarnAboutFieldSecuredEntities(entityConfigs: BaseEnginePropertyConfig[]): void {
+        const provider = this.ProviderToUse;
+        if (provider?.ProviderType !== ProviderType.Database) {
+            return;
+        }
+        for (const config of entityConfigs) {
+            const entityInfo = config.EntityName ? provider.EntityByName(config.EntityName) : undefined;
+            if (!entityInfo?.FieldLevelSecurityApplies) {
+                continue;
+            }
+            const key = `${this.constructor.name}|${entityInfo.Name}`.toLowerCase();
+            if (BaseEngine._fieldSecurityWarned.has(key)) {
+                continue;
+            }
+            BaseEngine._fieldSecurityWarned.add(key);
+            LogStatus(`${this.constructor.name}: '${entityInfo.Name}' has field-level security. Engine data is loaded as the system user and holds every column; project it for the acting user before it reaches a person.`);
+        }
     }
 
     /**

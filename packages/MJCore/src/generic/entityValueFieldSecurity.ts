@@ -49,10 +49,10 @@ export function OmitDeniedFieldKeys<T extends object>(values: T, denied: Readonl
 
 /**
  * The denied-READ set for `user` on `entityInfo`, or null when field security does not apply:
- * the entity has it switched off, there is no user, or the user is denied nothing.
+ * it applies to neither the entity nor an IS-A ancestor, there is no user, or the user is denied nothing.
  */
 function deniedReadFieldsFor(entityInfo: EntityInfo, user: UserInfo): Set<string> | null {
-    if (!entityInfo.EnableFieldLevelSecurity) {
+    if (!entityInfo.FieldLevelSecurityApplies) {
         return null;
     }
     const denied = entityInfo.GetDeniedReadFields(user);

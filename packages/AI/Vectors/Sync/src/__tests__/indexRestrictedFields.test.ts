@@ -136,3 +136,29 @@ describe('index-time field-level security', () => {
         });
     });
 });
+
+describe('index-time field-level security on an IS-A child', () => {
+    /** Links `child` to `parent` the way metadata resolution would, without a provider. */
+    function linkAsChild(child: EntityInfo, parent: EntityInfo): EntityInfo {
+        child.ParentID = parent.ID;
+        Object.defineProperty(child, 'ParentEntityInfo', { get: () => parent });
+        Object.defineProperty(child, 'ParentChain', { get: () => [parent] });
+        return child;
+    }
+
+    it('restricts a mirrored parent field on a child whose own flag is off', () => {
+        const child = linkAsChild(entity('Managers', { Name: [], Salary: [], Level: [] }, false), EMPLOYEES);
+        const restricted = GetIndexRestrictedFieldNames(child);
+        expect(restricted.has('salary')).toBe(true);
+        expect(restricted.has('review')).toBe(false); // the child has no Review field
+    });
+
+    it('leaves the child\'s own fields and readable mirrors alone', () => {
+        const child = linkAsChild(entity('Managers', { Name: [], Salary: [], Level: [] }, false), EMPLOYEES);
+        const restricted = GetIndexRestrictedFieldNames(child);
+        // "No rules" restricts only on an entity whose own flag is on; here the child's flag is off.
+        expect(restricted.has('level')).toBe(false);
+        expect(restricted.has('name')).toBe(false);
+        expect(restricted.has('id')).toBe(false);
+    });
+});
