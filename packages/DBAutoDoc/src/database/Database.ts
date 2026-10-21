@@ -128,7 +128,8 @@ export class Introspector {
           schema: fk.referencedSchema,
           table: fk.referencedTable,
           column: fk.columnName,
-          referencedColumn: fk.referencedColumn
+          referencedColumn: fk.referencedColumn,
+          constraintName: fk.constraintName
         }));
 
         // Convert columns
