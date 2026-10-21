@@ -74,6 +74,13 @@ function fieldRow(objectID: string) {
 const engine = () => IntegrationEngineBase.Instance;
 const names = () => engine().GetActiveIntegrationObjects(INTEGRATION).map(o => o.Name);
 
+// CatalogScope asks the integration engine for its provider, and the engine resolves it through its
+// own (unmocked) Metadata import — so point it at this file's mocked one.
+const { Metadata: MockedMetadata } = await import('@memberjunction/core');
+beforeEach(() => {
+    vi.spyOn(IntegrationEngineBase.Instance, 'ProviderToUse', 'get').mockImplementation(() => MockedMetadata.Provider as never);
+});
+
 beforeEach(() => {
     EvictCatalogScope();
     objectsInDb = [];

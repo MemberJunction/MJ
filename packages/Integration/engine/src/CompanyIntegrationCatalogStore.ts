@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     CATALOG_FIELD_COLUMNS,
     CATALOG_OBJECT_COLUMNS,
@@ -152,11 +152,15 @@ export class CatalogRow {
 
 /** Reads and writes for the per-connection catalog. */
 export class CompanyIntegrationCatalogStore {
-    constructor(private readonly contextUser: UserInfo) {}
+    /** `provider` is the caller's bound provider; without one the store uses the default. */
+    constructor(private readonly contextUser: UserInfo, private readonly provider?: IMetadataProvider) {}
+
+    private get md(): IMetadataProvider | Metadata {
+        return this.provider ?? new Metadata();
+    }
 
     private async newRow(entityName: CatalogEntityName): Promise<CatalogRow> {
-        const md = new Metadata();
-        const row = await md.GetEntityObject<BaseEntity>(entityName, this.contextUser);
+        const row = await this.md.GetEntityObject<BaseEntity>(entityName, this.contextUser);
         if (!row) {
             throw new CompanyIntegrationCatalogSchemaMismatch(entityName, ['<entity not registered>']);
         }
@@ -173,12 +177,11 @@ export class CompanyIntegrationCatalogStore {
     }
 
     private async loadRow(entityName: CatalogEntityName, id: string): Promise<CatalogRow | null> {
-        const md = new Metadata();
-        const row = await md.GetEntityObject<BaseEntity>(entityName, this.contextUser);
+        const row = await this.md.GetEntityObject<BaseEntity>(entityName, this.contextUser);
         if (!row) return null;
         // `Load(id)` is a GENERATED-subclass convenience. These entities have none, so the entry
         // point is the base one — the same call the existing shared-catalog code makes.
-        const loaded = await row.InnerLoad(CompositeKey.FromID(id));
+        const loaded = await row.InnerLoad(CompositeKey.FromID(id)); // first-pk-ok: entityName is one of the two per-connection catalog core tables ('MJ: Company Integration Objects' / '... Object Fields'), both keyed by ID
         return loaded ? CatalogRow.wrap(entityName, row) : null;
     }
 

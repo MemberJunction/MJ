@@ -111,6 +111,13 @@ const objectReads = () => calls.filter(c => c.EntityName === ENTITY_COMPANY_INTE
 const edgeReads = () => calls.filter(c => c.EntityName === ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS && c.ResultType === 'simple');
 const fieldReads = () => calls.filter(c => c.EntityName === ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS && c.ResultType !== 'simple');
 
+// CatalogScope asks the integration engine for its provider, and the engine resolves it through its
+// own (unmocked) Metadata import — so point it at this file's mocked one.
+const { Metadata: MockedMetadata } = await import('@memberjunction/core');
+beforeEach(() => {
+    vi.spyOn(IntegrationEngineBase.Instance, 'ProviderToUse', 'get').mockImplementation(() => MockedMetadata.Provider as never);
+});
+
 beforeEach(() => {
     EvictCatalogScope();
     calls.length = 0;
