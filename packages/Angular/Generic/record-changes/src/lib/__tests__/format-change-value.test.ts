@@ -71,3 +71,31 @@ describe('ChangeValuesMatch', () => {
     expect(ChangeValuesMatch(42, '42', field('int', EntityFieldTSType.Number))).toBe(true);
   });
 });
+
+describe('binary fields in change history and restore preview', () => {
+  const binary = { Type: 'varbinary', TSType: EntityFieldTSType.String, IsBinaryFieldType: true } as unknown as EntityFieldInfo;
+  const text = { Type: 'nvarchar', TSType: EntityFieldTSType.String, IsBinaryFieldType: false } as unknown as EntityFieldInfo;
+
+  it('shows a snapshot value (base64) as its size, never the text', () => {
+    expect(FormatChangeValue('AQIDBA==', binary)).toBe('[binary: 4 bytes]');
+    expect(FormatChangeValue('A'.repeat(8192), binary)).toBe('[binary: 6,144 bytes]');
+  });
+
+  it('shows a diff value that already is the size text as-is', () => {
+    expect(FormatChangeValue('[binary: 6,144 bytes]', binary)).toBe('[binary: 6,144 bytes]');
+    expect(FormatChangeValue('[binary: invalid base64]', binary)).toBe('[binary: invalid base64]');
+  });
+
+  it('leaves null and non-binary fields exactly as before', () => {
+    expect(FormatChangeValue(null, binary)).toBe('');
+    expect(FormatChangeValue('AQIDBA==', text)).toBe('AQIDBA==');
+    expect(FormatChangeValue('AQIDBA==', undefined)).toBe('AQIDBA==');
+  });
+
+  it('compares binary values by content, so equal sizes are not mistaken for equal bytes', () => {
+    expect(ChangeValuesMatch('AQIDBA==', 'AQIDBA==', binary)).toBe(true);
+    expect(ChangeValuesMatch('AQIDBA==', 'BAMCAQ==', binary)).toBe(false); // same 4 bytes, different content
+    expect(ChangeValuesMatch(null, undefined, binary)).toBe(true);
+    expect(ChangeValuesMatch(null, 'AQ==', binary)).toBe(false);
+  });
+});

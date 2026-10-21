@@ -1,0 +1,30 @@
+{
+  "Name": "model-side-indirect-address",
+  "Description": "Two full-duplex agents judging addressing themselves. A question that names nobody is taken up by the agent whose model signalled it was addressed; an unclaimed question is left alone; a later direct question is taken up by the other agent. A name-matching regex would have missed all three.",
+  "Agents": [
+    { "Id": "sage", "Names": ["Sage"], "Addressing": "ModelSide" },
+    { "Id": "demo", "Names": ["Demo Loop"], "Addressing": "ModelSide" }
+  ],
+  "Events": [
+    { "Type": "ModelAddressed", "AtMs": 2900, "Agent": "sage" },
+    { "Type": "HumanSpeech", "AtMs": 0, "DurationMs": 3000, "Text": "What does the finance side of the house think about that forecast?",
+      "ExpectDecisions": { "sage": "Speak", "demo": "Silent" } },
+    { "Type": "AgentSpeech", "AtMs": 4500, "Agent": "sage", "DurationMs": 6000, "Text": "Finance would want the downside case modeled before committing to the hiring plan." },
+    { "Type": "HumanSpeech", "AtMs": 12000, "DurationMs": 2000, "Text": "Anyone else have a view?",
+      "ExpectDecisions": { "sage": "Silent", "demo": "Silent" } },
+    { "Type": "ModelAddressed", "AtMs": 22400, "Agent": "demo" },
+    { "Type": "HumanSpeech", "AtMs": 20000, "DurationMs": 2500, "Text": "And from the product side, how does that land?",
+      "ExpectDecisions": { "sage": "Silent", "demo": "Speak" } },
+    { "Type": "AgentSpeech", "AtMs": 23500, "Agent": "demo", "DurationMs": 4000, "Text": "Product can absorb it if the launch slips by one sprint." }
+  ],
+  "Expect": {
+    "Speeches": [
+      { "Agent": "sage", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" },
+      { "Agent": "demo", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" }
+    ],
+    "Preempted": [],
+    "BackchannelCount": 0,
+    "LoopCapReached": false,
+    "FinalFloorHolder": null
+  }
+}

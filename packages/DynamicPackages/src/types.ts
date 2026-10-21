@@ -99,6 +99,15 @@ export interface LoadedDynamicPackage extends DiscoveredDynamicPackage {
     RanStartupExport: boolean;
 }
 
+/** Context passed to a dynamic package's StartupExport function, if provided. */
+export interface DynamicPackageStartupContext {
+    /**
+     * Identity of the calling process, lowercase and colon-separated: `mjapi`, `cli:sync:push`,
+     * `mcp`, `a2a`, `integration-tests`.
+     */
+    ProcessId: string;
+}
+
 /** Why an entry was not loaded. */
 export type DynamicPackageSkipReason = 'disabled' | 'process-filter' | 'mode-none' | 'duplicate';
 

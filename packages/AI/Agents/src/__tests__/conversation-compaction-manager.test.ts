@@ -73,8 +73,10 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
-vi.mock('@memberjunction/ai-core-plus', () => ({
+vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => ({
     AIPromptParams: class MockParams {},
+    // The real copy, so the summary prompt's execution scope is the one production builds.
+    PickPromptExecutionScope: (await importOriginal<typeof import('@memberjunction/ai-core-plus')>()).PickPromptExecutionScope,
     // Mirror of the real string-result extraction (prompt.types.ts) so the manager's
     // summary-text handling behaves identically under the module mock.
     ExtractPromptResultText: (result: { result?: unknown; rawResult?: string }) =>
@@ -270,6 +272,21 @@ describe('ConversationCompactionManager', () => {
             expect(mockCompactionRunEntity.ConversationDetailID).toBe('detail-5');
             expect(mockCompactionRunEntity.PromptRunID).toBe('PROMPT-RUN-1');
             expect(mockCompactionRunEntity.Save).toHaveBeenCalled();
+        });
+
+        it("runs the summary prompt on the triggering run's configuration and credentials", async () => {
+            const text = 'x'.repeat(1000);
+            mockRows.rows = [1, 2, 3, 4, 5, 6].map(n => sourceRow(n, n % 2 ? 'User' : 'AI', text));
+            const apiKeys = [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }];
+
+            await ConversationCompactionManager.CompactIfNeeded(baseInput({
+                ExecutionScope: { configurationId: 'config-1', apiKeys, CredentialScope: 'RuntimeOnly' }
+            }) as never);
+
+            const promptParams = mockExecutePrompt.mock.calls[0][0];
+            expect(promptParams.configurationId).toBe('config-1');
+            expect(promptParams.apiKeys).toBe(apiKeys);
+            expect(promptParams.CredentialScope).toBe('RuntimeOnly');
         });
 
         it('never selects the newest raw row as boundary, even when it alone exceeds the tail budget', async () => {

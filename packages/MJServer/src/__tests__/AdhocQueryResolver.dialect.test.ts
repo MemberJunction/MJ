@@ -4,27 +4,21 @@
  * The bug — `ExecuteAdhocQuery` opened with
  * `GetReadOnlyDataSource(context.dataSources, …)`, which looks for an **mssql
  * `ConnectionPool`**. A PostgreSQL provider never populates `context.dataSources`
- * with one, so the call threw and the resolver returned
- * "No read-only data source available for ad-hoc query execution" — which the
- * artifact viewer renders as "Showing cached data". The `GetReadOnlyProvider`
- * call immediately below it only resolved a platform STRING; it never executed
- * anything, so the resolver knew the tenant was PostgreSQL and still refused.
+ * with one, so every ad-hoc query on PostgreSQL returned
+ * "No read-only data source available for ad-hoc query execution".
  *
- * The fix routes both questions — which dialect to render, and what to execute
- * the rendered SQL on — through the SAME read-only provider, and executes via
- * `provider.ExecuteSQL`, which every platform implements.
- *
- * Same hybrid strategy as AdhocQueryResolver.pagination.test.ts:
- *   1. Source-shape contract tests — assert structural properties of the fix.
- *   2. Behavior tests — drive ExecuteAdhocQuery against a stub PostgreSQL
- *      provider and assert it neither refuses nor emits T-SQL.
+ * `next` fixed the execution path (R31): the resolver now hands the SQL to the
+ * read-only PROVIDER's `RunQuery`, and renders it for that provider's platform.
+ * This suite pins the dialect half of that contract — the platform comes from the
+ * provider the SQL runs on, never from a literal, and nothing reaches for mssql —
+ * and drives the resolver against a PostgreSQL provider with no mssql pool at all.
+ * Paging, the timeout clamp and the read authorizer have their own suites.
  */
 import 'reflect-metadata';
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { Metadata } from '@memberjunction/core';
 
 // `RunQueryResultType` is a type-graphql object type whose fields rely on
 // `emitDecoratorMetadata`. esbuild (what vitest transforms with) cannot emit it,
@@ -35,6 +29,9 @@ vi.mock('../resolvers/QueryResolver.js', () => ({
     RunQueryResultType: class RunQueryResultType {},
 }));
 
+// The server config is read from mj.config at import; only the timeout cap is used here.
+vi.mock('../config.js', () => ({ configInfo: { databaseSettings: { requestTimeout: 120_000 } } }));
+
 import { AdhocQueryResolver } from '../resolvers/AdhocQueryResolver.js';
 import type { AppContext } from '../types.js';
 
@@ -44,26 +41,14 @@ function readResolverSource(): string {
     return readFileSync(ADHOC_RESOLVER_PATH, 'utf8');
 }
 
-function stubMetadata(): void {
-    vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
-        Queries: [],
-        QueryDependencies: [],
-    } as unknown as ReturnType<typeof Metadata.Provider>);
-}
+type RunQueryCall = { SQL: string; MaxRows?: number; StartRow?: number };
 
-/** Records every statement handed to the provider so we can inspect the dialect. */
-type ExecutedSQL = { statements: string[] };
-
-function contextWithProvider(platformKey: string, executed: ExecutedSQL, rows: Record<string, unknown>[] = []): AppContext {
+function postgresContext(calls: RunQueryCall[], rows: Record<string, unknown>[]): AppContext {
     const provider = {
-        PlatformKey: platformKey,
-        ExecuteSQL: async (sqlText: string) => {
-            executed.statements.push(sqlText);
-            // A COUNT wrap must answer with a count; anything else gets the page.
-            if (/TotalRowCount/i.test(sqlText)) {
-                return [{ TotalRowCount: rows.length }];
-            }
-            return rows;
+        PlatformKey: 'postgresql',
+        RunQuery: async (params: RunQueryCall) => {
+            calls.push(params);
+            return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length };
         },
     };
     return {
@@ -79,14 +64,9 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-// ════════════════════════════════════════════════════════════════════
-// Source-shape contract tests
-// ════════════════════════════════════════════════════════════════════
-
 describe('AdhocQueryResolver dialect source-shape contract', () => {
     it('must NOT gate execution on a SQL-Server-only read-only data source', () => {
-        const src = readResolverSource();
-        expect(src).not.toContain('GetReadOnlyDataSource');
+        expect(readResolverSource()).not.toContain('GetReadOnlyDataSource');
     });
 
     it('must NOT depend on the mssql driver', () => {
@@ -96,91 +76,38 @@ describe('AdhocQueryResolver dialect source-shape contract', () => {
         expect(src).not.toContain('sql.ConnectionPool');
     });
 
-    it('must resolve the platform from the read-only provider, not a literal', () => {
+    it('renders for the platform of the read-only provider the SQL runs on, not a literal', () => {
         const src = readResolverSource();
         expect(src).toContain('GetReadOnlyProvider(context.providers');
-        expect(src).toContain('ResolvePlatformKey(roProvider)');
-        // The old code seeded `let platform: DatabasePlatform = 'sqlserver'` and
-        // only overwrote it if a provider happened to be there.
+        expect(src).toContain('Platform: provider.PlatformKey');
         expect(src).not.toMatch(/platform\s*(:\s*DatabasePlatform\s*)?=\s*'sqlserver'/);
-    });
-
-    it('must execute through the provider abstraction', () => {
-        const src = readResolverSource();
-        expect(src).toContain('provider.ExecuteSQL');
+        expect(src).not.toMatch(/Platform:\s*'sqlserver'/);
     });
 });
 
-// ════════════════════════════════════════════════════════════════════
-// Behavior tests
-// ════════════════════════════════════════════════════════════════════
-
 describe('ExecuteAdhocQuery on a PostgreSQL tenant', () => {
-    it('does NOT fall into the "no read-only data source" branch', async () => {
-        stubMetadata();
-        const executed: ExecutedSQL = { statements: [] };
+    it('runs on the read-only provider instead of refusing for want of an mssql pool', async () => {
         const resolver = new AdhocQueryResolver();
+        const authorize = vi.spyOn(resolver, 'AuthorizeRenderedSQL').mockReturnValue(null);
+        const calls: RunQueryCall[] = [];
 
         const result = await resolver.ExecuteAdhocQuery(
-            { SQL: 'SELECT ID, Name FROM __mj.vwUsers' },
-            contextWithProvider('postgresql', executed, [{ ID: '1', Name: 'A' }]),
+            { SQL: 'SELECT ID FROM __mj.vwUsers' },
+            postgresContext(calls, [{ ID: '1' }, { ID: '2' }]),
         );
 
         expect(result.ErrorMessage).not.toContain('No read-only data source');
         expect(result.Success).toBe(true);
-        expect(executed.statements.length).toBeGreaterThan(0);
-    });
-
-    it('renders the page in PostgreSQL syntax, not T-SQL', async () => {
-        stubMetadata();
-        const executed: ExecutedSQL = { statements: [] };
-        const resolver = new AdhocQueryResolver();
-
-        await resolver.ExecuteAdhocQuery(
-            { SQL: 'SELECT ID, Name FROM __mj.vwUsers ORDER BY Name', MaxRows: 10, StartRow: 0 },
-            contextWithProvider('postgresql', executed, [{ ID: '1', Name: 'A' }]),
-        );
-
-        const dataSQL = executed.statements[0];
-        expect(dataSQL).toMatch(/LIMIT/i);
-        expect(dataSQL).not.toMatch(/OFFSET\s+\d+\s+ROWS\s+FETCH/i);
-    });
-
-    it('returns the provider\'s rows', async () => {
-        stubMetadata();
-        const executed: ExecutedSQL = { statements: [] };
-        const resolver = new AdhocQueryResolver();
-
-        const result = await resolver.ExecuteAdhocQuery(
-            { SQL: 'SELECT ID FROM __mj.vwUsers' },
-            contextWithProvider('postgresql', executed, [{ ID: '1' }, { ID: '2' }]),
-        );
-
-        expect(result.RowCount).toBe(2);
+        expect(calls).toHaveLength(1);
+        expect(calls[0].SQL).toBe('SELECT ID FROM __mj.vwUsers');
         expect(JSON.parse(result.Results)).toEqual([{ ID: '1' }, { ID: '2' }]);
-    });
-});
-
-describe('ExecuteAdhocQuery on a SQL Server tenant', () => {
-    it('still renders the page in T-SQL', async () => {
-        stubMetadata();
-        const executed: ExecutedSQL = { statements: [] };
-        const resolver = new AdhocQueryResolver();
-
-        await resolver.ExecuteAdhocQuery(
-            { SQL: 'SELECT ID, Name FROM __mj.vwUsers ORDER BY Name', MaxRows: 10, StartRow: 0 },
-            contextWithProvider('sqlserver', executed, [{ ID: '1', Name: 'A' }]),
-        );
-
-        const dataSQL = executed.statements[0];
-        expect(dataSQL).toMatch(/OFFSET\s+0\s+ROWS\s+FETCH\s+NEXT\s+10\s+ROWS\s+ONLY/i);
-        expect(dataSQL).not.toMatch(/\bLIMIT\b/i);
+        // The SQL is authorized (and so rendered) against the same PostgreSQL provider it runs on.
+        expect((authorize.mock.calls[0][1] as { PlatformKey: string }).PlatformKey).toBe('postgresql');
     });
 });
 
 describe('ExecuteAdhocQuery refusal path', () => {
     it('still refuses when there is no read-only provider at all', async () => {
-        stubMetadata();
         const resolver = new AdhocQueryResolver();
 
         const result = await resolver.ExecuteAdhocQuery(
@@ -193,14 +120,13 @@ describe('ExecuteAdhocQuery refusal path', () => {
     });
 
     it('does NOT fall back to a read-write provider', async () => {
-        stubMetadata();
         const resolver = new AdhocQueryResolver();
 
         const result = await resolver.ExecuteAdhocQuery(
             { SQL: 'SELECT ID FROM __mj.vwUsers' },
             {
                 dataSources: [],
-                providers: [{ type: 'Read-Write', provider: { PlatformKey: 'postgresql', ExecuteSQL: async () => [] } }],
+                providers: [{ type: 'Read-Write', provider: { PlatformKey: 'postgresql', RunQuery: async () => ({ Success: true, Results: [] }) } }],
                 userPayload: { userRecord: { ID: 'u-1' } },
             } as unknown as AppContext,
         );

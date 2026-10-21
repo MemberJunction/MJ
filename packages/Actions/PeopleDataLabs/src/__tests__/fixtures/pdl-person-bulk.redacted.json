@@ -1,0 +1,562 @@
+{
+  "url": "https://api.peopledatalabs.com/v5/person/bulk",
+  "status": 200,
+  "headers": {
+    "x-call-credits-spent": "2",
+    "x-call-credits-type": "enrich",
+    "x-ratelimit-limit": "{\"minute\": 100}",
+    "x-ratelimit-remaining": "{\"minute\": 99}",
+    "x-ratelimit-reset": "2026-10-12 21:53:50",
+    "x-totallimit-overages-remaining": "0",
+    "x-totallimit-purchased-remaining": "98",
+    "x-totallimit-remaining": "92"
+  },
+  "body": [
+    {
+      "status": 200,
+      "likelihood": 6,
+      "data": {
+        "id": "pdl-fixture-1",
+        "full_name": "[full_name]",
+        "first_name": "[first_name]",
+        "middle_initial": null,
+        "middle_name": null,
+        "last_initial": "k",
+        "last_name": "[last_name]",
+        "sex": "[sex]",
+        "birth_year": "[birth_year]",
+        "birth_date": "[birth_date]",
+        "linkedin_url": "https://www.linkedin.com/in/fixture-person",
+        "linkedin_username": "[linkedin_username]",
+        "linkedin_id": "[linkedin_id]",
+        "facebook_url": null,
+        "facebook_username": null,
+        "facebook_id": null,
+        "twitter_url": null,
+        "twitter_username": null,
+        "github_url": null,
+        "github_username": null,
+        "work_email": "[work_email]",
+        "personal_emails": "[personal_emails]",
+        "recommended_personal_email": "[recommended_personal_email]",
+        "mobile_phone": "[mobile_phone]",
+        "industry": "international affairs",
+        "job_title": "secretary general",
+        "job_title_role": "operations",
+        "job_title_sub_role": "aides",
+        "job_title_class": "general_and_administrative",
+        "job_title_levels": [],
+        "job_company_id": "2siVgkJivHzFYFoe7yojswqHxeGz",
+        "job_company_name": "united nations",
+        "job_company_website": "un.org",
+        "job_company_size": "10001+",
+        "job_company_founded": 1945,
+        "job_company_industry": "international affairs",
+        "job_company_industry_v2": "international affairs",
+        "job_company_linkedin_url": "linkedin.com/company/united-nations",
+        "job_company_linkedin_id": "1860",
+        "job_company_facebook_url": "facebook.com/unitednations",
+        "job_company_twitter_url": "twitter.com/un_radio",
+        "job_company_location_name": "new york, new york, united states",
+        "job_company_location_locality": "new york",
+        "job_company_location_metro": "new york, new york",
+        "job_company_location_region": "new york",
+        "job_company_location_geo": "40.71,-73.99",
+        "job_company_location_street_address": null,
+        "job_company_location_address_line_2": null,
+        "job_company_location_postal_code": "10017",
+        "job_company_location_country": "united states",
+        "job_company_location_continent": "north america",
+        "job_last_changed": "2016-12-25",
+        "job_last_verified": "2026-07-20",
+        "job_start_date": "2007-01",
+        "location_name": "[location_name]",
+        "location_locality": "[location_locality]",
+        "location_metro": "[location_metro]",
+        "location_region": "[location_region]",
+        "location_country": "[location_country]",
+        "location_continent": "[location_continent]",
+        "location_street_address": "[location_street_address]",
+        "location_address_line_2": null,
+        "location_postal_code": "[location_postal_code]",
+        "location_geo": "[location_geo]",
+        "location_last_updated": "[location_last_updated]",
+        "phone_numbers": "[phone_numbers]",
+        "emails": "[emails]",
+        "interests": [],
+        "skills": [],
+        "location_names": "[location_names]",
+        "regions": "[regions]",
+        "countries": [],
+        "street_addresses": "[street_addresses]",
+        "experience": [
+          {
+            "company": {
+              "name": "united nations",
+              "size": "10001+",
+              "id": "2siVgkJivHzFYFoe7yojswqHxeGz",
+              "founded": 1945,
+              "industry": "international affairs",
+              "industry_v2": "international affairs",
+              "location": {
+                "name": "new york, new york, united states",
+                "locality": "new york",
+                "region": "new york",
+                "metro": "new york, new york",
+                "country": "united states",
+                "continent": "north america",
+                "street_address": null,
+                "address_line_2": null,
+                "postal_code": "10017",
+                "geo": "40.71,-73.99"
+              },
+              "linkedin_url": "linkedin.com/company/united-nations",
+              "linkedin_id": "[linkedin_id]",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": "[twitter_url]",
+              "website": "un.org"
+            },
+            "location_names": [],
+            "end_date": null,
+            "start_date": "2007-01",
+            "title": {
+              "name": "secretary general",
+              "class": "general_and_administrative",
+              "role": "operations",
+              "sub_role": "aides",
+              "levels": []
+            },
+            "is_primary": true
+          }
+        ],
+        "education": [
+          {
+            "school": {
+              "name": "harvard university",
+              "type": "post-secondary institution",
+              "id": "5Ic6qaBcxe2DlWHRIVFnZg_0000",
+              "location": {
+                "name": "cambridge, massachusetts, united states",
+                "locality": "cambridge",
+                "region": "massachusetts",
+                "country": "united states",
+                "continent": "north america"
+              },
+              "linkedin_url": "linkedin.com/school/harvard-university",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": "[twitter_url]",
+              "linkedin_id": "[linkedin_id]",
+              "website": "harvard.edu",
+              "domain": "harvard.edu"
+            },
+            "degrees": [
+              "masters"
+            ],
+            "start_date": "1985-01",
+            "end_date": "1985-12",
+            "majors": [
+              "public administration"
+            ],
+            "minors": [],
+            "gpa": null
+          },
+          {
+            "school": {
+              "name": "seoul national university",
+              "type": "post-secondary institution",
+              "id": "0wVdOEXtPERpSwCUcRsPHQ_0000",
+              "location": {
+                "name": "관악구, 서울특별시, south korea",
+                "locality": "관악구",
+                "region": "서울특별시",
+                "country": "south korea",
+                "continent": "asia"
+              },
+              "linkedin_url": "linkedin.com/school/seoulnational-university",
+              "facebook_url": null,
+              "twitter_url": "[twitter_url]",
+              "linkedin_id": "[linkedin_id]",
+              "website": "snu.ac.kr",
+              "domain": "snu.ac.kr"
+            },
+            "degrees": [
+              "bachelors"
+            ],
+            "start_date": "1970-01",
+            "end_date": "1970",
+            "majors": [
+              "international relations"
+            ],
+            "minors": [],
+            "gpa": null
+          }
+        ],
+        "profiles": [],
+        "dataset_version": "35.2"
+      },
+      "metadata": {
+        "label": "hks-1"
+      }
+    },
+    {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      },
+      "metadata": {
+        "label": "hks-2"
+      }
+    },
+    {
+      "status": 200,
+      "likelihood": 10,
+      "data": {
+        "id": "pdl-fixture-2",
+        "full_name": "[full_name]",
+        "first_name": "[first_name]",
+        "middle_initial": null,
+        "middle_name": null,
+        "last_initial": "n",
+        "last_name": "[last_name]",
+        "sex": null,
+        "birth_year": "[birth_year]",
+        "birth_date": "[birth_date]",
+        "linkedin_url": "https://www.linkedin.com/in/fixture-person",
+        "linkedin_username": "[linkedin_username]",
+        "linkedin_id": "[linkedin_id]",
+        "facebook_url": null,
+        "facebook_username": null,
+        "facebook_id": null,
+        "twitter_url": null,
+        "twitter_username": null,
+        "github_url": null,
+        "github_username": null,
+        "work_email": "[work_email]",
+        "personal_emails": "[personal_emails]",
+        "recommended_personal_email": "[recommended_personal_email]",
+        "mobile_phone": "[mobile_phone]",
+        "industry": "computer software",
+        "job_title": "member board of trustees",
+        "job_title_role": null,
+        "job_title_sub_role": null,
+        "job_title_class": null,
+        "job_title_levels": [],
+        "job_company_id": "BjhCYoDgVUsTXoBZPYdCBQ5cixE0",
+        "job_company_name": "university of chicago",
+        "job_company_website": "uchicago.edu",
+        "job_company_size": "10001+",
+        "job_company_founded": 1890,
+        "job_company_industry": "higher education",
+        "job_company_industry_v2": "higher education",
+        "job_company_linkedin_url": "linkedin.com/school/uchicago",
+        "job_company_linkedin_id": "3881",
+        "job_company_facebook_url": null,
+        "job_company_twitter_url": "twitter.com/uchicago",
+        "job_company_location_name": "chicago, illinois, united states",
+        "job_company_location_locality": "chicago",
+        "job_company_location_metro": "chicago, illinois",
+        "job_company_location_region": "illinois",
+        "job_company_location_geo": "41.87,-87.70",
+        "job_company_location_street_address": "5801 south ellis avenue",
+        "job_company_location_address_line_2": null,
+        "job_company_location_postal_code": "60637",
+        "job_company_location_country": "united states",
+        "job_company_location_continent": "north america",
+        "job_last_changed": "2019-12-07",
+        "job_last_verified": "2024-04-01",
+        "job_start_date": "2018",
+        "location_name": "[location_name]",
+        "location_locality": "[location_locality]",
+        "location_metro": "[location_metro]",
+        "location_region": "[location_region]",
+        "location_country": "[location_country]",
+        "location_continent": "[location_continent]",
+        "location_street_address": "[location_street_address]",
+        "location_address_line_2": null,
+        "location_postal_code": "[location_postal_code]",
+        "location_geo": "[location_geo]",
+        "location_last_updated": "[location_last_updated]",
+        "phone_numbers": "[phone_numbers]",
+        "emails": "[emails]",
+        "interests": [],
+        "skills": [],
+        "location_names": "[location_names]",
+        "regions": "[regions]",
+        "countries": [],
+        "street_addresses": "[street_addresses]",
+        "experience": [
+          {
+            "company": {
+              "name": "university of chicago",
+              "size": "10001+",
+              "id": "BjhCYoDgVUsTXoBZPYdCBQ5cixE0",
+              "founded": 1890,
+              "industry": "higher education",
+              "industry_v2": "higher education",
+              "location": {
+                "name": "chicago, illinois, united states",
+                "locality": "chicago",
+                "region": "illinois",
+                "metro": "chicago, illinois",
+                "country": "united states",
+                "continent": "north america",
+                "street_address": "5801 south ellis avenue",
+                "address_line_2": null,
+                "postal_code": "60637",
+                "geo": "41.87,-87.70"
+              },
+              "linkedin_url": "linkedin.com/school/uchicago",
+              "linkedin_id": "[linkedin_id]",
+              "facebook_url": null,
+              "twitter_url": "[twitter_url]",
+              "website": "uchicago.edu"
+            },
+            "location_names": [],
+            "end_date": null,
+            "start_date": "2018",
+            "title": {
+              "name": "member board of trustees",
+              "class": null,
+              "role": null,
+              "sub_role": null,
+              "levels": []
+            },
+            "is_primary": true
+          },
+          {
+            "company": {
+              "name": "starbucks",
+              "size": "10001+",
+              "id": "CY9mfehNBgJpBt29E5IRJwWIef53",
+              "founded": 1971,
+              "industry": "retail",
+              "industry_v2": "retail",
+              "location": {
+                "name": "seattle, washington, united states",
+                "locality": "seattle",
+                "region": "washington",
+                "metro": "seattle, washington",
+                "country": "united states",
+                "continent": "north america",
+                "street_address": "2401 utah avenue south",
+                "address_line_2": null,
+                "postal_code": "98134",
+                "geo": "47.58,-122.35"
+              },
+              "linkedin_url": "linkedin.com/company/starbucks",
+              "linkedin_id": "[linkedin_id]",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": "[twitter_url]",
+              "website": "starbucks.com"
+            },
+            "location_names": [],
+            "end_date": null,
+            "start_date": "2017",
+            "title": {
+              "name": "board member",
+              "class": "general_and_administrative",
+              "role": "advisory",
+              "sub_role": "board_member",
+              "levels": [
+                "partner"
+              ]
+            },
+            "is_primary": false
+          },
+          {
+            "company": {
+              "name": "microsoft",
+              "size": "10001+",
+              "id": "RZOFiRjw26VpLObnwmYXGgRyn3aW",
+              "founded": 1975,
+              "industry": "computer software",
+              "industry_v2": "software development",
+              "location": {
+                "name": "redmond, washington, united states",
+                "locality": "redmond",
+                "region": "washington",
+                "metro": "seattle, washington",
+                "country": "united states",
+                "continent": "north america",
+                "street_address": "1 microsoft way",
+                "address_line_2": null,
+                "postal_code": "98052",
+                "geo": "47.66,-122.06"
+              },
+              "linkedin_url": "linkedin.com/company/microsoft",
+              "linkedin_id": "[linkedin_id]",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": "[twitter_url]",
+              "website": "microsoft.com"
+            },
+            "location_names": [],
+            "end_date": null,
+            "start_date": "2014-02",
+            "title": {
+              "name": "chairman and chief executive officer",
+              "class": "general_and_administrative",
+              "role": "operations",
+              "sub_role": "executive",
+              "levels": []
+            },
+            "is_primary": false
+          }
+        ],
+        "education": [
+          {
+            "school": {
+              "name": "the university of chicago booth school of business",
+              "type": "post-secondary institution",
+              "id": "LmTaC65qdTMCHHYNS6XWIQ_0000",
+              "location": {
+                "name": "chicago, illinois, united states",
+                "locality": "chicago",
+                "region": "illinois",
+                "country": "united states",
+                "continent": "north america"
+              },
+              "linkedin_url": "linkedin.com/school/universityofchicagoboothschoolofbusiness",
+              "facebook_url": null,
+              "twitter_url": null,
+              "linkedin_id": "[linkedin_id]",
+              "website": "chicagobooth.edu",
+              "domain": "chicagobooth.edu"
+            },
+            "degrees": [],
+            "start_date": "1994",
+            "end_date": "1996",
+            "majors": [],
+            "minors": [],
+            "gpa": null
+          },
+          {
+            "school": {
+              "name": "mangalore university",
+              "type": "post-secondary institution",
+              "id": "99V-CuceB3awRNUxlN1y5w_0000",
+              "location": {
+                "name": "mangalore, karnataka, india",
+                "locality": "mangalore",
+                "region": "karnataka",
+                "country": "india",
+                "continent": "asia"
+              },
+              "linkedin_url": "linkedin.com/school/mangalore-university-dakshina-kannada",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": null,
+              "linkedin_id": "[linkedin_id]",
+              "website": "mangaloreuniversity.ac.in",
+              "domain": "mangaloreuniversity.ac.in"
+            },
+            "degrees": [
+              "bachelors"
+            ],
+            "start_date": null,
+            "end_date": null,
+            "majors": [
+              "electrical engineering"
+            ],
+            "minors": [],
+            "gpa": null
+          },
+          {
+            "school": {
+              "name": "manipal institute of technology",
+              "type": "post-secondary institution",
+              "id": "o-3B5b2fZ-SfmD3ehK3cYg_0000",
+              "location": {
+                "name": "nagar, karnataka, india",
+                "locality": "nagar",
+                "region": "karnataka",
+                "country": "india",
+                "continent": "asia"
+              },
+              "linkedin_url": "linkedin.com/school/manipal-institute-of-technology",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": "[twitter_url]",
+              "linkedin_id": "[linkedin_id]",
+              "website": "manipal.edu",
+              "domain": "manipal.edu"
+            },
+            "degrees": [
+              "bachelors"
+            ],
+            "start_date": null,
+            "end_date": null,
+            "majors": [
+              "electrical engineering"
+            ],
+            "minors": [],
+            "gpa": null
+          },
+          {
+            "school": {
+              "name": "university of wisconsin - milwaukee",
+              "type": "post-secondary institution",
+              "id": "u8ngo9JIkYZ38BRvJX91cQ_0000",
+              "location": {
+                "name": "milwaukee, wisconsin, united states",
+                "locality": "milwaukee",
+                "region": "wisconsin",
+                "country": "united states",
+                "continent": "north america"
+              },
+              "linkedin_url": "linkedin.com/school/uwmilwaukee",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": "[twitter_url]",
+              "linkedin_id": "[linkedin_id]",
+              "website": "uwm.edu",
+              "domain": "uwm.edu"
+            },
+            "degrees": [
+              "masters"
+            ],
+            "start_date": null,
+            "end_date": null,
+            "majors": [
+              "computer science"
+            ],
+            "minors": [],
+            "gpa": null
+          }
+        ],
+        "profiles": [],
+        "dataset_version": "35.2"
+      },
+      "metadata": {
+        "label": "exec-1"
+      }
+    },
+    {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      },
+      "metadata": {
+        "label": "exec-2"
+      }
+    },
+    {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      },
+      "metadata": {
+        "label": "exec-3"
+      }
+    },
+    {
+      "status": 404,
+      "error": {
+        "type": "not_found",
+        "message": "No records were found matching your request"
+      },
+      "metadata": {
+        "label": "exec-4"
+      }
+    }
+  ]
+}

@@ -24,7 +24,7 @@ export default class Watch extends Command {
   
   async run(): Promise<void> {
     const {
-      WatchService, loadMJConfig, loadSyncConfig, initializeProvider,
+      WatchService, loadMJConfig, initializeProvider,
       getSyncEngine, getSystemUser, resetSyncEngine, configManager,
     } = await import('@memberjunction/metadata-sync');
     const { BaseEntity } = await import('@memberjunction/core');
@@ -39,10 +39,6 @@ export default class Watch extends Command {
       if (!mjConfig) {
         this.error('No mj.config.cjs found in current directory or parent directories');
       }
-      
-      // Load sync config
-      const syncConfigDir = flags.dir ? path.resolve(configManager.getOriginalCwd(), flags.dir) : configManager.getOriginalCwd();
-      const syncConfig = await loadSyncConfig(syncConfigDir);
       
       // Stop spinner before provider initialization
       spinner.stop();
@@ -106,9 +102,10 @@ export default class Watch extends Command {
           const action = isNew ? 'created' : 'updated';
           this.log(chalk.green(`✅ Record ${action} for ${entityConfig.entity}`));
         },
+        // A failed file is reported and the watch goes on with the other files
         onError: (error: Error) => {
           spinner.fail('Watch error');
-          this.error(error);
+          this.logToStderr(error.message);
         },
         onWarn: (message: string) => {
           this.warn(message);

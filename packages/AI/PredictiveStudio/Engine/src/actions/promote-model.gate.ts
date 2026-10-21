@@ -22,6 +22,7 @@ import { DOMINANCE_THRESHOLD_DEFAULT, type FeatureImportance, type LeakageGuard 
 
 import { DetectSingleFeatureDominance } from '../feature-assembly/leakage-guard';
 import { ModelScoringActionGenerator } from './model-scoring-action-generator';
+import { ModelHasTrainedArtifact, ModelNeedsTrainingMessage } from '../scoring/model-readiness';
 import type {
   IModelPromotionGate,
   PromoteModelRequest,
@@ -202,6 +203,13 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
     const allowed = ProductionModelPromotionGate.ALLOWED_TRANSITIONS[currentStatus] ?? [];
     if (!allowed.includes(targetStatus)) {
       return { kind: 'invalid-transition', currentStatus, targetStatus };
+    }
+    // A model with no trained artifact can't score anything, so it must never reach
+    // Published — refuse with the plain "needs training" message instead of letting it
+    // look deployable and then fail every record at run time. Checked after the
+    // lifecycle rule, so an illegal jump is still reported as an invalid transition.
+    if (targetStatus === 'Published' && !ModelHasTrainedArtifact(model)) {
+      return { kind: 'needs-training', message: ModelNeedsTrainingMessage(model.ID) };
     }
     model.Status = targetStatus;
     const saved = await model.Save();

@@ -30,6 +30,7 @@ import type { PartialInstallConfig } from '../models/InstallConfig.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { SqlServerAdapter } from '../adapters/SqlServerAdapter.js';
+import { PostgresAdapter } from '../adapters/PostgresAdapter.js';
 import { Diagnostics, type DiagnosticCheck, type EnvironmentInfo } from '../models/Diagnostics.js';
 import { resolvePackageManager, type PackageManagerType } from '../models/PackageManager.js';
 
@@ -96,6 +97,7 @@ export class PreflightPhase {
   private processRunner = new ProcessRunner();
   private fileSystem = new FileSystemAdapter();
   private sqlAdapter = new SqlServerAdapter();
+  private pgAdapter = new PostgresAdapter();
 
   /** Why a `<binary> --version` probe failed, keyed by binary. Feeds the diagnostic message. */
   private readonly probeFailures = new Map<string, string>();
@@ -167,7 +169,7 @@ export class PreflightPhase {
     this.emitDiagnostic(emitter, explorerPortCheck);
 
     if (!context.SkipDB) {
-      emitter.Emit('step:progress', { Type: 'step:progress', Phase: 'preflight', Message: 'Checking SQL Server connectivity...' });
+      emitter.Emit('step:progress', { Type: 'step:progress', Phase: 'preflight', Message: `Checking ${context.Config.DatabasePlatform === 'postgresql' ? 'PostgreSQL' : 'SQL Server'} connectivity...` });
       const sqlCheck = await this.checkSqlConnectivity(context.Config, context.TargetDir);
       diagnostics.AddCheck(sqlCheck);
       this.emitDiagnostic(emitter, sqlCheck);
@@ -408,34 +410,39 @@ export class PreflightPhase {
   }
 
   /**
-   * Check SQL Server connectivity at the target host/port.
+   * Check database server connectivity (SQL Server, or PostgreSQL when
+   * `config.DatabasePlatform` is `'postgresql'`) at the target host/port.
    *
    * Resolution order for host/port:
    *   1. `.env` in `targetDir` (when present) — this is what MJAPI will actually use at runtime.
    *      Reading .env here keeps `mj doctor` honest: it reports on the same SQL Server the app talks to.
    *   2. Explicit `config.DatabaseHost` / `config.DatabasePort` from `--config` or env vars.
-   *   3. Defaults (`localhost:1433`).
+   *   3. Defaults (`localhost:1433`, or `localhost:5432` for PostgreSQL).
    */
   private async checkSqlConnectivity(config: PartialInstallConfig, targetDir?: string): Promise<DiagnosticCheck> {
     const envValues = targetDir ? await this.readEnvDbTarget(targetDir) : null;
+    const isPostgres = config.DatabasePlatform === 'postgresql';
+    const server = isPostgres ? 'PostgreSQL' : 'SQL Server';
     const host = envValues?.host ?? config.DatabaseHost ?? 'localhost';
-    const port = envValues?.port ?? config.DatabasePort ?? 1433;
+    const port = envValues?.port ?? config.DatabasePort ?? (isPostgres ? 5432 : 1433);
 
-    const result = await this.sqlAdapter.CheckConnectivity(host, port);
+    const result = isPostgres
+      ? await this.pgAdapter.CheckConnectivity(host, port)
+      : await this.sqlAdapter.CheckConnectivity(host, port);
 
     if (result.Reachable) {
       return {
-        Name: 'SQL Server connectivity',
+        Name: `${server} connectivity`,
         Status: 'pass',
-        Message: `SQL Server reachable at ${host}:${port} (${result.LatencyMs}ms)`,
+        Message: `${server} reachable at ${host}:${port} (${result.LatencyMs}ms)`,
       };
     }
 
     return {
-      Name: 'SQL Server connectivity',
+      Name: `${server} connectivity`,
       Status: 'fail',
-      Message: result.ErrorMessage ?? `Cannot reach SQL Server at ${host}:${port}`,
-      SuggestedFix: `Ensure SQL Server is running and accessible at ${host}:${port}. Use --skip-db to skip database checks.`,
+      Message: result.ErrorMessage ?? `Cannot reach ${server} at ${host}:${port}`,
+      SuggestedFix: `Ensure ${server} is running and accessible at ${host}:${port}. Use --skip-db to skip database checks.`,
     };
   }
 

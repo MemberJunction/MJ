@@ -7,11 +7,15 @@ import { MJUserEntity, UserInfoEngine } from '@memberjunction/core-entities';
 const SETTING_KEY = 'mj.form.users.headerCollapsed';
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:Users:header',
+    key: 'form-panel:MJ: Users:header',
     metadata: {
-        entity: 'Users',
-        slot: 'header',
-        sortKey: 10,
+        entity: 'MJ: Users',
+        // A hero is a bare strip in before-fields. Its sortKey is above the overview's
+        // (higher draws first), so it draws above the overview cards.
+        slot: 'before-fields',
+        presentation: 'bare',
+        contributionKey: 'users:header',
+        sortKey: 20,
     },
 })
 @Component({

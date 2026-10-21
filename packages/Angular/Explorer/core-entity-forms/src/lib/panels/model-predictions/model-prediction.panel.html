@@ -6,6 +6,7 @@
 @if (HasPredictions) {
   <mj-collapsible-panel
       SectionKey="modelPredictions"
+      [Order]="DisplayOrder"
       SectionName="Model Predictions"
       Icon="fa-solid fa-wand-magic-sparkles"
       [Form]="FormComponent"
