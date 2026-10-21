@@ -2046,7 +2046,25 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
             const result = await rv.RunView<MJAIPromptRunEntityExtended>({
                 EntityName: 'MJ: AI Prompt Runs',
                 ExtraFilter: `PromptID='${this.record.ID}'`,
-                OrderBy: 'RunAt DESC' 
+                OrderBy: 'RunAt DESC',
+                MaxRows: 200,
+                Fields: [
+                    'ID',
+                    'PromptID',
+                    'RunAt',
+                    'CompletedAt',
+                    'ExecutionTimeMS',
+                    'Success',
+                    'Model',
+                    'ModelID',
+                    'TokensUsed',
+                    'TokensPrompt',
+                    'TokensCompletion',
+                    'Cost',
+                    'TotalCost',
+                    'RunType'
+                ],
+                ResultType: 'simple'
             });
             
             this.ExecutionHistory = result.Results;

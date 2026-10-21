@@ -138,14 +138,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="AgentState"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="CancellationReason"
             Type="select"
             [EditMode]="EditMode"
@@ -944,6 +936,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationSkills', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Rubric Evaluations Section -->
+    <mj-collapsible-panel
+        SectionKey="mJRubricEvaluations"
+        SectionName="Rubric Evaluations"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJRubricEvaluations')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Evaluations','AIAgentRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Rubric Evaluations','AIAgentRunID')"
+                [AllowLoad]="IsSectionExpanded('mJRubricEvaluations')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJRubricEvaluations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

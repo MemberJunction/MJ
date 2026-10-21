@@ -187,7 +187,7 @@ export class RoutinesSectionComponent extends BaseAngularComponent implements On
     }
 
     private rebuildCounts(engine: UserRoutineEngine): void {
-        const routines = engine.Routines;
+        const routines = engine.Routines.filter((r: MJUserRoutineEntity) => r.RoutineType !== 'AgentWake');
         this.TotalCount = routines.length;
         this.ActiveCount = routines.filter((r: MJUserRoutineEntity) => r.Status === 'Active').length;
         this.cdr.markForCheck();

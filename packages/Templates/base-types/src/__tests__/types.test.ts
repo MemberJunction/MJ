@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('@memberjunction/core', () => ({
   BaseEngine: class {
@@ -55,6 +55,32 @@ describe('Templates/base-types exports', () => {
 
     it('should have a FindTemplate method', () => {
       expect(typeof TemplateEngineBase.prototype.FindTemplate).toBe('function');
+    });
+
+    it('attaches each template its own content and params, the same on every rebuild', async () => {
+      type Row = { TemplateID: string; Name: string };
+      type Tpl = { ID: string; Content: Row[]; Params: Row[] };
+      const engine = new TemplateEngineBase();
+      const templates: Tpl[] = [
+        { ID: 'AAA', Content: [], Params: [] },
+        { ID: 'bbb', Content: [], Params: [] },
+      ];
+      (engine as unknown as { _metadata: Record<string, unknown[]> })._metadata = {
+        Templates: templates,
+        TemplateContents: [{ TemplateID: 'aaa', Name: 'c1' }, { TemplateID: 'BBB', Name: 'c2' }, { TemplateID: 'aaa', Name: 'c3' }],
+        TemplateParams: [{ TemplateID: 'bbb', Name: 'p1' }],
+        TemplateContentTypes: [],
+        TemplateCategories: [],
+      };
+      const rebuild = () => (engine as unknown as { AdditionalLoading: () => Promise<void> }).AdditionalLoading();
+
+      await rebuild();
+      await rebuild();
+
+      expect(templates[0].Content.map(c => c.Name)).toEqual(['c1', 'c3']);
+      expect(templates[0].Params).toEqual([]);
+      expect(templates[1].Content.map(c => c.Name)).toEqual(['c2']);
+      expect(templates[1].Params.map(p => p.Name)).toEqual(['p1']);
     });
   });
 });

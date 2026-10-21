@@ -74,6 +74,20 @@ export interface SqlLoggingOptions {
    * Note: If filterPatterns is empty/undefined, all SQL is logged regardless of filterType.
    */
   filterType?: 'include' | 'exclude';
+  /**
+   * Optional rewrite of each logged text before the session reads it: the statement, its simple-SQL
+   * fallback, the description and the `-- Parameters:` line. It runs before the verbose prints, the
+   * filters, the Flyway escape and the pretty-print, so text it removes never reaches the log file
+   * or the console.
+   *
+   * It covers only this session's file and verbose prints, plus the provider's shared verbose
+   * `Query to log:` print. Other sessions and other output paths do not use it.
+   *
+   * If it throws, the error is caught: the session writes the fixed line
+   * `-- Statement not logged: TransformStatement failed` in place of the statement and the SQL
+   * call goes on as normal.
+   */
+  TransformStatement?: (sql: string) => string;
 }
 
 /**

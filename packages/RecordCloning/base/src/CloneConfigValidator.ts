@@ -71,6 +71,7 @@ export interface CloneConfigEntityMeta {
             Label: string;
             Options?: Record<string, unknown>;
             Relationships?: Record<string, { Policy?: string }>;
+            TemplateSourceField?: string;
         }>;
         Derivation?: {
             Field?: string;
@@ -126,6 +127,20 @@ export class CloneConfigValidator {
         for (const [key, desc] of Object.entries(config.Descendants ?? {})) checkPolicy(desc?.Policy, `Descendants[${key}].Policy`);
         for (const preset of config.Presets ?? []) {
             for (const [key, rel] of Object.entries(preset?.Relationships ?? {})) checkPolicy(rel?.Policy, `Presets[${preset.Key}].Relationships[${key}].Policy`);
+            // A template preset is gated on a yes/no field of the root; a misspelled one would refuse every clone.
+            if (preset?.TemplateSourceField !== undefined) {
+                const flag = entityFields.get(String(preset.TemplateSourceField).toLowerCase());
+                if (!flag || (flag.Type !== undefined && flag.Type.toLowerCase() !== 'bit' && flag.Type.toLowerCase() !== 'boolean')) {
+                    errors.push({
+                        EntityName: entity.Name,
+                        PropertyPath: `Presets[${preset.Key}].TemplateSourceField`,
+                        Message: flag
+                            ? `TemplateSourceField '${preset.TemplateSourceField}' must be a yes/no (bit) field; it is '${flag.Type}'.`
+                            : `TemplateSourceField '${preset.TemplateSourceField}' does not exist on entity '${entity.Name}'.`,
+                        Severity: 'Error',
+                    });
+                }
+            }
         }
 
         // 2. Validate Fields section

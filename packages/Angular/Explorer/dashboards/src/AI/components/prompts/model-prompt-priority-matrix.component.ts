@@ -5,7 +5,8 @@ import { Subject, BehaviorSubject } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
-import { UUIDsEqual } from '@memberjunction/global';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { IndexByUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 interface PromptModelAssociation {
@@ -308,11 +309,7 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
       this.error = null;
       this.LoadingMessage = 'Loading prompts, models, and associations...';
       
-      const [prompts, models, associations] = await Promise.all([
-        this.loadPrompts(),
-        this.loadModels(),
-        this.loadAssociations()
-      ]);
+      const [prompts, models, associations] = await this.loadMatrixEntities();
       
       this.Prompts = this.SelectedPrompts.length > 0 ? this.SelectedPrompts : prompts;
       this.Models = this.SelectedModels.length > 0 ? this.SelectedModels : models;
@@ -329,6 +326,35 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
     }
   }
   
+  private async loadMatrixEntities(): Promise<[MJAIPromptEntityExtended[], MJAIModelEntityExtended[], MJAIPromptModelEntity[]]> {
+    await AIEngineBase.Instance.Config(false);
+    if (AIEngineBase.Instance.Prompts.length > 0 || AIEngineBase.Instance.Models.length > 0) {
+      const prompts = this.SelectedPrompts.length > 0
+        ? this.SelectedPrompts
+        : AIEngineBase.Instance.Prompts
+            .filter(p => p.Status === 'Active')
+            .slice()
+            .sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
+      const models = this.SelectedModels.length > 0
+        ? this.SelectedModels
+        : AIEngineBase.Instance.Models
+            .filter(m => m.IsActive)
+            .slice()
+            .sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
+      const associations = AIEngineBase.Instance.PromptModels
+        .slice()
+        .sort((a, b) => (a.Priority || 0) - (b.Priority || 0));
+      return [prompts, models, associations];
+    }
+
+    const [prompts, models, associations] = await Promise.all([
+      this.loadPrompts(),
+      this.loadModels(),
+      this.loadAssociations()
+    ]);
+    return [prompts, models, associations];
+  }
+
   private async loadPrompts(): Promise<MJAIPromptEntityExtended[]> {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView({
@@ -385,11 +411,13 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
   
   private buildAssociations(dbAssociations: MJAIPromptModelEntity[]): void {
     this.Associations = [];
+    const promptsByID = IndexByUUID(this.Prompts);
+    const modelsByID = IndexByUUID(this.Models);
     
     // Create associations for existing database records
     dbAssociations.forEach(dbAssoc => {
-      const prompt = this.Prompts.find(p => UUIDsEqual(p.ID, dbAssoc.PromptID));
-      const model = this.Models.find(m => UUIDsEqual(m.ID, dbAssoc.ModelID));
+      const prompt = promptsByID.Get(dbAssoc.PromptID);
+      const model = modelsByID.Get(dbAssoc.ModelID);
       
       if (prompt && model) {
         this.Associations.push({
@@ -409,14 +437,18 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
   
   private buildMatrix(): void {
     this.Matrix = [];
+    // One lookup per cell instead of a scan of every association per cell; the first association for a pair wins, as find() did.
+    const associationsByPair = new Map<string, PromptModelAssociation>();
+    for (const a of this.Associations) {
+      const key = this.pairKey(a.promptId, a.modelId);
+      if (!associationsByPair.has(key)) associationsByPair.set(key, a);
+    }
     
     this.Prompts.forEach((prompt, promptIndex) => {
       this.Matrix[promptIndex] = [];
       
       this.Models.forEach((model, modelIndex) => {
-        const association = this.Associations.find(a => 
-          UUIDsEqual(a.promptId, prompt.ID) && UUIDsEqual(a.modelId, model.ID)
-        );
+        const association = associationsByPair.get(this.pairKey(prompt.ID, model.ID));
         
         this.Matrix[promptIndex][modelIndex] = {
           promptId: prompt.ID,
@@ -426,6 +458,10 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
         };
       });
     });
+  }
+  
+  private pairKey(promptId: string, modelId: string): string {
+    return `${NormalizeUUID(promptId)}|${NormalizeUUID(modelId)}`;
   }
   
   private canAssignModelToPrompt(prompt: MJAIPromptEntityExtended, model: MJAIModelEntityExtended): boolean {

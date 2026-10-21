@@ -1,0 +1,27 @@
+<section #consentRegion class="mjw-card mjw-consent" role="region" aria-labelledby="mjw-consent-title" tabindex="-1">
+  <header class="mjw-consent__head">
+    @if (LogoUrl) {
+      <img class="mjw-logo" [src]="LogoUrl" alt="" />
+    }
+    <h2 id="mjw-consent-title" class="mjw-title">{{ Heading }}</h2>
+  </header>
+
+  <div class="mjw-consent__notice">
+    <p class="mjw-consent__lead">{{ Text('consentLead') }}</p>
+    <ul class="mjw-consent__list">
+      <li>{{ Text('consentVoice') }}</li>
+      <li>{{ Text('consentAi') }}</li>
+    </ul>
+    <p class="mjw-consent__foot">{{ Text('consentFoot') }}</p>
+  </div>
+
+  <div class="mjw-actions">
+    <button type="button" mjButton variant="success" class="mjw-consent__begin" (click)="Accepted.emit()">
+      <i class="fa-solid fa-microphone" aria-hidden="true"></i>
+      <span>{{ Strings.begin }}</span>
+    </button>
+    <button type="button" mjButton variant="secondary" class="mjw-consent__decline" (click)="Declined.emit()">
+      {{ Strings.notNow }}
+    </button>
+  </div>
+</section>

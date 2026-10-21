@@ -1,4 +1,5 @@
 import { AIErrorInfo, AIErrorType, ErrorSeverity } from './errorTypes.js';
+import { IsAbortError, REQUEST_CANCELLED_CODE } from './cancellation.js';
 import { ContainsInOrderOnOneLine, FirstBraceSpanOnOneLine } from './linearTextScan.js';
 
 /**
@@ -39,6 +40,15 @@ export class ErrorAnalyzer {
      * ```
      */
     static AnalyzeError(error: any, providerName?: string): AIErrorInfo {
+        // A failed result that already carries its driver's classification keeps it. A streaming call
+        // rejects with its failed ChatResult (BaseLLM), not an Error; analyzed afresh, that object has
+        // no message and no status, so an invalid key classified 'Authentication'/'Fatal' by the driver
+        // came out 'Unknown'/'Transient' — failover kept going and agents retried a fatal error.
+        const carried = this.carriedErrorInfo(error);
+        if (carried) {
+            return carried;
+        }
+
         // Extract HTTP status code if available
         const httpStatusCode = this.extractHttpStatusCode(error);
         
@@ -97,6 +107,16 @@ export class ErrorAnalyzer {
     }
     
     /**
+     * The classification a failed result already carries on `errorInfo`, if it has a complete one.
+     */
+    private static carriedErrorInfo(error: { errorInfo?: Partial<AIErrorInfo> } | null | undefined): AIErrorInfo | undefined {
+        const info = error?.errorInfo;
+        return info && typeof info.errorType === 'string' && typeof info.severity === 'string' && typeof info.canFailover === 'boolean'
+            ? info as AIErrorInfo
+            : undefined;
+    }
+
+    /**
      * Extracts HTTP status code from various error object structures.
      * Different provider SDKs store status codes in different locations.
      * 
@@ -107,12 +127,52 @@ export class ErrorAnalyzer {
      */
     private static extractHttpStatusCode(error: any): number | undefined {
         // Common patterns across different provider SDKs
-        return error?.status || 
-               error?.statusCode || 
-               error?.response?.status || 
-               error?.response?.statusCode ||
-               error?.code ||
-               undefined;
+        const candidates = [error?.status, error?.statusCode, error?.response?.status, error?.response?.statusCode, error?.code];
+        // `code` is also where Node puts a system error code ('ECONNRESET') and a DOMException its
+        // legacy number (20 for an abort), so only a number in the HTTP range counts as a status.
+        return candidates.find((c): c is number => typeof c === 'number' && c >= 100 && c <= 599);
+    }
+
+    /**
+     * Error codes Node and its built-in fetch (undici) put on a failure to reach the server or to
+     * read its response. They describe the connection, never the request, so another attempt or
+     * another vendor can succeed.
+     */
+    private static readonly TRANSPORT_ERROR_CODES: ReadonlySet<string> = new Set([
+        'ECONNREFUSED', 'ECONNRESET', 'ECONNABORTED', 'EPIPE', 'ETIMEDOUT',
+        'ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'ENETDOWN', 'EHOSTUNREACH', 'EHOSTDOWN',
+        'UND_ERR_SOCKET', 'UND_ERR_CLOSED', 'UND_ERR_CONNECT_TIMEOUT',
+        'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT',
+    ]);
+
+    /** How far down an error's `cause` chain to look; SDKs wrap at most two or three levels deep. */
+    private static readonly MAX_CAUSE_DEPTH = 5;
+
+    /**
+     * Whether the error is a connection failure that its message does not name. Node's fetch
+     * reports one as `TypeError: fetch failed` (or `terminated` when the socket closes mid-response)
+     * and keeps the real reason — `ECONNRESET`, `ENOTFOUND` — on `cause`. SDKs built on fetch,
+     * such as `@google/genai`, rethrow that error unchanged, so the message alone reads as unknown.
+     *
+     * A plain `AbortError` is deliberately not a transport failure: it is also what a caller's
+     * cancellation looks like, and a cancellation must not fail over.
+     */
+    private static isTransportFailure(error: Error | null | undefined): boolean {
+        return this.causeChain(error).some((link) =>
+            (typeof link.code === 'string' && this.TRANSPORT_ERROR_CODES.has(link.code)) ||
+            (link.name === 'TypeError' && (link.message === 'fetch failed' || link.message === 'terminated'))
+        );
+    }
+
+    /** The error followed by each `cause` beneath it, stopping at a non-error, a cycle or the depth limit. */
+    private static causeChain(error: Error | null | undefined): Array<Error & { code?: string | number }> {
+        const chain: Array<Error & { code?: string | number }> = [];
+        let current: Error['cause'] = error;
+        while (current instanceof Error && chain.length < this.MAX_CAUSE_DEPTH && !chain.includes(current)) {
+            chain.push(current);
+            current = current.cause;
+        }
+        return chain;
     }
     
     /**
@@ -126,6 +186,12 @@ export class ErrorAnalyzer {
      * @returns {AIErrorType} The categorized error type
      */
     private static determineErrorType(error: any, statusCode?: number): AIErrorType {
+        // An aborted request is a cancellation, whatever its message says. A timeout abort is named
+        // TimeoutError, not AbortError, and is classified as a network error below.
+        if (IsAbortError(error) || error?.code === REQUEST_CANCELLED_CODE) {
+            return 'Cancelled';
+        }
+
         // IMPORTANT: Check error message patterns FIRST before status codes
         // This allows us to correctly classify vendor-specific errors that may use
         // non-standard status codes (e.g., xAI using 403 for billing/quota issues)
@@ -169,7 +235,16 @@ export class ErrorAnalyzer {
             errorString.includes('authentication failed') ||
             errorString.includes('invalid api key') ||
             errorString.includes('invalid key') ||
-            errorString.includes('api key is invalid')) {
+            errorString.includes('api key is invalid') ||
+            // Google: HTTP 400 "API key not valid. Please pass a valid API key." with reason
+            // API_KEY_INVALID. None of the phrases above match it, so it fell through to the
+            // permissive VendorValidationError and failed over to another vendor instead of failing.
+            errorString.includes('api key not valid') ||
+            errorString.includes('api_key_invalid') ||
+            // Google's expired key: HTTP 400 "API key expired. Please renew the API key." with reason
+            // API_KEY_EXPIRED. It read as InvalidRequest, which stops failover with the wrong reason.
+            errorString.includes('api key expired') ||
+            errorString.includes('api_key_expired')) {
             return 'Authentication';
         }
 
@@ -186,7 +261,8 @@ export class ErrorAnalyzer {
             errorString.includes('timeout') ||
             errorString.includes('econnrefused') ||
             errorString.includes('dns') ||
-            errorString.includes('connection reset')) {
+            errorString.includes('connection reset') ||
+            this.isTransportFailure(error)) {
             return 'NetworkError';
         }
 
@@ -296,6 +372,9 @@ export class ErrorAnalyzer {
             case 'ContextLengthExceeded':
                 return 'Fatal';
 
+            case 'Cancelled':             // The caller's decision - retrying would defeat it
+                return 'Fatal';
+
             default:
                 return 'Transient';
         }
@@ -330,6 +409,7 @@ export class ErrorAnalyzer {
             // Clear client-side structural/configuration errors - DO NOT failover (won't help)
             case 'InvalidRequest':         // Malformed JSON/syntax won't work anywhere
             case 'NoCredentials':          // No credentials configured for ANY provider - failover won't help
+            case 'Cancelled':              // The caller cancelled - another provider must not be tried
                 return false;
 
             // Unknown errors - DEFAULT to allowing failover (permissive approach)
