@@ -2081,7 +2081,9 @@ export class AIPromptRunner extends BaseModelRunner {
    */
   private async rerenderForNativeDecision(renderedPrompt: string, chatParams: ChatParams, params: AIPromptParams, model: MJAIModelEntityExtended): Promise<string> {
     const decision = GetToolCallingDecision(chatParams);
-    if (!decision) {
+    // A prompt rendered without the native flags (no agent-type system prompt) has no native
+    // wording to correct, whatever the decision.
+    if (!decision || params.data?._NATIVE_TOOL_CALLING === undefined) {
       return renderedPrompt;
     }
     const renderedNative = params.data?._NATIVE_TOOL_CALLING === true;
@@ -2123,6 +2125,11 @@ export class AIPromptRunner extends BaseModelRunner {
     const copy = [...messages];
     copy[at] = { ...copy[at], content: to + (copy[at].content as string).slice(from.length) };
     return copy;
+  }
+
+  /** The prompt run's `Messages` for a result whose attempt sent a re-rendered prompt, or undefined. */
+  protected RerenderedMessagesFor(result: ChatResult): string | undefined {
+    return AIPromptRunner._rerenderedMessages.get(result);
   }
 
   /** Records, for the prompt run, the messages an attempt sent when its prompt was rendered again. */
@@ -2267,7 +2274,8 @@ export class AIPromptRunner extends BaseModelRunner {
     prompt: MJAIPromptEntityExtended,
     reason: string,
     params: AIPromptParams,
-    renderedPrompt: string
+    renderedPrompt: string,
+    firstRenderedPrompt: string
   ): Promise<ChatResult> {
     console.warn(
       `AIPromptRunner: native tool calling failed on ${model.Name}${vendorId ? ` (vendor ${vendorId})` : ''} ` +
@@ -2290,7 +2298,8 @@ export class AIPromptRunner extends BaseModelRunner {
     chatParams.messages = this.replaceRenderedPrompt(chatParams.messages, renderedPrompt, envelopePrompt);
     const fallbackResult = await this.runChatCompletionBounded(llm, chatParams, executionBound);
     RecordToolCallingMode(fallbackResult, 'NativeFallback');
-    if (envelopePrompt !== renderedPrompt) {
+    // The prompt run holds the first-rendered prompt; record what this retry sent whenever it differs.
+    if (envelopePrompt !== firstRenderedPrompt) {
       this.recordRerenderedMessages(fallbackResult, prompt, params, model, vendorId, envelopePrompt);
     }
     return fallbackResult;
@@ -2600,7 +2609,7 @@ export class AIPromptRunner extends BaseModelRunner {
         }
         return await this.retryWithToolsStripped(
           llm, chatParams, executionBound, model, vendorId, prompt,
-          error instanceof Error ? error.message : String(error), params, renderedPrompt);
+          error instanceof Error ? error.message : String(error), params, renderedPrompt, firstRenderedPrompt);
       }
       // Carry the gate's WHOLE decision from the request onto the result, which is what flows back up
       // to the prompt run (mode) and to the agent loop (`toolResults` — the loop answers native
@@ -2618,7 +2627,7 @@ export class AIPromptRunner extends BaseModelRunner {
       if (chatParams.tools?.length && this.isToolSpecificFailure(chatResult)) {
         return await this.retryWithToolsStripped(
           llm, chatParams, executionBound, model, vendorId, prompt,
-          chatResult.errorMessage || chatResult.statusText || 'unspecified', params, renderedPrompt);
+          chatResult.errorMessage || chatResult.statusText || 'unspecified', params, renderedPrompt, firstRenderedPrompt);
       }
 
       if (renderedPrompt !== firstRenderedPrompt) {
@@ -2964,6 +2973,9 @@ export class AIPromptRunner extends BaseModelRunner {
     'tool call validation',
     'invalid tool call',
     'tool calling',
+    'tools is not supported',
+    'tools param',
+    'param: tools',
     'tool_choice',
     'tool choice',
     'tools:',

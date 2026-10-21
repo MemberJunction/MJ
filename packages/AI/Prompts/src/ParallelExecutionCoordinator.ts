@@ -1093,6 +1093,11 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       promptRun.ExecutionTimeMS = executionTimeMS;
       promptRun.Success = modelResult.success;
       promptRun.Status = modelResult.success ? 'Completed' : 'Failed';
+      // A task whose attempt re-rendered its prompt records what it actually sent.
+      const rerenderedMessages = this.RerenderedMessagesFor(modelResult);
+      if (rerenderedMessages) {
+        promptRun.Messages = rerenderedMessages;
+      }
 
       if (modelResult.success) {
         promptRun.Result = modelResult.data?.choices?.[0]?.message?.content || '';

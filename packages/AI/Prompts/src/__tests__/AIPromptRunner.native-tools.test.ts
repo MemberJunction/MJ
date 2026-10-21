@@ -409,7 +409,10 @@ describe('isToolSpecificFailureText — the thrown-rejection path', () => {
         ['Cerebras format conflict', '"tools" is incompatible with "response_format"'],
         ['bare tools rejection', 'Unrecognized request argument supplied: tools'],
         ['tool calling unsupported (Groq, Together, llama.cpp servers)', 'tool calling is not supported for this model'],
-        ['Anthropic tools-list rejection', 'tools: Input should be a valid list']
+        ['Anthropic tools-list rejection', 'tools: Input should be a valid list'],
+        ['llama.cpp without --jinja', '400 tools param requires --jinja flag'],
+        ['llama.cpp unsupported param', '400 Unsupported param: tools'],
+        ['model without tools', 'tools is not supported with this model']
     ])('recognizes %s', (_name, message) => {
         expect(priv(runner).isToolSpecificFailureText(message)).toBe(true);
     });
@@ -440,7 +443,8 @@ describe('retryWithToolsStripped — the retry sees an envelope-shaped history',
             prompt: unknown,
             reason: string,
             params: AIPromptParams,
-            renderedPrompt: string
+            renderedPrompt: string,
+            firstRenderedPrompt: string
         ): Promise<ChatResult>;
     };
     it('re-encodes tool turns as text, strips the declarations, and records the NativeFallback mode', async () => {
@@ -460,7 +464,7 @@ describe('retryWithToolsStripped — the retry sees an envelope-shaped history',
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         const result = await (runner as unknown as RetryInternals).retryWithToolsStripped(
             llm, chatParams, { TimedOut: () => false, Dispose: () => undefined }, model(), VENDOR_ID, prompt(true), 'provider said no',
-            { data: {} } as AIPromptParams, 'The whole task is in here.'
+            { data: {} } as AIPromptParams, 'The whole task is in here.', 'The whole task is in here.'
         );
         warn.mockRestore();
         expect(result).toBe(ok);

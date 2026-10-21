@@ -103,8 +103,10 @@ describe('retryWithToolsStripped — the retry is taught the envelope', () => {
     interface RetryInternals extends RerenderInternals {
         retryWithToolsStripped(
             llm: unknown, chatParams: ChatParams, bound: { TimedOut: () => boolean; Dispose: () => void },
-            model: unknown, vendorId: string | null, prompt: unknown, reason: string, params: AIPromptParams, renderedPrompt: string
+            model: unknown, vendorId: string | null, prompt: unknown, reason: string, params: AIPromptParams, renderedPrompt: string,
+            firstRenderedPrompt: string
         ): Promise<unknown>;
+        RerenderedMessagesFor(result: unknown): string | undefined;
     }
 
     it('swaps the native-worded system prompt for one rendered for the envelope, keeping what was appended to it', async () => {
@@ -119,9 +121,45 @@ describe('retryWithToolsStripped — the retry is taught the envelope', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
         await runner.retryWithToolsStripped(llm, chatParams, { TimedOut: () => false, Dispose: () => undefined },
-            { Name: 'M', ID: 'm' }, null, { Name: 'P', AssistantPrefill: null }, 'tools rejected', params, 'Call the tools.');
+            { Name: 'M', ID: 'm' }, null, { Name: 'P', AssistantPrefill: null }, 'tools rejected', params, 'Call the tools.', 'Call the tools.');
         warn.mockRestore();
 
         expect(seen?.messages[0].content).toBe('# Actions catalog (false/envelope)\n\nPrefill instruction');
+    });
+
+    it('records the envelope prompt it sent when that matches this attempt but not the first-rendered prompt', async () => {
+        const runner = new AIPromptRunner() as unknown as RetryInternals;
+        const params = new AIPromptParams();
+        params.data = { _NATIVE_TOOL_CALLING: true, _NATIVE_CONTROL_FLOW: 'implicit' };
+        runner.registerNativeRerender(params, async () => 'envelope text');
+        const result = { success: true };
+        const llm = { ChatCompletion: async () => result };
+        const chatParams = new ChatParams();
+        // A failover already re-rendered this attempt for the envelope; the run still holds the implicit text.
+        chatParams.messages = [{ role: 'system', content: 'envelope text' }, { role: 'user', content: 'Go' }];
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const runnerWithStore = runner as unknown as { storedMessagesJSON: () => string };
+        runnerWithStore.storedMessagesJSON = () => 'stored: envelope text';
+
+        await runner.retryWithToolsStripped(llm, chatParams, { TimedOut: () => false, Dispose: () => undefined },
+            { Name: 'M', ID: 'm' }, null, { Name: 'P', AssistantPrefill: null }, 'tools rejected', params, 'envelope text', 'implicit text');
+        warn.mockRestore();
+
+        expect(runner.RerenderedMessagesFor(result)).toBe('stored: envelope text');
+    });
+});
+
+describe('rerenderForNativeDecision — a prompt rendered without the native flags', () => {
+    it('is sent as it is, without a re-render on every native call', async () => {
+        const internals = new AIPromptRunner() as unknown as RerenderInternals;
+        const params = new AIPromptParams();
+        params.data = { other: 'kept' };
+        const render = vi.fn(async () => 'rendered again');
+        internals.registerNativeRerender(params, render);
+        const chatParams = new ChatParams();
+        RecordToolCallingDecision(chatParams, decision(true, 'implicit'));
+
+        expect(await internals.rerenderForNativeDecision('original text', chatParams, params, { Name: 'M' })).toBe('original text');
+        expect(render).not.toHaveBeenCalled();
     });
 });
