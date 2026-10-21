@@ -23,4 +23,21 @@ describe('FormRecordRefreshCoordinator', () => {
 
         expect(seen).toEqual([]);
     });
+
+    it('emits both RemoteUpdated$ and Refreshed$ when NotifyRemoteUpdate is called', () => {
+        const coordinator = new FormRecordRefreshCoordinator();
+        const remoteEvents: Array<{ record: BaseEntity; changed: string[] }> = [];
+        const refreshedRecords: BaseEntity[] = [];
+
+        coordinator.RemoteUpdated$.subscribe((evt) =>
+            remoteEvents.push({ record: evt.record, changed: Array.from(evt.changedFieldNames) }),
+        );
+        coordinator.Refreshed$.subscribe((record) => refreshedRecords.push(record));
+
+        const record = { ID: 'rec-1' } as unknown as BaseEntity;
+        coordinator.NotifyRemoteUpdate(record, new Set(['nickname']));
+
+        expect(remoteEvents).toEqual([{ record, changed: ['nickname'] }]);
+        expect(refreshedRecords).toEqual([record]);
+    });
 });

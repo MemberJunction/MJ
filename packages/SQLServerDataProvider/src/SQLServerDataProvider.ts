@@ -506,7 +506,7 @@ export class SQLServerDataProvider
    * ENOTBEGUN on a finished handle. A query on an explicit handle a caller passed in — an IS-A chain
    * sharing its own transaction — is never subject to that check.
    */
-  private _sqlQueue$ = new Subject<SQLQueueItem>();
+  private _sqlQueue$: Subject<SQLQueueItem> | null = null;
   /**
    * Handles whose commit or rollback has run — or whose commit FAILED, which dooms them just the same.
    * The ambient check in runQueueItem consults this as well as `_transaction`, because a failed
@@ -518,8 +518,31 @@ export class SQLServerDataProvider
   // Subscription for the queue processor
   private _queueSubscription: any;
   
-  // Transaction state management
-  private _transactionState$ = new BehaviorSubject<boolean>(false);
+  // Transaction state management — lazy-allocated so read-only per-request providers
+  // avoid allocating RxJS Subject/BehaviorSubject instances when no transaction is opened.
+  private _isTransactionActive = false;
+  private _transactionState$: BehaviorSubject<boolean> | null = null;
+
+  private ensureSqlQueue(): Subject<SQLQueueItem> {
+    if (!this._sqlQueue$) {
+      this._sqlQueue$ = new Subject<SQLQueueItem>();
+    }
+    return this._sqlQueue$;
+  }
+
+  private ensureTransactionStateSubject(): BehaviorSubject<boolean> {
+    if (!this._transactionState$) {
+      this._transactionState$ = new BehaviorSubject<boolean>(this._isTransactionActive);
+    }
+    return this._transactionState$;
+  }
+
+  private setTransactionActiveState(active: boolean): void {
+    this._isTransactionActive = active;
+    if (this._transactionState$) {
+      this._transactionState$.next(active);
+    }
+  }
 
 
   /**
@@ -532,7 +555,7 @@ export class SQLServerDataProvider
    * });
    */
   public get TransactionState$(): Observable<boolean> {
-    return this._transactionState$.asObservable();
+    return this.ensureTransactionStateSubject().asObservable();
   }
 
   /** @deprecated Use {@link TransactionState$}. */
@@ -570,7 +593,7 @@ export class SQLServerDataProvider
   public get IsTransactionActive(): boolean {
     // Always return instance-level state
     // Request-specific state should be accessed via getTransactionContext
-    return this._transactionState$.value;
+    return this._isTransactionActive;
   }
 
   /** @deprecated Use {@link IsTransactionActive}. */
@@ -746,7 +769,7 @@ export class SQLServerDataProvider
     // Each instance gets its own queue processor, but only do this ONCE if we get this method called more than once we don't need to reinit
     // the sub, taht would cause duplicate rprocessing.
     if (!this._queueSubscription) {
-      this._queueSubscription = this._sqlQueue$.pipe(
+      this._queueSubscription = this.ensureSqlQueue().pipe(
         concatMap(item =>
           from(this.runQueueItem(item)).pipe(
             // runQueueItem settles the item's own promise on success; only failure is handled here
@@ -2346,8 +2369,9 @@ export class SQLServerDataProvider
     // For transactional queries, use the instance queue to ensure serialization
     // This prevents EREQINPROG errors when multiple queries try to use the same transaction
     this.initializeQueueProcessor();
+    const queue = this.ensureSqlQueue();
     return new Promise<sql.IResult<any>>((resolve, reject) => {
-      this._sqlQueue$.next({
+      queue.next({
         kind: 'query',
         query,
         parameters,
@@ -3032,7 +3056,7 @@ IF ${varName} IS NOT NULL
     const transaction = new sql.Transaction(this._pool);
     await transaction.begin();
     this._transaction = transaction;
-    this._transactionState$.next(true);
+    this.setTransactionActiveState(true);
   }
 
   /**
@@ -3072,8 +3096,9 @@ IF ${varName} IS NOT NULL
    */
   private enqueueTransactionAction(description: string, handle: sql.Transaction, run: () => Promise<void>): Promise<void> {
     this.initializeQueueProcessor();
+    const queue = this.ensureSqlQueue();
     return new Promise<void>((resolve, reject) => {
-      this._sqlQueue$.next({ kind: 'action', description, handle, run, resolve, reject });
+      queue.next({ kind: 'action', description, handle, run, resolve, reject });
     });
   }
 
@@ -3098,14 +3123,14 @@ IF ${varName} IS NOT NULL
       // AbandonPhysicalTransaction can roll the doomed handle back — nulling it first, as the old
       // `finally` did, made that abandon a no-op and leaked the server-side transaction (#4447).
       this._transaction = null;
-      this._transactionState$.next(false);
+      this.setTransactionActiveState(false);
     });
   }
 
   protected override async AbandonPhysicalTransaction(): Promise<void> {
     const stale = this._transaction;
     this._transaction = null;
-    this._transactionState$.next(false);
+    this.setTransactionActiveState(false);
     if (stale) {
       try {
         // Through the queue, like commit and rollback: the handle is already nulled above, so any
@@ -3137,7 +3162,7 @@ IF ${varName} IS NOT NULL
       });
     } finally {
       this._transaction = null;
-      this._transactionState$.next(false);
+      this.setTransactionActiveState(false);
     }
   }
 
