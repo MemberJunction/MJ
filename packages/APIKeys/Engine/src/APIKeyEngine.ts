@@ -30,7 +30,7 @@ import {
     MJAPIScopeEntity,
     MJUserEntity
 } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, MJGlobal, MJEvent, MJEventType } from '@memberjunction/global';
 import { APIKeysEngineBase } from '@memberjunction/api-keys-base';
 import { ScopeEvaluator } from './ScopeEvaluator';
 import { UsageLogger } from './UsageLogger';
@@ -193,6 +193,29 @@ export class APIKeyEngine {
      * alongside so an edited filter re-parses instead of serving stale tokens.
      */
     private _filterTokenCache: Map<string, { text: string; tokens: string[] }> = new Map();
+    /**
+     * Short-TTL cache of validated active APIKey entities keyed by lowercase SHA-256 hash.
+     * Avoids running `RunView('MJ: API Keys')` on every single GraphQL request.
+     * Invalidated automatically on `RevokeAPIKey`, `ClearCache`, `RefreshCache`,
+     * and on `MJGlobal` BaseEntity save/delete/remote-invalidate events.
+     */
+    private _keyValidationCache: Map<string, { result: KeyHashValidationResult; expiresAt: number }> = new Map();
+    /**
+     * Short-TTL cache of validated active MJUserEntity records keyed by lowercase UserID.
+     * Avoids running `RunView('MJ: Users')` on every single API-key-authenticated request.
+     */
+    private _userValidationCache: Map<string, { userRecord: MJUserEntity; expiresAt: number }> = new Map();
+    /**
+     * Tracks the last timestamp (ms) when `LastUsedAt` was persisted for each APIKeyID
+     * so high-throughput requests do not issue a database `UPDATE` on every single call.
+     */
+    private _lastUsedUpdateTimestamps: Map<string, number> = new Map();
+    /**
+     * Tracks APIKeyIDs currently undergoing an internal `LastUsedAt` save so the
+     * resulting `BaseEntity` save event does not evict the key from `_keyValidationCache`.
+     */
+    private _updatingLastUsedKeyIds: Set<string> = new Set();
+    private _eventSubscription: { unsubscribe(): void } | null = null;
 
     constructor(config: APIKeyEngineConfig = {}) {
         this._config = {
@@ -543,29 +566,68 @@ export class APIKeyEngine {
             // If keyApps is empty, key works with all apps (global key)
         }
 
-        // 5. Get the user
-        const rv = new RunView();
-        const userResult = await rv.RunView<MJUserEntity>({
-            EntityName: 'MJ: Users',
-            ExtraFilter: `ID = '${apiKey.UserID}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
+        // 5. Get the user (check short-TTL validation cache first)
+        const now = Date.now();
+        const userCacheKey = (apiKey.UserID || '').toLowerCase();
+        let userRecord: MJUserEntity | undefined;
+        const cachedUser = userCacheKey ? this._userValidationCache.get(userCacheKey) : undefined;
+        if (cachedUser && now < cachedUser.expiresAt) {
+            userRecord = cachedUser.userRecord;
+        } else {
+            if (cachedUser) {
+                this._userValidationCache.delete(userCacheKey);
+            }
+            const rv = new RunView();
+            const userResult = await rv.RunView<MJUserEntity>({
+                EntityName: 'MJ: Users',
+                ExtraFilter: `ID = '${apiKey.UserID}'`,
+                ResultType: 'entity_object'
+            }, contextUser);
 
-        const userRecord = userResult.Results?.[0];
+            userRecord = userResult.Results?.[0];
+            if (userRecord && userRecord.IsActive && this._config.scopeCacheTTLMs > 0 && userCacheKey) {
+                this.ensureValidationCacheEventListener();
+                this._userValidationCache.set(userCacheKey, {
+                    userRecord,
+                    expiresAt: now + this._config.scopeCacheTTLMs
+                });
+            }
+        }
+
         if (!userRecord) {
             return { IsValid: false, Error: 'User not found for API key' };
         }
 
         if (!userRecord.IsActive) {
+            if (userCacheKey) {
+                this._userValidationCache.delete(userCacheKey);
+            }
             return { IsValid: false, Error: 'User account is inactive' };
         }
 
-        // 6. Update LastUsedAt
-        try {
-            apiKey.LastUsedAt = new Date();
-            await apiKey.Save();
-        } catch {
-            // Non-fatal - continue even if LastUsedAt update fails
+        // 6. Update LastUsedAt (throttled per key to avoid a DB UPDATE on every request)
+        const lastUsedWriteAt = apiKey.ID ? this._lastUsedUpdateTimestamps.get(apiKey.ID) : undefined;
+        const throttleMs = this._config.scopeCacheTTLMs > 0 ? this._config.scopeCacheTTLMs : 0;
+        const shouldPersistLastUsed =
+            throttleMs === 0 ||
+            lastUsedWriteAt === undefined ||
+            now - lastUsedWriteAt >= throttleMs;
+
+        if (shouldPersistLastUsed) {
+            try {
+                apiKey.LastUsedAt = new Date();
+                if (apiKey.ID) {
+                    this._lastUsedUpdateTimestamps.set(apiKey.ID, now);
+                    this._updatingLastUsedKeyIds.add(apiKey.ID);
+                }
+                await apiKey.Save();
+            } catch {
+                // Non-fatal - continue even if LastUsedAt update fails
+            } finally {
+                if (apiKey.ID) {
+                    this._updatingLastUsedKeyIds.delete(apiKey.ID);
+                }
+            }
         }
 
         // 7. Log usage if enabled and logging options provided
@@ -620,7 +682,9 @@ export class APIKeyEngine {
         }
 
         apiKey.Status = 'Revoked';
-        return await apiKey.Save();
+        const saved = await apiKey.Save();
+        this.invalidateKeyCacheById(apiKeyId);
+        return saved;
     }
 
     // =========================================================================
@@ -1150,6 +1214,8 @@ export class APIKeyEngine {
 
     /**
      * Validate an API key by its hash (internal method).
+     * Uses a short-TTL in-memory validation cache (`scopeCacheTTLMs`, default 60s)
+     * invalidated on API key revocation or BaseEntity mutation events.
      */
     public async ValidateKeyByHash(
         hash: string,
@@ -1161,6 +1227,30 @@ export class APIKeyEngine {
         if (!/^[a-f0-9]{64}$/i.test(hash)) {
             return { Valid: false, Reason: 'API key not found' };
         }
+
+        const normalizedHash = hash.toLowerCase();
+        const now = Date.now();
+        const cached = this._keyValidationCache.get(normalizedHash);
+        if (cached && now < cached.expiresAt) {
+            const cachedKey = cached.result.APIKey;
+            if (cached.result.Valid && cachedKey) {
+                if (cachedKey.Status !== 'Active') {
+                    this._keyValidationCache.delete(normalizedHash);
+                    return { Valid: false, Reason: 'API key is revoked' };
+                }
+                if (cachedKey.ExpiresAt) {
+                    const expiryDate = new Date(cachedKey.ExpiresAt);
+                    if (expiryDate < new Date(now)) {
+                        this._keyValidationCache.delete(normalizedHash);
+                        return { Valid: false, Reason: 'API key has expired' };
+                    }
+                }
+                return cached.result;
+            }
+        } else if (cached) {
+            this._keyValidationCache.delete(normalizedHash);
+        }
+
         const rv = new RunView();
         const result = await rv.RunView<MJAPIKeyEntity>({
             EntityName: 'MJ: API Keys',
@@ -1182,12 +1272,47 @@ export class APIKeyEngine {
         // Check expiry
         if (apiKey.ExpiresAt) {
             const expiryDate = new Date(apiKey.ExpiresAt);
-            if (expiryDate < new Date()) {
+            if (expiryDate < new Date(now)) {
                 return { Valid: false, Reason: 'API key has expired' };
             }
         }
 
-        return { Valid: true, APIKey: apiKey };
+        const validationResult: KeyHashValidationResult = { Valid: true, APIKey: apiKey };
+        if (this._config.scopeCacheTTLMs > 0) {
+            this.ensureValidationCacheEventListener();
+            this._keyValidationCache.set(normalizedHash, {
+                result: validationResult,
+                expiresAt: now + this._config.scopeCacheTTLMs
+            });
+        }
+
+        return validationResult;
+    }
+
+    /**
+     * Explicitly invalidates the in-memory API key validation cache.
+     * @param keyHash - Optional SHA-256 key hash to evict; when omitted, clears all cached keys and users.
+     */
+    public InvalidateValidationCache(keyHash?: string): void {
+        if (keyHash) {
+            const normalized = keyHash.toLowerCase();
+            const entry = this._keyValidationCache.get(normalized);
+            if (entry?.result.APIKey?.ID) {
+                this._lastUsedUpdateTimestamps.delete(entry.result.APIKey.ID);
+            }
+            this._keyValidationCache.delete(normalized);
+        } else {
+            this._keyValidationCache.clear();
+            this._userValidationCache.clear();
+            this._lastUsedUpdateTimestamps.clear();
+        }
+    }
+
+    /**
+     * Number of currently cached API key hash validations (for diagnostics and testing).
+     */
+    public get CachedKeyValidationCount(): number {
+        return this._keyValidationCache.size;
     }
 
     // =========================================================================
@@ -1255,6 +1380,8 @@ export class APIKeyEngine {
      * @param contextUser - User context for database operations (required for refresh)
      */
     public async RefreshCache(contextUser: UserInfo): Promise<void> {
+        this.InvalidateValidationCache();
+        this._filterTokenCache.clear();
         await this.Base.Config(true, contextUser);
     }
 
@@ -1263,6 +1390,12 @@ export class APIKeyEngine {
      * @deprecated Use RefreshCache(contextUser) instead to force a refresh
      */
     public ClearCache(): void {
+        this.InvalidateValidationCache();
+        this._filterTokenCache.clear();
+        if (this._eventSubscription) {
+            this._eventSubscription.unsubscribe();
+            this._eventSubscription = null;
+        }
         this._scopeEvaluator.ClearCache();
         // Note: Base engine cache is managed by calling Config(true, contextUser)
     }
@@ -1291,6 +1424,95 @@ export class APIKeyEngine {
     // =========================================================================
     // PRIVATE HELPERS
     // =========================================================================
+
+    /**
+     * Evicts any cached key validation entry matching the given APIKey ID.
+     */
+    private invalidateKeyCacheById(apiKeyId: string): void {
+        this._lastUsedUpdateTimestamps.delete(apiKeyId);
+        for (const [hash, entry] of this._keyValidationCache.entries()) {
+            if (entry.result.APIKey && UUIDsEqual(entry.result.APIKey.ID, apiKeyId)) {
+                this._keyValidationCache.delete(hash);
+            }
+        }
+    }
+
+    /**
+     * Subscribes lazily to MJGlobal BaseEntity events so key/user mutations
+     * immediately invalidate cached validation entries.
+     */
+    private ensureValidationCacheEventListener(): void {
+        if (this._eventSubscription) {
+            return;
+        }
+        try {
+            const listener = MJGlobal.Instance.GetEventListener(false);
+            this._eventSubscription = listener.subscribe((event: MJEvent) => {
+                if (event.event !== MJEventType.ComponentEvent || event.eventCode !== 'BaseEntityEvent') {
+                    return;
+                }
+                const entityEvent = event.args as {
+                    type?: string;
+                    entityName?: string;
+                    baseEntity?: {
+                        ID?: string;
+                        Status?: string;
+                        EntityInfo?: { Name?: string };
+                    } | null;
+                } | undefined;
+                if (!entityEvent) {
+                    return;
+                }
+                if (
+                    entityEvent.type !== 'save' &&
+                    entityEvent.type !== 'delete' &&
+                    entityEvent.type !== 'remote-invalidate'
+                ) {
+                    return;
+                }
+                const rawEntityName =
+                    entityEvent.baseEntity?.EntityInfo?.Name ??
+                    entityEvent.entityName ??
+                    '';
+                const normalizedName = rawEntityName.trim().toLowerCase();
+                if (!normalizedName) {
+                    return;
+                }
+                if (normalizedName === 'mj: api keys') {
+                    const savedKeyId = entityEvent.baseEntity?.ID;
+                    if (
+                        entityEvent.type === 'save' &&
+                        savedKeyId &&
+                        this._updatingLastUsedKeyIds.has(savedKeyId) &&
+                        entityEvent.baseEntity?.Status === 'Active'
+                    ) {
+                        return;
+                    }
+                    if (savedKeyId) {
+                        this.invalidateKeyCacheById(savedKeyId);
+                    } else {
+                        this._keyValidationCache.clear();
+                    }
+                } else if (normalizedName === 'mj: users') {
+                    const userId = entityEvent.baseEntity?.ID;
+                    if (userId) {
+                        this._userValidationCache.delete(userId.toLowerCase());
+                    } else {
+                        this._userValidationCache.clear();
+                    }
+                } else if (
+                    normalizedName === 'mj: api key scopes' ||
+                    normalizedName === 'mj: api key applications' ||
+                    normalizedName === 'mj: api applications' ||
+                    normalizedName === 'mj: api application scopes'
+                ) {
+                    this._keyValidationCache.clear();
+                }
+            });
+        } catch {
+            // Non-fatal if MJGlobal event listener is unavailable in minimal test harnesses
+        }
+    }
 
     /**
      * Encodes random bytes using the configured encoding format.
@@ -1377,5 +1599,8 @@ export function GetAPIKeyEngine(config?: APIKeyEngineConfig): APIKeyEngine {
  * Useful for testing or reconfiguration.
  */
 export function ResetAPIKeyEngine(): void {
+    if (defaultEngine) {
+        defaultEngine.ClearCache();
+    }
     defaultEngine = null;
 }
