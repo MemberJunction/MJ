@@ -22,6 +22,7 @@ import { ApiKeysChecks } from '../checks/api-keys.checks';
 import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
+import { NativeToolLoopChecks } from '../checks/native-tool-loop.checks';
 import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
@@ -125,6 +126,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['predictive-studio', PredictiveStudioChecks, 5],
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
+        ['native-tool-loop', NativeToolLoopChecks, 4],
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
@@ -266,6 +268,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'metadata-consistency': 7,
         'metadata-sync': 9,
         'metadata-sync-push': 8,
+        'native-tool-loop': 4,
         'nested-transactions': 11,
         'open-app-teardown': 2,
         'permission-engine': 14,
@@ -332,7 +335,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(96);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(97);
     });
 });
 

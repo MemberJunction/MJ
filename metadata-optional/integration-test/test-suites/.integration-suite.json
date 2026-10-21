@@ -1209,6 +1209,17 @@
           "primaryKey": {
             "ID": "F010EDA8-2094-41BA-8E25-0D5EFB0C13FE"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT130 - Native Tool Loop (scripted model)",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "19516008-6F25-49C0-BEAA-59762CC20B21"
+          }
         }
       ]
     },

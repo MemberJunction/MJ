@@ -1,0 +1,31 @@
+[
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT130 - Native Tool Loop (scripted model)",
+      "Description": "DETERMINISTIC — no network, no credentials. Runs a real Loop agent through AgentRunner and the prompt runner's native tool-calling gate against a scripted stand-in model (ITScriptedToolLLM) served by fixture AI Model / Vendor / Model Vendor rows whose catalog declares native tool calling with implicit control flow and native tool results. Each check scripts the model's turns and asserts on what the framework sent the model and on what it persisted. NTL1 a Retry on a native turn is answered in the protocol, directly after the call turn. NTL2 reasoning blocks are replayed on the call turn. NTL3 every prompt run of a native run records its tool-calling path. NTL4 a tools-payload rejection retries without tools, keeping calls as text. Self-cleaning.",
+      "MaxExecutionTimeMS": 600000,
+      "InputDefinition": {},
+      "ExpectedOutcomes": {
+        "summary": "Provider-valid history after a retried native turn, reasoning carried across tool turns, and every prompt run attributed to the tool-calling path it took."
+      },
+      "Configuration": {
+        "tier": "deterministic",
+        "transport": "server",
+        "checks": [
+          {
+            "type": "native-tool-loop"
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A2B5E1B9-7375-4509-8E3B-8AE10C5CCE70"
+    },
+    "sync": {
+      "lastModified": "2026-10-21T05:56:33.159Z",
+      "checksum": "d7df3dfbd6e7cc2d72f34207e7cf88d428a6325eaeea789f94d7b0d650ca28f7"
+    }
+  }
+]
