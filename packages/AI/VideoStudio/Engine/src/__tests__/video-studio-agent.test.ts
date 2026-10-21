@@ -74,6 +74,7 @@ function createHarness(
             stepType: string;
             stepName: string;
             contextUser?: UserInfo;
+            completed?: { success: boolean; errorMessage?: string };
         }) => Promise<MJAIAgentRunStepEntityExtended | null>;
         finalizeStepEntity: (
             stepEntity: MJAIAgentRunStepEntityExtended | null,
@@ -90,11 +91,21 @@ function createHarness(
     internal._agentHierarchy = [...hierarchy];
     internal.createStepEntity = vi.fn(async (opts) => {
         createdSteps.push({ stepType: opts.stepType, stepName: opts.stepName });
-        return {
+        const step = {
             ID: '99999999-8888-7777-6666-555555555555',
             StepType: opts.stepType,
             StepName: opts.stepName,
         } as unknown as MJAIAgentRunStepEntityExtended;
+        // BaseAgent saves the validation step already completed in one INSERT (`completed`) instead of
+        // createStepEntity + finalizeStepEntity, so record that outcome as the finalized step too.
+        if (opts.completed) {
+            finalizedSteps.push({
+                stepEntity: step,
+                success: opts.completed.success,
+                errorMessage: opts.completed.errorMessage,
+            });
+        }
+        return step;
     });
     internal.finalizeStepEntity = vi.fn(async (stepEntity, success, errorMessage) => {
         finalizedSteps.push({ stepEntity, success, errorMessage });
