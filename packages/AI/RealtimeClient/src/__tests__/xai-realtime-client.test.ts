@@ -305,11 +305,23 @@ describe('xAIRealtimeClient', () => {
             expect(transcripts.map(t => t.ReplacesPrevious)).toEqual([false, false]);
         });
 
-        it('should emit nothing for empty transcript payloads', () => {
+        it('should emit nothing for an empty assistant transcript', () => {
             const { transcripts } = collect(client);
-            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: '  ' });
             client.Emit({ type: 'response.output_audio_transcript.done', transcript: '' });
             expect(transcripts).toEqual([]);
+        });
+
+        it('should pass an empty user transcription through as a plain final, like the OpenAI base', () => {
+            // The host needs it to release the speech onset a VAD false positive stamped (MJ#5483).
+            const { transcripts } = collect(client);
+            client.Emit({ type: 'input_audio_buffer.speech_started' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: '  ' });
+            client.Emit({ type: 'input_audio_buffer.speech_started' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'I would like to apply' });
+            expect(transcripts).toEqual([
+                { Role: 'User', Text: '  ', IsFinal: true, Kind: 'normal' },
+                { Role: 'User', Text: 'I would like to apply', IsFinal: true, Kind: 'normal', ReplacesPrevious: false },
+            ]);
         });
     });
 
@@ -665,6 +677,15 @@ describe('xAIRealtimeClient', () => {
             expect(client.IsBusy).toBe(false);
             expect(interruptions).toHaveLength(1);
             expect(states.at(-1)).toBe('listening');
+        });
+
+        it('invokes the OnUserSpeechStart handler on input_audio_buffer.speech_started', () => {
+            let count = 0;
+            client.OnUserSpeechStart(() => { count++; });
+            client.Emit({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(1);
+            client.Emit({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(2);
         });
 
         it('should NOT surface speech_started while idle (user simply taking their turn)', () => {

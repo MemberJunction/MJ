@@ -150,7 +150,9 @@ describe('math extension: MathML markup', () => {
     expect(out).not.toMatch(/mml:/);
   });
 
-  it('an inline formula far into a long message still renders (the opener search is bounded)', () => {
+  // Correctness only: the bounded lookahead must not hide a formula past its window. marked calls
+  // start() again further along, so this passes for any window size; the cost tests guard the bound.
+  it('an inline formula past the opener lookahead window still renders', () => {
     const out = html(`${'plain words '.repeat(300)}then ${jatsInline} per pulse.`);
     expect(out).toMatch(/then <math display="inline">[\s\S]*<\/math> per pulse\.<\/p>/);
   });

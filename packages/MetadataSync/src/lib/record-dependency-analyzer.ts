@@ -24,6 +24,8 @@ export interface FlattenedRecord {
    * Independent sibling roots get distinct graphIds and may run in parallel.
    */
   graphId: string;
+  /** The record file this record came from. Set by push for every record of the file. */
+  FilePath?: string;
 }
 
 /**

@@ -51,6 +51,8 @@ export interface EntityFieldState {
     NotLoaded: boolean;
     /** Whether the field has had no set since it was created or re-armed. */
     NeverSet: boolean;
+    /** Whether the field was explicitly set after being not-loaded. See {@link EntityField.Dirty}. */
+    WrittenAfterNotLoaded?: boolean;
 }
 
 /**
@@ -85,6 +87,13 @@ export class EntityField {
     private _value: any;
     private _neverSet: boolean = true;
     private _notLoaded: boolean = false;
+    /**
+     * True once the field is explicitly set after being not-loaded: a write onto a value the record
+     * never loaded. The field is then dirty whatever it was set to — even null, which equals its
+     * cleared old value — so the write reaches the save, and Validate treats it as an existing
+     * record's value. Cleared when the old value is reset (load, save) or the field is not-loaded again.
+     */
+    private _writtenAfterNotLoaded: boolean = false;
 
     /**
      * True when the source this entity was hydrated from OMITTED this field's key — most
@@ -114,6 +123,19 @@ export class EntityField {
      */
     public MarkNotLoaded(): void {
         this._notLoaded = true;
+        this._writtenAfterNotLoaded = false;
+    }
+
+    /**
+     * Framework-internal, for the hydration paths: the source omitted this field, so it is
+     * not-loaded AND holds nothing. Unlike {@link MarkNotLoaded}, which only flags the field and keeps
+     * its in-memory value, this drops a default or a previous record's value that would otherwise
+     * read back through Get() as if it had been loaded.
+     */
+    public ClearAsNotLoaded(): void {
+        this._value = null;
+        this._oldValue = null;
+        this.MarkNotLoaded();
     }
 
     private _createSuppressed: boolean = false;
@@ -239,6 +261,9 @@ export class EntityField {
             // this field.
             const wasNotLoaded = this._notLoaded;
             this._notLoaded = false;
+            if (wasNotLoaded) {
+                this._writtenAfterNotLoaded = true;
+            }
 
             // in the below, we set the OldValue, but only if (a) we have never set the value before, or (b) the value or the old value is not null - which means that we are in a record setup scenario
             if (this._neverSet && !wasNotLoaded &&
@@ -261,6 +286,13 @@ export class EntityField {
     }
 
     /**
+     * True when the field has had no explicit write since construction or since {@link ResetNeverSetFlag}.
+     */
+    public get NeverSet(): boolean {
+        return this._neverSet;
+    }
+
+    /**
      * Returns true if the field is dirty, false otherwise. A field is considered dirty if the value is different from the old value. If the field is read only, it is never dirty.
      * A {@link NotLoaded} field is never dirty either — its in-memory state is a construction
      * artifact, not data, and nothing that was never loaded can have been changed.
@@ -268,9 +300,11 @@ export class EntityField {
     get Dirty(): boolean {
         if (this.ReadOnly || this._notLoaded)
             return false
+        else if (this._writtenAfterNotLoaded)
+            return true // a write onto a value the record never loaded must reach the save, even null
         else {
             const oldNull = this._oldValue === null || this.OldValue === undefined || Number.isNaN(this.OldValue); // check for NaN because sometimes we have old values that are NaN and we need to account for that
-            const curNull = this.Value === null || this.Value === undefined || Number.isNaN(this.OldValue);
+            const curNull = this.Value === null || this.Value === undefined || Number.isNaN(this.Value);
             if (oldNull && curNull)
                 return false; // BOTH are null or undefined, not dirty
             else {
@@ -286,9 +320,10 @@ export class EntityField {
                     newCompare = this.Value.getTime();
                 }
 
+                const tsType = this._entityFieldInfo.TSType;
+
                 // Special handling for bit/Boolean types - treat truthy values as equivalent
-                if (this._entityFieldInfo.TSType === EntityFieldTSType.Boolean || 
-                    this._entityFieldInfo.Type.toLowerCase() === 'bit') {
+                if (tsType === EntityFieldTSType.Boolean) {
                     // Convert both values to boolean for comparison
                     const oldBool = this.convertToBoolean(oldCompare);
                     const newBool = this.convertToBoolean(newCompare);
@@ -296,7 +331,7 @@ export class EntityField {
                 }
 
                 // Special handling for numeric types - treat numeric strings that convert to same value as equivalent
-                if (this._entityFieldInfo.TSType === EntityFieldTSType.Number || this.isNumericType(this._entityFieldInfo.Type)) {
+                if (tsType === EntityFieldTSType.Number) {
                     const oldNum = this.convertToNumber(oldCompare);
                     const newNum = this.convertToNumber(newCompare);
                     
@@ -313,7 +348,7 @@ export class EntityField {
                 }
 
                 // for string types where the comparisons are not both strings
-                if (this._entityFieldInfo.TSType === EntityFieldTSType.String) {
+                if (tsType === EntityFieldTSType.String) {
                     if (typeof oldCompare === 'object') {
                         // need to convert the object to a string for comparison
                         oldCompare = JSON.stringify(oldCompare);
@@ -426,7 +461,7 @@ export class EntityField {
                 }
                 else {
                     // we do have a default value, but our current value is null. If we are in an EXISTING record, this is an error, check the OldValue to determine this
-                    if (this._oldValue !== null && this._oldValue !== undefined) {
+                    if ((this._oldValue !== null && this._oldValue !== undefined) || this._writtenAfterNotLoaded) {
                         result.Success = false;
                         result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} cannot be null`, null));
                     }
@@ -527,7 +562,7 @@ export class EntityField {
         }
     }
 
-    constructor(fieldInfo: EntityFieldInfo, Value?: any) {
+    constructor(fieldInfo: EntityFieldInfo, Value?: unknown, skipDefaultValue: boolean = false) {
         // NOTE: constructing an EntityField for a deprecated/disabled field is always allowed — the
         // column is physically part of the entity and the instance must exist. Active-status is
         // asserted only when code accesses the field by name via BaseEntity.Get/Set/SetMany, never
@@ -536,93 +571,20 @@ export class EntityField {
         if (Value) {
             this.Value = Value;
         }
-        else if (fieldInfo.DefaultValue) {
-            if (fieldInfo.TSType === EntityFieldTSType.Boolean) {
-                // special handling for booleans as we don't want a string passed into a boolean field, we want a true boolean
-                if (typeof fieldInfo.DefaultValue === "string" && fieldInfo.DefaultValue.trim() === "1" || fieldInfo.DefaultValue.trim().toLowerCase() === "true")
-                    this.Value = true;
-                else
-                    this.Value = false;
-            }
-            else if (fieldInfo.TSType === EntityFieldTSType.Number) {
-                // special handling for numbers as we don't want a string passed into a value for a numeric field
-                if (!isNaN(Number(fieldInfo.DefaultValue))) {
-                    this.Value = Number(fieldInfo.DefaultValue);
-                }
-                else if (fieldInfo.DefaultValue.trim().toLowerCase() === "null") {
-                    this.Value = null;
-                }
-            }
-            else if (fieldInfo.IsUniqueIdentifier) {
-                // special handling for GUIDs (SQL Server `uniqueidentifier` / PostgreSQL `uuid`),
-                // we don't want to populate anything here because the server always sets the value, leave blank
-                this.Value = null;
-            }
-            else if (fieldInfo.TSType === EntityFieldTSType.Date) {
-                if (fieldInfo.DefaultValue.trim().length > 0) {
-                    // special handling for dates as we don't want to use getdate() type defaults as is, we want to convert them to a JS Date object
-                    try {
-                        // attempt to convert the default value to a date
-                        const temp = new Date(fieldInfo.DefaultValue);
-                        // if we get here, that means it worked, but we could have an invalid date, so check for that
-                        if (isNaN(temp.getTime())) {
-                            // this is an invalid date, so throw an error
-                            throw new Error(); // blank error because we just end up going to the catch block anyway and in there we have logic to handle this properly
-                        }
-                        else
-                            this.Value = temp;
-                    }
-                    catch (e) {
-                        // if we get here, that means the default value is not a valid date, so we need to check to see if it's a SQL current date function
-                        if (EntityFieldInfo.IsDefaultValueSQLCurrentDateFunction(fieldInfo.DefaultValue)) {
-                            // we have a SQL current date function default, leave the field alone if its a special date field as the server (i.e. database) will handle
-                            //setting the value, otherwise set the value to the current date
-                            if(fieldInfo.IsSpecialDateField){
-                                this.Value = null;
-                            }
-                            else {
-                                this.Value = new Date();
-                            }
-                        }
-                        else {
-                            // we have a default value that is not a valid date and not a getdate() type default, so we need to throw an error
-                            throw new Error(`Invalid default value for ${fieldInfo.Entity}.${fieldInfo.Name} of ${fieldInfo.DefaultValue}. Default values for date fields must be a valid date or a getdate() type default`);
-                        }
-                    }
-                }
-            }
-            else {
-                // For strings: strip PostgreSQL's typed-literal wrapper.
-                //
-                // PG's pg_get_expr() (used by vwSQLColumnsAndEntityFields →
-                // EntityField.DefaultValue) renders a string default like:
-                //   'Single'::character varying
-                //   'pending'::text
-                // SQL Server stores the same default as just `'Single'` or
-                // `'pending'`. If we set the field value to the raw PG form,
-                // the value is `'Single'::character varying` (27 chars), and
-                // a MaxLength=20 constraint immediately fails validation —
-                // even though the actual content is `Single` (6 chars).
-                //
-                // Unwrap a leading single-quoted string followed by a `::type`
-                // suffix. Function-call defaults (`nextval('...')`,
-                // `now() AT TIME ZONE 'UTC'`) deliberately don't match this
-                // shape and are left untouched — the database evaluates them
-                // server-side at INSERT time.
-                const dv = fieldInfo.DefaultValue.trim();
-                const pgTypedLiteral = /^'((?:[^']|'')*)'::[A-Za-z][\w "()\[\],]*$/;
-                const m = dv.match(pgTypedLiteral);
-                if (m) {
-                    // Replace the SQL-escaped doubled quotes back to a single quote.
-                    this.Value = m[1].replace(/''/g, "'");
-                } else {
-                    this.Value = fieldInfo.DefaultValue;
-                }
+        else if (!skipDefaultValue && fieldInfo.DefaultValue) {
+            const parsed = typeof fieldInfo.GetParsedDefaultValue === 'function'
+                ? fieldInfo.GetParsedDefaultValue()
+                : EntityFieldInfo.ParseDefaultValue(fieldInfo);
+            if (parsed.isCurrentDateFunction) {
+                this.Value = new Date();
+            } else if (parsed.hasValue) {
+                this.Value = parsed.value instanceof Date ? new Date(parsed.value.getTime()) : parsed.value;
             }
             this._neverSet = true; // set this back to true because we are setting the default value and we want to be able to set this ONCE from BaseEntity when we load
         }
         else {
-            this.Value = null; // we need to set the value to null instead of being undefined as the value is defined, it is NULL
+            this._value = null; // we need to set the value to null instead of being undefined as the value is defined, it is NULL
+            this._oldValue = null;
             this._neverSet = true; // set this back to true because we are setting the value to null;
         }
     }
@@ -632,6 +594,24 @@ export class EntityField {
      */
     public ResetOldValue() {
         this._oldValue = this.Value;
+        this._writtenAfterNotLoaded = false;
+    }
+
+    /**
+     * Framework-internal, for {@link BaseEntity.Revert}: puts the field back to its last loaded or
+     * saved state. A not-loaded field has nothing to revert and stays not-loaded; a field written
+     * after being not-loaded goes back to not-loaded, so the revert neither turns an unloaded field
+     * into "loaded" data a later update would write, nor leaves the write's dirty flag behind.
+     */
+    public RevertToOldValue(): void {
+        if (this._notLoaded) {
+            return;
+        }
+        if (this._writtenAfterNotLoaded) {
+            this.ClearAsNotLoaded();
+            return;
+        }
+        this.Value = this.OldValue;
     }
 
     /**
@@ -646,7 +626,13 @@ export class EntityField {
      * back can put them back with {@link RestoreState}.
      */
     public GetState(): EntityFieldState {
-        return { Value: this._value, OldValue: this._oldValue, NotLoaded: this._notLoaded, NeverSet: this._neverSet };
+        return {
+            Value: this._value,
+            OldValue: this._oldValue,
+            NotLoaded: this._notLoaded,
+            NeverSet: this._neverSet,
+            WrittenAfterNotLoaded: this._writtenAfterNotLoaded,
+        };
     }
 
     /**
@@ -658,6 +644,7 @@ export class EntityField {
         this._oldValue = state.OldValue;
         this._notLoaded = state.NotLoaded;
         this._neverSet = state.NeverSet;
+        this._writtenAfterNotLoaded = state.WrittenAfterNotLoaded ?? false;
     }
 
     /**
@@ -1255,7 +1242,7 @@ export abstract class BaseEntity<T = unknown> {
      * remote-invalidate). Exposed publicly via `Event$` so engines and UI components can react
      * to entity lifecycle events.
      */
-    private _eventSubject: Subject<BaseEntityEvent>;
+    private _eventSubject: Subject<BaseEntityEvent> | null = null;
 
     /**
      * Bounded ring of `BaseEntityResult` objects from each Save/Delete attempt. The most
@@ -1509,7 +1496,6 @@ export abstract class BaseEntity<T = unknown> {
     get ISAParentEntity(): BaseEntity | null { return this._parentEntity; }
 
     constructor(Entity: EntityInfo, Provider: IEntityDataProvider | null = null) {
-        this._eventSubject = new Subject<BaseEntityEvent>();
         this._entityInfo = Entity;
         EntityInfo.AssertEntityActiveStatus(Entity, 'BaseEntity::constructor');
         this._provider = Provider;
@@ -2110,7 +2096,26 @@ export abstract class BaseEntity<T = unknown> {
         return e instanceof Error ? e.message : String(e);
     }
 
-    private static _subtypeLookupCache = new Map<string, BaseEntity | null>();
+    /**
+     * The create path's SubtypeSelector lookup memo, partitioned by the provider that ran the lookup. A memo
+     * shared across providers would hand provider B a row loaded through provider A (another connection,
+     * another user's context) or a `null` miss recorded against A's database. Keyed weakly so a
+     * request-scoped provider's memo is collected with it.
+     */
+    private static _subtypeLookupCache = new WeakMap<object, Map<string, BaseEntity | null>>();
+
+    /** Partition key for lookups made by an entity that has no provider at all. */
+    private static readonly _noProviderSubtypeKey: object = {};
+
+    private static subtypeLookupCacheFor(provider: object | null | undefined): Map<string, BaseEntity | null> {
+        const partitionKey = provider ?? BaseEntity._noProviderSubtypeKey;
+        let cache = BaseEntity._subtypeLookupCache.get(partitionKey);
+        if (!cache) {
+            cache = new Map<string, BaseEntity | null>();
+            BaseEntity._subtypeLookupCache.set(partitionKey, cache);
+        }
+        return cache;
+    }
 
     /** Per entity (lowercased name): the resolver asked for load hints, decided once per registration. */
     private static _subtypeLoadHintResolvers = new Map<string, SubtypeLoadHintResolverEntry>();
@@ -2125,7 +2130,7 @@ export abstract class BaseEntity<T = unknown> {
      * reported again.
      */
     public static ClearSubtypeLookupCache(): void {
-        BaseEntity._subtypeLookupCache.clear();
+        BaseEntity._subtypeLookupCache = new WeakMap();
         BaseEntity._subtypeLoadHintResolvers.clear();
         BaseEntity._engineCachedRowIndexes = new WeakMap();
         BaseEntity._loggedSubtypeLoadHintMessages.clear();
@@ -2407,28 +2412,29 @@ export abstract class BaseEntity<T = unknown> {
 
     private async getSubtypePathTargetEntity(entityName: string, pkValue: unknown): Promise<BaseEntity | null> {
         const cacheKey = `${entityName.trim().toLowerCase()}|${String(pkValue).trim().toLowerCase()}`;
-        if (BaseEntity._subtypeLookupCache.has(cacheKey)) {
-            return BaseEntity._subtypeLookupCache.get(cacheKey) ?? null;
+        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const lookupCache = BaseEntity.subtypeLookupCacheFor(provider);
+        if (lookupCache.has(cacheKey)) {
+            return lookupCache.get(cacheKey) ?? null;
         }
 
         // 1. Check BaseEngineRegistry for loaded cached entities
         const cached = BaseEntity.findSubtypePathTargetInEngineCache(entityName, pkValue);
         if (cached) {
-            BaseEntity._subtypeLookupCache.set(cacheKey, cached);
+            lookupCache.set(cacheKey, cached);
             return cached;
         }
 
         // 2. Fall back to loading via provider
-        const provider = this.ProviderToUse as unknown as IMetadataProvider;
         if (!provider?.GetEntityObject) {
-            BaseEntity._subtypeLookupCache.set(cacheKey, null);
+            lookupCache.set(cacheKey, null);
             return null;
         }
 
         try {
             const targetObj = await provider.GetEntityObject<BaseEntity>(entityName, this._contextCurrentUser);
             if (!targetObj) {
-                BaseEntity._subtypeLookupCache.set(cacheKey, null);
+                lookupCache.set(cacheKey, null);
                 return null;
             }
 
@@ -2443,14 +2449,14 @@ export abstract class BaseEntity<T = unknown> {
 
             const loaded = await targetObj.InnerLoad(key);
             if (loaded) {
-                BaseEntity._subtypeLookupCache.set(cacheKey, targetObj);
+                lookupCache.set(cacheKey, targetObj);
                 return targetObj;
             }
         } catch {
             // On load failure, return null
         }
 
-        BaseEntity._subtypeLookupCache.set(cacheKey, null);
+        lookupCache.set(cacheKey, null);
         return null;
     }
 
@@ -3668,6 +3674,9 @@ export abstract class BaseEntity<T = unknown> {
      * @returns
      */
     public RegisterEventHandler(callback: (event: BaseEntityEvent) => void): Subscription {
+        if (!this._eventSubject) {
+            this._eventSubject = new Subject<BaseEntityEvent>();
+        }
         return this._eventSubject.asObservable().subscribe(callback);
     }
 
@@ -3693,6 +3702,9 @@ export abstract class BaseEntity<T = unknown> {
 
 
     private static _baseEventCode = 'BaseEntityEvent';
+    private static readonly _globalEventTypes: ReadonlySet<BaseEntityEvent["type"]> = new Set([
+        'save', 'delete', 'load_complete', 'save_started', 'delete_started', 'load_started'
+    ]);
     /**
      * When a BaseEntity class raises an event with MJGlobal, the eventCode property is set to this value. This is used to identify events that are raised by BaseEntity objects.
      * Any MJGlobal event that is raised by a BaseEntity class will use a BaseEntityEvent type as the args parameter
@@ -3716,12 +3728,11 @@ export abstract class BaseEntity<T = unknown> {
 
         // this is the local event handler that is specific to THIS instance of the entity object
         LogDebug(`BaseEntity.RaiseEvent() - ${type === 'save' ? 'save:' + saveSubType : type} event raised for ${this.EntityInfo.Name}, about to call this._eventSubject.next()`);
-        this._eventSubject.next({type: type, payload: payload, saveSubType: saveSubType, baseEntity: this, provider});
+        this._eventSubject?.next({type: type, payload: payload, saveSubType: saveSubType, baseEntity: this, provider});
 
         // this next call is to MJGlobal to let everyone who cares knows that we had an event on an entity object
         // we broadcast save/delete/load events and their _started counterparts
-        const globalEventTypes: BaseEntityEvent["type"][] = ['save', 'delete', 'load_complete', 'save_started', 'delete_started', 'load_started'];
-        if (globalEventTypes.includes(type)) {
+        if (BaseEntity._globalEventTypes.has(type)) {
             const event = new BaseEntityEvent();
             event.baseEntity = this;
             event.payload = payload;
@@ -3931,6 +3942,11 @@ export abstract class BaseEntity<T = unknown> {
         // Lookup needs an EntityField instance to return — hydrate.
         this.hydrateFieldsIfNeeded();
 
+        if (this._entityInfo && typeof this._entityInfo.FieldIndexByName === 'function' && this._fields.length === this._entityInfo.Fields.length && this._fieldCache === null) {
+            const idx = this._entityInfo.FieldIndexByName(fieldName);
+            return idx >= 0 ? (this._fields[idx] ?? null) : null;
+        }
+
         const lcase = fieldName.trim().toLowerCase(); // do this once as we will use it multiple times
 
         if (this._fieldCache === null) {
@@ -3977,6 +3993,9 @@ export abstract class BaseEntity<T = unknown> {
      * ```
      */
     public FieldIsDirty(fieldName: string, ...more: string[]): boolean {
+        if (!this._fieldsHydrated && this._raw !== null && !this._parentEntity) {
+            return false;
+        }
         const names = more.length === 0 ? [fieldName] : [fieldName, ...more];
         for (const name of names) {
             if (this.GetFieldByName(name)?.Dirty === true) {
@@ -3998,6 +4017,11 @@ export abstract class BaseEntity<T = unknown> {
 
         // Lookup needs an EntityField instance to return — hydrate.
         this.hydrateFieldsIfNeeded();
+
+        if (this._entityInfo && typeof this._entityInfo.FieldIndexByCodeName === 'function' && this._fields.length === this._entityInfo.Fields.length && this._codeNameCache === null) {
+            const idx = this._entityInfo.FieldIndexByCodeName(codeName);
+            return idx >= 0 ? (this._fields[idx] ?? null) : null;
+        }
 
         const lcase = codeName.trim().toLowerCase();
 
@@ -4171,35 +4195,42 @@ export abstract class BaseEntity<T = unknown> {
     private setLocal(FieldName: string, Value: any) {
         const field = this.GetFieldByName(FieldName);
         if (field != null) {
-            if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof Value === 'string' || typeof Value === 'number') ) {
-                field.Value = new Date(Value);
-            }
-            else if (field.EntityFieldInfo.TSType === EntityFieldTSType.Number && typeof Value === 'string' && Value !== null && Value !== undefined) {
-                const numericValue = Number(Value);
-                if (!isNaN(numericValue)) {
-                    field.Value = numericValue;
-                } else {
-                    field.Value = Value;
-                }
-            }
-            else if (field.EntityFieldInfo.TSType === EntityFieldTSType.Boolean && Value !== null && Value !== undefined) {
-                if (typeof Value === 'string') {
-                    if (Value.trim() === '1' || Value.trim().toLowerCase() === 'true') {
-                        field.Value = true;
-                    } else if (Value.trim() === '0' || Value.trim().toLowerCase() === 'false') {
-                        field.Value = false;
-                    } else {
-                        field.Value = Value;
-                    }
-                } else if (typeof Value === 'number') {
-                    field.Value = Value !== 0;
-                } else {
-                    field.Value = Value;
-                }
-            }
-            else {
+            this.setFieldValue(field, Value);
+        }
+    }
+
+    private setFieldValue(field: EntityField, Value: any) {
+        const tsType = field.EntityFieldInfo.TSType;
+        if (tsType === EntityFieldTSType.Date && (typeof Value === 'string' || typeof Value === 'number')) {
+            field.Value = new Date(Value);
+        }
+        else if (tsType === EntityFieldTSType.Number && typeof Value === 'string' && Value !== null && Value !== undefined) {
+            const numericValue = Number(Value);
+            if (!isNaN(numericValue)) {
+                field.Value = numericValue;
+            } else {
                 field.Value = Value;
             }
+        }
+        else if (tsType === EntityFieldTSType.Boolean && Value !== null && Value !== undefined) {
+            if (typeof Value === 'string') {
+                const trimmed = Value.trim();
+                const lower = trimmed.toLowerCase();
+                if (trimmed === '1' || lower === 'true') {
+                    field.Value = true;
+                } else if (trimmed === '0' || lower === 'false') {
+                    field.Value = false;
+                } else {
+                    field.Value = Value;
+                }
+            } else if (typeof Value === 'number') {
+                field.Value = Value !== 0;
+            } else {
+                field.Value = Value;
+            }
+        }
+        else {
+            field.Value = Value;
         }
     }
 
@@ -4212,6 +4243,16 @@ export abstract class BaseEntity<T = unknown> {
      * @param FieldName
      * @returns
      */
+    /**
+     * A raw-mode row's value for a field: under its Name, or else its CodeName. Hydration accepts
+     * both keys (as SetMany does), so every raw-mode read must too, or a CodeName-keyed row reads
+     * back empty. `undefined` means the row omitted the field.
+     */
+    private rawValueFor(raw: Record<string, unknown>, field: EntityFieldInfo): unknown {
+        const byName = raw[field.Name];
+        return byName !== undefined || field.CodeName === field.Name ? byName : raw[field.CodeName];
+    }
+
     /** Records a value derived from `_raw` so later reads skip the conversion. See {@link _rawConverted}. */
     private memoizeRawConversion(fieldName: string, value: unknown): void {
         (this._rawConverted ??= new Map<string, unknown>()).set(fieldName, value);
@@ -4242,25 +4283,27 @@ export abstract class BaseEntity<T = unknown> {
         // hydration. Cache data uses exact SQL column names so no case-insensitive scan needed.
         if (!this._fieldsHydrated && this._raw) {
             let value = this._raw[FieldName];
-            if (value === undefined) return null;
             // Conversions mirror the hydrated path, and memoize into `_rawConverted` rather than
             // back into `_raw` — the row may be shared, frozen cache state. Fields needing no
             // conversion (the vast majority) never touch the memo at all, so the fast path stays
             // a single property read.
             const fi = this._entityInfo?.FieldByName(FieldName);
+            if (value === undefined && fi) value = this.rawValueFor(this._raw, fi);
+            if (value === undefined) return null;
+            const memoKey = fi ? fi.Name : FieldName;
             if (fi?.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
-                const memo = this._rawConverted?.get(FieldName);
+                const memo = this._rawConverted?.get(memoKey);
                 if (memo !== undefined) return memo;
                 const d = new Date(value);
-                this.memoizeRawConversion(FieldName, d);
+                this.memoizeRawConversion(memoKey, d);
                 return d;
             }
             // Mirror the EntityField.Value setter: rtrim padding for fixed-width string columns.
             if (typeof value === 'string' && fi?.FixedWidthColumn) {
-                const memo = this._rawConverted?.get(FieldName);
+                const memo = this._rawConverted?.get(memoKey);
                 if (memo !== undefined) return memo;
                 value = trimTrailingSpaces(value);
-                this.memoizeRawConversion(FieldName, value);
+                this.memoizeRawConversion(memoKey, value);
             }
             return value;
         }
@@ -4309,8 +4352,8 @@ export abstract class BaseEntity<T = unknown> {
                 if (checkStatus) {
                     EntityFieldInfo.AssertEntityFieldActiveStatus(field.EntityFieldInfo, 'BaseEntity.SetMany');
                 }
-                // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
-                this.setLocal(key, object[key]);
+                // Use setFieldValue directly so we don't repeat GetFieldByName(key)
+                this.setFieldValue(field, object[key]);
                 if (replaceOldValues) {
                     field.ResetOldValue();
                 }
@@ -4323,8 +4366,8 @@ export abstract class BaseEntity<T = unknown> {
                     if (checkStatus) {
                         EntityFieldInfo.AssertEntityFieldActiveStatus(field.EntityFieldInfo, 'BaseEntity.SetMany');
                     }
-                    // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
-                    this.setLocal(field.Name, object[key]);
+                    // Use setFieldValue directly so we don't repeat GetFieldByName(field.Name)
+                    this.setFieldValue(field, object[key]);
                     if (replaceOldValues) {
                         field.ResetOldValue();
                     }
@@ -4402,21 +4445,46 @@ export abstract class BaseEntity<T = unknown> {
      * @returns
      */
     public GetAll(oldValues: boolean = false, onlyDirtyFields: boolean = false): any {
-        let obj = {};
-        for (let field of this.Fields) {
-            // NotLoaded fields are OMITTED (D-3 decision): their in-memory state is a
-            // construction artifact, and serializing it would launder a default/null into
-            // something downstream code treats as data — the exact masquerade the flag exists
-            // to prevent. Key-absence also propagates the flag naturally: hydrating another
-            // entity from this output re-marks the same fields not-loaded.
-            if (field.NotLoaded) continue;
-            if (!onlyDirtyFields || (onlyDirtyFields && field.Dirty)) {
-                // Reads field.Value directly — serialization is framework-internal, so it does not
-                // (and must not) assert active status. No suppression toggle needed: the assertion no
-                // longer lives on EntityField.Value (it moved to BaseEntity.Get/Set/SetMany).
-                obj[field.Name] = oldValues ? field.OldValue : field.Value;
-                if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && obj[field.Name] && !(obj[field.Name] instanceof Date)) {
-                    obj[field.Name] = new Date(obj[field.Name]); // a timestamp, convert to JS Date Object
+        let obj: Record<string, unknown> = {};
+        if (!this._fieldsHydrated && this._raw !== null) {
+            if (!onlyDirtyFields) {
+                for (const ef of this.EntityInfo.Fields) {
+                    const name = ef.Name;
+                    const rawVal = this.rawValueFor(this._raw, ef);
+                    // Key absence in _raw means NotLoaded (D-3 decision): omit from serialized output
+                    if (rawVal === undefined) continue;
+                    let val: unknown;
+                    const memo = this._rawConverted?.get(name);
+                    if (memo !== undefined) {
+                        val = memo;
+                    } else if (ef.TSType === EntityFieldTSType.Date && (typeof rawVal === 'string' || typeof rawVal === 'number')) {
+                        val = new Date(rawVal);
+                        this.memoizeRawConversion(name, val);
+                    } else if (typeof rawVal === 'string' && ef.FixedWidthColumn) {
+                        val = trimTrailingSpaces(rawVal);
+                        this.memoizeRawConversion(name, val);
+                    } else {
+                        val = rawVal;
+                    }
+                    obj[name] = val;
+                }
+            }
+        } else {
+            for (let field of this.Fields) {
+                // NotLoaded fields are OMITTED (D-3 decision): their in-memory state is a
+                // construction artifact, and serializing it would launder a default/null into
+                // something downstream code treats as data — the exact masquerade the flag exists
+                // to prevent. Key-absence also propagates the flag naturally: hydrating another
+                // entity from this output re-marks the same fields not-loaded.
+                if (field.NotLoaded) continue;
+                if (!onlyDirtyFields || (onlyDirtyFields && field.Dirty)) {
+                    // Reads field.Value directly — serialization is framework-internal, so it does not
+                    // (and must not) assert active status. No suppression toggle needed: the assertion no
+                    // longer lives on EntityField.Value (it moved to BaseEntity.Get/Set/SetMany).
+                    obj[field.Name] = oldValues ? field.OldValue : field.Value;
+                    if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && obj[field.Name] && !(obj[field.Name] instanceof Date)) {
+                        obj[field.Name] = new Date(obj[field.Name] as string | number); // a timestamp, convert to JS Date Object
+                    }
                 }
             }
         }
@@ -4635,37 +4703,49 @@ export abstract class BaseEntity<T = unknown> {
 
         if (!this.EntityInfo) return;
 
-        // 1. Allocate one EntityField per column. Same construction the old `init()` used to do
-        //    up-front — we just deferred it.
-        for (const rawField of this.EntityInfo.Fields) {
-            const key = this.EntityInfo.Name + '.' + rawField.Name;
-            const newField = MJGlobal.Instance.ClassFactory.CreateInstance<EntityField>(EntityField, key, rawField);
-            this._fields.push(newField);
+        // 1. Allocate one EntityField per column. Check once whether any custom EntityField
+        //    subclasses are registered in ClassFactory; in standard deployments none are, so we
+        //    can instantiate EntityField directly without N string concatenations + factory lookups.
+        const hasCustomEntityFieldRegistrations =
+            MJGlobal.Instance.ClassFactory.GetAllRegistrations(EntityField).length > 0;
+        const entityFields = this.EntityInfo.Fields;
+        const skipDefaultValue = this._raw !== null;
+        if (hasCustomEntityFieldRegistrations) {
+            const prefix = this.EntityInfo.Name + '.';
+            for (let i = 0; i < entityFields.length; i++) {
+                const rawField = entityFields[i];
+                const newField = MJGlobal.Instance.ClassFactory.CreateInstance<EntityField>(
+                    EntityField,
+                    prefix + rawField.Name,
+                    rawField,
+                    undefined,
+                    skipDefaultValue
+                );
+                this._fields.push(newField);
+            }
+        } else {
+            for (let i = 0; i < entityFields.length; i++) {
+                this._fields.push(new EntityField(entityFields[i], undefined, skipDefaultValue));
+            }
         }
 
-        // 2. If we have raw data from LoadFromData, populate Fields. The first set of each Field
-        //    runs through the EntityField setter with `_NeverSet=true`, which simultaneously sets
-        //    Value AND OldValue (so the field is not marked dirty). This matches the old
-        //    SetMany(replaceOldValues=true) semantics on initial load.
+        // 2. If we have raw data from LoadFromData, populate Fields and mark omitted fields as
+        //    NotLoaded in a single pass.
         if (this._raw) {
-            for (const field of this._fields) {
-                const value = this._raw[field.Name];
+            const raw = this._raw;
+            for (let i = 0; i < this._fields.length; i++) {
+                const field = this._fields[i];
+                const value = this.rawValueFor(raw, field.EntityFieldInfo);
                 if (value !== undefined) {
-                    // Populating fields from the loaded row writes EntityField.Value directly, which does
-                    // not assert active status — so a deprecated column still present in the table emits
-                    // no warning on load (hydration is not user use of the field). No suppression toggle
-                    // is needed now that the assertion lives at BaseEntity.Get/Set/SetMany.
-                    // Date conversion mirrors what SetLocal / Get does for raw string/number dates.
                     if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
                         field.Value = new Date(value);
                     } else {
                         field.Value = value;
                     }
+                } else {
+                    field.MarkNotLoaded();
                 }
             }
-            // _raw IS a hydration source (LoadFromData fast path) — fields whose key it omitted
-            // are not-loaded, not defaulted. See EntityField.NotLoaded.
-            this.markFieldsOmittedBySourceAsNotLoaded(this._raw);
             // Raw data has been promoted into Fields — release the reference so we don't carry
             // duplicate state. Fields hold their own copies, so a frozen source no longer
             // constrains anything from here on.
@@ -4685,7 +4765,9 @@ export abstract class BaseEntity<T = unknown> {
         if (!source || typeof source !== 'object') return;
         for (const field of this.Fields) {
             if (source[field.Name] === undefined && source[field.CodeName] === undefined) {
-                field.MarkNotLoaded();
+                // Cleared, not just flagged: otherwise a default from construction, or the previous
+                // record's value on a reload, reads back through Get() as if it had been loaded.
+                field.ClearAsNotLoaded();
             }
         }
     }
@@ -5266,7 +5348,7 @@ export abstract class BaseEntity<T = unknown> {
                         const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
                         if (!this.TransactionGroup) {
                             // no transaction group, so we have our results here
-                            const result = this.finalizeSave(data, saveSubType);
+                            const result = this.finalizeSave(data, saveSubType, _options);
 
                             // Settle the scope this entity opened, if any (only the initiator holds
                             // one). The provider can fail by RETURNING falsy data rather than
@@ -5289,7 +5371,7 @@ export abstract class BaseEntity<T = unknown> {
                             this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
                                 const transItem = success && results ? results.find(r => r.Transaction.BaseEntity === this) : undefined;
                                 if (transItem) {
-                                    this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
+                                    this.finalizeSave(transItem.Result, saveSubType, _options); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
                                 }
                                 else {
                                     // The transaction group failed / rolled back, OR (should never happen) reported success
@@ -5404,10 +5486,40 @@ export abstract class BaseEntity<T = unknown> {
     }
 
 
-    private finalizeSave(data: any, saveSubType: BaseEntityEvent["saveSubType"]): boolean {
+    private finalizeSave(
+        data: BaseEntity | Record<string, unknown> | null | undefined,
+        saveSubType: BaseEntityEvent["saveSubType"],
+        options?: EntitySaveOptions,
+    ): boolean {
         if (data) {
+            const effectiveReturnMode = options?.SaveReturnMode ?? this.EntityInfo.SaveReturnMode;
+            const hasGetAll = (val: BaseEntity | Record<string, unknown>): val is BaseEntity =>
+                val instanceof BaseEntity || typeof (val as { GetAll?: () => Record<string, unknown> }).GetAll === 'function';
+            const rawFieldData: Record<string, unknown> = hasGetAll(data) ? data.GetAll() : data;
+            // In 'datestamps_only' mode, the database only returned PK + __mj_CreatedAt / __mj_UpdatedAt.
+            // Merge those returned values onto the current in-memory values BEFORE init() wipes Fields,
+            // so caller-set fields remain loaded and intact without a post-save BaseView SELECT.
+            // When DatabaseProviderBase.Save already merged its pre-save snapshot (`__mj_preMerged`),
+            // reuse `rawFieldData` directly to avoid a redundant second `GetAll()` call.
+            let fieldData: Record<string, unknown>;
+            if (effectiveReturnMode === 'datestamps_only' && typeof rawFieldData === 'object' && !Array.isArray(rawFieldData)) {
+                if ((rawFieldData as { __mj_preMerged?: boolean }).__mj_preMerged) {
+                    fieldData = rawFieldData;
+                } else {
+                    const currentValues = this.GetAll() as Record<string, unknown>;
+                    if (saveSubType === 'create' || !this.IsSaved) {
+                        for (const f of this.EntityInfo.Fields) {
+                            if (f.IsVirtual && !f.IsPrimaryKey && !(f.Name in rawFieldData) && (currentValues[f.Name] === null || currentValues[f.Name] === undefined)) {
+                                delete currentValues[f.Name];
+                            }
+                        }
+                    }
+                    fieldData = { ...currentValues, ...rawFieldData };
+                }
+            } else {
+                fieldData = rawFieldData;
+            }
             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
-            const fieldData = (data instanceof BaseEntity || (data && typeof data.GetAll === 'function')) ? data.GetAll() : data;
             // IS-A GetAll() merges the parent, including parent virtuals this entity
             // does not own (e.g. OrderHeader on Event Order Line). Keep only columns
             // this entity defines, and ignore anything leftover.
@@ -5725,7 +5837,7 @@ export abstract class BaseEntity<T = unknown> {
         this.discardJSONFieldObjects(); // unconditional: an un-flushed edit through a stale reference must go too
         if (this.Dirty) {
             for (let field of this.Fields) {
-                field.Value = field.OldValue;
+                field.RevertToOldValue();
             }
             // IS-A composition: revert parent entity chain as well
             if (this._parentEntity) {
@@ -5949,14 +6061,30 @@ export abstract class BaseEntity<T = unknown> {
         // This is the dominant warm-load case (cache restore in TransformSimpleObjectToEntityObject
         // populating engine arrays of read-only data) and was previously the per-row bottleneck.
         const isPlainObject = data && typeof data === 'object' && !Array.isArray(data) && !(data instanceof Date);
+        const isFirstOrUnhydratedLoad =
+            this._raw === null &&
+            !this._recordLoaded &&
+            !this._everSaved &&
+            ((!this._fieldsHydrated && this._fields.length === 0) || this._fields.every(f => f.NeverSet));
+        const hasCompanionPayload =
+            this.HasCompanions &&
+            isPlainObject &&
+            Array.isArray((data as Record<string, unknown>)[COMPANION_PAYLOAD_KEY]);
         const canTakeFastPath =
             isPlainObject &&
-            !this._fieldsHydrated &&
-            this._fields.length === 0 &&
+            isFirstOrUnhydratedLoad &&
             !this._parentEntity &&
-            !this.EntityInfo?.IsParentType;
+            !this.EntityInfo?.IsParentType &&
+            !hasCompanionPayload;
 
         if (canTakeFastPath) {
+            if (this._fieldsHydrated || this._fields.length > 0) {
+                this._fields = [];
+                this._fieldsHydrated = false;
+                this._fieldCache = null;
+                this._codeNameCache = null;
+            }
+            this._compositeKey = null;
             this._raw = data as Record<string, unknown>;
             // Drop any conversions memoized from a previously-loaded row — they describe the old
             // `_raw`, not this one. No isFrozen probe is needed: `Get()` never writes to `_raw`,
@@ -5968,7 +6096,7 @@ export abstract class BaseEntity<T = unknown> {
             const pks = this.EntityInfo?.PrimaryKeys ?? [];
             let allPksPresent = pks.length > 0;
             for (const pkInfo of pks) {
-                const v = this._raw[pkInfo.Name];
+                const v = this.rawValueFor(this._raw, pkInfo);
                 if (v === null || v === undefined) {
                     allPksPresent = false;
                     break;
@@ -7068,7 +7196,7 @@ export abstract class BaseEntity<T = unknown> {
      * however it is possible for the string in the map to be any unique key relative to the object so you could have vectors
      * that embed multiple fields if desired.
      */
-    private _vectors: Map<string, number[]> = new Map<string, number[]>();
+    private _vectors: Map<string, number[]> | null = null;
 
     /**
      * When true, GenerateEmbedding() returns immediately without computing vectors.
@@ -7085,6 +7213,9 @@ export abstract class BaseEntity<T = unknown> {
      * use this to track vectors associated with 
      */
     public get Vectors(): Map<string, number[]> {
+        if (!this._vectors) {
+            this._vectors = new Map<string, number[]>();
+        }
         return this._vectors;
     }
 
@@ -7092,7 +7223,7 @@ export abstract class BaseEntity<T = unknown> {
      * Resets the vector embeddings for this entity to an empty state.
      */
     public ResetVectors(): void {
-        this._vectors.clear();
+        this._vectors?.clear();
     }
 
     /**

@@ -81,15 +81,12 @@ export class BaseEnginePropertyConfig extends BaseInfo {
 
     /**
      * When set to true, the engine will use the LocalCacheManager to cache results locally.
-     * On subsequent loads (unless forceRefresh is true), cached results will be returned
-     * immediately without hitting the server if they are still valid.
-     *
-     * This is useful for frequently-accessed, relatively-static data that doesn't need
-     * real-time freshness. The cache is automatically invalidated when entity data changes.
+     * On subsequent loads (unless forceRefresh is true), cached results will be validated
+     * via smart cache check and returned from local storage if still current.
      *
      * @default false
      */
-    CacheLocal?: boolean;
+    CacheLocal?: boolean = false;
 
     /**
      * Optional TTL (time-to-live) in milliseconds for locally cached results when CacheLocal is true.
@@ -344,6 +341,14 @@ export class PermissionConstrainedError extends Error {
     }
 }
 
+/** A reload of one engine property started by a peer's cache change. */
+interface ExternalChangeReload {
+    /** Another event arrived while this reload was running, so it must run once more. */
+    Again: boolean;
+    /** Settles when the last requested reload has finished. */
+    Done: Promise<void>;
+}
+
 export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartupSink {
     private _loaded: boolean = false;
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
@@ -414,6 +419,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * reconciles it. Keyed by config PropertyName. See {@link beginConfigRefresh}.
      */
     private _configRefreshGeneration: Map<string, number> = new Map();
+
+    /**
+     * Reloads started by {@link OnExternalCacheChange}, keyed by config PropertyName. While one is
+     * running, further events for that property set `Again` instead of starting another, so a
+     * burst of peer events costs at most two reloads per property. See {@link reloadAfterExternalChange}.
+     */
+    private _externalChangeReloads: Map<string, ExternalChangeReload> = new Map();
 
     /**
      * Returns an Observable for a specific engine array property. Subscribers receive the
@@ -983,7 +995,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
             if (event.type === 'delete' || event.type === 'save') {
                 const eName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
-                const matchingConfigs = this.Configs.filter((config: BaseEnginePropertyConfig) => {
+                const matchingConfigs = this._metadataConfigs.filter((config: BaseEnginePropertyConfig) => {
                     return config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === eName;
                 });
 
@@ -1054,7 +1066,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 return true; // No entity name, nothing to do
             }
 
-            const matchingConfigs = this.Configs.filter((config: BaseEnginePropertyConfig) => {
+            const matchingConfigs = this._metadataConfigs.filter((config: BaseEnginePropertyConfig) => {
                 return config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === entityName;
             });
 
@@ -1228,7 +1240,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
             if (!this._entityEventSubjects.has(entityName)) {
                 // Find matching config to get custom debounce time
-                const matchingConfig = this.Configs.find(c =>
+                const matchingConfig = this._metadataConfigs.find(c =>
                     c.EntityName?.trim().toLowerCase() === entityName
                 );
 
@@ -1312,7 +1324,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             const entityName = events[0].baseEntity.EntityInfo.Name.toLowerCase().trim();
             let refreshCount = 0;
 
-            for (const config of this.Configs) {
+            for (const config of this._metadataConfigs) {
                 if (config.AutoRefresh && config.Type === 'entity' && config.EntityName?.trim().toLowerCase() === entityName) {
                     const classified = events.map(e => ({ event: e, disposition: this.classifyEventForConfig(config, e) }));
                     const needingWork = classified.filter(c => c.disposition.action === 'refresh');
@@ -1927,6 +1939,32 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     protected CheckPermissionsOrSkipAll(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): BaseEnginePropertyConfig[] {
         if (configs.length === 0) return configs;
 
+        // First check whether any configured entity is missing from metadata altogether
+        // (e.g., an optional OpenApp engine registered in the bundle whose database schema
+        // is not installed in the target environment). Skip cleanly instead of firing N
+        // guaranteed-to-fail RunView calls and logging N error stack traces at startup.
+        const missingEntities = this.findMissingEntities(configs);
+        if (missingEntities.length > 0) {
+            LogStatusEx({
+                message: `${this.constructor.name}: Skipping ${configs.length} entity config(s) — entity metadata not installed for: ${missingEntities.join(', ')}`,
+                verboseOnly: true,
+                category: 'Cache',
+            });
+
+            for (const config of configs) {
+                if (config.AddToObject !== false) {
+                    (this as Record<string, unknown>)[config.PropertyName] = [];
+                }
+                this._dataMap.set(config.PropertyName, {
+                    entityName: config.EntityName,
+                    data: [],
+                    loadedSuccessfully: true,
+                });
+            }
+
+            return [];
+        }
+
         // Determine the user to check permissions for — on the client side contextUser
         // may be undefined, so fall back to the current logged-in user from Metadata.
         const user = contextUser || this.ProviderToUse?.CurrentUser;
@@ -1960,6 +1998,26 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
 
         return configs;
+    }
+
+    /**
+     * Returns entity names among `configs` that do not exist in the loaded metadata provider.
+     * Only checks when the metadata provider actually has entities loaded (`md.Entities.length > 0`)
+     * so unit tests with empty mock providers are unaffected.
+     */
+    private findMissingEntities(configs: BaseEnginePropertyConfig[]): string[] {
+        const md = this.ProviderToUse;
+        if (!md?.Entities || md.Entities.length === 0) {
+            return [];
+        }
+        const missing: string[] = [];
+        for (const config of configs) {
+            if (!config.EntityName) continue;
+            if (!md.EntityByName(config.EntityName)) {
+                missing.push(config.EntityName);
+            }
+        }
+        return missing;
     }
 
     /** The entity names among `configs` that `user` cannot read, per current metadata. */
@@ -2379,6 +2437,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                         LogStatusEx({ message: `BaseEngine.OnExternalCacheChange: '${config.PropertyName}' already holds the payload's rows — skipped`, verboseOnly: true });
                         return;
                     }
+                    // Rows written under a different field list (a server on the other side of a
+                    // migration) lack columns this process has, or carry ones it does not. Loading
+                    // them would blank the missing columns on every row, so read the rows instead.
+                    if (this.payloadSchemaDiffers(config, parsed.schemaHash)) {
+                        LogStatusEx({ message: `BaseEngine.OnExternalCacheChange: payload for '${config.PropertyName}' was written under a different schema — reloading instead`, verboseOnly: true });
+                        await this.reloadAfterExternalChange(config);
+                        return;
+                    }
                     // Claim a refresh generation BEFORE the awaited materialization — the same
                     // protocol LoadSingleConfig uses around its awaited RunView. Without it, two
                     // overlapping cache events (or an event racing a full reload) can resolve out
@@ -2430,13 +2496,56 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 LogWarning(`BaseEngine.OnExternalCacheChange: payload for '${config.PropertyName}' could not be applied (${e instanceof Error ? e.message : String(e)}) — falling back to full reload`, 'Cache');
             }
         }
-        // Fallback: reload this config from the database. This also replaces the property, so the
-        // derived state has to be rebuilt here too — and the reload must NOT emit on its own, or a
-        // subscriber wakes between the new rows and the rebuild and reads derived state still
-        // pointing at the instances this reload discarded.
-        await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true);
-        await this.RebuildDerivedState(this._contextUser);
-        this.emitPropertyChange(config.PropertyName);
+        await this.reloadAfterExternalChange(config);
+    }
+
+    /**
+     * True when a cache-change payload carries a schema hash and it differs from this engine's
+     * hash for the config's entity. A payload without a hash, or an entity this process cannot
+     * resolve, does not count as differing.
+     */
+    private payloadSchemaDiffers(config: BaseEnginePropertyConfig, payloadSchemaHash: unknown): boolean {
+        if (typeof payloadSchemaHash !== 'string' || !payloadSchemaHash || !config.EntityName) {
+            return false;
+        }
+        const ownHash = LocalCacheManager.Instance.ComputeSchemaHash(this.ProviderToUse, config.EntityName);
+        return ownHash !== undefined && ownHash !== payloadSchemaHash;
+    }
+
+    /**
+     * Reloads a config after a peer's cache change, coalescing overlapping requests: an event that
+     * arrives while a reload for the same property is running asks for one more reload after it
+     * instead of starting its own. Every caller's promise settles only after a reload that began
+     * after its event, so no change is missed, but N events in a burst cost at most two reloads.
+     */
+    private reloadAfterExternalChange(config: BaseEnginePropertyConfig): Promise<void> {
+        const running = this._externalChangeReloads.get(config.PropertyName);
+        if (running) {
+            running.Again = true;
+            return running.Done;
+        }
+        const reload: ExternalChangeReload = { Again: false, Done: Promise.resolve() };
+        this._externalChangeReloads.set(config.PropertyName, reload);
+        reload.Done = this.runExternalChangeReloads(config, reload);
+        return reload.Done;
+    }
+
+    /** Runs reloads for {@link reloadAfterExternalChange} until no further event asked for one. */
+    private async runExternalChangeReloads(config: BaseEnginePropertyConfig, reload: ExternalChangeReload): Promise<void> {
+        try {
+            do {
+                reload.Again = false;
+                // The reload replaces the property, so the derived state has to be rebuilt too —
+                // and the reload must NOT emit on its own, or a subscriber wakes between the new
+                // rows and the rebuild and reads derived state still pointing at the instances
+                // this reload discarded.
+                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true);
+                await this.RebuildDerivedState(this._contextUser);
+                this.emitPropertyChange(config.PropertyName);
+            } while (reload.Again);
+        } finally {
+            this._externalChangeReloads.delete(config.PropertyName);
+        }
     }
 
     /**

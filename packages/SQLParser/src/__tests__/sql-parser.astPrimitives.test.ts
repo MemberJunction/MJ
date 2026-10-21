@@ -290,6 +290,14 @@ describe('SQLParser.ClearOrderBy', () => {
 // Preprocessing fallback (bracket-identifier aliasing + trailing OPTION)
 // ════════════════════════════════════════════════════════════════════
 
+describe('SQLParser.SQL', () => {
+    it('returns the SQL supplied at construction, whether or not it parsed', () => {
+        const sql = 'WITH [Active People] AS (SELECT 1 AS a) SELECT * FROM [Active People]';
+        expect(new SQLParser(sql, tsql).SQL).toBe(sql);
+        expect(new SQLParser('SELECT FROM WHERE', tsql).SQL).toBe('SELECT FROM WHERE');
+    });
+});
+
 describe('SQLParser preprocessing fallback', () => {
 
     it('parses a CTE whose name has a space, restoring it on ToSQL', () => {
@@ -465,3 +473,58 @@ describe('SQLParser.HasUnwrappableTrailingClause', () => {
         )).toBe(true);
     });
 });
+
+// ════════════════════════════════════════════════════════════════════
+// Niladic user functions (CURRENT_USER, SESSION_USER, SYSTEM_USER)
+// ════════════════════════════════════════════════════════════════════
+
+describe('SQLParser niladic user functions', () => {
+
+    it.each(['CURRENT_USER', 'SESSION_USER', 'SYSTEM_USER', 'current_user'])(
+        'parses bare %s in SQL Server and round-trips without parentheses',
+        (fnName) => {
+            const parser = new SQLParser(`SELECT ${fnName} AS UserName`, tsql);
+            expect(parser.IsValid).toBe(true);
+            expect(parser.StatementKind).toBe('select');
+            expect(parser.HasWriteStatement).toBe(false);
+            expect(parser.ToSQL()).not.toContain('()');
+            expect(parser.ToSQL().toUpperCase()).toContain(fnName.toUpperCase());
+        },
+    );
+
+    it.each(['CURRENT_USER', 'SESSION_USER', 'SYSTEM_USER', 'current_user'])(
+        'parses bare %s in PostgreSQL and round-trips without parentheses',
+        (fnName) => {
+            const parser = new SQLParser(`SELECT ${fnName} AS UserName`, pg);
+            expect(parser.IsValid).toBe(true);
+            expect(parser.StatementKind).toBe('select');
+            expect(parser.HasWriteStatement).toBe(false);
+            expect(parser.ToSQL()).not.toContain('()');
+            expect(parser.ToSQL().toUpperCase()).toContain(fnName.toUpperCase());
+        },
+    );
+
+    it('parses bare niladic user functions inside WHERE and function arguments', () => {
+        const parser = new SQLParser(
+            "SELECT COALESCE(CURRENT_USER, SESSION_USER, SYSTEM_USER) AS Who FROM Users WHERE CreatedBy = CURRENT_USER",
+            tsql,
+        );
+        expect(parser.IsValid).toBe(true);
+        expect(parser.StatementKind).toBe('select');
+        expect(parser.ToSQL()).not.toContain('CURRENT_USER()');
+        expect(parser.ToSQL()).not.toContain('SESSION_USER()');
+        expect(parser.ToSQL()).not.toContain('SYSTEM_USER()');
+    });
+
+    it('composes with bracket-identifier preprocessing and trailing OPTION', () => {
+        const parser = new SQLParser(
+            'SELECT CURRENT_USER AS [Current User] FROM [Active People] OPTION (RECOMPILE)',
+            tsql,
+        );
+        expect(parser.IsValid).toBe(true);
+        expect(parser.ToSQL()).toBe(
+            'SELECT CURRENT_USER AS [Current User] FROM [Active People] OPTION (RECOMPILE)',
+        );
+    });
+});
+

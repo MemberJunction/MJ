@@ -2447,12 +2447,12 @@ export const MJAIAgentRunStepSchema = z.object({
         * * Field Name: PayloadAtStart
         * * Display Name: Payload At Start
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON serialization of the Payload state at the start of this step`),
+        * * Description: JSON serialization of the Payload state at the start of this step. NULL when PayloadAtStartSourceStepID is set; the starting payload is then the PayloadAtEnd of that step.`),
     PayloadAtEnd: z.string().nullable().describe(`
         * * Field Name: PayloadAtEnd
         * * Display Name: Payload At End
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON serialization of the Payload state at the end of this step`),
+        * * Description: JSON serialization of the Payload state at the end of this step. NULL when PayloadAtEndSourceStepID is set; the ending payload is then the PayloadAtEnd of that step.`),
     FinalPayloadValidationResult: z.union([z.literal('Fail'), z.literal('Fail'), z.literal('Pass'), z.literal('Pass'), z.literal('Retry'), z.literal('Retry'), z.literal('Warn'), z.literal('Warn')]).nullable().describe(`
         * * Field Name: FinalPayloadValidationResult
         * * Display Name: Validation Result
@@ -2519,6 +2519,18 @@ detailed information about what validation rules failed.`),
         * * Display Name: Native Tool Results Sent
         * * SQL Data Type: bit
         * * Description: For native tool-calling steps: 1 = the results of this step's tool calls were returned to the model as native tool-result turns, 0 = as the markdown action-results user message. NULL for envelope steps and for rows predating the feature.`),
+    PayloadAtStartSourceStepID: z.string().nullable().describe(`
+        * * Field Name: PayloadAtStartSourceStepID
+        * * Display Name: Payload At Start Source Step ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+        * * Description: When set, PayloadAtStart is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's starting payload.`),
+    PayloadAtEndSourceStepID: z.string().nullable().describe(`
+        * * Field Name: PayloadAtEndSourceStepID
+        * * Display Name: Payload At End Source Step ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+        * * Description: When set, PayloadAtEnd is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's ending payload.`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
         * * Display Name: Agent Run Context
@@ -2526,6 +2538,14 @@ detailed information about what validation rules failed.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Step Context
+        * * SQL Data Type: nvarchar(255)`),
+    PayloadAtStartSourceStep: z.string().nullable().describe(`
+        * * Field Name: PayloadAtStartSourceStep
+        * * Display Name: Payload At Start Source Step
+        * * SQL Data Type: nvarchar(255)`),
+    PayloadAtEndSourceStep: z.string().nullable().describe(`
+        * * Field Name: PayloadAtEndSourceStep
+        * * Display Name: Payload At End Source Step
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -2624,7 +2644,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Field Name: Result
         * * Display Name: Result
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Final result or output from the agent execution, stored as JSON or text`),
+        * * Description: Deprecated. No longer written by agent runs; use FinalPayload, which holds the same value. Kept for existing rows and external readers.`),
     AgentState: z.string().nullable().describe(`
         * * Field Name: AgentState
         * * Display Name: Agent State
@@ -3348,6 +3368,70 @@ export const MJAIAgentSessionChannelSchema = z.object({
 export type MJAIAgentSessionChannelEntityType = z.infer<typeof MJAIAgentSessionChannelSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Session Recording Shards
+ */
+export const MJAIAgentSessionRecordingShardSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentSessionID: z.string().describe(`
+        * * Field Name: AgentSessionID
+        * * Display Name: Agent Session
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)`),
+    Index: z.number().describe(`
+        * * Field Name: Index
+        * * Display Name: Index
+        * * SQL Data Type: int
+        * * Description: Zero-based position of the shard in the recording. Unique per session; a retry of the same index with the same bytes is acknowledged, with different bytes it is refused.`),
+    StartSample: z.number().describe(`
+        * * Field Name: StartSample
+        * * Display Name: Start Sample
+        * * SQL Data Type: bigint
+        * * Description: Sample position (48 kHz) where this shard's audio starts in the recording.`),
+    SampleCount: z.number().describe(`
+        * * Field Name: SampleCount
+        * * Display Name: Sample Count
+        * * SQL Data Type: int
+        * * Description: Number of audio samples (48 kHz) the shard covers.`),
+    Bytes: z.number().describe(`
+        * * Field Name: Bytes
+        * * Display Name: Bytes
+        * * SQL Data Type: int
+        * * Description: Size of Data in bytes.`),
+    Sha256: z.string().describe(`
+        * * Field Name: Sha256
+        * * Display Name: SHA-256
+        * * SQL Data Type: nvarchar(64)
+        * * Description: Lowercase hex SHA-256 of Data; decides whether a repeated upload of the same index is a retry or a conflict.`),
+    Data: z.string().describe(`
+        * * Field Name: Data
+        * * Display Name: Data
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The shard bytes as uploaded (MJOPUS1 header followed by length-prefixed Opus packets).`),
+    ReceivedAt: z.date().describe(`
+        * * Field Name: ReceivedAt
+        * * Display Name: Received At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When the server first stored this shard.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJAIAgentSessionRecordingShardEntityType = z.infer<typeof MJAIAgentSessionRecordingShardSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Sessions
  */
 export const MJAIAgentSessionSchema = z.object({
@@ -3460,6 +3544,39 @@ export const MJAIAgentSessionSchema = z.object({
         * * Display Name: Linked Record ID
         * * SQL Data Type: nvarchar(500)
         * * Description: Polymorphic counterparty-identity record key. The primary-key value of the record (within LinkedEntityID's entity) this session resolved to, serialized as a string so any entity type can be referenced regardless of PK shape (UUID, int, composite). NVARCHAR(500), intentionally NOT FK-constrained. Used together with LinkedEntityID — see CK_AIAgentSession_LinkBinding. NULL while the session's counterparty is anonymous/unresolved.`),
+    RecordingStatus: z.union([z.literal('Assembling'), z.literal('Complete'), z.literal('Failed'), z.literal('Partial'), z.literal('Pending')]).nullable().describe(`
+        * * Field Name: RecordingStatus
+        * * Display Name: Recording Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Assembling
+    *   * Complete
+    *   * Failed
+    *   * Partial
+    *   * Pending
+        * * Description: State of the server-side recording assembly for a client-direct session recorded as Opus shards: Pending (shards or a terminal signal are waiting to be assembled), Assembling (claimed by one server instance), Complete (recording.wav holds every captured sample), Partial (assembled with silent gaps, listed in RecordingGaps), Failed (a shard conflict or an assembly error needs a human). NULL when the session was not recorded this way.`),
+    RecordingExpectedShards: z.number().nullable().describe(`
+        * * Field Name: RecordingExpectedShards
+        * * Display Name: Expected Shards
+        * * SQL Data Type: int
+        * * Description: Number of recording shards the browser reported in its terminal signal (last shard index + 1). NULL until a terminal signal arrives.`),
+    RecordingCapturedSamples: z.number().nullable().describe(`
+        * * Field Name: RecordingCapturedSamples
+        * * Display Name: Captured Samples
+        * * SQL Data Type: bigint
+        * * Description: Total audio samples (48 kHz mono) the browser captured, from its terminal signal. The assembled recording.wav is exactly this long. NULL until a terminal signal arrives.`),
+    RecordingGaps: z.string().nullable().describe(`
+        * * Field Name: RecordingGaps
+        * * Display Name: Recording Gaps
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of the silent gaps in a Partial recording: [{startSample, sampleCount, indexes}], sample positions at 48 kHz and the shard indexes that were missing. Empty or NULL when nothing is missing.`),
+    RecordingAssemblyVersion: z.number().describe(`
+        * * Field Name: RecordingAssemblyVersion
+        * * Display Name: Assembly Version
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Incremented by every assembly claim. The assembler finishes only if the version is still the one it claimed, so a newer assembly always wins over a slower older one.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -3913,6 +4030,206 @@ export const MJAIAgentTypeSchema = z.object({
 });
 
 export type MJAIAgentTypeEntityType = z.infer<typeof MJAIAgentTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Agent User Policies
+ */
+export const MJAIAgentUserPolicySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: The AI Agent governed by this user policy.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The MJ User who owns this policy and under whose security principal the agent executes.`),
+    DisplayNameOverride: z.string().nullable().describe(`
+        * * Field Name: DisplayNameOverride
+        * * Display Name: Display Name Override
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional user-personalized display name for this agent (e.g., "Maya" for a user's Chief of Staff).`),
+    PreferredPersonaID: z.string().nullable().describe(`
+        * * Field Name: PreferredPersonaID
+        * * Display Name: Preferred Persona
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)
+        * * Description: Optional AI Persona selected by the user for this agent's voice and communication style.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Paused')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Paused
+        * * Description: Policy lifecycle status: Active, Paused (autonomous wakes suspended), or Disabled.`),
+    OnboardingStatus: z.union([z.literal('Completed'), z.literal('InProgress'), z.literal('NotStarted')]).describe(`
+        * * Field Name: OnboardingStatus
+        * * Display Name: Onboarding Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: NotStarted
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * InProgress
+    *   * NotStarted
+        * * Description: Onboarding progression for this user-agent pair: NotStarted, InProgress, or Completed.`),
+    OnboardedAt: z.date().nullable().describe(`
+        * * Field Name: OnboardedAt
+        * * Display Name: Onboarded At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when the user completed onboarding for this agent.`),
+    CoordinationMode: z.union([z.literal('Autonomous'), z.literal('Coordinator'), z.literal('Observer')]).describe(`
+        * * Field Name: CoordinationMode
+        * * Display Name: Coordination Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Observer
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Autonomous
+    *   * Coordinator
+    *   * Observer
+        * * Description: Operating posture: Observer (tracks and reports only; never nudges others), Coordinator (nudges internal task/priority owners and peer CoS agents), or Autonomous (proactively coordinates within approval boundaries).`),
+    DefaultDataAccessMode: z.union([z.literal('AllowListOnly'), z.literal('ReadOnly'), z.literal('UserCeiling')]).describe(`
+        * * Field Name: DefaultDataAccessMode
+        * * Display Name: Default Data Access Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: UserCeiling
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AllowListOnly
+    *   * ReadOnly
+    *   * UserCeiling
+        * * Description: Default entity access ceiling when no explicit rule in EntityAccessRules matches: UserCeiling (inherit user's MJ permissions), ReadOnly (read permitted entities, block all writes unless explicitly allowed), or AllowListOnly (deny all entities not listed in EntityAccessRules).`),
+    EmailChannelMode: z.union([z.literal('Disabled'), z.literal('DraftOnly'), z.literal('ReadOnly'), z.literal('SendAsAgent'), z.literal('SendAsUser')]).describe(`
+        * * Field Name: EmailChannelMode
+        * * Display Name: Email Channel Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: DraftOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Disabled
+    *   * DraftOnly
+    *   * ReadOnly
+    *   * SendAsAgent
+    *   * SendAsUser
+        * * Description: Email channel permission level: Disabled, ReadOnly, DraftOnly, SendAsAgent, or SendAsUser.`),
+    PhoneChannelMode: z.union([z.literal('Disabled'), z.literal('InboundOnly'), z.literal('OutboundAutonomous'), z.literal('OutboundWithApproval')]).describe(`
+        * * Field Name: PhoneChannelMode
+        * * Display Name: Phone Channel Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: InboundOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Disabled
+    *   * InboundOnly
+    *   * OutboundAutonomous
+    *   * OutboundWithApproval
+        * * Description: Telephony channel permission level: Disabled, InboundOnly, OutboundWithApproval, or OutboundAutonomous.`),
+    MessagingChannelMode: z.union([z.literal('Disabled'), z.literal('Enabled')]).describe(`
+        * * Field Name: MessagingChannelMode
+        * * Display Name: Messaging Channel Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Enabled
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Disabled
+    *   * Enabled
+        * * Description: Messaging channel permission level (Slack/Teams/In-App): Disabled or Enabled.`),
+    CalendarChannelMode: z.union([z.literal('Autonomous'), z.literal('Disabled'), z.literal('ProposeWithApproval'), z.literal('ReadOnly')]).describe(`
+        * * Field Name: CalendarChannelMode
+        * * Display Name: Calendar Channel Mode
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: ReadOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Autonomous
+    *   * Disabled
+    *   * ProposeWithApproval
+    *   * ReadOnly
+        * * Description: Calendar channel permission level: Disabled, ReadOnly (check events & free/busy only), ProposeWithApproval (create/modify events or send invites only with explicit user approval), or Autonomous.`),
+    AllowInterAgentCoordination: z.boolean().describe(`
+        * * Field Name: AllowInterAgentCoordination
+        * * Display Name: Allow Inter-Agent Coordination
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this user's agent may send or respond to structured coordination requests from other users' Chief of Staff agents.`),
+    RequireApprovalForExternalComms: z.boolean().describe(`
+        * * Field Name: RequireApprovalForExternalComms
+        * * Display Name: Require Approval For External Comms
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, any external email, message, or outbound call to non-internal recipients requires explicit user approval via AIAgentRequest.`),
+    RequireApprovalForFinancials: z.boolean().describe(`
+        * * Field Name: RequireApprovalForFinancials
+        * * Display Name: Require Approval For Financials
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, financial commitments, purchases, or accounting/order approvals require explicit user approval.`),
+    RequireApprovalForDestructiveActions: z.boolean().describe(`
+        * * Field Name: RequireApprovalForDestructiveActions
+        * * Display Name: Require Approval For Destructive Actions
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, deleting records or cancelling active workflows requires explicit user approval.`),
+    AutoApproveAmountThreshold: z.number().nullable().describe(`
+        * * Field Name: AutoApproveAmountThreshold
+        * * Display Name: Auto Approve Amount Threshold
+        * * SQL Data Type: decimal(18, 2)
+        * * Description: Optional monetary threshold below which low-risk financial actions may proceed when RequireApprovalForFinancials is 0. NULL means no automatic monetary threshold.`),
+    EntityAccessRules: z.any().nullable().describe(`
+        * * Field Name: EntityAccessRules
+        * * Display Name: Entity Access Rules
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule>
+        * * Description: JSON array of IAgentUserEntityAccessRule objects defining per-entity or wildcard CRUD narrowing, additional Row-Level Security (RLS) filters, additional Field-Level Security (FLS) field masks, and allowed time windows.`),
+    ActionPolicyRules: z.any().nullable().describe(`
+        * * Field Name: ActionPolicyRules
+        * * Display Name: Action Policy Rules
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule>
+        * * Description: JSON array of IAgentUserActionPolicyRule objects defining per-action Allow/RequireApproval/Deny policies, SafeExpressionEvaluator parameter conditions, and allowed time windows.`),
+    InstructionsOverride: z.string().nullable().describe(`
+        * * Field Name: InstructionsOverride
+        * * Display Name: Instructions Override
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional user-specific standing instructions injected into the agent's system context on every run.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+    PreferredPersona: z.string().nullable().describe(`
+        * * Field Name: PreferredPersona
+        * * Display Name: Preferred Persona Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJAIAgentUserPolicyEntityType = z.infer<typeof MJAIAgentUserPolicySchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agents
@@ -4663,6 +4980,12 @@ export const MJAIBridgeAgentIdentitySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Optional owning MJ User when this email address, phone DID, or platform account identity is dedicated to a specific user's personal agent instance (such as their Chief of Staff). NULL for shared/org-wide agent identities.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
@@ -4670,6 +4993,10 @@ export const MJAIBridgeAgentIdentitySchema = z.object({
     Provider: z.string().describe(`
         * * Field Name: Provider
         * * Display Name: Provider Name
+        * * SQL Data Type: nvarchar(100)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -7461,6 +7788,16 @@ export const MJAIPromptSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJAIPromptEntity_IAIPromptConfiguration
         * * Description: Per-prompt call-time configuration bag (JSON, IAIPromptConfiguration shape: LLM / Realtime / Vision / Audio sections). Base layer of the prompt Configuration cascade — AIPromptModel rows inherit from it per key and may override — and itself layered on top of the resolved AIModel/AIModelVendor ModelConfiguration. NULL = contributes nothing.`),
+    TemplateDataCapture: z.union([z.literal('Full'), z.literal('None'), z.literal('Referenced')]).nullable().describe(`
+        * * Field Name: TemplateDataCapture
+        * * Display Name: Template Data Capture
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Full
+    *   * None
+    *   * Referenced
+        * * Description: Which template inputs (data, templateData) prompt runs store in Messages: None (shape only), Referenced (only keys the template uses) or Full. NULL uses the server default.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template Text
@@ -9312,6 +9649,12 @@ export const MJActionParamSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this parameter's VALUE may be written to ActionExecutionLog.Params. Default 1. Set to 0 for parameters that carry records, credentials or personal data - for example the Data payload of Execute Agent. Independent of the hard rule that Entity Action params of ValueType 'Entity Object' or 'Entity Object Data' are never logged regardless of this flag. When logging is suppressed the log records the parameter name, its type and a redaction marker, never the value.`),
+    ValueSchema: z.any().nullable().describe(`
+        * * Field Name: ValueSchema
+        * * Display Name: Value Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJActionParamEntity_IActionParamValueSchema
+        * * Description: Optional JSON Schema fragment describing this parameter's value, limited to the cross-provider subset: type, description, enum, items, properties and required. When set, the native tool builder declares it to the model in place of the coarse ValueType mapping, and argument coercion follows it. For an IsArray parameter it describes one element. When NULL, the schema is derived from ValueType.`),
     Action: z.string().describe(`
         * * Field Name: Action
         * * Display Name: Action
@@ -10067,6 +10410,16 @@ export const MJArchiveConfigurationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    StorageMode: z.union([z.literal('Purge'), z.literal('Store')]).describe(`
+        * * Field Name: StorageMode
+        * * Display Name: Storage Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Store
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Purge
+    *   * Store
+        * * Description: Whether runs keep a copy of the data they remove. Store (default): each record's archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode, entities missing from metadata, entities that track Record Changes, entities whose driver is not registered or does not support purge, and HardDelete entities that use soft delete or whose delete cascade reaches an entity that tracks Record Changes or uses soft delete.`),
     StorageAccount: z.string().nullable().describe(`
         * * Field Name: StorageAccount
         * * Display Name: Storage Account Name
@@ -10157,10 +10510,10 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ArchiveRun: z.date().describe(`
+    ArchiveRun: z.string().describe(`
         * * Field Name: ArchiveRun
-        * * Display Name: Archive Run Timestamp
-        * * SQL Data Type: datetimeoffset`),
+        * * Display Name: Archive Run
+        * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
@@ -10259,6 +10612,16 @@ export const MJArchiveRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    StorageMode: z.union([z.literal('Purge'), z.literal('Store')]).describe(`
+        * * Field Name: StorageMode
+        * * Display Name: Storage Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Store
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Purge
+    *   * Store
+        * * Description: The configuration's StorageMode when this run started: Store (copies written to storage) or Purge (no copies kept; only failed records get an ArchiveRunDetail row).`),
     ArchiveConfiguration: z.string().describe(`
         * * Field Name: ArchiveConfiguration
         * * Display Name: Configuration Name
@@ -11838,6 +12201,44 @@ export const MJCommunicationProviderSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether or not the provider supports creating draft messages`),
+    SupportsCalendar: z.boolean().describe(`
+        * * Field Name: SupportsCalendar
+        * * Display Name: Supports Calendar
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the provider supports calendar event reading, creation, updating, and invitation responses.`),
+    SupportsFreeBusy: z.boolean().describe(`
+        * * Field Name: SupportsFreeBusy
+        * * Display Name: Supports Free Busy
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the provider supports checking free/busy schedules and finding optimal meeting times.`),
+    EnterpriseScopeMode: z.union([z.literal('SecurityGroupScoped'), z.literal('TenantWide'), z.literal('UtilityMailboxesOnly')]).describe(`
+        * * Field Name: EnterpriseScopeMode
+        * * Display Name: Enterprise Scope Mode
+        * * SQL Data Type: nvarchar(40)
+        * * Default Value: UtilityMailboxesOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * SecurityGroupScoped
+    *   * TenantWide
+    *   * UtilityMailboxesOnly
+        * * Description: Enterprise mailbox scope posture for this provider: UtilityMailboxesOnly (restricted to shared/agent utility mailboxes), SecurityGroupScoped (Exchange RBAC / Workspace group-scoped user mailboxes), or TenantWide.`),
+    AllowedEmailDomains: z.string().nullable().describe(`
+        * * Field Name: AllowedEmailDomains
+        * * Display Name: Allowed Email Domains
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional comma-separated list of corporate email domains permitted for user-scoped mailbox and calendar operations (e.g., "company.com,subsidiary.com").`),
+    DefaultCredentialID: z.string().nullable().describe(`
+        * * Field Name: DefaultCredentialID
+        * * Display Name: Default Credential ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Optional default MJ Credential used by this communication provider when no per-request credential override is supplied.`),
+    DefaultCredential: z.string().nullable().describe(`
+        * * Field Name: DefaultCredential
+        * * Display Name: Default Credential
+        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type MJCommunicationProviderEntityType = z.infer<typeof MJCommunicationProviderSchema>;
@@ -21112,6 +21513,184 @@ export const MJFeaturePipelineTypeSchema = z.object({
 export type MJFeaturePipelineTypeEntityType = z.infer<typeof MJFeaturePipelineTypeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Feature Pipeline Versions
+ */
+export const MJFeaturePipelineVersionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    RecordProcessID: z.string().describe(`
+        * * Field Name: RecordProcessID
+        * * Display Name: Record Process ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)`),
+    Version: z.number().describe(`
+        * * Field Name: Version
+        * * Display Name: Version
+        * * SQL Data Type: int
+        * * Description: Monotonic version number within the pipeline (1, 2, ...).`),
+    PinHash: z.string().describe(`
+        * * Field Name: PinHash
+        * * Display Name: Pin Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the pin (SpecHash, PromptVersionHash, AIModelID, ParametersHash). Unique per pipeline.`),
+    SpecHash: z.string().describe(`
+        * * Field Name: SpecHash
+        * * Display Name: Spec Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the output-affecting parts of the DataFeatureSpec (Context, Outputs, PipelineType, Escalation, PromptID, ProcessorExtensionKey) and the OutputMapping.`),
+    PromptID: z.string().nullable().describe(`
+        * * Field Name: PromptID
+        * * Display Name: Prompt
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: The pipeline prompt this version runs.`),
+    PromptVersionHash: z.string().nullable().describe(`
+        * * Field Name: PromptVersionHash
+        * * Display Name: Prompt Version Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: Prompt version hash (template text, outputs, constraint block, pipeline type, escalation) of this version.`),
+    AIModelID: z.string().nullable().describe(`
+        * * Field Name: AIModelID
+        * * Display Name: AI Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+        * * Description: Primary AI model of the prompt for this version.`),
+    ParametersHash: z.string().nullable().describe(`
+        * * Field Name: ParametersHash
+        * * Display Name: Parameters Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the prompt inference parameters for this version.`),
+    Status: z.union([z.literal('Active'), z.literal('Candidate'), z.literal('Refused'), z.literal('Retired')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Candidate
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Candidate
+    *   * Refused
+    *   * Retired
+        * * Description: Candidate (registered, not yet allowed to write), Active (the version runs write), Refused (golden-set result below threshold), Retired (superseded by a later Active version).`),
+    Gated: z.boolean().describe(`
+        * * Field Name: Gated
+        * * Display Name: Gated
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when the pipeline declares DataFeatureSpec.Activation: the version can become Active only through a stored golden-set result at or above Threshold.`),
+    GoldenSetTestID: z.string().nullable().describe(`
+        * * Field Name: GoldenSetTestID
+        * * Display Name: Golden Set Test
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tests (vwTests.ID)
+        * * Description: The MJ: Tests row holding the golden set this version was evaluated on.`),
+    GoldenSetTestRunID: z.string().nullable().describe(`
+        * * Field Name: GoldenSetTestRunID
+        * * Display Name: Golden Set Test Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+        * * Description: The MJ: Test Runs row of the evaluation whose result is stored here.`),
+    Metric: z.literal('accuracy').nullable().describe(`
+        * * Field Name: Metric
+        * * Display Name: Metric
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * accuracy
+        * * Description: Metric of the stored result: accuracy.`),
+    Threshold: z.number().nullable().describe(`
+        * * Field Name: Threshold
+        * * Display Name: Threshold
+        * * SQL Data Type: float(53)
+        * * Description: Declared activation threshold copied from DataFeatureSpec.Activation at evaluation time.`),
+    ResultValue: z.number().nullable().describe(`
+        * * Field Name: ResultValue
+        * * Display Name: Result Value
+        * * SQL Data Type: float(53)
+        * * Description: Point estimate of the metric (the lowest per-output value when the pipeline has several outputs).`),
+    ResultLower: z.number().nullable().describe(`
+        * * Field Name: ResultLower
+        * * Display Name: Result Lower Bound
+        * * SQL Data Type: float(53)
+        * * Description: Lower bound of the 95% Wilson interval of ResultValue.`),
+    ResultUpper: z.number().nullable().describe(`
+        * * Field Name: ResultUpper
+        * * Display Name: Result Upper Bound
+        * * SQL Data Type: float(53)
+        * * Description: Upper bound of the 95% Wilson interval of ResultValue.`),
+    ResultN: z.number().nullable().describe(`
+        * * Field Name: ResultN
+        * * Display Name: Result Sample Size (N)
+        * * SQL Data Type: int
+        * * Description: Number of golden cases scored.`),
+    ResultDetails: z.string().nullable().describe(`
+        * * Field Name: ResultDetails
+        * * Display Name: Result Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON per-output results (correct, n, value, interval) and the per-case answers of the evaluation.`),
+    ActivatedAt: z.date().nullable().describe(`
+        * * Field Name: ActivatedAt
+        * * Display Name: Activated At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the version became Active.`),
+    ApprovedByUserID: z.string().nullable().describe(`
+        * * Field Name: ApprovedByUserID
+        * * Display Name: Approved By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user whose run activated the version (for an unattended activation, the Feature Pipeline Version Steward job's user).`),
+    RetiredAt: z.date().nullable().describe(`
+        * * Field Name: RetiredAt
+        * * Display Name: Retired At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When a later Active version superseded this one.`),
+    BackfilledAt: z.date().nullable().describe(`
+        * * Field Name: BackfilledAt
+        * * Display Name: Backfilled At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    RecordProcess: z.string().describe(`
+        * * Field Name: RecordProcess
+        * * Display Name: Record Process
+        * * SQL Data Type: nvarchar(255)`),
+    Prompt: z.string().nullable().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt Text
+        * * SQL Data Type: nvarchar(255)`),
+    AIModel: z.string().nullable().describe(`
+        * * Field Name: AIModel
+        * * Display Name: AI Model Name
+        * * SQL Data Type: nvarchar(50)`),
+    GoldenSetTest: z.string().nullable().describe(`
+        * * Field Name: GoldenSetTest
+        * * Display Name: Golden Set Test Name
+        * * SQL Data Type: nvarchar(255)`),
+    GoldenSetTestRun: z.string().nullable().describe(`
+        * * Field Name: GoldenSetTestRun
+        * * Display Name: Golden Set Test Run Name
+        * * SQL Data Type: nvarchar(255)`),
+    ApprovedByUser: z.string().nullable().describe(`
+        * * Field Name: ApprovedByUser
+        * * Display Name: Approved By User Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJFeaturePipelineVersionEntityType = z.infer<typeof MJFeaturePipelineVersionSchema>;
+
+/**
  * zod schema definition for the entity MJ: Feature Value Caches
  */
 export const MJFeatureValueCacheSchema = z.object({
@@ -21207,6 +21786,17 @@ export const MJFeatureValueCacheSchema = z.object({
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()
         * * Description: Timestamp when this record was last updated.`),
+    AIModelID: z.string().nullable().describe(`
+        * * Field Name: AIModelID
+        * * Display Name: AI Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+        * * Description: Primary AI model of the prompt that computed this cached result. Part of the cache key.`),
+    ParametersHash: z.string().nullable().describe(`
+        * * Field Name: ParametersHash
+        * * Display Name: Parameters Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the prompt's inference parameters when this result was computed. Part of the cache key.`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process Name
@@ -21215,6 +21805,10 @@ export const MJFeatureValueCacheSchema = z.object({
         * * Field Name: Prompt
         * * Display Name: Prompt Name
         * * SQL Data Type: nvarchar(255)`),
+    AIModel: z.string().nullable().describe(`
+        * * Field Name: AIModel
+        * * Display Name: AI Model
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type MJFeatureValueCacheEntityType = z.infer<typeof MJFeatureValueCacheSchema>;
@@ -21343,6 +21937,42 @@ export const MJFeatureValueSchema = z.object({
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()
         * * Description: Timestamp when this record was last updated.`),
+    PipelineVersion: z.number().nullable().describe(`
+        * * Field Name: PipelineVersion
+        * * Display Name: Pipeline Version
+        * * SQL Data Type: int
+        * * Description: Version of the Feature Pipeline (MJ: Feature Pipeline Versions.Version) that computed this value; part of the FeatureValueKey.`),
+    AIModelID: z.string().nullable().describe(`
+        * * Field Name: AIModelID
+        * * Display Name: AI Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+        * * Description: Primary AI model the pipeline's prompt is configured to run (highest-priority Active AI Prompt Model). Part of the FeatureValueKey; the model that actually answered is on the linked AI Prompt Run.`),
+    ParametersHash: z.string().nullable().describe(`
+        * * Field Name: ParametersHash
+        * * Display Name: Parameters Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the prompt's inference parameters (temperature, topP, topK, minP, penalties, seed, response format, effort level, model parameters). Part of the FeatureValueKey.`),
+    InputHash: z.string().nullable().describe(`
+        * * Field Name: InputHash
+        * * Display Name: Input Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the normalized input the value was computed from (the Dedup Cache key hash when the pipeline caches). Part of the FeatureValueKey.`),
+    ValueKeyHash: z.string().nullable().describe(`
+        * * Field Name: ValueKeyHash
+        * * Display Name: Value Key Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the canonical FeatureValueKey (entity, record, feature, pipeline version, prompt version hash, AI model, parameters hash, input hash, source). Unique per pipeline: re-computing the same key updates the row instead of inserting a duplicate.`),
+    Source: z.union([z.literal('Human'), z.literal('Pipeline')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pipeline
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Human
+    *   * Pipeline
+        * * Description: Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (entered by a person, which write-back leaves in place).`),
     RecordProcess: z.string().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process
@@ -21363,6 +21993,10 @@ export const MJFeatureValueSchema = z.object({
         * * Field Name: FeatureValueCache
         * * Display Name: Feature Value Cache
         * * SQL Data Type: nvarchar(500)`),
+    AIModel: z.string().nullable().describe(`
+        * * Field Name: AIModel
+        * * Display Name: AI Model Details
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type MJFeatureValueEntityType = z.infer<typeof MJFeatureValueSchema>;
@@ -26850,6 +27484,11 @@ export const MJProcessRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Warnings: z.string().nullable().describe(`
+        * * Field Name: Warnings
+        * * Display Name: Warnings
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of the record's non-fatal problems (for example, its Dedup Cache entry could not be stored) on a record that otherwise succeeded. NULL when there were none. Failures are in ErrorMessage, never here.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
@@ -27033,6 +27672,11 @@ export const MJProcessRunSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.`),
+    ResultSummary: z.string().nullable().describe(`
+        * * Field Name: ResultSummary
+        * * Display Name: Result Summary
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON summary of a Feature Pipeline run (FeaturePipelineRunResult); NULL for other work types.`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process Name
@@ -35690,6 +36334,16 @@ export const MJThemeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    LoginScreen: z.string().nullable().describe(`
+        * * Field Name: LoginScreen
+        * * Display Name: Login Screen
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The published sign-in page design as JSON (the LoginDesign shape from @memberjunction/theme-engine): layout, background, colors and the blocks in each login-screen region. The default Active theme's value is served unauthenticated to draw the Explorer login screen. NULL means the stock login screen.`),
+    LoginScreenDraft: z.string().nullable().describe(`
+        * * Field Name: LoginScreenDraft
+        * * Display Name: Login Screen Draft
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The sign-in page design being edited in Login Studio, as JSON in the same shape as LoginScreen. Never served publicly; publishing copies it to LoginScreen. NULL means no draft.`),
 });
 
 export type MJThemeEntityType = z.infer<typeof MJThemeSchema>;
@@ -36410,16 +37064,17 @@ export const MJUserRoutineSchema = z.object({
     *   * Disabled
     *   * Paused
         * * Description: Lifecycle status: Active (eligible to run), Paused (temporarily off), Disabled (off).`),
-    RoutineType: z.union([z.literal('Monitoring'), z.literal('Scheduled')]).describe(`
+    RoutineType: z.union([z.literal('AgentWake'), z.literal('Monitoring'), z.literal('Scheduled')]).describe(`
         * * Field Name: RoutineType
         * * Display Name: Routine Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Scheduled
     * * Value List Type: List
     * * Possible Values 
+    *   * AgentWake
     *   * Monitoring
     *   * Scheduled
-        * * Description: Scheduled (always notify per NotifyCondition) or Monitoring (intended for OnChange detection via result hashing).`),
+        * * Description: Scheduled (user cron routine), Monitoring (OnChange detection via result hashing), or AgentWake (autonomous agent self-scheduled wake/monitor entry, hidden from the default user cron list).`),
     TargetType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Prompt')]).describe(`
         * * Field Name: TargetType
         * * Display Name: Target Type
@@ -36450,11 +37105,11 @@ export const MJUserRoutineSchema = z.object({
         * * Display Name: Requested Skills
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional JSON array of MJ: AI Skills IDs to pre-activate when the routine target is an Agent — threaded as ExecuteAgentParams.requestedSkillIDs so the agent starts each scheduled run with the requested skills' instructions and tools in effect (subject to all availability gates; ActivationMode does not gate this explicit-request path). Ignored for Action/Prompt targets.`),
-    CronExpression: z.string().describe(`
+    CronExpression: z.string().nullable().describe(`
         * * Field Name: CronExpression
         * * Display Name: Cron Expression
         * * SQL Data Type: nvarchar(100)
-        * * Description: Standard cron expression evaluated by the dispatcher to determine when the routine is due.`),
+        * * Description: Standard cron expression evaluated by the dispatcher for Recurring and Adaptive routines. NULL when ScheduleMode is OneShot.`),
     StartAt: z.date().nullable().describe(`
         * * Field Name: StartAt
         * * Display Name: Start At
@@ -36543,6 +37198,28 @@ export const MJUserRoutineSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
         * * Description: The dedicated conversation this routine's Agent runs append to (created on first conversation-mode run, Application-scoped so it stays out of the default chat list). NULL when the routine has never run in conversation mode.`),
+    ScheduleMode: z.union([z.literal('Adaptive'), z.literal('OneShot'), z.literal('Recurring')]).describe(`
+        * * Field Name: ScheduleMode
+        * * Display Name: Schedule Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Recurring
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Adaptive
+    *   * OneShot
+    *   * Recurring
+        * * Description: Scheduling mode: Recurring (fixed cron schedule), OneShot (single future wake at NextRunAt, auto-disables after firing unless rescheduled by the agent), or Adaptive (fallback CronExpression combined with agent-set NextRunAt and event/condition wake gates).`),
+    WakeConfiguration: z.any().nullable().describe(`
+        * * Field Name: WakeConfiguration
+        * * Display Name: Wake Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJUserRoutineEntity_IRoutineWakeConfiguration
+        * * Description: Optional JSON configuration (IRoutineWakeConfiguration) specifying watchedEntities for durable watermark/RecordChange polling and the 3-tier wake gate (Tier 1 SafeExpressionEvaluator, Tier 2 AIDecisionRunner fast decision model, Tier 3 AIPromptRunner metadata prompt).`),
+    LastCheckedAt: z.date().nullable().describe(`
+        * * Field Name: LastCheckedAt
+        * * Display Name: Last Checked At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when the dispatcher last evaluated this routine's watched entities and wake gate conditions.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User Name
@@ -45348,7 +46025,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     * * Field Name: PayloadAtStart
     * * Display Name: Payload At Start
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON serialization of the Payload state at the start of this step
+    * * Description: JSON serialization of the Payload state at the start of this step. NULL when PayloadAtStartSourceStepID is set; the starting payload is then the PayloadAtEnd of that step.
     */
     get PayloadAtStart(): string | null {
         return this.Get('PayloadAtStart');
@@ -45361,7 +46038,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     * * Field Name: PayloadAtEnd
     * * Display Name: Payload At End
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON serialization of the Payload state at the end of this step
+    * * Description: JSON serialization of the Payload state at the end of this step. NULL when PayloadAtEndSourceStepID is set; the ending payload is then the PayloadAtEnd of that step.
     */
     get PayloadAtEnd(): string | null {
         return this.Get('PayloadAtEnd');
@@ -45524,6 +46201,34 @@ detailed information about what validation rules failed.
     }
 
     /**
+    * * Field Name: PayloadAtStartSourceStepID
+    * * Display Name: Payload At Start Source Step ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+    * * Description: When set, PayloadAtStart is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's starting payload.
+    */
+    get PayloadAtStartSourceStepID(): string | null {
+        return this.Get('PayloadAtStartSourceStepID');
+    }
+    set PayloadAtStartSourceStepID(value: string | null) {
+        this.Set('PayloadAtStartSourceStepID', value);
+    }
+
+    /**
+    * * Field Name: PayloadAtEndSourceStepID
+    * * Display Name: Payload At End Source Step ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+    * * Description: When set, PayloadAtEnd is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's ending payload.
+    */
+    get PayloadAtEndSourceStepID(): string | null {
+        return this.Get('PayloadAtEndSourceStepID');
+    }
+    set PayloadAtEndSourceStepID(value: string | null) {
+        this.Set('PayloadAtEndSourceStepID', value);
+    }
+
+    /**
     * * Field Name: AgentRun
     * * Display Name: Agent Run Context
     * * SQL Data Type: nvarchar(255)
@@ -45539,6 +46244,24 @@ detailed information about what validation rules failed.
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: PayloadAtStartSourceStep
+    * * Display Name: Payload At Start Source Step
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PayloadAtStartSourceStep(): string | null {
+        return this.Get('PayloadAtStartSourceStep');
+    }
+
+    /**
+    * * Field Name: PayloadAtEndSourceStep
+    * * Display Name: Payload At End Source Step
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PayloadAtEndSourceStep(): string | null {
+        return this.Get('PayloadAtEndSourceStep');
     }
 
     /**
@@ -45909,7 +46632,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     * * Field Name: Result
     * * Display Name: Result
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Final result or output from the agent execution, stored as JSON or text
+    * * Description: Deprecated. No longer written by agent runs; use FinalPayload, which holds the same value. Kept for existing rows and external readers.
     */
     get Result(): string | null {
         return this.Get('Result');
@@ -47616,6 +48339,244 @@ export class MJAIAgentSessionChannelEntity extends BaseEntity<MJAIAgentSessionCh
 
 
 /**
+ * MJ: AI Agent Session Recording Shards - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentSessionRecordingShard
+ * * Base View: vwAIAgentSessionRecordingShards
+ * * @description One 5-second Opus recording shard (MJOPUS1 format) uploaded by the browser during a client-direct realtime call, staged here until the server assembles the session recording. Deleted once the recording is Complete, or by the session janitor after its lookback window.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Session Recording Shards')
+export class MJAIAgentSessionRecordingShardEntity extends BaseEntity<MJAIAgentSessionRecordingShardEntityType> {
+    /**
+    * Loads the MJ: AI Agent Session Recording Shards record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Session Recording Shards record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentSessionRecordingShardEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Session Recording Shards entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Index: The index must be zero or a positive number.
+    * * Table-Level: Start sample, sample count, and byte count must each be zero or greater to ensure recording data measurements are valid and non-negative.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateIndexNonNegative(result);
+        this.ValidateStartSampleSampleCountAndBytesNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The index must be zero or a positive number.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateIndexNonNegative(result: ValidationResult) {
+    	if (this.Index != null && this.Index < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Index",
+    			"Index must be greater than or equal to 0.",
+    			this.Index,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Start sample, sample count, and byte count must each be zero or greater to ensure recording data measurements are valid and non-negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateStartSampleSampleCountAndBytesNonNegative(result: ValidationResult) {
+    	if (this.StartSample != null && this.StartSample < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"StartSample",
+    			"Start sample must be greater than or equal to 0.",
+    			this.StartSample,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.SampleCount != null && this.SampleCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"SampleCount",
+    			"Sample count must be greater than or equal to 0.",
+    			this.SampleCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.Bytes != null && this.Bytes < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Bytes",
+    			"Bytes must be greater than or equal to 0.",
+    			this.Bytes,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentSessionID
+    * * Display Name: Agent Session
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)
+    */
+    get AgentSessionID(): string {
+        return this.Get('AgentSessionID');
+    }
+    set AgentSessionID(value: string) {
+        this.Set('AgentSessionID', value);
+    }
+
+    /**
+    * * Field Name: Index
+    * * Display Name: Index
+    * * SQL Data Type: int
+    * * Description: Zero-based position of the shard in the recording. Unique per session; a retry of the same index with the same bytes is acknowledged, with different bytes it is refused.
+    */
+    get Index(): number {
+        return this.Get('Index');
+    }
+    set Index(value: number) {
+        this.Set('Index', value);
+    }
+
+    /**
+    * * Field Name: StartSample
+    * * Display Name: Start Sample
+    * * SQL Data Type: bigint
+    * * Description: Sample position (48 kHz) where this shard's audio starts in the recording.
+    */
+    get StartSample(): number {
+        return this.Get('StartSample');
+    }
+    set StartSample(value: number) {
+        this.Set('StartSample', value);
+    }
+
+    /**
+    * * Field Name: SampleCount
+    * * Display Name: Sample Count
+    * * SQL Data Type: int
+    * * Description: Number of audio samples (48 kHz) the shard covers.
+    */
+    get SampleCount(): number {
+        return this.Get('SampleCount');
+    }
+    set SampleCount(value: number) {
+        this.Set('SampleCount', value);
+    }
+
+    /**
+    * * Field Name: Bytes
+    * * Display Name: Bytes
+    * * SQL Data Type: int
+    * * Description: Size of Data in bytes.
+    */
+    get Bytes(): number {
+        return this.Get('Bytes');
+    }
+    set Bytes(value: number) {
+        this.Set('Bytes', value);
+    }
+
+    /**
+    * * Field Name: Sha256
+    * * Display Name: SHA-256
+    * * SQL Data Type: nvarchar(64)
+    * * Description: Lowercase hex SHA-256 of Data; decides whether a repeated upload of the same index is a retry or a conflict.
+    */
+    get Sha256(): string {
+        return this.Get('Sha256');
+    }
+    set Sha256(value: string) {
+        this.Set('Sha256', value);
+    }
+
+    /**
+    * * Field Name: Data
+    * * Display Name: Data
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The shard bytes as uploaded (MJOPUS1 header followed by length-prefixed Opus packets).
+    */
+    get Data(): string {
+        return this.Get('Data');
+    }
+    set Data(value: string) {
+        this.Set('Data', value);
+    }
+
+    /**
+    * * Field Name: ReceivedAt
+    * * Display Name: Received At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the server first stored this shard.
+    */
+    get ReceivedAt(): Date {
+        return this.Get('ReceivedAt');
+    }
+    set ReceivedAt(value: Date) {
+        this.Set('ReceivedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: AI Agent Sessions - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentSession
@@ -47925,6 +48886,79 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     }
     set LinkedRecordID(value: string | null) {
         this.Set('LinkedRecordID', value);
+    }
+
+    /**
+    * * Field Name: RecordingStatus
+    * * Display Name: Recording Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Assembling
+    *   * Complete
+    *   * Failed
+    *   * Partial
+    *   * Pending
+    * * Description: State of the server-side recording assembly for a client-direct session recorded as Opus shards: Pending (shards or a terminal signal are waiting to be assembled), Assembling (claimed by one server instance), Complete (recording.wav holds every captured sample), Partial (assembled with silent gaps, listed in RecordingGaps), Failed (a shard conflict or an assembly error needs a human). NULL when the session was not recorded this way.
+    */
+    get RecordingStatus(): 'Assembling' | 'Complete' | 'Failed' | 'Partial' | 'Pending' | null {
+        return this.Get('RecordingStatus');
+    }
+    set RecordingStatus(value: 'Assembling' | 'Complete' | 'Failed' | 'Partial' | 'Pending' | null) {
+        this.Set('RecordingStatus', value);
+    }
+
+    /**
+    * * Field Name: RecordingExpectedShards
+    * * Display Name: Expected Shards
+    * * SQL Data Type: int
+    * * Description: Number of recording shards the browser reported in its terminal signal (last shard index + 1). NULL until a terminal signal arrives.
+    */
+    get RecordingExpectedShards(): number | null {
+        return this.Get('RecordingExpectedShards');
+    }
+    set RecordingExpectedShards(value: number | null) {
+        this.Set('RecordingExpectedShards', value);
+    }
+
+    /**
+    * * Field Name: RecordingCapturedSamples
+    * * Display Name: Captured Samples
+    * * SQL Data Type: bigint
+    * * Description: Total audio samples (48 kHz mono) the browser captured, from its terminal signal. The assembled recording.wav is exactly this long. NULL until a terminal signal arrives.
+    */
+    get RecordingCapturedSamples(): number | null {
+        return this.Get('RecordingCapturedSamples');
+    }
+    set RecordingCapturedSamples(value: number | null) {
+        this.Set('RecordingCapturedSamples', value);
+    }
+
+    /**
+    * * Field Name: RecordingGaps
+    * * Display Name: Recording Gaps
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of the silent gaps in a Partial recording: [{startSample, sampleCount, indexes}], sample positions at 48 kHz and the shard indexes that were missing. Empty or NULL when nothing is missing.
+    */
+    get RecordingGaps(): string | null {
+        return this.Get('RecordingGaps');
+    }
+    set RecordingGaps(value: string | null) {
+        this.Set('RecordingGaps', value);
+    }
+
+    /**
+    * * Field Name: RecordingAssemblyVersion
+    * * Display Name: Assembly Version
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Incremented by every assembly claim. The assembler finishes only if the version is still the one it claimed, so a newer assembly always wins over a slower older one.
+    */
+    get RecordingAssemblyVersion(): number {
+        return this.Get('RecordingAssemblyVersion');
+    }
+    set RecordingAssemblyVersion(value: number) {
+        this.Set('RecordingAssemblyVersion', value);
     }
 
     /**
@@ -49221,6 +50255,602 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     */
     get ConversationSummaryPrompt(): string | null {
         return this.Get('ConversationSummaryPrompt');
+    }
+}
+
+
+/**
+ * Per-entity or wildcard entity access rule stored in the `EntityAccessRules` JSON array
+ * on `MJ: AI Agent User Policies` (`AIAgentUserPolicy.EntityAccessRules`).
+ *
+ * The owning user's MJ permissions (`contextUser`: Entity CRUD permissions, role-based
+ * Row-Level Security filters, and role-based Field-Level Security permissions) are the
+ * non-negotiable ceiling. Rules in this array strictly narrow access below that ceiling:
+ * - CRUD narrowing (`Deny`, `ReadOnly`, `ReadWrite`, `RequireApprovalOnWrite`)
+ * - Additional RLS narrowing (extra `RowLevelSecurityFilter` ID, SQL `whereClause` validated
+ *   via `SQLExpressionValidator`, or in-memory `recordConditionExpression` evaluated via
+ *   `SafeExpressionEvaluator`)
+ * - Additional FLS narrowing (`deniedFields`, `readOnlyFields`, `requireApprovalFields`)
+ * - Time-of-day / day-of-week / date-range windows (`timeWindows`)
+ */
+export interface MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule {
+    /**
+     * Exact MJ Entity Name or wildcard pattern (e.g. `"*"`, `"MJ_BizApps_Accounting:*"`,
+     * `"MJ_BizApps_Sales: Deals"`).
+     */
+    entityPattern: string;
+
+    /**
+     * Maximum CRUD mode allowed on matching entities. Intersected with `contextUser`'s
+     * actual `EntityPermission` — never grants access the user does not already hold.
+     */
+    access: 'Deny' | 'ReadOnly' | 'ReadWrite' | 'RequireApprovalOnWrite';
+
+    /**
+     * Optional Row-Level Security (RLS) narrowing — AND-combined with the user's role RLS.
+     */
+    rlsNarrowing?: {
+        /** Optional ID of a reusable `MJ: Row Level Security Filters` record. */
+        rowLevelSecurityFilterId?: string;
+        /**
+         * Inline SQL filter validated via `SQLExpressionValidator` (`context: 'where_clause'`).
+         * Supports user tokens such as `{{UserID}}` and `{{UserEmail}}`.
+         */
+        whereClause?: string;
+        /**
+         * Safe AST-validated boolean expression evaluated via `SafeExpressionEvaluator`
+         * against `{ record, user, now }` before returning or saving a `BaseEntity`.
+         */
+        recordConditionExpression?: string;
+    };
+
+    /**
+     * Optional Field-Level Security (FLS) narrowing — merged with the user's role FLS.
+     * Each array supports exact field names or `*` wildcard patterns (e.g. `["Salary", "*SSN*"]`).
+     */
+    flsNarrowing?: {
+        /** Fields stripped from read projections and blocked from write mutations. */
+        deniedFields?: string[];
+        /** Fields readable by the agent, but blocked from modification on Create/Update. */
+        readOnlyFields?: string[];
+        /** Modifying any matching field escalates the save to a user approval request (`AIAgentRequest`). */
+        requireApprovalFields?: string[];
+    };
+
+    /**
+     * Optional time-of-day / day-of-week windows restricting when access (especially writes)
+     * is permitted on matching entities.
+     */
+    timeWindows?: Array<{
+        /** Allowed days of week (e.g. `['Mon', 'Tue', 'Wed', 'Thu', 'Fri']`). */
+        daysOfWeek?: Array<'Sun' | 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat'>;
+        /** 24-hour start time in `HH:mm` format (e.g. `"08:00"`). */
+        startTime?: string;
+        /** 24-hour end time in `HH:mm` format (e.g. `"18:00"`). */
+        endTime?: string;
+        /** IANA timezone (e.g. `"America/Chicago"`); defaults to UTC when omitted. */
+        timezone?: string;
+        /** Optional ISO-8601 start timestamp for temporary grants. */
+        validFromISO?: string;
+        /** Optional ISO-8601 end timestamp for temporary grants. */
+        validUntilISO?: string;
+        /**
+         * Behavior when an operation is attempted outside the allowed window:
+         * - `'Deny'`: Reject immediately
+         * - `'ReadOnly'`: Allow reads, block writes
+         * - `'RequireApproval'`: Create an `AIAgentRequest` for user approval
+         * - `'DeferUntilNextWindow'`: Return `nextWindowStartISO` so the agent can self-schedule an `AgentWake`
+         */
+        outsideWindowBehavior?: 'Deny' | 'ReadOnly' | 'RequireApproval' | 'DeferUntilNextWindow';
+    }>;
+}
+
+/**
+ * Per-action or wildcard action policy rule stored in the `ActionPolicyRules` JSON array
+ * on `MJ: AI Agent User Policies` (`AIAgentUserPolicy.ActionPolicyRules`).
+ *
+ * Evaluated by `BaseAgent` before executing any action or tool on behalf of the user.
+ */
+export interface MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule {
+    /**
+     * Exact Action Name, category prefix, or `"*"` wildcard pattern
+     * (e.g. `"Send Single Message"`, `"*Email*"`, `"Place Outbound*"`).
+     */
+    actionPattern: string;
+
+    /**
+     * Execution gate applied when this rule matches:
+     * - `'Allow'`: Proceed automatically (within the user's permission ceiling)
+     * - `'RequireApproval'`: Pause and create an `MJ: AI Agent Requests` approval item
+     * - `'Deny'`: Block execution and return a policy denial message to the agent
+     */
+    policy: 'Allow' | 'RequireApproval' | 'Deny';
+
+    /**
+     * Optional `SafeExpressionEvaluator` boolean condition evaluated against
+     * `{ params, user, now }` (e.g. `"params.Amount > 500 || params.IsExternal === true"`).
+     * When omitted, the rule applies unconditionally to matching actions.
+     */
+    conditionExpression?: string;
+
+    /**
+     * Optional time-of-day / day-of-week windows restricting when the action may run
+     * (e.g. allowing outbound follow-up nudges only Monday–Friday 08:00–18:00).
+     */
+    timeWindows?: Array<{
+        /** Allowed days of week (e.g. `['Mon', 'Tue', 'Wed', 'Thu', 'Fri']`). */
+        daysOfWeek?: Array<'Sun' | 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat'>;
+        /** 24-hour start time in `HH:mm` format (e.g. `"08:00"`). */
+        startTime?: string;
+        /** 24-hour end time in `HH:mm` format (e.g. `"18:00"`). */
+        endTime?: string;
+        /** IANA timezone (e.g. `"America/Chicago"`); defaults to UTC when omitted. */
+        timezone?: string;
+        /** Optional ISO-8601 start timestamp for temporary grants. */
+        validFromISO?: string;
+        /** Optional ISO-8601 end timestamp for temporary grants. */
+        validUntilISO?: string;
+        /**
+         * Behavior when the action is invoked outside the allowed window:
+         * - `'Deny'`: Reject immediately
+         * - `'RequireApproval'`: Create an `AIAgentRequest` for user approval
+         * - `'DeferUntilNextWindow'`: Return `nextWindowStartISO` so the agent can self-schedule an `AgentWake`
+         */
+        outsideWindowBehavior?: 'Deny' | 'ReadOnly' | 'RequireApproval' | 'DeferUntilNextWindow';
+    }>;
+}
+
+/**
+ * MJ: AI Agent User Policies - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentUserPolicy
+ * * Base View: vwAIAgentUserPolicies
+ * * @description Per-(Agent, User) policy and personalization record. The owning user's MJ permissions (Entity CRUD, Role RLS, Role FLS) form the hard ceiling; this table defines strict narrowing rules, channel modes, time windows, and approval gates.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent User Policies')
+export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEntityType> {
+    /**
+    * Loads the MJ: AI Agent User Policies record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent User Policies record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentUserPolicyEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: The AI Agent governed by this user policy.
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The MJ User who owns this policy and under whose security principal the agent executes.
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: DisplayNameOverride
+    * * Display Name: Display Name Override
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional user-personalized display name for this agent (e.g., "Maya" for a user's Chief of Staff).
+    */
+    get DisplayNameOverride(): string | null {
+        return this.Get('DisplayNameOverride');
+    }
+    set DisplayNameOverride(value: string | null) {
+        this.Set('DisplayNameOverride', value);
+    }
+
+    /**
+    * * Field Name: PreferredPersonaID
+    * * Display Name: Preferred Persona
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)
+    * * Description: Optional AI Persona selected by the user for this agent's voice and communication style.
+    */
+    get PreferredPersonaID(): string | null {
+        return this.Get('PreferredPersonaID');
+    }
+    set PreferredPersonaID(value: string | null) {
+        this.Set('PreferredPersonaID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Paused
+    * * Description: Policy lifecycle status: Active, Paused (autonomous wakes suspended), or Disabled.
+    */
+    get Status(): 'Active' | 'Disabled' | 'Paused' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Paused') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: OnboardingStatus
+    * * Display Name: Onboarding Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: NotStarted
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * InProgress
+    *   * NotStarted
+    * * Description: Onboarding progression for this user-agent pair: NotStarted, InProgress, or Completed.
+    */
+    get OnboardingStatus(): 'Completed' | 'InProgress' | 'NotStarted' {
+        return this.Get('OnboardingStatus');
+    }
+    set OnboardingStatus(value: 'Completed' | 'InProgress' | 'NotStarted') {
+        this.Set('OnboardingStatus', value);
+    }
+
+    /**
+    * * Field Name: OnboardedAt
+    * * Display Name: Onboarded At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the user completed onboarding for this agent.
+    */
+    get OnboardedAt(): Date | null {
+        return this.Get('OnboardedAt');
+    }
+    set OnboardedAt(value: Date | null) {
+        this.Set('OnboardedAt', value);
+    }
+
+    /**
+    * * Field Name: CoordinationMode
+    * * Display Name: Coordination Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Observer
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Autonomous
+    *   * Coordinator
+    *   * Observer
+    * * Description: Operating posture: Observer (tracks and reports only; never nudges others), Coordinator (nudges internal task/priority owners and peer CoS agents), or Autonomous (proactively coordinates within approval boundaries).
+    */
+    get CoordinationMode(): 'Autonomous' | 'Coordinator' | 'Observer' {
+        return this.Get('CoordinationMode');
+    }
+    set CoordinationMode(value: 'Autonomous' | 'Coordinator' | 'Observer') {
+        this.Set('CoordinationMode', value);
+    }
+
+    /**
+    * * Field Name: DefaultDataAccessMode
+    * * Display Name: Default Data Access Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: UserCeiling
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AllowListOnly
+    *   * ReadOnly
+    *   * UserCeiling
+    * * Description: Default entity access ceiling when no explicit rule in EntityAccessRules matches: UserCeiling (inherit user's MJ permissions), ReadOnly (read permitted entities, block all writes unless explicitly allowed), or AllowListOnly (deny all entities not listed in EntityAccessRules).
+    */
+    get DefaultDataAccessMode(): 'AllowListOnly' | 'ReadOnly' | 'UserCeiling' {
+        return this.Get('DefaultDataAccessMode');
+    }
+    set DefaultDataAccessMode(value: 'AllowListOnly' | 'ReadOnly' | 'UserCeiling') {
+        this.Set('DefaultDataAccessMode', value);
+    }
+
+    /**
+    * * Field Name: EmailChannelMode
+    * * Display Name: Email Channel Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: DraftOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Disabled
+    *   * DraftOnly
+    *   * ReadOnly
+    *   * SendAsAgent
+    *   * SendAsUser
+    * * Description: Email channel permission level: Disabled, ReadOnly, DraftOnly, SendAsAgent, or SendAsUser.
+    */
+    get EmailChannelMode(): 'Disabled' | 'DraftOnly' | 'ReadOnly' | 'SendAsAgent' | 'SendAsUser' {
+        return this.Get('EmailChannelMode');
+    }
+    set EmailChannelMode(value: 'Disabled' | 'DraftOnly' | 'ReadOnly' | 'SendAsAgent' | 'SendAsUser') {
+        this.Set('EmailChannelMode', value);
+    }
+
+    /**
+    * * Field Name: PhoneChannelMode
+    * * Display Name: Phone Channel Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: InboundOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Disabled
+    *   * InboundOnly
+    *   * OutboundAutonomous
+    *   * OutboundWithApproval
+    * * Description: Telephony channel permission level: Disabled, InboundOnly, OutboundWithApproval, or OutboundAutonomous.
+    */
+    get PhoneChannelMode(): 'Disabled' | 'InboundOnly' | 'OutboundAutonomous' | 'OutboundWithApproval' {
+        return this.Get('PhoneChannelMode');
+    }
+    set PhoneChannelMode(value: 'Disabled' | 'InboundOnly' | 'OutboundAutonomous' | 'OutboundWithApproval') {
+        this.Set('PhoneChannelMode', value);
+    }
+
+    /**
+    * * Field Name: MessagingChannelMode
+    * * Display Name: Messaging Channel Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Enabled
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Disabled
+    *   * Enabled
+    * * Description: Messaging channel permission level (Slack/Teams/In-App): Disabled or Enabled.
+    */
+    get MessagingChannelMode(): 'Disabled' | 'Enabled' {
+        return this.Get('MessagingChannelMode');
+    }
+    set MessagingChannelMode(value: 'Disabled' | 'Enabled') {
+        this.Set('MessagingChannelMode', value);
+    }
+
+    /**
+    * * Field Name: CalendarChannelMode
+    * * Display Name: Calendar Channel Mode
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: ReadOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Autonomous
+    *   * Disabled
+    *   * ProposeWithApproval
+    *   * ReadOnly
+    * * Description: Calendar channel permission level: Disabled, ReadOnly (check events & free/busy only), ProposeWithApproval (create/modify events or send invites only with explicit user approval), or Autonomous.
+    */
+    get CalendarChannelMode(): 'Autonomous' | 'Disabled' | 'ProposeWithApproval' | 'ReadOnly' {
+        return this.Get('CalendarChannelMode');
+    }
+    set CalendarChannelMode(value: 'Autonomous' | 'Disabled' | 'ProposeWithApproval' | 'ReadOnly') {
+        this.Set('CalendarChannelMode', value);
+    }
+
+    /**
+    * * Field Name: AllowInterAgentCoordination
+    * * Display Name: Allow Inter-Agent Coordination
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this user's agent may send or respond to structured coordination requests from other users' Chief of Staff agents.
+    */
+    get AllowInterAgentCoordination(): boolean {
+        return this.Get('AllowInterAgentCoordination');
+    }
+    set AllowInterAgentCoordination(value: boolean) {
+        this.Set('AllowInterAgentCoordination', value);
+    }
+
+    /**
+    * * Field Name: RequireApprovalForExternalComms
+    * * Display Name: Require Approval For External Comms
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, any external email, message, or outbound call to non-internal recipients requires explicit user approval via AIAgentRequest.
+    */
+    get RequireApprovalForExternalComms(): boolean {
+        return this.Get('RequireApprovalForExternalComms');
+    }
+    set RequireApprovalForExternalComms(value: boolean) {
+        this.Set('RequireApprovalForExternalComms', value);
+    }
+
+    /**
+    * * Field Name: RequireApprovalForFinancials
+    * * Display Name: Require Approval For Financials
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, financial commitments, purchases, or accounting/order approvals require explicit user approval.
+    */
+    get RequireApprovalForFinancials(): boolean {
+        return this.Get('RequireApprovalForFinancials');
+    }
+    set RequireApprovalForFinancials(value: boolean) {
+        this.Set('RequireApprovalForFinancials', value);
+    }
+
+    /**
+    * * Field Name: RequireApprovalForDestructiveActions
+    * * Display Name: Require Approval For Destructive Actions
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, deleting records or cancelling active workflows requires explicit user approval.
+    */
+    get RequireApprovalForDestructiveActions(): boolean {
+        return this.Get('RequireApprovalForDestructiveActions');
+    }
+    set RequireApprovalForDestructiveActions(value: boolean) {
+        this.Set('RequireApprovalForDestructiveActions', value);
+    }
+
+    /**
+    * * Field Name: AutoApproveAmountThreshold
+    * * Display Name: Auto Approve Amount Threshold
+    * * SQL Data Type: decimal(18, 2)
+    * * Description: Optional monetary threshold below which low-risk financial actions may proceed when RequireApprovalForFinancials is 0. NULL means no automatic monetary threshold.
+    */
+    get AutoApproveAmountThreshold(): number | null {
+        return this.Get('AutoApproveAmountThreshold');
+    }
+    set AutoApproveAmountThreshold(value: number | null) {
+        this.Set('AutoApproveAmountThreshold', value);
+    }
+
+    /**
+    * * Field Name: EntityAccessRules
+    * * Display Name: Entity Access Rules
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule>
+    * * Description: JSON array of IAgentUserEntityAccessRule objects defining per-entity or wildcard CRUD narrowing, additional Row-Level Security (RLS) filters, additional Field-Level Security (FLS) field masks, and allowed time windows.
+    */
+    get EntityAccessRules(): string | null {
+        return this.Get('EntityAccessRules');
+    }
+    set EntityAccessRules(value: string | null) {
+        this.Set('EntityAccessRules', value);
+    }
+
+    /**
+    * Typed accessor for EntityAccessRules — a live view of the parsed JSON as Array<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying EntityAccessRules field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get EntityAccessRulesObject(): Array<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule> | null {
+        return this.GetJSONFieldObject<Array<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule>>('EntityAccessRules');
+    }
+    set EntityAccessRulesObject(value: Array<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule> | null) {
+        this.SetJSONFieldObject<Array<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule>>('EntityAccessRules', value);
+    }
+
+    /**
+    * * Field Name: ActionPolicyRules
+    * * Display Name: Action Policy Rules
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule>
+    * * Description: JSON array of IAgentUserActionPolicyRule objects defining per-action Allow/RequireApproval/Deny policies, SafeExpressionEvaluator parameter conditions, and allowed time windows.
+    */
+    get ActionPolicyRules(): string | null {
+        return this.Get('ActionPolicyRules');
+    }
+    set ActionPolicyRules(value: string | null) {
+        this.Set('ActionPolicyRules', value);
+    }
+
+    /**
+    * Typed accessor for ActionPolicyRules — a live view of the parsed JSON as Array<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ActionPolicyRules field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ActionPolicyRulesObject(): Array<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule> | null {
+        return this.GetJSONFieldObject<Array<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule>>('ActionPolicyRules');
+    }
+    set ActionPolicyRulesObject(value: Array<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule> | null) {
+        this.SetJSONFieldObject<Array<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule>>('ActionPolicyRules', value);
+    }
+
+    /**
+    * * Field Name: InstructionsOverride
+    * * Display Name: Instructions Override
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional user-specific standing instructions injected into the agent's system context on every run.
+    */
+    get InstructionsOverride(): string | null {
+        return this.Get('InstructionsOverride');
+    }
+    set InstructionsOverride(value: string | null) {
+        this.Set('InstructionsOverride', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: PreferredPersona
+    * * Display Name: Preferred Persona Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get PreferredPersona(): string | null {
+        return this.Get('PreferredPersona');
     }
 }
 
@@ -51241,6 +52871,20 @@ export class MJAIBridgeAgentIdentityEntity extends BaseEntity<MJAIBridgeAgentIde
     }
 
     /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Optional owning MJ User when this email address, phone DID, or platform account identity is dedicated to a specific user's personal agent instance (such as their Chief of Staff). NULL for shared/org-wide agent identities.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
@@ -51256,6 +52900,15 @@ export class MJAIBridgeAgentIdentityEntity extends BaseEntity<MJAIBridgeAgentIde
     */
     get Provider(): string {
         return this.Get('Provider');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
     }
 }
 
@@ -61590,6 +63243,24 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     }
 
     /**
+    * * Field Name: TemplateDataCapture
+    * * Display Name: Template Data Capture
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Full
+    *   * None
+    *   * Referenced
+    * * Description: Which template inputs (data, templateData) prompt runs store in Messages: None (shape only), Referenced (only keys the template uses) or Full. NULL uses the server default.
+    */
+    get TemplateDataCapture(): 'Full' | 'None' | 'Referenced' | null {
+        return this.Get('TemplateDataCapture');
+    }
+    set TemplateDataCapture(value: 'Full' | 'None' | 'Referenced' | null) {
+        this.Set('TemplateDataCapture', value);
+    }
+
+    /**
     * * Field Name: Template
     * * Display Name: Template Text
     * * SQL Data Type: nvarchar(255)
@@ -66622,6 +68293,42 @@ export class MJActionLibraryEntity extends BaseEntity<MJActionLibraryEntityType>
 
 
 /**
+ * JSON Schema fragment for one Action parameter's value.
+ *
+ * Stored in the `ValueSchema` column of `MJ: Action Params`. CodeGen emits a typed
+ * `ValueSchemaObject` accessor that returns `MJActionParamEntity_IActionParamValueSchema | null`.
+ *
+ * When set, the native tool builder declares this schema to the model in place of the coarse
+ * `ValueType` mapping, and argument coercion follows it before the Action runs. For an `IsArray`
+ * param it describes ONE element; the builder wraps it in `{ type: 'array', items: … }`.
+ *
+ * Deliberately limited to the subset every tool-calling provider accepts (`type`, `description`,
+ * `enum`, `items`, `properties`, `required`). Keywords outside it (`oneOf`, `$ref`, `format`,
+ * `additionalProperties`, …) are rejected or handled differently from one provider to the next, so
+ * the interface does not offer them.
+ *
+ * @example { "type": "string", "enum": ["asc", "desc"] }
+ * @example { "type": "object", "properties": { "TopCount": { "type": "integer" } }, "required": ["TopCount"] }
+ */
+export interface MJActionParamEntity_IActionParamValueSchema {
+    /**
+     * The JSON type of the value. An array of types is a union; prefer a single type, since OpenAPI
+     * 3.0 (which Gemini's function declarations follow) has no union `type`.
+     */
+    type?: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'null' | Array<'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'null'>;
+    /** What the value means. On the top-level schema the param's own `Description` is used when this is absent. */
+    description?: string;
+    /** The only values allowed. */
+    enum?: Array<string | number | boolean | null>;
+    /** For `type: 'array'`: the schema of each element. */
+    items?: MJActionParamEntity_IActionParamValueSchema;
+    /** For `type: 'object'`: the schema of each named property. */
+    properties?: Record<string, MJActionParamEntity_IActionParamValueSchema>;
+    /** For `type: 'object'`: the property names that must be present. */
+    required?: string[];
+}
+
+/**
  * MJ: Action Params - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ActionParam
@@ -66834,6 +68541,35 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
     }
     set LogValue(value: boolean) {
         this.Set('LogValue', value);
+    }
+
+    /**
+    * * Field Name: ValueSchema
+    * * Display Name: Value Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJActionParamEntity_IActionParamValueSchema
+    * * Description: Optional JSON Schema fragment describing this parameter's value, limited to the cross-provider subset: type, description, enum, items, properties and required. When set, the native tool builder declares it to the model in place of the coarse ValueType mapping, and argument coercion follows it. For an IsArray parameter it describes one element. When NULL, the schema is derived from ValueType.
+    */
+    get ValueSchema(): string | null {
+        return this.Get('ValueSchema');
+    }
+    set ValueSchema(value: string | null) {
+        this.Set('ValueSchema', value);
+    }
+
+    /**
+    * Typed accessor for ValueSchema — a live view of the parsed JSON as MJActionParamEntity_IActionParamValueSchema.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ValueSchema field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ValueSchemaObject(): MJActionParamEntity_IActionParamValueSchema | null {
+        return this.GetJSONFieldObject<MJActionParamEntity_IActionParamValueSchema>('ValueSchema');
+    }
+    set ValueSchemaObject(value: MJActionParamEntity_IActionParamValueSchema | null) {
+        this.SetJSONFieldObject<MJActionParamEntity_IActionParamValueSchema>('ValueSchema', value);
     }
 
     /**
@@ -69152,6 +70888,24 @@ export class MJArchiveConfigurationEntity extends BaseEntity<MJArchiveConfigurat
     }
 
     /**
+    * * Field Name: StorageMode
+    * * Display Name: Storage Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Store
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Purge
+    *   * Store
+    * * Description: Whether runs keep a copy of the data they remove. Store (default): each record's archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode, entities missing from metadata, entities that track Record Changes, entities whose driver is not registered or does not support purge, and HardDelete entities that use soft delete or whose delete cascade reaches an entity that tracks Record Changes or uses soft delete.
+    */
+    get StorageMode(): 'Purge' | 'Store' {
+        return this.Get('StorageMode');
+    }
+    set StorageMode(value: 'Purge' | 'Store') {
+        this.Set('StorageMode', value);
+    }
+
+    /**
     * * Field Name: StorageAccount
     * * Display Name: Storage Account Name
     * * SQL Data Type: nvarchar(200)
@@ -69375,10 +71129,10 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
 
     /**
     * * Field Name: ArchiveRun
-    * * Display Name: Archive Run Timestamp
-    * * SQL Data Type: datetimeoffset
+    * * Display Name: Archive Run
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArchiveRun(): Date {
+    get ArchiveRun(): string {
         return this.Get('ArchiveRun');
     }
 
@@ -69613,6 +71367,24 @@ export class MJArchiveRunEntity extends BaseEntity<MJArchiveRunEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: StorageMode
+    * * Display Name: Storage Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Store
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Purge
+    *   * Store
+    * * Description: The configuration's StorageMode when this run started: Store (copies written to storage) or Purge (no copies kept; only failed records get an ArchiveRunDetail row).
+    */
+    get StorageMode(): 'Purge' | 'Store' {
+        return this.Get('StorageMode');
+    }
+    set StorageMode(value: 'Purge' | 'Store') {
+        this.Set('StorageMode', value);
     }
 
     /**
@@ -73580,6 +75352,89 @@ export class MJCommunicationProviderEntity extends BaseEntity<MJCommunicationPro
     }
     set SupportsDrafts(value: boolean) {
         this.Set('SupportsDrafts', value);
+    }
+
+    /**
+    * * Field Name: SupportsCalendar
+    * * Display Name: Supports Calendar
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the provider supports calendar event reading, creation, updating, and invitation responses.
+    */
+    get SupportsCalendar(): boolean {
+        return this.Get('SupportsCalendar');
+    }
+    set SupportsCalendar(value: boolean) {
+        this.Set('SupportsCalendar', value);
+    }
+
+    /**
+    * * Field Name: SupportsFreeBusy
+    * * Display Name: Supports Free Busy
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the provider supports checking free/busy schedules and finding optimal meeting times.
+    */
+    get SupportsFreeBusy(): boolean {
+        return this.Get('SupportsFreeBusy');
+    }
+    set SupportsFreeBusy(value: boolean) {
+        this.Set('SupportsFreeBusy', value);
+    }
+
+    /**
+    * * Field Name: EnterpriseScopeMode
+    * * Display Name: Enterprise Scope Mode
+    * * SQL Data Type: nvarchar(40)
+    * * Default Value: UtilityMailboxesOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * SecurityGroupScoped
+    *   * TenantWide
+    *   * UtilityMailboxesOnly
+    * * Description: Enterprise mailbox scope posture for this provider: UtilityMailboxesOnly (restricted to shared/agent utility mailboxes), SecurityGroupScoped (Exchange RBAC / Workspace group-scoped user mailboxes), or TenantWide.
+    */
+    get EnterpriseScopeMode(): 'SecurityGroupScoped' | 'TenantWide' | 'UtilityMailboxesOnly' {
+        return this.Get('EnterpriseScopeMode');
+    }
+    set EnterpriseScopeMode(value: 'SecurityGroupScoped' | 'TenantWide' | 'UtilityMailboxesOnly') {
+        this.Set('EnterpriseScopeMode', value);
+    }
+
+    /**
+    * * Field Name: AllowedEmailDomains
+    * * Display Name: Allowed Email Domains
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional comma-separated list of corporate email domains permitted for user-scoped mailbox and calendar operations (e.g., "company.com,subsidiary.com").
+    */
+    get AllowedEmailDomains(): string | null {
+        return this.Get('AllowedEmailDomains');
+    }
+    set AllowedEmailDomains(value: string | null) {
+        this.Set('AllowedEmailDomains', value);
+    }
+
+    /**
+    * * Field Name: DefaultCredentialID
+    * * Display Name: Default Credential ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Optional default MJ Credential used by this communication provider when no per-request credential override is supplied.
+    */
+    get DefaultCredentialID(): string | null {
+        return this.Get('DefaultCredentialID');
+    }
+    set DefaultCredentialID(value: string | null) {
+        this.Set('DefaultCredentialID', value);
+    }
+
+    /**
+    * * Field Name: DefaultCredential
+    * * Display Name: Default Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get DefaultCredential(): string | null {
+        return this.Get('DefaultCredential');
     }
 }
 
@@ -88874,6 +90729,18 @@ export class MJEncryptionKeyEntity extends BaseEntity<MJEncryptionKeyEntityType>
  *
  * @see guides/FORMS_ARCHITECTURE_GUIDE.md §7d
  */
+/**
+ * Controls which columns a save operation (`spCreate` / `spUpdate` and provider save wrappers)
+ * returns from the database:
+ * - `'full'` (default): Re-queries `SELECT * FROM <BaseView>` after `INSERT`/`UPDATE` so all
+ *   columns (including virtual/joined columns) are returned from the database.
+ * - `'datestamps_only'`: Returns only the primary key column(s) plus `__mj_CreatedAt` and
+ *   `__mj_UpdatedAt` (when present on the entity) directly from `<BaseTable>`, avoiding the
+ *   expensive `BaseView` JOINs and large column reads while still returning exact DB-generated
+ *   keys and timestamps for optimistic concurrency / inconsistency checks.
+ */
+export type MJEntityEntity_EntitySaveReturnMode = 'full' | 'datestamps_only';
+
 export interface MJEntityEntity_IEntityConfiguration {
     /**
      * Presentation / chrome. Null = host defaults (`Layout: auto`,
@@ -88894,6 +90761,14 @@ export interface MJEntityEntity_IEntityConfiguration {
      * policy says Deep, unless NotCloneable is true.
      */
     Clone?: MJEntityEntity_IEntityCloneConfiguration;
+
+    /**
+     * Controls which columns a save operation (`spCreate` / `spUpdate`) returns from the database.
+     * - `'full'` (default when omitted): Re-queries `SELECT * FROM <BaseView>` after `INSERT`/`UPDATE`.
+     * - `'datestamps_only'`: Selects only the primary key(s) and `__mj_CreatedAt`/`__mj_UpdatedAt`
+     *   directly from `<BaseTable>`, preserving in-memory field values on the saved entity.
+     */
+    SaveReturnMode?: MJEntityEntity_EntitySaveReturnMode;
 }
 
 /**
@@ -98939,6 +100814,440 @@ export class MJFeaturePipelineTypeEntity extends BaseEntity<MJFeaturePipelineTyp
 
 
 /**
+ * MJ: Feature Pipeline Versions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: FeaturePipelineVersion
+ * * Base View: vwFeaturePipelineVersions
+ * * @description One version of a Feature Pipeline: a distinct pin (spec hash, prompt version hash, primary AI model, parameters hash). A gated pipeline runs only under an Active version, and a version becomes Active only with a stored golden-set result at or above its declared threshold.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Feature Pipeline Versions')
+export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipelineVersionEntityType> {
+    /**
+    * Loads the MJ: Feature Pipeline Versions record from the database
+    * @param ID: string - primary key value to load the MJ: Feature Pipeline Versions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJFeaturePipelineVersionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RecordProcessID
+    * * Display Name: Record Process ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+    */
+    get RecordProcessID(): string {
+        return this.Get('RecordProcessID');
+    }
+    set RecordProcessID(value: string) {
+        this.Set('RecordProcessID', value);
+    }
+
+    /**
+    * * Field Name: Version
+    * * Display Name: Version
+    * * SQL Data Type: int
+    * * Description: Monotonic version number within the pipeline (1, 2, ...).
+    */
+    get Version(): number {
+        return this.Get('Version');
+    }
+    set Version(value: number) {
+        this.Set('Version', value);
+    }
+
+    /**
+    * * Field Name: PinHash
+    * * Display Name: Pin Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the pin (SpecHash, PromptVersionHash, AIModelID, ParametersHash). Unique per pipeline.
+    */
+    get PinHash(): string {
+        return this.Get('PinHash');
+    }
+    set PinHash(value: string) {
+        this.Set('PinHash', value);
+    }
+
+    /**
+    * * Field Name: SpecHash
+    * * Display Name: Spec Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the output-affecting parts of the DataFeatureSpec (Context, Outputs, PipelineType, Escalation, PromptID, ProcessorExtensionKey) and the OutputMapping.
+    */
+    get SpecHash(): string {
+        return this.Get('SpecHash');
+    }
+    set SpecHash(value: string) {
+        this.Set('SpecHash', value);
+    }
+
+    /**
+    * * Field Name: PromptID
+    * * Display Name: Prompt
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: The pipeline prompt this version runs.
+    */
+    get PromptID(): string | null {
+        return this.Get('PromptID');
+    }
+    set PromptID(value: string | null) {
+        this.Set('PromptID', value);
+    }
+
+    /**
+    * * Field Name: PromptVersionHash
+    * * Display Name: Prompt Version Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: Prompt version hash (template text, outputs, constraint block, pipeline type, escalation) of this version.
+    */
+    get PromptVersionHash(): string | null {
+        return this.Get('PromptVersionHash');
+    }
+    set PromptVersionHash(value: string | null) {
+        this.Set('PromptVersionHash', value);
+    }
+
+    /**
+    * * Field Name: AIModelID
+    * * Display Name: AI Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    * * Description: Primary AI model of the prompt for this version.
+    */
+    get AIModelID(): string | null {
+        return this.Get('AIModelID');
+    }
+    set AIModelID(value: string | null) {
+        this.Set('AIModelID', value);
+    }
+
+    /**
+    * * Field Name: ParametersHash
+    * * Display Name: Parameters Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the prompt inference parameters for this version.
+    */
+    get ParametersHash(): string | null {
+        return this.Get('ParametersHash');
+    }
+    set ParametersHash(value: string | null) {
+        this.Set('ParametersHash', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Candidate
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Candidate
+    *   * Refused
+    *   * Retired
+    * * Description: Candidate (registered, not yet allowed to write), Active (the version runs write), Refused (golden-set result below threshold), Retired (superseded by a later Active version).
+    */
+    get Status(): 'Active' | 'Candidate' | 'Refused' | 'Retired' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Candidate' | 'Refused' | 'Retired') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Gated
+    * * Display Name: Gated
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True when the pipeline declares DataFeatureSpec.Activation: the version can become Active only through a stored golden-set result at or above Threshold.
+    */
+    get Gated(): boolean {
+        return this.Get('Gated');
+    }
+    set Gated(value: boolean) {
+        this.Set('Gated', value);
+    }
+
+    /**
+    * * Field Name: GoldenSetTestID
+    * * Display Name: Golden Set Test
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tests (vwTests.ID)
+    * * Description: The MJ: Tests row holding the golden set this version was evaluated on.
+    */
+    get GoldenSetTestID(): string | null {
+        return this.Get('GoldenSetTestID');
+    }
+    set GoldenSetTestID(value: string | null) {
+        this.Set('GoldenSetTestID', value);
+    }
+
+    /**
+    * * Field Name: GoldenSetTestRunID
+    * * Display Name: Golden Set Test Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
+    * * Description: The MJ: Test Runs row of the evaluation whose result is stored here.
+    */
+    get GoldenSetTestRunID(): string | null {
+        return this.Get('GoldenSetTestRunID');
+    }
+    set GoldenSetTestRunID(value: string | null) {
+        this.Set('GoldenSetTestRunID', value);
+    }
+
+    /**
+    * * Field Name: Metric
+    * * Display Name: Metric
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * accuracy
+    * * Description: Metric of the stored result: accuracy.
+    */
+    get Metric(): 'accuracy' | null {
+        return this.Get('Metric');
+    }
+    set Metric(value: 'accuracy' | null) {
+        this.Set('Metric', value);
+    }
+
+    /**
+    * * Field Name: Threshold
+    * * Display Name: Threshold
+    * * SQL Data Type: float(53)
+    * * Description: Declared activation threshold copied from DataFeatureSpec.Activation at evaluation time.
+    */
+    get Threshold(): number | null {
+        return this.Get('Threshold');
+    }
+    set Threshold(value: number | null) {
+        this.Set('Threshold', value);
+    }
+
+    /**
+    * * Field Name: ResultValue
+    * * Display Name: Result Value
+    * * SQL Data Type: float(53)
+    * * Description: Point estimate of the metric (the lowest per-output value when the pipeline has several outputs).
+    */
+    get ResultValue(): number | null {
+        return this.Get('ResultValue');
+    }
+    set ResultValue(value: number | null) {
+        this.Set('ResultValue', value);
+    }
+
+    /**
+    * * Field Name: ResultLower
+    * * Display Name: Result Lower Bound
+    * * SQL Data Type: float(53)
+    * * Description: Lower bound of the 95% Wilson interval of ResultValue.
+    */
+    get ResultLower(): number | null {
+        return this.Get('ResultLower');
+    }
+    set ResultLower(value: number | null) {
+        this.Set('ResultLower', value);
+    }
+
+    /**
+    * * Field Name: ResultUpper
+    * * Display Name: Result Upper Bound
+    * * SQL Data Type: float(53)
+    * * Description: Upper bound of the 95% Wilson interval of ResultValue.
+    */
+    get ResultUpper(): number | null {
+        return this.Get('ResultUpper');
+    }
+    set ResultUpper(value: number | null) {
+        this.Set('ResultUpper', value);
+    }
+
+    /**
+    * * Field Name: ResultN
+    * * Display Name: Result Sample Size (N)
+    * * SQL Data Type: int
+    * * Description: Number of golden cases scored.
+    */
+    get ResultN(): number | null {
+        return this.Get('ResultN');
+    }
+    set ResultN(value: number | null) {
+        this.Set('ResultN', value);
+    }
+
+    /**
+    * * Field Name: ResultDetails
+    * * Display Name: Result Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON per-output results (correct, n, value, interval) and the per-case answers of the evaluation.
+    */
+    get ResultDetails(): string | null {
+        return this.Get('ResultDetails');
+    }
+    set ResultDetails(value: string | null) {
+        this.Set('ResultDetails', value);
+    }
+
+    /**
+    * * Field Name: ActivatedAt
+    * * Display Name: Activated At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the version became Active.
+    */
+    get ActivatedAt(): Date | null {
+        return this.Get('ActivatedAt');
+    }
+    set ActivatedAt(value: Date | null) {
+        this.Set('ActivatedAt', value);
+    }
+
+    /**
+    * * Field Name: ApprovedByUserID
+    * * Display Name: Approved By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user whose run activated the version (for an unattended activation, the Feature Pipeline Version Steward job's user).
+    */
+    get ApprovedByUserID(): string | null {
+        return this.Get('ApprovedByUserID');
+    }
+    set ApprovedByUserID(value: string | null) {
+        this.Set('ApprovedByUserID', value);
+    }
+
+    /**
+    * * Field Name: RetiredAt
+    * * Display Name: Retired At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When a later Active version superseded this one.
+    */
+    get RetiredAt(): Date | null {
+        return this.Get('RetiredAt');
+    }
+    set RetiredAt(value: Date | null) {
+        this.Set('RetiredAt', value);
+    }
+
+    /**
+    * * Field Name: BackfilledAt
+    * * Display Name: Backfilled At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version.
+    */
+    get BackfilledAt(): Date | null {
+        return this.Get('BackfilledAt');
+    }
+    set BackfilledAt(value: Date | null) {
+        this.Set('BackfilledAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RecordProcess
+    * * Display Name: Record Process
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RecordProcess(): string {
+        return this.Get('RecordProcess');
+    }
+
+    /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt Text
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Prompt(): string | null {
+        return this.Get('Prompt');
+    }
+
+    /**
+    * * Field Name: AIModel
+    * * Display Name: AI Model Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AIModel(): string | null {
+        return this.Get('AIModel');
+    }
+
+    /**
+    * * Field Name: GoldenSetTest
+    * * Display Name: Golden Set Test Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get GoldenSetTest(): string | null {
+        return this.Get('GoldenSetTest');
+    }
+
+    /**
+    * * Field Name: GoldenSetTestRun
+    * * Display Name: Golden Set Test Run Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get GoldenSetTestRun(): string | null {
+        return this.Get('GoldenSetTestRun');
+    }
+
+    /**
+    * * Field Name: ApprovedByUser
+    * * Display Name: Approved By User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ApprovedByUser(): string | null {
+        return this.Get('ApprovedByUser');
+    }
+}
+
+
+/**
  * MJ: Feature Value Caches - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: FeatureValueCache
@@ -99191,6 +101500,33 @@ export class MJFeatureValueCacheEntity extends BaseEntity<MJFeatureValueCacheEnt
     }
 
     /**
+    * * Field Name: AIModelID
+    * * Display Name: AI Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    * * Description: Primary AI model of the prompt that computed this cached result. Part of the cache key.
+    */
+    get AIModelID(): string | null {
+        return this.Get('AIModelID');
+    }
+    set AIModelID(value: string | null) {
+        this.Set('AIModelID', value);
+    }
+
+    /**
+    * * Field Name: ParametersHash
+    * * Display Name: Parameters Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the prompt's inference parameters when this result was computed. Part of the cache key.
+    */
+    get ParametersHash(): string | null {
+        return this.Get('ParametersHash');
+    }
+    set ParametersHash(value: string | null) {
+        this.Set('ParametersHash', value);
+    }
+
+    /**
     * * Field Name: RecordProcess
     * * Display Name: Record Process Name
     * * SQL Data Type: nvarchar(255)
@@ -99207,6 +101543,15 @@ export class MJFeatureValueCacheEntity extends BaseEntity<MJFeatureValueCacheEnt
     get Prompt(): string {
         return this.Get('Prompt');
     }
+
+    /**
+    * * Field Name: AIModel
+    * * Display Name: AI Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AIModel(): string | null {
+        return this.Get('AIModel');
+    }
 }
 
 
@@ -99215,7 +101560,7 @@ export class MJFeatureValueCacheEntity extends BaseEntity<MJFeatureValueCacheEnt
  * * Schema: __mj
  * * Base Table: FeatureValue
  * * Base View: vwFeatureValues
- * * @description Complete historical audit table for Feature Pipelines. Records every feature value ever computed per entity record, with full provenance, model reasoning, and run back-links.
+ * * @description Feature values computed by Feature Pipelines (or entered by people), one row per Feature Value key, updated in place when the same key is recomputed.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -99531,6 +101876,90 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     }
 
     /**
+    * * Field Name: PipelineVersion
+    * * Display Name: Pipeline Version
+    * * SQL Data Type: int
+    * * Description: Version of the Feature Pipeline (MJ: Feature Pipeline Versions.Version) that computed this value; part of the FeatureValueKey.
+    */
+    get PipelineVersion(): number | null {
+        return this.Get('PipelineVersion');
+    }
+    set PipelineVersion(value: number | null) {
+        this.Set('PipelineVersion', value);
+    }
+
+    /**
+    * * Field Name: AIModelID
+    * * Display Name: AI Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    * * Description: Primary AI model the pipeline's prompt is configured to run (highest-priority Active AI Prompt Model). Part of the FeatureValueKey; the model that actually answered is on the linked AI Prompt Run.
+    */
+    get AIModelID(): string | null {
+        return this.Get('AIModelID');
+    }
+    set AIModelID(value: string | null) {
+        this.Set('AIModelID', value);
+    }
+
+    /**
+    * * Field Name: ParametersHash
+    * * Display Name: Parameters Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the prompt's inference parameters (temperature, topP, topK, minP, penalties, seed, response format, effort level, model parameters). Part of the FeatureValueKey.
+    */
+    get ParametersHash(): string | null {
+        return this.Get('ParametersHash');
+    }
+    set ParametersHash(value: string | null) {
+        this.Set('ParametersHash', value);
+    }
+
+    /**
+    * * Field Name: InputHash
+    * * Display Name: Input Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the normalized input the value was computed from (the Dedup Cache key hash when the pipeline caches). Part of the FeatureValueKey.
+    */
+    get InputHash(): string | null {
+        return this.Get('InputHash');
+    }
+    set InputHash(value: string | null) {
+        this.Set('InputHash', value);
+    }
+
+    /**
+    * * Field Name: ValueKeyHash
+    * * Display Name: Value Key Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the canonical FeatureValueKey (entity, record, feature, pipeline version, prompt version hash, AI model, parameters hash, input hash, source). Unique per pipeline: re-computing the same key updates the row instead of inserting a duplicate.
+    */
+    get ValueKeyHash(): string | null {
+        return this.Get('ValueKeyHash');
+    }
+    set ValueKeyHash(value: string | null) {
+        this.Set('ValueKeyHash', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pipeline
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Human
+    *   * Pipeline
+    * * Description: Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (entered by a person, which write-back leaves in place).
+    */
+    get Source(): 'Human' | 'Pipeline' {
+        return this.Get('Source');
+    }
+    set Source(value: 'Human' | 'Pipeline') {
+        this.Set('Source', value);
+    }
+
+    /**
     * * Field Name: RecordProcess
     * * Display Name: Record Process
     * * SQL Data Type: nvarchar(255)
@@ -99573,6 +102002,15 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     */
     get FeatureValueCache(): string | null {
         return this.Get('FeatureValueCache');
+    }
+
+    /**
+    * * Field Name: AIModel
+    * * Display Name: AI Model Details
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AIModel(): string | null {
+        return this.Get('AIModel');
     }
 }
 
@@ -113728,6 +116166,19 @@ export class MJProcessRunDetailEntity extends BaseEntity<MJProcessRunDetailEntit
     }
 
     /**
+    * * Field Name: Warnings
+    * * Display Name: Warnings
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of the record's non-fatal problems (for example, its Dedup Cache entry could not be stored) on a record that otherwise succeeded. NULL when there were none. Failures are in ErrorMessage, never here.
+    */
+    get Warnings(): string | null {
+        return this.Get('Warnings');
+    }
+    set Warnings(value: string | null) {
+        this.Set('Warnings', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
@@ -114149,6 +116600,19 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
     }
     set DryRun(value: boolean) {
         this.Set('DryRun', value);
+    }
+
+    /**
+    * * Field Name: ResultSummary
+    * * Display Name: Result Summary
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON summary of a Feature Pipeline run (FeaturePipelineRunResult); NULL for other work types.
+    */
+    get ResultSummary(): string | null {
+        return this.Get('ResultSummary');
+    }
+    set ResultSummary(value: string | null) {
+        this.Set('ResultSummary', value);
     }
 
     /**
@@ -138067,6 +140531,32 @@ export class MJThemeEntity extends BaseEntity<MJThemeEntityType> {
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: LoginScreen
+    * * Display Name: Login Screen
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The published sign-in page design as JSON (the LoginDesign shape from @memberjunction/theme-engine): layout, background, colors and the blocks in each login-screen region. The default Active theme's value is served unauthenticated to draw the Explorer login screen. NULL means the stock login screen.
+    */
+    get LoginScreen(): string | null {
+        return this.Get('LoginScreen');
+    }
+    set LoginScreen(value: string | null) {
+        this.Set('LoginScreen', value);
+    }
+
+    /**
+    * * Field Name: LoginScreenDraft
+    * * Display Name: Login Screen Draft
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The sign-in page design being edited in Login Studio, as JSON in the same shape as LoginScreen. Never served publicly; publishing copies it to LoginScreen. NULL means no draft.
+    */
+    get LoginScreenDraft(): string | null {
+        return this.Get('LoginScreenDraft');
+    }
+    set LoginScreenDraft(value: string | null) {
+        this.Set('LoginScreenDraft', value);
+    }
 }
 
 
@@ -139831,6 +142321,102 @@ export class MJUserRoutineRunEntity extends BaseEntity<MJUserRoutineRunEntityTyp
 
 
 /**
+ * Configuration for autonomous wake conditions and durable entity change watching
+ * on `MJ: User Routines` (`UserRoutine.WakeConfiguration`).
+ *
+ * Evaluated by `WakeGateEvaluator` inside `UserRoutineDispatcherDriver` before invoking
+ * the routine's target (Agent, Action, or Prompt) so routines only spend LLM tokens
+ * when meaningful state changes or scheduled wake deadlines occur.
+ */
+export interface MJUserRoutineEntity_IRoutineWakeConfiguration {
+    /**
+     * Logical workstream or monitor key used by self-scheduling agents (e.g. `"q4-okr-rollup"`,
+     * `"chief-of-staff-main"`) to upsert a specific `AgentWake` routine row per workstream.
+     */
+    workstreamKey?: string;
+
+    /**
+     * Human-readable reason the agent scheduled this wake (injected into the wake prompt).
+     */
+    wakeReason?: string;
+
+    /**
+     * Arbitrary JSON state saved by the agent when going to sleep and restored into the
+     * conversation/payload when the routine wakes.
+     */
+    resumeState?: Record<string, unknown>;
+
+    /**
+     * Entities watched for durable change detection since `UserRoutine.LastCheckedAt`.
+     * Checked via `GetRunViewsDatabaseStatus` (`COUNT(*)` + `MAX(__mj_UpdatedAt)`) and/or
+     * `MJ: Record Changes` under the routine owner's `contextUser` security scope.
+     */
+    watchedEntities?: Array<{
+        /** Exact MJ Entity Name (e.g. `"MJ_BizApps_Tasks: Tasks"`, `"MJ_BizApps_Issues: Issues"`). */
+        entityName: string;
+        /** Optional SQL `ExtraFilter` (validated via `SQLExpressionValidator`) scoping watched rows. */
+        extraFilter?: string;
+        /** Optional alias used as the key inside `deltas.<alias>` for Tier 1 expressions. */
+        alias?: string;
+        /** When true, also inspects `MJ: Record Changes` for field-level diffs since `LastCheckedAt`. */
+        includeRecordChanges?: boolean;
+    }>;
+
+    /**
+     * 3-Tier Wake Condition Gate evaluated in order of increasing cost:
+     * - Tier 0: Durable watermark / hash comparison (0 tokens)
+     * - Tier 1: Deterministic `SafeExpressionEvaluator` boolean expression (0 tokens)
+     * - Tier 2: Fast classifier / decision model via `AIDecisionRunner` (~100 tokens)
+     * - Tier 3: Full metadata `MJ: AI Prompts` evaluation via `AIPromptRunner`
+     */
+    wakeGate?: {
+        /**
+         * When true, skips target execution if watched entities and signals have not changed
+         * since `LastCheckedAt` AND any `forceWakeAfterMinutes` deadline has not elapsed.
+         */
+        skipIfUnchanged?: boolean;
+
+        /**
+         * Optional maximum minutes of silence before forcing a wake even if watched entities
+         * are unchanged (e.g. `480` for an 8-hour heartbeat).
+         */
+        forceWakeAfterMinutes?: number;
+
+        /**
+         * Tier 1: Deterministic boolean expression evaluated by `SafeExpressionEvaluator`
+         * against `{ deltas, totalChangedCount, elapsedMinutes, isScheduledWakeTimeReached, payload }`.
+         * When it evaluates to `false`, the wake is skipped with zero LLM cost.
+         */
+        tier1Expression?: string;
+
+        /**
+         * Tier 2: Fast Decision Model question evaluated via `AIDecisionRunner` (`Default Decision` /
+         * `Jev` / `Kev`) when Tier 1 passes (or when Tier 1 is omitted).
+         */
+        tier2Decision?: {
+            /** Question posed to the decision model along with the delta summary. */
+            question: string;
+            /** Decision type (`'Likelihood'` 0-100 or `'Choice'`). Defaults to `'Likelihood'`. */
+            type?: 'Likelihood' | 'Choice';
+            /** Minimum likelihood score (0-100) required to wake the agent when `type === 'Likelihood'`. */
+            wakeIfAtLeast?: number;
+            /** Choice options when `type === 'Choice'`. */
+            options?: Array<{ key: string; description: string }>;
+            /** Option keys that trigger a wake when `type === 'Choice'`. */
+            wakeOnChoices?: string[];
+            /** Optional extra context instructions for the decision classifier. */
+            additionalInstructions?: string;
+        };
+
+        /**
+         * Tier 3: Optional `MJ: AI Prompts` ID executed via `AIPromptRunner` as the final gate
+         * when deeper synthesis is required before waking the full agent.
+         */
+        tier3WakePromptId?: string;
+    };
+}
+
+/**
  * MJ: User Routines - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: UserRoutine
@@ -139952,14 +142538,15 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     * * Default Value: Scheduled
     * * Value List Type: List
     * * Possible Values 
+    *   * AgentWake
     *   * Monitoring
     *   * Scheduled
-    * * Description: Scheduled (always notify per NotifyCondition) or Monitoring (intended for OnChange detection via result hashing).
+    * * Description: Scheduled (user cron routine), Monitoring (OnChange detection via result hashing), or AgentWake (autonomous agent self-scheduled wake/monitor entry, hidden from the default user cron list).
     */
-    get RoutineType(): 'Monitoring' | 'Scheduled' {
+    get RoutineType(): 'AgentWake' | 'Monitoring' | 'Scheduled' {
         return this.Get('RoutineType');
     }
-    set RoutineType(value: 'Monitoring' | 'Scheduled') {
+    set RoutineType(value: 'AgentWake' | 'Monitoring' | 'Scheduled') {
         this.Set('RoutineType', value);
     }
 
@@ -140037,12 +142624,12 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     * * Field Name: CronExpression
     * * Display Name: Cron Expression
     * * SQL Data Type: nvarchar(100)
-    * * Description: Standard cron expression evaluated by the dispatcher to determine when the routine is due.
+    * * Description: Standard cron expression evaluated by the dispatcher for Recurring and Adaptive routines. NULL when ScheduleMode is OneShot.
     */
-    get CronExpression(): string {
+    get CronExpression(): string | null {
         return this.Get('CronExpression');
     }
-    set CronExpression(value: string) {
+    set CronExpression(value: string | null) {
         this.Set('CronExpression', value);
     }
 
@@ -140238,6 +142825,67 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     }
     set ConversationID(value: string | null) {
         this.Set('ConversationID', value);
+    }
+
+    /**
+    * * Field Name: ScheduleMode
+    * * Display Name: Schedule Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Recurring
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Adaptive
+    *   * OneShot
+    *   * Recurring
+    * * Description: Scheduling mode: Recurring (fixed cron schedule), OneShot (single future wake at NextRunAt, auto-disables after firing unless rescheduled by the agent), or Adaptive (fallback CronExpression combined with agent-set NextRunAt and event/condition wake gates).
+    */
+    get ScheduleMode(): 'Adaptive' | 'OneShot' | 'Recurring' {
+        return this.Get('ScheduleMode');
+    }
+    set ScheduleMode(value: 'Adaptive' | 'OneShot' | 'Recurring') {
+        this.Set('ScheduleMode', value);
+    }
+
+    /**
+    * * Field Name: WakeConfiguration
+    * * Display Name: Wake Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJUserRoutineEntity_IRoutineWakeConfiguration
+    * * Description: Optional JSON configuration (IRoutineWakeConfiguration) specifying watchedEntities for durable watermark/RecordChange polling and the 3-tier wake gate (Tier 1 SafeExpressionEvaluator, Tier 2 AIDecisionRunner fast decision model, Tier 3 AIPromptRunner metadata prompt).
+    */
+    get WakeConfiguration(): string | null {
+        return this.Get('WakeConfiguration');
+    }
+    set WakeConfiguration(value: string | null) {
+        this.Set('WakeConfiguration', value);
+    }
+
+    /**
+    * Typed accessor for WakeConfiguration — a live view of the parsed JSON as MJUserRoutineEntity_IRoutineWakeConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying WakeConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get WakeConfigurationObject(): MJUserRoutineEntity_IRoutineWakeConfiguration | null {
+        return this.GetJSONFieldObject<MJUserRoutineEntity_IRoutineWakeConfiguration>('WakeConfiguration');
+    }
+    set WakeConfigurationObject(value: MJUserRoutineEntity_IRoutineWakeConfiguration | null) {
+        this.SetJSONFieldObject<MJUserRoutineEntity_IRoutineWakeConfiguration>('WakeConfiguration', value);
+    }
+
+    /**
+    * * Field Name: LastCheckedAt
+    * * Display Name: Last Checked At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the dispatcher last evaluated this routine's watched entities and wake gate conditions.
+    */
+    get LastCheckedAt(): Date | null {
+        return this.Get('LastCheckedAt');
+    }
+    set LastCheckedAt(value: Date | null) {
+        this.Set('LastCheckedAt', value);
     }
 
     /**

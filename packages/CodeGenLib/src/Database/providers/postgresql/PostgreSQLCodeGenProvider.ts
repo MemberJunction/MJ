@@ -1,5 +1,5 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, ResolveStartupMode, SetProvider, StartupManager } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
     CRUDType,
@@ -9,6 +9,7 @@ import {
     MaterializedColumnSpec,
     PhasedExecutionResult,
     DataSourceResult,
+    ExcludedBaseViewFieldNames,
 } from '../../codeGenDatabaseProvider';
 import { configInfo, MjCoreSchema } from '../../../Config/config';
 import { logError, logStatus, LogWarning, StartSpinner, SucceedSpinner } from '../../../Misc/status_logging';
@@ -665,14 +666,18 @@ $do$;
             (pk) => `${pgDialect.QuoteIdentifier(pk.Name)} = v_${this.toSnakeCase(pk.CodeName)}`
         ).join(' AND ');
 
+        const returnType = this.buildCRUDReturnType(entity, viewName);
+        const variableConflictDirective = entity.SaveReturnMode === 'datestamps_only' ? '\n#variable_conflict use_column' : '';
+        const returnSelect = this.buildCRUDReturnSelect(entity, viewName, whereClause);
+
         return `
 ------------------------------------------------------------
 ----- UPDATE FUNCTION FOR ${entity.BaseTable} (JSON-arg shape)
 ------------------------------------------------------------
 ${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(p_data JSONB)
-RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-AS $$
+RETURNS ${returnType}
+AS $$${variableConflictDirective}
 DECLARE
 ${pkExtractions}
     v_updated_count INTEGER;
@@ -696,8 +701,7 @@ BEGIN
 
     -- Return the updated record from the base view
     RETURN QUERY
-    SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-    WHERE ${whereClause};
+    ${returnSelect};
 END;
 $$ LANGUAGE plpgsql;
 ${permissions}
@@ -786,14 +790,18 @@ ${trigger}
     END IF;
     ${v.varName} := (p_data->>'${v.field.Name}')::${v.pgType};`).join('\n');
 
+        const returnType = this.buildCRUDReturnType(entity, viewName);
+        const variableConflictDirective = entity.SaveReturnMode === 'datestamps_only' ? '\n#variable_conflict use_column' : '';
+        const returnSelect = this.buildCRUDReturnSelect(entity, viewName, pkWhere);
+
         return `
 ------------------------------------------------------------
 ----- CREATE FUNCTION FOR ${entity.BaseTable} (JSON-arg shape)
 ------------------------------------------------------------
 ${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(p_data JSONB)
-RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-AS $$
+RETURNS ${returnType}
+AS $$${variableConflictDirective}
 DECLARE
 ${pkDeclarations}
     v_field_name TEXT;
@@ -831,8 +839,7 @@ ${fieldCastEntries}
     EXECUTE v_sql USING p_data;
 
     RETURN QUERY
-    SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-    WHERE ${pkWhere};
+    ${returnSelect};
 END;
 $$ LANGUAGE plpgsql;
 ${permissions}
@@ -889,6 +896,8 @@ ${permissions}
         const strategy = this.buildCreateInsertStrategy(
             entity, firstKey, insertColumns, insertValues
         );
+        const returnType = this.buildCRUDReturnType(entity, viewName);
+        const variableConflictDirective = entity.SaveReturnMode === 'datestamps_only' ? '\n#variable_conflict use_column' : '';
 
         return `
 ------------------------------------------------------------
@@ -897,7 +906,7 @@ ${permissions}
 ${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     ${paramString}
-) RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
+) RETURNS ${returnType} AS $$${variableConflictDirective}
 DECLARE
     v_new_id ${this.mapSQLType(generatedKey.SQLFullType)};
 BEGIN
@@ -919,15 +928,50 @@ ${permissions}
 `;
     }
 
+    /**
+     * Builds the `RETURNS` clause type for a PostgreSQL CRUD create/update function.
+     *
+     * - When `entity.SaveReturnMode` is `'full'` (default), returns `SETOF "schema"."vwBaseView"`.
+     * - When `entity.SaveReturnMode` is `'datestamps_only'`, returns `TABLE(...)` listing only the
+     *   primary key column(s) plus `__mj_CreatedAt` and `__mj_UpdatedAt` (via {@link EntityInfo.DatestampReturnFields}).
+     */
+    protected buildCRUDReturnType(entity: EntityInfo, viewName: string): string {
+        if (entity.SaveReturnMode === 'datestamps_only') {
+            const cols = entity.DatestampReturnFields
+                .map((f: EntityFieldInfo) => `${pgDialect.QuoteIdentifier(f.Name)} ${this.mapSQLType(f.SQLFullType)}`)
+                .join(', ');
+            return `TABLE(${cols})`;
+        }
+        return `SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}`;
+    }
+
+    /**
+     * Builds the post-insert / post-update `SELECT` statement returned by a PostgreSQL CRUD function.
+     *
+     * - When `entity.SaveReturnMode` is `'full'` (default), queries `SELECT * FROM "schema"."vwBaseView"`.
+     * - When `entity.SaveReturnMode` is `'datestamps_only'`, queries only the primary key column(s)
+     *   plus `__mj_CreatedAt` and `__mj_UpdatedAt` (via {@link EntityInfo.DatestampReturnFields})
+     *   directly from `"schema"."BaseTable"`, avoiding the post-write `BaseView` joins and large
+     *   payload columns while still returning DB-generated key and timestamp values.
+     */
+    protected buildCRUDReturnSelect(entity: EntityInfo, viewName: string, whereClause: string): string {
+        if (entity.SaveReturnMode === 'datestamps_only') {
+            const cols = entity.DatestampReturnFields.map((f: EntityFieldInfo) => pgDialect.QuoteIdentifier(f.Name)).join(', ');
+            return `SELECT ${cols} FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}\n    WHERE ${whereClause}`;
+        }
+        return `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${whereClause}`;
+    }
+
     // ─── CRUD UPDATE ─────────────────────────────────────────────────────
 
     /**
      * Generates a PostgreSQL `CREATE OR REPLACE FUNCTION` for updating an existing record.
      * The function accepts typed parameters for all updatable fields plus primary key(s),
      * performs an `UPDATE ... SET ... WHERE PK = param`, checks `ROW_COUNT` to detect
-     * missing rows, and returns the updated record from the base view via `RETURN QUERY
-     * SELECT`. Also generates the `__mj_UpdatedAt` timestamp trigger for the entity
-     * and emits `GRANT EXECUTE` permissions.
+     * missing rows, and returns the updated record from the base view (or PK + datestamp
+     * columns from the base table when `entity.SaveReturnMode === 'datestamps_only'`) via
+     * `RETURN QUERY SELECT`. Also generates the `__mj_UpdatedAt` timestamp trigger for the
+     * entity and emits `GRANT EXECUTE` permissions.
      */
     generateCRUDUpdate(entity: EntityInfo): string {
         if (this.shouldUseJsonArgShape(entity, 'update')) {
@@ -941,6 +985,9 @@ ${permissions}
         const updateFields = this.generateUpdateFieldString(entity.Fields);
         const whereClause = this.buildPrimaryKeyWhereClause(entity);
         const selectWhereClause = this.buildPrimaryKeyWhereClause(entity);
+        const returnType = this.buildCRUDReturnType(entity, viewName);
+        const variableConflictDirective = entity.SaveReturnMode === 'datestamps_only' ? '\n#variable_conflict use_column' : '';
+        const returnSelect = this.buildCRUDReturnSelect(entity, viewName, selectWhereClause);
 
         const trigger = this.generateTimestampTrigger(entity);
 
@@ -965,12 +1012,10 @@ ${permissions}
 
     -- Return the updated record from the base view
     RETURN QUERY
-    SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-    WHERE ${selectWhereClause};`
+    ${returnSelect};`
             : `    -- No updatable fields (PK-only entity, e.g. junction table). Return the existing row.
     RETURN QUERY
-    SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-    WHERE ${selectWhereClause};`;
+    ${returnSelect};`;
 
         // Only declare v_updated_count when we actually perform an UPDATE.
         const declareBlock = hasUpdatableFields ? '\n    v_updated_count INTEGER;' : '';
@@ -982,7 +1027,7 @@ ${permissions}
 ${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     ${paramString}
-) RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
+) RETURNS ${returnType} AS $$${variableConflictDirective}
 DECLARE${declareBlock}
 BEGIN
 ${fnBody}
@@ -1146,6 +1191,25 @@ EXECUTE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}();
      *
      * @returns A {@link FullTextSearchResult} with the generated SQL and the search function name.
      */
+    /**
+     * PostgreSQL charges full-text search on the WRITE path, not the read path: the emitted objects
+     * include a row-level `BEFORE INSERT OR UPDATE OF <fields>` trigger that recomputes
+     * `to_tsvector` for the row, a GIN index that is maintained on every one of those writes, and a
+     * one-off backfill `UPDATE` across the existing table at apply time. None of that is reversed by
+     * clearing the entity's full-text flags later — the column, trigger and index stay until someone
+     * drops them.
+     */
+    FullTextSearchCostDisclosure(entity: EntityInfo, searchFields: EntityFieldInfo[]): string | null {
+        const trigName = `trg_fts_${this.toSnakeCase(entity.BaseTable)}`;
+        const indexName = `idx_fts_${this.toSnakeCase(entity.BaseTable)}`;
+        const fields = searchFields.map((f: EntityFieldInfo) => f.Name).join(', ');
+        return `Full-text search on ${entity.SchemaName}.${entity.BaseTable} adds a PERMANENT per-write cost: `
+            + `trigger ${trigName} recomputes to_tsvector on every INSERT and on every UPDATE of (${fields}), `
+            + `GIN index ${indexName} is maintained on each of those writes, and a one-off backfill UPDATE `
+            + `rewrites every existing row when this script is applied. Clearing the entity's full-text flags `
+            + `later does not drop the column, trigger or index.`;
+    }
+
     generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], _primaryKeyIndexName: string): FullTextSearchResult {
         const ftsColName = '__mj_fts_vector';
         const trigName = `trg_fts_${this.toSnakeCase(entity.BaseTable)}`;
@@ -2556,7 +2620,13 @@ WHERE p.prokind IN ('f', 'p')
     private buildBaseViewSelectParts(context: BaseViewGenerationContext, alias: string): string {
         // parentFieldsSelect and rootFieldsSelect have leading commas (e.g. ",\n    Field AS Alias").
         // relatedFieldsSelect does NOT have a leading comma for the first field (starts with "\n    Field...").
-        let select = `${alias}.*`;
+        // `alias.*` unless this entity has a configured base-view column exclusion, in which case the
+        // base-table columns are enumerated instead. See baseTableSelectList / ExcludedBaseViewFieldNames.
+        let select = this.baseTableSelectList(
+            context.entity,
+            alias,
+            ExcludedBaseViewFieldNames(context.entity.Name, configInfo?.baseViewExcludedFields ?? [])
+        );
         if (context.parentFieldsSelect) select += context.parentFieldsSelect;
         if (context.relatedFieldsSelect) select += `,${context.relatedFieldsSelect}`;
         if (context.rootFieldsSelect) select += context.rootFieldsSelect;
@@ -2626,7 +2696,7 @@ WHERE p.prokind IN ('f', 'p')
             return {
                 preInsert: '',
                 returningClause: `RETURNING ${identityCol} INTO v_new_id`,
-                selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${identityCol} = v_new_id${keyPredicates}`,
+                selectClause: this.buildCRUDReturnSelect(entity, viewName, `${identityCol} = v_new_id${keyPredicates}`),
                 finalColumns: callerSuppliedKeys.length === 0 ? insertColumns : (hasNonPkColumns ? `${keyColumns},\n            ${insertColumns}` : keyColumns),
                 finalValues: callerSuppliedKeys.length === 0 ? insertValues : (hasNonPkColumns ? `${keyValues},\n            ${insertValues}` : keyValues),
             };
@@ -2638,7 +2708,7 @@ WHERE p.prokind IN ('f', 'p')
             return {
                 preInsert: `v_new_id := COALESCE(${paramName}, gen_random_uuid());\n    `,
                 returningClause: '',
-                selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${pkCol} = v_new_id`,
+                selectClause: this.buildCRUDReturnSelect(entity, viewName, `${pkCol} = v_new_id`),
                 // Include the PK column in the INSERT so caller-provided IDs are respected.
                 // When there are no non-PK columns, omit the trailing comma.
                 finalColumns: hasNonPkFields ? `${pkCol},\n            ${insertColumns}` : pkCol,
@@ -2673,7 +2743,7 @@ WHERE p.prokind IN ('f', 'p')
         return {
             preInsert: '',
             returningClause: '',
-            selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${selectWhere}`,
+            selectClause: this.buildCRUDReturnSelect(entity, viewName, selectWhere),
             finalColumns,
             finalValues,
         };
@@ -2865,6 +2935,28 @@ WHERE p.prokind IN ('f', 'p')
             AND a.attname = '${columnName}'
       )
       AND array_length(ix.indkey, 1) > 1`;
+    }
+
+    /**
+     * @inheritdoc
+     * `indkey` lists the key columns first, then the INCLUDE columns; `indnkeyatts` is how many are keys.
+     */
+    public override GetUniqueIndexMembershipSQL(schema: string, tableName: string, columnName: string): string | null {
+        return `SELECT
+        NOT EXISTS (
+            SELECT 1 FROM generate_series(0, ix.indnkeyatts - 1) AS k(pos)
+            WHERE ix.indkey[k.pos] = a.attnum
+        ) AS "IsIncludedColumn",
+        ix.indnkeyatts AS "KeyColumnCount"
+    FROM pg_catalog.pg_index ix
+    INNER JOIN pg_catalog.pg_class t ON t.oid = ix.indrelid
+    INNER JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+    INNER JOIN pg_catalog.pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+    WHERE ix.indisunique
+      AND NOT ix.indisprimary
+      AND n.nspname = '${EscapeSQLString(schema)}'
+      AND t.relname = '${EscapeSQLString(tableName)}'
+      AND a.attname = '${EscapeSQLString(columnName)}'`;
     }
 
     /** @inheritdoc */
