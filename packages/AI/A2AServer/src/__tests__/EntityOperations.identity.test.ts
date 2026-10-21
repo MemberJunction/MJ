@@ -19,6 +19,8 @@ vi.mock('@memberjunction/core', () => ({
   CompositeKey: class {},
   RunQuery: class {},
   LogError: vi.fn(),
+  // Field security is covered in EntityOperations.fieldSecurity.test.ts; here it passes rows through.
+  ProjectEntityValueRowsForUser: <T,>(_provider: object, _entity: object, rows: T): T => rows,
   RunView: class {
     RunView = mockRunView;
   },
