@@ -21,6 +21,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { randomUUID } from 'crypto';
+import { Readable } from 'stream';
 import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
 import { z } from "zod";
@@ -748,6 +749,129 @@ export interface ToolConfig {
 export type AddToolFn = (config: ToolConfig) => void;
 
 /**
+ * Cached compiled built-in tool configurations (including pre-built Zod input schemas)
+ * so new MCP sessions reuse the compiled definitions instead of rebuilding thousands of
+ * Zod schemas per connection.
+ */
+let _compiledToolConfigsCache: { key: string; tools: ToolConfig[] } | null = null;
+
+/**
+ * Clears the cached compiled MCP tool definitions (e.g. when configuration or metadata changes).
+ */
+export function ClearCompiledToolCache(): void {
+    _compiledToolConfigsCache = null;
+}
+
+/**
+ * Computes a cache key reflecting the current MCP server configuration and engine metadata counts.
+ */
+function computeCompiledToolCacheKey(): string {
+    const md = Metadata.Provider;
+    const entityCount = md?.Entities?.length ?? 0;
+    const actionCount = ActionEngineServer.Instance.Loaded ? ActionEngineServer.Instance.Actions.length : 0;
+    const actionParamCount = ActionEngineServer.Instance.Loaded ? ActionEngineServer.Instance.ActionParams.length : 0;
+    const agentCount = AIEngine.Instance.Loaded ? AIEngine.Instance.Agents.length : 0;
+    const promptCount = AIEngine.Instance.Loaded ? AIEngine.Instance.Prompts.length : 0;
+    return JSON.stringify({
+        entityTools: _config?.mcpServerSettings?.entityTools ?? null,
+        actionTools: _config?.mcpServerSettings?.actionTools ?? null,
+        agentTools: _config?.mcpServerSettings?.agentTools ?? null,
+        agentManagementTools: _config?.mcpServerSettings?.agentManagementTools ?? null,
+        queryTools: _config?.mcpServerSettings?.queryTools ?? null,
+        promptTools: _config?.mcpServerSettings?.promptTools ?? null,
+        communicationTools: _config?.mcpServerSettings?.communicationTools ?? null,
+        entityCount,
+        actionCount,
+        actionParamCount,
+        agentCount,
+        promptCount,
+    });
+}
+
+/**
+ * Returns the compiled built-in {@link ToolConfig} list, building and caching it on first call
+ * or when the underlying metadata/configuration changes. Each tool's `execute(props, sessionContext)`
+ * receives the active connection's `MCPSessionContext` at invocation time.
+ */
+export async function GetOrBuildCompiledToolConfigs(
+    systemUser: UserInfo,
+    fallbackSessionContext: MCPSessionContext
+): Promise<ToolConfig[]> {
+    const currentKey = computeCompiledToolCacheKey();
+    if (_compiledToolConfigsCache && _compiledToolConfigsCache.key === currentKey) {
+        return _compiledToolConfigsCache.tools;
+    }
+
+    const compiledTools: ToolConfig[] = [];
+    const seenToolNames = new Set<string>();
+    const collectTool: AddToolFn = (config: ToolConfig): void => {
+        if (seenToolNames.has(config.name)) {
+            return;
+        }
+        seenToolNames.add(config.name);
+        compiledTools.push(config);
+    };
+
+    // Register Get_Entity_List tool - ultra-lightweight list of all entities
+    collectTool({
+        name: "Get_Entity_List",
+        description: "Retrieves a list of all entity names. Use Get_Single_Entity(entityName) to get full details including description, fields, and relationships for a specific entity.",
+        parameters: z.object({}),
+        scopeInfo: { scopePath: 'entity:read', resource: '*' },
+        async execute() {
+            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
+            // Just return entity names - minimal payload
+            const entityNames = md.Entities.map(e => e.Name);
+            return JSON.stringify(entityNames);
+        }
+    });
+
+    // Register Get_Single_Entity tool - full details for one entity
+    collectTool({
+        name: "Get_Single_Entity",
+        description: "Retrieves complete details for a single entity including all fields, relationships, and metadata. Use Get_Entity_List first to find entity names.",
+        parameters: z.object({
+            entityName: z.string().describe("The exact name of the entity to retrieve (e.g., 'Users', 'MJ: AI Models')")
+        }),
+        scopeInfo: (props) => ({ scopePath: 'entity:read', resource: props.entityName as string || '*' }),
+        async execute(params: Record<string, unknown>) {
+            const entityName = params.entityName as string;
+            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
+            const entity = md.Entities.find(e =>
+                e.Name.toLowerCase() === entityName.toLowerCase()
+            );
+            if (!entity) {
+                return JSON.stringify({
+                    error: `Entity '${entityName}' not found`,
+                    suggestion: "Use Get_Entity_List to see available entity names"
+                });
+            }
+            return JSON.stringify(entity, null, 2);
+        }
+    });
+
+    // Load all tool categories into the compiled cache
+    await loadEntityTools(collectTool);
+    await loadActionTools(collectTool, systemUser, fallbackSessionContext);
+    await loadAgentTools(collectTool, systemUser, fallbackSessionContext);
+    await LoadAgentManagementTools(
+        collectTool,
+        systemUser,
+        fallbackSessionContext,
+        (agent) => addAgentExecuteTool(collectTool, agent, fallbackSessionContext),
+        _config?.mcpServerSettings?.agentManagementTools
+    );
+    loadAgentRunDiagnosticTools(collectTool, fallbackSessionContext);
+    loadQueryTools(collectTool, fallbackSessionContext);
+    await loadPromptTools(collectTool, systemUser, fallbackSessionContext);
+    loadCommunicationTools(collectTool, fallbackSessionContext);
+
+    const postLoadKey = computeCompiledToolCacheKey();
+    _compiledToolConfigsCache = { key: postLoadKey, tools: compiledTools };
+    return compiledTools;
+}
+
+/**
  * Registers all tools with the MCP server for a specific authenticated session.
  * This function is called per-connection to create user-scoped tool handlers.
  *
@@ -811,59 +935,10 @@ async function registerAllTools(
         );
     };
 
-    // Register Get_Entity_List tool - ultra-lightweight list of all entities
-    addToolWithFilter({
-        name: "Get_Entity_List",
-        description: "Retrieves a list of all entity names. Use Get_Single_Entity(entityName) to get full details including description, fields, and relationships for a specific entity.",
-        parameters: z.object({}),
-        scopeInfo: { scopePath: 'entity:read', resource: '*' },
-        async execute() {
-            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
-            // Just return entity names - minimal payload
-            const entityNames = md.Entities.map(e => e.Name);
-            return JSON.stringify(entityNames);
-        }
-    });
-
-    // Register Get_Single_Entity tool - full details for one entity
-    addToolWithFilter({
-        name: "Get_Single_Entity",
-        description: "Retrieves complete details for a single entity including all fields, relationships, and metadata. Use Get_Entity_List first to find entity names.",
-        parameters: z.object({
-            entityName: z.string().describe("The exact name of the entity to retrieve (e.g., 'Users', 'MJ: AI Models')")
-        }),
-        scopeInfo: (props) => ({ scopePath: 'entity:read', resource: props.entityName as string || '*' }),
-        async execute(params: Record<string, unknown>) {
-            const entityName = params.entityName as string;
-            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
-            const entity = md.Entities.find(e =>
-                e.Name.toLowerCase() === entityName.toLowerCase()
-            );
-            if (!entity) {
-                return JSON.stringify({
-                    error: `Entity '${entityName}' not found`,
-                    suggestion: "Use Get_Entity_List to see available entity names"
-                });
-            }
-            return JSON.stringify(entity, null, 2);
-        }
-    });
-
-    // Load all tool categories
-    await loadEntityTools(addToolWithFilter);
-    await loadActionTools(addToolWithFilter, systemUser, sessionContext);
-    await loadAgentTools(addToolWithFilter, systemUser, sessionContext);
-    await LoadAgentManagementTools(
-        addToolWithFilter,
-        systemUser,
-        sessionContext,
-        (agent) => addAgentExecuteTool(addToolWithFilter, agent, sessionContext),
-        _config.mcpServerSettings?.agentManagementTools
-    );
-    loadAgentRunDiagnosticTools(addToolWithFilter, sessionContext);
-    loadQueryTools(addToolWithFilter, sessionContext);
-    await loadPromptTools(addToolWithFilter, systemUser, sessionContext);
-    loadCommunicationTools(addToolWithFilter, sessionContext);
+    const compiledTools = await GetOrBuildCompiledToolConfigs(systemUser, sessionContext);
+    for (const toolConfig of compiledTools) {
+        addToolWithFilter(toolConfig);
+    }
 
     // Register custom tool providers
     for (const provider of activeCustomToolProviders) {
@@ -1328,7 +1403,6 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
             const bodyBuffer = Buffer.concat(chunks as unknown as Uint8Array[]);
 
             // Create a new readable stream from the buffered body for the transport
-            const { Readable } = await import('stream');
             const bodyStream = new Readable({
                 read() {
                     this.push(bodyBuffer);
@@ -1493,7 +1567,7 @@ async function loadActionTools(
     systemUser: UserInfo,
     sessionContext: MCPSessionContext
 ): Promise<void> {
-    const actionTools = _config.mcpServerSettings?.actionTools;
+    const actionTools = _config?.mcpServerSettings?.actionTools;
 
     if (actionTools && actionTools.length > 0) {
         // Ensure ActionEngine is configured
@@ -1511,8 +1585,8 @@ async function loadActionTools(
                     category: z.string().optional().describe("Category name to filter actions")
                 }),
                 scopeInfo: { scopePath: 'action:read', resource: '*' },
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
                     const actions = await discoverActions(props.pattern as string || '*', props.category as string | undefined, sessionUser);
                     const paramCounts = CountByUUID(actionEngine.ActionParams, (p: MJActionParamEntity) => p.ActionID);
                     return JSON.stringify(actions.map(action => ({
@@ -1544,8 +1618,8 @@ async function loadActionTools(
                     scopePath: 'action:execute',
                     resource: (props.actionName as string) || (props.actionId as string) || '*'
                 }),
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
                     try {
                         const actionEngine = ActionEngineServer.Instance;
                         await actionEngine.Config(false, sessionUser);
@@ -1616,8 +1690,8 @@ async function loadActionTools(
                     actionId: z.string().optional().describe("ID of the action")
                 }),
                 scopeInfo: (props) => ({ scopePath: 'action:read', resource: (props.actionName as string) || (props.actionId as string) || '*' }),
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
                     const actionEngine = ActionEngineServer.Instance;
                     await actionEngine.Config(false, sessionUser);
 
@@ -1770,8 +1844,8 @@ function addActionExecuteTool(
         description: `Execute the ${action.Name || 'Unknown'} action. ${action.Description || ''}`,
         parameters: z.object(paramSchema),
         scopeInfo: { scopePath: 'action:execute', resource: action.Name || '*' },
-        async execute(props) {
-            const sessionUser = sessionContext.user;
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             try {
                 const runParams: RunActionParams = {
                     Action: action,
@@ -1821,7 +1895,7 @@ async function loadAgentTools(
     systemUser: UserInfo,
     sessionContext: MCPSessionContext
 ): Promise<void> {
-    const agentTools = _config.mcpServerSettings?.agentTools;
+    const agentTools = _config?.mcpServerSettings?.agentTools;
 
     if (agentTools && agentTools.length > 0) {
         // Ensure AIEngine is configured
@@ -1838,8 +1912,8 @@ async function loadAgentTools(
                     pattern: z.string().describe("Name pattern to match agents (supports wildcards: *, *Agent, Agent*, *Agent*)")
                 }),
                 scopeInfo: { scopePath: 'agent:read', resource: '*' },
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
                     const agents = await discoverAgents(props.pattern as string, sessionUser);
                     return JSON.stringify(agents.map(agent => ({
                         id: agent.ID,
@@ -1872,8 +1946,8 @@ async function loadAgentTools(
                     scopePath: 'agent:execute',
                     resource: (props.agentName as string) || (props.agentId as string) || '*'
                 }),
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
                     try {
                         // Find the agent
                         const aiEngine = AIEngine.Instance;
@@ -1981,8 +2055,8 @@ async function loadAgentTools(
                     runId: z.string().describe("The agent run ID")
                 }),
                 scopeInfo: (props) => ({ scopePath: 'agent:monitor', resource: props.runId as string || '*' }),
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
                     const md = new Metadata(); // global-provider-ok: MCP server bootstrap
                     const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
                     const loaded = await agentRun.Load(props.runId as string);
@@ -2014,8 +2088,8 @@ async function loadAgentTools(
                     runId: z.string().describe("The run ID of the agent execution to cancel")
                 }),
                 scopeInfo: (props) => ({ scopePath: 'agent:cancel', resource: props.runId as string || '*' }),
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
                     // Note: Actual cancellation would require the agent to check the cancellation token
                     // For now, we can update the status to indicate cancellation was requested
                     const md = new Metadata(); // global-provider-ok: MCP server bootstrap
@@ -2065,8 +2139,8 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             limit: z.number().default(10).describe("Maximum number of runs to return")
         }),
         scopeInfo: { scopePath: 'agent:monitor', resource: '*' },
-        async execute(props) {
-            const sessionUser = sessionContext.user;
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             const rv = new RunView();
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - (props.days as number));
@@ -2104,8 +2178,8 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
         parameters: z.object({
             runId: z.string().describe("The agent run ID to summarize")
         }),
-        async execute(props) {
-            const sessionUser = sessionContext.user;
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             const md = new Metadata(); // global-provider-ok: MCP server bootstrap
             const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
             const loaded = await agentRun.Load(props.runId as string);
@@ -2178,8 +2252,8 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             maxChars: z.number().default(5000).describe("Maximum characters for I/O data (0 = no truncation)")
         }),
         scopeInfo: (props) => ({ scopePath: 'agent:monitor', resource: props.runId as string || '*' }),
-        async execute(props) {
-            const sessionUser = sessionContext.user;
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             const rv = new RunView();
             const stepsResult = await rv.RunView<MJAIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',
@@ -2240,8 +2314,8 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             stepNumber: z.number().describe("The step number to retrieve (1-based)"),
             outputFile: z.string().optional().describe("File path to write JSON output (optional)")
         }),
-        async execute(props) {
-            const sessionUser = sessionContext.user;
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             const rv = new RunView();
             const stepsResult = await rv.RunView<MJAIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',
@@ -2319,7 +2393,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
  * @param sessionContext - The authenticated session context
  */
 function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSessionContext): void {
-    const queryTools = _config.mcpServerSettings?.queryTools;
+    const queryTools = _config?.mcpServerSettings?.queryTools;
 
     if (queryTools?.enabled) {
         // Add query discovery tool
@@ -2331,8 +2405,9 @@ function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSession
                 category: z.string().optional().describe("Category name or path to filter queries (e.g., 'Reports', '/MJ/AI/')")
             }),
             scopeInfo: { scopePath: 'query:read', resource: '*' },
-            async execute(props) {
-                const sessionUser = sessionContext.user;
+            async execute(props, activeSessionContext) {
+                const sessionUser = (activeSessionContext ?? sessionContext).user;
+                void sessionUser;
 
                 try {
                     let queries = QueryEngine.Instance.Queries
@@ -2384,8 +2459,8 @@ function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSession
                 scopePath: 'query:run',
                 resource: (props.queryName as string) || (props.queryId as string) || '*'
             }),
-            async execute(props) {
-                const sessionUser = sessionContext.user;
+            async execute(props, activeSessionContext) {
+                const sessionUser = (activeSessionContext ?? sessionContext).user;
 
                 if (!props.queryName && !props.queryId) {
                     return JSON.stringify({
@@ -2510,7 +2585,7 @@ async function loadPromptTools(
     systemUser: UserInfo,
     sessionContext: MCPSessionContext
 ): Promise<void> {
-    const promptTools = _config.mcpServerSettings?.promptTools;
+    const promptTools = _config?.mcpServerSettings?.promptTools;
 
     if (promptTools && promptTools.length > 0) {
         // Ensure AIEngine is configured
@@ -2528,8 +2603,8 @@ async function loadPromptTools(
                     category: z.string().optional().describe("Category name to filter prompts")
                 }),
                 scopeInfo: { scopePath: 'prompt:read', resource: '*' },
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
 
                     const aiEngine = AIEngine.Instance;
                     await aiEngine.Config(false, sessionUser);
@@ -2584,8 +2659,8 @@ async function loadPromptTools(
                     scopePath: 'prompt:execute',
                     resource: (props.promptName as string) || (props.promptId as string) || '*'
                 }),
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
 
                     try {
                         const aiEngine = AIEngine.Instance;
@@ -2658,7 +2733,7 @@ async function loadPromptTools(
  * @param sessionContext - The authenticated session context
  */
 function loadCommunicationTools(addToolWithFilter: AddToolFn, sessionContext: MCPSessionContext): void {
-    const commTools = _config.mcpServerSettings?.communicationTools;
+    const commTools = _config?.mcpServerSettings?.communicationTools;
 
     if (commTools?.enabled) {
         // Add email sending tool
@@ -2696,8 +2771,8 @@ function loadCommunicationTools(addToolWithFilter: AddToolFn, sessionContext: MC
             description: "List available communication providers configured in the system",
             parameters: z.object({}),
             scopeInfo: { scopePath: 'communication:read', resource: '*' },
-            async execute() {
-                const sessionUser = sessionContext.user;
+            async execute(_props, activeSessionContext) {
+                const sessionUser = (activeSessionContext ?? sessionContext).user;
                 const rv = new RunView();
                 const result = await rv.RunView({
                     EntityName: 'MJ: Communication Providers',
@@ -2789,8 +2864,8 @@ function addAgentExecuteTool(
             waitForCompletion: z.boolean().optional().default(true).describe("Wait for agent to complete before returning")
         }),
         scopeInfo: { scopePath: 'agent:execute', resource: agent.Name || '*' },
-        async execute(props) {
-            const sessionUser = sessionContext.user;
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             try {
                 // Convert conversation history to ChatMessage format
                 const historyArray = props.conversationHistory as Array<{ role: string; content: string }> | undefined;
@@ -2855,7 +2930,7 @@ function addAgentExecuteTool(
  * @param addToolWithFilter - Function to register tools with filter check
  */
 async function loadEntityTools(addToolWithFilter: AddToolFn): Promise<void> {
-    const entityTools = _config.mcpServerSettings?.entityTools;
+    const entityTools = _config?.mcpServerSettings?.entityTools;
 
     if (entityTools && entityTools.length > 0) {
         const md = new Metadata(); // global-provider-ok: MCP server bootstrap
@@ -3414,7 +3489,7 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}):
  * @param _systemUser - System user for context (unused in this function but kept for API consistency)
  */
 async function loadEntityToolsForListing(_systemUser: UserInfo): Promise<void> {
-    const entityTools = _config.mcpServerSettings?.entityTools;
+    const entityTools = _config?.mcpServerSettings?.entityTools;
 
     if (entityTools && entityTools.length > 0) {
         const md = new Metadata(); // global-provider-ok: MCP server bootstrap
@@ -3449,7 +3524,7 @@ async function loadEntityToolsForListing(_systemUser: UserInfo): Promise<void> {
  * @param systemUser - System user for context when discovering agents
  */
 async function loadAgentToolsForListing(systemUser: UserInfo): Promise<void> {
-    const agentTools = _config.mcpServerSettings?.agentTools;
+    const agentTools = _config?.mcpServerSettings?.agentTools;
 
     if (agentTools && agentTools.length > 0) {
         const aiEngine = AIEngine.Instance;

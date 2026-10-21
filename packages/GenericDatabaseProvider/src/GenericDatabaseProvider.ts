@@ -2449,33 +2449,51 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 aggregateValidationErrors = aggregateBuild.validationErrors;
             }
 
-            // ── Execute queries in parallel ──
-            const queries: Promise<unknown>[] = [];
-            const queryKeys: string[] = [];
+            // ── Execute queries (single TDS batch via ExecuteSQLBatch when multiple SQL statements are needed) ──
+            const sqlQueries: string[] = [];
+            const sqlQueryKeys: string[] = [];
+            let countExecutorPromise: Promise<unknown> | null = null;
 
             if (params.ResultType !== 'count_only') {
-                queries.push(this.ExecuteSQL(viewSQL, undefined, undefined, contextUser));
-                queryKeys.push('data');
+                sqlQueries.push(viewSQL);
+                sqlQueryKeys.push('data');
             }
 
             const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
             const willNeedCount = countSQL && (usingPagination || params.ResultType === 'count_only');
             if (willNeedCount) {
-                queries.push(countExecutor && params.ResultType === 'count_only'
-                    ? countExecutor(countSQL!)
-                    : this.ExecuteSQL(countSQL!, undefined, undefined, contextUser));
-                queryKeys.push('count');
+                if (countExecutor && params.ResultType === 'count_only') {
+                    countExecutorPromise = countExecutor(countSQL!);
+                } else {
+                    sqlQueries.push(countSQL!);
+                    sqlQueryKeys.push('count');
+                }
             }
 
             const aggregateStartTime = Date.now();
             if (aggregateSQL) {
-                queries.push(this.ExecuteSQL(aggregateSQL, undefined, undefined, contextUser));
-                queryKeys.push('aggregate');
+                sqlQueries.push(aggregateSQL);
+                sqlQueryKeys.push('aggregate');
             }
 
-            const results = await Promise.all(queries);
             const resultMap: Record<string, unknown> = {};
-            queryKeys.forEach((key, index) => { resultMap[key] = results[index]; });
+            if (sqlQueries.length === 1 && !countExecutorPromise) {
+                resultMap[sqlQueryKeys[0]] = await this.ExecuteSQL(sqlQueries[0], undefined, undefined, contextUser);
+            } else if (sqlQueries.length > 0 && countExecutorPromise) {
+                const [batchResults, countRes] = await Promise.all([
+                    sqlQueries.length === 1
+                        ? this.ExecuteSQL(sqlQueries[0], undefined, undefined, contextUser).then(r => [r])
+                        : this.ExecuteSQLBatch(sqlQueries, undefined, undefined, contextUser),
+                    countExecutorPromise,
+                ]);
+                sqlQueryKeys.forEach((key, index) => { resultMap[key] = batchResults[index]; });
+                resultMap['count'] = countRes;
+            } else if (sqlQueries.length > 1) {
+                const batchResults = await this.ExecuteSQLBatch(sqlQueries, undefined, undefined, contextUser);
+                sqlQueryKeys.forEach((key, index) => { resultMap[key] = batchResults[index]; });
+            } else if (countExecutorPromise) {
+                resultMap['count'] = await countExecutorPromise;
+            }
 
             // ── Process data rows ──
             let retData = (resultMap['data'] as Record<string, unknown>[]) || [];
