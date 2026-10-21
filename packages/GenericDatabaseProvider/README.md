@@ -124,6 +124,20 @@ Validation enforced by `BuildKeysetSeekClause`:
 
 See **[KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md)** for the full pattern and reference implementations.
 
+## Single-Flight `RunView` Coalescing & Bounded Batch Concurrency
+
+To prevent connection pool starvation and thundering-herd SQL queries when multiple concurrent requests or engines query the same uncached view simultaneously, `GenericDatabaseProvider` provides two built-in safeguards:
+
+1. **Single-Flight In-Flight `RunView` Coalescing (`EnableInflightRunViewCoalescing`)**:
+   - Concurrent `InternalRunView` calls on the same non-transactional provider (`TransactionDepth === 0`) with identical canonical fingerprints (`EntityName`/`ViewID`/`ViewName`, `ExtraFilter`, `OrderBy`, `Fields`, `UserSearchString`, `MaxRows`, `StartRow`, `ResultType`, `Aggregates`, and user role/ID scope when RLS applies) share a single database execution.
+   - Each caller receives an isolated deep clone of the `Results` array and row objects (`cloneRunViewResultForCoalescedCaller`) so in-place caller mutations never bleed across requests.
+   - Eligible only when `ResultType` is `'simple'` or `'count_only'` and `SaveViewResults` / `ForceAuditLog` are not set.
+
+2. **Bounded Batch Concurrency (`MaxConcurrentViewsPerBatch = 8`)**:
+   - `InternalRunViews` deduplicates identical view items within the batch and limits concurrent physical database executions to `GenericDatabaseProvider.MaxConcurrentViewsPerBatch` (default `8`), preventing large `RunViews` batches from exhausting the connection pool.
+
+See the **[Server Scaling and Broadcast Architecture Guide](../../guides/SERVER_SCALING_AND_BROADCAST_ARCHITECTURE.md)** for full details.
+
 ## Server-Side Cache Backend
 
 `GenericDatabaseProvider` owns the `LocalStorageProvider` property that all database providers (SQL Server, PostgreSQL) inherit. This is the cache backend used by `LocalCacheManager`, metadata persistence, and all server-side caching operations.
