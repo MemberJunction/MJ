@@ -997,11 +997,13 @@ jobs:
   # in the repo's shared, LRU-evicted Actions cache budget until it aged out — and what it would
   # evict is the `next` turbo seed that makes every PR's build fast, plus the pnpm store.
   # Best-effort by design: a failed cleanup must never red an otherwise green run.
+  # Only `build` saves the entry, so when `build` was skipped (no unit-test paths changed, see
+  # the `changes` job) there is nothing to delete and the job does not spin up a runner.
   # ---------------------------------------------------------------------------------------
   cleanup:
     name: Clean up run cache
-    if: always()
-    needs: [test, esm-guard]
+    if: always() && needs.build.result != 'skipped'
+    needs: [build, test, esm-guard]
     timeout-minutes: 10
     runs-on: ubuntu-latest
     permissions:
