@@ -6394,7 +6394,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // below well-defined.
                 OrderBy: 'ID ASC',
                 AfterKey: afterID ? CompositeKey.FromID(afterID) : undefined,
-                IgnoreMaxRows: true, // the entity-level cap is exactly what we're defeating here
+                // An explicit MaxRows already overrides the entity-level UserViewMaxRows cap on a keyset
+                // read. Do NOT add IgnoreMaxRows: it drops MaxRows too, so the first "page" becomes the
+                // whole record map.
                 MaxRows: PAGE_SIZE,
                 ResultType: 'simple',
                 BypassCache: true, // sync decisions must reflect committed record-map state
@@ -6406,7 +6408,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
             rowsRead += page.Results.length;
             if (onPage) onPage(page.Results);
-            else rows.push(...page.Results);
+            // No spread: push(...rows) passes every row as a call argument and throws
+            // "Maximum call stack size exceeded" past ~100k rows if a provider returns an oversized page.
+            else for (const row of page.Results) rows.push(row);
             if (page.Results.length < PAGE_SIZE) return { Rows: rows, RowsRead: rowsRead, Complete: true };
             afterID = page.Results[page.Results.length - 1].ID;
         }

@@ -5,9 +5,9 @@ import { BaseInfo } from '../generic/baseInfo';
 // Matches the real MJ pattern: call super() (NO args), let field initializers
 // run, then call copyInitData(initData) from the subclass constructor.
 abstract class TestableInfo extends BaseInfo {
-    public CallCopyInitData(initData: Record<string, unknown>) {
+    public CallCopyInitData(initData: Record<string, unknown>, skipKeys?: ReadonlySet<string>) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (this as unknown as { copyInitData(d: unknown): void }).copyInitData(initData);
+        (this as unknown as { copyInitData(d: unknown, s?: ReadonlySet<string>): void }).copyInitData(initData, skipKeys);
     }
 }
 
@@ -176,5 +176,38 @@ describe('copyInitData — @deprecated aliases for renamed fields', () => {
     it('does not copy a key that merely matches an inherited METHOD', () => {
         const info = new AliasedInfo({ CallCopyInitData: 'clobbered' });
         expect(typeof info.CallCopyInitData).toBe('function');
+    });
+
+    it('overwrites non-null default values when initData supplies null, while fast-skipping already-null fields', () => {
+        class NonNullDefaultInfo extends TestableInfo {
+            TrustServerCacheCompletely: boolean | null = true;
+            AlreadyNullField: string | null = null;
+            private _items: string[] = [];
+
+            get Items(): string[] {
+                return this._items;
+            }
+
+            constructor(initData: Record<string, unknown> | null = null, skipKeys?: ReadonlySet<string>) {
+                super();
+                if (initData) this.CallCopyInitData(initData, skipKeys);
+            }
+        }
+
+        const info = new NonNullDefaultInfo({
+            TrustServerCacheCompletely: null,
+            AlreadyNullField: null,
+            Items: ['skip-me'],
+        }, new Set(['Items']));
+
+        expect(info.TrustServerCacheCompletely).toBeNull();
+        expect(info.AlreadyNullField).toBeNull();
+        expect(info.Items).toEqual([]);
+        expect(info.toJSON()).toMatchObject({
+            ID: null,
+            TrustServerCacheCompletely: null,
+            AlreadyNullField: null,
+            Items: [],
+        });
     });
 });

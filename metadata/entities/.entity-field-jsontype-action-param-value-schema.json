@@ -1,0 +1,33 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on ValueSchema (MJ: Action Params entity) so CodeGen emits",
+      "a typed ValueSchemaObject accessor returning MJActionParamEntity_IActionParamValueSchema.",
+      "The EntityField row must exist (created by a CodeGen pass over the new column) before",
+      "this @lookup resolves on push."
+    ],
+    "fields": {
+      "Name": "MJ: Action Params"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IActionParamValueSchema",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IActionParamValueSchema.ts"
+          },
+          "_comments": [
+            "ValueSchema field — JSON Schema fragment the native tool builder declares for this param"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Action Params&Name=ValueSchema"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Action Params"
+    }
+  }
+]

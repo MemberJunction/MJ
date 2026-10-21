@@ -128,6 +128,7 @@ import { SyncEngine, DeferrableLookupError } from '../lib/sync-engine';
 import type { SyncResolutionCollector } from '../lib/sync-engine';
 import type { BaseEntity, UserInfo } from '@memberjunction/core';
 import type { BatchContextStub } from '../lib/batch-context-index';
+import { OptionalEnvMissingError } from '../lib/env-reference';
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -148,7 +149,6 @@ function makeStub(entityName: string, fields: Record<string, unknown>): BatchCon
     EntityInfo: {
       Name: entityName,
       PrimaryKeys: [{ Name: 'ID' }],
-      FirstPrimaryKey: { Name: 'ID' },
       Fields: Object.keys(fields).map((name) => ({ Name: name })),
     },
     Get: (field: string) => fields[field],
@@ -623,6 +623,36 @@ describe('SyncEngine reference resolution (processFieldValue / resolveLookup)', 
         'Environment variable not found: MJ_REFS_TEST_MISSING',
       );
     });
+
+    it('resolves an optional variable that is set', async () => {
+      vi.stubEnv('MJ_REFS_TEST_VALUE', 'from-env');
+
+      const result: unknown = await engine.processFieldValue('@env:MJ_REFS_TEST_VALUE?optional', tmpDir);
+
+      expect(result).toBe('from-env');
+    });
+
+    it('throws OptionalEnvMissingError for a missing optional variable', async () => {
+      await expect(engine.processFieldValue('@env:MJ_REFS_TEST_MISSING?optional', tmpDir)).rejects.toBeInstanceOf(
+        OptionalEnvMissingError,
+      );
+    });
+
+    it('resolves an optional variable that is set to an empty string', async () => {
+      vi.stubEnv('MJ_REFS_TEST_EMPTY', '');
+
+      const result: unknown = await engine.processFieldValue('@env:MJ_REFS_TEST_EMPTY?optional', tmpDir);
+
+      expect(result).toBe('');
+    });
+
+    it('rejects an unknown modifier', async () => {
+      vi.stubEnv('MJ_REFS_TEST_VALUE', 'from-env');
+
+      await expect(engine.processFieldValue('@env:MJ_REFS_TEST_VALUE?bogus', tmpDir)).rejects.toThrow(
+        'Invalid @env reference: @env:MJ_REFS_TEST_VALUE?bogus',
+      );
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -670,6 +700,201 @@ describe('SyncEngine reference resolution (processFieldValue / resolveLookup)', 
       await expect(
         engine.processFieldValue('@lookup:MJ: AI Prompt Categories.Bogus=X', tmpDir),
       ).rejects.toThrow("Field 'Bogus' not found in entity 'MJ: AI Prompt Categories'");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // @lookup — criteria that come from @env:
+  // ---------------------------------------------------------------------------
+
+  describe('@lookup — env-sourced criteria are not printed', () => {
+    const SECRET_EMAIL = 'secret.owner@example.com';
+
+    beforeEach(() => {
+      vi.stubEnv('MJ_LOOKUP_EMAIL', SECRET_EMAIL);
+    });
+
+    it('prints a label in the not-found message and queries with the real value', async () => {
+      const error = await engine
+        .processFieldValue('@lookup:MJ: Users.Email=@env:MJ_LOOKUP_EMAIL&Department=Ops', tmpDir)
+        .catch((e: Error) => e);
+
+      expect((error as Error).message).toBe(
+        "Lookup failed: No record found in 'MJ: Users' where Email=<from @env:MJ_LOOKUP_EMAIL> AND Department='Ops'",
+      );
+      expect(runViewInvocations[0].ExtraFilter).toContain(SECRET_EMAIL);
+    });
+
+    it('prints a label in the deferrable error and keeps the real value for the retry', async () => {
+      const error = await engine
+        .processFieldValue('@lookup:MJ: Users.Email=@env:MJ_LOOKUP_EMAIL?allowDefer', tmpDir)
+        .catch((e: Error) => e);
+
+      expect(error).toBeInstanceOf(DeferrableLookupError);
+      const deferrable = error as DeferrableLookupError;
+      expect(deferrable.message).not.toContain(SECRET_EMAIL);
+      expect(deferrable.lookupFields).toEqual([{ fieldName: 'Email', fieldValue: SECRET_EMAIL }]);
+      expect(deferrable.originalValue).toBe('@lookup:MJ: Users.Email=@env:MJ_LOOKUP_EMAIL?allowDefer');
+    });
+
+    it('prints a label in the auto-create log line', async () => {
+      const created = new FakeCreatedEntity('created-user');
+      entityObjectFactory = () => created;
+      const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+      await engine.processFieldValue('@lookup:MJ: Users.Email=@env:MJ_LOOKUP_EMAIL?create', tmpDir);
+
+      const lines = log.mock.calls.map((call) => String(call[0]));
+      expect(lines).toContain('📝 Auto-creating MJ: Users record where Email=<from @env:MJ_LOOKUP_EMAIL>');
+      expect(lines.join('\n')).not.toContain(SECRET_EMAIL);
+      log.mockRestore();
+    });
+
+    it('gives the created record and its env-sourced fields to BeforeLookupCreateSave before the save', async () => {
+      const created = new FakeCreatedEntity('created-user');
+      entityObjectFactory = () => created;
+      vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      const calls: Array<{ entity: BaseEntity; fields: Record<string, string[]>; savesBefore: number }> = [];
+      engine.BeforeLookupCreateSave = (entity, envFields) => {
+        const fields: Record<string, string[]> = {};
+        envFields.forEach((names, field) => (fields[field] = [...names]));
+        calls.push({ entity, fields, savesBefore: created.SaveCallCount });
+      };
+
+      await engine.processFieldValue('@lookup:MJ: Users.Email=@env:MJ_LOOKUP_EMAIL?create', tmpDir);
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0].entity).toBe(created);
+      expect(calls[0].fields).toEqual({ Email: ['MJ_LOOKUP_EMAIL'] });
+      expect(calls[0].savesBefore).toBe(0);
+      expect(created.SaveCallCount).toBe(1);
+    });
+
+    it('masks the variable value in an auto-create failure message', async () => {
+      entityObjectFactory = () => new FakeCreatedEntity('never-saved', false, `Duplicate value '${SECRET_EMAIL}'`);
+      vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+      const error = await engine
+        .processFieldValue('@lookup:MJ: Users.Email=@env:MJ_LOOKUP_EMAIL?create', tmpDir)
+        .catch((e: Error) => e);
+
+      expect((error as Error).message).toBe("Failed to auto-create MJ: Users: Duplicate value '<from @env:MJ_LOOKUP_EMAIL>'");
+    });
+
+    it('prints literal criteria as before when no criteria come from @env:', async () => {
+      await expect(engine.processFieldValue('@lookup:MJ: Users.Email=x@y.z', tmpDir)).rejects.toThrow(
+        "Lookup failed: No record found in 'MJ: Users' where Email='x@y.z'",
+      );
+    });
+
+    it('masks a create field value from @env: in an auto-create failure message', async () => {
+      vi.stubEnv('MJ_LOOKUP_DESCRIPTION', 'secret description text');
+      entityObjectFactory = () =>
+        new FakeCreatedEntity('never-saved', false, "Description 'secret description text' is too long");
+      vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+      const error = await engine
+        .processFieldValue(
+          '@lookup:MJ: AI Prompt Categories.Name=Fresh?create&Description=@env:MJ_LOOKUP_DESCRIPTION',
+          tmpDir,
+        )
+        .catch((e: Error) => e);
+
+      expect((error as Error).message).toBe(
+        "Failed to auto-create MJ: AI Prompt Categories: Description '<from @env:MJ_LOOKUP_DESCRIPTION>' is too long",
+      );
+    });
+
+    it('prints a label for a @parent: criterion copied from an env-sourced parent field', async () => {
+      await engine.processFieldValue('@env:MJ_LOOKUP_EMAIL', tmpDir);
+      const parent = makeStub('MJ: AI Agents', { ID: 'agent-1', OwnerEmail: SECRET_EMAIL });
+
+      const error = await engine
+        .processFieldValue('@lookup:MJ: Users.Email=@parent:OwnerEmail?allowDefer', tmpDir, parent)
+        .catch((e: Error) => e);
+
+      expect(error).toBeInstanceOf(DeferrableLookupError);
+      const deferrable = error as DeferrableLookupError;
+      expect(deferrable.message).toBe(
+        "Lookup failed: No record found in 'MJ: Users' where Email=<from @env:MJ_LOOKUP_EMAIL>",
+      );
+      expect(deferrable.lookupFields).toEqual([{ fieldName: 'Email', fieldValue: SECRET_EMAIL }]);
+      expect(runViewInvocations[0].ExtraFilter).toContain(SECRET_EMAIL);
+    });
+
+    it('records a lookup result that equals an env value and shows the label in its note', async () => {
+      const secretKey = 'f3a1c2d4-0000-4000-8000-00000000abcd';
+      vi.stubEnv('MJ_LOOKUP_USER_ID', secretKey);
+      await engine.processFieldValue('@env:MJ_LOOKUP_USER_ID', tmpDir);
+      runViewHandler = () => ({ Success: true, Results: [{ ID: secretKey }] });
+      const collector: SyncResolutionCollector = { notes: [], fieldPrefix: 'fields', EnvFields: new Map() };
+
+      const result: unknown = await engine.processFieldValue(
+        '@lookup:MJ: Users.Email=x@y.z',
+        tmpDir,
+        null,
+        null,
+        0,
+        undefined,
+        collector,
+        'UserID',
+      );
+
+      expect(result).toBe(secretKey);
+      expect(collector.EnvFields?.get('UserID')).toEqual(new Set(['MJ_LOOKUP_USER_ID']));
+      expect(collector.notes).toEqual([
+        {
+          type: 'lookup',
+          field: 'fields.UserID',
+          expression: '@lookup:MJ: Users.Email=x@y.z',
+          resolved: '<from @env:MJ_LOOKUP_USER_ID>',
+        },
+      ]);
+    });
+
+    it('prints a label for a criterion lookup whose result equals an env value', async () => {
+      const secretModelId = 'b7e9d2c1-0000-4000-8000-00000000beef';
+      vi.stubEnv('MJ_LOOKUP_MODEL_ID', secretModelId);
+      await engine.processFieldValue('@env:MJ_LOOKUP_MODEL_ID', tmpDir);
+      runViewHandler = (params) =>
+        params.EntityName === 'MJ: AI Models'
+          ? { Success: true, Results: [{ ID: secretModelId }] }
+          : { Success: true, Results: [] };
+
+      const error = await engine
+        .processFieldValue('@lookup:MJ: AI Model Vendors.ModelID=@lookup:MJ: AI Models.Name=GPT 5', tmpDir)
+        .catch((e: Error) => e);
+
+      expect((error as Error).message).toBe(
+        "Lookup failed: No record found in 'MJ: AI Model Vendors' where ModelID=<from @env:MJ_LOOKUP_MODEL_ID>",
+      );
+    });
+
+    it('shows the label in the nested note when the outer lookup resolves', async () => {
+      const secretModelId = 'b7e9d2c1-0000-4000-8000-00000000beef';
+      vi.stubEnv('MJ_LOOKUP_MODEL_ID', secretModelId);
+      await engine.processFieldValue('@env:MJ_LOOKUP_MODEL_ID', tmpDir);
+      runViewHandler = (params) =>
+        params.EntityName === 'MJ: AI Models'
+          ? { Success: true, Results: [{ ID: secretModelId }] }
+          : { Success: true, Results: [{ ID: 'mv-1' }] };
+      const collector: SyncResolutionCollector = { notes: [], fieldPrefix: 'fields' };
+
+      await engine.processFieldValue(
+        '@lookup:MJ: AI Model Vendors.ModelID=@lookup:MJ: AI Models.Name=GPT 5',
+        tmpDir,
+        null,
+        null,
+        0,
+        undefined,
+        collector,
+        'ModelVendorID',
+      );
+
+      expect(collector.notes[0].nested).toEqual([
+        { expression: '@lookup:MJ: AI Models.Name=GPT 5', resolved: '<from @env:MJ_LOOKUP_MODEL_ID>' },
+      ]);
+      expect(JSON.stringify(collector.notes)).not.toContain(secretModelId);
     });
   });
 });

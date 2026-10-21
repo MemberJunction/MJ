@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ComponentFixture } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
@@ -64,6 +64,13 @@ describe('MarkdownComponent (DOM)', () => {
     expect(container(f).classList.contains('my-custom-class')).toBe(true);
   });
 
+  it('re-renders when the canonical Data input changes, not only the deprecated data alias', () => {
+    const f = render({ Data: '# One' });
+    f.componentRef.setInput('Data', '# Two');
+    f.detectChanges();
+    expect(container(f).querySelector('h1')?.textContent).toContain('Two');
+  });
+
   it('emits the rendered @Output with hasCodeBlocks=true for code content', async () => {
     const f = render({ data: '' });
     const events = capture<MarkdownRenderEvent>(f.componentInstance.rendered);
@@ -92,6 +99,51 @@ describe('MarkdownComponent (DOM)', () => {
 
     expect(events.length).toBeGreaterThanOrEqual(1);
     expect(events[events.length - 1].hasCodeBlocks).toBe(false);
+  });
+
+  describe('TeX math', () => {
+    // postRenderProcessing awaits the lazily-imported KaTeX chunk, so wait for the typeset
+    // output rather than for a fixed number of microtasks.
+    const typesetIn = async (f: ComponentFixture<MarkdownComponent>): Promise<HTMLElement> => {
+      const c = container(f);
+      await vi.waitFor(() => expect(c.querySelector('math')).not.toBeNull());
+      return c;
+    };
+
+    it('typesets inline and display math after render', async () => {
+      const c = await typesetIn(render({ data: 'Area $\\pi r^2$\n\n$$\n\\sum_{i=1}^n i\n$$' }));
+      expect(c.querySelectorAll('math').length).toBe(2);
+      expect(c.querySelector('math[display="block"] munderover')).not.toBeNull();
+      expect(c.querySelector('code.mj-math')).toBeNull();
+    });
+
+    it('typesets through the Angular sanitizer path too (no passthrough, no SVG renderer)', async () => {
+      const c = await typesetIn(render({ data: 'so $x_i + y_j$ holds', enableSvgRenderer: false }));
+      expect(c.querySelector('em')).toBeNull();
+      expect(c.querySelector('annotation')?.textContent).toBe('x_i + y_j');
+    });
+
+    it('renders a JATS MathML formula and fixes its styled letters', async () => {
+      const f = render({ data: 'Field <mml:math><mml:mi mathvariant="bold">E</mml:mi></mml:math> here' });
+      const c = container(f);
+      await vi.waitFor(() => expect(c.querySelector('mi')?.textContent).toBe('𝐄'));
+      expect(c.querySelector('math')?.namespaceURI).toBe('http://www.w3.org/1998/Math/MathML');
+    });
+
+    it('EnableMath=false leaves the dollars as text', async () => {
+      const f = render({ data: '$x^2$', EnableMath: false });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(container(f).querySelector('math, code.mj-math')).toBeNull();
+      expect(container(f).textContent).toContain('$x^2$');
+    });
+
+    it('EnableMath=false still fixes the styled letters of MathML markup', async () => {
+      const f = render({ data: 'Field <math><mi mathvariant="bold">E</mi></math> here', EnableMath: false });
+      const c = container(f);
+      await vi.waitFor(() => expect(c.querySelector('mi')?.textContent).toBe('𝐄'));
+      expect(c.querySelector('mi[mathvariant]')).toBeNull();
+    });
   });
 
   /**

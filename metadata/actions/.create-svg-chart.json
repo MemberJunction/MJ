@@ -19,7 +19,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Type of chart to generate: 'bar', 'line', 'pie', 'scatter', 'area'. Required.",
-            "IsRequired": true
+            "IsRequired": true,
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "bar",
+                "line",
+                "pie",
+                "scatter",
+                "area"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "588CFAFD-1EA3-478E-935A-33932113B44A"
@@ -37,7 +47,27 @@
             "ValueType": "Other",
             "IsArray": true,
             "Description": "Array of data objects (can be passed as object or JSON string). For bar charts: {label, value} or {x, y}. For line/area/scatter: {x, y}. For pie: {label, value}. Required.",
-            "IsRequired": true
+            "IsRequired": true,
+            "ValueSchema": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "number"
+                },
+                "x": {
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                },
+                "y": {
+                  "type": "number"
+                }
+              }
+            }
           },
           "primaryKey": {
             "ID": "71FD517A-B020-4D93-A543-67ABE3BD48BD"
@@ -110,7 +140,10 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Chart width in pixels. Default: 800.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "5BA494B6-E742-441F-AA15-BD7587EB8B26"
@@ -129,7 +162,10 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Chart height in pixels. Default: 600.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "DD01BD72-1555-43C5-A7C1-0B1199E0E298"
@@ -148,7 +184,16 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Color palette name (optional). Options: 'mjDefault', 'gray', 'pastel', 'highContrast'. Default: 'mjDefault'.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "mjDefault",
+                "gray",
+                "pastel",
+                "highContrast"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "C3D4E5F6-A789-0123-CDEF-234567890123"
@@ -167,7 +212,10 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Show grid lines (optional). 'true' or 'false'. Default: 'false'.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "D4E5F6A7-8901-2345-DEF0-345678901234"
@@ -186,7 +234,10 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Show legend (optional). 'true' or 'false'. Default: 'false'. Currently only supported for pie charts.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "E5F6A789-0123-4567-EF01-456789012345"

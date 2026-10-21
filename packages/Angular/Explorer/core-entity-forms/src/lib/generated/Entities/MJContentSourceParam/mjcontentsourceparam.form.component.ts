@@ -15,8 +15,7 @@ export class MJContentSourceParamFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'parameterSettings', sectionName: 'Parameter Settings', isExpanded: true }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
         ]);
     }
 }

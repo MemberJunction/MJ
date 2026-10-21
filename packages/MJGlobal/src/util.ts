@@ -1266,21 +1266,89 @@ function getSingularForm(word: string): string | null {
 
 
 /**
- * Converts a singular word to its plural form, handling common pluralization rules 
- * and irregular plurals.
- * 
- * @param singularName - The singular form of the word to pluralize.
- * @returns The plural form of the word.
- * 
+ * Converts a singular name to its plural form. The head of the name is kept
+ * verbatim, including the separator that ends it, and only the tail is pluralized.
+ * The tail keeps its own case. A linear scan finds the tail: the last space,
+ * underscore, or hyphen, or else the last Unicode capital that starts a word.
+ * A regex over ASCII letters is not used, because it drops a leading character
+ * such as Ä and it erases the underscore that distinguishes user_profile from
+ * userProfile.
+ *
+ * @param singularName - The singular form of the name to pluralize.
+ * @returns The plural form of the name.
+ *
  * @example
  * ```typescript
- * generatePluralName('child'); // returns 'children'
- * generatePluralName('box'); // returns 'boxes'
- * generatePluralName('party'); // returns 'parties'
- * generatePluralName('dog'); // returns 'dogs'
+ * GeneratePluralName('child'); // returns 'children'
+ * GeneratePluralName('box'); // returns 'boxes'
+ * GeneratePluralName('party'); // returns 'parties'
+ * GeneratePluralName('dog'); // returns 'dogs'
+ * GeneratePluralName('Contact Person'); // returns 'Contact People'
+ * GeneratePluralName('user_profile', { capitalizeFirstLetterOnly: true }); // returns 'user_Profiles'
  * ```
  */
 export function GeneratePluralName(singularName: string, options? : { capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean }): string {
+    const name = singularName.trim();
+    if (name.length === 0) return name;
+    const { head, tail } = splitPluralTail(name);
+    if (tail.length === 0) {
+        return options?.capitalizeEntireWord ? name.toUpperCase() : name;
+    }
+    // capitalizeEntireWord applies to the whole name, not only the tail.
+    const tailOptions = options?.capitalizeEntireWord
+        ? { ...options, capitalizeEntireWord: false }
+        : options;
+    const joined = head + pluralizeOneWord(tail, tailOptions);
+    return options?.capitalizeEntireWord ? joined.toUpperCase() : joined;
+}
+
+function isUnicodeLetter(ch: string): boolean {
+    return ch.toLowerCase() !== ch.toUpperCase();
+}
+
+function isUnicodeUpper(ch: string): boolean {
+    return isUnicodeLetter(ch) && ch === ch.toUpperCase();
+}
+
+function isUnicodeLower(ch: string): boolean {
+    return isUnicodeLetter(ch) && ch === ch.toLowerCase();
+}
+
+/**
+ * Head is everything through the last separator, kept verbatim. With no
+ * separator, the tail starts at the last capital that begins a new word
+ * (a capital after a lowercase letter, or a capital whose next letter is
+ * lowercase, so an acronym stays on the head).
+ */
+function splitPluralTail(name: string): { head: string; tail: string } {
+    for (let i = name.length - 1; i >= 0; i--) {
+        const ch = name[i];
+        if (ch === ' ' || ch === '_' || ch === '-' || ch === '\t') {
+            return { head: name.slice(0, i + 1), tail: name.slice(i + 1) };
+        }
+    }
+    let tailStart = 0;
+    for (let i = 1; i < name.length; i++) {
+        const current = name[i];
+        if (!isUnicodeUpper(current)) continue;
+        const next = i + 1 < name.length ? name[i + 1] : '';
+        if (isUnicodeLower(name[i - 1]) || isUnicodeLower(next)) tailStart = i;
+    }
+    if (tailStart > 0) return { head: name.slice(0, tailStart), tail: name.slice(tailStart) };
+    return { head: '', tail: name };
+}
+
+function matchTailCase(source: string, pluralLower: string): string {
+    const letters = [...source].filter(isUnicodeLetter);
+    if (letters.length > 0 && letters.every(isUnicodeUpper)) return pluralLower.toUpperCase();
+    const first = source.charAt(0);
+    if (first && isUnicodeUpper(first)) {
+        return pluralLower.charAt(0).toUpperCase() + pluralLower.slice(1);
+    }
+    return pluralLower;
+}
+
+function pluralizeOneWord(singularName: string, options? : { capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean }): string {
     // Check if it's already plural
     const detectedSingular = getSingularForm(singularName);
     if (!detectedSingular) {
@@ -1295,10 +1363,11 @@ export function GeneratePluralName(singularName: string, options? : { capitalize
         return AdjustCasing(singularName, options);
     }
 
-    // Check for irregular plurals
+    // The irregular map stores lowercase values. Restore the tail's case so
+    // "Person" becomes "People" and "PERSON" becomes "PEOPLE".
     const irregularPlural = GetIrregularPlural(singularName);
     if (irregularPlural) {
-        return AdjustCasing(irregularPlural, options);
+        return AdjustCasing(matchTailCase(singularName, irregularPlural), options);
     }
 
     // Handle common pluralization rules
@@ -1409,6 +1478,27 @@ export function StripTrailingChars(s: string, charsToStrip: string, skipIfExactM
 /** @deprecated Use {@link StripTrailingChars}. */
 export function stripTrailingChars(s: string, charsToStrip: string, skipIfExactMatch: boolean): string {
   return StripTrailingChars(s, charsToStrip, skipIfExactMatch);
+}
+
+/**
+ * Removes every trailing `/` from a string, typically a base URL before a path is joined onto it.
+ *
+ * Linear in the length of the input. The regex `/\/+$/` is not: on a string holding many slashes that
+ * are NOT at the end, it backtracks quadratically, which makes it a denial-of-service vector on any
+ * caller-supplied URL.
+ *
+ * @example
+ * ```typescript
+ * TrimTrailingSlashes('http://localhost:4000///'); // 'http://localhost:4000'
+ * TrimTrailingSlashes('/');                        // ''
+ * ```
+ */
+export function TrimTrailingSlashes(s: string): string {
+    let end = s.length;
+    while (end > 0 && s.charCodeAt(end - 1) === 47 /* '/' */) {
+        end--;
+    }
+    return end === s.length ? s : s.substring(0, end);
 }
 
 
@@ -2008,6 +2098,44 @@ export function ToEpochMs(value: Date | string | number | null | undefined): num
     if (value == null) return 0;
     const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
     return Number.isNaN(ms) ? 0 : ms;
+}
+
+/**
+ * Compares two values for equality, including cross-representation `Date` comparisons
+ * where one or both values may be `Date` instances, ISO date strings, or numeric epoch
+ * timestamps (e.g., comparing in-memory entity field values before and after database or
+ * JSON wire serialization).
+ *
+ * Returns `true` when:
+ * - `a === b` (strict identity for primitives and references)
+ * - Both `a` and `b` are `Date` instances with identical `.getTime()` epoch milliseconds
+ * - One side is a `Date` and the other is a `string` or `number` that parses to the same
+ *   epoch milliseconds as the `Date`
+ *
+ * @param a - First value to compare
+ * @param b - Second value to compare
+ * @returns `true` if the values are equal, `false` otherwise
+ *
+ * @example
+ * ```typescript
+ * ValuesEqual(42, 42); // true
+ * ValuesEqual(new Date('2026-08-01T00:00:00.000Z'), new Date('2026-08-01T00:00:00.000Z')); // true
+ * ValuesEqual(new Date('2026-08-01T00:00:00.000Z'), '2026-08-01T00:00:00.000Z'); // true
+ * ValuesEqual('a', 'b'); // false
+ * ```
+ */
+export function ValuesEqual(a: unknown, b: unknown): boolean {
+    if (a === b) return true;
+    if (a instanceof Date && b instanceof Date) {
+        return a.getTime() === b.getTime();
+    }
+    if (a instanceof Date && (typeof b === 'string' || typeof b === 'number')) {
+        return a.getTime() === new Date(b).getTime();
+    }
+    if (b instanceof Date && (typeof a === 'string' || typeof a === 'number')) {
+        return new Date(a).getTime() === b.getTime();
+    }
+    return false;
 }
 
 /**
