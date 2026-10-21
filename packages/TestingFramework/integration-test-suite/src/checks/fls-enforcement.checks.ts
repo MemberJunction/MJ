@@ -316,6 +316,15 @@ export async function TeardownFlsEnforcementFixture(ctx: IntegrationCheckContext
             .catch(() => undefined);
     }
     await Q(ctx, `DELETE FROM [${schema}].Company WHERE Name LIKE 'IT FLS Fixture Co%'`).catch(() => undefined);
+    // Remove every permission row the snapshot wrote for this entity. This runs BEFORE the flag is
+    // turned off on purpose: raw SQL raises no entity event, so a running MJAPI would keep these
+    // rows in its metadata — and a later enable over the wire would then compute an empty
+    // snapshot. The flag's entity-path save below is what makes every server reload metadata.
+    await Q(ctx,
+        `DELETE p FROM [${schema}].EntityFieldPermission p ` +
+        `JOIN [${schema}].EntityField f ON f.ID = p.EntityFieldID ` +
+        `JOIN [${schema}].Entity e ON e.ID = f.EntityID WHERE e.Name = '${SEEDED_FLS_ENTITY}'`
+    ).catch(() => undefined);
     // Restore the flag through the entity path (disable is always permitted — 2.5).
     try {
         const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
@@ -327,12 +336,6 @@ export async function TeardownFlsEnforcementFixture(ctx: IntegrationCheckContext
             }
         }
     } catch { /* best-effort — the SQL fallback below still runs */ }
-    // Remove every permission row the snapshot wrote for this entity (flag is off, rows are inert).
-    await Q(ctx,
-        `DELETE p FROM [${schema}].EntityFieldPermission p ` +
-        `JOIN [${schema}].EntityField f ON f.ID = p.EntityFieldID ` +
-        `JOIN [${schema}].Entity e ON e.ID = f.EntityID WHERE e.Name = '${SEEDED_FLS_ENTITY}'`
-    ).catch(() => undefined);
     await Q(ctx, `UPDATE [${schema}].Entity SET EnableFieldLevelSecurity = 0 WHERE Name = '${SEEDED_FLS_ENTITY}'`)
         .catch(() => undefined);
     await ctx.Provider.Refresh().catch(() => undefined);
@@ -607,34 +610,47 @@ export async function CheckFls10_UnrestrictedUserUnaffected(ctx: IntegrationChec
 }
 
 /**
- * FLS11 — the cache CANNOT leak across users (3.3), proven at the mechanism level. The
- * server's slots are full-width and SHARED (no FLS fingerprint segment); per-user narrowing
- * happens at read time on every hit and every miss. So: the writer's cold query writes a
- * slot; the reader's identical query is served WITHOUT a new slot write (shared slot — the
- * exact surface a leak would use) and STILL comes back without the denied column.
+ * FLS11 — the cache CANNOT leak across users (3.3), proven at the mechanism level. Server slots
+ * are segmented by field-security fingerprint, as they are by row-level security: each permission
+ * class reads and fills its own slot. So: the writer's cold query writes a slot carrying the
+ * column; the reader's identical query is NOT served from it — it writes its own segment — and
+ * comes back without the denied column; the reader's repeat read is served from that segment
+ * (no new write) and is still clean; and the writer's repeat read still gets the column, so the
+ * reader's miss never narrowed the writer's slot.
  */
 export async function CheckFls11SharedCacheSlotStillStrips(ctx: IntegrationCheckContext): Promise<void> {
     if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS11')) return;
     const fx = ctx.FlsFixture!;
     const tag = `fls11-${Date.now()}`;
     const params = (): RunViewParams => ({ EntityName: SEEDED_FLS_ENTITY, ExtraFilter: coldFilter(tag), ResultType: 'simple' });
+    const readAs = async (user: UserInfo, label: string): Promise<Record<string, unknown>[]> => {
+        const res = await new RunView().RunView<Record<string, unknown>>(params(), user);
+        Assert(res.Success, `${label} failed: ${res.ErrorMessage}`);
+        return res.Results;
+    };
+    const assertClean = (rows: Record<string, unknown>[], label: string): void => {
+        for (const row of rows) {
+            Assert(!(FLS_READER_DENIED_FIELD in row), `CACHE LEAK: ${FLS_READER_DENIED_FIELD} reached the reader (${label})`);
+        }
+    };
 
     ctx.Storage.ResetCounts();
-    const warm = await new RunView().RunView<Record<string, unknown>>(params(), fx.Writer!);
-    Assert(warm.Success, `writer warm-up failed: ${warm.ErrorMessage}`);
+    const warmRow = (await readAs(fx.Writer!, 'writer warm-up')).find(r => UUIDsEqual(String(r.ID), fx.FixtureEmployeeID!));
     Assert(ctx.Storage.SetCount('RunViewCache') > 0, 'the writer cold query must write a RunViewCache slot');
-    const warmRow = warm.Results.find(r => UUIDsEqual(String(r.ID), fx.FixtureEmployeeID!));
-    Assert(warmRow != null && FLS_READER_DENIED_FIELD in warmRow, 'the cached slot is full-width (writer sees the column)');
+    Assert(warmRow != null && FLS_READER_DENIED_FIELD in warmRow, 'the writer\'s slot carries the column (writer sees it)');
 
     ctx.Storage.ResetCounts();
-    const read = await new RunView().RunView<Record<string, unknown>>(params(), fx.Reader!);
-    Assert(read.Success, `reader read failed: ${read.ErrorMessage}`);
-    AssertEqual(ctx.Storage.SetCount('RunViewCache'), 0,
-        'the reader must be served from the SHARED slot (no new cache write) — the leak surface under test');
-    for (const row of read.Results) {
-        Assert(!(FLS_READER_DENIED_FIELD in row),
-            `CACHE LEAK: ${FLS_READER_DENIED_FIELD} from the writer-warmed slot reached the reader`);
-    }
+    assertClean(await readAs(fx.Reader!, 'reader read after the writer warm-up'), 'first read');
+    Assert(ctx.Storage.SetCount('RunViewCache') > 0,
+        'the reader must NOT be served from the writer-warmed slot — its own field-security segment must be written');
+
+    ctx.Storage.ResetCounts();
+    assertClean(await readAs(fx.Reader!, 'reader repeat read'), 'repeat read from its own segment');
+    AssertEqual(ctx.Storage.SetCount('RunViewCache'), 0, 'the reader\'s repeat read must be served from its own segment');
+
+    const writerAgain = (await readAs(fx.Writer!, 'writer repeat read')).find(r => UUIDsEqual(String(r.ID), fx.FixtureEmployeeID!));
+    Assert(writerAgain != null && FLS_READER_DENIED_FIELD in writerAgain,
+        'the reader\'s miss must not narrow the writer\'s slot — the writer must still get the column');
 }
 
 /** @deprecated Use {@link CheckFls11SharedCacheSlotStillStrips}. */
@@ -961,14 +977,15 @@ export async function CheckFls22_RecordChangePayloadProjected(ctx: IntegrationCh
 }
 
 /**
- * FLS23 — the audit projection holds on the SHARED cache slot, the same mechanism-level proof
- * FLS11 gives for ordinary reads.
+ * FLS23 — the audit projection holds on a repeat read after an unrestricted user's identical
+ * read, the cache-path counterpart of FLS22.
  *
- * The server's RunView slots are full-width and shared across users; per-request narrowing runs at
- * read time on every hit and every miss. So the writer's cold query warms a slot carrying the
- * denied value, the reader's identical query is served from that same slot WITHOUT a new cache
- * write, and the payload must still come back narrowed. This is the exact path the original
- * cross-user leak ran through.
+ * Record Changes rows are written by a stored procedure rather than the entity layer, so no
+ * entity event could invalidate a slot holding them, and the server never caches them. Their
+ * denials also belong to the entity each row is about, which a slot key for Record Changes could
+ * not carry. So the check pins both halves: the writer's warm-up writes NO server slot (a slot
+ * would be a shared surface no field-security segment can split), and the reader's identical
+ * read, made right after it, still comes back narrowed.
  */
 export async function CheckFls23RecordChangeCacheSlotStillProjects(ctx: IntegrationCheckContext): Promise<void> {
     if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS23')) return;
@@ -982,18 +999,15 @@ export async function CheckFls23RecordChangeCacheSlotStillProjects(ctx: Integrat
         ctx.Storage.ResetCounts();
         const warm = await readFixtureRecordChanges(ctx, fx.Writer!, fx.FixtureEmployeeID!, tag);
         Assert(warm.some(r => (r.ChangesJSON ?? '').includes(marker)),
-            'the writer warm-up must see the denied value — otherwise the slot under test is not full-width');
+            'the writer warm-up must see the denied value — otherwise the read under test carries nothing to withhold');
+        AssertEqual(ctx.Storage.SetCount('RunViewCache'), 0,
+            `${RECORD_CHANGES_ENTITY} must never be written to a server cache slot — its slot key cannot carry the ` +
+            'denials of the entity each row is about, so a slot would be shared across permission classes');
 
-        const wroteSlot = ctx.Storage.SetCount('RunViewCache') > 0;
-        ctx.Storage.ResetCounts();
         const read = await readFixtureRecordChanges(ctx, fx.Reader!, fx.FixtureEmployeeID!, tag);
-        if (wroteSlot) {
-            AssertEqual(ctx.Storage.SetCount('RunViewCache'), 0,
-                'the reader must be served from the SHARED slot (no new cache write) — the leak surface under test');
-        }
-        Assert(read.length > 0, 'the reader must still see the audit rows on the cache path');
+        Assert(read.length > 0, 'the reader must still see the audit rows after the writer\'s identical read');
         for (const row of read) {
-            assertPayloadIsClean(row, marker, `reader cache-path row ${row.ID}`);
+            assertPayloadIsClean(row, marker, `reader row after the writer warm-up ${row.ID}`);
         }
     });
 }
@@ -1177,7 +1191,7 @@ export const FlsEnforcementChecks: NamedCheck[] = [
     { Id: 'fls-enforcement.FLS8', Name: 'FLS8: the system user is NOT exempt — its full access aggregates from ordinary Allow rows', Fn: CheckFls8SystemUserAccessIsData },
     { Id: 'fls-enforcement.FLS9', Name: 'FLS9: RunView as the restricted user omits denied columns from every row', Fn: CheckFls9RunViewStripsDeniedColumns },
     { Id: 'fls-enforcement.FLS10', Name: 'FLS10: the same query as an unrestricted user still returns the column', Fn: CheckFls10UnrestrictedUserUnaffected },
-    { Id: 'fls-enforcement.FLS11', Name: 'FLS11: the shared full-width cache slot cannot cross-serve — reader is served from the writer-warmed slot WITHOUT the denied column', Fn: CheckFls11SharedCacheSlotStillStrips },
+    { Id: 'fls-enforcement.FLS11', Name: 'FLS11: cache slots are segmented by field-security class — the reader never reads the writer-warmed slot, its own segment never holds the denied column, and the writer is never narrowed', Fn: CheckFls11SharedCacheSlotStillStrips },
     { Id: 'fls-enforcement.FLS12', Name: 'FLS12: ExtraFilter on a denied field is rejected with exactly the ambiguous message', Fn: CheckFls12ExtraFilterRejected },
     { Id: 'fls-enforcement.FLS13', Name: 'FLS13: OrderBy on a denied field is rejected', Fn: CheckFls13OrderByRejected },
     { Id: 'fls-enforcement.FLS14', Name: 'FLS14: an Aggregate expression on a denied field is rejected (value-reconstruction hole)', Fn: CheckFls14AggregatesRejected },
@@ -1188,7 +1202,7 @@ export const FlsEnforcementChecks: NamedCheck[] = [
     { Id: 'fls-enforcement.FLS19', Name: 'FLS19: a permission row targeting a primary key is rejected at save time', Fn: CheckFls19UnrestrictableTargetRejected },
     { Id: 'fls-enforcement.FLS20', Name: 'FLS20: the typed-accessor gate throws the ambiguous message on a read-denied field', Fn: CheckFls20AccessorGateThrows },
     { Id: 'fls-enforcement.FLS22', Name: 'FLS22: the Record Changes payload is projected against the entity each row is ABOUT — denied keys dropped from ChangesJSON/FullRecordJSON, ChangesDescription withheld, and an unrestricted caller still gets everything', Fn: CheckFls22RecordChangePayloadProjected },
-    { Id: 'fls-enforcement.FLS23', Name: 'FLS23: the Record Changes projection holds on the SHARED cache slot — the reader is served from the writer-warmed slot and still gets a narrowed payload', Fn: CheckFls23RecordChangeCacheSlotStillProjects },
+    { Id: 'fls-enforcement.FLS23', Name: 'FLS23: Record Changes are never server-cached (no slot to share across permission classes), and the reader\'s read right after the writer\'s identical one still gets a narrowed payload', Fn: CheckFls23RecordChangeCacheSlotStillProjects },
     { Id: 'fls-enforcement.FLS24', Name: 'FLS24: a read-denied name field withholds the record name from the provider lookups and search enrichment, including after an unrestricted user looked it up', Fn: CheckFls24RecordNameWithheldFromEveryLookup },
     { Id: 'fls-enforcement.FLS21', Name: 'FLS21: full-metadata-refresh cost is measured and recorded (the per-debounced-burst price of a permission change)', Fn: CheckFls21RefreshCostVisibility }
 ];

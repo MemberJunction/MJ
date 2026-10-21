@@ -1612,7 +1612,7 @@
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT132 - FLS Close-out Pending Behaviour (cache segmentation, RunQuery)",
             "Sequence": 49,
-            "Status": "Skip"
+            "Status": "Active"
           },
           "primaryKey": {
             "ID": "DDD6658B-7337-4F0B-95A5-E1BE7676C3B7"

@@ -63,8 +63,14 @@ function user(id: string, roleId: string): UserInfo {
 const hr = user('U0000000-0000-0000-0000-0000000000B1', HR);
 const staff = user('U0000000-0000-0000-0000-0000000000B2', STAFF);
 
+/**
+ * A zero-arg alias: `vi.mock` swaps the generated base class at runtime, but the typecheck pass
+ * still sees the real constructor's required arguments.
+ */
+const QueryCtor = MJQueryEntityExtended as unknown as new () => MJQueryEntityExtended;
+
 function query(id: string): MJQueryEntityExtended {
-    const q = new MJQueryEntityExtended();
+    const q = new QueryCtor();
     Object.defineProperty(q, 'ID', { value: id });
     return q;
 }

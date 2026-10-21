@@ -17,5 +17,8 @@
       ]
     },
     "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "CCC39B15-2EA6-49B1-A422-5C4A76FAB7D6"
   }
 }
