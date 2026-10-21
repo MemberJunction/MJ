@@ -3,7 +3,8 @@ import { AppContext } from '../types.js';
 import { RunViewByIDInput } from '../generic/RunViewResolver.js';
 import { Message } from '@memberjunction/communication-types';
 import { EntityCommunicationsEngine } from '@memberjunction/entity-communications-server';
-import { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
@@ -191,6 +192,7 @@ export class ReportResolver extends ResolverBase {
     try {
       const contextUser = this.GetUserFromPayload(userPayload);
       if (!contextUser) throw new Error('Unable to determine the acting user for this communication');
+      const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       this.screenClientViewClauses(
         {
           extraFilter: runViewByIDInput.ExtraFilter,
@@ -198,9 +200,10 @@ export class ReportResolver extends ResolverBase {
           userSearchString: runViewByIDInput.UserSearchString,
           overrideExcludeFilter: runViewByIDInput.OverrideExcludeFilter,
         },
-        GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider,
+        provider as unknown as IMetadataProvider,
         contextUser,
       );
+      await this.assertViewBelongsToEntity(runViewByIDInput.ViewID, entityID, provider, contextUser);
 
       await EntityCommunicationsEngine.Instance.Config(false, contextUser);
       const newMessage = await this.resolveMessageTemplates(message, contextUser);
@@ -229,6 +232,18 @@ export class ReportResolver extends ResolverBase {
         Success: false,
         ErrorMessage: message,
       };
+    }
+  }
+
+  /**
+   * Refuses a view that is not a view of `entityID`, with the same message as for a view that does
+   * not exist or that the caller cannot load, so the refusal does not reveal which views exist.
+   */
+  private async assertViewBelongsToEntity(viewID: string | undefined, entityID: string, provider: DatabaseProviderBase, contextUser: UserInfo): Promise<void> {
+    if (!viewID) return;
+    const view = await this.resolveUserViewByID(viewID, provider, contextUser);
+    if (!view?.ID || !UUIDsEqual(view.ID, viewID) || !UUIDsEqual(view.EntityID, entityID)) {
+      throw new Error('The requested view does not exist or you do not have access to it');
     }
   }
 

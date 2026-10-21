@@ -66,12 +66,16 @@ export function AddEntityRunViewTool(addToolWithFilter: AddToolFn, entity: Entit
  * @param entity - The entity to create the tool for
  */
 export function AddEntityCreateTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
-    const paramObject = getEntityParamObject(entity, true, false, false);
+    const schemas = new EntityToolSchemaCache(
+        (omitted) => z.object(getEntityParamObject(entity, true, false, false, omitted)),
+        (user) => deniedFieldsUnion(entity, user, (u) => entity.GetDeniedCreateFields(u)),
+    );
 
     addToolWithFilter({
         name: `Create_${entity.ClassName}_Record`,
         description: `Creates a new record in the ${entity.Name} entity`,
-        parameters: z.object(paramObject),
+        parameters: schemas.Shared,
+        parametersForUser: (user) => schemas.ForUser(user),
         scopeInfo: { scopePath: 'entity:create', resource: entity.Name },
         async execute(props, sessionContext) {
             const sessionUser = sessionContext.user;
@@ -101,12 +105,16 @@ export function AddEntityCreateTool(addToolWithFilter: AddToolFn, entity: Entity
  * @param entity - The entity to create the tool for
  */
 export function AddEntityUpdateTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
-    const paramObject = getEntityParamObject(entity, true, true, true);
+    const schemas = new EntityToolSchemaCache(
+        (omitted) => z.object(getEntityParamObject(entity, true, true, true, omitted)),
+        (user) => deniedFieldsUnion(entity, user, (u) => entity.GetDeniedUpdateFields(u)),
+    );
 
     addToolWithFilter({
         name: `Update_${entity.ClassName}_Record`,
         description: `Updates the specified record in the ${entity.Name} entity`,
-        parameters: z.object(paramObject),
+        parameters: schemas.Shared,
+        parametersForUser: (user) => schemas.ForUser(user),
         scopeInfo: { scopePath: 'entity:update', resource: entity.Name },
         async execute(props, sessionContext) {
             const sessionUser = sessionContext.user;
@@ -235,25 +243,79 @@ function clientInputRefusal(entity: EntityInfo, values: Record<string, unknown>,
 }
 
 /**
+ * An entity tool's input schema, built once per permission class rather than per session: users
+ * whose omitted fields are the same set share one schema, and a user for whom nothing is omitted
+ * gets {@link Shared}. The number of classes is bounded by the distinct role combinations that
+ * have different field rules on the entity.
+ */
+class EntityToolSchemaCache {
+    /** The schema for a user for whom nothing is omitted. */
+    public readonly Shared: z.ZodObject<z.ZodRawShape>;
+    private readonly byOmittedFields = new Map<string, z.ZodObject<z.ZodRawShape>>();
+
+    /**
+     * @param build - builds the schema leaving out the given lowercased field names
+     * @param omittedFor - the lowercased field names to leave out for a user
+     */
+    constructor(
+        private readonly build: (omitted: Set<string>) => z.ZodObject<z.ZodRawShape>,
+        private readonly omittedFor: (user: UserInfo) => Set<string>,
+    ) {
+        this.Shared = build(new Set<string>());
+    }
+
+    /** The schema a session of `user` is shown. */
+    public ForUser(user: UserInfo): z.ZodObject<z.ZodRawShape> {
+        const omitted = this.omittedFor(user);
+        if (omitted.size === 0) {
+            return this.Shared;
+        }
+        const key = [...omitted].sort().join(',');
+        let schema = this.byOmittedFields.get(key);
+        if (!schema) {
+            schema = this.build(omitted);
+            this.byOmittedFields.set(key, schema);
+        }
+        return schema;
+    }
+}
+
+/**
+ * The lowercased names of the fields `user` may not read on `entity`, together with those the
+ * given verb denies. Empty without computing anything when field security does not apply.
+ */
+function deniedFieldsUnion(entity: EntityInfo, user: UserInfo, deniedForVerb: (user: UserInfo) => Set<string>): Set<string> {
+    if (!entity.FieldLevelSecurityApplies || !user) {
+        return new Set<string>();
+    }
+    return new Set([...entity.GetDeniedReadFields(user), ...deniedForVerb(user)]);
+}
+
+/**
  * Builds a Zod parameter object for entity CRUD operations.
  *
  * @param entity - The entity to build parameters for
  * @param excludeReadOnlyFields - If true, excludes read-only fields from the schema
- * @param includePrimaryKeys - If true, includes primary key fields
+ * @param includePrimaryKeys - If true, includes primary key fields (never omitted)
  * @param nonPKeysOptional - If true, makes non-primary-key fields optional
+ * @param omittedFields - Lowercased names of fields to leave out, such as those the session user is denied
  * @returns Object with Zod schemas for each included field
  */
 function getEntityParamObject(
     entity: EntityInfo,
     excludeReadOnlyFields: boolean,
     includePrimaryKeys: boolean,
-    nonPKeysOptional: boolean
+    nonPKeysOptional: boolean,
+    omittedFields: Set<string> = new Set<string>()
 ): Record<string, z.ZodTypeAny> {
     const paramObject: Record<string, z.ZodTypeAny> = {};
 
     entity.Fields.filter(f => {
         if (f.IsPrimaryKey && includePrimaryKeys) {
             return true;
+        }
+        else if (omittedFields.has(f.Name.trim().toLowerCase())) {
+            return false;
         }
         else if (f.ReadOnly && excludeReadOnlyFields) {
             return false;

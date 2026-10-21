@@ -66,7 +66,28 @@ function fakeProvider(): DatabaseProviderBase {
     });
     return {
         Entities: [entity('Customers', 'vwCustomers', true), entity('Salaries', 'vwSalaries', false)],
+        GetEntityObject: async () => fakeView(),
     } as unknown as DatabaseProviderBase;
+}
+
+/** Saved views by ID, as the caller can load them: `view-1` is a Customers view, `view-salaries` is not. */
+const VIEWS: Record<string, { ID: string; EntityID: string }> = {
+    'view-1': { ID: 'view-1', EntityID: 'Customers' },
+    'view-salaries': { ID: 'view-salaries', EntityID: 'Salaries' },
+};
+
+function fakeView() {
+    const view = {
+        ID: undefined as string | undefined,
+        EntityID: undefined as string | undefined,
+        async Load(id: string) {
+            const found = VIEWS[id];
+            if (!found) return false;
+            Object.assign(view, found);
+            return true;
+        },
+    };
+    return view;
 }
 
 function context(): AppContext {
@@ -76,8 +97,8 @@ function context(): AppContext {
     } as unknown as AppContext;
 }
 
-function run(extraFilter?: string) {
-    const viewInput = { ViewID: 'view-1', ExtraFilter: extraFilter } as RunViewByIDInput;
+function run(extraFilter?: string, viewID = 'view-1') {
+    const viewInput = { ViewID: viewID, ExtraFilter: extraFilter } as RunViewByIDInput;
     const message = { MessageType: {}, From: 'a@example.com', To: '' } as unknown as CommunicationMessageInput;
     return new ReportResolver().RunEntityCommunicationByViewID('Customers', viewInput, 'SendGrid', 'Email', message, true, true, context());
 }
@@ -104,6 +125,27 @@ describe('RunEntityCommunicationByViewID — runs as the caller', () => {
     it('refuses an ExtraFilter that carries a second statement', async () => {
         const result = await run("1=1; SELECT 1");
         expect(result.Success).toBe(false);
+        expect(captured.params).toHaveLength(0);
+    });
+});
+
+describe('RunEntityCommunicationByViewID — the view must belong to the entity', () => {
+    beforeEach(() => {
+        captured.params = [];
+    });
+
+    it('refuses a view of a different entity, before the engine runs', async () => {
+        const result = await run(undefined, 'view-salaries');
+        expect(result.Success).toBe(false);
+        expect(captured.params).toHaveLength(0);
+    });
+
+    it('gives the same error for a view of another entity as for a view that does not exist', async () => {
+        const mismatched = await run(undefined, 'view-salaries');
+        const missing = await run(undefined, 'view-missing');
+        expect(missing.Success).toBe(false);
+        expect(mismatched.ErrorMessage).toBe(missing.ErrorMessage);
+        expect(mismatched.ErrorMessage).toMatch(/does not exist or you do not have access/);
         expect(captured.params).toHaveLength(0);
     });
 });
