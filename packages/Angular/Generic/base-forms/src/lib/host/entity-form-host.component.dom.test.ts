@@ -5,7 +5,9 @@ import { renderComponentFixture, query, text, createFakeProvider, StubLoadingCom
 import { BaseEntity, EntityInfo, IMetadataProvider, LogError } from '@memberjunction/core';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { MjEntityFormHostComponent } from './entity-form-host.component';
+import { MJGlobal } from '@memberjunction/global';
 import { BaseFormComponent } from '../base-form-component';
+import { BaseFormSectionComponent } from '../base-form-section-component';
 import { EntityFormMode, FormResolution, FormResolverService } from '../resolver/form-resolver.service';
 import { FormNotificationEvent } from '../types/form-types';
 
@@ -116,6 +118,8 @@ function makeEntityInfo(): EntityInfo {
 class SwitchRecord extends BaseEntity {
   public Saved = true;
   override get IsSaved(): boolean { return this.Saved; }
+  /** Raise the record's own 'save' event, as a successful Save() does. */
+  public EmitSave(): void { this.RaiseEvent('save', null, 'update'); }
 }
 
 function makeRecord(entityInfo: EntityInfo): SwitchRecord {
@@ -153,6 +157,8 @@ async function mountSwitchHost(opts: {
   inputs?: Record<string, unknown>;
   /** Called on every resolve — i.e. once per (re)load. */
   onResolve?: () => void;
+  /** Replaces the stub resolver's resolve, e.g. to hold a load at its first await. */
+  resolve?: () => Promise<FormResolution>;
 }): Promise<SwitchHarness> {
   const entityInfo = makeEntityInfo();
   const modeChanges: EntityFormMode[] = [];
@@ -162,7 +168,12 @@ async function mountSwitchHost(opts: {
   const f = renderComponentFixture(MjEntityFormHostComponent, {
     imports: [StubLoadingComponent, MJButtonDirective],
     declarations: [MjEntityFormHostComponent],
-    providers: [{ provide: FormResolverService, useValue: stubResolver(opts.resolution, opts.onResolve) }],
+    providers: [{
+      provide: FormResolverService,
+      useValue: opts.resolve
+        ? { ...stubResolver(opts.resolution), ResolveFormForEntity: opts.resolve }
+        : stubResolver(opts.resolution, opts.onResolve),
+    }],
     inputs: { Provider: provider, ...recordInput, ...(opts.inputs ?? {}) },
     setup: (c) => {
       c.FormModeChange.subscribe((m) => modeChanges.push(m));
@@ -397,5 +408,191 @@ describe('MjEntityFormHostComponent — standard-form switch (DOM)', () => {
     expect(loads).toBe(3); // the standard-mode fallback path ran twice
     const fallbackLogs = vi.mocked(LogError).mock.calls.filter(([msg]) => String(msg).includes('standard form requested'));
     expect(fallbackLogs.length).toBe(1);
+  });
+});
+
+/** A promise whose resolution the test controls. */
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => { resolve = r; });
+  return { promise, resolve };
+}
+
+describe('MjEntityFormHostComponent — overlapping loads (DOM)', () => {
+  /** Each resolve is held until the test releases it, so a second load can start while the first waits. */
+  function heldResolves(): { calls: ReturnType<typeof deferred<FormResolution>>[]; resolve: () => Promise<FormResolution> } {
+    const calls: ReturnType<typeof deferred<FormResolution>>[] = [];
+    return { calls, resolve: () => { const d = deferred<FormResolution>(); calls.push(d); return d.promise; } };
+  }
+
+  it.each([
+    { order: 'the stale load finishes last', release: [1, 0] },
+    { order: 'the stale load finishes first', release: [0, 1] },
+  ])('a switch during a load leaves only the newest load in charge ($order)', async ({ release }) => {
+    const resolution = classResolution(GenForm);
+    const held = heldResolves();
+    const record = makeRecord(makeEntityInfo());
+    const { f } = await mountSwitchHost({ resolution, record, resolve: held.resolve });
+    const host = f.componentInstance;
+    let created = 0, completed = 0, saved = 0;
+    host.FormCreated.subscribe(() => created++);
+    host.LoadComplete.subscribe(() => completed++);
+    host.Saved.subscribe(() => saved++);
+    expect(held.calls.length).toBe(1); // the first load is waiting on the resolver
+
+    expect(host.SwitchFormMode('standard')).toBe(true);
+    expect(held.calls.length).toBe(2);
+    held.calls[release[0]].resolve(resolution);
+    await settle(f);
+    if (release[0] === 0) expect(host.Loading).toBe(true); // the stale load must not end the newer one's loading state
+    held.calls[release[1]].resolve(resolution);
+    await settle(f);
+
+    expect(created).toBe(1);
+    expect(completed).toBe(1);
+    expect(f.nativeElement.querySelectorAll('.gen').length).toBe(1);
+    expect(host.Loading).toBe(false);
+    record.EmitSave();
+    expect(saved).toBe(1); // no orphaned save handler from the superseded load
+  });
+
+  it('a superseded load that resolves to no form does not put the newer load into the error state', async () => {
+    const resolution = classResolution(GenForm);
+    const held = heldResolves();
+    const { f } = await mountSwitchHost({ resolution, resolve: held.resolve });
+
+    f.componentInstance.SwitchFormMode('standard');
+    held.calls[1].resolve(resolution);
+    await settle(f);
+    held.calls[0].resolve({ kind: 'none', variants: [], standard: null });
+    await settle(f);
+
+    expect(query(f, '.mj-form-host-error')).toBeNull();
+    expect(query(f, '.gen')).not.toBeNull();
+  });
+
+  it.each([
+    { outcome: 'fails', staleRecord: (): BaseEntity | null => null },
+    { outcome: 'returns another record', staleRecord: (): BaseEntity | null => makeRecord(makeEntityInfo()) },
+  ])('a superseded record load that $outcome leaves the newer load mounted', async ({ staleRecord }) => {
+    const entityInfo = makeEntityInfo();
+    const record = makeRecord(entityInfo);
+    record.Saved = false;
+    const gets: ReturnType<typeof deferred<BaseEntity | null>>[] = [];
+    const provider = Object.assign(
+      createFakeProvider({ entityByName: (n) => (n === ENTITY_NAME ? entityInfo : undefined) }),
+      { GetEntityObject: () => { const d = deferred<BaseEntity | null>(); gets.push(d); return d.promise; } },
+    );
+    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm), provider, inputs: { EntityName: ENTITY_NAME } });
+    let created = 0;
+    f.componentInstance.FormCreated.subscribe(() => created++);
+    expect(gets.length).toBe(1);
+
+    f.componentInstance.SwitchFormMode('standard');
+    await settle(f);
+    expect(gets.length).toBe(2);
+    gets[1].resolve(record);
+    await settle(f);
+    gets[0].resolve(staleRecord());
+    await settle(f);
+
+    expect(query(f, '.mj-form-host-error')).toBeNull();
+    expect(query(f, '.gen')).not.toBeNull();
+    expect(created).toBe(1);
+    expect(f.componentInstance.Form?.record).toBe(record);
+  });
+
+  it('a superseded load whose saved record fails to load leaves the newer load mounted', async () => {
+    const entityInfo = makeEntityInfo();
+    /** A saved record whose load the test settles. */
+    class HeldLoadRecord extends SwitchRecord {
+      public readonly Load = deferred<boolean>();
+      override InnerLoad(): Promise<boolean> { return this.Load.promise; }
+    }
+    const loaded: HeldLoadRecord[] = [];
+    const provider = Object.assign(
+      createFakeProvider({ entityByName: (n) => (n === ENTITY_NAME ? entityInfo : undefined) }),
+      { GetEntityObject: async () => { const r = new HeldLoadRecord(entityInfo); loaded.push(r); return r; } },
+    );
+    const { f } = await mountSwitchHost({
+      resolution: classResolution(GenForm), provider,
+      inputs: { EntityName: ENTITY_NAME, PrimaryKey: makeRecord(entityInfo).PrimaryKey },
+    });
+    expect(loaded.length).toBe(1);
+
+    f.componentInstance.SwitchFormMode('standard');
+    await settle(f);
+    expect(loaded.length).toBe(2);
+    loaded[1].Load.resolve(true);
+    await settle(f);
+    loaded[0].Load.resolve(false);
+    await settle(f);
+
+    expect(query(f, '.mj-form-host-error')).toBeNull();
+    expect(f.componentInstance.Form?.record).toBe(loaded[1]);
+  });
+
+  it('a superseded load that throws is logged, not shown over the newer load', async () => {
+    vi.mocked(LogError).mockClear();
+    const resolution = classResolution(GenForm);
+    const calls: { promise: Promise<FormResolution>; reject: (e: Error) => void; resolve: (r: FormResolution) => void }[] = [];
+    const resolve = (): Promise<FormResolution> => {
+      let res!: (r: FormResolution) => void, rej!: (e: Error) => void;
+      const promise = new Promise<FormResolution>((r, j) => { res = r; rej = j; });
+      calls.push({ promise, resolve: res, reject: rej });
+      return promise;
+    };
+    const { f } = await mountSwitchHost({ resolution, resolve });
+
+    f.componentInstance.SwitchFormMode('standard');
+    calls[1].resolve(resolution);
+    await settle(f);
+    calls[0].reject(new Error('resolver went away'));
+    await settle(f);
+
+    expect(query(f, '.mj-form-host-error')).toBeNull();
+    expect(query(f, '.gen')).not.toBeNull();
+    const logged = vi.mocked(LogError).mock.calls.filter(([msg]) => String(msg).includes('superseded load'));
+    expect(logged.length).toBe(1);
+  });
+
+  it('in section mode, a superseded load mounts nothing', async () => {
+    @Component({ standalone: true, selector: 'test-quick-section', template: '<p class="quick">quick</p>' })
+    class QuickSection extends BaseFormSectionComponent {}
+    MJGlobal.Instance.ClassFactory.Register(BaseFormSectionComponent, QuickSection, `${ENTITY_NAME}.Quick`);
+    const entityInfo = makeEntityInfo();
+    const gets: ReturnType<typeof deferred<BaseEntity | null>>[] = [];
+    const provider = Object.assign(
+      createFakeProvider({ entityByName: (n) => (n === ENTITY_NAME ? entityInfo : undefined) }),
+      { GetEntityObject: () => { const d = deferred<BaseEntity | null>(); gets.push(d); return d.promise; } },
+    );
+    const { f } = await mountSwitchHost({
+      resolution: classResolution(GenForm), provider, inputs: { EntityName: ENTITY_NAME, SectionName: 'Quick' },
+    });
+    let completed = 0;
+    f.componentInstance.LoadComplete.subscribe(() => completed++);
+
+    f.componentInstance.SwitchFormMode('standard'); // still loading, so this reloads
+    gets[1].resolve(makeRecord(entityInfo));
+    await settle(f);
+    gets[0].resolve(makeRecord(entityInfo));
+    await settle(f);
+
+    expect(completed).toBe(1);
+    expect(f.nativeElement.querySelectorAll('.quick').length).toBe(1);
+  });
+
+  it('a load still in flight when the host is destroyed mounts nothing', async () => {
+    const resolution = classResolution(GenForm);
+    const held = heldResolves();
+    const { f } = await mountSwitchHost({ resolution, resolve: held.resolve });
+    let created = 0;
+    f.componentInstance.FormCreated.subscribe(() => created++);
+
+    f.destroy();
+    held.calls[0].resolve(resolution);
+    for (let i = 0; i < 4; i++) await tick();
+
+    expect(created).toBe(0);
   });
 });

@@ -246,6 +246,13 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
    * button once the mount completes instead of falling to `<body>`.
    */
   private _refocusModeSwitch = false;
+  /**
+   * Bumped by every {@link teardown} (so by every reload and by destroy). A
+   * load captures it on entry and gives up after any `await` once it has
+   * moved: a superseded load must not mount, emit, register a save handler,
+   * or report a failure over the load that replaced it.
+   */
+  private _loadGeneration = 0;
 
   /** The live form component instance, or null before mount / after teardown. */
   get Form(): BaseFormComponent | null {
@@ -368,6 +375,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   }
 
   private async loadAndMount(): Promise<void> {
+    const generation = this._loadGeneration;
     const md = this.ProviderToUse;
     // When a pre-loaded record is supplied, derive the entity from it.
     const entityName = this._record?.EntityInfo?.Name ?? this._entityName;
@@ -388,11 +396,12 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
 
       // Section mode short-circuits the full-form resolver / container.
       if (this.SectionName) {
-        await this.mountSection(entityName, permissions);
+        await this.mountSection(entityName, permissions, generation);
         return;
       }
 
       const resolution = await this.formResolver.ResolveFormForEntity(entity, md.CurrentUser, md);
+      if (this.isSuperseded(generation)) return;
       this.HasStandardFormAlternative = hasStandardFormAlternative(resolution);
       if (resolution.kind === 'none') {
         this.fail(`No form is registered for "${entityName}".`,
@@ -400,8 +409,8 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
         return;
       }
 
-      const record = await this.obtainRecord(entityName, md);
-      if (!record) return; // fail() already called
+      const record = await this.obtainRecord(entityName, generation, md);
+      if (!record || this.isSuperseded(generation)) return; // a failure already called fail()
 
       // Emit Saved on the record's own save event (covers all save paths).
       this._saveHandlerSub = record.RegisterEventHandler((e: BaseEntityEvent) => {
@@ -443,12 +452,27 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       this.LoadComplete.emit();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      if (this.isSuperseded(generation)) {
+        LogError(`MjEntityFormHost: a superseded load of "${entityName}" failed: ${msg}`);
+        return;
+      }
       this.fail(`Failed to load ${entityName} record.`, `An unexpected error occurred: ${msg}`);
     } finally {
-      this.Loading = false;
-      this.cdr.detectChanges();
-      this.restoreModeSwitchFocus();
+      // The load that replaced this one owns Loading, change detection and focus.
+      if (!this.isSuperseded(generation)) this.settleLoad();
     }
+  }
+
+  /** Whether a newer load (or destroy) has replaced the load that captured `generation`. */
+  private isSuperseded(generation: number): boolean {
+    return generation !== this._loadGeneration;
+  }
+
+  /** End the current load: clear the loading state, render, and restore the switch's focus. */
+  private settleLoad(): void {
+    this.Loading = false;
+    this.cdr.detectChanges();
+    this.restoreModeSwitchFocus();
   }
 
   /** After a strip-initiated switch, hand focus to the re-rendered switch button (if the strip is back). */
@@ -511,7 +535,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
    * variants, container, or form-event surface — section components are bare
    * field editors; the host saves the record directly (see {@link Save}).
    */
-  private async mountSection(entityName: string, permissions: unknown): Promise<void> {
+  private async mountSection(entityName: string, permissions: unknown, generation: number): Promise<void> {
     const key = `${entityName}.${this.SectionName}`;
     const reg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormSectionComponent, key);
     if (!reg?.SubClass) {
@@ -520,8 +544,8 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       return;
     }
 
-    const record = await this.obtainRecord(entityName);
-    if (!record) return;
+    const record = await this.obtainRecord(entityName, generation);
+    if (!record || this.isSuperseded(generation)) return;
 
     this._saveHandlerSub = record.RegisterEventHandler((e: BaseEntityEvent) => {
       if (e.type === 'save') this.Saved.emit(record);
@@ -542,8 +566,11 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     this.LoadComplete.emit();
   }
 
-  /** Resolve the BaseEntity to bind: the supplied instance, or a freshly loaded/new one. */
-  private async obtainRecord(entityName: string, md = this.ProviderToUse): Promise<BaseEntity | null> {
+  /**
+   * Resolve the BaseEntity to bind: the supplied instance, or a freshly loaded/new one.
+   * Returns null on failure; reports it through {@link fail} only while `generation` is still current.
+   */
+  private async obtainRecord(entityName: string, generation: number, md = this.ProviderToUse): Promise<BaseEntity | null> {
     if (this._record) return this._record;
     const carried = this._carryNewRecord;
     this._carryNewRecord = null;
@@ -552,6 +579,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
 
     const record = await md.GetEntityObject<BaseEntity>(entityName, md.CurrentUser);
     if (!record) {
+      if (this.isSuperseded(generation)) return null;
       this.fail(`Failed to load ${entityName} record.`, `Unable to instantiate entity "${entityName}".`);
       return null;
     }
@@ -559,6 +587,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     if (this._primaryKey.HasValue) {
       const loadOk = await record.InnerLoad(this._primaryKey);
       if (!loadOk) {
+        if (this.isSuperseded(generation)) return null;
         this.fail(`Could not load ${entityName} record.`,
           record.LatestResult?.Message
             ? `Server error: ${record.LatestResult.Message}`
@@ -709,6 +738,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   }
 
   private teardown(): void {
+    this._loadGeneration++;
     this.cleanupFormSubs();
     if (this._saveHandlerSub) {
       this._saveHandlerSub.unsubscribe();
