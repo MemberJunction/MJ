@@ -50,6 +50,24 @@ export interface PersistSchemaOptions {
    * are preserved, and the CustomColumnPromoter reactivates them if the object reappears.
    */
   DeactivateAbsent?: boolean;
+  /**
+   * The OBJECT half of {@link DeactivateAbsent}, separately gateable. Defaults to `DeactivateAbsent`.
+   *
+   * A streaming discovery persists one object at a time and then the complete set of object NAMES,
+   * and the two retirements belong to opposite moments: per object, the object's own field list is
+   * complete but every OTHER object looks absent, so objects must not retire there; in the final
+   * name pass the whole name set is known, so absent objects may retire. Still gated on an
+   * authoritative source, exactly as `DeactivateAbsent` is.
+   */
+  DeactivateAbsentObjects?: boolean;
+  /**
+   * The FIELD half of {@link DeactivateAbsent}, separately gateable. Defaults to `DeactivateAbsent`.
+   *
+   * Per object the field list is complete, so absent fields may retire there; the final name pass
+   * carries name stubs with no fields, so retiring fields there would disable every column of
+   * every object. Still gated on an authoritative source, exactly as `DeactivateAbsent` is.
+   */
+  DeactivateAbsentFields?: boolean;
 }
 
 /** Per-field provenance recording which source decided each attribute during the merge. */
@@ -626,7 +644,17 @@ export class IntegrationSchemaSync {
     // enumerated the FULL gamut the credentials expose (SourceSchema.IsAuthoritative). A stubbed/empty or
     // cache-driven discovery has IsAuthoritative=false, so absence proves NOTHING and nothing is disabled
     // (else it would wrongly wipe the Declared metadata that is the only source). Deactivate, never delete.
-    if (opts.DeactivateAbsent && SourceSchema.IsAuthoritative) {
+    //
+    // Object-level and field-level retirement are separately gateable (DeactivateAbsentObjects /
+    // DeactivateAbsentFields), because a STREAMING discovery needs them at different moments with
+    // opposite scopes: a per-object persist holds that object's FULL field list but sees only one
+    // object, and the final name pass sees every object but no fields. Both default to
+    // DeactivateAbsent, so every caller that sets neither behaves exactly as before. The PURE decider
+    // still decides both from one flag — its tests stay the cheapest correctness evidence here — and
+    // its OUTPUT is filtered instead of forking its logic.
+    const retireObjects = opts.DeactivateAbsentObjects ?? opts.DeactivateAbsent ?? false;
+    const retireFields = opts.DeactivateAbsentFields ?? opts.DeactivateAbsent ?? false;
+    if ((retireObjects || retireFields) && SourceSchema.IsAuthoritative) {
       // Gather the active set + per-discovered-object fields, then let the PURE decision
       // (decideAbsentDeactivations — unit-tested) choose what to Disable. The EFFECT (load + Save) is
       // applied here; the CHOICE lives in the pure function so it is testable without mocking the engine.
@@ -666,7 +694,7 @@ export class IntegrationSchemaSync {
         ObjectIDByName: objectIDByName,
       });
       let deactivated = 0;
-      for (const id of decision.ObjectIDsToDeactivate) {
+      for (const id of retireObjects ? decision.ObjectIDsToDeactivate : []) {
         const obj = await md.GetEntityObject<MJIntegrationObjectEntity>('MJ: Integration Objects', ContextUser);
         if (await obj.InnerLoad(CompositeKey.FromID(id))) {
           obj.Status = 'Disabled'; // deactivate (Active|Deprecated|Disabled enum); never delete
@@ -675,7 +703,7 @@ export class IntegrationSchemaSync {
         }
       }
       let fieldsDeactivated = 0;
-      for (const id of decision.FieldIDsToDeactivate) {
+      for (const id of retireFields ? decision.FieldIDsToDeactivate : []) {
         const f = await md.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', ContextUser);
         if (await f.InnerLoad(CompositeKey.FromID(id))) {
           f.Status = 'Disabled'; // deactivate, never delete
