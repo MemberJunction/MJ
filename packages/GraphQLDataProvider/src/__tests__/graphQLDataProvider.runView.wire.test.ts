@@ -602,6 +602,26 @@ describe('GraphQLDataProvider RunView wire behavior', () => {
             ]);
         });
 
+        it('forwards BypassCache on the smart-cache input, so a deliberate database read is not answered from the server cache', async () => {
+            // The third field to be dropped from this map (after Aggregates and DataSource), and the
+            // only one whose omission INVERTED the caller's meaning: a BypassCache param is ineligible
+            // for a cache status, so none is attached — and the server reads a missing cacheStatus as
+            // "the client has nothing cached", its cue to answer from the SERVER cache with no DB hit.
+            GraphQLWire.EnqueueResponse({
+                RunViewsWithCacheCheck: { success: true, errorMessage: null, results: [] },
+            });
+
+            await provider.RunViewsWithCacheCheck([
+                { params: { EntityName: 'Customers', CacheLocal: true, BypassCache: true } },
+            ]);
+
+            const sent = GraphQLWire.LastInput as Array<{ params: Record<string, unknown>; cacheStatus: unknown }>;
+            expect(sent[0].params.BypassCache).toBe(true);
+            // And no cache status rode along — the two together are what tell the server this one
+            // refuses the cache rather than merely lacking one.
+            expect(sent[0].cacheStatus).toBeNull();
+        });
+
         it('deserializes stale results and JSON-parses aggregate values', async () => {
             GraphQLWire.EnqueueResponse({
                 RunViewsWithCacheCheck: {

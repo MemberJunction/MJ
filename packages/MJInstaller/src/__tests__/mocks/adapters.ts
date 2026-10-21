@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 import type { ProcessResult, ProcessOptions } from '../../adapters/ProcessRunner.js';
-import type { SqlConnectivityResult } from '../../adapters/SqlServerAdapter.js';
+import type { SqlConnectivityResult, SqlLoginTarget, SqlLoginResult } from '../../adapters/SqlServerAdapter.js';
+import type { PgConnectivityResult, PgLoginTarget, PgLoginResult, PgSetupStep } from '../../adapters/PostgresAdapter.js';
 import type { VersionInfo } from '../../models/VersionInfo.js';
 
 /**
@@ -64,10 +65,31 @@ export function createMockSqlAdapter() {
 
   return {
     CheckConnectivity: vi.fn<(config: unknown) => Promise<SqlConnectivityResult>>().mockResolvedValue({ ...defaultResult }),
+    TryLogin: vi.fn<(target: SqlLoginTarget) => Promise<SqlLoginResult>>().mockResolvedValue({ Ok: true, LoginRejected: false }),
+    ExecuteBatches: vi
+      .fn<(target: SqlLoginTarget, batches: string[], onMessage: (message: string) => void) => Promise<void>>()
+      .mockResolvedValue(undefined),
   };
 }
 
 export type MockSqlAdapter = ReturnType<typeof createMockSqlAdapter>;
+
+/**
+ * Create a mock PostgresAdapter with vi.fn() stubs.
+ */
+export function createMockPgAdapter() {
+  return {
+    CheckConnectivity: vi
+      .fn<(host: string, port: number, timeoutMs?: number) => Promise<PgConnectivityResult>>()
+      .mockResolvedValue({ Reachable: true, LatencyMs: 9 }),
+    TryLogin: vi.fn<(target: PgLoginTarget) => Promise<PgLoginResult>>().mockResolvedValue({ Ok: true, LoginRejected: false }),
+    ExecuteSteps: vi
+      .fn<(server: Omit<PgLoginTarget, 'Database'>, steps: PgSetupStep[], onMessage: (message: string) => void) => Promise<void>>()
+      .mockResolvedValue(undefined),
+  };
+}
+
+export type MockPgAdapter = ReturnType<typeof createMockPgAdapter>;
 
 /**
  * Create a mock GitHubReleaseProvider with vi.fn() stubs.

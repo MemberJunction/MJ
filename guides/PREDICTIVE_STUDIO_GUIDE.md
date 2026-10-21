@@ -429,6 +429,25 @@ These are **four distinct, orthogonal** things. The common confusion is to assum
 
 > **#2770 is NOT "ML Model Run Results."** It's view/entity-materialization infrastructure that ML could *optionally* use later. Per-run prediction history already lives in path B (`MJ: Process Run Details`) and, if you want a typed table, path C (`childRecord`). Writing a prediction into an entity column (path A) is a plain MJ column write — it needs nothing from #2770.
 
+### 6.x "Needs training" and opt-in auto-train
+
+A model row can exist without a trained artifact — most often because an app **seeds** model metadata but the serialized model only ever lived on the machine that trained it. Artifact bytes are per-host (§5) and training always creates a **new** immutable model row, so a shipped model id can never be made scoreable in place.
+
+- **Refuse up front, clearly.** Record Set Processing has an optional run-level `IRecordProcessor.Preflight(context)` seam, called once before the first batch. `MLModelInferenceProcessor.Preflight` warm-loads the model; a model that is missing, has no `ArtifactFileID`, or whose artifact bytes aren't on this server throws a `ModelNeedsTrainingError` ("… needs training …"). The run is recorded as `Failed` with that message and **no record is processed** — instead of every record failing into the error-rate circuit breaker. `ScoreRecordSet` uses the same preflight.
+- **Never publish an untrained model.** The promotion gate refuses `→ Published` for a model with no artifact (`needs-training` outcome; Actions return `MODEL_NEEDS_TRAINING`, Remote Ops throw the message).
+- **Studio shows it.** The Production panel marks such a model **Needs training** (amber) instead of Bound/Scheduled and disables **Operate**.
+- **Opt-in auto-train.** An `'ML Model'` Record Process can declare, in its `Configuration`:
+
+  ```json
+  { "primaryKeyField": "ID",
+    "autoTrain": { "pipelineId": "<ML Training Pipeline id>",
+                   "binding": { "targetColumn": "RenewalProbability", "mode": "Scheduled" } } }
+  ```
+
+  (`modelId` may then be omitted.) When a run's model needs training, `PipelineAutoTrainer` **reuses** the newest Published model of that pipeline whose artifact loads on this server, or **trains** the pipeline through the real `TrainingEngine` and publishes it through the promotion gate (Draft → Validated → Published — a leakage-flagged model is refused and stays Draft for a human). It then writes the model id back into the process `Configuration`, repoints the process's bindings (and any still on the superseded model), creates the declared binding if none exists, archives the superseded Published model, and the same run goes on to score. Processes that don't declare `autoTrain` are unaffected. This is how an Open App ships a scoring process that works on a fresh install with no hand steps — ship the **pipeline + Record Process**, not model rows.
+
+> Feature assembly reads **every** matching row when the caller sets no `MaxRows` (`IgnoreMaxRows`), so training is not silently capped at the entity's `UserViewMaxRows` (1000 by default).
+
 ---
 
 ## 7. The experiment engine — a generic agentic-search primitive
@@ -612,6 +631,78 @@ flowchart LR
 - **Category seed** — `metadata/record-process-categories/.record-process-categories.json` seeds the one `MJ: Record Process Categories` row named "Feature Pipeline".
 - **Run path** — `RunFeaturePipeline` (the only op with no PS-specific logic) delegates straight to `RecordProcessExecutor.RunByID(featurePipelineID, …)`. Running a feature pipeline is *exactly* running the underlying Record Process — full batching/resume/audit + true forwarded per-batch progress.
 - **Knowledge Hub UI** — `FeaturePipelinesResourceComponent` (`@RegisterClass(BaseResourceComponent, 'FeaturePipelinesResource')`, `packages/Angular/Explorer/dashboards/src/KnowledgeHub/components/feature-pipelines/`) lists pipelines from the engine, shows target/written-attribute/freshness, offers **Run** (via the provider's `RouteOperation` seam → `RunFeaturePipeline`), and an **authoring** entry that opens the reusable `mj-record-process-editor` rather than rebuilding authoring.
+
+### Feature Value key and versions
+
+**The key.** A `MJ: Feature Values` row is upserted on its key: the record, the feature name, the pipeline version, the
+prompt version hash (template text, outputs, constraint block, pipeline type, escalation settings), the primary AI
+model, the parameters hash and the input hash. `ValueKeyHash` (SHA-256 of the key) is unique per pipeline. A re-run
+with the same key leaves the row `Unchanged`; a changed value updates it; a changed key is a new row. The latest value
+of a feature for a record is the row with the newest `ComputedAt`.
+
+**Human values.** `Source` is `Pipeline` or `Human` (a value a person entered on the target record). Write-back never
+overwrites a `Human` value unless the run sets `overwriteHumanValues`; `HumanValuesPreserved` counts the ones it kept.
+
+- **Versions.** Each distinct pin (prompt version hash, primary model, parameters hash, spec hash) is the next numbered
+  `MJ: Feature Pipeline Versions` row: Candidate, Active, Retired or Refused.
+- Without an `Activation` block, an on-demand or manual run activates a changed pin; a scheduled or on-change run of a
+  changed pipeline is refused until then, so a prompt edit never silently changes what an unattended job writes.
+- With `Activation` (`GoldenSetTestID`, `Metric: 'accuracy'`, `Threshold`), a version runs only when its golden-set
+  result meets the threshold; a failing result marks it Refused. Dry runs report this (`WouldRefuse`) and never
+  register or activate.
+- The **Feature Pipeline Version Steward** (`FeaturePipelineVersionSteward` in `@memberjunction/feature-pipelines-engine`,
+  exposed as the **`Steward Feature Pipeline Version`** Action and run per pipeline by the **`Feature Pipeline Version Steward`**
+  `MJ: Record Processes` row of `WorkType: 'Action'` over `WorkType='Infer' AND Status='Active'`, dispatched every 15 minutes
+  by `RecordProcessScheduledJobDriver`) evaluates a gated pipeline's unevaluated version and runs the one backfill of a
+  changed version (the records whose latest value is under another version or none), returning each decision in
+  `Outcomes` / `Version` / `LastAction` / `Detail`. A pipeline opts out per step with
+  `Unattended: { AutoEvaluate: false }` / `{ AutoBackfill: false }`.
+
+**Golden sets.** A `Feature Pipeline Golden Set` test (`FeaturePipelineGoldenSetDriver`, `GoldenSetScorer`, and
+`GoldenLabelQualityCheck` in `@memberjunction/feature-pipelines-engine`) scores a pipeline's answers against labelled cases. Model-made
+labels carry a stored **label-quality record**: two labelers from two vendors label every case under the same guide,
+each must agree with the existing labels at a Wilson 95% lower bound of at least 0.70, one adjudicates the other's
+disagreements, and at most 5 of 52 cases may be excluded. The record is tied to the cases by hash, and the driver
+refuses a set that fails it before any model call. A case marked `Required: true` that is answered wrong fails the set
+whatever its accuracy (gate value 0, the cases listed in `RequiredFailures`). A case can expect an abstention for some
+outputs (`ExpectAbstain`). `LabelSource: "specification"` cases (prompt-injection attempts, non-titles) are fixed by
+the guide's rule rather than labelled, must be `Required`, and stay outside the label-quality record.
+
+**Output constraints.** A `lookup` constraint reads its entity's rows (`DisplayFields`, `Filter`) and renders them into
+the prompt as the taxonomy; `ItemRef` checks an array output item by item. A violating answer is `RejectedInvalid`,
+nothing is written for it, and the run ends `Failed`.
+
+**Confidence floors.** An output can declare `MinConfidence` with `OnLowConfidence: 'null'` (an LLM pipeline also
+needs `ConfidenceRef`). Below the floor the output is withheld: its Feature Value records the abstention with no value,
+write-back clears a value the pipeline wrote and keeps a person's, and the result lists it in `BelowConfidenceOutputs`.
+The floor is part of the spec hash, so changing it is a new version.
+
+**The record as the user turn.** An LLM pipeline that sets `Context.RecordAsUserMessage: true` sends the template as
+the system turn and the record's context fields, as one JSON object, as the user turn, so a field value cannot pose as
+an instruction.
+
+### Feature Pipeline dry runs and run results
+
+An `Infer` (`InferProcessor` in `@memberjunction/feature-pipelines-engine`, registered into `RecordProcessorRegistry` by
+`FeaturePipelineStartup` / `RegisterInferRecordProcessor()`) dry run writes nothing (no Dedup Cache entry, Feature Value, watermark, target or child
+row) but still calls the model, so its `MJ: AI Prompt Runs` are recorded and cost what a real run of those records would.
+
+- Without a scope or a single record it previews at most **25** records (`DryRunSampleSize` overrides it).
+- A record whose real write would fail is reported `Failed` with the write-back's reason (`PreviewErrors`).
+- It reports, in `WouldRefuse` (via `InferProcessor.BuildRunSummary`), why a real run would be refused (a version that has
+  not passed its golden set), and never registers or activates a version. `RecordProcess.RunNow` /
+  `PredictiveStudio.RunFeaturePipeline` return it as `wouldRefuse`; the Bulk Operations dialog then offers no Apply.
+- Each record's `previewFields` / `previewChildren` / `previewTags` hold only what the real write would change, so the
+  dialog's change count is what the following real run writes. Outputs withheld below their confidence floor are listed
+  in `withheldFields` (and `withheldKeptFields` when the column does not allow null) and `withheldChildEntities`.
+- An output with no `Target` ("Feature value only") writes nothing to the record; its dry-run result is
+  `previewFeatureValues` (`FeatureName`, `Previous`, `Proposed`), listing the Feature Values a real run would store.
+  The dialog shows one `<Feature> (feature value)` row per item, counted as a change like any other row; a record
+  with no such rows counts as unchanged.
+- On every Feature Pipeline run, `MJ: Process Runs.ResultSummary` holds the `FeaturePipelineRunResult` JSON built by
+  `FeaturePipelineRunResults.Build`: the pin the run used and the tallies `Attempted`, `Upserted`, `Unchanged`,
+  `Previewed`, `RejectedInvalid`, `BelowConfidence`, `Failed`, `Skipped`, `HumanValuesPreserved`. Because `InferProcessor`
+  sets `FailRunOnRecordError = true`, **a Feature Pipeline run with any failed or rejected record ends `Failed`**.
 
 ---
 
@@ -1037,6 +1128,8 @@ The payoff renders on **any** entity a model writes to, with **no per-entity cod
 - **The `'*'` slot wildcard** — added to the slot host (`packages/Angular/Generic/base-forms/src/lib/panel-slot/`). `entityMatches()` now treats `'*'` as "mount on **every** entity's form"; such panels are expected to self-hide when they don't apply. This is the entity-agnostic-panel contract: one registration, cross-cutting, unobtrusive.
 - **Binding-driven** — on any record the panel `RunView`s `MJ: ML Model Scoring Bindings` filtered to `TargetEntityID=<this entity> AND TargetColumn IS NOT NULL`. No binding → no cards → the panel **self-hides** (`@if (HasPredictions)`, i.e. `Cards.length > 0`). It's invisible on every form a model doesn't touch.
 - **Entity-neutral band + format** — the bound value renders as a meaningful indicator: a low/mid/high band shaded with `--mj-brand-primary` opacity (no moral "risk" direction baked in — generic by construction); 0–1 values → "%", regression → grouped number, classification → class label, missing → "—". Plus the **top 5 drivers** (parsed from the model's `FeatureImportance`), the **model + version** ("Pipeline v{n}"), and **last scored**.
+
+A sibling panel, `FeatureValuesPanel` (`packages/Angular/Explorer/core-entity-forms/src/lib/panels/feature-values/`, `'*'` wildcard, `sortKey` 41, right after the Model Prediction panel), shows the Feature Values stored for the record in `MJ: Feature Values`: the latest answer per pipeline and feature with Source, Confidence, pipeline version, Computed, Reasoning and older values, plus a Refresh button. A latest answer that withheld the value (an abstention, or a value a person cleared) reads "no value" and supersedes any older value, which stays in the history. It is read-only and renders nothing when the record has no Feature Values. It is where the output of a feature pipeline with no write target ("Feature value only") is visible.
 
 ### 16.4 "Models in Production" — the control tower
 

@@ -1,12 +1,15 @@
-import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone, inject } from '@angular/core';
 
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
+import { takeUntil, debounceTime } from 'rxjs/operators';
+import { BaseDashboard, NavigationService, GetDeletedRecordFromEvent, RecordIdentityMatches, NormalizeRecordIdForMatch } from '@memberjunction/ng-shared';
+import type { DeletedRecordRef } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
-import { CompositeKey, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo } from '@memberjunction/core';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { IndexByUUID, RegisterClass, UUIDMap, UUIDsEqual } from '@memberjunction/global';
+import { CompositeKey, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo, LogError } from '@memberjunction/core';
 // CompositeKey is used via buildCompositeKey from ng-entity-viewer
 import { MJApplicationEntityEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import {
@@ -28,6 +31,7 @@ import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-pane
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
 import { buildDataExplorerAgentContext, isValidViewMode, isValidEntityBrowserMode, AppGroupSummary, entityDisplayName, resolveEntityByName, resolveRecordSelection, RecordSelectionRequest } from './data-explorer-agent-context';
 import { validateStringParam, validateEnumParam, validateNonNegativeNumberParam, VALID_ENTITY_BROWSER_MODES_FOR_VALIDATION } from '../shared/agent-tool-validation';
+import { DASHBOARDS_LIBRARY_NAV_ITEM, EnsureDashboardsApp } from '../shared/dashboards-app.helpers';
 
 /**
  * Default server-side page size used by the inner entity viewer when {@link viewerConfig}
@@ -64,6 +68,7 @@ const DATA_EXPLORER_DEFAULT_PAGE_SIZE = 100;
 export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, OnChanges, AfterViewInit {
   protected override destroy$ = new Subject<void>();
   private metadata = this.ProviderToUse;
+  private appManager = inject(ApplicationManager);
 
   /** Reference to the filter input for keyboard shortcuts */
   @ViewChild('filterInput') FilterInputRef: ElementRef<HTMLInputElement> | undefined;
@@ -194,6 +199,21 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** @deprecated Use {@link Entities}. */
   public set entities(value: EntityInfo[]) {
     this.Entities = value;
+  }
+
+  private entitiesIndexSource: EntityInfo[] | null = null;
+  private entitiesIndex = new UUIDMap<EntityInfo>();
+
+  /**
+   * Entities keyed by ID, rebuilt only when Entities is replaced (it is never mutated in place),
+   * so the per-render RecentEntities / FavoriteEntities getters don't scan every entity per item.
+   */
+  private get entitiesByID(): UUIDMap<EntityInfo> {
+    if (this.entitiesIndexSource !== this.Entities) {
+      this.entitiesIndex = IndexByUUID(this.Entities);
+      this.entitiesIndexSource = this.Entities;
+    }
+    return this.entitiesIndex;
   }
   // Application entity groups for the home view (Concept D)
   public AppEntityGroups: AppEntityGroup[] = [];
@@ -380,6 +400,20 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.RecentRecordsEntityFilter = value;
   }
 
+  /** User setting that records the dismissal of the "Dashboards moved" banner. */
+  private static readonly DASHBOARDS_MOVED_KEY = 'DataExplorer.DashboardsMovedBanner';
+
+  /** True until the user dismisses the "Dashboards moved" banner. ngOnInit sets it from the user's settings. */
+  private dashboardsMovedBannerOpen = false;
+
+  /**
+   * Shows the "Dashboards moved" banner on the Data tab, with or without a selected entity.
+   * An explorer that has an entity filter (an application's own scoped explorer) never shows it.
+   */
+  public get ShowDashboardsMovedBanner(): boolean {
+    return this.dashboardsMovedBannerOpen && !this.EntityFilter;
+  }
+
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
     return "Data Explorer"
   }
@@ -520,7 +554,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   get RecentEntities(): EntityInfo[] {
     return this.State.recentEntityAccesses
       .slice(0, 5)
-      .map(r => this.Entities.find(e => UUIDsEqual(e.ID, r.entityId)))
+      .map(r => this.entitiesByID.Get(r.entityId))
       .filter((e): e is EntityInfo => e !== undefined);
   }
 
@@ -534,7 +568,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   get FavoriteEntities(): EntityInfo[] {
     return this.State.favoriteEntities
-      .map(f => this.Entities.find(e => UUIDsEqual(e.ID, f.entityId)))
+      .map(f => this.entitiesByID.Get(f.entityId))
       .filter((e): e is EntityInfo => e !== undefined);
   }
 
@@ -737,11 +771,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
+    // Wired before the async setup below, so a delete during a slow load isn't missed.
+    this.listenForRecordDeletes();
     try {
     // Ensure UserInfoEngine is configured before we try to access user settings
     // This prevents race conditions where we try to load default view settings
     // before the user settings have been loaded from the server
     await UserInfoEngine.Instance.Config(false);
+    this.dashboardsMovedBannerOpen = !this.isDashboardsMovedBannerDismissed();
 
     // Read initial query params — prefer params forwarded from the resource wrapper
     // (which has Data.Configuration.queryParams from the shell), then fall back to
@@ -821,10 +858,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.filterInput$
       .pipe(
         debounceTime(500),
-        distinctUntilChanged(),
         takeUntil(this.destroy$)
       )
       .subscribe(filterText => {
+        // Compare against the APPLIED filter, not the last debounced value: navigation and view
+        // switches reset DebouncedFilterText directly, and a distinctUntilChanged() here would
+        // then swallow the user re-typing the same search until the box was cleared first.
+        if (filterText === this.DebouncedFilterText) {
+          return;
+        }
         this.DebouncedFilterText = filterText;
         this.cdr.detectChanges();
       });
@@ -2236,6 +2278,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (this.pendingRecordSelection && this.SelectedEntity) {
       const recordId = this.pendingRecordSelection;
       this.pendingRecordSelection = null; // Clear it so we don't keep trying
+      if (this.wasDeletedInSession(this.SelectedEntity, recordId)) {
+        // A replayed key for a record deleted in this session — nothing to select.
+        this.StateService.closeDetailPanel();
+        this.cdr.detectChanges();
+        return;
+      }
 
       // Try to find the record by primary key or concatenated string
       const entity = this.SelectedEntity;
@@ -2255,7 +2303,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       }
     }
     // Restore selected record if we have a persisted selectedRecordId
-    else if (this.State.selectedRecordId && this.State.detailPanelOpen && !this.SelectedRecord && this.SelectedEntity) {
+    else if (this.State.selectedRecordId && this.State.detailPanelOpen && !this.SelectedRecord && this.SelectedEntity
+      && !this.wasDeletedInSession(this.SelectedEntity, this.State.selectedRecordId)) {
       const entity = this.SelectedEntity;
       const record = event.records.find(r =>
         buildPkString(r, entity) === this.State.selectedRecordId
@@ -2304,6 +2353,55 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** @deprecated Use {@link OnDetailPanelClosed}. */
   public onDetailPanelClosed(): void {
     return this.OnDetailPanelClosed();
+  }
+
+  /**
+   * Keep the preview and the grid honest when records are deleted — from a form in another tab,
+   * a custom form, or any other `BaseEntity.Delete()`; and, for the grid, by another session.
+   */
+  private listenForRecordDeletes(): void {
+    MJGlobal.Instance.GetEventListener()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(event => {
+        // Read the key now: right after raising 'delete' the entity is reset and its key is gone.
+        const deleted = GetDeletedRecordFromEvent(event);
+        if (deleted) {
+          this.OnRecordDeleted(deleted);
+        }
+      });
+    this.gridRefreshOnDelete$
+      .pipe(debounceTime(300), takeUntil(this.destroy$))
+      .subscribe(() => this.ViewWorkspaceRef?.RefreshInPlace());
+  }
+
+  /**
+   * A record was deleted. A delete in this session closes the preview if it shows that record,
+   * and the record is remembered so a replayed `record=` param can't reopen it. A delete by
+   * another session leaves the preview alone — the user may be reading it — as record tabs do.
+   * Either way, a grid showing that entity reloads in place, keeping the user's page and sort.
+   */
+  public OnRecordDeleted(deleted: DeletedRecordRef): void {
+    if (!deleted.Remote) {
+      this.deletedRecordKeys.add(this.deletedRecordKey(deleted.EntityName, deleted.RecordId));
+      const panelEntity = this.DetailPanelEntity;
+      if (this.SelectedRecord && panelEntity &&
+          RecordIdentityMatches(panelEntity.Name, buildPkString(this.SelectedRecord, panelEntity), deleted)) {
+        this.OnDetailPanelClosed();
+        this.cdr.detectChanges();
+      }
+    }
+    if (this.SelectedEntity?.Name.trim().toLowerCase() === deleted.EntityName.trim().toLowerCase()) {
+      this.gridRefreshOnDelete$.next();
+    }
+  }
+
+  private deletedRecordKey(entityName: string, recordId: string): string {
+    return `${entityName.trim().toLowerCase()}::${NormalizeRecordIdForMatch(recordId)}`;
+  }
+
+  /** True when this session deleted the record a URL / deep-link key names. */
+  private wasDeletedInSession(entity: EntityInfo | null, recordKey: string): boolean {
+    return !!entity && this.deletedRecordKeys.has(this.deletedRecordKey(entity.Name, recordKey));
   }
 
   /**
@@ -2577,6 +2675,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** Record ID to select once data loads (from deep link) */
   private pendingRecordSelection: string | null = null;
 
+  /**
+   * Records deleted in this session, as `entity::id` keys (see {@link deletedRecordKey}). Leaving a
+   * deleted record's tab returns here by replaying the query params captured when it was opened —
+   * `record=<its id>` included — so every path that would re-select a record from a key checks this
+   * first, or the preview reopens on a record that no longer exists.
+   */
+  private deletedRecordKeys = new Set<string>();
+
+  /** Grid reloads asked for by deletes, debounced so a burst of deletes reloads once. */
+  private gridRefreshOnDelete$ = new Subject<void>();
+
   // ========================================
   // BREADCRUMB NAVIGATION
   // ========================================
@@ -2779,14 +2888,22 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.StateService.selectEntity(entity.Name);
         }
 
+        // These params are also delivered back after this dashboard writes them itself (the tab's
+        // param stream echoes every write), so only apply what actually differs from the state
+        // on screen — re-applying an echo would wipe the user's search and re-resolve a record
+        // they just clicked against whatever page happens to be loaded.
+        const viewChanged = entityChanged || !this.isSelectedView(urlState.viewId);
+
         // Restore saved view by ID if specified. The workspace applies the view's grid state
         // itself once selectedViewEntity flows into its [SelectedView] input.
-        if (urlState.viewId) {
-          await this.restoreViewFromUrl(urlState.viewId, entity);
-        } else {
-          // No specific view — clear view selection to use default
-          this.SelectedViewEntity = null;
-          this.StateService.selectView(null);
+        if (viewChanged) {
+          if (urlState.viewId) {
+            await this.restoreViewFromUrl(urlState.viewId, entity);
+          } else {
+            // No specific view — clear view selection to use default
+            this.SelectedViewEntity = null;
+            this.StateService.selectView(null);
+          }
         }
 
         // Filters live in saved views (DB), never in URL query strings.
@@ -2794,12 +2911,21 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         if (entityChanged && !urlState.viewId) {
           this.StateService.setSmartFilterPrompt('');
         }
-        // User search text is always cleared when applying URL state
-        this.LiveFilterText = '';
-        this.DebouncedFilterText = '';
+        // User search text belongs to the entity + view it was typed against
+        if (viewChanged) {
+          this.LiveFilterText = '';
+          this.DebouncedFilterText = '';
+        }
 
-        // Handle record selection
-        if (urlState.record) {
+        // Handle record selection. A key for a record deleted in this session (replayed when its
+        // tab closes and returns here) is treated as no record.
+        if (urlState.record && this.wasDeletedInSession(entity, urlState.record)) {
+          this.SelectedRecord = null;
+          this.DetailPanelEntity = null;
+          this.StateService.closeDetailPanel();
+        } else if (urlState.record && !entityChanged && this.isSelectedRecord(urlState.record)) {
+          // Already showing this record — nothing to re-resolve
+        } else if (urlState.record) {
           if (entityChanged) {
             // Entity changed - need to wait for data to load
             this.pendingRecordSelection = urlState.record;
@@ -2838,6 +2964,24 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
 
     this.cdr.detectChanges();
+  }
+
+  /** Whether `viewId` (absent = the default view) is the view currently selected. */
+  private isSelectedView(viewId: string | undefined): boolean {
+    const selectedId = this.SelectedViewEntity?.ID;
+    if (!viewId || !selectedId) {
+      return !viewId && !selectedId;
+    }
+    return UUIDsEqual(selectedId, viewId);
+  }
+
+  /** Whether `recordKey` (concatenated or compact URL form) is the record shown in the detail panel. */
+  private isSelectedRecord(recordKey: string): boolean {
+    if (!this.SelectedRecord || !this.SelectedEntity) {
+      return false;
+    }
+    const key = buildCompositeKey(this.SelectedRecord, this.SelectedEntity);
+    return key.ToConcatenatedString() === recordKey || key.ToCompactURLSegment() === recordKey;
   }
 
   /**
@@ -2941,6 +3085,39 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** @deprecated Use {@link ToggleShowAllEntities}. */
   public toggleShowAllEntities(): void {
     return this.ToggleShowAllEntities();
+  }
+
+  /**
+   * Opens the Library page of the Dashboards app. First installs or re-enables the app for the
+   * user when necessary. When the app cannot be opened, tells the user to try again or ask for access.
+   */
+  public async OpenDashboardsApp(): Promise<void> {
+    const app = await EnsureDashboardsApp(this.appManager);
+    if (app) {
+      await this.navigationService.SwitchToApp(app.ID, DASHBOARDS_LIBRARY_NAV_ITEM);
+    } else {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Could not open the Dashboards app. Try again, or ask your administrator for access.',
+        'warning',
+        4000,
+      );
+    }
+  }
+
+  /** Hides the "Dashboards moved" banner and saves the dismissal in the user's settings. */
+  public async DismissDashboardsMovedBanner(): Promise<void> {
+    this.dashboardsMovedBannerOpen = false;
+    await UserInfoEngine.Instance.SetSetting(DataExplorerDashboardComponent.DASHBOARDS_MOVED_KEY, 'dismissed');
+  }
+
+  /** True when the user dismissed the "Dashboards moved" banner, or when the user's settings cannot be read. */
+  private isDashboardsMovedBannerDismissed(): boolean {
+    try {
+      return UserInfoEngine.Instance.GetSetting(DataExplorerDashboardComponent.DASHBOARDS_MOVED_KEY) === 'dismissed';
+    } catch (error) {
+      LogError(`Data Explorer: cannot read the Dashboards moved banner setting: ${error instanceof Error ? error.message : String(error)}`);
+      return true;
+    }
   }
 
   // ========================================

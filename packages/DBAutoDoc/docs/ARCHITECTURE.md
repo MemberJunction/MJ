@@ -643,6 +643,10 @@ export interface OutputConfig {
 
 - **SQLGenerator**: Generates SQL extended properties scripts
 - **MarkdownGenerator**: Generates comprehensive markdown documentation with Mermaid diagrams
+- **HTMLGenerator**: Single-file interactive documentation; links to the subject-area diagrams when a cluster plan is supplied
+- **MermaidGenerator**: The schema-wide ERD (`erd.mmd` / `erd.html`), with a `columns` option (`all`, `keys`, `none`)
+- **ErdClusterer**: Splits the foreign-key graph into hub-centred subject areas (reference tables set aside, nearest-hub assignment, folding of undersized areas, pagination). Pure computation over the state; no rendering
+- **ErdClusterGenerator**: Renders an `ErdClusterPlan` as one Mermaid page per area under `erd/`, plus the HTML and Markdown index
 
 ---
 

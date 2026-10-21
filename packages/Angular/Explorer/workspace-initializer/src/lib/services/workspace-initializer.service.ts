@@ -74,6 +74,9 @@ export class WorkspaceInitializerService {
         environment.MJ_CORE_SCHEMA_NAME
       );
       config.OnAuthenticationError = (error: Error) => this.handleSessionExpired(error);
+      if (environment.MJAPI_URI) {
+        config.MJAPIURL = environment.MJAPI_URI;
+      }
 
       await setupGraphQLClient(config);
       const end = Date.now();

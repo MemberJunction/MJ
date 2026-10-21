@@ -1,0 +1,32 @@
+{
+  "name": "@memberjunction/actions-peopledatalabs",
+  "type": "module",
+  "version": "6.2.0-edge.4",
+  "description": "A table-agnostic People Data Labs client (bulk person enrichment, person search, school lookup) and a thin Action that returns data and writes nothing",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@memberjunction/actions": "6.2.0-edge.4",
+    "@memberjunction/actions-base": "6.2.0-edge.4",
+    "@memberjunction/core": "6.2.0-edge.4",
+    "@memberjunction/core-entities": "6.2.0-edge.4",
+    "@memberjunction/credentials": "6.2.0-edge.4",
+    "@memberjunction/global": "6.2.0-edge.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

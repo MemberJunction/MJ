@@ -9,7 +9,8 @@ import {
     ElevenLabsServerEvent,
     IElevenLabsClientSocket,
 } from '../drivers/elevenLabsRealtimeClient';
-import { collect, FakeMediaStream, FakeTrack } from './helpers/realtime-fakes';
+import { collect, FakeMediaStream, FakeMicCapture, FakeTrack } from './helpers/realtime-fakes';
+import { DescribePcmMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
 
@@ -66,6 +67,12 @@ class FakePlayback implements IRealtimePcmPlayback {
     public Closed = false;
     /** Controllable stand-in for "playhead is ahead of the context clock". */
     public IsPlaying = false;
+    /** Stand-in for the Web Audio output stream the real playback exposes (issue #5153). */
+    public OutputStream: MediaStream | null = null;
+
+    public GetOutputStream(): MediaStream | null {
+        return this.OutputStream;
+    }
 
     public Enqueue(pcm16: ArrayBuffer): void {
         this.Enqueued.push(pcm16);
@@ -78,14 +85,6 @@ class FakePlayback implements IRealtimePcmPlayback {
     public Close(): void {
         this.Closed = true;
         this.IsPlaying = false;
-    }
-}
-
-/** Fake mic capture handle. */
-class FakeMicCapture implements IPcmMicCapture {
-    public Stopped = false;
-    public Stop(): void {
-        this.Stopped = true;
     }
 }
 
@@ -673,6 +672,22 @@ describe('ElevenLabsRealtimeClient', () => {
             expect(track.enabled).toBe(true);
         });
 
+        it('should publish the playback output stream on Connect and clear it on Disconnect (#5153)', async () => {
+            const agentStream = new FakeMediaStream([]);
+            client.Playback.OutputStream = agentStream;
+            const delivered: (MediaStream | null)[] = [];
+            client.OnRemoteMediaStream((s) => delivered.push(s));
+
+            await connect(client);
+
+            expect(client.GetRemoteMediaStream()).toBe(agentStream);
+            expect(delivered).toEqual([agentStream]);
+
+            await client.Disconnect();
+
+            expect(client.GetRemoteMediaStream()).toBeNull();
+        });
+
         it('should tear everything down and emit closed on Disconnect', async () => {
             const { states } = collect(client);
             const track = await connect(client);
@@ -776,3 +791,12 @@ describe('tool-result nudge — result lands after the turn closed', () => {
         expect(userMessages()).toHaveLength(0);
     });
 });
+
+DescribePcmMicrophoneReplacement(
+    async () => {
+        const client = new TestElevenLabsClient();
+        const track = await connect(client);
+        return { Client: client, Track: track, Capture: client.Capture };
+    },
+    () => new TestElevenLabsClient()
+);
