@@ -67,6 +67,8 @@ export interface SeedContext {
   businessDomains?: string[];
   customInstructions?: string;
   industryContext?: string;
+  /** See SeedContextConfig.keyPassMaxChars. */
+  keyPassMaxChars?: number;
 }
 
 /**
@@ -206,6 +208,8 @@ export interface ForeignKeyReference {
   table: string;
   column: string;
   referencedColumn: string;
+  /** The constraint this column pair belongs to, when introspected. Groups the columns of a composite key. */
+  constraintName?: string;
 }
 
 /**
