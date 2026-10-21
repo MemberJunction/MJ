@@ -4,7 +4,7 @@ import { AIEmbeddingRunner, EmbeddingRunResult } from '@memberjunction/ai-prompt
 import { CredentialEngine } from '@memberjunction/credentials';
 import { BaseResponse, IndexDescription, IndexList, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
-import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, IMetadataProvider, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, GetIndexRestrictedFieldNames, IMetadataProvider, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJEntityRecordDocumentEntity, MJTemplateContentEntity,
   MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
 import { Float32VectorToBase64, IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -15,7 +15,6 @@ import { CombineExtraFilters, GetEntityDocumentRecordFilter, ParseEntityDocument
 import { EntityDocumentCache } from '@memberjunction/entity-documents';
 import { PagedRecords } from './PagedRecords';
 import { EntityDocumentTemplateDataBuilder } from './EntityDocumentTemplateData';
-import { GetIndexRestrictedFieldNames } from '../generic/indexRestrictedFields';
 import { AsyncBatchTransform } from './AsyncBatchTransform';
 import { Transform, TransformCallback, Writable } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';

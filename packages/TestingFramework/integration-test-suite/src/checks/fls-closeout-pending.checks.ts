@@ -27,7 +27,7 @@
 import { RunView, RunQuery } from '@memberjunction/core';
 import type { RunViewParams, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { Assert, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { Assert, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext, FlsFixture } from '@memberjunction/testing-integration';
 import { SEEDED_FLS_ENTITY, SEED_FIXTURES_COMMAND, FLS_READER_DENIED_FIELD } from '@memberjunction/testing-integration';
 import { QueryEngine } from '@memberjunction/core-entities';
@@ -61,14 +61,16 @@ interface PendingState {
 
 const state: PendingState = { Queries: {}, PermissionIDs: [] };
 
-function ready(ctx: IntegrationCheckContext, checkId: string): { Fx: FlsFixture; Markers: CloseoutMarkers } | undefined {
+/** The usable fixture and its markers; the check is SKIPPED (never scored as a pass) without one. A provisioned-but-broken fixture fails. */
+function ready(ctx: IntegrationCheckContext, checkId: string): { Fx: FlsFixture; Markers: CloseoutMarkers } {
     const fx = ctx.FlsFixture;
     if (fx?.EnableError || state.ProvisionError) {
         Assert(false, `${checkId}: the fixture could not be provisioned: ${fx?.EnableError ?? state.ProvisionError}`);
     }
     if (!fx || !fx.Usable || !state.Markers) {
-        console.warn(`  ⚠ ${BUNDLE}.${checkId} SKIPPED — ${fx?.Reason ?? 'fixture not provisioned'}. Seed with \`${SEED_FIXTURES_COMMAND}\`.`);
-        return undefined;
+        const reason = `${fx?.Reason ?? 'fixture not provisioned'}. Seed with \`${SEED_FIXTURES_COMMAND}\`.`;
+        console.warn(`  ⚠ ${BUNDLE}.${checkId} SKIPPED — ${reason}`);
+        return SkipCheck(`${checkId}: ${reason}`);
     }
     return { Fx: fx, Markers: state.Markers };
 }
@@ -172,7 +174,6 @@ async function cachedFixtureRead(fx: FlsFixture, user: UserInfo, tag: string): P
 /** PC1 — a restricted user's cold miss does not narrow the result an unrestricted user then gets for the same request. */
 export async function CheckPc1RestrictedMissDoesNotNarrow(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'PC1');
-    if (!r) return;
     const tag = `pc1-${Date.now()}`;
     AssertValuesWithheld(await cachedFixtureRead(r.Fx, r.Fx.Reader!, tag), FLS_READER_DENIED_FIELD, r.Markers.Email, 'PC1 reader (cold miss)');
     AssertValuePresent(await cachedFixtureRead(r.Fx, r.Fx.Writer!, tag), FLS_READER_DENIED_FIELD, r.Markers.Email,
@@ -182,7 +183,6 @@ export async function CheckPc1RestrictedMissDoesNotNarrow(ctx: IntegrationCheckC
 /** PC2 — the restricted user's identical read after an unrestricted warm-up writes its own slot and carries no denied value. */
 export async function CheckPc2RestrictedNeverServedWide(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'PC2');
-    if (!r) return;
     const tag = `pc2-${Date.now()}`;
     AssertValuePresent(await cachedFixtureRead(r.Fx, r.Fx.Writer!, tag), FLS_READER_DENIED_FIELD, r.Markers.Email, 'PC2 writer warm-up');
     ctx.Storage.ResetCounts();
@@ -222,7 +222,6 @@ async function withDeniedColumnSearchable(ctx: IntegrationCheckContext, fn: () =
 /** PC3 — a search that matches a row only through a denied column returns it to the unrestricted user and never to the reader. */
 export async function CheckPc3SearchRowSetIsolated(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'PC3');
-    if (!r) return;
     await withDeniedColumnSearchable(ctx, async () => {
         const tag = `pc3-${Date.now()}`;
         const search = (user: UserInfo) => new RunView().RunView<{ ID: string }>(
@@ -265,7 +264,6 @@ function assertQueryRefused(result: QueryOutcome, marker: string, what: string):
 /** PQ1 — a saved query selecting a denied column: refused for the reader, runs for the writer with the value. */
 export async function CheckPq1QuerySelectingDeniedRefused(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'PQ1');
-    if (!r) return;
     assertQueryRefused(await runQueryAs(state.Queries.SelectsDenied!, r.Fx.Reader!), r.Markers.Email, 'PQ1 reader');
     const asWriter = await runQueryAs(state.Queries.SelectsDenied!, r.Fx.Writer!);
     Assert(asWriter.Success && asWriter.Results.length === 1, `PQ1: the writer must run the query: ${asWriter.ErrorMessage}`);
@@ -275,7 +273,6 @@ export async function CheckPq1QuerySelectingDeniedRefused(ctx: IntegrationCheckC
 /** PQ2 — a saved query filtering on a denied column is refused for the reader even though it selects only allowed ones. */
 export async function CheckPq2QueryFilteringOnDeniedRefused(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'PQ2');
-    if (!r) return;
     assertQueryRefused(await runQueryAs(state.Queries.FiltersOnDenied!, r.Fx.Reader!), r.Markers.Email, 'PQ2 reader');
     const asWriter = await runQueryAs(state.Queries.FiltersOnDenied!, r.Fx.Writer!);
     Assert(asWriter.Success, `PQ2: the writer must run the query: ${asWriter.ErrorMessage}`);
@@ -284,7 +281,6 @@ export async function CheckPq2QueryFilteringOnDeniedRefused(ctx: IntegrationChec
 /** PQ3 — a saved query reading whole rows of the entity fails closed for the reader. */
 export async function CheckPq3QueryWholeRowRefused(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'PQ3');
-    if (!r) return;
     assertQueryRefused(await runQueryAs(state.Queries.SelectsStar!, r.Fx.Reader!), r.Markers.Email, 'PQ3 reader');
     const asWriter = await runQueryAs(state.Queries.SelectsStar!, r.Fx.Writer!);
     Assert(asWriter.Success && asWriter.Results.length === 1, `PQ3: the writer must run the query: ${asWriter.ErrorMessage}`);
@@ -293,7 +289,6 @@ export async function CheckPq3QueryWholeRowRefused(ctx: IntegrationCheckContext)
 /** PQ4 — a query whose role list includes the reader's role runs for the reader: the role-list grant bypasses FLS by design. */
 export async function CheckPq4RoleListGrantBypasses(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'PQ4');
-    if (!r) return;
     const asReader = await runQueryAs(state.Queries.RoleListed!, r.Fx.Reader!);
     Assert(asReader.Success && asReader.Results.length === 1,
         `PQ4: a query granted to the reader's role must run for the reader (role-list grants bypass field-level security): ${asReader.ErrorMessage}`);

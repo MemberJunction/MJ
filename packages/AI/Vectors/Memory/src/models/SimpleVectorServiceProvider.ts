@@ -48,7 +48,7 @@
  */
 
 import { BaseSingleton, EscapeSQLString, MJEventType, MJGlobal, RegisterClass, UserScopedCacheKey } from '@memberjunction/global';
-import { BaseEntity, BaseEntityEvent, LogError, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, EntityPermissionType, LogError, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import type { RemoteInvalidatePayload } from '@memberjunction/core';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import type {
@@ -102,6 +102,60 @@ interface LoadedIndex {
     stale: boolean;
 }
 
+/** A loaded index as the cache holds it: tagged with the permission class it was loaded for. */
+interface CachedIndex extends LoadedIndex {
+    /** The {@link PermissionClass} key shared by every user this index may be served to */
+    permissionClass: string;
+    /** True when the class's load is narrowed by a row filter or denied field; see {@link PermissionClass} */
+    rowFiltered: boolean;
+}
+
+/**
+ * Which users may share one loaded index. An index is loaded with a RunView as one user, so it
+ * holds exactly the `MJ: Entity Record Documents` rows that user may read. Two users get the same
+ * rows when they agree on everything that narrows that RunView: entity-level Read, the effective
+ * row filter (role row-level security plus any API-key row filter, rendered for the user) and the
+ * vector columns field-level security denies them. Those make up the key.
+ */
+interface PermissionClass {
+    Key: string;
+    /**
+     * Whether the class's rows are narrowed. A change to a row is written straight into the
+     * indexes of an unnarrowed class, but must be re-read as the class's user before it reaches a
+     * narrowed one: the changed row may be one that class cannot see.
+     */
+    RowFiltered: boolean;
+}
+
+/** The `MJ: Entity Record Documents` columns an index is built from; a denial of any of them changes what a load returns. */
+const INDEX_COLUMNS = ['id', 'entitydocumentid', 'recordid', 'vectorjson', 'vectorbinary'];
+
+/**
+ * The permission class `contextUser` loads indexes under, or null (do not cache) without a user.
+ * Falls back to a class of one — the user alone, narrowed — when the entity's metadata is not
+ * available, so an unknown permission set is never shared.
+ */
+function permissionClassOf(contextUser: UserInfo | undefined): PermissionClass | null {
+    const userKey = UserScopedCacheKey(contextUser?.ID);
+    if (!contextUser || userKey === null) {
+        return null;
+    }
+    const entity = new Metadata().EntityByName(ENTITY_RECORD_DOCUMENTS); // global-provider-ok: the driver has no provider context; its index loads run on the same global provider through new RunView()
+    const canRead = entity?.GetUserPermisions(contextUser)?.CanRead === true;
+    if (!entity || !canRead) {
+        return { Key: userKey, RowFiltered: true };
+    }
+    const rowFilter = entity.GetEffectiveRowFilterWhereClause(contextUser, EntityPermissionType.Read, '') ?? '';
+    const denied = Array.from(entity.GetDeniedReadFields(contextUser) ?? [])
+        .map(name => name.trim().toLowerCase())
+        .filter(name => INDEX_COLUMNS.includes(name))
+        .sort();
+    return {
+        Key: `pc:rls=${rowFilter}|deny=${denied.join(',')}`,
+        RowFiltered: rowFilter.length > 0 || denied.length > 0,
+    };
+}
+
 /** A row-level change recorded while a load is in flight, replayed onto its result. */
 type PendingChange = { Kind: 'upsert'; Row: RecordDocumentVectorRow } | { Kind: 'remove'; ID: string };
 
@@ -119,7 +173,9 @@ class LoadInProgress {
         /** The EntityDocument's invalidation epoch when the load started; a later epoch supersedes it */
         public readonly Epoch: number,
         /** The user the load reads as */
-        public readonly ContextUser: UserInfo | undefined
+        public readonly ContextUser: UserInfo | undefined,
+        /** The permission class the load is for */
+        public readonly Class: PermissionClass
     ) {}
 }
 
@@ -129,6 +185,12 @@ class LoadInProgress {
  * writes that bypass BaseEntity (raw SQL, external tools).
  */
 const DEFAULT_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+/**
+ * Default cap on loaded indexes held at once, across every EntityDocument and permission class.
+ * Past it the least recently queried index is dropped and reloads on its next query.
+ */
+const DEFAULT_MAX_INDEXES = 64;
 
 /** How long remote changes without record data are batched before the changed rows are re-read. */
 const REMOTE_REFRESH_DEBOUNCE_MS = 250;
@@ -141,11 +203,15 @@ const REMOTE_REFRESH_BATCH_SIZE = 500;
  * loads, and subscribes once to BaseEntity events so loaded indexes track
  * EntityRecordDocument changes row by row.
  *
- * **Indexes are cached per (EntityDocument, user).** An index is loaded with a
- * RunView as the user who asked for it, so it holds only the documents that
- * user may read; serving it to anyone else would hand them another user's
- * record IDs and scores. A request with no user is loaded and answered but
- * never cached or shared.
+ * **Indexes are cached per (EntityDocument, permission class).** An index is
+ * loaded with a RunView as the user who asked for it, so it holds only the
+ * documents that user may read. It is served only to users of the same
+ * {@link PermissionClass} — the same entity read, effective row filter and
+ * denied vector columns — so nobody receives record IDs or scores of rows they
+ * cannot read, while every unrestricted user shares one copy. The cache holds
+ * at most {@link SimpleVectorIndexCache.MaxIndexes} indexes and drops the least
+ * recently queried one past that. A request with no user is loaded and
+ * answered but never cached or shared.
  *
  * The provider class itself (`SimpleVectorServiceProvider`) remains a
  * non-singleton — callers can `new` one freely and they all delegate to this
@@ -153,15 +219,17 @@ const REMOTE_REFRESH_BATCH_SIZE = 500;
  * while giving us process-wide cache coherence.
  */
 export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache> {
-    /** Loaded indexes, keyed by {@link cacheKey} (EntityDocument and user) */
-    private indexCache = new Map<string, LoadedIndex>();
+    /** Loaded indexes, keyed by {@link cacheKey} (EntityDocument and permission class), least recently queried first */
+    private indexCache = new Map<string, CachedIndex>();
     /** The current load per {@link cacheKey}; a superseded load is dropped from here but finishes for its own callers */
     private inFlightLoads = new Map<string, LoadInProgress>();
     /** Bumped by an explicit invalidate, so a load that started before it is never cached */
     private loadEpochs = new Map<string, number>();
-    private remoteRefreshIDs = new Set<string>();
+    /** Rows queued for re-read; true when every class re-reads the row, false when only narrowed classes do */
+    private remoteRefreshIDs = new Map<string, boolean>();
     private remoteRefreshTimer: ReturnType<typeof setTimeout> | null = null;
     private ttlMs = DEFAULT_TTL_MS;
+    private maxIndexes = DEFAULT_MAX_INDEXES;
     private subscribedToBaseEntityEvents = false;
 
     protected constructor() {
@@ -177,11 +245,32 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
     public get TtlMs(): number { return this.ttlMs; }
     public set TtlMs(value: number) { this.ttlMs = value; }
 
+    /** The most indexes held at once; lowering it evicts the least recently queried ones now. */
+    public get MaxIndexes(): number { return this.maxIndexes; }
+    public set MaxIndexes(value: number) {
+        this.maxIndexes = Math.max(1, Math.floor(value));
+        this.evictOverCapacity();
+    }
+
     public get Size(): number { return this.indexCache.size; }
 
-    /** The cache slot of an EntityDocument's index as loaded by `contextUser`; null (do not cache) without a user. */
-    private cacheKey(entityDocumentId: string, contextUser: UserInfo | undefined): string | null {
-        return UserScopedCacheKey(contextUser?.ID, entityDocumentId);
+    /** The cache slot of an EntityDocument's index for one permission class. */
+    private cacheKey(entityDocumentId: string, permissionClass: PermissionClass): string {
+        return `${entityDocumentId}|${permissionClass.Key}`;
+    }
+
+    /** Marks a cached index as just queried, so eviction drops it last. */
+    private touch(key: string, index: CachedIndex): void {
+        this.indexCache.delete(key);
+        this.indexCache.set(key, index);
+    }
+
+    /** Drops the least recently queried indexes until the cache is within {@link MaxIndexes}. */
+    private evictOverCapacity(): void {
+        for (const key of this.indexCache.keys()) {
+            if (this.indexCache.size <= this.maxIndexes) return;
+            this.indexCache.delete(key);
+        }
     }
 
     /**
@@ -190,24 +279,27 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
      * Promise — only one DB read and vector-pool build happens. An index past its
      * TTL (or marked stale) is returned immediately while a background reload
      * replaces it. Without a user the loader runs every time and nothing is cached.
+     * Users of the same {@link PermissionClass} share one index.
      */
     public async GetOrLoad(
         entityDocumentId: string,
         contextUser: UserInfo | undefined,
         loader: () => Promise<LoadedIndex | null>
     ): Promise<LoadedIndex | null> {
-        const key = this.cacheKey(entityDocumentId, contextUser);
-        if (key === null) {
+        const permissionClass = permissionClassOf(contextUser);
+        if (permissionClass === null) {
             return Promise.resolve().then(loader);
         }
+        const key = this.cacheKey(entityDocumentId, permissionClass);
         const cached = this.indexCache.get(key);
         if (cached) {
+            this.touch(key, cached);
             if (cached.stale || (Date.now() - cached.loadedAt) >= this.ttlMs) {
-                void this.startLoad(key, entityDocumentId, contextUser, loader);
+                void this.startLoad(key, entityDocumentId, contextUser, permissionClass, loader);
             }
             return cached;
         }
-        return this.startLoad(key, entityDocumentId, contextUser, loader);
+        return this.startLoad(key, entityDocumentId, contextUser, permissionClass, loader);
     }
 
     /**
@@ -219,13 +311,14 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
         key: string,
         entityDocumentId: string,
         contextUser: UserInfo | undefined,
+        permissionClass: PermissionClass,
         loader: () => Promise<LoadedIndex | null>
     ): Promise<LoadedIndex | null> {
         const epoch = this.epochOf(entityDocumentId);
         const existing = this.inFlightLoads.get(key);
         if (existing && existing.Epoch === epoch) return existing.Promise;
 
-        const load = new LoadInProgress(entityDocumentId, epoch, contextUser);
+        const load = new LoadInProgress(entityDocumentId, epoch, contextUser, permissionClass);
         load.Promise = this.runLoad(key, load, loader);
         this.inFlightLoads.set(key, load);
         // A background refresh has no awaiter; log its failure rather than leave it unhandled.
@@ -245,9 +338,13 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
             // only after this load is registered — and is then cleared below.
             const loaded = await Promise.resolve().then(loader);
             if (loaded && load.Epoch === this.epochOf(load.EntityDocumentID)) {
-                this.replayPendingChanges(load, loaded);
-                if (load.StaleOnArrival) loaded.stale = true;
-                this.indexCache.set(key, loaded);
+                const cached: CachedIndex = { ...loaded, permissionClass: load.Class.Key, rowFiltered: load.Class.RowFiltered };
+                this.replayPendingChanges(load, cached);
+                if (load.StaleOnArrival) cached.stale = true;
+                this.indexCache.delete(key);
+                this.indexCache.set(key, cached);
+                this.evictOverCapacity();
+                return cached;
             }
             return loaded;
         } finally {
@@ -298,9 +395,16 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
      * an upsert when it carries a usable vector, a removal when it doesn't.
      * Safe to call for indexes that are not loaded (no-op) or still loading
      * (the change is replayed onto the load's result).
+     *
+     * Only indexes of unnarrowed permission classes take the row as given. A
+     * narrowed class may not be allowed to see it, so the row is re-read as that
+     * class's user instead, and lands only if the re-read returns it.
      */
     public ApplyRowChange(row: RecordDocumentVectorRow): void {
-        this.applyRowChangeWhere(row, () => true);
+        this.applyRowChangeWhere(row, target => !target.Class.RowFiltered);
+        if (row.ID && this.hasRowFilteredIndexes()) {
+            this.queueRowReRead(row.ID, false);
+        }
     }
 
     /** Removes an EntityRecordDocument from every loaded (or loading) index. */
@@ -308,14 +412,25 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
         this.applyRowRemovalWhere(id, () => true);
     }
 
-    /** {@link ApplyRowChange}, limited to the indexes (and loads) whose user passes `includeUser`. */
-    private applyRowChangeWhere(row: RecordDocumentVectorRow, includeUser: (contextUser: UserInfo | undefined) => boolean): void {
+    /** Whether any loaded or loading index belongs to a narrowed permission class. */
+    private hasRowFilteredIndexes(): boolean {
+        for (const index of this.indexCache.values()) {
+            if (index.rowFiltered) return true;
+        }
+        for (const load of this.inFlightLoads.values()) {
+            if (load.Class.RowFiltered) return true;
+        }
+        return false;
+    }
+
+    /** {@link ApplyRowChange}, limited to the indexes (and loads) whose class passes `include`. */
+    private applyRowChangeWhere(row: RecordDocumentVectorRow, include: (target: IndexTarget) => boolean): void {
         if (!row.ID) return;
         const targetDoc = row.EntityDocumentID || null;
         // A row that moved to another EntityDocument must leave its old index — loaded or still loading.
         let dimensionsChanged = false;
         this.indexCache.forEach(index => {
-            if (!includeUser(index.contextUser)) return;
+            if (!include(targetOfIndex(index))) return;
             if (index.entityDocumentId !== targetDoc) {
                 index.service.RemoveVector(row.ID);
             } else if (!this.applyRowToIndex(index, row)) {
@@ -323,7 +438,7 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
             }
         });
         this.inFlightLoads.forEach(load => {
-            if (!includeUser(load.ContextUser)) return;
+            if (!include(load)) return;
             load.Pending.push(load.EntityDocumentID === targetDoc ? { Kind: 'upsert', Row: row } : { Kind: 'remove', ID: row.ID });
         });
         if (dimensionsChanged && targetDoc) {
@@ -333,12 +448,12 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
         }
     }
 
-    private applyRowRemovalWhere(id: string, includeUser: (contextUser: UserInfo | undefined) => boolean): void {
+    private applyRowRemovalWhere(id: string, include: (target: IndexTarget) => boolean): void {
         this.indexCache.forEach(index => {
-            if (includeUser(index.contextUser)) index.service.RemoveVector(id);
+            if (include(targetOfIndex(index))) index.service.RemoveVector(id);
         });
         this.inFlightLoads.forEach(load => {
-            if (includeUser(load.ContextUser)) load.Pending.push({ Kind: 'remove', ID: id });
+            if (include(load)) load.Pending.push({ Kind: 'remove', ID: id });
         });
     }
 
@@ -442,16 +557,20 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
                 return;
             }
             if (id) {
-                this.queueRemoteRefresh(id);
+                this.queueRowReRead(id, true);
                 return;
             }
         }
         this.MarkAllStale();
     }
 
-    private queueRemoteRefresh(id: string): void {
+    /**
+     * Queues a changed row to be re-read, batched, as a user of each loaded permission class —
+     * or, with `everyClass` false, of each narrowed class only (the others already took the row).
+     */
+    private queueRowReRead(id: string, everyClass: boolean): void {
         if (this.indexCache.size === 0 && this.inFlightLoads.size === 0) return; // nothing loaded to keep current
-        this.remoteRefreshIDs.add(id);
+        this.remoteRefreshIDs.set(id, everyClass || this.remoteRefreshIDs.get(id) === true);
         if (this.remoteRefreshTimer) return;
         this.remoteRefreshTimer = setTimeout(() => {
             this.remoteRefreshTimer = null;
@@ -466,15 +585,17 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
     }
 
     /**
-     * Re-reads the queued rows once per user an index was loaded as, and
-     * applies each read only to that user's indexes: a row one user cannot see
-     * must not be removed from an index another user loaded.
+     * Re-reads the queued rows once per permission class an index was loaded
+     * for, as a user of that class, and applies each read only to that class's
+     * indexes: a row one class cannot see must not be removed from (or added
+     * to) an index another class loaded.
      */
     private async refreshQueuedRows(): Promise<void> {
-        const ids = Array.from(this.remoteRefreshIDs);
+        const queued = Array.from(this.remoteRefreshIDs);
         this.remoteRefreshIDs.clear();
-        for (const [userKey, contextUser] of this.loadedUsers()) {
-            const includeUser = (user: UserInfo | undefined): boolean => userKeyOf(user) === userKey;
+        for (const [classKey, { ContextUser: contextUser, RowFiltered: rowFiltered }] of this.loadedClasses()) {
+            const includeUser = (target: IndexTarget): boolean => target.Class.Key === classKey;
+            const ids = queued.filter(([, everyClass]) => everyClass || rowFiltered).map(([id]) => id);
             for (let start = 0; start < ids.length; start += REMOTE_REFRESH_BATCH_SIZE) {
                 const batch = ids.slice(start, start + REMOTE_REFRESH_BATCH_SIZE);
                 if (!await this.refreshRows(batch, contextUser, includeUser)) {
@@ -488,7 +609,7 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
     private async refreshRows(
         ids: string[],
         contextUser: UserInfo | undefined,
-        includeUser: (user: UserInfo | undefined) => boolean
+        includeUser: (target: IndexTarget) => boolean
     ): Promise<boolean> {
         const inList = ids.map(id => `'${EscapeSQLString(id)}'`).join(',');
         let result: RunViewResult<RecordDocumentVectorRow>;
@@ -523,18 +644,22 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
         return true;
     }
 
-    /** Each distinct user a loaded or loading index reads as, keyed by user ID ('' for none). */
-    private loadedUsers(): Map<string, UserInfo | undefined> {
-        const users = new Map<string, UserInfo | undefined>();
-        this.indexCache.forEach(index => users.set(userKeyOf(index.contextUser), index.contextUser));
-        this.inFlightLoads.forEach(load => users.set(userKeyOf(load.ContextUser), load.ContextUser));
-        return users;
+    /** Each permission class a loaded or loading index belongs to, with a user of that class to read as. */
+    private loadedClasses(): Map<string, { ContextUser: UserInfo | undefined; RowFiltered: boolean }> {
+        const classes = new Map<string, { ContextUser: UserInfo | undefined; RowFiltered: boolean }>();
+        this.indexCache.forEach(index => classes.set(index.permissionClass, { ContextUser: index.contextUser, RowFiltered: index.rowFiltered }));
+        this.inFlightLoads.forEach(load => classes.set(load.Class.Key, { ContextUser: load.ContextUser, RowFiltered: load.Class.RowFiltered }));
+        return classes;
     }
 }
 
-/** Groups indexes by the user they were loaded as. */
-function userKeyOf(user: UserInfo | undefined): string {
-    return user?.ID ?? '';
+/** What a row-change filter sees of a loaded index or a load in flight: its permission class. */
+interface IndexTarget {
+    Class: PermissionClass;
+}
+
+function targetOfIndex(index: CachedIndex): IndexTarget {
+    return { Class: { Key: index.permissionClass, RowFiltered: index.rowFiltered } };
 }
 
 /** Reads the `ID` value out of a remote-invalidate `primaryKeyValues` payload. */

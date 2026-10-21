@@ -15,7 +15,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { type IMetadataProvider, LogError, LogStatus, Metadata, RunQuery, RunView } from '@memberjunction/core';
+import { type EntityInfo, GetIndexRestrictedFieldNames, type IMetadataProvider, LogError, LogStatus, Metadata, RunQuery, RunView } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, Canonicalize, ComputeContentHashAsync, EscapeSQLString, ResolveMappingRef, ResolveValueMapping, SafeJSONParse } from '@memberjunction/global';
 import { KnowledgeHubMetadataEngine, type MJFeatureValueCacheEntity, type MJFeaturePipelineTypeEntity, type MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -2054,7 +2054,8 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         const mappingToUse = this.inputMapping ?? this.spec?.Context?.InputMapping;
 
         if (!mappingToUse) {
-            promptData = { record: recordData };
+            const fieldsListed = (this.spec?.Context?.Fields?.length ?? 0) > 0;
+            promptData = { record: fieldsListed ? recordData : this.withoutIndexRestrictedFields(recordData, record, ctx) };
         } else {
             const mapped = ResolveValueMapping(mappingToUse, { record: recordData });
             promptData = mapped && typeof mapped === 'object' ? (mapped as Record<string, unknown>) : { record: recordData };
@@ -2138,6 +2139,31 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             values[field] = key === undefined || data[key] === undefined ? null : data[key];
         }
         return JSON.stringify(values);
+    }
+
+    /**
+     * The default mapping's record data without the fields field-level security restricts for any
+     * role ({@link GetIndexRestrictedFieldNames}). A record process runs as a system identity and
+     * writes what the model answers into fields other users read, so the model must not see by
+     * default what any of those users may not. A field named in `Context.Fields` or an input
+     * mapping is an explicit choice and is not filtered.
+     */
+    private withoutIndexRestrictedFields(recordData: Record<string, unknown>, record: RecordRef, ctx?: RecordProcessorContext): Record<string, unknown> {
+        const restricted = GetIndexRestrictedFieldNames(this.recordEntityInfo(record, ctx));
+        if (restricted.size === 0) {
+            return recordData;
+        }
+        return Object.fromEntries(Object.entries(recordData).filter(([key]) => !restricted.has(key.trim().toLowerCase())));
+    }
+
+    /** The record's entity: from a loaded BaseEntity, else from the run's (or the global) metadata provider. */
+    private recordEntityInfo(record: RecordRef, ctx?: RecordProcessorContext): EntityInfo | null {
+        const loaded = record.Record as { EntityInfo?: EntityInfo } | undefined;
+        if (loaded?.EntityInfo) {
+            return loaded.EntityInfo;
+        }
+        const provider = ctx?.Provider ?? Metadata.Provider;
+        return record.EntityID && provider ? provider.EntityByID(record.EntityID) ?? null : null;
     }
 
     /** Extracts a plain field map from the record (BaseEntity → GetAll(), plain object → as-is). */
