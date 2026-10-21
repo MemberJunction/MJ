@@ -29,6 +29,7 @@
     "@memberjunction/integration-engine": "6.2.0-edge.4",
     "@memberjunction/notifications": "6.2.0-edge.4",
     "@memberjunction/record-set-processor": "6.2.0-edge.4",
+    "@memberjunction/record-set-processor-base": "6.2.0-edge.4",
     "@memberjunction/rubrics": "6.2.0-edge.4",
     "@memberjunction/scheduling-base-types": "6.2.0-edge.4",
     "@memberjunction/scheduling-engine-base": "6.2.0-edge.4",
@@ -40,6 +41,7 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@memberjunction/unit-testing": "6.2.0-edge.4",
     "@types/node": "24.10.11",
     "typescript": "^5.9.3",
     "vitest": "^3.1.1"
