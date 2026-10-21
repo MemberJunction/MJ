@@ -148,6 +148,8 @@ function makeEntity(name: string): EntityInfo {
         UserViewMaxRows: 1000,
         FieldByName: (n: string) => allFields.find(f => f.Name.toLowerCase() === n.trim().toLowerCase()),
         DatetimeFields: [],
+        // PostProcessRows reads this memoized list to convert binary columns; none here.
+        BinaryFields: [],
         // RLS is not under test — no row filter.
         GetEffectiveRowFilterWhereClause: () => '',
     } as unknown as EntityInfo;
