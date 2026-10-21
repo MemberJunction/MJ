@@ -1052,8 +1052,12 @@ export class BoxFileStorage extends FileStorageBase {
   }
 
   /**
-   * Ensures we have a valid access token, refreshing if necessary.
+   * Ensures we have a valid access token, renewing it if necessary.
    * Also reinitializes the Box client with the new token.
+   *
+   * Renewal uses the same grant `initialize()` authenticated with: the refresh-token grant when a
+   * refresh token is configured, otherwise the client-credentials grant. Client-credentials
+   * tokens carry no refresh token, so renewing one means requesting a new token outright.
    */
   private async _ensureValidToken(): Promise<void> {
     // Check if token is expired or about to expire (within 5 minutes)
@@ -1066,15 +1070,21 @@ export class BoxFileStorage extends FileStorageBase {
         const tokenData = await this._refreshAccessToken();
         this._accessToken = tokenData.access_token;
         this._tokenExpiresAt = Date.now() + tokenData.expires_in * 1000 - 60000;
-
-        // Reinitialize the Box client with the new token
-        const auth = new BoxDeveloperTokenAuth({ token: this._accessToken });
-        this._client = new BoxClient({ auth });
-
-        console.log('[Box] Token refreshed successfully');
+      } else if (this._clientId && this._clientSecret && this._enterpriseId) {
+        // _getAccessToken sets _accessToken and _tokenExpiresAt itself
+        await this._getAccessToken();
       } else {
-        throw new Error('Cannot refresh Box token: missing credentials');
+        throw new Error(
+          'Cannot refresh Box token: missing credentials (need a refresh token with client ID and secret, ' +
+            'or client ID, secret and enterprise ID)'
+        );
       }
+
+      // Reinitialize the Box client with the new token
+      const auth = new BoxDeveloperTokenAuth({ token: this._accessToken });
+      this._client = new BoxClient({ auth });
+
+      console.log('[Box] Token refreshed successfully');
     }
   }
 

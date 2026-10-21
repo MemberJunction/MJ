@@ -320,6 +320,38 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
   // carries its positive control, so a listener that died for an unrelated reason cannot pass
   // as "correctly gated".
 
+  describe('Move to stage', () => {
+    const stageButton = (f: Fix) =>
+      (Array.from(f.nativeElement.querySelectorAll('button.head-btn')) as HTMLButtonElement[]).find((b) =>
+        /Move to stage|Back to tab/.test(b.textContent ?? '')
+      ) as HTMLButtonElement;
+
+    it('offers "Move to stage", and asks for the stage when clicked', () => {
+      const f = render();
+      const asked: boolean[] = [];
+      f.componentInstance.FocusModeChange.subscribe((on: boolean) => asked.push(on));
+      expect(stageButton(f).textContent?.trim()).toBe('Move to stage');
+      stageButton(f).click();
+      f.detectChanges();
+      expect(asked).toEqual([true]);
+    });
+
+    it('offers "Back to tab" once the host reports the board on the stage, and asks for the tab when clicked', () => {
+      const f = render();
+      const asked: boolean[] = [];
+      f.componentInstance.FocusModeChange.subscribe((on: boolean) => asked.push(on));
+      f.componentInstance.SetOnStage(true);
+      f.detectChanges();
+      expect(stageButton(f).textContent?.trim()).toBe('Back to tab');
+      stageButton(f).click();
+      f.detectChanges();
+      expect(asked).toEqual([false]);
+      f.componentInstance.SetOnStage(false);
+      f.detectChanges();
+      expect(stageButton(f).textContent?.trim()).toBe('Move to stage');
+    });
+  });
+
   describe('ReadOnly', () => {
     const renderRO = (
       readOnly: boolean,
@@ -396,6 +428,36 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
       const rwState = new WhiteboardState();
       canvasClick(renderRO(false, rwState, 'sticky'));
       expect(rwState.ElementCount).toBe(1);
+    });
+  });
+
+  // ── ShowFocusToggle: chrome a host can turn off (LXP P12) ─────────────────────────
+  describe('ShowFocusToggle', () => {
+    /** The header's "Move to stage" / "Back to tab" control, or null when it is not rendered. */
+    const focusButton = (f: Fix): HTMLButtonElement | null =>
+      (Array.from(f.nativeElement.querySelectorAll('button.head-btn')) as HTMLButtonElement[])
+        .find((b) => /Move to stage|Back to tab/.test(b.textContent ?? '')) ?? null;
+
+    it('renders the Focus toggle by default (MJ\'s own overlay services FocusModeChange)', () => {
+      expect(focusButton(render())).not.toBeNull();
+    });
+
+    it('a host that cannot service FocusModeChange hides the toggle instead of shipping a dead button', () => {
+      const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
+        inputs: { State: new WhiteboardState(), ShowFocusToggle: false },
+      });
+      expect(focusButton(f)).toBeNull();
+      // Only the Focus toggle goes: the rest of the header chrome is untouched.
+      expect(f.nativeElement.querySelector('button.head-btn--more')).not.toBeNull();
+    });
+
+    it('with the toggle hidden, the stage state the host reports still lands (no button is not no feature)', () => {
+      const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
+        inputs: { State: new WhiteboardState(), ShowFocusToggle: false },
+      });
+      f.componentInstance.SetOnStage(true);
+      expect(f.componentInstance.FocusMode).toBe(true);
+      expect(focusButton(f)).toBeNull();
     });
   });
 });

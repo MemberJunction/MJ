@@ -3,7 +3,7 @@ import { BaseEntity, CompositeKey, DatabaseProviderBase, EntityInfo, LocalCacheM
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { NoLog } from "../logging/NoLog.js";
 import { UUIDsEqual } from "@memberjunction/global";
-import { DrainResponseBody } from "@memberjunction/network-utils";
+import { DrainResponseBody, SafeFetch } from "@memberjunction/network-utils";
 import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
 import {
     MJCompanyIntegrationEntity,
@@ -6570,7 +6570,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
     private async sendWebhook(url: string, payload: Record<string, unknown>): Promise<void> {
         try {
-            const response = await fetch(url, {
+            // SECURITY: the webhook URL is caller-supplied, so go through the SSRF guard —
+            // SafeFetch validates the URL (and every redirect hop) resolves to a public address.
+            const response = await SafeFetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)

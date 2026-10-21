@@ -101,8 +101,16 @@ export interface CreateClaimParams {
     ClaimTypeName?: string;
     /** ID of the IdentityClaimType (if Name is not provided) */
     ClaimTypeID?: string;
-    /** Email address of the intended recipient/claimant */
-    NormalizedEmail: string;
+    /**
+     * Email address of the intended recipient/claimant.
+     *
+     * Optional ONLY for claim types whose `Configuration` sets `RequireToken: true`. Such a claim
+     * is redeemed by its token alone, so it needs no recipient — for example, a link that hands
+     * an anonymous visitor's work to whoever signs in holding it. The claim is stored with an
+     * empty `NormalizedEmail`, which no account can match, so email-match redemption and
+     * auto-claim on login can never reach it. Every other claim type still requires an email.
+     */
+    NormalizedEmail?: string;
     /** Optional polymorphic target entity ID */
     EntityID?: string | null;
     /** Optional target record primary key ID */
@@ -111,6 +119,11 @@ export interface CreateClaimParams {
     Payload?: Record<string, unknown> | null;
     /** Lifespan in days before expiration (defaults to ClaimType.DefaultExpirationDays) */
     ExpiresInDays?: number;
+    /**
+     * Exact expiry instant, for claims shorter than a day (whole days cannot express "ten
+     * minutes"). Takes precedence over `ExpiresInDays`. Must be a valid instant in the future.
+     */
+    ExpiresAt?: Date;
     /** Optional linked MagicLinkInvite ID for token verification */
     MagicLinkInviteID?: string | null;
     /** Optional tracking metadata */
