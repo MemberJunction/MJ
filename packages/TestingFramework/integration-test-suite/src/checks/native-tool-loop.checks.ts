@@ -76,7 +76,7 @@ const DOC_TOOLS: AgentToolDefinition<DocPayload>[] = [
             const doc = context.CurrentPayload.doc ?? '';
             const oldString = String(args.old_string);
             if (!doc.includes(oldString)) return { Content: `old_string not found: '${oldString}'`, IsError: true };
-            return { Content: 'Edit applied.', IsError: false, PayloadChange: { updateElements: { doc: doc.replace(oldString, String(args.new_string)) } } };
+            return { Content: 'Edit applied.', IsError: false, PayloadChange: { updateElements: { doc: doc.replace(oldString, () => String(args.new_string)) } } };
         }
     }
 ];

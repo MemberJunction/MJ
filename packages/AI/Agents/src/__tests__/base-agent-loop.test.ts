@@ -2758,7 +2758,7 @@ describe('BaseAgent.Execute — agent-local tools: write, a failing edit, a succ
                 if (!doc.includes(oldString)) {
                     return { Content: `old_string not found: '${oldString}'`, IsError: true };
                 }
-                return { Content: 'Edit applied.', IsError: false, PayloadChange: { updateElements: { doc: doc.replace(oldString, String(args.new_string)) } } };
+                return { Content: 'Edit applied.', IsError: false, PayloadChange: { updateElements: { doc: doc.replace(oldString, () => String(args.new_string)) } } };
             }
         }
     ];

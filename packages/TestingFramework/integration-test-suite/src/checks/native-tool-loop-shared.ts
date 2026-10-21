@@ -17,7 +17,7 @@ import { RegisterClass, MJGlobal } from '@memberjunction/global';
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import {
     BaseLLM, ChatResult, ModelUsage, GetAIAPIKey, ChatMessageRole,
-    type ChatParams, type ChatMessage, type ChatToolCall, type ChatToolChoice, type ChatReasoningBlock,
+    type ChatParams, type ChatMessage, type ChatMessageContentBlock, type ChatToolCall, type ChatToolChoice, type ChatReasoningBlock,
     type ClassifyParams, type ClassifyResult, type SummarizeParams, type SummarizeResult, type AIErrorInfo
 } from '@memberjunction/ai';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
@@ -244,12 +244,9 @@ export class ITRecordingLLM extends BaseLLM {
 
 // ─── Reading recorded history ──────────────────────────────────────────────────
 
-/** A tool_result block as the history carries it. */
-export interface ResultBlock { type: string; toolCallId?: string; toolName?: string; isError?: boolean; content?: string }
-
 /** The tool_result blocks of a message, or none. */
-export function ResultBlocksOf(message: ChatMessage | undefined): ResultBlock[] {
-    return Array.isArray(message?.content) ? (message!.content as unknown as ResultBlock[]).filter((b) => b.type === 'tool_result') : [];
+export function ResultBlocksOf(message: ChatMessage | undefined): ChatMessageContentBlock[] {
+    return Array.isArray(message?.content) ? message.content.filter((b) => b.type === 'tool_result') : [];
 }
 
 /** The text of a message, whatever its content shape. */
