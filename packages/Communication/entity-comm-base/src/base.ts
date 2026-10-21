@@ -29,6 +29,13 @@ export class EntityCommunicationParams {
 export class EntityCommunicationResultItem {
     RecipientData: any
     Message: ProcessedMessage
+    /**
+     * True when nothing was sent (or previewed) for this recipient. {@link SkipReason} says why, without
+     * revealing any value the sender may not read; {@link Message} is unset.
+     */
+    Skipped?: boolean
+    /** Why this recipient was skipped, when {@link Skipped} is true. */
+    SkipReason?: string
 }
 export class EntityCommunicationResult {
     Success: boolean

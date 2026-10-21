@@ -9,7 +9,7 @@
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus, BaseEntity, CompositeKey, IMetadataProvider } from '@memberjunction/core';
 import { CredentialEngine } from '@memberjunction/credentials';
-import { DescribeTokenEndpointFailure } from '@memberjunction/global';
+import { DescribeTokenEndpointFailure, UserScopedCacheKey } from '@memberjunction/global';
 import type {
     OAuthTokenSet,
     OAuthTokenResponse,
@@ -58,7 +58,10 @@ export class TokenManager {
     /** Locks for concurrent refresh protection */
     private readonly refreshLocks: Map<string, Promise<TokenRefreshResult>> = new Map();
 
-    /** In-memory token cache for faster access */
+    /**
+     * In-memory token cache, keyed by connection and user (see {@link cacheKey}), so a hit for one
+     * user never skips another user's own lookup and credential-access audit.
+     */
     private readonly tokenCache: Map<string, OAuthTokenSet> = new Map();
 
     constructor(expirationThresholdSeconds = DEFAULT_EXPIRATION_THRESHOLD_SECONDS) {
@@ -175,8 +178,9 @@ export class TokenManager {
                 await entity.Save();
             }
 
-            // Update in-memory cache
-            this.tokenCache.set(connectionId, tokens);
+            // The connection's tokens changed: no user's cached copy is current any more
+            this.forgetConnection(connectionId);
+            this.cacheTokens(connectionId, contextUser, tokens);
 
             LogStatus(`[OAuth] Stored tokens for connection ${connectionId}`);
         } catch (error) {
@@ -207,7 +211,8 @@ export class TokenManager {
         contextUser: UserInfo
     ): Promise<OAuthTokenSet | null> {
         // Check in-memory cache first
-        const cached = this.tokenCache.get(connectionId);
+        const key = this.cacheKey(connectionId, contextUser);
+        const cached = key ? this.tokenCache.get(key) : undefined;
         if (cached) {
             return cached;
         }
@@ -272,7 +277,7 @@ export class TokenManager {
             };
 
             // Update in-memory cache
-            this.tokenCache.set(connectionId, tokens);
+            this.cacheTokens(connectionId, contextUser, tokens);
 
             return tokens;
         } catch (error) {
@@ -653,8 +658,8 @@ export class TokenManager {
                 }
             }
 
-            // Clear from in-memory cache
-            this.tokenCache.delete(connectionId);
+            // Clear every user's cached copy
+            this.forgetConnection(connectionId);
 
             LogStatus(`[OAuth] Revoked credentials for connection ${connectionId}`);
 
@@ -697,6 +702,29 @@ export class TokenManager {
     /**
      * Sleep helper for retry delays.
      */
+    /** The cache key for `connectionId` as loaded by `contextUser`, or null when there is no user to key on. */
+    private cacheKey(connectionId: string, contextUser: UserInfo | undefined): string | null {
+        return UserScopedCacheKey(contextUser?.ID, connectionId);
+    }
+
+    /** Caches `tokens` for this connection and user; does nothing without a user to key on. */
+    private cacheTokens(connectionId: string, contextUser: UserInfo | undefined, tokens: OAuthTokenSet): void {
+        const key = this.cacheKey(connectionId, contextUser);
+        if (key) {
+            this.tokenCache.set(key, tokens);
+        }
+    }
+
+    /** Drops every user's cached tokens for a connection. */
+    private forgetConnection(connectionId: string): void {
+        const prefix = `${connectionId}:`;
+        for (const key of [...this.tokenCache.keys()]) {
+            if (key.startsWith(prefix)) {
+                this.tokenCache.delete(key);
+            }
+        }
+    }
+
     private sleep(ms: number): Promise<void> {
         return new Promise(resolve => setTimeout(resolve, ms));
     }

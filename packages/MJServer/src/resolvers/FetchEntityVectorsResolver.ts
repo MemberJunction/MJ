@@ -50,6 +50,12 @@ type LabelledVector = { row: StoredVectorRow; labels: Record<string, string> };
 /** Most Entity Record Document IDs named in one `ID IN (...)` filter when fetching VectorJSON. */
 const VECTOR_FETCH_CHUNK_SIZE = 1000;
 
+/** Most record keys named in one view when checking which matched records the caller may read. */
+const READABLE_KEY_CHECK_CHUNK_SIZE = 1000;
+
+/** A match returned by an external vector index's `QueryIndex`. */
+type IndexMatch = { id: string; values?: number[]; metadata?: Record<string, unknown>; score?: number };
+
 /* ───── Resolver ───── */
 
 @Resolver()
@@ -146,8 +152,10 @@ export class FetchEntityVectorsResolver extends ResolverBase {
                 );
             }
 
-            // Step 5: Convert query matches to result format, without the fields this caller may not read
-            const matches = (queryResponse.data as { matches?: Array<{ id: string; values?: number[]; metadata?: Record<string, unknown>; score?: number }> }).matches ?? [];
+            // Step 5: Keep only matches for records this caller may read (the index is not filtered
+            // by row-level security), then convert them without the fields this caller may not read
+            const allMatches = (queryResponse.data as { matches?: IndexMatch[] }).matches ?? [];
+            const matches = await this.readableMatches(entityInfo, allMatches, currentUser);
             const denied = entityInfo.GetDeniedReadFields(currentUser);
             const results: EntityVectorItem[] = matches.map(match => ({
                 ID: match.id,
@@ -177,6 +185,75 @@ export class FetchEntityVectorsResolver extends ResolverBase {
         const entityInfo = md.EntityByName(entityName);
         if (!entityInfo) return null;
         return entityInfo.GetUserPermisions(contextUser)?.CanRead ? entityInfo : null;
+    }
+
+    /**
+     * The matches whose record `contextUser` may read, in their original order. A match is kept only
+     * when its `RecordID` metadata names a key of the entity and a view run as `contextUser` returns
+     * that record; a match without a usable record ID cannot be checked, so it is dropped.
+     */
+    private async readableMatches(entityInfo: EntityInfo, matches: IndexMatch[], contextUser: UserInfo): Promise<IndexMatch[]> {
+        const keyed = matches
+            .map(match => ({ match, key: this.matchRecordKey(entityInfo, match) }))
+            .filter((m): m is { match: IndexMatch; key: CompositeKey } => m.key !== null);
+        if (keyed.length === 0) return [];
+        const readable = await this.loadReadableKeys(entityInfo, keyed.map(k => k.key), contextUser);
+        return keyed.filter(k => readable.has(this.canonicalKey(k.key))).map(k => k.match);
+    }
+
+    /** The record key a match's `RecordID` metadata names, or null when it names no key of the entity. */
+    private matchRecordKey(entityInfo: EntityInfo, match: IndexMatch): CompositeKey | null {
+        const recordID = match.metadata?.RecordID;
+        if (typeof recordID !== 'string' || recordID.length === 0) return null;
+        try {
+            return CompositeKey.FromRecordID(entityInfo, recordID);
+        } catch {
+            return null; // field names that are not the entity's primary key: never put into SQL
+        }
+    }
+
+    /**
+     * The canonical forms of the keys among `keys` whose record a view run as `contextUser` returns.
+     * The keys are checked in lists of at most {@link READABLE_KEY_CHECK_CHUNK_SIZE}, all sent in one
+     * `RunViews` batch.
+     */
+    private async loadReadableKeys(entityInfo: EntityInfo, keys: CompositeKey[], contextUser: UserInfo): Promise<Set<string>> {
+        const views: RunViewParams[] = [];
+        for (let i = 0; i < keys.length; i += READABLE_KEY_CHECK_CHUNK_SIZE) {
+            views.push({
+                EntityName: entityInfo.Name,
+                ExtraFilter: this.keyFilter(entityInfo, keys.slice(i, i + READABLE_KEY_CHECK_CHUNK_SIZE)),
+                Fields: entityInfo.PrimaryKeys.map(pk => pk.Name),
+                IgnoreMaxRows: true,
+                BypassCache: true, // one-off key lists: a cache slot per call would only hold memory
+                ResultType: 'simple',
+            });
+        }
+        const readable = new Set<string>();
+        const results = await new RunView().RunViews<Record<string, unknown>>(views, contextUser);
+        for (const result of results) {
+            if (!result.Success) {
+                throw new Error(`Failed to check access to "${entityInfo.Name}" records: ${result.ErrorMessage}`);
+            }
+            for (const row of result.Results) {
+                readable.add(this.canonicalKey(CompositeKey.FromEntityRecord(entityInfo, row)));
+            }
+        }
+        return readable;
+    }
+
+    /** A filter matching exactly `keys`: `PK IN (...)` for a single-column key, one clause per key otherwise. */
+    private keyFilter(entityInfo: EntityInfo, keys: CompositeKey[]): string {
+        if (entityInfo.PrimaryKeys.length === 1) {
+            const values = keys.map(k => `'${EscapeSQLString(String(k.KeyValuePairs[0].Value))}'`).join(',');
+            return `${entityInfo.FirstPrimaryKey.Name} IN (${values})`; // first-pk-ok: single-column key, checked above
+        }
+        return keys.map(k => `(${k.ToWhereClause()})`).join(' OR ');
+    }
+
+    /** A key's field names and values, lower-cased, so keys from the index and from a view compare equal. */
+    private canonicalKey(key: CompositeKey): string {
+        return key.KeyValuePairs.map(kv => `${kv.FieldName.toLowerCase()}|${String(kv.Value).toLowerCase()}`).join('||');
     }
 
     /**

@@ -3,11 +3,20 @@ import { MJCommunicationProviderEntityExtended, Message, MessageRecipient } from
 import { EntityInfo, LogStatus, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJListDetailEntityType, MJListEntityType, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
-import { MJEntityCommunicationMessageTypeEntityExtended, EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
+import { MJEntityCommunicationMessageTypeEntityExtended, EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationResultItem, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
 
  
 /** One row of a recipient or related-entity view, as RunView returns it with `ResultType: 'simple'`. */
 export type EntityCommunicationRecord = Record<string, unknown>;
+
+/** One recipient built from a record: ready to send, or skipped with the reason why. */
+export type EntityCommunicationRecipient = { Recipient: MessageRecipient; SkipReason?: string };
+
+/**
+ * The per-recipient result when the sender cannot read the field that holds the recipient's
+ * address. It names neither the field nor its value.
+ */
+export const RECIPIENT_ADDRESS_UNREADABLE_MESSAGE = 'Recipient skipped: the sender cannot read the address field';
 
 /**
  * Server-side implementation of the entity communications engine
@@ -43,18 +52,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             const entityMessageType = this.ResolveEntityMessageType(params);
             const records = await this.RunRecipientView(entityInfo, params.RunViewParams, contextUser);
             const recipients = await this.PopulateRecipientContextData(entityInfo, entityMessageType, params.Message, records, contextUser);
-            const sendResult = await CommunicationEngine.Instance.SendMessages(params.ProviderName, params.ProviderMessageTypeName, params.Message, recipients, params.PreviewOnly, undefined, contextUser);
-            if (sendResult && sendResult.length === recipients.length) {
-                return {
-                    Success: !sendResult.some(r => !r.Success),
-                    ErrorMessage: sendResult.filter(r => !r.Success).map(r => r.Error).join('; '),
-                    Results: sendResult.map((r, i) => ({ RecipientData: recipients[i], Message: r.Message }))
-                };
-            }
-            return {
-                Success: false,
-                ErrorMessage: `Communication engine returned ${sendResult?.length ?? 0} results for ${recipients.length} recipients`
-            }
+            return await this.SendToRecipients(params, recipients, contextUser);
         }
         catch (e) {
             return {
@@ -62,6 +60,52 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
                 ErrorMessage: e instanceof Error ? e.message : String(e)
             }
         }
+    }
+
+    /**
+     * Sends (or previews) the message to every recipient that is not skipped, and reports one result
+     * per recipient in the original order. A skipped recipient is reported with its reason (in its
+     * result item and in `ErrorMessage`) but never stops the others: the run succeeds when every
+     * recipient that was not skipped succeeded and at least one was sent, so a partial preview
+     * still shows the messages that could be built.
+     */
+    protected async SendToRecipients(params: EntityCommunicationParams, recipients: EntityCommunicationRecipient[], contextUser: UserInfo): Promise<EntityCommunicationResult> {
+        const sendable = recipients.filter(r => !r.SkipReason).map(r => r.Recipient);
+        const sendResult = sendable.length === 0 ? [] :
+            await CommunicationEngine.Instance.SendMessages(params.ProviderName, params.ProviderMessageTypeName, params.Message, sendable, params.PreviewOnly, undefined, contextUser);
+        if (!sendResult || sendResult.length !== sendable.length) {
+            return {
+                Success: false,
+                ErrorMessage: `Communication engine returned ${sendResult?.length ?? 0} results for ${sendable.length} recipients`
+            };
+        }
+
+        const results: EntityCommunicationResultItem[] = [];
+        const errors: string[] = [];
+        let nextSent = 0;
+        for (const r of recipients) {
+            if (r.SkipReason) {
+                results.push({ RecipientData: r.Recipient, Message: undefined, Skipped: true, SkipReason: r.SkipReason });
+                continue;
+            }
+            const sent = sendResult[nextSent++];
+            results.push({ RecipientData: r.Recipient, Message: sent.Message });
+            if (!sent.Success)
+                errors.push(sent.Error);
+        }
+        const sendFailed = errors.length > 0;
+        errors.push(...this.SummarizeSkips(recipients));
+        return { Success: !sendFailed && sendable.length > 0, ErrorMessage: errors.join('; '), Results: results };
+    }
+
+    /** One line per distinct skip reason, with how many recipients it applied to. */
+    protected SummarizeSkips(recipients: EntityCommunicationRecipient[]): string[] {
+        const counts = new Map<string, number>();
+        for (const r of recipients) {
+            if (r.SkipReason)
+                counts.set(r.SkipReason, (counts.get(r.SkipReason) ?? 0) + 1);
+        }
+        return [...counts].map(([reason, count]) => `${reason} (${count} recipient${count === 1 ? '' : 's'})`);
     }
 
     /**
@@ -119,9 +163,10 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
 
     /**
      * Builds one recipient per record, with the template context data each needs. `contextUser` is
-     * the acting user; related-entity data is read as that user.
+     * the acting user; related-entity data is read as that user. A record whose address field the
+     * acting user cannot read is returned as a skipped recipient, with no address and no context data.
      */
-    protected async PopulateRecipientContextData(entityInfo: EntityInfo, entityMessageType: MJEntityCommunicationMessageTypeEntityExtended, message: Message, records: any[], contextUser?: UserInfo): Promise<MessageRecipient[]> {
+    protected async PopulateRecipientContextData(entityInfo: EntityInfo, entityMessageType: MJEntityCommunicationMessageTypeEntityExtended, message: Message, records: any[], contextUser?: UserInfo): Promise<EntityCommunicationRecipient[]> {
         // we have now validated we are good on the message type requested...
         // next up we will figure out which field to use for the entity, starting at the entity level and then going to the record level, IF the entity has
         // a PreferredCommunicationField we will flag that here as recordLevelPref = true
@@ -153,24 +198,42 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             });
         });
 
-        const recipients: MessageRecipient[] = [];  
+        const deniedRead = contextUser && entityInfo.FieldLevelSecurityApplies ? entityInfo.GetDeniedReadFields(contextUser) : new Set<string>();
+        const recipients: EntityCommunicationRecipient[] = [];
         for (const r of records) {
-            // in the below we get the VALUE of the record level preferred field if it exists, otherwise we get the value of the entity level preferred field
-            const ToValue = !recordLevelPref ? r[entityLevelPrefField.FieldName] : r[r[entityInfo.PreferredCommunicationField]];
-            // we have mapped the ToValue based on preferences, next up, we need to populate the context data, if there are any templates
+            // the address field is the record level preferred field if the entity has one, otherwise the entity level preferred field
+            const addressField = !recordLevelPref ? entityLevelPrefField.FieldName : r[entityInfo.PreferredCommunicationField];
+            if (!this.IsAddressFieldReadable(entityInfo, addressField, deniedRead, recordLevelPref)) {
+                recipients.push({ Recipient: { To: undefined, ContextData: {} }, SkipReason: RECIPIENT_ADDRESS_UNREADABLE_MESSAGE });
+                continue;
+            }
+            // we have mapped the address based on preferences, next up, we need to populate the context data, if there are any templates
             // if there are no templates, we skip this step to save time
             const pkey = r[entityInfo.FirstPrimaryKey.Name]; // first-pk-ok: compared against LinkedParameterField, an FK back to the recipient entity — single-column by design
-            const retVal = {
-                To: ToValue,
+            const retVal: MessageRecipient = {
+                To: r[addressField],
                 ContextData: {}
             }
             if (hasTemplates) {
                 retVal.ContextData = await this.PopulateSingleRecipientContextData(r, relatedData, pkey, params);                
             }
-            recipients.push(retVal);
+            recipients.push({ Recipient: retVal });
         }
 
         return recipients;
+    }
+
+    /**
+     * Whether the acting user may read the field holding a recipient's address. With a record level
+     * preference, the field naming the address field must be readable too: when it is denied the
+     * record does not say which field holds the address.
+     */
+    protected IsAddressFieldReadable(entityInfo: EntityInfo, addressField: string | undefined, deniedRead: Set<string>, recordLevelPref: boolean): boolean {
+        if (recordLevelPref && deniedRead.has(entityInfo.PreferredCommunicationField.trim().toLowerCase()))
+            return false;
+        if (!addressField)
+            return true; // no address configured: the provider reports it, as before
+        return !deniedRead.has(String(addressField).trim().toLowerCase());
     }
 
     protected async PopulateSingleRecipientContextData(record: any, relatedData: {paramName: string, data: any[]}[], pkey: any, params: MJTemplateParamEntity[]): Promise<{[key: string]: any}> {

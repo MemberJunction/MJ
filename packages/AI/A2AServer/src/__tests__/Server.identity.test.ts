@@ -28,3 +28,23 @@ describe('A2A Server task access', () => {
         expect(source).toMatch(/tasks\.GetForUser\(/);
     });
 });
+
+describe('A2A agent card identity', () => {
+    /** The source of one top-level function, from its declaration to its closing brace. */
+    function functionSource(name: string): string {
+        const start = source.search(new RegExp(`function ${name}\\b`));
+        expect(start).toBeGreaterThanOrEqual(0);
+        const end = source.indexOf('\n}\n', start);
+        return source.slice(start, end);
+    }
+
+    it('never builds the public card as the system user', () => {
+        expect(functionSource('generateAgentCard')).not.toMatch(/GetSystemUser/);
+        expect(source).not.toMatch(/function resolveServiceUser/);
+    });
+
+    it('serves the minimal card when no service identity is configured', () => {
+        expect(functionSource('generateAgentCard')).toMatch(/ResolveAgentCardIdentity\(/);
+        expect(functionSource('generateAgentCard')).toMatch(/BuildAgentCard\(a2aServerSettings\)/);
+    });
+});

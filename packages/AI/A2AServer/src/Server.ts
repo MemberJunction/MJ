@@ -13,6 +13,7 @@ import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { ShutdownRegistry, UUIDsEqual } from "@memberjunction/global";
 import { TaskStore, Task, TaskStatus, Message, Artifact, Part } from "./TaskStore.js";
+import { AgentCard, AgentCardAgentCapability, AgentCardEntityCapability, BuildAgentCard, ResolveAgentCardIdentity } from "./AgentCard.js";
 
 // A2A Server Configuration
 const a2aServerPort = a2aServerSettings?.port || 3200;
@@ -39,34 +40,6 @@ if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.tr
 
 // A2A Server Classes and Types — `TaskStatus`, `Task`, `Message`, `Part`, `Artifact`
 // are imported from `./TaskStore.js` (extracted for testability).
-
-interface AgentCard {
-    name: string;
-    description: string;
-    version: string;
-    endpoints: {
-        tasks: string;
-        agentCard: string;
-    };
-    authentication?: {
-        type: string;
-        scheme: string;
-    };
-    capabilities: {
-        streaming: boolean;
-        asynchronous: boolean;
-        multimedia: boolean;
-        entities: {
-            name: string;
-            schema: string;
-            operations: string[];
-        }[];
-        agents?: {
-            name: string;
-            operations: string[];
-        }[];
-    };
-}
 
 // In-memory storage for tasks. Bounded by the periodic sweep started below;
 // in production you'd swap in a database-backed store. See `./TaskStore.ts`
@@ -401,18 +374,13 @@ export function ClearAgentCardCache(): void {
     cachedAgentCardAgentCount = -1;
 }
 
-/**
- * The identity server-internal A2A work runs as when no caller is involved, such as building the
- * public agent card: the service user named by `a2aServerSettings.userEmail` when one is
- * configured, otherwise the system user. Undefined when the configured user does not resolve,
- * rather than substituting some other user.
- */
-function resolveServiceUser(): UserInfo | undefined {
-    const email = a2aServerSettings?.userEmail?.trim();
-    if (email) {
-        return UserCache.Instance.Users.find((u: UserInfo) => u.Email?.toLowerCase() === email.toLowerCase());
-    }
-    return UserCache.Instance.GetSystemUser();
+let warnedMinimalAgentCard = false;
+
+/** Logs, once per process, that the agent card is minimal because no service identity is configured. */
+function warnMinimalAgentCardOnce(): void {
+    if (warnedMinimalAgentCard) return;
+    warnedMinimalAgentCard = true;
+    console.warn('A2A Server: a2aServerSettings.userEmail is not set, so the public agent card lists no entities or agents. Set it to a service user to advertise what that user may see.');
 }
 
 /**
@@ -432,10 +400,15 @@ function resolveTaskCaller(authenticatedUser?: UserInfo): UserInfo {
 }
 
 async function generateAgentCard(): Promise<AgentCard> {
-    const contextUser = resolveServiceUser();
-    if (!contextUser) {
+    const identity = ResolveAgentCardIdentity(a2aServerSettings, UserCache.Instance.Users);
+    if (identity.Kind === 'unresolved') {
         throw new Error('No service user is available to build the agent card; check a2aServerSettings.userEmail.');
     }
+    if (identity.Kind === 'anonymous') {
+        warnMinimalAgentCardOnce();
+        return BuildAgentCard(a2aServerSettings);
+    }
+    const contextUser = identity.User;
     const md = resolveProviderForRequest();
     const aiEngine = AIEngine.Instance;
     await aiEngine.Config(false, contextUser);
@@ -448,37 +421,18 @@ async function generateAgentCard(): Promise<AgentCard> {
         return cachedAgentCard;
     }
 
-    const entityCapabilities = getEntityCapabilities(md.Entities, contextUser);
-    const agentCapabilities = await getAgentCapabilities(contextUser);
-
-    cachedAgentCard = {
-        name: a2aServerSettings?.agentName || "MemberJunction",
-        description: a2aServerSettings?.agentDescription || "MemberJunction A2A Agent",
-        version: "1.0.0",
-        endpoints: {
-            tasks: `/a2a/tasks`,
-            agentCard: `/a2a/agent-card`
-        },
-        authentication: {
-            type: "apiKey",
-            scheme: "X-API-Key"
-        },
-        capabilities: {
-            streaming: !!a2aServerSettings?.streamingEnabled,
-            asynchronous: false,
-            multimedia: false,
-            entities: entityCapabilities,
-            agents: agentCapabilities
-        }
-    };
+    cachedAgentCard = BuildAgentCard(a2aServerSettings, {
+        entities: getEntityCapabilities(md.Entities, contextUser),
+        agents: await getAgentCapabilities(contextUser)
+    });
     cachedAgentCardEntityCount = md.Entities.length;
     cachedAgentCardAgentCount = aiEngine.Agents.length;
 
     return cachedAgentCard;
 }
 
-function getEntityCapabilities(allEntities: EntityInfo[], contextUser: UserInfo) {
-    const capabilities = [];
+function getEntityCapabilities(allEntities: EntityInfo[], contextUser: UserInfo): AgentCardEntityCapability[] {
+    const capabilities: AgentCardEntityCapability[] = [];
     const entityCapabilitiesConfig = a2aServerSettings?.entityCapabilities || [];
 
     for (const config of entityCapabilitiesConfig) {
@@ -505,8 +459,8 @@ function getEntityCapabilities(allEntities: EntityInfo[], contextUser: UserInfo)
     return capabilities;
 }
 
-async function getAgentCapabilities(contextUser: UserInfo) {
-    const capabilities = [];
+async function getAgentCapabilities(contextUser: UserInfo): Promise<AgentCardAgentCapability[]> {
+    const capabilities: AgentCardAgentCapability[] = [];
     const agentCapabilitiesConfig = a2aServerSettings?.agentCapabilities || [];
 
     // Ensure AIEngine is configured

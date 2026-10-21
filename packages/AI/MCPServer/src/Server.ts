@@ -735,6 +735,12 @@ export interface ToolConfig {
     name: string;
     description: string;
     parameters: z.ZodObject<z.ZodRawShape>;
+    /**
+     * The input schema for one session user, for a tool whose schema differs by user (an entity
+     * tool leaves out the fields that user may not write). When absent every session is shown
+     * {@link parameters}.
+     */
+    parametersForUser?: (user: UserInfo) => z.ZodObject<z.ZodRawShape>;
     execute: (props: Record<string, unknown>, sessionContext: MCPSessionContext) => Promise<string>;
     /**
      * Scope information for authorization. Can be:
@@ -908,7 +914,7 @@ async function registerAllTools(
             config.name,
             {
                 description: config.description,
-                inputSchema: config.parameters.shape
+                inputSchema: (config.parametersForUser ? config.parametersForUser(sessionContext.user) : config.parameters).shape
             },
             async (params: Record<string, unknown>) => {
                 // Check authorization if scopeInfo is provided
