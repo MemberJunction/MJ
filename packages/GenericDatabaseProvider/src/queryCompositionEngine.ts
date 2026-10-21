@@ -1,6 +1,6 @@
 import { UUIDsEqual } from "@memberjunction/global";
 import { GetDialect, type SQLDialect } from "@memberjunction/sql-dialect";
-import { SQLParser, AnalyzeTopLevelOrderBy } from "@memberjunction/sql-parser";
+import { SQLParser, AnalyzePagingShape, AnalyzeTopLevelOrderBy, IsKeyword, LexSQL, SignificantTokens, SplitLeadingCTEs } from "@memberjunction/sql-parser";
 import { DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
 import { MJQueryEntityExtended, QueryEngine } from "@memberjunction/core-entities";
 import { SymbolTable } from "./symbolTable.js";
@@ -140,19 +140,40 @@ export class QueryCompositionEngine {
     /**
      * Checks whether SQL contains any {{query:"..."}} composition tokens.
      * Use this as a fast guard before calling ResolveComposition().
-     * Only considers tokens outside of SQL comments.
+     * Only tokens that are SQL count: not those inside a comment, a string literal or a
+     * bracket-quoted identifier.
      */
-    public HasCompositionTokens(sql: string): boolean {
+    public HasCompositionTokens(sql: string, platform: DatabasePlatform = 'sqlserver'): boolean {
         if (!sql) return false;
-        const stripped = this.stripSQLComments(sql);
-        const tokens = SQLParser.Tokenize(stripped);
+        const tokens = SQLParser.Tokenize(this.maskNonSQL(sql, platform));
         return tokens.some(t => t.type === 'MJ_COMPOSITION_REF');
+    }
+
+    /**
+     * `sql` with every comment, string literal and bracket-quoted identifier blanked out to
+     * spaces of the same length, so a composition token found in the result is real SQL and sits
+     * at the same position in the original.
+     */
+    private maskNonSQL(sql: string, platform: DatabasePlatform): string {
+        return LexSQL(sql, this.getDialect(platform))
+            .map(t => t.Kind === 'comment' || t.Kind === 'string' || (t.Kind === 'identifier' && t.Text.startsWith('['))
+                ? ' '.repeat(t.Text.length)
+                : t.Text)
+            .join('');
+    }
+
+    /** Replaces the first occurrence of `token` that is real SQL, leaving comments and literals as written. */
+    private replaceToken(sql: string, token: string, replacement: string, platform: DatabasePlatform): string {
+        const at = this.maskNonSQL(sql, platform).indexOf(token);
+        if (at === -1) return sql;
+        return sql.substring(0, at) + replacement + sql.substring(at + token.length);
     }
 
     /**
      * Parses all {{query:"..."}} tokens from SQL without resolving them.
      * Useful for dependency extraction during the save pipeline.
-     * Only considers tokens outside of SQL comments.
+     * Only tokens that are SQL count: not those inside a comment, a string literal or a
+     * bracket-quoted identifier.
      *
      * Uses MJLexer for structured tokenization instead of regex, providing
      * full parsing of category paths, query names, and parameter lists.
@@ -160,11 +181,10 @@ export class QueryCompositionEngine {
      * @param sql - The SQL text to parse
      * @returns Array of parsed token metadata
      */
-    public ParseCompositionTokens(sql: string): ParsedCompositionToken[] {
+    public ParseCompositionTokens(sql: string, platform: DatabasePlatform = 'sqlserver'): ParsedCompositionToken[] {
         if (!sql) return [];
 
-        const stripped = this.stripSQLComments(sql);
-        const refs = SQLParser.ExtractCompositionRefs(stripped);
+        const refs = SQLParser.ExtractCompositionRefs(this.maskNonSQL(sql, platform));
 
         return refs.map(ref => {
             const categorySegments = ref.categoryPath
@@ -267,7 +287,7 @@ export class QueryCompositionEngine {
             );
         }
 
-        const tokens = this.ParseCompositionTokens(sql);
+        const tokens = this.ParseCompositionTokens(sql, platform);
         if (tokens.length === 0) return sql;
 
         let resolvedSQL = sql;
@@ -305,9 +325,7 @@ export class QueryCompositionEngine {
             // Check if we already have this exact CTE
             const existingCTE = cteEntries.find(e => e.DeduplicationKey === dedupeKey);
             if (existingCTE) {
-                // safe-replace: CTEName is only ever generateCTEName(), which strips every
-                // char outside [a-zA-Z0-9_ ] and appends a base36 hash — it cannot hold a `$`
-                resolvedSQL = resolvedSQL.replace(token.FullToken, existingCTE.CTEName);
+                resolvedSQL = this.replaceToken(resolvedSQL, token.FullToken, existingCTE.CTEName, platform);
                 continue;
             }
 
@@ -373,9 +391,7 @@ export class QueryCompositionEngine {
             };
 
             cteEntries.push(cteEntry);
-            // safe-replace: cteName is generateCTEName() output — sanitised to
-            // [a-zA-Z0-9_ ] plus a base36 hash, so it cannot hold a `$`
-            resolvedSQL = resolvedSQL.replace(token.FullToken, cteName);
+            resolvedSQL = this.replaceToken(resolvedSQL, token.FullToken, cteName, platform);
         }
 
         return resolvedSQL;
@@ -582,11 +598,12 @@ export class QueryCompositionEngine {
                 const outerVarName = value.slice(2, -2).trim();
                 result = SQLParser.RenameTemplateVariable(result, name, outerVarName);
             } else {
-                // Static value: replace entire template expression with literal
-                const literal = /^-?\d+(\.\d+)?$/.test(value)
-                    ? value // Numeric: bare literal
-                    : `'${value.replace(/'/g, "''")}'`; // String: quoted literal
-                result = SQLParser.SubstituteTemplateVariable(result, name, literal);
+                // Static value: replace entire template expression with a SQL literal, and reads of
+                // the variable in template tags with the same value as a template literal
+                const isNumeric = /^-?\d+(\.\d+)?$/.test(value);
+                const literal = isNumeric ? value : `'${value.replace(/'/g, "''")}'`;
+                const tagLiteral = isNumeric ? value : JSON.stringify(value);
+                result = SQLParser.SubstituteTemplateVariable(result, name, literal, tagLiteral);
             }
         }
 
@@ -661,26 +678,34 @@ export class QueryCompositionEngine {
     private assembleCTEs(cteEntries: CTEEntry[], mainSQL: string, platform: DatabasePlatform): string {
         if (cteEntries.length === 0) return mainSQL;
 
-        const trimmedMain = mainSQL.trimStart();
-        const startsWithWith = /^WITH\s/i.test(trimmedMain);
         const dialect = this.getDialect(platform);
+        const outer = SplitLeadingCTEs(mainSQL, dialect);
 
         // SymbolTable guarantees CTE name uniqueness at registration time.
         const symTable = new SymbolTable(dialect);
 
-        // Seed the symbol table with outer-CTE names so inner CTEs that happen
-        // to share a name with an outer CTE also get renamed.
+        // Seed the symbol table with every name the assembled WITH clause already holds, the
+        // dependency CTEs and the outer query's own, so a dependency's inner CTE that shares one
+        // of them is renamed instead of declared twice.
         for (const entry of cteEntries) {
             symTable.Seed(this.canonicalCTEName(entry.CTEName));
         }
+        for (const definition of outer?.Definitions ?? []) {
+            symTable.Seed(this.canonicalCTEName(definition.Name));
+        }
 
+        let recursive = outer?.Recursive ?? false;
         const cteDefinitions: string[] = [];
+        const queryHints: string[] = [];
         for (const entry of cteEntries) {
-            const strippedSQL = this.stripTrailingOrderBy(entry.SQL, dialect);
+            const { Body: statement, Hints } = this.splitQueryHints(this.withoutStatementSemicolons(entry.SQL, dialect), dialect);
+            queryHints.push(...Hints);
+            const strippedSQL = this.stripTrailingOrderBy(statement, dialect);
             const commentStrippedSQL = this.stripSQLComments(strippedSQL).trimStart();
 
             if (/^WITH\s/i.test(commentStrippedSQL)) {
-                const { innerCTEDefinitions, mainSelect } = this.hoistInnerCTEs(commentStrippedSQL, dialect);
+                const { innerCTEDefinitions, mainSelect, isRecursive } = this.hoistInnerCTEs(commentStrippedSQL, dialect);
+                recursive = recursive || isRecursive;
 
                 // Use SymbolTable for deconfliction instead of raw Set
                 const { definitions, rewrittenMainSelect } =
@@ -697,12 +722,96 @@ export class QueryCompositionEngine {
             this.validateCTEBodies(cteDefinitions, cteEntries, dialect);
         }
 
-        if (startsWithWith) {
-            const mainWithoutWith = trimmedMain.replace(/^WITH\s+/i, '');
-            return `WITH ${cteDefinitions.join(',\n')},\n${mainWithoutWith}`;
-        }
+        // One WITH clause: the composed CTEs first, then the outer query's own. When any CTE in it
+        // refers to itself, the clause opens with the dialect's recursive form (`WITH RECURSIVE`
+        // on PostgreSQL; plain `WITH` on SQL Server, which has no keyword).
+        const withKeyword = recursive ? dialect.RecursiveCTESyntax() : 'WITH';
+        const composed = outer
+            ? `${withKeyword} ${[...cteDefinitions, ...outer.Definitions.map(d => d.Text)].join(',\n')}\n${outer.Main}`
+            : `${withKeyword} ${cteDefinitions.join(',\n')}\n${mainSQL}`;
+        return this.appendQueryHints(composed, queryHints, dialect);
+    }
 
-        return `WITH ${cteDefinitions.join(',\n')}\n${mainSQL}`;
+    /**
+     * Takes a statement's trailing query-hint clause off ({@link SQLDialect.QueryHintKeyword},
+     * `OPTION (…)` on SQL Server), returning the hints in it. A CTE body cannot carry query hints;
+     * they belong to the statement the dependency is composed into. A dialect without a hint
+     * clause leaves the statement as it is.
+     */
+    private splitQueryHints(statement: string, dialect: SQLDialect): { Body: string; Hints: string[] } {
+        const list = this.findOptionList(statement, dialect);
+        if (!list) return { Body: statement, Hints: [] };
+        return { Body: statement.substring(0, list.OptionStart).trimEnd(), Hints: list.Hints };
+    }
+
+    /**
+     * Adds query hints to a statement: into its own hint clause when it has one, otherwise as a
+     * new clause (`OPTION (…)` on SQL Server) after its last token, ahead of any trailing
+     * semicolon or comment. A hint already present, compared ignoring case and spacing, is not
+     * added twice. Hints only come from a dialect with a hint clause, so one is always named.
+     */
+    private appendQueryHints(sql: string, hints: string[], dialect: SQLDialect): string {
+        const keyword = dialect.QueryHintKeyword;
+        if (hints.length === 0 || keyword === null) return sql;
+        const list = this.findOptionList(sql, dialect);
+        const merged = this.distinctHints([...(list?.Hints ?? []), ...hints]).join(', ');
+        if (list) {
+            return sql.substring(0, list.ListStart) + merged + sql.substring(list.ListEnd);
+        }
+        const tokens = SignificantTokens(LexSQL(sql, dialect));
+        let last = tokens.length - 1;
+        while (last > 0 && tokens[last].Kind === 'semicolon') last--;
+        const at = tokens[last].End;
+        return `${sql.substring(0, at)} ${keyword} (${merged})${sql.substring(at)}`;
+    }
+
+    /**
+     * Finds a statement's top-level trailing query-hint clause (`OPTION (…)` on SQL Server): where
+     * the keyword starts, where the list inside the parentheses starts and ends, and the hints in
+     * it split at top-level commas. `null` when the dialect has no hint clause or there is none.
+     */
+    private findOptionList(sql: string, dialect: SQLDialect): { OptionStart: number; ListStart: number; ListEnd: number; Hints: string[] } | null {
+        const keyword = dialect.QueryHintKeyword;
+        if (keyword === null) return null;
+        const shape = AnalyzePagingShape(sql, dialect);
+        const tokens = SignificantTokens(LexSQL(sql, dialect)).filter(t => t.Start >= shape.TailStart);
+        if (!IsKeyword(tokens[0], keyword.toUpperCase()) || tokens[1]?.Kind !== 'open') return null;
+        const depth = tokens[1].Depth;
+        const close = tokens.findIndex((t, i) => i > 1 && t.Kind === 'close' && t.Depth === depth);
+        if (close === -1) return null;
+        const hints: string[] = [];
+        let hintStart = 2;
+        for (let i = 2; i <= close; i++) {
+            const endsHint = i === close || (tokens[i].Kind === 'comma' && tokens[i].Depth === depth + 1);
+            if (!endsHint) continue;
+            if (i > hintStart) hints.push(sql.substring(tokens[hintStart].Start, tokens[i - 1].End));
+            hintStart = i + 1;
+        }
+        return { OptionStart: tokens[0].Start, ListStart: tokens[1].End, ListEnd: tokens[close].Start, Hints: hints };
+    }
+
+    /** Hints with repeats removed, comparing case- and spacing-insensitively; first spelling kept. */
+    private distinctHints(hints: string[]): string[] {
+        const seen = new Set<string>();
+        return hints.filter(h => {
+            const key = h.replace(/\s+/g, ' ').toUpperCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
+    /**
+     * A dependency's statement without the semicolons before or after it (`;WITH …`, `… ;`),
+     * which a CTE body cannot hold.
+     */
+    private withoutStatementSemicolons(sql: string, dialect: SQLDialect): string {
+        const tokens = SignificantTokens(LexSQL(sql, dialect));
+        const first = tokens.findIndex(t => t.Kind !== 'semicolon');
+        if (first === -1) return sql;
+        let last = tokens.length - 1;
+        while (tokens[last].Kind === 'semicolon') last--;
+        return sql.substring(tokens[first].Start, tokens[last].End);
     }
 
     /**
@@ -834,27 +943,37 @@ export class QueryCompositionEngine {
     }
 
     /**
-     * Extracts inner CTE definitions from SQL that starts with a WITH clause.
+     * Extracts inner CTE definitions from SQL that starts with a WITH clause, and whether the
+     * clause is `WITH RECURSIVE`.
      *
-     * Delegates to {@link SQLParser.ExtractCTEs} which uses AST parsing first
-     * (via node-sql-parser), falling back to a paren-depth regex approach when
-     * AST parsing fails (e.g. SQL contains Nunjucks template tokens).
+     * Splits by position ({@link SplitLeadingCTEs}) so each definition is kept as written; when
+     * that cannot read the clause, falls back to {@link SQLParser.ExtractCTEs}.
      *
      * @param sql SQL starting with a WITH clause
      * @param dialect SQL dialect for AST parsing
      */
-    private hoistInnerCTEs(sql: string, dialect: SQLDialect): { innerCTEDefinitions: string[]; mainSelect: string } {
-        const extraction = SQLParser.ExtractCTEs(sql, dialect);
+    private hoistInnerCTEs(sql: string, dialect: SQLDialect): { innerCTEDefinitions: string[]; mainSelect: string; isRecursive: boolean } {
+        // Split by position, so each definition is kept exactly as written (no re-emission).
+        const split = SplitLeadingCTEs(sql, dialect);
+        if (split) {
+            return {
+                innerCTEDefinitions: split.Definitions.map(d => d.Text),
+                mainSelect: split.Main,
+                isRecursive: split.Recursive,
+            };
+        }
 
+        const extraction = SQLParser.ExtractCTEs(sql, dialect);
         if (!extraction) {
             // Should not happen since caller already verified WITH prefix,
             // but handle gracefully by treating the whole SQL as the main select
-            return { innerCTEDefinitions: [], mainSelect: sql };
+            return { innerCTEDefinitions: [], mainSelect: sql, isRecursive: false };
         }
 
         return {
             innerCTEDefinitions: extraction.CTEDefinitions,
             mainSelect: extraction.MainStatement,
+            isRecursive: false,
         };
     }
 

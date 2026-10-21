@@ -22,6 +22,9 @@ export type MjButtonVariant =
 
 export type MjButtonSize = 'sm' | 'md' | 'lg';
 
+/** `default` is the rounded rectangle; `circle` is a circle for an icon-only button. */
+export type MjButtonShape = 'default' | 'circle';
+
 /**
  * mjButton — Attribute directive that styles a native `<button>` or `<a>` element
  * as an MJ-branded button.
@@ -29,21 +32,22 @@ export type MjButtonSize = 'sm' | 'md' | 'lg';
  * Uses `--mj-*` design tokens for all colors, ensuring dark-mode support
  * with zero extra CSS.
  *
- * Inputs use lowercase (not PascalCase) per the Phase 2 plan exception for
- * directives — matches HTML attribute convention.
+ * Inputs are PascalCase. The lowercase names (`variant`, `size`, `toggleable`, `selected`,
+ * `ariaLabel`) are deprecated aliases.
  *
- * Accessibility: an **icon-only** button (`variant="icon"`, no visible text) has no accessible
- * name unless you supply one — set `[ariaLabel]` (or a native `title`). Without a name, screen
- * readers announce it as an unlabeled "button" and DOM/accessibility-tree agents (e.g. computer-use)
- * can't identify it. In dev mode the directive logs a warning for an icon button that ends up with
- * no accessible name.
+ * Accessibility: an **icon-only** button (`Variant="icon"` or `Shape="circle"`, no visible text) has
+ * no accessible name unless you supply one — set `[AriaLabel]` (or a native `title`). Without a name,
+ * screen readers announce it as an unlabeled "button" and DOM/accessibility-tree agents (e.g.
+ * computer-use) can't identify it. In dev mode the directive logs a warning for an icon-only button
+ * that ends up with no accessible name.
  *
  * @example
  * ```html
- * <button mjButton variant="primary" (click)="save()">Save</button>
- * <button mjButton variant="outline" size="sm">Cancel</button>
- * <button mjButton variant="icon" ariaLabel="Remove" (click)="remove()"><i class="fa-solid fa-xmark"></i></button>
- * <button mjButton variant="flat" [toggleable]="true" [(selected)]="isActive">Toggle</button>
+ * <button mjButton Variant="primary" (click)="save()">Save</button>
+ * <button mjButton Variant="outline" Size="sm">Cancel</button>
+ * <button mjButton Variant="icon" AriaLabel="Remove" (click)="remove()"><i class="fa-solid fa-xmark"></i></button>
+ * <button mjButton Variant="danger" Shape="circle" AriaLabel="Unmute microphone"><i class="fa-solid fa-microphone-slash"></i></button>
+ * <button mjButton Variant="flat" [Toggleable]="true" [(Selected)]="isActive">Toggle</button>
  * ```
  */
 @Directive({
@@ -71,6 +75,15 @@ export class MJButtonDirective implements AfterContentInit {
   get size(): MjButtonSize {
     return this.Size;
   }
+
+  /**
+   * `circle` makes the button a circle, as wide as it is tall: 32, 44 or 52 px by {@link Size}. It suits call
+   * controls (microphone, camera, share, leave) and combines with any {@link Variant}, such as `danger` for a muted
+   * microphone. A circle has room for an icon only, so name it with {@link AriaLabel}; dev mode warns when it has no
+   * name, as it does for the `icon` variant.
+   */
+  @Input() Shape: MjButtonShape = 'default';
+
   @Input() Toggleable = false;
 
   /** @deprecated Use {@link Toggleable}. */
@@ -146,6 +159,8 @@ export class MJButtonDirective implements AfterContentInit {
   @HostBinding('class.mj-btn--sm') get isSm() { return this.Size === 'sm'; }
   @HostBinding('class.mj-btn--lg') get isLg() { return this.Size === 'lg'; }
 
+  @HostBinding('class.mj-btn--circle') get isCircle() { return this.Shape === 'circle'; }
+
   @HostBinding('class.mj-btn--selected') get isSelected() { return this.Toggleable && this.Selected; }
   @HostBinding('attr.aria-pressed') get ariaPressed(): string | null {
     return this.Toggleable ? String(this.Selected) : null;
@@ -160,12 +175,13 @@ export class MJButtonDirective implements AfterContentInit {
   }
 
   /**
-   * Dev-only guard: an icon-variant button with no accessible name (no `ariaLabel`/`aria-label`/
-   * `aria-labelledby`/`title` and no visible text) is invisible-by-name to screen readers and DOM
-   * agents. Warn so it gets a name. No-op in production builds.
+   * Dev-only guard: an icon-only button (the `icon` variant or the `circle` shape) with no accessible
+   * name (no `ariaLabel`/`aria-label`/`aria-labelledby`/`title` and no visible text) is
+   * invisible-by-name to screen readers and DOM agents. Warn so it gets a name. No-op in production
+   * builds.
    */
   ngAfterContentInit(): void {
-    if (!isDevMode() || this.Variant !== 'icon') {
+    if (!isDevMode() || (this.Variant !== 'icon' && this.Shape !== 'circle')) {
       return;
     }
     const el = this.host.nativeElement;
@@ -178,7 +194,7 @@ export class MJButtonDirective implements AfterContentInit {
     );
     if (!hasAccessibleName) {
       console.warn(
-        '[mjButton] icon-only button has no accessible name — add [ariaLabel]="…" (or a title) so ' +
+        '[mjButton] icon-only button has no accessible name — add [AriaLabel]="…" (or a title) so ' +
           'screen readers and computer-use agents can identify it.',
         el
       );

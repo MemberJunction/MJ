@@ -23,6 +23,7 @@ import {
     ChannelInboundVideoBridge,
     IChannelFrameProvider,
 } from '../media/channelVideoSource';
+import { FAKE_FRAME_BASE64, InstallFakeDom } from './helpers/fake-dom';
 
 describe('Phase F — Realtime Video Tracks, Bridge, and Continuity', () => {
     let client: GeminiTestClient;
@@ -38,7 +39,7 @@ describe('Phase F — Realtime Video Tracks, Bridge, and Continuity', () => {
 
     // ── F1: Frame Capture ──────────────────────────────────────────────────────
 
-    describe('F1: Frame Capture consent and rate ceiling', () => {
+    describe('F1: Frame Capture consent and rate', () => {
         it('refuses camera capture when consent is required but not granted', async () => {
             const onFrame = vi.fn();
             await expect(
@@ -61,20 +62,24 @@ describe('Phase F — Realtime Video Tracks, Bridge, and Continuity', () => {
             ).rejects.toThrow('Explicit consent is required');
         });
 
-        it('clamps capture rate to at most 1 fps ceiling', () => {
+        it('passes the requested rate through: no 1 fps ceiling', () => {
+            const dom = InstallFakeDom();
             const track = new FakeTrack();
             const stream = new FakeMediaStream([track]);
             const onFrame = vi.fn();
 
-            // Requesting 10 fps — must be clamped to 1 fps (interval >= 1000ms)
             const capture = createStreamFrameCapture(stream, {
                 Rate: 10,
                 OnFrame: onFrame,
             });
+            dom.Videos[0].SetFrameSize(640, 480);
+            vi.advanceTimersByTime(1000);
 
-            expect(capture).toBeDefined();
+            expect(onFrame).toHaveBeenCalledTimes(10);
+            expect(onFrame).toHaveBeenCalledWith({ data: FAKE_FRAME_BASE64, mimeType: 'image/jpeg' });
             expect(capture.Stream).toBe(stream);
             capture.Stop();
+            vi.unstubAllGlobals();
         });
     });
 

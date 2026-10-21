@@ -55,8 +55,14 @@ export {
     PrepareServerExtensionConfigs, prepareServerExtensionConfigs,
     ServerExtensionRootsOverlap, serverExtensionRootsOverlap,
     ValidateServerExtensionRootPath, validateServerExtensionRootPath,
+    ComposeServerExtensionMountPath,
 } from './collect.js';
 export type { NormalizeServerExtensionOptions, PrepareServerExtensionOptions } from './collect.js';
+export {
+    GetCorsOwningServerExtensionRoots,
+    IsPathUnderServerExtensionRoot,
+    SkipForServerExtensionRoots,
+} from './corsOwnership.js';
 export {
     RegisterMediaUpgradeRoute,
     InstallMediaUpgradeDispatcher,

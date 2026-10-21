@@ -200,7 +200,7 @@ export interface CommunicationLogsContext extends CommunicationSelectedItem {
     VisibleLogSummaries: string[];
 }
 
-/** Providers surface: the configured messaging-provider cards. */
+/** Providers surface: the configured messaging-provider cards + enterprise mailbox governance + agent utility mailboxes. */
 export interface CommunicationProvidersContext extends CommunicationSelectedItem {
     Surface: 'providers';
     /** Total provider cards. */
@@ -209,6 +209,16 @@ export interface CommunicationProvidersContext extends CommunicationSelectedItem
     ActiveProviderCount: number;
     /** Provider display names (bounded). */
     ProviderNames: string[];
+    /** Names of providers with SupportsCalendar = true (bounded). */
+    CalendarCapableProviderNames?: string[];
+    /** Names of providers with SupportsFreeBusy = true (bounded). */
+    FreeBusyCapableProviderNames?: string[];
+    /** Per-provider EnterpriseScopeMode & AllowedEmailDomains summaries (bounded). */
+    EnterpriseScopeSummaries?: string[];
+    /** Total registered Agent Utility Mailboxes (MJ: AI Bridge Agent Identities with IdentityType='Email'). */
+    AgentUtilityMailboxCount?: number;
+    /** Bounded summary list of Agent Utility Mailboxes ("<email> · <agent> · <user|shared>"). */
+    AgentUtilityMailboxSummaries?: string[];
 }
 
 /** Templates surface: reusable message templates with a category filter + search. */
@@ -326,6 +336,21 @@ function buildProvidersContext(s: CommunicationProvidersContext, context: Record
     context['SelectedProviderId'] = s.SelectedItemId;
     context['SelectedProviderName'] = s.SelectedItemName;
     appendBoundedList(context, 'ProviderNames', 'ProviderNameCount', s.ProviderNames);
+    if (s.CalendarCapableProviderNames) {
+        appendBoundedList(context, 'CalendarCapableProviders', 'CalendarCapableProviderCount', s.CalendarCapableProviderNames);
+    }
+    if (s.FreeBusyCapableProviderNames) {
+        appendBoundedList(context, 'FreeBusyCapableProviders', 'FreeBusyCapableProviderCount', s.FreeBusyCapableProviderNames);
+    }
+    if (s.EnterpriseScopeSummaries) {
+        appendBoundedList(context, 'EnterpriseScopeSummaries', 'EnterpriseScopeSummaryCount', s.EnterpriseScopeSummaries);
+    }
+    if (typeof s.AgentUtilityMailboxCount === 'number') {
+        context['AgentUtilityMailboxCount'] = s.AgentUtilityMailboxCount;
+    }
+    if (s.AgentUtilityMailboxSummaries) {
+        appendBoundedList(context, 'AgentUtilityMailboxes', 'AgentUtilityMailboxTotalCount', s.AgentUtilityMailboxSummaries);
+    }
 }
 
 /** Shape the templates surface slice. */

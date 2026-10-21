@@ -166,6 +166,9 @@ export class CloneMaterializer {
     /**
      * Create rows with a remapped column, other than the join field to their parent, whose new
      * value is another new row's key: they must save after that row, not inside the graph save.
+     * A row pointing only at its own ancestors stays in the graph save, which saves each parent
+     * before its children (a copied user's messages naming the new user as author): deferring it
+     * would save it after its siblings and reorder rows the UI sorts by creation time.
      */
     private static rowsToDefer(plan: ClonePlan): Set<string> {
         const newRowByKey = CloneMaterializer.newRowsByTargetKey(plan);
@@ -175,10 +178,29 @@ export class CloneMaterializer {
             const nodeKey = node.NodeKey ?? node.Key;
             const edge = plan.Edges.find((e) => e.ToKey === nodeKey && e.Policy === 'Deep');
             if (!edge || edge.Kind === 'ForwardFK') continue;
-            const pointsAtNewRow = CloneMaterializer.remappedTargets(node, edge.JoinField, newRowByKey).some((target) => target !== nodeKey);
+            const ancestors = CloneMaterializer.graphAncestors(plan, nodeKey);
+            const pointsAtNewRow = CloneMaterializer.remappedTargets(node, edge.JoinField, newRowByKey).some(
+                (target) => target !== nodeKey && !ancestors.has(target)
+            );
             if (pointsAtNewRow) deferred.add(nodeKey);
         }
         return deferred;
+    }
+
+    /**
+     * The rows above `nodeKey` that the graph save writes before it: each Deep parent up to the
+     * root. A ForwardFK parent saves after its prerequisite, so the chain stops there.
+     */
+    private static graphAncestors(plan: ClonePlan, nodeKey: string): Set<string> {
+        const ancestors = new Set<string>();
+        let key = nodeKey;
+        for (;;) {
+            const edge = plan.Edges.find((e) => e.ToKey === key && e.Policy === 'Deep');
+            if (!edge || edge.Kind === 'ForwardFK' || ancestors.has(edge.FromKey)) break;
+            ancestors.add(edge.FromKey);
+            key = edge.FromKey;
+        }
+        return ancestors;
     }
 
     /** New rows by their planned key, lower-cased, for matching a remapped column's value. */

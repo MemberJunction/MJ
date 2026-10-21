@@ -23,6 +23,7 @@ import {
 } from '@memberjunction/unit-testing';
 import { AIImageGenerationRunner } from '../image/AIImageGenerationRunner';
 import type { AIImageEditRunParams, AIImageGenerationRunParams } from '../image/image-runner.types';
+import type { AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 // ---------------------------------------------------------------------------
 // Hoisted mock state and AIEngine mock (the shape AIDecisionRunner.test.ts uses)
@@ -191,6 +192,8 @@ class MockImageDriver extends BaseImageGenerator {
   public EditCalls: ImageEditParams[] = [];
   /** Decides the result per call from the model API name the runner passed. */
   public Respond: (model: string) => ImageGenerationResult = () => ImagesResult(2);
+  /** Models whose request stays open until its signal aborts, as a hung provider call does. */
+  public HangingModels = new Set<string>();
 
   constructor() {
     super('test-key');
@@ -198,7 +201,17 @@ class MockImageDriver extends BaseImageGenerator {
 
   public async GenerateImage(params: ImageGenerationParams): Promise<ImageGenerationResult> {
     this.GenerateCalls.push(params);
+    if (this.HangingModels.has(params.model ?? '')) {
+      return this.waitForAbort(params.CancellationToken);
+    }
     return this.Respond(params.model ?? '');
+  }
+
+  /** Never answers; once the signal fires, reports the abort as the shipped drivers do. */
+  private waitForAbort(signal: AbortSignal | undefined): Promise<ImageGenerationResult> {
+    return new Promise<ImageGenerationResult>(resolve => {
+      signal?.addEventListener('abort', () => resolve(this.CancelledResult(signal)), { once: true });
+    });
   }
 
   public async EditImage(params: ImageEditParams): Promise<ImageGenerationResult> {
@@ -617,6 +630,65 @@ describe('AIImageGenerationRunner', () => {
     });
   });
 
+  describe('timeout and cancellation', () => {
+    it('refuses a call whose token is already aborted, before a run row exists', async () => {
+      const caller = new AbortController();
+      caller.abort('user stopped it');
+
+      const result = await runner.RunImageGeneration(generationParams({ CancellationToken: caller.signal }));
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('cancelled before it started');
+      expect(result.PromptRunID).toBeUndefined();
+      expect(lastPromptRun).toBeNull();
+      expect(driver.GenerateCalls).toHaveLength(0);
+    });
+
+    it('ends a call the caller cancels mid-flight without failing over, and records the run as Cancelled', async () => {
+      driver.HangingModels.add('primary-image-v1');
+      const caller = new AbortController();
+
+      const pending = runner.RunImageGeneration(generationParams({ CancellationToken: caller.signal }));
+      await vi.waitFor(() => expect(driver.GenerateCalls).toHaveLength(1));
+      caller.abort('user stopped it');
+      const result = await pending;
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(result.Success).toBe(false);
+      expect(driver.GenerateCalls.map(c => c.model)).toEqual(['primary-image-v1']);
+      expect(driver.GenerateCalls[0].CancellationToken?.aborted).toBe(true);
+      expect(lastPromptRun?.Status).toBe('Cancelled');
+      expect(lastPromptRun?.Cancelled).toBe(true);
+      expect(lastPromptRun?.CancellationReason).toBe('user_requested');
+    });
+
+    it('fails over a call that exceeds TimeoutMS, aborting the timed-out request', async () => {
+      driver.HangingModels.add('primary-image-v1');
+      driver.Respond = () => ImagesResult(1);
+
+      const result = await runner.RunImageGeneration(generationParams({ TimeoutMS: 30 }));
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(result.Success).toBe(true);
+      expect(driver.GenerateCalls.map(c => c.model)).toEqual(['primary-image-v1', 'secondary-image-v1']);
+      expect(result.ModelID).toBe(SECONDARY_ID);
+      expect(driver.GenerateCalls[0].CancellationToken?.aborted).toBe(true);
+      expect(lastPromptRun?.Status).not.toBe('Cancelled');
+    });
+
+    it("hands the driver the bound's signal, never the runner's own fields", async () => {
+      const caller = new AbortController();
+      await runner.RunImageGeneration(generationParams({ CancellationToken: caller.signal }));
+      await runner.RunImageEdit(editParams({ CancellationToken: caller.signal, TimeoutMS: 5_000 }));
+
+      expect(driver.GenerateCalls[0].CancellationToken).toBe(caller.signal);
+      const edit = driver.EditCalls[0] as ImageEditParams & { TimeoutMS?: number };
+      expect(edit.CancellationToken).toBeInstanceOf(AbortSignal);
+      expect(edit.CancellationToken).not.toBe(caller.signal);
+      expect(edit.TimeoutMS).toBeUndefined();
+    });
+  });
+
   describe('credentials', () => {
     it('fails without a run when no candidate has a credential', async () => {
       h.state.configuredDrivers.clear();
@@ -627,6 +699,22 @@ describe('AIImageGenerationRunner', () => {
       expect(result.ErrorMessage).toMatch(/No Image Generator model has credentials available/);
       expect(driver.GenerateCalls).toHaveLength(0);
       expect(lastPromptRun).toBeNull();
+    });
+
+    it('passes CredentialScope through to the base runner params', () => {
+      // Dropped here, a RuntimeOnly image run would gate and resolve credentials as 'Any' and spend platform keys.
+      const prompt = { ID: 'image-prompt', Name: 'Image Prompt' } as unknown as MJAIPromptEntityExtended;
+      const build = (runner as unknown as {
+        buildPromptParams(params: AIImageGenerationRunParams, prompt: MJAIPromptEntityExtended): AIPromptParams;
+      }).buildPromptParams.bind(runner);
+      const apiKeys = [{ driverClass: DRIVER, apiKey: 'caller-key' }];
+
+      const scoped = build(generationParams({ APIKeys: apiKeys, CredentialScope: 'RuntimeOnly' }), prompt);
+      expect(scoped.CredentialScope).toBe('RuntimeOnly');
+      expect(scoped.apiKeys).toBe(apiKeys);
+      expect(scoped.prompt).toBe(prompt);
+
+      expect(build(generationParams(), prompt).CredentialScope).toBeUndefined();
     });
 
     it('passes APIKeys through as the base runner apiKeys', async () => {

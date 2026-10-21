@@ -9,7 +9,7 @@
  * The only MJ references are erased `import type`s. They derive the spec and result shapes from the
  * processor itself, so they track `DataFeatureSpec` and `RecordResult` without a hand-copied shape.
  */
-import type { InferProcessor } from '@memberjunction/record-set-processor';
+import type { InferProcessor } from '@memberjunction/feature-pipelines-engine';
 import type { RecordResult } from '@memberjunction/record-set-processor-base';
 
 /** A Feature Pipeline spec, as `InferProcessor` takes it (`DataFeatureSpec`). */

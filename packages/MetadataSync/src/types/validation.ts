@@ -179,6 +179,10 @@ export interface ValidationOptions {
     checkBestPractices: boolean;
     include?: string[]; // Only process these directories (whitelist, supports patterns)
     exclude?: string[]; // Skip these directories (blacklist, supports patterns)
+    /** When true, folders that push would skip because of their pushWhen are not validated. */
+    HonorPushWhen?: boolean;
+    /** When true, `dir` is treated as a root: its child folders are validated even when its own config has an entity. */
+    ValidateChildFoldersOnly?: boolean;
 }
 
 /**
@@ -195,4 +199,6 @@ export interface ParsedReference {
     fields?: Array<{field: string, value: string}>; // For multi-field lookups
     createIfMissing?: boolean;
     additionalFields?: Record<string, any>;
+    /** Lowercased bare `@lookup:` flags other than `create` and `allowDefer`. Set only when there are any. */
+    UnknownFlags?: string[];
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ============================================================================
 // Mocks
@@ -124,7 +124,27 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 // Import under test
 // ============================================================================
 import { TemplateEngineServer, TemplateEntityLoader } from '../TemplateEngine';
+import { TemplateEmbedExtension } from '../extensions/TemplateEmbed.extension';
 import { LogError } from '@memberjunction/core';
+
+interface EmbedParser { nextToken(): { value: string }; parseSignature(a: null, b: boolean): object; advanceAfterBlockEnd(name: string): void }
+interface EmbedNodes { CallExtensionAsync: new (ext: object, prop: string, args: object) => object }
+
+/** Stand-in for TemplateEmbedExtension: the same tag and the same parse. */
+class EmbedExtensionStandIn {
+    public tags = ['template'];
+    public parse(parser: EmbedParser, nodes: EmbedNodes) {
+        const tok = parser.nextToken();
+        const args = parser.parseSignature(null, true);
+        parser.advanceAfterBlockEnd(tok.value);
+        return new nodes.CallExtensionAsync(this, 'run', args);
+    }
+}
+
+/** An extension the variable analysis does not know: the embed's parse under another tag. */
+class CustomExtensionStandIn extends EmbedExtensionStandIn {
+    public tags = ['custom'];
+}
 
 describe('TemplateEntityLoader', () => {
     let loader: TemplateEntityLoader;
@@ -601,6 +621,32 @@ describe('TemplateEngineServer', () => {
             );
             expect(result2.Output).toBe('second');
         });
+
+        it('renders raw when autoescape is false and escapes by default', async () => {
+            const templateEntity = {
+                ID: 't-1',
+                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
+                GetParametersForContent: vi.fn().mockReturnValue([]),
+            } as never;
+            const content = { ID: 'tc-amp', TemplateText: 'Job Title: {{ Title }}' } as never;
+            const raw = await engine.RenderTemplate(templateEntity, content, { Title: 'Affineur & Owner' }, true, true, { autoescape: false });
+            const escaped = await engine.RenderTemplate(templateEntity, content, { Title: 'Affineur & Owner' }, true, true);
+            expect(raw.Output).toBe('Job Title: Affineur & Owner');
+            expect(escaped.Output).toBe('Job Title: Affineur &amp; Owner');
+        });
+
+        it('registers the template extensions on the raw environment', async () => {
+            const templateEntity = {
+                ID: 't-1',
+                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
+                GetParametersForContent: vi.fn().mockReturnValue([]),
+            };
+            mockGetAllRegistrations.mockReturnValue([{ Key: 'template', SubClass: EmbedExtensionStandIn }]);
+            const result = await engine.RenderTemplate(templateEntity as never, { ID: 'tc-ext', TemplateText: '{% template "Child" %}' } as never, {}, true, true, { autoescape: false });
+            mockGetAllRegistrations.mockReturnValue([]);
+            // the stand-in parses the tag; without the extension the compile fails with "unknown block tag"
+            expect(result.Message ?? '').not.toContain('unknown block tag');
+        });
     });
 
     describe('mergeDefaultValues', () => {
@@ -773,6 +819,131 @@ describe('TemplateEngineServer', () => {
 
             // Should not throw
             expect(() => engine.AddTemplate(templateEntity as never)).not.toThrow();
+        });
+    });
+
+    describe('GetReferencedVariables', () => {
+        const childTemplate = { Name: 'Child', Content: [{ TemplateText: '{{ childVar }}' }] };
+
+        /** Configures the engine with the given extension registrations. */
+        async function configureWith(registrations: Array<{ SubClass: new (...args: never[]) => object; Key: string }>): Promise<void> {
+            mockGetAllRegistrations.mockReturnValueOnce(registrations);
+            await engine.Config(false, { ID: 'test-user', Name: 'Test' } as never);
+        }
+
+        beforeEach(() => {
+            engine.Templates.push(childTemplate as never);
+        });
+
+        afterEach(() => {
+            engine.Templates.splice(engine.Templates.indexOf(childTemplate as never), 1);
+        });
+
+        it('should parse tags of registered extensions and follow embedded templates found by name', async () => {
+            await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
+
+            const result = engine.GetReferencedVariables('{% template "Child" %}{{ a }}');
+
+            expect(result.Complete).toBe(true);
+            expect(result.Names.has('a')).toBe(true);
+            expect(result.Names.has('childVar')).toBe(true);
+        });
+
+        it('should return the cached result for the same text until ClearTemplateCache', async () => {
+            await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
+            const text = '{% template "Child" %}';
+
+            const first = engine.GetReferencedVariables(text);
+            expect(engine.GetReferencedVariables(text)).toBe(first);
+
+            engine.ClearTemplateCache();
+            const afterClear = engine.GetReferencedVariables(text);
+            expect(afterClear).not.toBe(first);
+            expect(afterClear.Names.has('childVar')).toBe(true);
+        });
+
+        it('should return a frozen result', async () => {
+            await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
+
+            expect(Object.isFrozen(engine.GetReferencedVariables('{{ a }}'))).toBe(true);
+        });
+
+        it('should be incomplete for a tag from a registered extension the analysis does not know', async () => {
+            await configureWith([{ SubClass: CustomExtensionStandIn, Key: 'Custom' }]);
+
+            const result = engine.GetReferencedVariables('{% custom "x" %}');
+
+            expect(result.Complete).toBe(false);
+            expect(result.Reason).toContain('{% custom %}');
+        });
+
+        it('should be incomplete when no registered extension handles a custom tag', async () => {
+            await configureWith([]);
+
+            const result = engine.GetReferencedVariables('{% template "Child" %}');
+
+            expect(result.Complete).toBe(false);
+        });
+
+        it('should give the same answer before and after the first Config()', async () => {
+            mockGetAllRegistrations.mockReturnValueOnce([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
+            const text = '{% template "Child" %}{{ a }}';
+
+            const before = engine.GetReferencedVariables(text);
+            await engine.Config(false, { ID: 'test-user', Name: 'Test' } as never);
+            const after = engine.GetReferencedVariables(text);
+
+            expect(before.Complete).toBe(true);
+            expect(after.Complete).toBe(true);
+            expect([...before.Names].sort()).toEqual([...after.Names].sort());
+            expect(before.Names.has('childVar')).toBe(true);
+        });
+
+        it('should not cache a result for text that does not parse', async () => {
+            await configureWith([]);
+            const text = '{% template "Child" %}'; // no registered extension handles the tag
+
+            const first = engine.GetReferencedVariables(text);
+
+            expect(first.Complete).toBe(false);
+            expect(first.Reason).toContain('could not be parsed');
+            expect(engine.GetReferencedVariables(text)).not.toBe(first);
+        });
+
+        it('should not cache a result when a template it pulls in does not parse', async () => {
+            await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
+            const broken = { Name: 'Broken', Content: [{ TemplateText: '{% if %}' }] };
+            engine.Templates.push(broken as never);
+            try {
+                const text = '{% template "Broken" %}{{ a }}';
+
+                const first = engine.GetReferencedVariables(text);
+
+                expect(first.Complete).toBe(false);
+                expect(engine.GetReferencedVariables(text)).not.toBe(first);
+            } finally {
+                engine.Templates.splice(engine.Templates.indexOf(broken as never), 1);
+            }
+        });
+
+        it('should cache an incomplete result that is not a parse failure', async () => {
+            await configureWith([{ SubClass: EmbedExtensionStandIn, Key: 'TemplateEmbed' }]);
+            const text = '{% template "Missing" %}';
+
+            const first = engine.GetReferencedVariables(text);
+
+            expect(first.Complete).toBe(false);
+            expect(first.Reason).toContain('was not found');
+            expect(engine.GetReferencedVariables(text)).toBe(first);
+        });
+
+        it('should follow a {% template %} tag parsed by the real TemplateEmbedExtension', async () => {
+            await configureWith([{ SubClass: TemplateEmbedExtension, Key: 'TemplateEmbed' }]);
+
+            const result = engine.GetReferencedVariables('{% template "Child", type="HTML" %}');
+
+            expect(result.Complete).toBe(true);
+            expect(result.Names.has('childVar')).toBe(true);
         });
     });
 });

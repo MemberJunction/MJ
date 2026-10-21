@@ -117,6 +117,25 @@ describe('SearchEnricher - Option B Content Item Promotion & Exclusion', () => {
         expect(mockRunViewFn).not.toHaveBeenCalled();
     });
 
+    it('marks a promoted result with the content item it came from, and leaves other results unmarked', async () => {
+        const results = [
+            makeResult({
+                EntityName: 'MJ: Content Items',
+                RecordID: 'ci-100',
+                RawMetadata: JSON.stringify({ Entity: 'MJ: Products', RecordID: 'prod-999' })
+            }),
+            makeResult({ EntityName: 'MJ: Users', RecordID: 'user-1' })
+        ];
+
+        const output = await enricher.ExcludeEntitySourcedContentItems(results, mockUser);
+
+        // The provider that found the content item never read `prod-999`, so the engine must not trust it as that row.
+        expect(output.map(r => [r.EntityName, r.RecordID, r.PromotedFromContentItemID])).toEqual([
+            ['MJ: Products', 'prod-999', 'ci-100'],
+            ['MJ: Users', 'user-1', undefined],
+        ]);
+    });
+
     it('promotes content items via RunView when RawMetadata does not have Entity info', async () => {
         const results = [
             makeResult({

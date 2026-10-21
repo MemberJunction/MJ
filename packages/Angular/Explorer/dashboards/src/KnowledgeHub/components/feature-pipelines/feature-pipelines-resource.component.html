@@ -85,11 +85,18 @@
                 <span class="fp-meta-row__k"><i class="fa-solid fa-clock-rotate-left"></i> Last run</span>
                 <span class="fp-meta-row__v">
                   {{ TimeAgo(pipeline.LastRunAt) }}
-                  @if (pipeline.LastRunProcessed != null) {
-                    <span class="fp-meta-row__sub">· {{ pipeline.LastRunSuccess }}/{{ pipeline.LastRunProcessed }} written</span>
+                  @if (pipeline.LastRunOutcomeText) {
+                    <span class="fp-meta-row__sub">· {{ pipeline.LastRunOutcomeText }}</span>
+                  } @else if (pipeline.LastRunProcessed != null) {
+                    <span class="fp-meta-row__sub">· {{ pipeline.LastRunSuccess }}/{{ pipeline.LastRunProcessed }} processed</span>
                   }
                 </span>
               </div>
+              @if (pipeline.LastRunErrorMessage) {
+                <p class="fp-card__error" [title]="pipeline.LastRunErrorMessage">
+                  <i class="fa-solid fa-circle-exclamation"></i> {{ pipeline.LastRunErrorMessage }}
+                </p>
+              }
             </div>
 
             <div class="fp-card__actions">

@@ -1,0 +1,7 @@
+{
+  "resource_changes": [
+    { "address": "module.work_queue.aws_sqs_queue.subscription[\"email.archive\"]", "type": "aws_sqs_queue", "change": { "actions": ["update"] } },
+    { "address": "module.work_queue.aws_cloudwatch_metric_alarm.dead_letters[\"email.archive\"]", "type": "aws_cloudwatch_metric_alarm", "change": { "actions": ["delete", "create"] } },
+    { "address": "module.work_queue.aws_sns_topic.this[\"email.events\"]", "type": "aws_sns_topic", "change": { "actions": ["no-op"] } }
+  ]
+}

@@ -36,6 +36,11 @@ function baseInput(overrides: Partial<HomeAgentContextInput> = {}): HomeAgentCon
         AddPanelOpen: false,
         SidebarOpen: false,
         AddPanelSearchQuery: '',
+        PinnedCollapsed: false,
+        CurrentDashboardName: null,
+        CurrentDashboardID: null,
+        IsEditingDashboard: false,
+        PinnedDashboardNames: [],
         ...overrides,
     };
 }
@@ -125,11 +130,50 @@ describe('buildHomeAgentContext', () => {
         expect(ctx['RecentItemNameCount']).toBe(recents.length);
     });
 
+    it('reports whether the Pinned section is collapsed', () => {
+        expect(BuildHomeAgentContext(baseInput({ PinnedCollapsed: true }))['PinnedCollapsed']).toBe(true);
+        expect(BuildHomeAgentContext(baseInput({ PinnedCollapsed: false }))['PinnedCollapsed']).toBe(false);
+    });
+
+    it('publishes no Dashboards strip or Home tab fields', () => {
+        const ctx = BuildHomeAgentContext(baseInput());
+        for (const key of ['DashboardsCollapsed', 'DashboardTotal', 'ContinueDashboardName', 'FavoriteDashboardNames', 'HomeTabNames', 'ActiveHomeTab', 'ActiveHomeTabDashboardID']) {
+            expect(key in ctx).toBe(false);
+        }
+    });
+
     it('reflects edit mode and sidebar/panel toggles', () => {
         const ctx = BuildHomeAgentContext(baseInput({ EditMode: true, SidebarOpen: true, AddPanelOpen: true }));
         expect(ctx['EditMode']).toBe(true);
         expect(ctx['SidebarOpen']).toBe(true);
         expect(ctx['AddPanelOpen']).toBe(true);
+    });
+
+    it('reports the overview with no open dashboard, and the pinned dashboards', () => {
+        const ctx = BuildHomeAgentContext(baseInput({ PinnedDashboardNames: ['Revenue', 'Quota'] }));
+        expect(ctx['HomeView']).toBe('Overview');
+        for (const key of ['CurrentDashboardName', 'CurrentDashboardID', 'IsEditingDashboard', 'PinnedDashboardNameCount']) {
+            expect(key in ctx).toBe(false);
+        }
+        expect(ctx['PinnedDashboardNames']).toEqual(['Revenue', 'Quota']);
+    });
+
+    it('reports the open dashboard by name and id, and whether it is being edited', () => {
+        const ctx = BuildHomeAgentContext(baseInput({ CurrentDashboardName: 'Revenue', CurrentDashboardID: 'D1', IsEditingDashboard: true }));
+        expect(ctx).toMatchObject({ HomeView: 'Dashboard', CurrentDashboardName: 'Revenue', CurrentDashboardID: 'D1', IsEditingDashboard: true });
+    });
+
+    it('caps the pinned dashboard names and surfaces the true total when truncated', () => {
+        const names = Array.from({ length: HOME_AGENT_CONTEXT_NAME_LIST_CAP + 3 }, (_, i) => `D${i}`);
+        const ctx = BuildHomeAgentContext(baseInput({ PinnedDashboardNames: names }));
+        expect(ctx['PinnedDashboardNames']).toEqual(names.slice(0, HOME_AGENT_CONTEXT_NAME_LIST_CAP));
+        expect(ctx['PinnedDashboardNameCount']).toBe(names.length);
+    });
+
+    it('omits the pinned dashboard names when no dashboard is pinned', () => {
+        const ctx = BuildHomeAgentContext(baseInput());
+        expect('PinnedDashboardNames' in ctx).toBe(false);
+        expect('PinnedDashboardNameCount' in ctx).toBe(false);
     });
 });
 
