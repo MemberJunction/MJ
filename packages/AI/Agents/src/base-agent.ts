@@ -3820,7 +3820,7 @@ export class BaseAgent {
         if (unanswered.length === 0) {
             return;
         }
-        params.conversationMessages.push(buildToolResultTurn(
+        const synthetic = buildToolResultTurn(
             unanswered.map((call) => ({
                 toolCallId: call.id,
                 toolName: call.name,
@@ -3828,7 +3828,26 @@ export class BaseAgent {
                 isError: true
             })),
             { turnAdded: this._promptTurnCount, messageType: 'action-result' }
-        ) as AgentChatMessage);
+        ) as AgentChatMessage;
+        BaseAgent.insertToolResultsAfterCallTurn(messages, at, synthetic);
+    }
+
+    /**
+     * Places a tool turn immediately after the assistant turn whose calls it answers.
+     *
+     * Anthropic requires every result for a call turn in the single message that follows it, and
+     * OpenAI requires the call turn to be followed by its tool messages — so a result appended after
+     * a retry message that already sits behind the call is rejected by both. When the message right
+     * after the call turn is already a tool turn, the results merge into it instead of opening a
+     * second one.
+     */
+    private static insertToolResultsAfterCallTurn(messages: ChatMessage[], callTurnIndex: number, results: AgentChatMessage): void {
+        const adjacent = messages[callTurnIndex + 1];
+        if (adjacent?.role === 'tool' && Array.isArray(adjacent.content) && Array.isArray(results.content)) {
+            messages[callTurnIndex + 1] = { ...adjacent, content: [...adjacent.content, ...results.content] };
+            return;
+        }
+        messages.splice(callTurnIndex + 1, 0, results);
     }
 
     /**
@@ -6119,17 +6138,47 @@ The context is now within limits. Please retry your request with the recovered c
                 content: 'Task complete.',
                 isError: false
             }], { turnAdded: this._promptTurnCount, messageType: 'action-result' }) as AgentChatMessage);
-        } else if (guardrailCheckedStep.step === 'Retry' && (guardrailCheckedStep.message || guardrailCheckedStep.errorMessage || guardrailCheckedStep.retryInstructions)) {
-            params.conversationMessages.push({
-                role: 'user',
-                content: `Retrying due to: ${guardrailCheckedStep.retryInstructions || guardrailCheckedStep.message || guardrailCheckedStep.errorMessage}`
-            });
-        }   
+        } else if (guardrailCheckedStep.step === 'Retry') {
+            const reason = guardrailCheckedStep.retryInstructions || guardrailCheckedStep.message || guardrailCheckedStep.errorMessage;
+            if (reason && !this.answerNativeRetryTurn(params, guardrailCheckedStep, reason)) {
+                params.conversationMessages.push({
+                    role: 'user',
+                    content: `Retrying due to: ${reason}`
+                });
+            }
+        }
 
         // Return the next step directly - execution handling is done in execute NextStep
         return guardrailCheckedStep;
     }
  
+    /**
+     * Answers a retried native tool-call turn in the protocol itself: every call gets an `is_error`
+     * result carrying the retry reason, and no user message follows.
+     *
+     * The call turn was just replayed by `appendNativeAssistantTurn`, so the result turn lands
+     * directly behind it — the adjacency Anthropic and OpenAI both require. Returns false when the
+     * turn's results do not go back natively, or no call carries an id to pair with; the caller
+     * then sends the reason as a user message, and `reconcileUnansweredToolCalls` closes the calls.
+     */
+    private answerNativeRetryTurn(params: ExecuteAgentParams, step: BaseAgentNextStep, reason: string): boolean {
+        const turn = step.nativeTurn;
+        const calls = turn?.sendResultsNatively ? turn.toolCalls.filter((call) => !!call.id) : [];
+        if (calls.length === 0) {
+            return false;
+        }
+        params.conversationMessages.push(buildToolResultTurn(
+            calls.map((call) => ({
+                toolCallId: call.id,
+                toolName: call.name,
+                content: `Not executed. ${reason}`,
+                isError: true
+            })),
+            { turnAdded: this._promptTurnCount, messageType: 'action-result' }
+        ) as AgentChatMessage);
+        return true;
+    }
+
     /** The tool name the model used for a call on this turn — `payload_change_request` when it cannot be found. */
     private nativeToolNameForCall(step: BaseAgentNextStep, toolCallId: string): string {
         return step.nativeTurn?.toolCalls.find((c) => c.id === toolCallId)?.name ?? 'payload_change_request';
@@ -7528,8 +7577,9 @@ The context is now within limits. Please retry your request with the recovered c
             if (typed.role === 'assistant' && typed.toolCalls?.length) {
                 const answered = typed.toolCalls.every((call) => call.id && resolved.has(call.id));
                 if (!answered) {
-                    // Demote to prose rather than send a call this window never answers.
-                    const { toolCalls: _dropped, ...rest } = typed;
+                    // Demote to prose rather than send a call this window never answers. Its reasoning
+                    // goes too: the signatures were minted for the turn with its calls.
+                    const { toolCalls: _dropped, reasoning: _reasoning, ...rest } = typed;
                     kept.push({ ...rest, content: typed.content || '[tool call omitted for context management]' } as ChatMessage);
                     continue;
                 }

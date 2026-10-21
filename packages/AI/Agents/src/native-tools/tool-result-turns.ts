@@ -7,7 +7,7 @@
  * answers each call here.
  * @module @memberjunction/ai-agents
  */
-import type { ChatToolCall, ChatMessageContentBlock } from '@memberjunction/ai';
+import type { ChatToolCall, ChatMessageContentBlock, ChatReasoningBlock } from '@memberjunction/ai';
 import type { AgentChatMessage, AgentChatMessageMetadata } from '@memberjunction/ai-core-plus';
 
 /** One tool call's outcome, ready to be shown to the model. */
@@ -19,9 +19,26 @@ export interface NativeToolResult {
     isError: boolean;
 }
 
-/** The model's own turn, replayed into history so the results that follow have something to answer. */
-export function buildAssistantToolCallTurn(turn: { text: string; toolCalls: ChatToolCall[] }): AgentChatMessage {
-    return { role: 'assistant', content: turn.text ?? '', toolCalls: turn.toolCalls };
+/** The model's tool-call turn as the loop records it. */
+export interface NativeAssistantTurn {
+    text: string;
+    toolCalls: ChatToolCall[];
+    /** The provider's reasoning blocks from the turn, when the driver kept any. */
+    reasoning?: ChatReasoningBlock[];
+}
+
+/**
+ * The model's own turn, replayed into history so the results that follow have something to answer.
+ * Its reasoning blocks travel with it: Anthropic asks for a tool-use turn's thinking to come back
+ * unchanged, and the driver replays them ahead of the calls.
+ */
+export function buildAssistantToolCallTurn(turn: NativeAssistantTurn): AgentChatMessage {
+    return {
+        role: 'assistant',
+        content: turn.text ?? '',
+        toolCalls: turn.toolCalls,
+        ...(turn.reasoning?.length ? { reasoning: turn.reasoning } : {})
+    };
 }
 
 /** One `tool` turn with a `tool_result` block per result, paired to its call by id. */

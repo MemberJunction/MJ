@@ -306,7 +306,8 @@ export class LoopAgentType extends BaseAgentType {
         const nativeTurn: NonNullable<BaseAgentNextStep['nativeTurn']> = {
             text: typeof message?.content === 'string' ? message.content : '',
             toolCalls: calls,
-            sendResultsNatively: GetToolCallingDecision(promptResult.chatResult)?.toolResults === true
+            sendResultsNatively: GetToolCallingDecision(promptResult.chatResult)?.toolResults === true,
+            ...(message?.reasoning?.length ? { reasoning: message.reasoning } : {})
         };
         const { resolved, unknown } = this.resolveNativeCalls(calls, bindings, implicit);
         if (unknown.length > 0) {

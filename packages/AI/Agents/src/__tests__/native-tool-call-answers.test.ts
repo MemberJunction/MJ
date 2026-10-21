@@ -86,3 +86,55 @@ describe('processNextStep — answering the step\'s native call', () => {
         expect(lastToolResults(p)).toEqual([expect.objectContaining({ toolCallId: 'call_0', toolName: 'complete_task', content: 'Task complete.' })]);
     });
 });
+
+describe('processNextStep — a generic Retry on a native tool-call turn', () => {
+    const reason = "You called 'search_web', which is not a tool available to you.";
+
+    /** A Retry carrying a native turn with these call ids, and no payload call of its own. */
+    const retryFor = (ids: string[], sendResultsNatively: boolean): BaseAgentNextStep => ({
+        step: 'Retry',
+        terminate: false,
+        retryInstructions: reason,
+        nativeTurn: { text: '', toolCalls: ids.map((id) => ({ id, name: `tool_${id}`, arguments: {} })), sendResultsNatively }
+    });
+
+    it('answers every call with an is_error result carrying the reason, directly after the call turn', async () => {
+        const p = params();
+        await new Probe().Process(retryFor(['call_a', 'call_b'], true), p);
+
+        expect(p.conversationMessages.map((m) => m.role)).toEqual(['assistant', 'tool']);
+        expect(lastToolResults(p)).toEqual([
+            expect.objectContaining({ toolCallId: 'call_a', toolName: 'tool_call_a', content: `Not executed. ${reason}`, isError: true }),
+            expect.objectContaining({ toolCallId: 'call_b', toolName: 'tool_call_b', content: `Not executed. ${reason}`, isError: true })
+        ]);
+    });
+
+    it('sends no "Retrying due to" user message when the calls were answered', async () => {
+        const p = params();
+        await new Probe().Process(retryFor(['call_a'], true), p);
+
+        expect(p.conversationMessages.some((m) => m.role === 'user')).toBe(false);
+    });
+
+    it('keeps the user message when the turn\'s results do not go back natively', async () => {
+        const p = params();
+        await new Probe().Process(retryFor(['call_a'], false), p);
+
+        expect(p.conversationMessages).toEqual([{ role: 'user', content: `Retrying due to: ${reason}` }]);
+    });
+
+    it('keeps the user message when no call carries an id to pair with', async () => {
+        const p = params();
+        await new Probe().Process(retryFor([''], true), p);
+
+        expect(p.conversationMessages.map((m) => m.role)).toEqual(['assistant', 'user']);
+        expect(p.conversationMessages[1].content).toBe(`Retrying due to: ${reason}`);
+    });
+
+    it('keeps the user message for an envelope Retry', async () => {
+        const p = params();
+        await new Probe().Process({ step: 'Retry', terminate: false, errorMessage: 'Response was not valid JSON' }, p);
+
+        expect(p.conversationMessages).toEqual([{ role: 'user', content: 'Retrying due to: Response was not valid JSON' }]);
+    });
+});
