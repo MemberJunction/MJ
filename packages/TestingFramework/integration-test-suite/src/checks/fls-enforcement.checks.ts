@@ -319,7 +319,8 @@ export async function TeardownFlsEnforcementFixture(ctx: IntegrationCheckContext
     // Remove every permission row the snapshot wrote for this entity. This runs BEFORE the flag is
     // turned off on purpose: raw SQL raises no entity event, so a running MJAPI would keep these
     // rows in its metadata — and a later enable over the wire would then compute an empty
-    // snapshot. The flag's entity-path save below is what makes every server reload metadata.
+    // snapshot. The flag's entity-path save below makes every server that shares this process's
+    // cache reload metadata; a server that does not is handled by the wire fixture's enable.
     await Q(ctx,
         `DELETE p FROM [${schema}].EntityFieldPermission p ` +
         `JOIN [${schema}].EntityField f ON f.ID = p.EntityFieldID ` +

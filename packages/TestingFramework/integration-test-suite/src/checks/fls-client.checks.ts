@@ -174,15 +174,57 @@ export function ClientEntityRecord(ctx: IntegrationCheckContext): MJEntityEntity
     return new MJEntityEntity(info);
 }
 
-/** Enable field security on the target entity through the wire (the snapshot runs inside MJAPI). */
-async function enableOverWire(ctx: IntegrationCheckContext, entityId: string): Promise<void> {
+/** Set the target entity's field-security flag through the wire. */
+async function setFlagOverWire(ctx: IntegrationCheckContext, entityId: string, enabled: boolean): Promise<void> {
     const ent = ClientEntityRecord(ctx);
     if (!(await ent.Load(entityId))) {
         throw new Error(`failed to load '${SEEDED_FLS_ENTITY}' entity record over the wire`);
     }
-    ent.EnableFieldLevelSecurity = true;
+    ent.EnableFieldLevelSecurity = enabled;
     if (!(await ent.Save())) {
-        throw new Error(`enable over the wire failed: ${ent.LatestResult?.CompleteMessage ?? 'Save() returned false'}`);
+        throw new Error(`${enabled ? 'enable' : 'disable'} over the wire failed: ${ent.LatestResult?.CompleteMessage ?? 'Save() returned false'}`);
+    }
+}
+
+/** How many times Setup enables the flag before giving up on the snapshot landing. */
+const ENABLE_SNAPSHOT_ATTEMPTS = 6;
+const ENABLE_SNAPSHOT_RETRY_MS = 5_000;
+
+/** True when the reader role's Email rule row exists, read fresh over the wire. */
+async function readerEmailRuleExists(ctx: IntegrationCheckContext): Promise<boolean> {
+    const field = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY)?.Fields.find(f => f.Name === FLS_READER_DENIED_FIELD);
+    const role = ctx.Provider.Roles.find(r => r.Name === FLS_READER_ROLE);
+    if (!field || !role) {
+        return false;
+    }
+    const rows = await new RunView().RunView<{ ID: string }>(
+        { EntityName: 'MJ: Entity Field Permissions', ExtraFilter: `EntityFieldID = '${field.ID}' AND RoleID = '${role.ID}'`,
+          Fields: ['ID'], ResultType: 'simple', BypassCache: true },
+        ctx.User);
+    return rows.Success && rows.Results.length > 0;
+}
+
+/**
+ * Enable field security on the target entity through the wire (the snapshot runs inside MJAPI),
+ * and confirm the snapshot rows landed.
+ *
+ * MJAPI computes the snapshot from its in-memory metadata. The server-transport FLS bundles
+ * remove the entity's permission rows with raw SQL from a process that shares no cache with
+ * MJAPI, so a running MJAPI that held those rows still lists them, and its enable writes
+ * nothing. MJAPI's own save of the entity record schedules a metadata reload, so turning the
+ * flag off and on again reconciles from the rows that actually exist.
+ */
+async function enableOverWire(ctx: IntegrationCheckContext, entityId: string): Promise<void> {
+    for (let attempt = 1; ; attempt++) {
+        await setFlagOverWire(ctx, entityId, true);
+        if (await readerEmailRuleExists(ctx)) {
+            return;
+        }
+        if (attempt >= ENABLE_SNAPSHOT_ATTEMPTS) {
+            throw new Error(`enabling field security over the wire wrote no snapshot rows after ${attempt} attempts — MJAPI's metadata never caught up`);
+        }
+        await setFlagOverWire(ctx, entityId, false);
+        await new Promise(resolve => setTimeout(resolve, ENABLE_SNAPSHOT_RETRY_MS));
     }
 }
 
