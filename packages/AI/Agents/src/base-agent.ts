@@ -25,7 +25,7 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
+import { BaseLLM, ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
@@ -5319,7 +5319,7 @@ export class BaseAgent {
             answered.add(summary);
         }
         if (results.length > 0) {
-            this.pushToolResultTurn(params, BuildToolResultTurn(results, metadata) as AgentChatMessage);
+            this.PushToolResultTurn(params, BuildToolResultTurn(results, metadata) as AgentChatMessage);
         }
         if (orphans.length > 0) {
             params.conversationMessages.push({ role: 'user', content: `Action results:\n${this.formatActionResultsAsMarkdown(orphans)}`, metadata } as AgentChatMessage);
@@ -5380,7 +5380,7 @@ export class BaseAgent {
      * by a tool turn — declined calls, or agent-tool results, answered first — the results join it,
      * because Anthropic takes every result for a call turn from the one message that follows it.
      */
-    protected pushToolResultTurn(params: ExecuteAgentParams, results: AgentChatMessage): void {
+    protected PushToolResultTurn(params: ExecuteAgentParams, results: AgentChatMessage): void {
         const messages = params.conversationMessages;
         const at = BaseAgent.lastToolCallTurnIndex(messages);
         if (at >= 0 && at === messages.length - 2 && messages[at + 1].role === 'tool') {
@@ -5469,7 +5469,7 @@ export class BaseAgent {
         );
         const subAgents = this.getEffectiveSubAgentsForValidation(params.agent.ID);
         const agentTools = this.GetAgentTools(params);
-        const control = this.getNativeControlConfig(params);
+        const control = this.GetNativeControlConfig(params);
         // A native-only agent declares its control and framework tools even with no Actions or
         // sub-agents: tools are its only way to act.
         if (actions.length === 0 && subAgents.length === 0 && agentTools.length === 0 && !control.NativeOnly) {
@@ -5493,9 +5493,9 @@ export class BaseAgent {
             promptParams.tools = toolSet.tools;
             promptParams.controlFlowToolNames = toolSet.controlToolNames;
             promptParams.toolChoice = this.resolveToolChoiceForTurn(params);
-            // Independent calls in one turn are how the strongest models work; every provider that
-            // has the switch defaults it on, and this keeps it on where a provider's default differs.
-            promptParams.parallelToolCalls ??= true;
+            // Parallel calls stay on through each provider's own default (OpenAI, Anthropic and Gemini
+            // allow them when the flag is absent). Sending an explicit flag would reach providers
+            // whose models do not document it, and a rejected flag would strip every tool.
             this._nativeToolBindings = toolSet.byToolName;
         } catch (error) {
             // A tool-name collision is a metadata problem and a hard error at build time — but it
@@ -5603,7 +5603,7 @@ export class BaseAgent {
      * @param params The run parameters
      * @returns The payload after the last call, and one result per call, in call order
      */
-    protected async executeAgentToolCallsAsSteps<P>(
+    protected async ExecuteAgentToolCallsAsSteps<P>(
         calls: AgentToolCallRequest[],
         payload: P,
         params: ExecuteAgentParams
@@ -5722,7 +5722,7 @@ export class BaseAgent {
         }
         const metadata: AgentChatMessageMetadata = { turnAdded: this._promptTurnCount, messageType: 'action-result' };
         if (step.nativeTurn?.sendResultsNatively && this._lastNativeTurnAppended === step.nativeTurn) {
-            this.pushToolResultTurn(params, BuildToolResultTurn(pending.results, metadata) as AgentChatMessage);
+            this.PushToolResultTurn(params, BuildToolResultTurn(pending.results, metadata) as AgentChatMessage);
             return;
         }
         const lines = pending.results.map((r) => `### ${r.toolName}${r.isError ? ' (failed)' : ''}\n${r.content}`);
@@ -5770,7 +5770,7 @@ export class BaseAgent {
         if (!this.isFinalPermittedIteration(params)) {
             return 'auto';
         }
-        return this.getNativeControlConfig(params).Terminal === 'text' ? 'none' : { name: COMPLETE_TASK_TOOL };
+        return this.GetNativeControlConfig(params).Terminal === 'text' ? 'none' : { name: COMPLETE_TASK_TOOL };
     }
 
     /**
@@ -5782,7 +5782,7 @@ export class BaseAgent {
      *
      * @param params The run parameters, for the agent
      */
-    protected getNativeControlConfig(params: ExecuteAgentParams): NativeControlConfig {
+    protected GetNativeControlConfig(params: ExecuteAgentParams): NativeControlConfig {
         const source = params.agent?.TypeConfiguration ?? null;
         if (this._nativeControl && this._nativeControl.source === source) {
             return this._nativeControl.config;
@@ -5869,7 +5869,7 @@ export class BaseAgent {
         promptParams.contextUser = params.contextUser;
         // Last gate before the history goes back to the model: no tool call may be left dangling.
         this.reconcileUnansweredToolCalls(params);
-        if (this.getNativeControlConfig(params).CompactToolArguments) {
+        if (this.GetNativeControlConfig(params).CompactToolArguments) {
             const compacted = CompactAnsweredToolCallArguments(params.conversationMessages as AgentChatMessage[]);
             if (compacted > 0) {
                 this.logStatus(`[NativeTools] Compacted the large arguments of ${compacted} older tool call(s)`, true, params);
@@ -5932,7 +5932,7 @@ export class BaseAgent {
             promptParams.data['_ARTIFACTS_ENABLED'] = this.isArtifactSupportEnabled(params.agent);
             if (artifactToolsEnabled && this._artifactToolManager.HasArtifacts()) {
                 promptParams.data['_ARTIFACT_MANIFEST'] = this._artifactToolManager.ToManifestString();
-                if (this.getNativeControlConfig(params).NativeOnly) {
+                if (this.GetNativeControlConfig(params).NativeOnly) {
                     // The native-only prompt (picked at render time) names the artifact_tool tool instead of artifactToolCalls.
                     promptParams.data['_ARTIFACT_MANIFEST_NATIVE'] = this._artifactToolManager.ToManifestString({ nativeTools: true });
                 }
@@ -5949,7 +5949,7 @@ export class BaseAgent {
             const conversationToolsEnabled = agentTypePromptParams?.includeConversationToolsDocs !== false;
             if (conversationToolsEnabled && this._conversationToolManager.IsAvailable) {
                 promptParams.data['_CONVERSATION_TOOLS'] = this._conversationToolManager.GetToolDocumentation();
-                if (this.getNativeControlConfig(params).NativeOnly) {
+                if (this.GetNativeControlConfig(params).NativeOnly) {
                     promptParams.data['_CONVERSATION_TOOLS_NATIVE'] = this._conversationToolManager.GetToolDocumentation(true);
                 }
             }
@@ -6157,7 +6157,9 @@ export class BaseAgent {
      * Which providers are which is METADATA, not code: the `PrefixPromptCache` flag in the model
      * catalog's `ModelConfiguration` cascade (Model Types < Models < Vendors' `Configuration.ModelDefaults`
      * < Model Vendors), read through {@link resolvePrefixPromptCache}. `true` means append-only;
-     * anything else means replace.
+     * anything else means replace. One exception comes from the driver, not the catalog: a run that
+     * declares native tools to a driver whose replayed reasoning needs the history before it
+     * unchanged is append-only too (see {@link resolveAppendOnlyState}).
      *
      * Decided ONCE per run. An explicit `trailingStateMode` or a runtime model override answers
      * immediately. Otherwise the answer is frozen at the first model selection and reused for every
@@ -6187,7 +6189,7 @@ export class BaseAgent {
         if (promptParams.override?.modelId) {
             const model = AIEngine.Instance?.ModelsByID?.get(NormalizeUUID(promptParams.override.modelId));
             const vendor = promptParams.override.vendorId ? AIEngine.Instance?.VendorsByID?.get(NormalizeUUID(promptParams.override.vendorId)) : undefined;
-            return this.resolvePrefixPromptCache(model, vendor);
+            return this.resolveAppendOnlyState(model, vendor);
         }
 
         if (this._resolvedTrailingStateMode !== undefined) {
@@ -6196,12 +6198,41 @@ export class BaseAgent {
         if (this._lastModelSelectionInfo) {
             const model = this._lastModelSelectionInfo.ModelSelected;
             const vendor = this._lastModelSelectionInfo.vendorSelected;
-            this._resolvedTrailingStateMode = this.resolvePrefixPromptCache(model, vendor);
+            this._resolvedTrailingStateMode = this.resolveAppendOnlyState(model, vendor);
             return this._resolvedTrailingStateMode;
         }
 
         // Turn 1, nothing known yet: replace-in-place, resolved for good on turn 2 (see above).
         return false;
+    }
+
+    /**
+     * Whether this run keeps its runtime-state fragments (append-only): the model sits behind a
+     * byte-prefix prompt cache, or the run declares native tools to a driver whose replayed
+     * reasoning is accepted only while the history before it is unchanged. In replace mode each
+     * request drops the previous fragment, and a thinking block produced after it would be replayed
+     * behind a changed history and rejected.
+     */
+    protected resolveAppendOnlyState(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
+        if (this.resolvePrefixPromptCache(model, vendor)) {
+            return true;
+        }
+        return this._nativeToolBindings !== undefined && this.replayedReasoningRequiresStablePrefix(model, vendor);
+    }
+
+    /** Whether the driver serving `model` on `vendor` binds replayed reasoning to the unchanged history before it. */
+    protected replayedReasoningRequiresStablePrefix(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
+        if (!model || !vendor) {
+            return false;
+        }
+        const engine = AIEngine.Instance;
+        const modelVendor = (engine.ModelVendorsByModelID?.get(NormalizeUUID(model.ID)) ?? [])
+            .find(mv => UUIDsEqual(mv.VendorID, vendor.ID) && engine.IsInferenceProvider(mv));
+        if (!modelVendor?.DriverClass) {
+            return false;
+        }
+        const driver = MJGlobal.Instance.ClassFactory.GetRegistration(BaseLLM, modelVendor.DriverClass)?.SubClass as typeof BaseLLM | undefined;
+        return driver?.ReplayedReasoningRequiresStablePrefix === true;
     }
 
     /**
@@ -8941,15 +8972,21 @@ The context is now within limits. Please retry your request with the recovered c
         if (guardrailCheckedStep.step === 'Retry' && guardrailCheckedStep.payloadToolCallId && guardrailCheckedStep.nativeTurn?.sendResultsNatively) {
             // A payload-only turn, or a complete_task that failed Success validation, is answered as a
             // tool result for that call — the feedback is what the model reads next.
-            this.pushToolResultTurn(params, BuildToolResultTurn([{
+            // A complete_task that came back as a Retry was refused (Success validation, a self-check
+            // rubric): its feedback, wherever the step carries it, is that call's error result.
+            const toolName = this.nativeToolNameForCall(guardrailCheckedStep, guardrailCheckedStep.payloadToolCallId);
+            const refusedCompletion = toolName === COMPLETE_TASK_TOOL;
+            const feedback = guardrailCheckedStep.retryInstructions
+                || (refusedCompletion ? guardrailCheckedStep.message || guardrailCheckedStep.errorMessage : undefined);
+            this.PushToolResultTurn(params, BuildToolResultTurn([{
                 toolCallId: guardrailCheckedStep.payloadToolCallId,
-                toolName: this.nativeToolNameForCall(guardrailCheckedStep, guardrailCheckedStep.payloadToolCallId),
-                content: guardrailCheckedStep.retryInstructions || 'Payload change applied.',
-                isError: false
+                toolName,
+                content: feedback || (refusedCompletion ? 'The task is not complete yet.' : 'Payload change applied.'),
+                isError: refusedCompletion
             }], { turnAdded: this._promptTurnCount, messageType: 'action-result' }) as AgentChatMessage);
         } else if (guardrailCheckedStep.step === 'Success' && guardrailCheckedStep.payloadToolCallId && guardrailCheckedStep.nativeTurn?.sendResultsNatively) {
             // complete_task ended the run: answer the call so the history never ends on a dangling tool_use.
-            this.pushToolResultTurn(params, BuildToolResultTurn([{
+            this.PushToolResultTurn(params, BuildToolResultTurn([{
                 toolCallId: guardrailCheckedStep.payloadToolCallId,
                 toolName: this.nativeToolNameForCall(guardrailCheckedStep, guardrailCheckedStep.payloadToolCallId),
                 content: 'Task complete.',
@@ -10172,21 +10209,6 @@ The context is now within limits. Please retry your request with the recovered c
         );
     }
 
-    /**
-     * Executes a batch of in-flight memory writes, recording each as its own
-     * `Tool` AIAgentRunStep (a sibling of the Prompt step that requested them)
-     * with full inputs/outcomes captured in InputData/OutputData.
-     *
-     * Writes run SEQUENTIALLY (not Promise.all like artifact tools) by design:
-     * each persisted note is embedded and synced into the in-memory vector
-     * service on Save, so write N must be visible to write N+1's near-duplicate
-     * check (this is also what makes same-run supersede-own work). The per-run
-     * cap bounds the cost of the serialization.
-     *
-     * Step naming convention: `Memory Write` for log/UI clarity.
-     *
-     * @protected
-     */
     /** Where and for whom a memory write lands — shared by the envelope field and the native tool. */
     private memoryWriteOptions(params: ExecuteAgentParams): Parameters<MemoryWriteManager['ExecuteWrite']>[1] {
         return {
@@ -10202,6 +10224,21 @@ The context is now within limits. Please retry your request with the recovered c
         };
     }
 
+    /**
+     * Executes a batch of in-flight memory writes, recording each as its own
+     * `Tool` AIAgentRunStep (a sibling of the Prompt step that requested them)
+     * with full inputs/outcomes captured in InputData/OutputData.
+     *
+     * Writes run SEQUENTIALLY (not Promise.all like artifact tools) by design:
+     * each persisted note is embedded and synced into the in-memory vector
+     * service on Save, so write N must be visible to write N+1's near-duplicate
+     * check (this is also what makes same-run supersede-own work). The per-run
+     * cap bounds the cost of the serialization.
+     *
+     * Step naming convention: `Memory Write` for log/UI clarity.
+     *
+     * @protected
+     */
     protected async executeMemoryWritesAsSteps(
         writes: MemoryWriteRequest[],
         params: ExecuteAgentParams,
@@ -15439,7 +15476,7 @@ The context is now within limits. Please retry your request with the recovered c
             const declined: NativeToolResult[] = (initialNextStep.declinedToolCalls ?? [])
                 .map((d) => ({ toolCallId: d.toolCallId, toolName: d.toolName, content: `Not executed. ${d.reason}`, isError: true }));
             if (initialNextStep.agentToolCalls?.length || declined.length) {
-                const ran = await this.executeAgentToolCallsAsSteps(initialNextStep.agentToolCalls ?? [], finalPayload, params);
+                const ran = await this.ExecuteAgentToolCallsAsSteps(initialNextStep.agentToolCalls ?? [], finalPayload, params);
                 finalPayload = ran.payload;
                 const results = [...ran.results, ...declined];
                 initialNextStep = this.declineTerminalAfterFailedWrite(initialNextStep, results);
@@ -16151,7 +16188,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (previousDecision?.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
                 // the delegate_to_* call is answered as a tool result.
-                this.pushToolResultTurn(params, BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
+                this.PushToolResultTurn(params, BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
                     toolCallId: subAgentRequest.toolCallId,
                     toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
                     content: resultMessage,
@@ -16856,7 +16893,7 @@ The context is now within limits. Please retry your request with the recovered c
         const pairable = nativeResults ? allExecutions.filter((e) => !!e.request.toolCallId) : [];
         const unpairable = allExecutions.filter((e) => !pairable.includes(e));
         if (pairable.length > 0) {
-            this.pushToolResultTurn(params, BuildToolResultTurn([
+            this.PushToolResultTurn(params, BuildToolResultTurn([
                 ...this.payloadToolResult(previousDecision),
                 ...pairable.map((e) => ({
                     toolCallId: e.request.toolCallId as string,
@@ -17176,7 +17213,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (previousDecision.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
                 // the delegate_to_* call is answered as a tool result (same as the child path).
-                this.pushToolResultTurn(params, BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
+                this.PushToolResultTurn(params, BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
                     toolCallId: subAgentRequest.toolCallId,
                     toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
                     content: relatedResultMessage,

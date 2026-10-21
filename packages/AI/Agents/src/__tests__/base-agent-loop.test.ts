@@ -3110,3 +3110,66 @@ describe('BaseAgent.Execute — a failed native action carries its guidance in i
         expect(params.conversationMessages.some((m) => typeof m.content === 'string' && m.content.includes('Action Execution Failure Guidance'))).toBe(true);
     });
 });
+
+describe('BaseAgent.Execute — replayed reasoning behind an unchanged history', () => {
+    type Selection = AIPromptRunResult['modelSelectionInfo'];
+    /** Stands in for a run served by a driver whose replayed reasoning is bound to the history before it. */
+    class BoundReasoningAgent extends HarnessAgent {
+        protected override resolveAppendOnlyState(): boolean {
+            return (this as unknown as { _nativeToolBindings?: unknown })._nativeToolBindings !== undefined;
+        }
+    }
+
+    function thinkingCall(id: string): AIPromptRunResult {
+        const result = llmNativeActionCall(id, true);
+        const message = (result.chatResult as unknown as { data: { choices: Array<{ message: Record<string, unknown> }> } }).data.choices[0].message;
+        message.reasoning = [{ provider: 'anthropic', kind: 'thinking', text: `Think ${id}.`, signature: `sig-${id}` }];
+        return { ...result, modelSelectionInfo: { ModelSelected: { ID: 'm' }, vendorSelected: { ID: 'v' } } as unknown as Selection };
+    }
+
+    it('keeps every earlier message of each request, so a replayed thinking block is sent after exactly the history it was made with', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new BoundReasoningAgent();
+        const runner = new ScriptedPromptRunner([() => thinkingCall('c1'), () => thinkingCall('c2'), () => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+
+        await agent.Execute(makeParams());
+
+        expect(runner.Calls).toHaveLength(3);
+        for (let i = 1; i < runner.Calls.length; i++) {
+            const before = runner.Calls[i - 1].conversationMessages ?? [];
+            const after = runner.Calls[i].conversationMessages ?? [];
+            // Request i extends request i-1: nothing it sent was removed or rewritten.
+            expect(after.slice(0, before.length)).toEqual(before);
+        }
+        const last = runner.Calls[2].conversationMessages as AgentChatMessage[];
+        const replayed = last.findIndex((m) => m.toolCalls?.some((c) => c.id === 'c2'));
+        expect(last[replayed].reasoning?.[0]).toMatchObject({ signature: 'sig-c2' });
+    });
+});
+
+describe('BaseAgent — a native complete_task refused by validation', () => {
+    class Probe extends HarnessAgent {
+        public async Process(step: BaseAgentNextStep, params: ExecuteAgentParams): Promise<BaseAgentNextStep> {
+            return (this as unknown as { processNextStep(s: BaseAgentNextStep, p: ExecuteAgentParams, ...rest: unknown[]): Promise<BaseAgentNextStep> })
+                .processNextStep(step, params, {}, {}, {}, {});
+        }
+    }
+
+    it('answers the call with the feedback, as an error, so the model can act on it', async () => {
+        const agent = new Probe();
+        const internals = agent as unknown as { validateNextStep: (p: unknown, s: BaseAgentNextStep) => Promise<BaseAgentNextStep>; checkExecutionGuardrails: (p: unknown, s: BaseAgentNextStep) => Promise<BaseAgentNextStep> };
+        internals.validateNextStep = async (_p, s) => s;
+        internals.checkExecutionGuardrails = async (_p, s) => s;
+        const params = { agent: { Name: 'Probe' }, conversationMessages: [] } as unknown as ExecuteAgentParams;
+        const step: BaseAgentNextStep = {
+            step: 'Retry', terminate: false, payloadToolCallId: 'call_done', message: 'The rubric failed: the summary is missing.',
+            nativeTurn: { text: '', toolCalls: [{ id: 'call_done', name: 'complete_task', arguments: {} }], sendResultsNatively: true }
+        };
+
+        await agent.Process(step, params);
+
+        const answer = (params.conversationMessages[1].content as unknown as Array<{ toolCallId: string; content: string; isError: boolean }>)[0];
+        expect(answer).toMatchObject({ toolCallId: 'call_done', isError: true, content: 'The rubric failed: the summary is missing.' });
+    });
+});
