@@ -277,6 +277,30 @@ describe('selectModel — Specific strategy + AIPromptModel', () => {
     expect(r.vendorDriverClass).toBe('OpenAILLM');
   });
 
+  it('Default strategy preserves AIPromptModel VendorID preference, EffortLevel, and PromptConfigurationObject', async () => {
+    // ClaudeOpus45 is offered by Anthropic (Priority 1) and Bedrock (Priority 5).
+    // When AIPromptModel specifies VendorID=Anthropic under SelectionStrategy='Default',
+    // Anthropic must receive the preferred-vendor priority boost and carry EffortLevel + PromptConfigurationObject.
+    const promptConfig = { temperature: 0.1 };
+    catalog.promptModels.push({
+      ...makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.ClaudeOpus45, VendorID: VENDOR.Anthropic, Priority: 10 }),
+      EffortLevel: 25,
+      PromptConfigurationObject: promptConfig,
+    } as never);
+    loadCatalog(catalog);
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    expect(r.model?.ID).toBe(MODEL.ClaudeOpus45);
+    expect(r.vendorDriverClass).toBe('AnthropicLLM');
+    const winningCandidate = (r.allCandidates as Array<{
+      model: { ID: string };
+      driverClass: string;
+      effortLevel?: number;
+      promptModelConfiguration?: Record<string, unknown>;
+    }>)?.find(c => c.model.ID === MODEL.ClaudeOpus45 && c.driverClass === 'AnthropicLLM');
+    expect(winningCandidate?.effortLevel).toBe(25);
+    expect(winningCandidate?.promptModelConfiguration).toEqual(promptConfig);
+  });
+
   it('orders multiple prompt models by Priority (higher first)', async () => {
     catalog.promptModels.push(
       makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.GPT5Mini, VendorID: VENDOR.OpenAI, Priority: 1 }),

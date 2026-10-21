@@ -92,6 +92,8 @@ function makeProvider(details: RacyDetail[]): IMetadataProvider {
 
 interface RunAgentStub {
     RunAgent(params: ExecuteAgentParams): Promise<ExecuteAgentResult>;
+    generateConversationName(userMessage: string, contextUser: UserInfo): Promise<{ name: string; description: string } | null>;
+    gatherConversationArtifacts(conversationId: string, contextUser: UserInfo): Promise<unknown[]>;
 }
 
 describe('AgentRunner.RunAgentInConversation — a progress save still committing does not swallow the final status', () => {
@@ -117,4 +119,47 @@ describe('AgentRunner.RunAgentInConversation — a progress save still committin
 
         expect(agentDetail.Persisted).toEqual({ Status: 'Complete', Message: 'All done' });
     });
+
+    it('runs generateConversationName in parallel with RunAgent and skips artifact queries on a brand-new conversation', async () => {
+        const events: string[] = [];
+        const convEntity = makeRacyDetail('conv-new');
+        const userDetail = makeRacyDetail('user-detail');
+        const agentDetail = makeRacyDetail('agent-detail');
+        const loadSpy = vi.spyOn(agentDetail, 'Load');
+
+        const runner = new AgentRunner(makeProvider([convEntity, userDetail, agentDetail]));
+        const gatherSpy = vi.spyOn(runner as unknown as RunAgentStub, 'gatherConversationArtifacts');
+
+        vi.spyOn(runner as unknown as RunAgentStub, 'generateConversationName').mockImplementation(async () => {
+            events.push('rename:start');
+            await delay(80);
+            events.push('rename:done');
+            return { name: 'Smart Title', description: 'Smart Description' };
+        });
+
+        vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockImplementation(async (params: ExecuteAgentParams) => {
+            events.push('runAgent:start');
+            expect(params.inputArtifacts).toEqual([]);
+            await delay(10);
+            events.push('runAgent:done');
+            return { success: true, agentRun: { Message: 'Reply' } } as unknown as ExecuteAgentResult;
+        });
+
+        await runner.RunAgentInConversation({
+            agent: { ID: 'agent-1', Name: 'Betty' },
+            conversationMessages: [],
+            contextUser: USER,
+        } as unknown as ExecuteAgentParams, { userMessage: 'What are the membership tiers?' });
+
+        // RunAgent starts before generateConversationName finishes (parallel execution)
+        expect(events.indexOf('runAgent:start')).toBeLessThan(events.indexOf('rename:done'));
+        // Brand-new conversation skips gatherConversationArtifacts DB queries
+        expect(gatherSpy).not.toHaveBeenCalled();
+        // Conversation name & description are persisted before RunAgentInConversation returns
+        expect(convEntity.Name).toBe('Smart Title');
+        expect(convEntity.Description).toBe('Smart Description');
+        // Newly created agentResponseDetail is not redundantly reloaded before final Save
+        expect(loadSpy).not.toHaveBeenCalled();
+    });
 });
+
