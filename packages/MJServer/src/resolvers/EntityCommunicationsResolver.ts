@@ -216,6 +216,7 @@ export class ReportResolver extends ResolverBase {
         PreviewOnly: previewOnly,
         IncludeProcessedMessages: includeProcessedMessages,
         ContextUser: contextUser,
+        Provider: provider,
       };
       const result = await EntityCommunicationsEngine.Instance.RunEntityCommunication(params);
       return {

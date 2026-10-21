@@ -8,6 +8,7 @@ import {
   ReadIsRowFiltered,
   ShapeCacheInvalidationEvent,
 } from '../generic/CacheInvalidationResolver.js';
+import { EntityInfo } from '@memberjunction/core';
 import { EmployeeEntity } from './fieldSecurityFixtures.js';
 
 /**
@@ -87,6 +88,22 @@ describe('MayBroadcastRecordData: entities under field-level security', () => {
   it('still allows the same entity with field security off', () => {
     ConfigureRecordDataBroadcast(['Employees']);
     expect(MayBroadcastRecordData('Employees', EmployeeEntity(false))).toBe(true);
+  });
+
+  it("REGRESSION: refuses MJ: Record Changes under '*', with or without its metadata", () => {
+    // A Record Change row carries other entities' values in ChangesJSON / FullRecordJSON, and its
+    // own FieldLevelSecurityApplies is false; the per-row projection never runs on this push.
+    ConfigureRecordDataBroadcast(['*']);
+    const recordChanges = new EntityInfo({ ID: 'rc', Name: 'MJ: Record Changes', SchemaName: '__mj', BaseTable: 'RecordChange', BaseView: 'vwRecordChanges', Fields: [] });
+    expect(recordChanges.FieldLevelSecurityApplies).toBe(false);
+    expect(MayBroadcastRecordData('MJ: Record Changes', recordChanges)).toBe(false);
+    expect(MayBroadcastRecordData('MJ: Record Changes')).toBe(false);
+    expect(MayBroadcastRecordData(' mj: record changes ')).toBe(false);
+  });
+
+  it('REGRESSION: refuses MJ: Record Changes even when named in the allowlist', () => {
+    ConfigureRecordDataBroadcast(['MJ: Record Changes']);
+    expect(MayBroadcastRecordData('MJ: Record Changes')).toBe(false);
   });
 });
 

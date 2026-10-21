@@ -7,15 +7,27 @@ import type { UserInfo } from '@memberjunction/core';
  * The engine runs every render inside {@link RunAsTemplateRenderUser}; an extension reads the user
  * back with {@link CurrentTemplateRenderUser} (through `TemplateExtensionBase.ContextUser`), and
  * every callback and promise the render starts sees the same user.
+ *
+ * The scope is held as an object so that a render with no user is still known to be a render
+ * ({@link IsInsideTemplateRender}): its extensions then act for no user rather than falling back to
+ * a user cached on the singleton by some other caller.
  */
-const renderUser = new AsyncLocalStorage<UserInfo | undefined>();
+interface TemplateRenderScope {
+    User: UserInfo | undefined;
+}
+const renderScope = new AsyncLocalStorage<TemplateRenderScope>();
 
 /** Runs `work` with `user` as the template render user for everything it does, sync or async. */
 export function RunAsTemplateRenderUser<T>(user: UserInfo | undefined, work: () => T): T {
-    return renderUser.run(user, work);
+    return renderScope.run({ User: user }, work);
 }
 
-/** The user of the template render in progress, or undefined outside a render. */
+/** The user of the template render in progress, or undefined outside a render or for a render with no user. */
 export function CurrentTemplateRenderUser(): UserInfo | undefined {
-    return renderUser.getStore();
+    return renderScope.getStore()?.User;
+}
+
+/** Whether a template render is in progress, whether or not it has a user. */
+export function IsInsideTemplateRender(): boolean {
+    return renderScope.getStore() !== undefined;
 }

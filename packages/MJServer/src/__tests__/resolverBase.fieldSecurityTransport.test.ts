@@ -193,6 +193,18 @@ describe('ResolverBase CloudEvents: no field values for entities under field sec
         expect(cloudEventInits[0].data).toMatchObject({ ID: 'emp-1', Name: 'Ada' });
     });
 
+    it('REGRESSION: a Record Changes row emits only its key and changed-field names', async () => {
+        // The audit trail has no field security of its own, but its payload columns hold other
+        // entities' values, so its rows must not ride along to the sink either.
+        const recordChanges = EmployeeEntity(false);
+        recordChanges.Name = 'MJ: Record Changes';
+        await new TestResolver().Emit(fullWidthEntity(recordChanges, ['Notes']));
+        expect(cloudEventInits[0].data).toEqual({
+            PrimaryKey: [{ FieldName: 'ID', Value: 'emp-1' }],
+            ChangedFields: ['Notes'],
+        });
+    });
+
     it('REGRESSION: the entity-event debug log carries no field values for an FLS entity', async () => {
         const entity = fullWidthEntity(EmployeeEntity(true));
         new TestResolver().Listen(entity);

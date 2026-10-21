@@ -2,12 +2,13 @@
  * Field-Security Egress Compliance (source guard)
  *
  * Scans the code that hands entity values to someone outside the server process (GraphQL
- * resolvers, REST handlers, the MCP and A2A servers, and actions) for the calls that turn an
- * entity object into plain values:
- *   - `.GetAll(`
- *   - `.GetDataObject(`
- *   - `.GetDataObjectJSON(`
- *   - `JSON.stringify(<entity>)` (heuristic, below)
+ * resolvers and the rest of the API server, REST handlers, realtime and agent sessions, the MCP
+ * and A2A servers, agents, communications, templates, search, messaging adapters and actions)
+ * for the calls that turn an entity object or a view result into plain values:
+ *   - `.GetAll(`, `.GetDataObject(`, `.GetDataObjectJSON(`, `.To(`
+ *   - `<entity>.Fields.map(f => f.Value)`
+ *   - `JSON.stringify(<entity>)` and `JSON.stringify(<rows>)` (heuristic, below)
+ *   - `res.json(…Results…)` / `res.send(…Results…)`: a view's rows written straight to an HTTP response
  *
  * An entity object built for a restricted user never holds a value that user is denied, so most
  * of these calls are safe. They are flagged anyway because the object's width depends on WHO it
@@ -32,15 +33,17 @@
  * Types are not available to a text scan, so `JSON.stringify(x)` is flagged only when its first
  * argument is a plain identifier or member path (no call, index or literal) whose LAST segment is
  * named like an entity object: `entity`, `record`, `entityObject`, `fooEntity`, `fooRecord`,
- * `fooEntityObject` (any case). `JSON.stringify(result.EntityUpdateDates)` or
- * `JSON.stringify(rows)` are not flagged. This misses entities held under other names; it is a
- * reminder that runs on every PR, not a proof.
+ * `fooEntityObject` (any case), or like a set of rows: `rows`, `results`, `records` (so
+ * `result.Results` counts). `JSON.stringify(result.EntityUpdateDates)` is not flagged. This misses
+ * values held under other names; it is a reminder that runs on every PR, not a proof.
  *
  * ## Scope
  *
- * `MJServer/src/resolvers`, `MJServer/src/rest`, `AI/MCPServer/src`, `AI/A2AServer/src`, and every
- * `src/` folder under `Actions/`. Tests, generated code, `dist/` and `.d.ts` files are skipped, as are
- * pure comment lines and imports.
+ * In `MJServer/src`: `resolvers`, `rest`, `generic`, `agentSessions`, `realtimeProxy`,
+ * `realtimeSessions`, `realtimeWidget`, `services`, `index.ts` and `realtimeConfigUnits.ts`. Also
+ * `AI/MCPServer/src`, `AI/A2AServer/src`, `AI/Agents/src`, and every `src/` folder under `Actions/`,
+ * `Communication/`, `Templates/`, `SearchEngine/` and `MessagingAdapters/`. Tests, generated code,
+ * `dist/` and `.d.ts` files are skipped, as are pure comment lines and imports.
  */
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
@@ -48,21 +51,43 @@ import * as path from 'path';
 
 const PACKAGES_ROOT = path.resolve(__dirname, '..', '..', '..'); // packages/
 
-/** Folders scanned, relative to packages/. `Actions` is walked for every nested `src/`. */
+/** Folders and files scanned, relative to packages/. A {@link SRC_ONLY_ROOTS} folder is walked for every nested `src/`. */
 const SCAN_DIRS = [
     'MJServer/src/resolvers',
     'MJServer/src/rest',
+    'MJServer/src/generic',
+    'MJServer/src/agentSessions',
+    'MJServer/src/realtimeProxy',
+    'MJServer/src/realtimeSessions',
+    'MJServer/src/realtimeWidget',
+    'MJServer/src/services',
+    'MJServer/src/index.ts',
+    'MJServer/src/realtimeConfigUnits.ts',
     'AI/MCPServer/src',
     'AI/A2AServer/src',
+    'AI/Agents/src',
     'Actions',
+    'Communication',
+    'Templates',
+    'SearchEngine',
+    'MessagingAdapters',
 ];
 
-/** Calls that produce an entity's field values as plain data. */
-const ACCESSOR_PATTERN = /\.(GetAll|GetDataObject|GetDataObjectJSON)\s*\(/;
+/** Roots holding several packages: only files under a package's `src/` count. */
+const SRC_ONLY_ROOTS = ['Actions', 'Communication', 'Templates', 'SearchEngine', 'MessagingAdapters'];
 
-/** `JSON.stringify(<path>)` where the last path segment is named like an entity object. */
+/** Calls that produce an entity's field values as plain data. */
+const ACCESSOR_PATTERN = /\.(GetAll|GetDataObject|GetDataObjectJSON|To)\s*[<(]/;
+
+/** `JSON.stringify(<path>)` where the last path segment is named like an entity object or a set of rows. */
 const STRINGIFY_ENTITY_PATTERN =
-    /JSON\.stringify\(\s*(?:[A-Za-z_$][\w$]*\??\.)*(?:entity|record|entityObject|[A-Za-z_$][\w$]*(?:Entity|Record|EntityObject))\s*[,)]/i;
+    /JSON\.stringify\(\s*(?:[A-Za-z_$][\w$]*\??\.)*(?:entity|record|entityObject|rows|results|records|[A-Za-z_$][\w$]*(?:Entity|Record|EntityObject))\s*(?:\?\?\s*[\w$.]+\s*)?[,)]/i;
+
+/** An entity's field values read in bulk: `.Fields.map(f => f.Value)`. */
+const FIELD_VALUES_PATTERN = /\.Fields\.map\(\s*\(?\s*([A-Za-z_$][\w$]*)(?:\s*:\s*[\w.]+)?\s*\)?\s*=>\s*\1\.Value\b/;
+
+/** A view's rows written straight to an HTTP response. */
+const RESULTS_RESPONSE_PATTERN = /\b(?:res|response|reply)(?:\.status\([^)]*\))?\.(?:json|send)\([^;]*\bResults\b/;
 
 /** The allow marker, with a non-empty reason after it. */
 const ALLOW_COMMENT = /\/\/\s*fls-guard:\s*\S/;
@@ -86,14 +111,16 @@ interface Violation {
 function shouldScanFile(filePath: string): boolean {
     if (!filePath.endsWith('.ts')) return false;
     if (EXCLUDE_PATH_PATTERNS.some(p => p.test(filePath))) return false;
-    // Under Actions, only package source counts: skip scripts, fixtures and the like.
+    // Under a multi-package root, only package source counts: skip scripts, fixtures and the like.
     const relative = path.relative(PACKAGES_ROOT, filePath).split(path.sep).join('/');
-    return !relative.startsWith('Actions/') || relative.includes('/src/');
+    const root = SRC_ONLY_ROOTS.find(r => relative.startsWith(`${r}/`));
+    return !root || relative.includes('/src/');
 }
 
 function findTsFiles(dir: string): string[] {
     const results: string[] = [];
     if (!fs.existsSync(dir)) return results;
+    if (fs.statSync(dir).isFile()) return shouldScanFile(dir) ? [dir] : [];
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const fullPath = path.join(dir, entry.name);
         if (entry.isDirectory()) {
@@ -111,7 +138,7 @@ function lineSerializesEntity(line: string): boolean {
     const trimmed = line.trim();
     if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return false;
     if (trimmed.startsWith('import ')) return false;
-    return ACCESSOR_PATTERN.test(line) || STRINGIFY_ENTITY_PATTERN.test(line);
+    return [ACCESSOR_PATTERN, STRINGIFY_ENTITY_PATTERN, FIELD_VALUES_PATTERN, RESULTS_RESPONSE_PATTERN].some(p => p.test(line));
 }
 
 /** True when line `index` of `lines`, or the line above it, carries the allow marker. */
@@ -149,10 +176,24 @@ describe('Field-Security Egress Compliance', () => {
             expect(lineSerializesEntity('JSON.stringify(params.fileEntity)')).toBe(true);
         });
 
+        it('flags rows serialized or sent as a response, entity.To(), and Fields.map(f => f.Value)', () => {
+            expect(lineSerializesEntity('JSON.stringify(rows)')).toBe(true);
+            expect(lineSerializesEntity('JSON.stringify(result.Results, null, 2)')).toBe(true);
+            expect(lineSerializesEntity('Results: JSON.stringify(result.Results ?? null),')).toBe(true);
+            expect(lineSerializesEntity('res.json(result.Results);')).toBe(true);
+            expect(lineSerializesEntity('res.status(200).json({ rows: result.Results })')).toBe(true);
+            expect(lineSerializesEntity('return entity.To(schema);')).toBe(true);
+            expect(lineSerializesEntity('const v = record.To<typeof S>(S);')).toBe(true);
+            expect(lineSerializesEntity('const values = entity.Fields.map(f => f.Value);')).toBe(true);
+            expect(lineSerializesEntity('const values = entity.Fields.map((field) => field.Value);')).toBe(true);
+        });
+
         it('does not flag plain data, comments or imports', () => {
             expect(lineSerializesEntity('JSON.stringify(result.EntityUpdateDates)')).toBe(false);
-            expect(lineSerializesEntity('JSON.stringify(rows)')).toBe(false);
             expect(lineSerializesEntity('JSON.stringify(entities[i])')).toBe(false);
+            expect(lineSerializesEntity('x.ToString()')).toBe(false);
+            expect(lineSerializesEntity('entity.Fields.map(f => f.Name)')).toBe(false);
+            expect(lineSerializesEntity('res.json({ Success: true })')).toBe(false);
             expect(lineSerializesEntity(' * Uses entity.GetAll() for scalar fields')).toBe(false);
             expect(lineSerializesEntity('// entity.GetAll() is projected below')).toBe(false);
         });

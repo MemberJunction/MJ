@@ -33,7 +33,7 @@ export function ProjectEntityObjectForCaller(
   user: UserInfo | null | undefined,
   provider?: RecordChangeMetadataSource
 ): Record<string, unknown> {
-  const values = entity.GetAll();
+  const values = entity.GetAll(); // fls-guard: projected on the next line
   return ProjectEntityValuesForUser(provider ?? new Metadata(), entity.EntityInfo, values, user) ?? values;
 }
 

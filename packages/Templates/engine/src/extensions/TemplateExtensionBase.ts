@@ -1,5 +1,5 @@
 import { UserInfo } from "@memberjunction/core";
-import { CurrentTemplateRenderUser } from "../TemplateRenderUser";
+import { CurrentTemplateRenderUser, IsInsideTemplateRender } from "../TemplateRenderUser";
 // TODO: Add type defs based on nunjucks classes used for extensions
 type Parser = any;
 type Nodes = any;
@@ -31,10 +31,12 @@ export abstract class TemplateExtensionBase {
     /**
      * The user this extension acts for: the user of the render in progress. An extension instance is
      * shared by every render in the process, so it must read this at run time and never cache it.
-     * Outside a render it falls back to the user the instance was constructed with.
+     * Inside a render that has no user it is undefined; it never falls back to the user the instance
+     * was constructed with, which is whichever caller first configured the engine. Outside a render
+     * it returns the constructed user.
      */
-    public get ContextUser(): UserInfo {
-        return CurrentTemplateRenderUser() ?? this._contextUser;
+    public get ContextUser(): UserInfo | undefined {
+        return IsInsideTemplateRender() ? CurrentTemplateRenderUser() : this._contextUser;
     }
     private _contextUser: UserInfo;
 

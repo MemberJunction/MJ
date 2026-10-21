@@ -11403,7 +11403,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         const message: AgentChatMessage = {
             role: 'user',
-            content: `Decision results:\n${JSON.stringify(results)}`,
+            content: `Decision results:\n${JSON.stringify(results)}`, // fls-guard: decision outcomes, not entity rows
             metadata: {
                 turnAdded: this._promptTurnCount,
                 messageType: 'tool-result',

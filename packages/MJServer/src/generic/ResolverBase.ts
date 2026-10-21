@@ -17,6 +17,7 @@ import {
   LogError,
   LogStatus,
   Metadata,
+  ProjectEntityValuesForUser,
   ReadableFieldsTransportKey,
   RecordChangeFieldSecurityProjector,
   RecordChangePayloadFields,
@@ -47,7 +48,7 @@ import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
-import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
+import { MJEvent, MJEventType, MJGlobal, UUIDsEqual, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
 import { SQLParser, IsBalancedSQLFragment, LexSQL } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
@@ -380,6 +381,7 @@ export class ResolverBase {
     if (!loaded) {
       return null;
     }
+    // fls-guard: MapFieldNamesToCodeNames drops the fields the caller may not read
     const mapped = await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), contextUser);
     return mapped as T;
   }
@@ -842,17 +844,21 @@ export class ResolverBase {
    * What an entity event may carry to a CloudEvents sink or a log line.
    *
    * The whole row for an entity without field security. For one where it applies (its own flag
-   * or an IS-A ancestor's), only the primary key and the names of the fields that changed: the
-   * sink is outside MemberJunction with no reader to project the row for, and these events fire
-   * for server-internal saves too, whose objects hold every column.
+   * or an IS-A ancestor's), and for `MJ: Record Changes` (whose payload columns hold other
+   * entities' values), only the primary key and the names of the fields that changed: the sink
+   * is outside MemberJunction with no reader to project the row for, and these events fire for
+   * server-internal saves too, whose objects hold every column.
    */
-  protected EntityEventPayload(baseEntity: BaseEntity): Record<string, unknown> {
-    if (!baseEntity.EntityInfo?.FieldLevelSecurityApplies) {
-      return baseEntity.GetAll();
+  protected EntityEventPayload(baseEntity: BaseEntity, changedFieldNames?: string[]): Record<string, unknown> {
+    const entityInfo = baseEntity.EntityInfo;
+    if (!entityInfo?.FieldLevelSecurityApplies && !RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo)) {
+      return baseEntity.GetAll(); // fls-guard: entity without field security and not the audit trail; whole row is the documented payload
     }
     return {
       PrimaryKey: (baseEntity.PrimaryKey?.KeyValuePairs ?? []).map((kv) => ({ FieldName: kv.FieldName, Value: kv.Value })),
-      ChangedFields: (baseEntity.Fields ?? []).filter((f) => f.Dirty).map((f) => f.Name),
+      // A completed save has already rebased the object, so nothing on it is dirty: the event
+      // carries the names the save wrote. Other events (save_started) still read them off the object.
+      ChangedFields: changedFieldNames ?? (baseEntity.Fields ?? []).filter((f) => f.Dirty).map((f) => f.Name),
     };
   }
 
@@ -863,7 +869,7 @@ export class ResolverBase {
       const type = `MemberJunction.${event}${extendedType}`;
       const source = `${process.env.CLOUDEVENTS_SOURCE ?? 'MemberJunction'}`;
       const subject = args instanceof BaseEntityEvent ? args.baseEntity.EntityInfo.CodeName : undefined;
-      const data = args?.baseEntity ? this.EntityEventPayload(args.baseEntity) : {};
+      const data = args?.baseEntity ? this.EntityEventPayload(args.baseEntity, args.ChangedFieldNames) : {};
 
       const cloudEvent = new CloudEvent({ type, source, subject, data });
 
@@ -1651,7 +1657,7 @@ export class ResolverBase {
       originSessionId: userPayload?.sessionId || null,
       recordData:
         action === 'save' && MayBroadcastRecordData(entityName, entityObject.EntityInfo)
-          ? JSON.stringify(entityObject.GetAll())
+          ? JSON.stringify(entityObject.GetAll()) // fls-guard: MayBroadcastRecordData refuses FLS entities and Record Changes
           : undefined,
     });
   }
@@ -1691,28 +1697,52 @@ export class ResolverBase {
             return;
           }
 
-          const baseEntityValues = baseEntity ? this.EntityEventPayload(baseEntity) : null;
+          const baseEntityValues = baseEntity ? this.EntityEventPayload(baseEntity, event.args instanceof BaseEntityEvent ? event.args.ChangedFieldNames : undefined) : null;
           const eventToLog = { entityName: entityObject.EntityInfo.Name, baseEntity: baseEntityValues, event: event.event, eventCode: event.eventCode };
           LogDebug(`ResolverBase.ListenForEntityMessages: Received Event from within MJGlobal.Instance.GetEventListener() callback. Will call EmitCloudEvent() next\nEvent data:\n${JSON.stringify(eventToLog)}`);
           await this.EmitCloudEvent(event);
           LogDebug(`ResolverBase.ListenForEntityMessages: EmitCloudEvent() completed successfully`);  
 
-          if (event.args && event.args instanceof BaseEntityEvent) {
-            const baseEntityEvent = event.args as BaseEntityEvent;
-            // message from our entity object, relay it to the client
+          if (event.args && event.args instanceof BaseEntityEvent && this.EntityEventBelongsToSession(event.args, userPayload)) {
+            // message from an entity object of this session's user, relay it to the client
             LogDebug('ResolverBase.ListenForEntityMessages: About to publish PUSH_STATUS_UPDATES_TOPIC');
-            this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
-              status: 'OK',
-              type: 'EntityObjectStatusMessage',
-              entityName: baseEntityEvent.baseEntity.EntityInfo.Name,
-              primaryKey: baseEntityEvent.baseEntity.PrimaryKey,
-              message: event.args.payload,
-            }), userPayload);
+            this.PublishStatusUpdate(pubSub, userPayload.sessionId, this.EntityStatusMessage(event.args), userPayload);
           }
         }
       });
       this.eventSubscriptions.set(uniqueKey, theSub);
     }
+  }
+
+  /**
+   * Whether an entity event may be relayed to the session whose call created the listener. The
+   * listener is shared by every caller in the process for that entity, so an event raised by an
+   * object loaded for another user (or for the system user) is never relayed to this session.
+   */
+  protected EntityEventBelongsToSession(event: BaseEntityEvent, userPayload: UserPayload): boolean {
+    const sessionUserId = userPayload?.userRecord?.ID;
+    const objectUserId = event.baseEntity?.ContextCurrentUser?.ID;
+    return Boolean(sessionUserId && objectUserId && UUIDsEqual(sessionUserId, objectUserId));
+  }
+
+  /**
+   * The status message relayed for an entity event: the entity, key and event type. The event's
+   * payload is included only when it cannot carry record values: never for a delete (its payload
+   * is the whole deleted row), an entity under field-level security, or `MJ: Record Changes`.
+   */
+  protected EntityStatusMessage(event: BaseEntityEvent): string {
+    const entityInfo = event.baseEntity.EntityInfo;
+    const mayCarryPayload = event.type !== 'delete'
+      && !entityInfo.FieldLevelSecurityApplies
+      && !RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo);
+    return JSON.stringify({
+      status: 'OK',
+      type: 'EntityObjectStatusMessage',
+      entityName: entityInfo.Name,
+      primaryKey: event.baseEntity.PrimaryKey,
+      eventType: event.type,
+      message: mayCarryPayload ? event.payload : undefined,
+    });
   }
 
   /**
@@ -1810,6 +1840,7 @@ export class ResolverBase {
         // Cache invalidation is now handled globally by the MJGlobal listener in index.ts
         const contextUser = this.GetUserFromPayload(userPayload);
         // MapFieldNamesToCodeNames now handles encryption filtering as well
+        // fls-guard: MapFieldNamesToCodeNames drops the fields the caller may not read
         return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), contextUser);
       }
       // save failed, throw error with message
@@ -1917,6 +1948,7 @@ export class ResolverBase {
         // Cache invalidation is now handled globally by the MJGlobal listener in index.ts
 
         // MapFieldNamesToCodeNames now handles encryption filtering as well
+        // fls-guard: MapFieldNamesToCodeNames drops the fields the caller may not read
         return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), userInfo);
       } else {
         // CompleteMessage, not Message. A validation refusal puts its reasons in `Errors` and leaves
@@ -2212,7 +2244,7 @@ export class ResolverBase {
 
     // clientOldValues now has all of the oldValues the CLIENT passed us. Now we need to build the same kind of object
     // with the DB values
-    const dbValues = entityObject.GetAll();
+    const dbValues = entityObject.GetAll(); // fls-guard: compared on the server only, never returned
 
     // now we need to compare clientOldValues and dbValues and have a new array that has entries for any differences and have FieldName, clientOldValue and dbValue as properties
     const dbDifferences = [];
@@ -2360,7 +2392,10 @@ export class ResolverBase {
           extensions: { code: 'LOAD_ENTITY_ERROR', entityName },
         });
       }
-      const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+      // Grab the values before we delete so we can return the last state if the delete succeeds,
+      // projected for the caller in case the object holds a column they may not read.
+      // fls-guard: projected by ProjectEntityValuesForUser
+      const returnValue = ProjectEntityValuesForUser(provider, entityObject.EntityInfo, entityObject.GetAll(), this.GetUserFromPayload(userPayload));
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
       

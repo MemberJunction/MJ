@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { Arg, Ctx, Field, Int, ObjectType, Query, Resolver, Root, Subscription } from 'type-graphql';
-import { EntityInfo, Metadata, UserInfo } from '@memberjunction/core';
+import { EntityInfo, Metadata, RecordChangeFieldSecurityProjector, RecordChangesEntityName, UserInfo } from '@memberjunction/core';
 import {
     CacheInvalidationBroadcastManager,
 } from '../broadcast/index.js';
@@ -43,8 +43,9 @@ export function ConfigureRecordDataBroadcast(entities: readonly string[] | undef
  * row-level security, field-level security, or any tenant scoping a consumer applies on the read
  * path, none of which this push traverses. The answer is therefore NO unless a deployment has
  * explicitly opted the entity in via `cacheSettings.recordDataBroadcastEntities`, and always NO
- * for an entity under field-level security (its own flag or an IS-A ancestor's), whatever the
- * allowlist says: the row would carry the columns some of those sessions may not read.
+ * for an entity under field-level security (its own flag or an IS-A ancestor's), and for
+ * `MJ: Record Changes`, whatever the allowlist says: the row would carry columns (or, for Record
+ * Changes, other entities' values) some of those sessions may not read.
  *
  * Callers that get `false` simply omit `recordData`; the event still carries the entity name and
  * primary key, so clients evict and re-fetch through the normal access-controlled read path.
@@ -58,6 +59,7 @@ export function ConfigureRecordDataBroadcast(entities: readonly string[] | undef
 export function MayBroadcastRecordData(entityName: string, entityInfo?: EntityInfo | null): boolean {
   if (allowedRecordDataEntities.length === 0) return false;
   if (fieldSecurityApplies(entityName, entityInfo)) return false;
+  if (isRecordChanges(entityName, entityInfo)) return false;
   if (allowedRecordDataEntities.includes('*')) return true;
   return allowedRecordDataEntities.includes(entityName.trim().toLowerCase());
 }
@@ -66,6 +68,16 @@ export function MayBroadcastRecordData(entityName: string, entityInfo?: EntityIn
 function fieldSecurityApplies(entityName: string, entityInfo: EntityInfo | null | undefined): boolean {
   const info = entityInfo ?? lookUpEntity(entityName);
   return Boolean(info?.FieldLevelSecurityApplies);
+}
+
+/**
+ * Whether the entity is the Record Changes audit trail. Its rows carry other entities' values in
+ * `ChangesJSON` and `FullRecordJSON`, which are projected per reader, so a row is never broadcast
+ * even though field-level security is not switched on for the audit entity itself.
+ */
+function isRecordChanges(entityName: string, entityInfo: EntityInfo | null | undefined): boolean {
+  if (entityInfo) return RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo);
+  return entityName.trim().toLowerCase() === RecordChangesEntityName.toLowerCase();
 }
 
 /** The entity by name from the process's metadata, or undefined when none is loaded. */

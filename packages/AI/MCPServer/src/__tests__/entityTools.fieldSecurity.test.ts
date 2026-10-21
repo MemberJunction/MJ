@@ -217,3 +217,39 @@ describe('MCP entity tools: values returned to a restricted caller', () => {
         expect(record).toEqual(fullRow());
     });
 });
+
+// ─── Clause screen ────────────────────────────────────────────────────────
+
+describe('MCP Run View: caller-supplied filter and sort are screened like GraphQL and REST', () => {
+    const rowComparisons = [
+        "EXISTS (SELECT * FROM vwEmployees x WHERE x.ID = vwEmployees.ID INTERSECT SELECT x2.ID, x2.Name, n.v FROM vwEmployees x2 CROSS JOIN (VALUES (100000),(200000)) n(v))",
+        "EXISTS (SELECT * FROM vwEmployees WHERE ID='k' EXCEPT SELECT ID, Name, 1 FROM vwEmployees)",
+        "EXISTS (SELECT * FROM vwEmployees WHERE ID='k' UNION ALL SELECT 1,2,3)",
+        "NOT EXISTS (SELECT * FROM vwEmployees WHERE ID='k' EXCEPT SELECT 'k','Bob',1)",
+    ];
+
+    for (const extraFilter of rowComparisons) {
+        it(`refuses a whole-row set-operation comparison before running the view: ${extraFilter.slice(0, 60)}…`, async () => {
+            const out = JSON.parse(await run(AddEntityRunViewTool, { extraFilter }, intern)) as { Success: boolean; Results: unknown[]; ErrorMessage: string };
+            expect(out.Success).toBe(false);
+            expect(out.Results).toEqual([]);
+            expect(out.ErrorMessage).toMatch(/ExtraFilter/);
+            expect(state.runViewParams).toHaveLength(0);
+        });
+    }
+
+    it('refuses a sort that reads the base view through a subquery', async () => {
+        const orderBy = '(SELECT TOP 1 x.Salary FROM vwEmployees x WHERE x.ID = vwEmployees.ID)';
+        const out = JSON.parse(await run(AddEntityRunViewTool, { orderBy }, intern)) as { Success: boolean; ErrorMessage: string };
+        expect(out.Success).toBe(false);
+        expect(out.ErrorMessage).toMatch(/OrderBy/);
+        expect(state.runViewParams).toHaveLength(0);
+    });
+
+    it('passes a plain filter and sort through to the view', async () => {
+        const out = JSON.parse(await run(AddEntityRunViewTool, { extraFilter: "Name = 'Ada'", orderBy: 'Name DESC' }, intern)) as { Results: Record<string, unknown>[] };
+        expect(state.runViewParams[0].ExtraFilter).toBe("Name = 'Ada'");
+        expect(state.runViewParams[0].OrderBy).toBe('Name DESC');
+        expect(out.Results).toEqual([{ ID: ROW_ID, Name: 'Ada' }]);
+    });
+});

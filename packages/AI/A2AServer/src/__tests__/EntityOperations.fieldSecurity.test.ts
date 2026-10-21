@@ -38,9 +38,13 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     };
 });
 
-vi.mock('@memberjunction/generic-database-provider', () => ({
-    UserCache: { Instance: { get Users() { return state.cachedUsers; } } },
-}));
+vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/generic-database-provider')>();
+    return {
+        ClientClauseScreen: actual.ClientClauseScreen,
+        UserCache: { Instance: { get Users() { return state.cachedUsers; } } },
+    };
+});
 
 vi.mock('../config.js', () => ({
     a2aServerSettings: state.settings,
@@ -208,5 +212,40 @@ describe('A2A entity operations: values returned to a restricted caller', () => 
     it('an unrestricted caller still receives every value', async () => {
         const result = await new EntityOperations(provider(), hr).GetEntity('Employees', { ID: ROW_ID });
         expect(resultRow(result)).toEqual(fullRow());
+    });
+});
+
+// ─── Clause screen ────────────────────────────────────────────────────────
+
+describe('A2A QueryEntity: caller-supplied filter and sort are screened like GraphQL and REST', () => {
+    const rowComparisons = [
+        "EXISTS (SELECT * FROM vwEmployees x WHERE x.ID = vwEmployees.ID INTERSECT SELECT x2.ID, x2.Name, n.v FROM vwEmployees x2 CROSS JOIN (VALUES (100000),(200000)) n(v))",
+        "EXISTS (SELECT * FROM vwEmployees WHERE ID='k' EXCEPT SELECT ID, Name, 1 FROM vwEmployees)",
+        "EXISTS (SELECT * FROM vwEmployees WHERE ID='k' UNION ALL SELECT 1,2,3)",
+        "NOT EXISTS (SELECT * FROM vwEmployees WHERE ID='k' EXCEPT SELECT 'k','Bob',1)",
+    ];
+
+    for (const extraFilter of rowComparisons) {
+        it(`refuses a whole-row set-operation comparison before running the view: ${extraFilter.slice(0, 60)}…`, async () => {
+            const result = await new EntityOperations(provider(), intern).QueryEntity('Employees', { extraFilter });
+            expect(result.success).toBe(false);
+            expect(result.errorMessage).toMatch(/ExtraFilter/);
+            expect(state.runViewCalls).toHaveLength(0);
+        });
+    }
+
+    it('refuses a sort that reads the base view through a subquery', async () => {
+        const orderBy = '(SELECT TOP 1 x.Salary FROM vwEmployees x WHERE x.ID = vwEmployees.ID)';
+        const result = await new EntityOperations(provider(), intern).QueryEntity('Employees', { orderBy });
+        expect(result.success).toBe(false);
+        expect(result.errorMessage).toMatch(/OrderBy/);
+        expect(state.runViewCalls).toHaveLength(0);
+    });
+
+    it('passes a plain filter and sort through to the view', async () => {
+        const result = await new EntityOperations(provider(), intern).QueryEntity('Employees', { extraFilter: "Name = 'Ada'", orderBy: 'Name DESC' });
+        expect(result.success).toBe(true);
+        expect(state.runViewCalls[0].params.ExtraFilter).toBe("Name = 'Ada'");
+        expect(state.runViewCalls[0].params.OrderBy).toBe('Name DESC');
     });
 });
