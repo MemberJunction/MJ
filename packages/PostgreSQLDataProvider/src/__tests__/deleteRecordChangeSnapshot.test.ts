@@ -51,6 +51,16 @@ describe('PG GenerateDeleteSQL — delete Record Change snapshot', () => {
         expect(payloadOldData()).toEqual(FULL_SNAPSHOT);
     });
 
+    it("records the object's OLD values, as SQL Server does, when the object was edited before the delete", () => {
+        const edited = {
+            ...(entity as unknown as Record<string, unknown>),
+            GetAll: (oldValues?: boolean) => (oldValues ? { ID: 42, Name: 'Ada' } : { ID: 42, Name: 'Edited, never saved' }),
+        } as unknown as BaseEntity;
+        const { host, payloadOldData } = makeHost(null);
+        host.GenerateDeleteSQL(edited, user);
+        expect(payloadOldData()).toEqual({ ID: 42, Name: 'Ada' });
+    });
+
     it("records the object's own values when nothing was captured", () => {
         const { host, payloadOldData } = makeHost(null);
         host.GenerateDeleteSQL(entity, user);

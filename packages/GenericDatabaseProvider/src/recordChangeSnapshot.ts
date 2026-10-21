@@ -1,4 +1,4 @@
-import { BaseEntity, EntityField } from '@memberjunction/core';
+import { BaseEntity, EntityField, UserInfo } from '@memberjunction/core';
 
 /**
  * The old and new record snapshots a save hands to `BuildRecordChangePayload`. `OldData` is
@@ -19,13 +19,22 @@ function lacksStoredValue(field: EntityField): boolean {
 }
 
 /**
- * The names of the entity's fields whose stored value the saving object does not hold. Empty
- * for a full-width object — the case for every unrestricted or system-user save of a record
- * that was loaded whole — which is what lets those saves skip the stored-row read.
+ * The names of the fields `user` may not read whose stored value the saving object does not
+ * hold — the columns a restricted user's object leaves out of a snapshot. Empty for every user
+ * denied nothing, which is what lets those saves skip the stored-row read: a field such a user's
+ * object lacks only because its load left the column out (a list load skips binary columns)
+ * stays out of the snapshot, as it always has.
  */
-export function FieldsLackingStoredValue(entity: BaseEntity): Set<string> {
+export function FieldsLackingStoredValue(entity: BaseEntity, user: UserInfo | null | undefined): Set<string> {
     const names = new Set<string>();
+    const denied = user && entity.EntityInfo.FieldLevelSecurityApplies ? entity.EntityInfo.GetDeniedReadFields(user) : null;
+    if (!denied || denied.size === 0) {
+        return names;
+    }
     for (const fieldInfo of entity.EntityInfo.Fields) {
+        if (!denied.has(fieldInfo.Name.trim().toLowerCase())) {
+            continue;
+        }
         const field = entity.GetFieldByName(fieldInfo.Name);
         if (field && lacksStoredValue(field)) {
             names.add(fieldInfo.Name);

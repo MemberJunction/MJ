@@ -54,7 +54,7 @@ class AdhocTestProvider extends GenericDatabaseProviderTestBase {
     }
 
     public RunSpec(spec: QueryExecutionSpec): Promise<RunQueryResult> {
-        return this.InternalExecuteQueryFromSpec(spec);
+        return this.InternalExecuteQueryFromSpec(spec, systemUser);
     }
 }
 
