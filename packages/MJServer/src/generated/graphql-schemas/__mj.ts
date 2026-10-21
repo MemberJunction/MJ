@@ -31449,16 +31449,10 @@ export class MJCompanyIntegrationObjectField_ {
     @MaxLength(25)
     Status?: string;
         
-    @Field() 
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    _mj__UpdatedAt: Date;
-        
     @Field(() => Boolean, {nullable: true, description: "When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata."}) 
     IsCustom?: boolean;
         
-    @Field({nullable: true, description: "Provenance of this IntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category."}) 
+    @Field({nullable: true, description: "Provenance of this CompanyIntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category."}) 
     @MaxLength(20)
     MetadataSource?: string;
         
@@ -31498,6 +31492,12 @@ export class MJCompanyIntegrationObjectField_ {
         
     @Field({nullable: true, description: "When sampling last streamed records for this item. Distinct from LastSeenAt: an item can be listed by an endpoint without ever being sampled, and unsampled items are exactly the ones whose widths and keys came from the declared catalog rather than from data."}) 
     LastSampledAt?: Date;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -31825,7 +31825,7 @@ export class MJCompanyIntegrationObject_ {
     @MaxLength(36)
     ID: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: "The integration (connector) this object belongs to. Always the IntegrationID of the owning CompanyIntegration, copied onto the row by the catalog writer so the per-connection catalog can be read through the same projection as the shared IntegrationObject catalog."}) 
     @MaxLength(36)
     IntegrationID?: string;
         
@@ -31880,12 +31880,6 @@ export class MJCompanyIntegrationObject_ {
     @Field({nullable: true, description: "Active, Deprecated, or Disabled. Mirrors EntityField status values."}) 
     @MaxLength(25)
     Status?: string;
-        
-    @Field() 
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    _mj__UpdatedAt: Date;
         
     @Field({nullable: true, description: "API path for create/update operations when different from the read APIPath. If NULL, the read APIPath is used for writes as well."}) 
     @MaxLength(500)
@@ -31951,7 +31945,7 @@ export class MJCompanyIntegrationObject_ {
     @MaxLength(255)
     IncrementalWatermarkField?: string;
         
-    @Field({nullable: true, description: "Provenance of this IntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync."}) 
+    @Field({nullable: true, description: "Provenance of this CompanyIntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync."}) 
     @MaxLength(20)
     MetadataSource?: string;
         
@@ -32004,6 +31998,16 @@ export class MJCompanyIntegrationObject_ {
         
     @Field({nullable: true, description: "When sampling last streamed records for this item. Distinct from LastSeenAt: an item can be listed by an endpoint without ever being sampled, and unsampled items are exactly the ones whose widths and keys came from the declared catalog rather than from data."}) 
     LastSampledAt?: Date;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Integration?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
