@@ -510,6 +510,16 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
       expect(f.componentInstance.PenColor).toBe(DEFAULT_FIRST);
     });
 
+    it('entries that are not hex colors are dropped, so the pen never moves to a url() or a named color', () => {
+      const f = render();
+      f.componentInstance.PenPalette = ['url(https://tracker.example/pixel.gif)', 'red', '#1d4ed8'];
+      expect(f.componentInstance.PenPalette).toEqual(['#1d4ed8']);
+      expect(f.componentInstance.PenColor).toBe('#1d4ed8');
+      f.componentInstance.PenPalette = ['url(https://tracker.example/pixel.gif)', 'rgb(0, 0, 0)'];
+      expect(f.componentInstance.PenPalette).toBeNull();
+      expect(f.componentInstance.PenColor).toBe(DEFAULT_FIRST);
+    });
+
     it('the toolbar renders the host palette', () => {
       const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
         inputs: { State: new WhiteboardState(), PenPalette: ['#1d4ed8', '#b91c1c'] },

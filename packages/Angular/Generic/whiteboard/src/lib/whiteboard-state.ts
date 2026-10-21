@@ -50,6 +50,22 @@ export type WhiteboardStickyTint = 'amber' | 'amber-light';
 export const WHITEBOARD_FONT_SIZES: readonly number[] = [12, 14, 18, 24, 32];
 
 /**
+ * The one color syntax the whiteboard accepts from outside: `#rgb` or `#rrggbb`, either case.
+ * Shared by the agent tools (`Whiteboard_AddText` color) and the host's `PenPalette` so both
+ * entry points hold the same line. A color string is painted into `style.background` on the
+ * toolbar swatches and `style.color` on text items, and Angular does not sanitize style
+ * bindings, so a `url(...)` or `image-set(...)` that got through would make the browser fetch
+ * it. Named colors, `rgb()` and `var()` are rejected on purpose: ink items persist the chosen
+ * string, and a `var()` would make a saved board theme-dependent.
+ */
+export const WHITEBOARD_HEX_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+/** Whether `value` is a hex color the whiteboard accepts (see {@link WHITEBOARD_HEX_COLOR}). */
+export function IsWhiteboardHexColor(value: string): boolean {
+  return WHITEBOARD_HEX_COLOR.test(value);
+}
+
+/**
  * Font family choices for text labels / stickies. The keys are mapped to token-friendly
  * font stacks in the board CSS (`wb-font-serif`, `wb-font-mono`; sans is the default).
  */

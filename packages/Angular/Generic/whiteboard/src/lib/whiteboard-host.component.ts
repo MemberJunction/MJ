@@ -260,8 +260,9 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
    * {@link WHITEBOARD_PEN_COLORS}. An input rather than CSS custom properties on purpose: ink
    * items persist the chosen hex, so a `var()` palette would make saved boards theme-dependent.
    * When a palette arrives that excludes the current pen color, the pen moves to the palette's
-   * first entry, so the swatch that is "selected" is always one the user can see. Blank and
-   * non-string entries are dropped; a palette with nothing usable reads as no palette.
+   * first entry, so the swatch that is "selected" is always one the user can see. Blank,
+   * non-string and non-hex entries are dropped ({@link NormalizeWhiteboardPenPalette}); a
+   * palette with nothing usable reads as no palette.
    *
    * A setter rather than `ngOnChanges`, for the same reason as {@link ToolRoster}: a channel's
    * `BindSurface` assigns inputs directly on a dynamically-created component.
