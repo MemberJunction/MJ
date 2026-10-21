@@ -491,3 +491,89 @@ describe('MessageItemComponent — a failed agent reply reads as it always has',
     expect(source({ ID: 'U-1', Role: 'User', Status: 'Error', Message: 'hello' })).toBe('hello');
   });
 });
+
+describe('MessageItemComponent artifact and workflow memoization', () => {
+  it('returns referentially stable DisplayArtifacts and SupportingArtifacts across change-detection reads', () => {
+    const component = Object.create(MessageItemComponent.prototype) as MessageItemComponent;
+    const open = component as unknown as Record<string, unknown>;
+    open._lastArtifactsInput = null;
+    open._sortedDisplayArtifactsCache = [];
+    open._supportingArtifactsCache = [];
+    open.Artifacts = [
+      {
+        artifact: { ID: 'a-2', __mj_CreatedAt: new Date('2026-01-01T10:02:00Z') },
+        version: { ID: 'v-2', __mj_CreatedAt: new Date('2026-01-01T10:02:00Z') },
+      },
+      {
+        artifact: { ID: 'a-1', __mj_CreatedAt: new Date('2026-01-01T10:01:00Z') },
+        version: { ID: 'v-1', __mj_CreatedAt: new Date('2026-01-01T10:01:00Z') },
+      },
+    ];
+
+    const firstDisplay = component.DisplayArtifacts;
+    const secondDisplay = component.DisplayArtifacts;
+    expect(firstDisplay).toBe(secondDisplay);
+    expect(firstDisplay.map((x) => x.artifact.ID)).toEqual(['a-1', 'a-2']);
+
+    const firstSupporting = component.SupportingArtifacts;
+    const secondSupporting = component.SupportingArtifacts;
+    expect(firstSupporting).toBe(secondSupporting);
+    expect(firstSupporting.map((x) => x.artifact.ID)).toEqual(['a-1']);
+  });
+
+  it('memoizes WorkflowSteps, counts, and single-pass step summaries with upstream delta deduplication', () => {
+    const component = Object.create(MessageItemComponent.prototype) as MessageItemComponent;
+    const open = component as unknown as Record<string, unknown>;
+    open._workflowCacheFingerprint = null;
+    open._workflowStepSummariesCache = new Map();
+    const step1 = {
+      ID: 'step-1',
+      ParentID: 'parent-1',
+      Name: 'Step 1',
+      Status: 'Complete',
+      __mj_CreatedAt: new Date('2026-01-01T10:00:00Z'),
+      OutputPayload: JSON.stringify({ sharedKey: 'unchanged', summary: 'Step 1 output' }),
+    };
+    const step2 = {
+      ID: 'step-2',
+      ParentID: 'parent-1',
+      Name: 'Step 2',
+      Status: 'Complete',
+      __mj_CreatedAt: new Date('2026-01-01T10:01:00Z'),
+      OutputPayload: JSON.stringify({ sharedKey: 'unchanged', explanation: 'Step 2 delta' }),
+    };
+    const parent = {
+      ID: 'parent-1',
+      ParentID: null,
+      Name: 'My Workflow',
+      Status: 'Complete',
+      __mj_CreatedAt: new Date('2026-01-01T09:59:00Z'),
+    };
+    open.DetailTasks = [parent, step2, step1];
+
+    const stepsA = component.WorkflowSteps;
+    const stepsB = component.WorkflowSteps;
+    expect(stepsA).toBe(stepsB);
+    expect(stepsA.map((s) => s.ID)).toEqual(['step-1', 'step-2']);
+    expect(component.WorkflowTitle).toBe('My Workflow');
+    expect(component.WorkflowStatus).toBe('Complete');
+    expect(component.WorkflowCompletedStepCount).toBe(2);
+    expect(component.WorkflowProgressPercent).toBe(100);
+    expect(component.GetWorkflowStepSummary(step1 as never)).toBe('Step 1 output');
+    expect(component.GetWorkflowStepSummary(step2 as never)).toBe('Step 2 delta');
+  });
+
+  it('emits ScrollToMessageRequested when observed on ScrollToOriginatingWorkflow', () => {
+    const component = Object.create(MessageItemComponent.prototype) as MessageItemComponent;
+    const open = component as unknown as Record<string, unknown>;
+    const emitted: string[] = [];
+    open.message = { ID: 'child-msg', ParentID: 'origin-msg' };
+    open.ScrollToMessageRequested = {
+      observed: true,
+      emit: (id: string) => emitted.push(id),
+    };
+
+    component.ScrollToOriginatingWorkflow({ stopPropagation: vi.fn() } as unknown as MouseEvent);
+    expect(emitted).toEqual(['origin-msg']);
+  });
+});

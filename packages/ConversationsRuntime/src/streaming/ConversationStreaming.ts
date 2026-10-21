@@ -34,6 +34,23 @@ export interface CompletionEvent {
     errorMessage?: string;
 }
 
+/**
+ * Live task-graph frame event bridged from `TaskGraphFrameBroadcaster` over `PUSH_STATUS_UPDATES_TOPIC`.
+ */
+export interface TaskGraphStreamEvent {
+    Kind?: string;
+    ParentTaskID?: string;
+    TaskID?: string;
+    TaskName?: string;
+    Status?: string;
+    ErrorMessage?: string;
+    ProgressMessage?: string;
+    ProgressPercent?: number;
+    CompletedCount?: number;
+    TotalCount?: number;
+    conversationDetailId?: string;
+}
+
 /** Metadata structure for message progress updates. */
 export interface MessageProgressMetadata {
     /** Progress details (from RunAIAgentResolver). */
@@ -173,6 +190,11 @@ export class ConversationStreaming {
      * Emits enriched completion data once per agent finish.
      */
     public readonly CompletionEvents$ = new Subject<CompletionEvent>();
+
+    /**
+     * Observable for components to subscribe to durable task-graph step & workflow frames in real-time.
+     */
+    public readonly TaskGraphEvents$ = new Subject<TaskGraphStreamEvent>();
 
     /** @deprecated Use {@link CompletionEvents$}. */
     public get completionEvents$() {
@@ -439,6 +461,7 @@ export class ConversationStreaming {
         this.lastHeardAtByRunId.clear();
         this.lastHeardAtByDetailId.clear();
         this.CompletionEvents$.complete();
+        this.TaskGraphEvents$.complete();
         this.connectionStatus$.complete();
         this.initialized = false;
     }
@@ -482,7 +505,7 @@ export class ConversationStreaming {
 
     /**
      * Route a TaskOrchestrator progress update to the message-scoped callback set,
-     * keyed by `conversationDetailId`.
+     * keyed by `conversationDetailId`, and emit on `TaskGraphEvents$`.
      */
     private async routeTaskProgress(statusObj: Record<string, unknown>): Promise<void> {
         try {
@@ -493,15 +516,33 @@ export class ConversationStreaming {
             const metadata = data.metadata as MessageProgressMetadata | undefined;
             const conversationDetailId = data.conversationDetailId as string | undefined;
 
+            this.TaskGraphEvents$.next({
+                Kind: (data.Kind as string | undefined) ?? (statusObj.type as string | undefined),
+                ParentTaskID: data.ParentTaskID as string | undefined,
+                TaskID: data.TaskID as string | undefined,
+                TaskName: (data.TaskName as string | undefined) ?? taskName,
+                Status: data.Status as string | undefined,
+                ErrorMessage: data.ErrorMessage as string | undefined,
+                ProgressMessage: (data.ProgressMessage as string | undefined) ?? message,
+                ProgressPercent: (data.ProgressPercent as number | undefined) ?? percentComplete,
+                CompletedCount: data.CompletedCount as number | undefined,
+                TotalCount: data.TotalCount as number | undefined,
+                conversationDetailId,
+            });
+
             if (!message) {
-                console.warn('[ConversationStreaming] No message content in TaskOrchestrator update');
+                if (!data.ParentTaskID) {
+                    console.warn('[ConversationStreaming] No message content in TaskOrchestrator update');
+                }
                 return;
             }
             if (!conversationDetailId) {
-                console.warn('[ConversationStreaming] TaskOrchestrator update missing conversationDetailId', {
-                    taskName,
-                    message,
-                });
+                if (!data.ParentTaskID) {
+                    console.warn('[ConversationStreaming] TaskOrchestrator update missing conversationDetailId', {
+                        taskName,
+                        message,
+                    });
+                }
                 return;
             }
 

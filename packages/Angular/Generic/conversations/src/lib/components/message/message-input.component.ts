@@ -2355,7 +2355,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    */
   private buildRoutingDecisionInput(message: MJConversationDetailEntity, continuityAgentId: string): RoutingDecisionInput {
     const history = this.ConversationHistory.filter(row => this.isWithinHistoryFloor(row) && !UUIDsEqual(row.ID, message.ID));
-    const findAgent = (agentId: string): RoutingCatalogAgent | undefined => AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
+    const findAgent = (agentId: string): RoutingCatalogAgent | undefined => AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentId));
     const runnable = this.mentionAutocomplete.GetAvailableAgents();
     const findRunnable = (agentId: string): RoutingCatalogAgent | undefined => runnable.find(a => UUIDsEqual(a.ID, agentId));
     const manager = this.ConverationManagerAgent;
@@ -2620,17 +2620,17 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /** True when the agent is in the client's agent catalog. */
   private isKnownAgent(agentId: string): boolean {
-    return AIEngineBase.Instance.Agents.some(a => UUIDsEqual(a.ID, agentId));
+    return AIEngineBase.Instance.ReadableAgents.some(a => UUIDsEqual(a.ID, agentId));
   }
 
   /** The agent's name, when the client's agent catalog has it. */
   private agentNameFor(agentId: string): string | null {
-    return AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId))?.Name ?? null;
+    return AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentId))?.Name ?? null;
   }
 
   /** The ID of the agent with this name, or null when there is none. */
   private agentIdByName(agentName: string): string | null {
-    return AIEngineBase.Instance.Agents.find(a => a.Name === agentName)?.ID ?? null;
+    return AIEngineBase.Instance.ReadableAgents.find(a => a.Name === agentName)?.ID ?? null;
   }
 
   /** True when the agent is MJ's conversation manager. */
@@ -3224,7 +3224,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     const payload = managerResult.payload;
     const agentName = payload.invokeAgent;
     const reasoning = payload.reasoning || 'Delegating to specialist agent';
-    const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
+    const agent = AIEngineBase.Instance.ReadableAgents.find(a => a.Name === agentName);
 
     // The manager routes only among the allowed agents, but its answer is model output: hold
     // the host's list here too, before any run starts for the delegate.
@@ -3347,7 +3347,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
 
     // Load the agent entity to get its name
-    const previousAgent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, lastAIMessage.AgentID));
+    const previousAgent = AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, lastAIMessage.AgentID));
     if (!previousAgent) {
       console.warn('⚠️ Could not load previous agent - marking complete');
       await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
@@ -3448,7 +3448,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       this.MessageSent.emit(userMessage);
 
       // Look up the agent to get its ID
-      const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
+      const agent = AIEngineBase.Instance.ReadableAgents.find(a => a.Name === agentName);
 
       // The reply shows as a local placeholder until the server creates the row and names it.
       agentResponseMessage = await this.createReplyPlaceholder(conversationId, branchId, userMessage.ID, agent?.ID ?? null);
@@ -3537,7 +3537,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     targetArtifactVersionId?: string
   ): Promise<void> {
     // Load the agent entity to get its name
-    const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
+    const agent = AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentId));
     if (!agent) {
       if (!IsAgentAllowed(this.ConverationManagerAgent?.ID, this.AllowedAgentIDs)) {
         console.warn('⚠️ Could not load agent for continuation, and Sage is not allowed in this chat');
@@ -3967,7 +3967,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // (when the run produced an artifact); the shared dedupe key folds the two into one
         // toast, and this wording — the later of the two — is what stays on screen.
         const agent = task.agentId
-          ? AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, task.agentId))
+          ? AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, task.agentId))
           : undefined;
         // The task carries the name from send time; the engine has the current one (the
         // first exchange auto-names the conversation). The placeholder a brand-new

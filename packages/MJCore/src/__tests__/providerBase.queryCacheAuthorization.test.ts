@@ -10,7 +10,7 @@
  * B46 distinguishing fingerprint segment — so the slot key and the authorization decision are
  * derived from the SAME resolution and can never disagree about which query they describe.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { ProviderBase, QueryCacheAuthorization } from '../generic/providerBase';
 import {
     RunViewResult,
@@ -29,7 +29,8 @@ import { CompositeKey } from '../generic/compositeKey';
 import { UserInfo, RecordDependency } from '../generic/securityInfo';
 import { RecordMergeRequest, RecordMergeResult } from '../generic/entityInfo';
 import { TransactionGroupBase } from '../generic/transactionGroup';
-import { QueryInfo } from '../generic/queryInfo';
+import { QueryInfo, QueryPermissionInfo } from '../generic/queryInfo';
+import { Metadata } from '../generic/metadata';
 
 const FINANCE_ID = '11111111-1111-1111-1111-111111111111';
 const SALES_ID = '22222222-2222-2222-2222-222222222222';
@@ -99,7 +100,7 @@ describe('ProviderBase.ResolveQueryCacheAuthorization (B45/B46 cache-serve seam)
 
     it('resolves by QueryID and reports the canonical category path', () => {
         const r = provider.auth({ QueryID: FINANCE_ID } as RunQueryParams, user);
-        expect(r).toEqual({ resolvable: true, authorized: true, categoryPath: '/Finance/', queryName: 'Revenue Summary' });
+        expect(r).toEqual({ resolvable: true, authorized: true, categoryPath: '/Finance/', queryName: 'Revenue Summary', queryId: FINANCE_ID });
     });
 
     it('resolves by name case- and whitespace-insensitively', () => {
@@ -142,5 +143,53 @@ describe('ProviderBase.ResolveQueryCacheAuthorization (B45/B46 cache-serve seam)
         const r = provider.auth({ QueryID: SALES_ID, QueryName: 'Board Metrics' } as RunQueryParams, user);
         expect(r.queryName).toBe('Revenue Summary');
         expect(r.categoryPath).toBe('/Sales/');
+    });
+});
+
+/**
+ * The seam authorizes against THIS provider's query permissions, not the global provider's. A
+ * client connection that is not the global one (a process talking to two servers, a rig's separate
+ * connection) may have no global provider at all, or one holding another server's permissions.
+ */
+class OwnPermissionsProvider extends QueryAuthTestProvider {
+    public override get Queries(): QueryInfo[] {
+        // Built with its owning provider, as providers build their Info objects.
+        return [new QueryInfo({ ID: FINANCE_ID, Name: 'Revenue Summary' }, this)];
+    }
+
+    public override get QueryPermissions(): QueryPermissionInfo[] {
+        return [new QueryPermissionInfo({ QueryID: FINANCE_ID, Role: 'Finance' })];
+    }
+}
+
+/** A provider standing in for another server, which grants nothing on the query. */
+class OtherServerProvider extends QueryAuthTestProvider {
+    public override get QueryPermissions(): QueryPermissionInfo[] {
+        return [];
+    }
+}
+
+describe('ProviderBase.ResolveQueryCacheAuthorization uses its own query permissions', () => {
+    const financeUser = new UserInfo(null as unknown as IMetadataProvider, { ID: 'user-f', Email: 'f@test', UserRoles: [{ Role: 'Finance' }] });
+    const otherUser = new UserInfo(null as unknown as IMetadataProvider, { ID: 'user-o', Email: 'o@test', UserRoles: [{ Role: 'Sales' }] });
+    const savedGlobal = Metadata.Provider;
+
+    afterEach(() => {
+        Metadata.Provider = savedGlobal;
+    });
+
+    it('authorizes without a global provider', () => {
+        Metadata.Provider = undefined as unknown as IMetadataProvider;
+        const provider = new OwnPermissionsProvider();
+
+        expect(provider.auth({ QueryID: FINANCE_ID } as RunQueryParams, financeUser).authorized).toBe(true);
+        expect(provider.auth({ QueryID: FINANCE_ID } as RunQueryParams, otherUser).authorized).toBe(false);
+    });
+
+    it("ignores the global provider's permissions when they belong to another server", () => {
+        Metadata.Provider = new OtherServerProvider() as unknown as IMetadataProvider;
+        const provider = new OwnPermissionsProvider();
+
+        expect(provider.auth({ QueryID: FINANCE_ID } as RunQueryParams, otherUser).authorized).toBe(false);
     });
 });

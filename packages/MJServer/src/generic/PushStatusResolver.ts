@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { Arg, Field, ID, ObjectType, PubSubEngine, Resolver, ResolverFilterData, Root, Subscription } from 'type-graphql';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { UserPayload } from '../types.js';
@@ -95,6 +96,57 @@ export function ParseReplicatedStatusUpdate(raw: string, localServerId: string):
 }
 
 /**
+ * Returns the $O(1)$ session-scoped pub/sub topic name for a given `sessionId`.
+ * Wildcard (`'*'`) or empty session IDs fall back to the broadcast {@link PUSH_STATUS_UPDATES_TOPIC}.
+ */
+export function GetSessionStatusTopic(sessionId: string): string {
+  const normalized = sessionId?.trim();
+  if (!normalized || normalized === '*') {
+    return PUSH_STATUS_UPDATES_TOPIC;
+  }
+  return `${PUSH_STATUS_UPDATES_TOPIC}:session:${normalized}`;
+}
+
+interface ParsedMessageCacheEntry {
+   parsed: Record<string, unknown> | null;
+   isJson: boolean;
+}
+
+const _parsedMessageMemo = new WeakMap<PushStatusNotificationPayload, ParsedMessageCacheEntry>();
+
+/**
+ * Parses and memoizes the JSON `message` envelope on a {@link PushStatusNotificationPayload}
+ * in a `WeakMap` so multiple consumers (`ShouldReplicateStatusUpdate`, filters, hooks) never
+ * call `JSON.parse` more than once per payload object.
+ */
+export function ParseStatusUpdateMessage(
+  payload: PushStatusNotificationPayload
+): ParsedMessageCacheEntry {
+  const cached = _parsedMessageMemo.get(payload);
+  if (cached) {
+    return cached;
+  }
+  if (!payload.message) {
+    const emptyEntry: ParsedMessageCacheEntry = { parsed: null, isJson: false };
+    _parsedMessageMemo.set(payload, emptyEntry);
+    return emptyEntry;
+  }
+  try {
+    const raw: unknown = JSON.parse(payload.message);
+    const entry: ParsedMessageCacheEntry = {
+      parsed: typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : null,
+      isJson: true,
+    };
+    _parsedMessageMemo.set(payload, entry);
+    return entry;
+  } catch {
+    const plainEntry: ParsedMessageCacheEntry = { parsed: null, isJson: false };
+    _parsedMessageMemo.set(payload, plainEntry);
+    return plainEntry;
+  }
+}
+
+/**
  * Whether an update is worth sending to other server instances.
  *
  * Streaming content is excluded. It arrives at hundreds of messages per second and each one carries
@@ -103,9 +155,19 @@ export function ParseReplicatedStatusUpdate(raw: string, localServerId: string):
  * Progress and completion are low-rate and each is individually meaningful, which is exactly the
  * kind of message that must survive landing on the wrong replica.
  */
-export function ShouldReplicateStatusUpdate(message?: string): boolean {
+export function ShouldReplicateStatusUpdate(
+  message?: string,
+  payload?: PushStatusNotificationPayload
+): boolean {
   if (!message) {
     return false;
+  }
+  if (payload && payload.message === message) {
+    const entry = ParseStatusUpdateMessage(payload);
+    if (!entry.isJson) {
+      return true;
+    }
+    return entry.parsed?.type !== 'StreamingContent';
   }
   try {
     const parsed: unknown = JSON.parse(message);
@@ -150,7 +212,7 @@ export function PublishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdatePa
   // Fan out to other instances. Only reached by updates originating HERE: a message arriving from
   // the bus is republished straight onto the local topic and never comes back through this
   // function, so there is no loop to break beyond the SourceServerId check on the receiving side.
-  if (_publishHook && ShouldReplicateStatusUpdate(params.message)) {
+  if (_publishHook && ShouldReplicateStatusUpdate(params.message, payload)) {
     try {
       _publishHook(payload);
     } catch {
@@ -189,7 +251,7 @@ export function StatusUpdatesFilter(data: {
   context: StatusUpdatesFilterContext | undefined;
 }): boolean {
   const { payload, args, context } = data;
-  if (payload.sessionId !== args.sessionId) {
+  if (payload.sessionId !== '*' && payload.sessionId !== args.sessionId) {
     return false;
   }
   const connectionUserId: string | undefined = context?.userPayload?.userRecord?.ID;
@@ -211,7 +273,10 @@ export function statusUpdatesFilter(data: {
 @Resolver()
 export class PushStatusResolver {
   @Subscription(() => PushStatusNotification, {
-    topics: PUSH_STATUS_UPDATES_TOPIC,
+    topics: ({ args }: { args: PushStatusNotificationArgs }) =>
+      args?.sessionId && args.sessionId !== '*'
+        ? [GetSessionStatusTopic(args.sessionId), PUSH_STATUS_UPDATES_TOPIC]
+        : PUSH_STATUS_UPDATES_TOPIC,
     filter: (data: ResolverFilterData<PushStatusNotificationPayload, PushStatusNotificationArgs, StatusUpdatesFilterContext>) =>
       StatusUpdatesFilter(data),
   })

@@ -18,6 +18,7 @@ export class MJThemeFormComponent extends BaseFormComponent {
             { sectionKey: 'themeConfiguration', sectionName: 'Theme Configuration', isExpanded: true },
             { sectionKey: 'brandAssets', sectionName: 'Brand Assets', isExpanded: true },
             { sectionKey: 'advancedStyling', sectionName: 'Advanced Styling', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

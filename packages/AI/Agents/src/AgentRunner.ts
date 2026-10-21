@@ -12,9 +12,12 @@
 
 import { createHash } from 'crypto';
 import { BaseEntity, LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString, IndexByUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
+import {
+    ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID,
+    WithAgentRunDataTrustApplied
+} from '@memberjunction/ai-core-plus';
 import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
 import { BaseAgent } from './base-agent';
 import { MJConversationEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ConversationEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
@@ -27,13 +30,17 @@ import { FileStorageEngine } from '@memberjunction/storage';
  */
 interface ArtifactVersionRow {
     VersionID: string;
+    ArtifactID?: string;
+    VersionNumber?: number;
     VersionName: string | null;
+    VersionDescription?: string | null;
     ContentMode: 'File' | 'Text';
     FileID: string | null;
     Content: string | null;
     MimeType: string | null;
     ForceToolsOnly: boolean | null;
     ArtifactName: string;
+    ArtifactDescription?: string | null;
     TypeName: string;
     ToolLibraryClass: string | null;
     DefaultDeliveryMode: 'Inline' | 'ToolsOnly' | null;
@@ -127,6 +134,9 @@ export class AgentRunner {
     /** Fallback artifact type for agent payloads when the agent declares no DefaultArtifactTypeID. */
     private static readonly JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
 
+    /** Artifact type for structured research report payloads containing `{ report: { html } }`. */
+    private static readonly RESEARCH_CONTENT_ARTIFACT_TYPE_ID = 'a7b8c9d0-e1f2-3a4b-5c6d-7e8f9a0b1c2d';
+
     /**
      * Max length of `MJ: Artifacts.Name` (`nvarchar(255)`).
      *
@@ -193,13 +203,35 @@ export class AgentRunner {
                 throw new Error(`Failed to create agent instance for driver class: ${driverClass}`);
             }
             
+            // Ensure caller params carries the shared AgentTreeBudget reference before any shallow
+            // clone occurs in hydrateConversationArtifacts or Execute.
+            if (!params.treeBudget) {
+                params.treeBudget = {
+                    maxTreeSteps: params.maxTreeSteps,
+                    maxTreeTokens: params.maxTreeTokens,
+                    maxTreeCost: params.maxTreeCost,
+                    maxTreeDurationMs: params.maxTreeDurationMs,
+                    totalSteps: 0,
+                    totalTokens: 0,
+                    totalCost: 0,
+                    startedAtMs: Date.now()
+                };
+            }
+
             // A conversation-linked run must see the conversation's artifacts no matter which
             // entry point the caller used. See hydrateConversationArtifacts for why.
             const runParams = await this.hydrateConversationArtifacts(params);
+            runParams.treeBudget = params.treeBudget;
 
             // Execute the agent and return the result directly, threading the isolated provider.
             // Favor provider already in params (caller-supplied) over the instance-level provider.
-            return await agentInstance.Execute({ ...runParams, provider: runParams.provider || this._provider } as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
+            try {
+                return await agentInstance.Execute({ ...runParams, provider: runParams.provider || this._provider }) as ExecuteAgentResult<R>;
+            } finally {
+                if (agentInstance.TreeBudget) {
+                    params.treeBudget = agentInstance.TreeBudget;
+                }
+            }
             
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -499,6 +531,13 @@ export class AgentRunner {
             // Flag to prevent late progress callbacks from overwriting final status
             // Progress callbacks fire async and may complete AFTER agent returns
             let agentExecutionCompleted = false;
+            // Progress saves run one at a time on this chain, and the final update awaits it.
+            // EnsureSaveComplete() alone is not enough: it resolves on the entity's 'save' event,
+            // which BaseEntity raises before the save finishes committing, so a progress save
+            // can still be in flight when the final update calls Save(). BaseEntity.Save() hands
+            // a concurrent caller the in-flight save's promise, so the final status was dropped
+            // and the detail stayed 'In-Progress' with the last progress message.
+            let progressSaves: Promise<void> = Promise.resolve();
 
             // Wrap progress callback to update agent response detail
             const originalOnProgress = params.onProgress;
@@ -516,11 +555,20 @@ export class AgentRunner {
 
                     // Update the agent response detail with progress message
                     if (agentResponseDetail && progress.message) {
-                        agentResponseDetail.Message = progress.message;
-                        const saved = await agentResponseDetail.Save();
-                        if (!saved) {
-                            LogError(`Failed to save agent response detail progress update: ${AgentRunner.saveFailureReason(agentResponseDetail)}`);
-                        }
+                        const detail = agentResponseDetail;
+                        const message: string = progress.message;
+                        progressSaves = progressSaves.then(async () => {
+                            try {
+                                detail.Message = message;
+                                if (!(await detail.Save())) {
+                                    LogError(`Failed to save agent response detail progress update: ${AgentRunner.saveFailureReason(detail)}`);
+                                }
+                            } catch (error) {
+                                // A failed progress save must not break the chain the final update awaits
+                                LogError(`Failed to save agent response detail progress update: ${error}`, undefined, error);
+                            }
+                        });
+                        await progressSaves;
                     }
                     // Call original callback if provided
                     if (originalOnProgress) {
@@ -592,8 +640,9 @@ export class AgentRunner {
             // Step 5: Update agent response detail with final result.
             const updateDetail = async () => {
                 if (agentResponseDetail && agentResponseDetailId) {
-                    // Wait for any in-flight progress save to complete
-                    // EnsureSaveComplete() resolves immediately if no save in progress
+                    // Wait for every queued progress save (none can be added: the flag is set),
+                    // then for any other save still in flight on this entity
+                    await progressSaves;
                     await agentResponseDetail.EnsureSaveComplete();
 
                     LogStatus('Updating agent response detail with final result');
@@ -1108,8 +1157,37 @@ export class AgentRunner {
 
         // Check agent's ArtifactCreationMode
         await AIEngine.Instance.Config(false, contextUser);
-        const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentRun.AgentID));
-        const creationMode = agent?.ArtifactCreationMode;
+        const agentsById = IndexByUUID(AIEngine.Instance.Agents);
+        let agent = agentsById.Get(agentRun.AgentID);
+        let creationMode = agent?.ArtifactCreationMode;
+
+        // When an orchestrator with ArtifactCreationMode='Never' or 'System Only' (or no
+        // DefaultArtifactTypeID, such as Sage) delegates a folded single-node task graph (or
+        // sub-agent step) to a specialist agent (such as Query Builder or Research Agent) that
+        // DOES produce user-visible artifacts, resolve the artifact creation mode and
+        // DefaultArtifactTypeID from the last completed Sub-Agent step's specialist agent so
+        // the specialist's deliverable artifact is persisted with the specialist's
+        // DefaultArtifactTypeID and visibility.
+        if ((creationMode === 'Never' || creationMode === 'System Only' || !agent?.DefaultArtifactTypeID) && agentRun?.Steps?.length) {
+            for (let i = agentRun.Steps.length - 1; i >= 0; i--) {
+                const step = agentRun.Steps[i];
+                if (step.StepType === 'Sub-Agent' && step.Success) {
+                    const subAgentId = step.TargetID || step.SubAgentRun?.AgentID;
+                    const delegatedAgent = subAgentId
+                        ? agentsById.Get(subAgentId)
+                        : undefined;
+                    if (
+                        delegatedAgent &&
+                        delegatedAgent.ArtifactCreationMode !== 'Never' &&
+                        (delegatedAgent.DefaultArtifactTypeID != null || delegatedAgent.ArtifactCreationMode === 'Always')
+                    ) {
+                        agent = delegatedAgent;
+                        creationMode = delegatedAgent.ArtifactCreationMode;
+                        break;
+                    }
+                }
+            }
+        }
 
         if (creationMode === 'Never') {
             LogStatus(`Skipping artifact creation - agent "${agent?.Name}" has ArtifactCreationMode='Never'`);
@@ -1197,7 +1275,7 @@ export class AgentRunner {
                     newVersionNumber = previousArtifact.versionNumber + 1;
                     LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
                 } else {
-                    const artifact = await this.createArtifactHeader(md, contextUser, agent, creationMode, directive);
+                    const artifact = await this.createArtifactHeader(md, contextUser, agent, creationMode, directive, payload);
                     artifactId = artifact.ID;
                     newVersionNumber = 1;
                     isNewArtifact = true;
@@ -1236,29 +1314,74 @@ export class AgentRunner {
             version.Content = serializedContent;
             version.UserID = contextUser.ID;
 
+            const directiveName = AgentRunner.safeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH);
+            const directiveDescription = AgentRunner.safeDirectiveText(directive?.description);
+            const payloadRecord = (typeof payload === 'object' && payload !== null && !Array.isArray(payload))
+                ? (payload as Record<string, unknown>)
+                : undefined;
+            const reportRecord = (typeof payloadRecord?.report === 'object' && payloadRecord.report !== null && !Array.isArray(payloadRecord.report))
+                ? (payloadRecord.report as Record<string, unknown>)
+                : undefined;
+            const synthesisRecord = (typeof payloadRecord?.synthesis === 'object' && payloadRecord.synthesis !== null && !Array.isArray(payloadRecord.synthesis))
+                ? (payloadRecord.synthesis as Record<string, unknown>)
+                : undefined;
+            const payloadName = AgentRunner.safeDirectiveText(
+                payloadRecord?.title ?? payloadRecord?.name ?? payloadRecord?.savedQueryName ?? reportRecord?.name,
+                AgentRunner.ARTIFACT_NAME_MAX_LENGTH
+            );
+            const payloadDescription = AgentRunner.safeDirectiveText(
+                payloadRecord?.description ?? payloadRecord?.interpretation ?? reportRecord?.description ?? synthesisRecord?.executiveSummary
+            );
+
+            if (directiveName || payloadName) {
+                version.Name = directiveName || payloadName || null;
+            }
+            if (directiveDescription || payloadDescription) {
+                version.Description = directiveDescription || payloadDescription || null;
+            }
+
             if (!(await version.Save())) {
                 throw new Error('Failed to save artifact version');
             }
 
             LogStatus(`Created artifact version ${newVersionNumber} (${version.ID})`);
 
-            // First version of a new artifact: adopt the extracted Name attribute unless the agent named it
-            if (isNewArtifact && newVersionNumber === 1 && !AgentRunner.safeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)) {
-                const nameAttr = (version as any).Attributes?.find((attr: any) =>
+            // First version of a new artifact: adopt the extracted Name/Description attribute (or payload title/description)
+            // unless the agent explicitly named/described it via artifactDirective.
+            if (isNewArtifact && newVersionNumber === 1 && (!directiveName || !directiveDescription)) {
+                const attrs = (version as unknown as { Attributes?: Array<{ StandardProperty?: string; Name?: string; Value?: string }> }).Attributes;
+                const nameAttr = attrs?.find((attr) =>
                     attr.StandardProperty === 'name' || attr.Name?.toLowerCase() === 'name'
                 );
+                const descAttr = attrs?.find((attr) =>
+                    attr.StandardProperty === 'description' || attr.Name?.toLowerCase() === 'description'
+                );
 
-                let extractedName = nameAttr?.Value?.trim();
-                if (extractedName && extractedName.toLowerCase() !== 'null') {
-                    extractedName = extractedName.replace(/^["']|["']$/g, '');
+                const cleanAttr = (val: string | undefined, maxLen?: number): string | undefined => {
+                    const trimmed = val?.trim();
+                    if (!trimmed || trimmed.toLowerCase() === 'null') {
+                        return undefined;
+                    }
+                    const unquoted = trimmed.replace(/^["']|["']$/g, '').trim();
+                    return AgentRunner.safeDirectiveText(unquoted, maxLen);
+                };
 
+                const resolvedName = !directiveName ? (cleanAttr(nameAttr?.Value, AgentRunner.ARTIFACT_NAME_MAX_LENGTH) || payloadName) : undefined;
+                const resolvedDescription = !directiveDescription ? (cleanAttr(descAttr?.Value) || payloadDescription) : undefined;
+
+                if (resolvedName || resolvedDescription) {
                     const artifact = await md.GetEntityObject<MJArtifactEntity>(
                         'MJ: Artifacts',
                         contextUser
                     );
 
                     if (await artifact.Load(artifactId)) {
-                        artifact.Name = extractedName;
+                        if (resolvedName) {
+                            artifact.Name = resolvedName;
+                        }
+                        if (resolvedDescription) {
+                            artifact.Description = resolvedDescription;
+                        }
                         if (await artifact.Save()) {
                             LogStatus(`Updated artifact name to: ${artifact.Name}`);
                         }
@@ -1493,7 +1616,8 @@ export class AgentRunner {
         contextUser: UserInfo,
         agent: (typeof AIEngine.Instance.Agents)[number] | undefined,
         creationMode: string | undefined,
-        directive: ArtifactDirective | undefined
+        directive: ArtifactDirective | undefined,
+        payload?: unknown
     ): Promise<MJArtifactEntity> {
         const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
 
@@ -1506,8 +1630,17 @@ export class AgentRunner {
         artifact.Description = AgentRunner.safeDirectiveText(directive?.description)
             || `Payload returned by ${agentName}`;
 
-        // Use agent's DefaultArtifactTypeID if available
-        artifact.TypeID = agent?.DefaultArtifactTypeID || AgentRunner.JSON_ARTIFACT_TYPE_ID;
+        // Use agent's DefaultArtifactTypeID if available; otherwise infer Research Content when
+        // the payload carries a non-empty report.html string (e.g., Research Report Writer).
+        const payloadObj = (typeof payload === 'object' && payload !== null && !Array.isArray(payload))
+            ? (payload as Record<string, unknown>)
+            : undefined;
+        const reportObj = (typeof payloadObj?.report === 'object' && payloadObj.report !== null && !Array.isArray(payloadObj.report))
+            ? (payloadObj.report as Record<string, unknown>)
+            : undefined;
+        const hasReportHtml = typeof reportObj?.html === 'string' && reportObj.html.trim().length > 0;
+        artifact.TypeID = agent?.DefaultArtifactTypeID
+            || (hasReportHtml ? AgentRunner.RESEARCH_CONTENT_ARTIFACT_TYPE_ID : AgentRunner.JSON_ARTIFACT_TYPE_ID);
 
         artifact.UserID = contextUser.ID;
         artifact.EnvironmentID = (contextUser as any).EnvironmentID || MJEnvironmentEntityExtended.DefaultEnvironmentID;
@@ -2211,8 +2344,10 @@ export class AgentRunner {
             if (!contextUser?.ReturningVisitorContext) {
                 return;
             }
-            // Gate 2: need a conversation to read from, and an explicit caller scope always wins.
-            if (!conversationId || params.PrimaryScopeRecordID || (params.data?.PrimaryScopeRecordID as string | undefined)) {
+            // Gate 2: need a conversation to read from, and an explicit caller scope always wins — a data scope only when
+            // the run will honour it (TrustReservedRunData; BaseAgent.Execute drops it otherwise).
+            const runData = WithAgentRunDataTrustApplied(params).Params.data;
+            if (!conversationId || params.PrimaryScopeRecordID || (runData?.PrimaryScopeRecordID as string | undefined)) {
                 return;
             }
             const convo = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
@@ -2375,7 +2510,7 @@ export class AgentRunner {
 
                         let content: string | Buffer = '';
                         if (row.ContentMode === 'File' && row.FileID) {
-                            const downloaded = await this.downloadArtifactFileContent(row.FileID, contextUser);
+                            const downloaded = await this.DownloadArtifactFileContent(row.FileID, contextUser);
                             if (downloaded) {
                                 content = downloaded;
                             } else {
@@ -2402,10 +2537,18 @@ export class AgentRunner {
                         }
 
                         if (content) {
+                            const rawDescription = row.VersionDescription || row.ArtifactDescription;
+                            const cleanDescription = rawDescription && !rawDescription.startsWith('Payload returned by ')
+                                ? rawDescription
+                                : undefined;
                             inputArtifacts.push({
                                 name: artifactName,
                                 typeName,
                                 content,
+                                ...(row.ArtifactID ? { artifactId: row.ArtifactID } : {}),
+                                ...(row.VersionID ? { versionId: row.VersionID } : {}),
+                                ...(row.VersionNumber != null ? { versionNumber: row.VersionNumber } : {}),
+                                ...(cleanDescription ? { description: cleanDescription } : {}),
                                 mimeType: row.MimeType ?? undefined,
                                 ...(row.ToolLibraryClass ? { toolLibraryClass: row.ToolLibraryClass } : {}),
                                 deliveryMode: row.DefaultDeliveryMode ?? 'ToolsOnly',
@@ -2509,22 +2652,27 @@ export class AgentRunner {
 
     /**
      * Downloads binary content for a file-backed artifact from MJStorage.
-     * Uses FileStorageEngine to resolve the storage account and driver,
-     * then fetches the file by its ProviderKey.
+     * Reads the `MJ: Files` row as the user, then resolves it through
+     * `FileStorageEngine.ResolveFileObject`, which applies the storage-account gate and the
+     * tracked-file rule before any driver call — the same path every other file-ID route uses.
      *
      * @param fileId - The MJ: Files entity ID referenced by ArtifactVersion.FileID
      * @param contextUser - User context for storage driver authentication
      * @returns Buffer of file content, or null if download fails
      */
-    private async downloadArtifactFileContent(fileId: string, contextUser: UserInfo): Promise<Buffer | null> {
+    protected async DownloadArtifactFileContent(fileId: string, contextUser: UserInfo): Promise<Buffer | null> {
+        if (!IsValidUUID(fileId)) {
+            LogError(`[AgentRunner] Refusing to read artifact file content: '${fileId}' is not a file ID`);
+            return null;
+        }
         try {
             await FileStorageEngine.Instance.Config(false, contextUser);
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this._provider);
             const fileResult = await rv.RunView<{ ID: string; Name: string; ContentType: string; ProviderID: string; ProviderKey: string }>(
                 {
                     EntityName: 'MJ: Files',
-                    ExtraFilter: `ID = '${fileId}'`,
+                    ExtraFilter: `ID = '${EscapeSQLString(fileId.trim())}'`,
                     Fields: ['ID', 'Name', 'ContentType', 'ProviderID', 'ProviderKey'],
                     ResultType: 'simple',
                 },
@@ -2536,16 +2684,13 @@ export class AgentRunner {
                 return null;
             }
 
-            const file = fileResult.Results[0];
-            const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
-            if (accounts.length === 0) {
-                LogError(`[AgentRunner] No FileStorageAccount found for ProviderID: ${file.ProviderID}`);
+            // Account gate and tracked-file rule first; a refusal throws and is logged below.
+            const resolved = await FileStorageEngine.Instance.ResolveFileObject(fileResult.Results[0], contextUser, 'Read', this._provider);
+            if (!resolved) {
+                LogError(`[AgentRunner] No FileStorageAccount found for ProviderID: ${fileResult.Results[0].ProviderID}`);
                 return null;
             }
-
-            const driver = await FileStorageEngine.Instance.GetDriver(accounts[0].ID, contextUser);
-            const objectName = file.ProviderKey ?? file.Name;
-            const content = await driver.GetObject({ fullPath: objectName });
+            const content = await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey });
 
             // GetObject returns string or Buffer depending on provider
             if (Buffer.isBuffer(content)) {

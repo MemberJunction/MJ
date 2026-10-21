@@ -125,6 +125,34 @@ describe('BaseImageGenerator', () => {
         expect(models[0].id).toBe('dall-e-3');
         expect(models[0].name).toBe('DALL-E 3');
     });
+
+    describe('CancelledResult', () => {
+        class CancellingImageGenerator extends TestImageGenerator {
+            public Cancelled(signal: AbortSignal, error?: unknown): ImageGenerationResult {
+                return this.CancelledResult(signal, error);
+            }
+        }
+
+        it('classifies a caller cancellation as Cancelled, never failed over', () => {
+            const controller = new AbortController();
+            controller.abort('user stopped it');
+            const result = new CancellingImageGenerator('key').Cancelled(controller.signal);
+
+            expect(result.success).toBe(false);
+            expect(result.errorMessage).toContain('was cancelled');
+            expect(result.errorInfo?.errorType).toBe('Cancelled');
+            expect(result.errorInfo?.canFailover).toBe(false);
+        });
+
+        it('classifies an abort caused by a timeout as a retriable network error', () => {
+            const controller = new AbortController();
+            controller.abort(new DOMException('The operation timed out', 'TimeoutError'));
+            const result = new CancellingImageGenerator('key').Cancelled(controller.signal);
+
+            expect(result.errorInfo?.errorType).toBe('NetworkError');
+            expect(result.errorInfo?.canFailover).toBe(true);
+        });
+    });
 });
 
 describe('BaseDiffusion (deprecated)', () => {

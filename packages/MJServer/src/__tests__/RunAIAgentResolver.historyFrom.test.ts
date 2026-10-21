@@ -112,6 +112,8 @@ afterEach(() => {
 describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
     let resolver: RunAIAgentResolver;
     let seams: ResolverSeams;
+    /** The floor's position in executeAIAgent / executeAgentInBackground: fourth from last, before TrustReservedRunData, the branch, and the reply detail. */
+    const FLOOR_ARG = -4;
 
     beforeEach(() => {
         ({ resolver, seams } = makeResolver());
@@ -128,7 +130,7 @@ describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
         expect(loaderArgs[0]).toBe('conv-1');
         expect(loaderArgs[4]).toBeUndefined(); // the reply row is created after the history loads, so nothing to exclude
         expect((loaderArgs[5] as Date).toISOString()).toBe(FLOOR_ISO);
-        const runFloor = seams.executeAIAgent.mock.calls[0].at(-3) as Date; // the calls end (..., historyFrom, branchId, replyDetail)
+        const runFloor = seams.executeAIAgent.mock.calls[0].at(FLOOR_ARG) as Date;
         expect(runFloor.toISOString()).toBe(FLOOR_ISO);
     });
 
@@ -137,7 +139,7 @@ describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
 
         expect(result.success).toBe(true);
         expect(seams.executeAIAgent).not.toHaveBeenCalled();
-        const runFloor = seams.executeAgentInBackground.mock.calls[0].at(-3) as Date; // the calls end (..., historyFrom, branchId, replyDetail)
+        const runFloor = seams.executeAgentInBackground.mock.calls[0].at(FLOOR_ARG) as Date;
         expect(runFloor.toISOString()).toBe(FLOOR_ISO);
     });
 
@@ -145,7 +147,7 @@ describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
         await runMutation(resolver, {});
 
         expect(seams.loadConversationHistoryWithAttachments.mock.calls[0][5]).toBeUndefined();
-        expect(seams.executeAIAgent.mock.calls[0].at(-3)).toBeUndefined();
+        expect(seams.executeAIAgent.mock.calls[0].at(FLOOR_ARG)).toBeUndefined();
     });
 
     it('fails the request on an unreadable floor, before loading or running anything', async () => {

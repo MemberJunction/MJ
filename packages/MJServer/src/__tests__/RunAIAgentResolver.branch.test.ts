@@ -168,6 +168,7 @@ describe('executeAIAgent — ConversationBranchID', () => {
             {}, {}, 'agent-1', userPayload, '[{"role":"user","content":"hi"}]', 'session-1', pubSub,
             undefined, undefined, undefined, undefined, undefined, undefined, 'detail-1', false, false,
             undefined, undefined, 'conv-1', undefined, undefined, undefined, undefined, undefined,
+            false, // trustReservedRunData
         ];
         await execute(...base, 'branch-b');
         await execute(...base, null);

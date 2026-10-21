@@ -17,6 +17,12 @@
   transition: all var(--mj-transition-base) ease;
 }
 
+/* No label (e.g. a generated section holding a single field, whose section title names it):
+   the control takes the whole row instead of falling into the label column. */
+.mj-forms-field--no-label {
+  grid-template-columns: 1fr;
+}
+
 /* Subtle row hover in edit mode */
 .mj-forms-field--editing:hover {
   background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
@@ -1389,6 +1395,11 @@
 /* ============================================
    RESPONSIVE
    ============================================ */
+/* With no label column, validation messages sit under the control in the only column. */
+.mj-forms-field--no-label .mj-forms-field-validation {
+  grid-column: 1;
+}
+
 @media (max-width: 640px) {
   .mj-forms-field {
     grid-template-columns: 1fr;

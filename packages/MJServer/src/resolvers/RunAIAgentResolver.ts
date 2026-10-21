@@ -13,6 +13,7 @@ import { StartLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolveWidgetGuestRunContext, ElevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
+import { IsTrustedAgentRunCaller } from './agent-run-data-guard.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
@@ -262,6 +263,14 @@ export class RunAIAgentResolver extends ResolverBase {
             throw new Error(`AI Agent "${agentEntity.Name}" is not active (Status: ${agentEntity.Status})`);
         }
 
+        // Enforce agent run permissions for the calling user
+        if (currentUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
+            const canRun = await AIEngine.Instance.CanUserRunAgent(agentEntity.ID, currentUser);
+            if (!canRun) {
+                throw new Error(`User does not have permission to run AI Agent "${agentEntity.Name}" (${agentEntity.ID})`);
+            }
+        }
+
         return agentEntity;
     }
 
@@ -304,6 +313,8 @@ export class RunAIAgentResolver extends ResolverBase {
         /** History floor for a conversation run — threaded into ExecuteAgentParams.ConversationHistoryFrom,
          *  so the framework's own conversation reads (retrieval tools, artifacts, compaction) honour it too. */
         conversationHistoryFrom?: Date,
+        /** ExecuteAgentParams.TrustReservedRunData: true only for a caller IsTrustedAgentRunCaller accepts. */
+        trustReservedRunData: boolean = false,
         /** The conversation branch of the run — threaded into ExecuteAgentParams.ConversationBranchID. */
         conversationBranchId?: string | null,
         /** The reply row this request created on the server for the run (`conversationDetailId` is its ID). The run
@@ -379,6 +390,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 ConversationHistoryFrom: conversationHistoryFrom,
                 ...(conversationBranchId ? { ConversationBranchID: conversationBranchId } : {}),
                 data: parsedData,
+                // Whether the run may read the reserved data keys (scope, agent-type params); BaseAgent drops them otherwise.
+                TrustReservedRunData: trustReservedRunData,
                 context: {
                     dataSource: dataSource
                 }
@@ -581,6 +594,9 @@ export class RunAIAgentResolver extends ResolverBase {
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
 
         const p = GetReadWriteProvider(providers);
+        // Only the system user or an API key holding the agent:trusted scope may set a run's scope and agent-type
+        // params through data; for anyone else BaseAgent drops those keys (ExecuteAgentParams.TrustReservedRunData).
+        const trustRunData = await IsTrustedAgentRunCaller({ UserPayload: userPayload, IsWidgetGuestRun: false, AgentID: agentId });
 
         if (fireAndForget) {
             // Fire-and-forget mode: start execution in background, return immediately.
@@ -589,7 +605,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
                 data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
                 conversationDetailId, createArtifacts || false, createNotification || false,
-                sourceArtifactId, sourceArtifactVersionId, undefined /*conversationId*/, planMode, requestedSkillIDs, taskGraphDebug
+                sourceArtifactId, sourceArtifactVersionId, undefined /*conversationId*/, planMode, requestedSkillIDs, taskGraphDebug,
+                undefined /*conversationHistoryFrom*/, trustRunData
             );
 
             LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
@@ -624,7 +641,9 @@ export class RunAIAgentResolver extends ResolverBase {
             undefined, // runRef
             planMode,
             requestedSkillIDs,
-            taskGraphDebug
+            taskGraphDebug,
+            undefined, // conversationHistoryFrom
+            trustRunData
         );
     }
 
@@ -657,6 +676,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[]
     ): Promise<AIAgentRunResult> {
         const p = GetReadWriteProvider(providers);
+        // @RequireSystemUser admits only the system user, whom the rule trusts; it is still asked, so every
+        // resolver entry that takes a client's data decides the same way.
+        const trustRunData = await IsTrustedAgentRunCaller({ UserPayload: userPayload, IsWidgetGuestRun: false, AgentID: agentId });
         return this.executeAIAgent(
             p,
             dataSource,
@@ -679,7 +701,10 @@ export class RunAIAgentResolver extends ResolverBase {
             undefined, // conversationId (not pre-resolved on this path)
             undefined, // runRef
             planMode,
-            requestedSkillIDs
+            requestedSkillIDs,
+            undefined, // taskGraphDebug
+            undefined, // conversationHistoryFrom
+            trustRunData
         );
     }
 
@@ -993,6 +1018,12 @@ export class RunAIAgentResolver extends ResolverBase {
         const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
         const effectiveAgentId = widgetElevation ? widgetElevation.PinnedAgentId : agentId;
         const effectiveUserPayload = widgetElevation ? ElevateUserPayload(userPayload, widgetElevation.ElevatedUser) : userPayload;
+        // Only the system user or an API key holding the agent:trusted scope may set a run's scope and agent-type
+        // params through data (ExecuteAgentParams.TrustReservedRunData). Judged on the caller's own payload: a widget
+        // guest runs under an elevated server principal but is never trusted.
+        const trustRunData = await IsTrustedAgentRunCaller({
+            UserPayload: userPayload, IsWidgetGuestRun: widgetElevation !== null, AgentID: agentId,
+        });
 
         try {
             // Parsed before anything loads: a floor the caller asked for must never be dropped.
@@ -1035,6 +1066,7 @@ export class RunAIAgentResolver extends ResolverBase {
                     sourceArtifactId, sourceArtifactVersionId, turn.ConversationId, planMode, requestedSkillIDs,
                     undefined, // taskGraphDebug
                     historyFrom,
+                    trustRunData,
                     branchId,
                     reply
                 );
@@ -1079,6 +1111,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 requestedSkillIDs,
                 undefined, // taskGraphDebug
                 historyFrom,
+                trustRunData,
                 branchId,
                 reply
             );
@@ -1388,6 +1421,8 @@ export class RunAIAgentResolver extends ResolverBase {
         taskGraphDebug?: string,
         /** History floor — threaded through to ExecuteAgentParams.ConversationHistoryFrom. */
         conversationHistoryFrom?: Date,
+        /** ExecuteAgentParams.TrustReservedRunData — see executeAIAgent. */
+        trustReservedRunData: boolean = false,
         /** The conversation branch of the run — threaded through to ExecuteAgentParams.ConversationBranchID. */
         conversationBranchId?: string | null,
         /** The reply row this request created for the run — see executeAIAgent. */
@@ -1411,7 +1446,7 @@ export class RunAIAgentResolver extends ResolverBase {
             data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
             configurationId, conversationDetailId, createArtifacts, createNotification,
             sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode, requestedSkillIDs, taskGraphDebug,
-            conversationHistoryFrom, conversationBranchId, replyDetail
+            conversationHistoryFrom, trustReservedRunData, conversationBranchId, replyDetail
         ).catch((error: unknown) => {
             // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
             // so this would only fire for truly unexpected errors).

@@ -15,6 +15,7 @@ import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
 import { MJAIModelEntityExtended } from './MJAIModelEntityExtended';
 import { AIModelRunParams, type AIModelRunResult } from './model-run.types';
+import type { TemplateDataCaptureMode } from './prompt-run-messages.types';
 
 /**
  * Modality types for multi-modal outputs
@@ -382,6 +383,13 @@ export class AIPromptParams extends AIModelRunParams {
   templateData?: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
+   * Which template inputs (`data`, `templateData`) this run stores in `AIPromptRun.Messages`.
+   * Overrides the `TemplateDataCapture` of the run's prompts (child prompts, then the main prompt)
+   * and the server default (`aiPromptRuns.templateDataCapture` in mj.config.cjs, otherwise `'None'`).
+   */
+  TemplateDataCapture?: TemplateDataCaptureMode;
+
+  /**
    * Optional conversation messages for multi-turn conversations
    * When provided, these messages will be combined with the rendered template
    * for direct conversation-style prompting
@@ -493,6 +501,13 @@ export class AIPromptParams extends AIModelRunParams {
    * The AIPromptRunner will pass these through when building model-specific parameters.
    */
   additionalParameters?: Record<string, any>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+  /**
+   * When false, the prompt's template renders without HTML escaping: its output is plain text for a model, not HTML.
+   * Unset keeps the template engine's default (escaped), as every caller got before this member existed. Feature
+   * Pipeline drivers set it to false.
+   */
+  templateAutoescape?: boolean;  // case-violation-ok-legacy-back-compat: new member of shipped camelCase AIPromptParams keeps its casing
 
   /**
    * Optional prompt to use for model selection instead of the main prompt.

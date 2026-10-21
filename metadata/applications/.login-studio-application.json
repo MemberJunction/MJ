@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "Name": "Login Studio",
+    "Description": "Design the Explorer sign-in page as data: drag blocks into the story panel and the sign-in column, set the layout, background and colors, and publish it on the default theme. Drafts stay private until published.",
+    "Icon": "fa-solid fa-right-to-bracket",
+    "DefaultForNewUser": false,
+    "Color": "#0ea5e9",
+    "DefaultSequence": 1060,
+    "DefaultNavItems": [
+      {
+        "Label": "Sign-in Page",
+        "Icon": "fa-solid fa-right-to-bracket",
+        "ResourceType": "Custom",
+        "DriverClass": "LoginStudioResource",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "AEE03C0A-86DA-4852-8C71-635AF9C8F71E"
+  }
+}

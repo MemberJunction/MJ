@@ -17,7 +17,7 @@ import { RunAgentFromConversationDetailParams } from '@memberjunction/ai-agent-c
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { LazyArtifactInfo } from '../models/lazy-artifact-info';
 import { MentionParserService } from './mention-parser.service';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 
 import { ConversationsRuntimeBootstrap } from './conversations-runtime-bootstrap.service';
 import {
@@ -191,6 +191,11 @@ export class ConversationAgentService {
     if (this._conversationManagerAgent) {
       return this._conversationManagerAgent;
     }
+    // A user who may not read the agents has no manager agent to resolve: say nothing, rather than an error for a state
+    // that is theirs by design (MJ#5240)
+    if (AIEngineBase.Instance.IsPermissionConstrained && AIEngineBase.Instance.ReadableAgents.length === 0) {
+      return null;
+    }
 
     try {
       const provider = this.Provider;
@@ -355,7 +360,7 @@ export class ConversationAgentService {
     if (!message) {
       return null;
     }
-    const parsed = this.mentionParser.parseMentions(message, AIEngineBase.Instance.Agents, []);
+    const parsed = this.mentionParser.parseMentions(message, AIEngineBase.Instance.ReadableAgents, []);
     const mention = parsed.agentMention;
     return mention?.id === agentId && mention.configurationId ? mention.configurationId : null;
   }
@@ -431,7 +436,7 @@ export class ConversationAgentService {
       await AIEngineBase.Instance.Config(false);
 
       // Find the agent by name
-      const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
+      const agent = AIEngineBase.Instance.ReadableAgents.find(a => a.Name === agentName);
 
       if (!agent || !agent.ID) {
         const errorMsg = `Sub-agent "${agentName}" not found`;
@@ -566,7 +571,7 @@ export class ConversationAgentService {
         return { decision: 'UNSURE', reasoning: 'Check Sage Intent prompt not found' };
       }
 
-      const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
+      const agent = AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentId));
       if (!agent) {
         console.warn('⚠️ Previous agent not found, defaulting to UNSURE');
         return { decision: 'UNSURE', reasoning: 'Previous agent not found' };
@@ -718,7 +723,7 @@ ${compactHistory}${artifactContext}
    * plausible, and wrong: the same failure class as {@link FindLatestAgentOutputVersion},
    * closed the same way.
    *
-   * Two reads, not the four the old shape would have needed — see
+   * Three reads: the agent's replies, their Output versions, and the artifacts' names. See
    * {@link AgentArtifactSummary} for why dropping `runId` removes the join back to agent runs.
    *
    * @param historyFrom The chat's history floor, when set (see {@link FindAgentArtifacts}).
@@ -731,15 +736,15 @@ ${compactHistory}${artifactContext}
     branchId?: string | null
   ): Promise<AgentArtifactSummary[]> {
     type VersionRow = Pick<MJArtifactVersionEntity, 'ID' | 'ArtifactID' | 'VersionNumber' | 'Name'>;
-    const pathFilter = await this.branchPathFilter(conversationId, branchId);
-    if (pathFilter == null) {
+    const versionFilter = await this.agentOutputVersionFilter(conversationId, agentId, historyFrom, branchId);
+    if (!versionFilter) {
       return [];                    // the classifier degrades to no artifact context
     }
 
     const rv = RunView.FromMetadataProvider(this.Provider);
     const versionResult = await rv.RunView<VersionRow>({
       EntityName: 'MJ: Artifact Versions',
-      ExtraFilter: this.agentOutputVersionFilter(pathFilter, agentId, historyFrom),
+      ExtraFilter: versionFilter,
       OrderBy: '__mj_CreatedAt DESC',
       MaxRows: MAX_AGENT_ARTIFACT_VERSIONS,
       Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name'],
@@ -792,7 +797,7 @@ ${compactHistory}${artifactContext}
    * again" exchanges where payload continuity matters most. A null payload is a LEGAL agent
    * input, so the failure is silent: the agent regenerates from scratch instead of modifying.
    *
-   * One round trip. The subquery walks details -> Output junctions, and versions carry
+   * Two reads: the agent's replies, then their newest Output version. Versions carry
    * `__mj_CreatedAt`, so "newest" is expressible without joining back for `Sequence`.
    *
    * @param historyFrom The chat's history floor. When set, only artifacts on replies written at
@@ -807,38 +812,73 @@ ${compactHistory}${artifactContext}
     historyFrom?: Date | null,
     branchId?: string | null
   ): Promise<AgentPayloadSource | null> {
-    const pathFilter = await this.branchPathFilter(conversationId, branchId);
-    if (pathFilter == null) {
-      return null;
-    }
-    return this.runPayloadSourceQuery(
-      this.agentOutputVersionFilter(pathFilter, agentId, historyFrom), '__mj_CreatedAt DESC'
-    );
+    const versionFilter = await this.agentOutputVersionFilter(conversationId, agentId, historyFrom, branchId);
+    return versionFilter ? this.runPayloadSourceQuery(versionFilter, '__mj_CreatedAt DESC') : null;
   }
 
   /**
    * `ArtifactVersion.ID IN (...)` for every OUTPUT artifact an agent produced on one
-   * conversation path, in messages no rerun replaced. Shared by {@link FindLatestAgentOutputVersion} and
-   * {@link findAllAgentArtifacts} so the two can never disagree about what "this agent's
-   * artifacts" means.
+   * conversation path, in messages no rerun replaced, or null when the agent has no such reply
+   * there. Shared by {@link FindLatestAgentOutputVersion} and {@link findAllAgentArtifacts} so
+   * the two can never disagree about what "this agent's artifacts" means.
+   *
+   * The replies are read with their own RunView ({@link agentReplyIds}), so the row-level
+   * security on conversation messages applies. A subquery over their view would skip it, and the
+   * server refuses one for a user whose read of messages is row-filtered.
+   */
+  private async agentOutputVersionFilter(
+    conversationId: string,
+    agentId: string,
+    historyFrom?: Date | null,
+    branchId?: string | null
+  ): Promise<string | null> {
+    const replyIds = await this.agentReplyIds(conversationId, agentId, historyFrom, branchId);
+    if (replyIds.length === 0) {
+      return null;
+    }
+    const inReplies = replyIds.map(id => `'${EscapeSQLString(id)}'`).join(',');
+    return `ID IN (
+        SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts]
+        WHERE Direction='Output' AND ConversationDetailID IN (${inReplies})
+      )`;
+  }
+
+  /**
+   * IDs of the agent's replies on one conversation path, in messages no rerun replaced, written
+   * at or after the history floor when one is set. Empty when the path cannot be built
+   * ({@link branchPathFilter}) or the read fails.
    *
    * Filters on the DETAIL's `Status <> 'Error'` rather than the agent run's
    * `Status = 'Completed'` (which is what the array scan this replaced used). Doing it on the
    * run would mean joining back to `MJ: AI Agent Runs` purely to restate a condition the
    * detail already carries.
-   *
-   * @param pathFilter The conversation-and-branch predicate from {@link branchPathFilter}.
    */
-  private agentOutputVersionFilter(pathFilter: string, agentId: string, historyFrom?: Date | null): string {
+  private async agentReplyIds(
+    conversationId: string,
+    agentId: string,
+    historyFrom?: Date | null,
+    branchId?: string | null
+  ): Promise<string[]> {
+    const pathFilter = await this.branchPathFilter(conversationId, branchId);
+    if (pathFilter == null) {
+      return [];
+    }
     const floor = historyFrom ? ` AND ${ConversationEngine.HistoryFromFilter(historyFrom)}` : '';
-    return `ID IN (
-        SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts]
-        WHERE Direction='Output' AND ConversationDetailID IN (
-          SELECT ID FROM [__mj].[vwConversationDetails]
-          WHERE ${ConversationEngine.LiveRowsFilter(pathFilter)} AND AgentID='${agentId}'
-            AND Role='AI' AND Status <> 'Error'${floor}
-        )
-      )`;
+    const rv = RunView.FromMetadataProvider(this.Provider);
+    const result = await rv.RunView<Pick<MJConversationDetailEntity, 'ID'>>({
+      EntityName: 'MJ: Conversation Details',
+      ExtraFilter: `${ConversationEngine.LiveRowsFilter(pathFilter)} AND AgentID='${EscapeSQLString(agentId)}'` +
+        ` AND Role='AI' AND Status <> 'Error'${floor}`,
+      Fields: ['ID'],
+      ResultType: 'simple',
+      IgnoreMaxRows: true
+    }, this.Provider.CurrentUser ?? undefined);
+
+    if (!result.Success) {
+      console.error('Failed to load agent replies:', result.ErrorMessage);
+      return [];
+    }
+    return (result.Results || []).map(reply => reply.ID);
   }
 
   /**

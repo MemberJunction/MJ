@@ -435,7 +435,10 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Latitude coordinate for weather lookup. Must be used with Longitude parameter",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "number"
+            }
           },
           "primaryKey": {
             "ID": "97291346-9DA1-46B9-9970-ACCAF7731800"
@@ -453,7 +456,10 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Longitude coordinate for weather lookup. Must be used with Latitude parameter",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "number"
+            }
           },
           "primaryKey": {
             "ID": "499AD8DE-7AFB-4295-B6AD-584C0EAF4535"
@@ -947,7 +953,10 @@
             "IsArray": false,
             "Description": "Boolean flag to include word frequency analysis in results",
             "IsRequired": false,
-            "DefaultValue": "false"
+            "DefaultValue": "false",
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "C83B1A2C-3F19-419A-AD09-42DDD77A2E5C"
@@ -1732,7 +1741,10 @@
             "IsArray": false,
             "Description": "Desired number of results. Clamped to the serving provider's own cap, not rejected. Default: 10.",
             "IsRequired": false,
-            "DefaultValue": "10"
+            "DefaultValue": "10",
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "DC71F183-DE01-4187-8735-7A5DF3898B61"
@@ -1751,7 +1763,15 @@
             "IsArray": false,
             "Description": "Adult-content filter: 'off', 'moderate' or 'strict'. Default: moderate.",
             "IsRequired": false,
-            "DefaultValue": "moderate"
+            "DefaultValue": "moderate",
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "off",
+                "moderate",
+                "strict"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "9015D7B9-14C4-466D-BB77-B0A96E2187C9"
@@ -1822,7 +1842,10 @@
             "ValueType": "Scalar",
             "IsArray": true,
             "Description": "Restrict results to these domains, where the serving provider supports it. Array or comma-separated.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "string"
+            }
           },
           "primaryKey": {
             "ID": "F8D31EEA-5AC9-468D-A9AC-E1AD54A3341C"
@@ -1840,7 +1863,10 @@
             "ValueType": "Scalar",
             "IsArray": true,
             "Description": "Exclude these domains, where the serving provider supports it. Array or comma-separated.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "string"
+            }
           },
           "primaryKey": {
             "ID": "05712275-D554-4640-9EE1-37F7DBADD7BD"
@@ -1858,7 +1884,16 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Restrict by recency: 'day', 'week', 'month' or 'year'. Omit for no recency constraint.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month",
+                "year"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "D3973928-157C-40A4-AC5A-0D585D68ED30"
@@ -1913,7 +1948,10 @@
             "IsArray": false,
             "Description": "Also return a synthesized answer. This restricts selection to providers that can produce one, so it changes which provider serves the request. Default: false.",
             "IsRequired": false,
-            "DefaultValue": "false"
+            "DefaultValue": "false",
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "42F35BCA-4E9F-4A18-802B-4D8DF918E1CC"
@@ -2257,7 +2295,17 @@
             "IsArray": false,
             "Description": "Output format - 'auto' (intelligent detection), 'text', 'html', 'markdown', 'json'. Auto-detects and processes JSON, PDF, DOCX, XML, CSV, HTML, images and more (default: 'auto')",
             "IsRequired": false,
-            "DefaultValue": "auto"
+            "DefaultValue": "auto",
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "text",
+                "html",
+                "markdown",
+                "json"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "E013D3BF-E9B1-4B65-BB46-B2F293651FB0"
@@ -2276,7 +2324,10 @@
             "IsArray": false,
             "Description": "Extract only main content vs full page (default: false)",
             "IsRequired": false,
-            "DefaultValue": "false"
+            "DefaultValue": "false",
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "14672B44-03C2-4D1A-A977-6D9F852F7BED"
@@ -2295,7 +2346,10 @@
             "IsArray": false,
             "Description": "Include page metadata in response (default: true)",
             "IsRequired": false,
-            "DefaultValue": "true"
+            "DefaultValue": "true",
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "3FC11C9A-B034-4684-81CA-F443003363CC"
@@ -2314,7 +2368,10 @@
             "IsArray": false,
             "Description": "Maximum content length to return (default: 100000 chars)",
             "IsRequired": false,
-            "DefaultValue": "100000"
+            "DefaultValue": "100000",
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "2749E985-DC09-4DD3-902B-BDB7C7E6B036"
@@ -4014,8 +4071,8 @@
             "ID": "37290D24-A8D1-415A-A4AE-48207ECFFDA3"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:50.276Z",
-            "checksum": "76ad0a27bccab20feac11176c02de8f5d969e85b40a5e5ea4d887179c5940da4"
+            "lastModified": "2026-10-13T19:00:03.328Z",
+            "checksum": "1e0e601c353e4287d383e04ae060b310a3207a473a654dbcb7645ad262a20de6"
           }
         },
         {
@@ -4068,8 +4125,8 @@
             "ID": "75B1D375-30BD-4297-88D2-AD89351AF27B"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:50.424Z",
-            "checksum": "a2187003e6628a0f175784f8158408c03b041de17b9d0167ea1606fda5cc7940"
+            "lastModified": "2026-10-13T19:00:03.339Z",
+            "checksum": "67d451159d40345c9794e96d86ac2f281a6aaa0c337129a791073be4d49df7d5"
           }
         },
         {
@@ -4192,6 +4249,10 @@
           },
           "primaryKey": {
             "ID": "DD76FC35-6BAF-4BBC-8E0C-5C549B274FD8"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.369Z",
+            "checksum": "a14fd485b54dffc0951f480c29e8ab36f86b563280f56f73df899e41ffa09198"
           }
         }
       ],
@@ -4355,6 +4416,10 @@
           },
           "primaryKey": {
             "ID": "AF817C76-BC44-4147-8680-A9B611723163"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.390Z",
+            "checksum": "ecc09f7305824d890c722ebd46f50572526a2e9505fac6f65c3d5b2232704bf0"
           }
         },
         {
@@ -4366,6 +4431,10 @@
           },
           "primaryKey": {
             "ID": "C04EAA6C-8A27-4B78-9837-3223C494EF96"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.404Z",
+            "checksum": "06105f4fcbed387b4637b2936f13b0fed92cf85aa81f835e4d0b09eaf2986d58"
           }
         }
       ]
@@ -4374,8 +4443,8 @@
       "ID": "BE9B9B7F-791B-4E97-AC17-7E93B52B237C"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.613Z",
-      "checksum": "6be95de38efd013077a3cf1c0ec2d31deff1401677c7d01e377eb2bb9c7005b2"
+      "lastModified": "2026-10-13T19:00:03.272Z",
+      "checksum": "0a63595e1613caee9ab0f630443740d96582c9a172c5d5c3582887dd06d65ffb"
     }
   },
   {
@@ -4494,6 +4563,10 @@
           },
           "primaryKey": {
             "ID": "95EE62B8-8F28-4BAB-838F-A3EEF1ED9F85"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.422Z",
+            "checksum": "a14fd485b54dffc0951f480c29e8ab36f86b563280f56f73df899e41ffa09198"
           }
         }
       ],
@@ -4597,6 +4670,10 @@
           },
           "primaryKey": {
             "ID": "DD3D2BE4-02E0-4745-9623-DCBBE999AF6C"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.436Z",
+            "checksum": "ecc09f7305824d890c722ebd46f50572526a2e9505fac6f65c3d5b2232704bf0"
           }
         },
         {
@@ -4608,6 +4685,10 @@
           },
           "primaryKey": {
             "ID": "B9FD85EE-16BE-4035-8A08-43BFECB485CF"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.449Z",
+            "checksum": "06105f4fcbed387b4637b2936f13b0fed92cf85aa81f835e4d0b09eaf2986d58"
           }
         }
       ]
@@ -4616,8 +4697,8 @@
       "ID": "E57641A1-B7C2-4EAB-BB17-8C9631E89095"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.614Z",
-      "checksum": "fa9b93a3efaca316c5d4a7b058a47b2dc22de919922c7626980cc14366a5bc8f"
+      "lastModified": "2026-10-13T19:00:03.287Z",
+      "checksum": "52365fb7b52b7dfbce9bb6d1b3f6ba5d1984fdbfddaaf53b880041fc24278a37"
     }
   }
 ]

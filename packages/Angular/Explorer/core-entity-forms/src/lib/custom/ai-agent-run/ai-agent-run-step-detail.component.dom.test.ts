@@ -99,4 +99,27 @@ describe('AIAgentRunStepDetailComponent (DOM)', () => {
     link.click();
     expect(nav).toEqual(['log-7']);
   });
+
+  it('memoizes parsed payload objects, skill invocations, and scratchpad snapshots across reads', () => {
+    const fixture = render(
+      item({
+        type: 'step',
+        data: {
+          StepType: 'Prompt',
+          PayloadAtStart: '{"count":1}',
+          PayloadAtEnd: '{"count":2}',
+          Skills: '[{"SkillID":"sk-1","SkillName":"Search","ActivationType":"requested","Provenance":{"RequestedBy":"user-request","AgentAcceptsSkills":true,"SkillActivationMode":"Manual","AgentSkillActivationMode":"Auto"}}]',
+          InputData: '{"scratchpad":{"notes":"n1","tasks":[{"id":"t1","title":"Task 1","status":"Pending"}]}}',
+          OutputData: '{"scratchpad":{"notes":"n1","tasks":[{"id":"t1","title":"Task 1","status":"Complete"}]}}',
+        },
+      })
+    );
+    const comp = fixture.componentInstance;
+    expect(comp.StepPayloadAtStartObject).toBe(comp.StepPayloadAtStartObject);
+    expect(comp.StepPayloadAtEndObject).toBe(comp.StepPayloadAtEndObject);
+    expect(comp.StepSkillInvocations).toBe(comp.StepSkillInvocations);
+    expect(comp.StepScratchpadInput).toBe(comp.StepScratchpadInput);
+    expect(comp.StepScratchpadOutput).toBe(comp.StepScratchpadOutput);
+    expect(comp.ScratchpadTaskChangeCount).toBe(1);
+  });
 });

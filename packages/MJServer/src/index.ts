@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
@@ -38,24 +38,18 @@ import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateReadOnlyProvider, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
-import { variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
+import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
-import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
-import { createSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
-import { createMediaStreamRouter } from './rest/MediaStreamHandler.js';
-import { createRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.js';
-import { REALTIME_SDP_EXCHANGE_PATH } from '@memberjunction/ai';
-import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
-import { createWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
+import { CreateRealtimeRecordingRouter, REALTIME_RECORDING_MOUNT_PATH } from './rest/RealtimeRecordingHandler.js';
+import { LoadOwnedRealtimeSession } from './realtimeSessions/ownedRealtimeSession.js';
+import { LoadSessionConversationExternalID } from './realtimeSessions/sessionAccess.js';
+import { RecordingAssemblyScheduler } from './realtimeSessions/RecordingAssemblyScheduler.js';
 import {
-  CreateRealtimeVerifyRouter,
-  REALTIME_VERIFY_MOUNT_PATH,
   RealtimeSessionEventService,
-  RealtimeSessionVerificationService,
   ParseReplicatedRealtimeSessionEvent,
   type RealtimeSessionEventTopicPayload,
 } from './realtimeSessions/index.js';
@@ -67,7 +61,6 @@ import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { IntegrationSyncWorkerService } from './services/IntegrationSyncWorkerService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
 import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
-import { createAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { CreateAdhocSQLAuthorizer } from './resolvers/AdhocQueryResolver.js';
@@ -87,7 +80,7 @@ import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
-import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
+import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
@@ -103,14 +96,22 @@ import {
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
-import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath } from '@memberjunction/server-extensions-core';
-import { coreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
+import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath, GetCorsOwningServerExtensionRoots } from '@memberjunction/server-extensions-core';
+import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from './globalCors.js';
+import { CoreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
+import { ApiRoute, ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
+import { MountHealthcheckRoute, MountPublicCoreRoutes, MountExtensionHealthRoute, MountAuthCatalogRoute, MountAuthenticatedCoreRoutes } from './coreRoutes.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 import { CreateMetadataRefreshSignalHandler, METADATA_REFRESH_SIGNAL } from './metadataRefreshSignal.js';
+import { CacheInvalidationBroadcastManager } from './broadcast/index.js';
+import { ResolveServerRole, ShouldRunBackgroundWorkers } from './serverRoleConfigUnits.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
 export { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
+export * from './serverRoleConfigUnits.js';
+export * from './broadcast/index.js';
+export { ApplyRootVariablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 
 /**
  * Returns the configured database platform from the `DB_PLATFORM` environment
@@ -142,6 +143,7 @@ export { Int, Float, ID } from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
 export { CreateIsolatedProvider } from './isolatedProvider.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
+export { ApiRoute, ApiRootPath, ConfiguredPublicUrl, JoinApiRoute, NormalizeApiRootPath, type ApiRouteOptions } from './apiRoot.js';
 export { ServerExtensionLoader, BaseServerExtension, DefaultServerExtensionServiceRegistry } from '@memberjunction/server-extensions-core';
 export type {
     ServerExtensionConfig,
@@ -251,6 +253,7 @@ export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './rest/MediaAccessKeys.js';
 export * from './rest/MediaStreamHandler.js';
+export * from './rest/RealtimeRecordingHandler.js';
 export * from './resolvers/InfoResolver.js';
 export * from './resolvers/PotentialDuplicateRecordResolver.js';
 export * from './resolvers/DuplicateEntryCheckResolver.js';
@@ -303,7 +306,15 @@ const localPath = (p: string) => {
   return resolvedPath;
 };
 
-export const CreateApp = (): Application => express();
+/**
+ * Creates the Express application MJServer serves on. `X-Powered-By` is disabled: it only
+ * advertises the framework to scanners. {@link Serve} disables it again on a host-supplied app.
+ */
+export const CreateApp = (): Application => {
+  const app = express();
+  app.disable('x-powered-by');
+  return app;
+};
 
 /** @deprecated Use {@link CreateApp}. */
 export const createApp = CreateApp;
@@ -839,6 +850,8 @@ const setupComplete$ = new ReplaySubject(1);
   if (sharedCache) {
     await LocalCacheManager.Instance.SetStorageProvider(sharedCache);
   }
+  // The derived per-entry ceiling, so the boot log says what the largest cacheable entry actually is.
+  startupLog.LogIf('verbose', `LocalCacheManager: largest cacheable entry ${Math.floor(LocalCacheManager.Instance.MaxEntrySizeBytes / 1024 / 1024)} MB (maxEntryPercentOfCache: ${configInfo.cacheSettings?.maxEntryPercentOfCache ?? 'auto'})`);
   const engineSweepMs = StartEngineSweeper(configInfo.cacheSettings);
   startupLog.LogIf('verbose', engineSweepMs > 0 ? `Engine/database sweep every ${engineSweepMs / 1000}s` : 'Engine/database sweep disabled');
   const userCacheCheckMs = StartUserCacheChecks(configInfo.cacheSettings);
@@ -1022,6 +1035,7 @@ const setupComplete$ = new ReplaySubject(1);
   // config.ts loads and validates at module scope, so importing it there would pull full config
   // validation into every import chain that touches the resolver, unit tests included.
   ConfigureRecordDataBroadcast(configInfo.cacheSettings?.recordDataBroadcastEntities);
+  CacheInvalidationBroadcastManager.Instance.Configure(configInfo.cacheSettings?.broadcast);
 
   // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
   // ANY BaseEntity save/delete occurs on this server — regardless of whether it
@@ -1095,7 +1109,6 @@ const setupComplete$ = new ReplaySubject(1);
     scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
     emitSchemaFile: websiteRunFromPackage !== 1,
     pubSub,
-    globalMiddlewares: [variablesLoggingMiddleware],
   });
   const buildMs = performance.now() - tBuild;
 
@@ -1122,6 +1135,7 @@ const setupComplete$ = new ReplaySubject(1);
   auditResolversForUndecoratedArgs();
 
   const tTransform = performance.now();
+  schema = ApplyRootVariablesLoggingMiddleware(schema);
   schema = requireSystemUserDirective.transformer(schema);
   schema = publicDirective.transformer(schema);
 
@@ -1270,6 +1284,9 @@ const setupComplete$ = new ReplaySubject(1);
   await apolloServer.start();
   
   // Fix #8: Add compression for better throughput performance
+  // Never advertise the framework (`X-Powered-By: Express`) — the host may have passed its own app.
+  app.disable('x-powered-by');
+
   app.use(compression({
     // Don't compress responses smaller than 1KB
     threshold: 1024,
@@ -1290,114 +1307,23 @@ const setupComplete$ = new ReplaySubject(1);
     level: 6
   }));
 
-  // Health check endpoint - registered before auth middleware so cloud
-  // platform probes (Azure App Service, AWS ALB, k8s, etc.) don't
-  // generate noisy auth errors in the logs. CORS is enabled so browser-based
-  // clients (e.g. MJExplorer's connectivity poller) can read the response.
-  app.get('/healthcheck', cors<cors.CorsRequest>(), (_req, res) => {
-    res.status(200).json({ status: 'ok' });
-  });
+  // Health check — before every middleware contribution and the auth middleware, so cloud platform
+  // probes never generate auth noise. Every core route mounts under MJAPI_BASE_PATH (see apiRoot.ts).
+  MountHealthcheckRoute(app);
 
   // Apply middleware-contributed pre-auth handlers (after compression, before routes)
   for (const mw of mwPreAuth) {
     app.use(mw);
   }
 
-  // ─── OAuth callback routes (unauthenticated, registered BEFORE auth) ─────
-  const oauthPublicUrl = configInfo.publicUrl || `${configInfo.baseUrl}:${configInfo.graphqlPort}${configInfo.graphqlRootPath || ''}`;
+  // ─── Public core routes (unauthenticated, registered BEFORE auth) ─────
+  // OAuth callback, eSignature, media, realtime SDP broker, magic-link, widget, realtime verify — see
+  // coreRoutes.ts. New custom routes belong in Server Extensions, never in serve().
+  // oauthPublicUrl is the configured public URL, derived as it always was; it is also the magic-link JWT
+  // issuer, so it stays untrimmed. Outward links use ApiRoute(…, { absolute: true }) instead.
+  const oauthPublicUrl = ConfiguredPublicUrl();
   startupLog.LogIf('verbose', `[OAuth] publicUrl: ${oauthPublicUrl}`);
-
-  let oauthAuthenticatedRouter: ReturnType<typeof createOAuthCallbackHandler>['authenticatedRouter'] | undefined;
-  if (oauthPublicUrl) {
-    const { callbackRouter, authenticatedRouter } = createOAuthCallbackHandler({
-      publicUrl: oauthPublicUrl,
-      successRedirectUrl: `${oauthPublicUrl}/oauth/success`,
-      errorRedirectUrl: `${oauthPublicUrl}/oauth/error`,
-      // Constrains where a caller-supplied frontendReturnUrl may point (open-redirect guard).
-      allowedFrontendOrigins: configInfo.cors?.allowedOrigins ?? ['*']
-    });
-    oauthAuthenticatedRouter = authenticatedRouter;
-
-    const oauthCors = cors<cors.CorsRequest>();
-
-    // OAuth callback is unauthenticated (called by external auth server)
-    app.use('/oauth', oauthCors, callbackRouter);
-    startupLog.LogIf('verbose', '[OAuth] Callback route registered at /oauth/callback');
-  }
-
-  // ─── Core HTTP Routes (Static Core Infrastructure) ─────────────────────────
-  // IMPORTANT ARCHITECTURAL NOTE:
-  // The route mounts below are strictly reserved for core framework infrastructure (OAuth, eSignature,
-  // media streaming, realtime WebRTC broker, magic-link, widgets).
-  // ALL new custom routes, external webhooks, vendor adapters, and application integrations MUST be
-  // implemented as Server Extensions (subclasses of BaseServerExtension in @memberjunction/server-extensions-core)
-  // mounted via ServerExtensionLoader — NEVER hardcoded as ad-hoc app.use() in serve().
-  // See guides/SERVER_EXTENSIONS_GUIDE.md for complete patterns and best practices.
-
-  // ─── eSignature webhook (unauthenticated, registered BEFORE auth) ─────
-  // Called by external signature providers (DocuSign Connect, etc.) without an MJ bearer token.
-  // The provider DRIVER verifies the payload signature/HMAC; MJ auth does not apply here.
-  app.use('/esignature', cors<cors.CorsRequest>(), createSignatureWebhookHandler());
-  startupLog.LogIf('verbose', '[eSignature] Webhook route registered at /esignature/webhook/:driverKey');
-
-  // ─── Authenticated media streaming (token-gated, registered BEFORE auth) ─────
-  // The `?token=` query param (minted by CreateMediaAccessToken after a per-user permission
-  // check) is the capability — the route verifies it itself, so it does NOT use the MJ bearer
-  // auth middleware (an <audio>/<video> element can't send Authorization headers).
-  app.use('/media', cors<cors.CorsRequest>(), createMediaStreamRouter());
-  startupLog.LogIf('verbose', '[Media] Streaming route registered at /media/:fileId');
-
-  // ─── Realtime WebRTC SDP broker (ticket-gated, registered BEFORE auth) ───────
-  if (configInfo.realtime?.enabled) {
-    app.use(REALTIME_SDP_EXCHANGE_PATH, cors<cors.CorsRequest>(), createRealtimeSdpBrokerRouter());
-    startupLog.LogIf('verbose', `[Realtime] WebRTC SDP broker registered at ${REALTIME_SDP_EXCHANGE_PATH}`);
-  }
-
-  // ─── Magic-link routes (MJ-issued, app-scoped external access) ───────────
-  // Public router (JWKS + redeem) mounts BEFORE the auth middleware; the
-  // authenticated invite-creation router mounts AFTER it (see below).
-  let widgetAuthenticatedRouter: ReturnType<typeof createWidgetHandler>['authenticatedRouter'] | undefined;
-  let magicLinkAuthenticatedRouter: ReturnType<typeof createMagicLinkHandler>['authenticatedRouter'] | undefined;
-  if (configInfo.magicLink?.enabled) {
-    const { publicRouter, authenticatedRouter } = createMagicLinkHandler(oauthPublicUrl, configInfo.magicLink);
-    magicLinkAuthenticatedRouter = authenticatedRouter;
-    registerMagicLinkAuthProvider(oauthPublicUrl, configInfo.magicLink);
-    app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), publicRouter);
-    startupLog.LogIf('verbose', `[MagicLink] Public routes registered at ${MAGIC_LINK_MOUNT_PATH}/redeem and ${MAGIC_LINK_MOUNT_PATH}/jwks.json`);
-  }
-
-  // ─── Public web widget: guest-session mint (PUBLIC, before auth mw) ───────
-  // Visitors hold no MJ JWT yet, so POST /widget/session is public. It reuses the
-  // magic-link RS256 key + `magic-link` auth provider (ensured idempotently inside
-  // createWidgetHandler), so it stands on its own even if magicLink.enabled is false.
-  if (configInfo.widget?.enabled) {
-    const { publicRouter: widgetRouter, authenticatedRouter: widgetAuthRouter } = createWidgetHandler(oauthPublicUrl, configInfo.widget);
-    widgetAuthenticatedRouter = widgetAuthRouter;
-    app.use(WIDGET_MOUNT_PATH, cors<cors.CorsRequest>(), widgetRouter);
-    // The widget reuses the magic-link RS256 key + auth provider to validate guest
-    // tokens, which validates by fetching the JWKS at MAGIC_LINK_MOUNT_PATH/jwks.json.
-    // When magic-link itself is disabled its public router (which serves JWKS) never
-    // mounts, so publish the key here — otherwise every guest token fails validation
-    // (the auth middleware can't fetch the public key) and the widget 401s.
-    if (!configInfo.magicLink?.enabled) {
-      app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), createMagicLinkJwksRouter());
-      startupLog.LogIf('verbose', `[Widget] Published reused signing key at ${MAGIC_LINK_MOUNT_PATH}/jwks.json (magic-link flow disabled)`);
-    }
-    startupLog.LogIf('verbose', `[Widget] Public routes registered at ${WIDGET_MOUNT_PATH}/session and ${WIDGET_MOUNT_PATH}/session/refresh`);
-  }
-
-  // ─── Realtime identity verification: PUBLIC verify-link routes (before auth mw) ───
-  // The person opening the emailed link holds no MJ token — the single-use token is the capability.
-  // GET only renders a confirm button; the POST redeems (mail scanners GET every link). Mounted only
-  // when verification is enabled AND able to send mail AND able to protect its codes (see
-  // realtime.identityVerification config: communicationProvider + hmacSecret).
-  if (configInfo.realtime?.identityVerification?.enabled && !RealtimeSessionVerificationService.Instance.IsEnabled) {
-    console.warn('[RealtimeVerify] realtime.identityVerification.enabled is true but verification is unavailable: it needs a communicationProvider and an hmacSecret of at least 16 characters.');
-  }
-  if (RealtimeSessionVerificationService.Instance.IsEnabled) {
-    app.use(REALTIME_VERIFY_MOUNT_PATH, cors<cors.CorsRequest>(), CreateRealtimeVerifyRouter());
-    startupLog.LogIf('verbose', `[RealtimeVerify] Public routes registered at ${REALTIME_VERIFY_MOUNT_PATH}/:token (GET) and ${REALTIME_VERIFY_MOUNT_PATH} (POST)`);
-  }
+  const coreAuthenticatedRouters = MountPublicCoreRoutes(app, oauthPublicUrl, startupLog);
 
   // ─── Server extensions loader & shared service registry ───────────────────
   const extensionLoader = new ServerExtensionLoader();
@@ -1468,9 +1394,9 @@ const setupComplete$ = new ReplaySubject(1);
 
   // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
   // (and remains the only source for host-only extensions such as Slack/Teams).
-  // extraReservedRoots is derived from the mounts registered above plus graphqlRootPath
-  // so a new pre-auth app.use(...) in serve() must also be added to
-  // coreReservedServerExtensionRoots() — otherwise an Open App can claim it.
+  // Every RootPath is relative to MJAPI_BASE_PATH: apiRootPath composes the real mount path, and
+  // extraReservedRoots (also relative) must list every core mount in coreRoutes.ts, otherwise an
+  // Open App can claim it.
   const extensionConfigs = prepareServerExtensionConfigs(
     mergeServerExtensionConfigs(
       options?.serverExtensions ?? [],
@@ -1479,7 +1405,8 @@ const setupComplete$ = new ReplaySubject(1);
     {
       onInvalid: (message) => LogError(message),
       onOverlap: (message) => LogStatus(message),
-      extraReservedRoots: coreReservedServerExtensionRoots(graphqlRootPath),
+      extraReservedRoots: CoreReservedServerExtensionRoots(),
+      apiRootPath: ApiRootPath(),
     },
   );
   for (const cfg of extensionConfigs) {
@@ -1490,27 +1417,14 @@ const setupComplete$ = new ReplaySubject(1);
   // Without this, the browser blocks 401 responses from the auth middleware
   // because they lack Access-Control-Allow-Origin headers, preventing the
   // client from reading the error code and triggering token refresh.
-  const corsAllowed = configInfo.cors?.allowedOrigins ?? ['*'];
-  const corsWildcard = corsAllowed.includes('*');
-  // SECURITY: never combine credentials with a wildcard/reflect-any-origin policy. When
-  // allowedOrigins is ['*'] the origin callback reflects the caller's Origin, and pairing that
-  // with Access-Control-Allow-Credentials: true lets any site a signed-in user visits make
-  // credentialed cross-origin reads. MJ's primary auth is a Bearer token (not auto-sent
-  // cross-origin), so dropping credentials under the wildcard default is safe; deployments that
-  // genuinely need credentialed CORS must configure an explicit allowedOrigins list.
-  app.use(cors<cors.CorsRequest>({
-    origin: (origin, callback) => {
-      // Allow all origins when ['*'] (default/backward-compatible),
-      // or when no Origin header (server-to-server calls).
-      if (corsWildcard || !origin || corsAllowed.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`Origin ${origin} not allowed by CORS`));
-      }
-    },
-    credentials: corsWildcard ? false : (configInfo.cors?.allowCredentials ?? true),
-    maxAge: configInfo.cors?.maxAge ?? 86400,
-  }));
+  // Extensions that declare `OwnsCORS: true` (ServerExtensionConfig) are exempt: the global
+  // middleware skips their RootPaths so it neither reflects an origin onto their responses nor
+  // answers their preflights — the extension's own OPTIONS handling and origin policy run instead.
+  const corsOwnedExtensionRoots = GetCorsOwningServerExtensionRoots(extensionConfigs);
+  if (corsOwnedExtensionRoots.length > 0) {
+    LogStatus(`Global CORS skips extension-owned roots: ${corsOwnedExtensionRoots.join(', ')}`);
+  }
+  app.use(CreateGlobalCorsMiddleware(configInfo.cors, corsOwnedExtensionRoots));
 
   // ─── Pre-auth server extensions (before auth — extensions handle their own auth) ─────
   // Slack uses HMAC signature verification, Teams uses Bot Framework JWT validation.
@@ -1521,23 +1435,12 @@ const setupComplete$ = new ReplaySubject(1);
       phase: 'pre-auth',
       httpServer,
       publicUrl: oauthPublicUrl,
+      apiRootPath: ApiRootPath(),
     });
   }
 
-  // Extension health endpoint (always available, returns empty array if no extensions)
-  app.get('/health/extensions', async (_req, res) => {
-    const results = await extensionLoader.HealthCheckAll();
-    const allHealthy = results.length === 0 || results.every(r => r.Healthy);
-    res.status(allHealthy ? 200 : 503).json({ extensions: results });
-  });
-
-  // ─── Public authentication-provider catalog (PUBLIC, before auth mw) ──────
-  // The browser needs the provider list BEFORE it holds a token, so this is necessarily
-  // unauthenticated and must mount ahead of the auth middleware. It publishes only the
-  // non-secret allow-list (see AuthProviderEngine.GetPublicCatalog) — the same values a
-  // single-provider SPA already compiled into its bundle.
-  app.use(AUTH_CATALOG_MOUNT_PATH, cors<cors.CorsRequest>(), createAuthProviderCatalogRouter());
-  startupLog.LogIf('verbose', `[Auth] Public provider catalog registered at ${AUTH_CATALOG_MOUNT_PATH}/providers`);
+  MountExtensionHealthRoute(app, extensionLoader);
+  MountAuthCatalogRoute(app, startupLog);
 
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
   app.use(CreateUnifiedAuthMiddleware(dataSources));
@@ -1550,25 +1453,16 @@ const setupComplete$ = new ReplaySubject(1);
     app.use(mw);
   }
 
-  // ─── OAuth authenticated routes (auth already handled by unified middleware) ─────
-  if (oauthAuthenticatedRouter) {
-    const oauthCors = cors<cors.CorsRequest>();
-    app.use('/oauth', oauthCors, BodyParser.json(), oauthAuthenticatedRouter);
-    startupLog.LogIf('verbose', '[OAuth] Authenticated routes registered at /oauth/status, /oauth/initiate, and /oauth/exchange');
-  }
+  // ─── Authenticated core routes: OAuth status/initiate/exchange, magic-link create, widget resolve-identity ─────
+  MountAuthenticatedCoreRoutes(app, coreAuthenticatedRouters, startupLog);
 
-  // ─── Magic-link authenticated route (invite creation) ─────────────────────
-  if (magicLinkAuthenticatedRouter) {
-    app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), magicLinkAuthenticatedRouter);
-    startupLog.LogIf('verbose', `[MagicLink] Authenticated route registered at ${MAGIC_LINK_MOUNT_PATH}/create`);
-  }
-
-  // ─── Widget authenticated route (RV4 resolve-identity) ────────────────────
-  // Mounts after the unified auth middleware so a verified visitor (post magic-link upgrade) can
-  // promote their anonymous returning-visitor trail to the verified record.
-  if (widgetAuthenticatedRouter) {
-    app.use(WIDGET_MOUNT_PATH, cors<cors.CorsRequest>(), widgetAuthenticatedRouter);
-    startupLog.LogIf('verbose', `[Widget] Authenticated route registered at ${WIDGET_MOUNT_PATH}/resolve-identity`);
+  // ─── Realtime recording shards + terminal signal (authenticated, owner-gated) ─────
+  // The browser uploads a client-direct call's recording as Opus shards and a keepalive terminal request;
+  // assembly runs off the request path on the scheduler. Needs a SQL provider: the ledger calls procs.
+  if (configInfo.realtime?.enabled) {
+    if (mountRealtimeRecordingRoutes(app)) {
+      startupLog.LogIf('verbose', `[Realtime] Recording routes registered at ${ApiRoute(REALTIME_RECORDING_MOUNT_PATH)}/:agentSessionId/shard/:index and /end`);
+    }
   }
 
   // ─── Post-auth server extensions ──────────────────────────────────────────
@@ -1579,7 +1473,15 @@ const setupComplete$ = new ReplaySubject(1);
       phase: 'post-auth',
       httpServer,
       publicUrl: oauthPublicUrl,
+      apiRootPath: ApiRootPath(),
     });
+  }
+
+  // Every extension has now had its chance at the request: a preflight under an extension-owned
+  // root that none of them answered is refused here, instead of falling through to the GraphQL
+  // mount's cors(), which would approve it for every origin.
+  if (corsOwnedExtensionRoots.length > 0) {
+    app.use(CreateExtensionOwnedPreflightFallback(corsOwnedExtensionRoots));
   }
 
   // ─── Cross-extension lifecycle hook: OnAllExtensionsMounted ───────────────
@@ -1588,6 +1490,7 @@ const setupComplete$ = new ReplaySubject(1);
   await extensionLoader.NotifyAllExtensionsMounted({
     httpServer,
     publicUrl: oauthPublicUrl,
+    apiRootPath: ApiRootPath(),
   });
 
   // Install the single path-routing WebSocket-upgrade dispatcher AFTER all extensions across both
@@ -1633,11 +1536,29 @@ const setupComplete$ = new ReplaySubject(1);
   // ─── GraphQL middleware (contextFunction reads req.userPayload, no re-auth) ─────
   app.use(
     graphqlRootPath,
-    cors<cors.CorsRequest>(),
+    cors<cors.CorsRequest>({
+      exposedHeaders: ['X-MJ-Cache-Seq', 'X-MJ-Server-ID'],
+    }),
     BodyParser.json({ limit: '50mb' }),
     // Express 5 leaves req.body as undefined for non-JSON or empty bodies;
     // Apollo Server's expressMiddleware requires req.body to be defined.
-    (req, _res, next) => { if (req.body === undefined) req.body = {}; next(); },
+    // Also piggyback the latest monotonic cache invalidation sequence and server process ID
+    // onto every GraphQL HTTP response so clients can detect and recover missed invalidations.
+    (req, res, next) => {
+      if (req.body === undefined) req.body = {};
+      const broadcastProvider = CacheInvalidationBroadcastManager.Instance.Provider;
+      res.setHeader('X-MJ-Cache-Seq', String(broadcastProvider.CurrentSequence));
+      res.setHeader('X-MJ-Server-ID', broadcastProvider.ServerProcessID);
+      const originalWriteHead = res.writeHead.bind(res);
+      res.writeHead = ((...args: Parameters<typeof res.writeHead>) => {
+        if (!res.headersSent) {
+          res.setHeader('X-MJ-Cache-Seq', String(broadcastProvider.CurrentSequence));
+          res.setHeader('X-MJ-Server-ID', broadcastProvider.ServerProcessID);
+        }
+        return originalWriteHead(...args);
+      }) as typeof res.writeHead;
+      next();
+    },
     expressMiddleware(apolloServer, {
       context: contextFunction({
                                  setupComplete$,
@@ -1652,9 +1573,15 @@ const setupComplete$ = new ReplaySubject(1);
     app.use(mw);
   }
 
+  const serverRole = ResolveServerRole(configInfo.serverRole ?? process.env.MJ_SERVER_ROLE);
+  const runBackgroundWorkers = ShouldRunBackgroundWorkers(serverRole);
+  if (!runBackgroundWorkers) {
+    LogStatus(`[ServerRole] Running in '${serverRole}' mode — background worker services are disabled on this replica.`);
+  }
+
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;
-  if (configInfo.scheduledJobs?.enabled) {
+  if (runBackgroundWorkers && configInfo.scheduledJobs?.enabled) {
     try {
       scheduledJobsService = new ScheduledJobsService(configInfo.scheduledJobs);
       await scheduledJobsService.Initialize();
@@ -1668,7 +1595,7 @@ const setupComplete$ = new ReplaySubject(1);
   // Initialize and start the integration sync worker if enabled (PR 1 item 8).
   // Off by default — deployments that don't opt in keep running syncs inline.
   let integrationSyncWorker: IntegrationSyncWorkerService | null = null;
-  if (configInfo.integrationSyncWorker?.enabled) {
+  if (runBackgroundWorkers && configInfo.integrationSyncWorker?.enabled) {
     try {
       integrationSyncWorker = new IntegrationSyncWorkerService(configInfo.integrationSyncWorker);
       await integrationSyncWorker.Initialize();
@@ -1706,52 +1633,55 @@ const setupComplete$ = new ReplaySubject(1);
   }
   startupLog.PrintSummary();
 
-  // Process pending RSU work from pre-restart (entity maps, field maps, sync)
-  processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`));
-
-  // Resume any integration syncs that were orphaned by the previous process restart
   const resumeUser = UserCache.Instance.GetSystemUser();
-  if (resumeUser) {
-    IntegrationEngine.Instance.ResumeOrphanedSyncs(resumeUser)
-      .catch(err => console.warn(`[IntegrationEngine] Orphaned sync resume failed: ${err}`));
-  }
 
-  // Force-fail any agent runs left 'Running' by a process that died (restart/crash/OOM) or whose
-  // terminal-state write never landed. Staleness-based, so it never touches runs another healthy
-  // instance is still heart-beating. The watchdog also self-registers for graceful-shutdown
-  // cancellation (via ShutdownRegistry) once it begins tracking this process's first live run.
-  if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
-    const sweepUser = resumeUser;
-    const sweepProvider = Metadata.Provider; // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
-    AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser)
-      .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
+  if (runBackgroundWorkers) {
+    // Process pending RSU work from pre-restart (entity maps, field maps, sync)
+    processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`));
 
-    // The watchdog repairs the RUN; nothing repaired the conversation detail, which is the row the
-    // chat actually renders from (MJ #4222). A process that dies mid-run leaves a terminal run
-    // beside a message that still claims to be generating, and it spins forever for anyone who
-    // opens it. Runs at boot (closes restart orphans) and on a timer (closes mid-life orphans),
-    // mirroring the watchdog's own two-phase shape.
-    const reconcileOrphans = () =>
-      ReconcileOrphanedConversationDetails(sweepProvider, sweepUser)
-        .catch(err => console.warn(`[OrphanDetailReconciler] Pass failed: ${err}`));
-    void reconcileOrphans();
-    const orphanDetailTimer = setInterval(() => void reconcileOrphans(), ORPHAN_DETAIL_SWEEP_INTERVAL_MS);
-    ShutdownRegistry.Instance.Register({
-      ShutdownName: 'OrphanDetailReconciler',
-      Shutdown: () => { clearInterval(orphanDetailTimer); },
-    });
-  }
+    // Resume any integration syncs that were orphaned by the previous process restart
+    if (resumeUser) {
+      IntegrationEngine.Instance.ResumeOrphanedSyncs(resumeUser)
+        .catch(err => console.warn(`[IntegrationEngine] Orphaned sync resume failed: ${err}`));
+    }
 
-  // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then a periodic tick
-  // that closes stale and over-deadline sessions and rebuilds lost realtime recordings from their
-  // crash-recovery shards (storage reads and writes). Self-registers with ShutdownRegistry, so its timer
-  // is cleared by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
-  if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
-    SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
-      .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
-    // The bridge engine's orphan reconcile likewise starts only now that this process holds its port, so it can't
-    // take the live bridges of another MJAPI still serving that port for its own orphans (#5310).
-    StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+    // Force-fail any agent runs left 'Running' by a process that died (restart/crash/OOM) or whose
+    // terminal-state write never landed. Staleness-based, so it never touches runs another healthy
+    // instance is still heart-beating. The watchdog also self-registers for graceful-shutdown
+    // cancellation (via ShutdownRegistry) once it begins tracking this process's first live run.
+    if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
+      const sweepUser = resumeUser;
+      const sweepProvider = Metadata.Provider; // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
+      AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser)
+        .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
+
+      // The watchdog repairs the RUN; nothing repaired the conversation detail, which is the row the
+      // chat actually renders from (MJ #4222). A process that dies mid-run leaves a terminal run
+      // beside a message that still claims to be generating, and it spins forever for anyone who
+      // opens it. Runs at boot (closes restart orphans) and on a timer (closes mid-life orphans),
+      // mirroring the watchdog's own two-phase shape.
+      const reconcileOrphans = () =>
+        ReconcileOrphanedConversationDetails(sweepProvider, sweepUser)
+          .catch(err => console.warn(`[OrphanDetailReconciler] Pass failed: ${err}`));
+      void reconcileOrphans();
+      const orphanDetailTimer = setInterval(() => void reconcileOrphans(), ORPHAN_DETAIL_SWEEP_INTERVAL_MS);
+      ShutdownRegistry.Instance.Register({
+        ShutdownName: 'OrphanDetailReconciler',
+        Shutdown: () => { clearInterval(orphanDetailTimer); },
+      });
+    }
+
+    // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then a periodic tick
+    // that closes stale and over-deadline sessions and rebuilds lost realtime recordings from their
+    // crash-recovery shards (storage reads and writes). Self-registers with ShutdownRegistry, so its timer
+    // is cleared by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
+    if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
+      SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+        .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
+      // The bridge engine's orphan reconcile likewise starts only now that this process holds its port, so it can't
+      // take the live bridges of another MJAPI still serving that port for its own orphans (#5310).
+      StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+    }
   }
 
   // Launch the durable task-graph dispatcher: claim Pending tasks, execute them with a fresh
@@ -1780,7 +1710,7 @@ const setupComplete$ = new ReplaySubject(1);
     // StartTaskGraphDispatcher); this gives the agent seam the same.
     SuppressTaskGraphSubmission('MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 is set on this host');
     LogStatus('[TaskGraphDispatcher] Disabled by MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 — this process will neither accept nor execute task graphs.');
-  } else if (resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
+  } else if (runBackgroundWorkers && resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
     StartTaskGraphDispatcher(taskGraphPool, resumeUser)
       .catch(err => console.warn(`[TaskGraphDispatcher] Startup failed: ${err}`));
   }
@@ -1790,7 +1720,7 @@ const setupComplete$ = new ReplaySubject(1);
   // ShutdownAll() drains it (up to 2 × shutdownDrainMs) before the HTTP server closes.
   // Not awaited: a slow engine load must not delay readiness, and a failure never stops the API.
   const workQueueProvider = Metadata.Provider; // global-provider-ok: server startup — the work-queue host runs on the server's own provider
-  if (configInfo.workQueue?.enabled && workQueueProvider instanceof DatabaseProviderBase) {
+  if (runBackgroundWorkers && configInfo.workQueue?.enabled && workQueueProvider instanceof DatabaseProviderBase) {
     const workQueuePool = dataSources[0]?.dataSource;
     const providerSource = new MJServerWorkQueueProviderSource(workQueuePool instanceof sql.ConnectionPool ? workQueuePool : null, workQueueProvider);
     StartWorkQueueHost(configInfo.workQueue, workQueueProvider, providerSource)
@@ -2280,3 +2210,49 @@ function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
   return wrapper as unknown as sql.ConnectionPool;
 }
 
+// Defined below serve() on purpose: serverExtensionReservedRoots.test.ts treats every app.use() that appears
+// textually before the unified auth middleware as a pre-auth mount, and these routes are mounted post-auth.
+/**
+ * Mounts the realtime recording shard/terminal routes (post-auth) and starts the assembly scheduler they
+ * hand work to. Skipped, with a warning, when the server's provider is not a SQL provider (the ledger calls
+ * stored procedures). Without a system user the routes still store shards, and the janitor assembles them.
+ * Returns whether the routes were mounted.
+ */
+function mountRealtimeRecordingRoutes(app: Application): boolean {
+  const provider = Metadata.Provider; // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet; the ledger's procs run as the server's SQL login either way
+  if (!(provider instanceof DatabaseProviderBase)) {
+    console.warn('[Realtime] Recording routes not mounted: the server provider is not a DatabaseProviderBase');
+    return false;
+  }
+  const graceMs = (): number => configInfo.realtime.recordingAssemblyGraceSeconds * 1000;
+  const systemUser = UserCache.Instance.GetSystemUser();
+  const runWorkers = ShouldRunBackgroundWorkers(ResolveServerRole(configInfo.serverRole ?? process.env.MJ_SERVER_ROLE));
+  if (systemUser && runWorkers) {
+    RecordingAssemblyScheduler.Instance.Start({ Provider: provider, SystemUser: systemUser, GraceMs: graceMs });
+  } else if (!systemUser) {
+    LogError('[Realtime] Recording assembly scheduler not started: no system user; the session janitor assembles recordings instead');
+  }
+  app.use(ApiRoute(REALTIME_RECORDING_MOUNT_PATH), cors<cors.CorsRequest>(), CreateRealtimeRecordingRouter({
+    ResolveCaller: req => {
+      const user: UserInfo | undefined = req.userPayload?.userRecord;
+      return user ? { ContextUser: user, Provider: provider } : null;
+    },
+    LoadOwnedSession: LoadOwnedRealtimeSession,
+    LoadConversationExternalID: LoadSessionConversationExternalID,
+    CreateLedger: (ledgerProvider, contextUser) => new SqlRealtimeRecordingLedger(ledgerProvider, contextUser),
+    Scheduler: RecordingAssemblyScheduler.Instance,
+    GraceMs: graceMs,
+    SystemUser: () => UserCache.Instance.GetSystemUser() ?? null,
+  }));
+  return true;
+}
+
+// Public-edge building blocks for Open Apps that run their own pre-auth edge and mint
+// scope-limited guest sessions (e.g. a ballot edge: verify a credential, then mint a short-lived
+// session scoped to one resource). They are the same pieces WidgetSessionService uses; a generic
+// public-widget session mint remains the long-term replacement.
+export { BuildSessionClaims, MagicLinkKeyManager, MagicLinkService, HashToken, GenerateRawToken } from './auth/magicLink/index.js';
+export type { MagicLinkJWTClaims } from './auth/magicLink/index.js';
+export { VerifyHostAssertion } from './realtimeWidget/host-identity.js';
+export type { HostAssertedIdentity, HostAssertionResult } from './realtimeWidget/host-identity.js';
+export { IsScopeLimitedPrincipal } from './auth/scopeLimitedPrincipal.js';

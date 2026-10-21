@@ -99,6 +99,13 @@ export class RecentAccessService {
         return;
       }
 
+      // Skip logging when the current user's roles do not grant Create/Update on MJ: User Record Logs
+      const logEntityInfo = md.Entities.find(e => e.Name === 'MJ: User Record Logs');
+      const logPerms = logEntityInfo?.GetUserPermisions(md.CurrentUser);
+      if (logPerms && !logPerms.CanCreate && !logPerms.CanUpdate) {
+        return;
+      }
+
       // Persist the key in the compact CompositeKey segment form — the bare value for a single-column
       // primary key (so existing rows and lookups are unchanged), "F1|v1||F2|v2" for a composite one.
       // That is the form CompositeKey.FromURLSegment reads back; the previous Values(',') dropped
@@ -122,6 +129,9 @@ export class RecentAccessService {
       }
 
       if (existingResult.Results && existingResult.Results.length > 0) {
+        if (logPerms && !logPerms.CanUpdate) {
+          return;
+        }
         // Update existing entry
         const existing = existingResult.Results[0];
         existing.LatestAt = new Date();
@@ -129,9 +139,12 @@ export class RecentAccessService {
 
         const saveResult = await existing.Save();
         if (!saveResult) {
-          console.error('RecentAccessService: Failed to update log entry');
+          console.error('RecentAccessService: Failed to update log entry', existing.LatestResult?.CompleteMessage || '');
         }
       } else {
+        if (logPerms && !logPerms.CanCreate) {
+          return;
+        }
         // Create new entry
         const newLog = await md.GetEntityObject<MJUserRecordLogEntity>('MJ: User Record Logs', md.CurrentUser);
         newLog.UserID = md.CurrentUser.ID;
@@ -143,7 +156,7 @@ export class RecentAccessService {
 
         const saveResult = await newLog.Save();
         if (!saveResult) {
-          console.error('RecentAccessService: Failed to create log entry');
+          console.error('RecentAccessService: Failed to create log entry', newLog.LatestResult?.CompleteMessage || '');
         }
       }
 

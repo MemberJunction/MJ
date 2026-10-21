@@ -882,5 +882,18 @@
       "lastModified": "2026-10-06T20:21:36.664Z",
       "checksum": "cb86ee44edadf3fbafcde1eebf2c4970f0060355817933dcb4c582239cebbb7f"
     }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=agent:trusted",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "02239240-B328-4E62-9E0F-28D6440A1FFB"
+    }
   }
 ]

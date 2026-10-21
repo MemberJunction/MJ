@@ -9,6 +9,10 @@
  *     BaseEntity instances? Row counts cannot see this: `results.length` is correct on
  *     prototype-less JSON, which is exactly how #3777 shipped past XS1/XS2 and broke
  *     every RunQuery in production with `query.UserCanRun is not a function`.
+ *   - QUERY DEFINITIONS (XS8–XS10) — after a query is edited through B, does A stop serving
+ *     results of the old SQL, keep serving them after an edit that changes nothing, and is a
+ *     shared RunQuery slot of the query deleted once, with nothing published? XS10 needs
+ *     REDIS_URL and REDIS_KEY_PREFIX (the servers' own) and skips without them.
  *
  * This is the ONE check class that fundamentally needs TWO processes — it cannot be
  * expressed in a single-process suite — so it is a standalone script (D1/D8), gated
@@ -26,7 +30,7 @@
  *
  * Exit contract (harness standard): 0 all passed · 1 failures · 2 bootstrap/connectivity error.
  */
-import { RunView } from '@memberjunction/core';
+import { RunView, CacheCategory } from '@memberjunction/core';
 import { GetGlobalObjectStore } from '@memberjunction/global';
 import type { UserInfo } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
@@ -34,6 +38,8 @@ import type { MJActionCategoryEntity, MJEntityEntity, MJUserSettingEntity, MJQue
 // Side-effect import: registers generated entity subclasses so GetEntityObject<…>()
 // materializes a real BaseEntity (this script doesn't go through bootstrapIntegrationClient).
 import '@memberjunction/server-bootstrap-lite';
+import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
+import Redis from 'ioredis';
 import { TestRunner, Assert, AssertEqual } from './lib/harness';
 import { LooksLikePoisonedEngine } from './lib/cross-server-signatures';
 
@@ -238,6 +244,72 @@ async function setModelsMaxRows(provider: GraphQLDataProvider, user: UserInfo, v
     entity.UserViewMaxRows = value;
     Assert(await entity.Save(), `saving UserViewMaxRows=${value} failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown'}`);
     return previous;
+}
+
+// ── XS8–XS10 helpers: a query edited through B ─────────────────────────────────────────────────
+
+/**
+ * Time for an edit saved through B to finish on B and reach A, and for B to delete the query's
+ * shared RunQuery slots (its QueryEngine waits 3 s after the edit's last save).
+ */
+const DEFINITION_SETTLE_MS = 5000;
+
+/** The throwaway query XS8–XS10 edit, deleted after the suite runs. */
+let definitionFixture: MJQueryEntity | null = null;
+
+/**
+ * Creates the query through B: a `Marker` column that names the SQL version, and a
+ * CacheValidationSQL over a table nothing in this rig writes, so the DATA always validates as
+ * unchanged and only a definition check can tell the client its rows are stale. The validation SQL
+ * is written for SQL Server.
+ */
+async function createDefinitionFixture(provider: GraphQLDataProvider, user: UserInfo): Promise<MJQueryEntity> {
+    const query = await provider.GetEntityObject<MJQueryEntity>('MJ: Queries', user);
+    query.NewRecord();
+    query.Name = `XS Definition ${Date.now()} (mj-integration-test — safe to delete)`;
+    query.SQL = `SELECT 'v1' AS Marker`;
+    // `RowCount`, not the also-documented `TotalRows`: SQLServerDataProvider's batched status check
+    // reads only `RowCount`, so with `TotalRows` every slot would validate as stale.
+    query.CacheValidationSQL = 'SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS [RowCount] FROM __mj.vwSQLDialects';
+    query.Status = 'Approved';
+    Assert(await query.Save(), `creating the query through B failed: ${query.LatestResult?.CompleteMessage ?? 'unknown'}`);
+    definitionFixture = query;
+    return query;
+}
+
+/** Saves an edit to the fixture through the server it was created on (B). */
+async function editFixture(query: MJQueryEntity, edit: (q: MJQueryEntity) => void): Promise<void> {
+    edit(query);
+    Assert(await query.Save(), `editing the query through B failed: ${query.LatestResult?.CompleteMessage ?? 'unknown'}`);
+}
+
+/** One client RunQuery with CacheLocal through `provider`: the marker served, and whether the client's slot served it. */
+async function markerServedBy(provider: GraphQLDataProvider, user: UserInfo, queryID: string): Promise<{ Marker: string; CacheHit: boolean }> {
+    const result = await provider.RunQuery({ QueryID: queryID, CacheLocal: true }, user);
+    Assert(result.Success, `RunQuery through ${provider.InstanceConnectionString} failed: ${result.ErrorMessage}`);
+    await sleep(100); // the client's slot write is fire-and-forget
+    return { Marker: String(result.Results[0]?.Marker), CacheHit: result.CacheHit === true };
+}
+
+/**
+ * Fills the client's slot through `provider` until the server validates it as current: a first run
+ * writes it, the second is answered stale with the server's definition hash, the third is current.
+ */
+async function primeClientSlot(provider: GraphQLDataProvider, user: UserInfo, queryID: string, expectedMarker: string): Promise<void> {
+    let last = { Marker: '', CacheHit: false };
+    for (let i = 0; i < 3; i++) {
+        last = await markerServedBy(provider, user, queryID);
+        AssertEqual(last.Marker, expectedMarker, 'precondition: the client must get the current SQL\'s rows');
+    }
+    Assert(last.CacheHit, 'precondition: the server must validate the client\'s slot as current');
+}
+
+/** Deletes the XS8–XS10 query. Never throws. */
+async function cleanupDefinitionFixture(): Promise<void> {
+    if (definitionFixture) {
+        await definitionFixture.Delete().catch(() => false);
+        definitionFixture = null;
+    }
 }
 
 async function main(): Promise<void> {
@@ -510,7 +582,84 @@ async function main(): Promise<void> {
         }
     });
 
+
+    // ────────────────────────────────────────────────────────────────────────────────────────────
+    // XS8–XS10: a query edited through B.
+    //
+    // A GraphQL RunQuery never engages a server's own RunQuery cache (GetQueryData does not forward
+    // CacheLocal), so from outside the servers the cache under test is the CLIENT's: its slot is
+    // validated by the server it talks to (A), whose QueryEngine learns of B's edit through the
+    // shared cache. XS10 reaches the servers' shared RunQuery slots directly in Redis.
+    // ────────────────────────────────────────────────────────────────────────────────────────────
+
+    suite.Test("XS8: after a query's SQL is edited through B, A gives a client holding the old SQL's rows the new ones", async () => {
+        const query = await createDefinitionFixture(b, userB);
+        await sleep(SETTLE_MS); // A's engine learns of the new query
+        await primeClientSlot(a, userA, query.ID, 'v1');
+
+        await editFixture(query, q => { q.SQL = `SELECT 'v2' AS Marker`; });
+        const elapsed = await waitUntil(async () => (await markerServedBy(a, userA, query.ID)).Marker === 'v2', 15000);
+        console.log(`      → A served the new SQL's rows ${elapsed === null ? 'never (15 s)' : `after ${elapsed} ms`}`);
+        Assert(elapsed !== null, "A must stop validating the old SQL's rows as current once B's edit reaches it, although the data is unchanged");
+    });
+
+    suite.Test('XS9: a description-only edit through B leaves the client\'s slot current on A', async () => {
+        const query = definitionFixture;
+        Assert(!!query, 'XS9 needs the query XS8 created');
+        // This process saved XS8's edit, so its own QueryEngine deletes its slots of the query once
+        // that edit settles. Let that happen before priming, or it lands inside the wait below.
+        await sleep(DEFINITION_SETTLE_MS);
+        await primeClientSlot(a, userA, query!.ID, 'v2');
+
+        await editFixture(query!, q => { q.Description = `Reworded ${Date.now()}`; });
+        await sleep(DEFINITION_SETTLE_MS);
+        const after = await markerServedBy(a, userA, query!.ID);
+        AssertEqual(after.Marker, 'v2', 'the rows must still be the current SQL\'s');
+        Assert(after.CacheHit, 'a description edit must not make A answer the client\'s slot stale');
+    });
+
+    suite.Test("XS10: an edit through B deletes the query's shared RunQuery slots once, publishing nothing, and nothing deletes them again", async () => {
+        const redisUrl = process.env.REDIS_URL;
+        const keyPrefix = process.env.REDIS_KEY_PREFIX;
+        const query = definitionFixture;
+        if (!redisUrl || !keyPrefix || !query) {
+            console.log('      → skipped: needs REDIS_URL and REDIS_KEY_PREFIX (the servers\' own) and the XS8 query');
+            return;
+        }
+        const store = new RedisLocalStorageProvider({ url: redisUrl, keyPrefix, enablePubSub: false, enableLogging: false });
+        const subscriber = new Redis(redisUrl);
+        let published = 0;
+        await subscriber.subscribe(`${keyPrefix}:__pubsub__`);
+        subscriber.on('message', (_channel: string, message: string) => {
+            if ((JSON.parse(message) as { Category?: string }).Category === CacheCategory.RunQueryCache) published++;
+        });
+        // A slot as a server still on the old definition writes it: indexed by the query's ID.
+        const fingerprint = `XS Seeded|${query.ID}|_|{"__maxRows":-1,"__startRow":0}`;
+        const seed = (): Promise<void> => store.SetItem(fingerprint,
+            { results: [{ Marker: 'v2' }], maxUpdatedAt: '', rowCount: 1, queryId: query.ID, definitionHash: 'written-by-a-peer' },
+            CacheCategory.RunQueryCache, { TTLSeconds: 300, IndexGroup: query.ID.toLowerCase() });
+        const stored = async (): Promise<boolean> => (await store.GetItem(fingerprint, CacheCategory.RunQueryCache)) !== null;
+        try {
+            await seed();
+            await editFixture(query, q => { q.SQL = `SELECT 'v3' AS Marker`; });
+            const gone = await waitUntil(async () => !(await stored()), 15000);
+            console.log(`      → the shared slot was deleted ${gone === null ? 'never (15 s)' : `after ${gone} ms`}`);
+            Assert(gone !== null, "B must delete the edited query's shared RunQuery slots once the edit settles");
+
+            // A server still writing under the old definition puts a slot back; nobody deletes it again.
+            await seed();
+            await sleep(DEFINITION_SETTLE_MS);
+            Assert(await stored(), 'nothing may delete the query\'s slots again once the edit has settled');
+            AssertEqual(published, 0, 'deleting RunQuery slots must publish nothing for the RunQueryCache category');
+        } finally {
+            await store.Remove(fingerprint, CacheCategory.RunQueryCache).catch(() => undefined);
+            await store.Disconnect().catch(() => undefined);
+            await subscriber.quit().catch(() => undefined);
+        }
+    });
+
     const failures = await suite.Run();
+    await cleanupDefinitionFixture();
     process.exit(failures > 0 ? 1 : 0);
 }
 
