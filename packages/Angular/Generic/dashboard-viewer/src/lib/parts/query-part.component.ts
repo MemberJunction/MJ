@@ -39,7 +39,7 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
               class="part-placeholder"
               Icon="fa-solid fa-flask"
               Title="No Query Selected"
-              Message="Click the configure button to select a query for this part."
+              Message="Use Edit part to choose a query."
               Size="compact" />
           }
         

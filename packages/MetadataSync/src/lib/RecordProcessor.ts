@@ -1,4 +1,6 @@
 import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import fs from 'fs-extra';
+import path from 'path';
 import { ordinalCompare, UUIDsEqual } from '@memberjunction/global';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { EntityConfig } from '../config';
@@ -11,8 +13,37 @@ import {
   ExternalizeSubProperties,
   FieldExternalizerAdapter,
 } from './json-subproperty-externalization';
-import { METADATA_KEYWORDS, createKeywordReference } from '../constants/metadata-keywords';
+import { METADATA_KEYWORDS, ExtractKeywordValue, createKeywordReference, IsMetadataKeyword } from '../constants/metadata-keywords';
 import { RelatedEntityConfig } from '../config';
+import {
+  HasNestedEnvReference,
+  IsJsonContainer,
+  JsonValue,
+  KeepEnvReference,
+  KeepNestedEnvReferences,
+  KeptEnvReference,
+  NestedEnvKeepResult,
+  ParseEnvReference,
+} from './env-reference';
+import { EnvSourcedValue, EnvSourcedValuesOf, FindEnvSourcedValue } from './env-derived-fields';
+import { ExistingRecordIndex, KeepPrimaryKeyEnvReferences, UnsetPrimaryKeyVariableError } from './existing-record-index';
+import { LookupPair, ParseLookupCreateFields, ParseLookupPairs, SplitLookupReference } from './lookup-reference';
+
+/** A `@lookup:` value whose criteria or create fields use `@env:`. */
+interface ParsedEnvLookup {
+  EntityName: string;
+  Criteria: LookupPair[];
+  Variables: Set<string>;
+}
+
+/** A criteria field and the value it must have; null means a null value. */
+interface ExpectedLookupValue {
+  Name: string;
+  Value: string | null;
+}
+
+/** The record a lookup's foreign key points at: found, not found, or not readable. */
+type LookupTargetRead = { Status: 'Found'; Row: Record<string, unknown> } | { Status: 'NotFound' } | { Status: 'Failed' };
 
 /**
  * Handles the core processing of individual record data into the sync format
@@ -21,6 +52,11 @@ export class RecordProcessor {
   private propertyExtractor: EntityPropertyExtractor;
   private fieldExternalizer: FieldExternalizer;
   private relatedEntityHandler: RelatedEntityHandler;
+
+  /** Receives pull warnings. When not set, warnings go to the console. */
+  public WarningSink: ((message: string) => void) | null = null;
+  /** For each record this processor returned, the read-only fields it left out because they hold an env value. */
+  private readonly envOmittedFields = new WeakMap<RecordData, ReadonlySet<string>>();
 
   constructor(
     private syncEngine: SyncEngine,
@@ -72,6 +108,7 @@ export class RecordProcessor {
     const allProperties = this.propertyExtractor.extractAllProperties(record, fieldOverrides);
 
     // Process fields, collections, embeds, extension, and related entities (§6)
+    const envOmitted = new Set<string>();
     const { fields, collections, embeds, extension, relatedEntities } = await this.processEntityData(
       allProperties,
       record,
@@ -82,7 +119,8 @@ export class RecordProcessor {
       currentDepth,
       ancestryPath,
       verbose,
-      batchedRelatedData
+      batchedRelatedData,
+      envOmitted
     );
     
     // Calculate checksum and sync metadata
@@ -98,15 +136,38 @@ export class RecordProcessor {
     );
     
     // Build the final record data with proper ordering
-    return JsonWriteHelper.createOrderedRecordData(
+    const recordData = JsonWriteHelper.createOrderedRecordData(
       fields,
       relatedEntities,
-      primaryKey,
+      this.keptPrimaryKey(primaryKey, entityConfig, existingRecordData),
       syncData,
       collections,
       embeds,
       extension
     );
+    this.envOmittedFields.set(recordData, envOmitted);
+    return recordData;
+  }
+
+  /**
+   * The read-only fields left out of a record this processor returned, because their database
+   * value holds the value of an `@env:` reference in the record file. A merge removes them too.
+   */
+  EnvOmittedFieldsOf(recordData: RecordData): ReadonlySet<string> {
+    return this.envOmittedFields.get(recordData) ?? new Set<string>();
+  }
+
+  /** The key to write: the file's `@env:` key values that still resolve to the database key, else the database key. */
+  private keptPrimaryKey(
+    primaryKey: Record<string, unknown>,
+    entityConfig: EntityConfig,
+    existingRecordData: RecordData | undefined
+  ): Record<string, unknown> {
+    const fileKey = existingRecordData?.primaryKey;
+    if (!fileKey || !Object.values(fileKey).some((value) => ParseEnvReference(value) !== null)) {
+      return primaryKey;
+    }
+    return KeepPrimaryKeyEnvReferences(fileKey, primaryKey, this.syncEngine.getEntityInfo(entityConfig.entity));
   }
 
   /** @deprecated Use {@link ProcessRecord}. */
@@ -139,7 +200,8 @@ export class RecordProcessor {
     currentDepth: number,
     ancestryPath: Set<string>,
     verbose?: boolean,
-    batchedRelatedData?: Map<string, Map<string, BaseEntity[]>>
+    batchedRelatedData?: Map<string, Map<string, BaseEntity[]>>,
+    envOmitted: Set<string> = new Set()
   ): Promise<{
     fields: Record<string, any>;
     collections?: Record<string, RecordData[]>;
@@ -160,7 +222,8 @@ export class RecordProcessor {
       entityConfig,
       existingRecordData,
       fields,
-      verbose
+      verbose,
+      envOmitted
     );
 
     // Process collections if declared (§6)
@@ -171,7 +234,8 @@ export class RecordProcessor {
       collections,
       currentDepth,
       ancestryPath,
-      verbose
+      verbose,
+      existingRecordData
     );
 
     // Process extension if present (§6)
@@ -180,7 +244,8 @@ export class RecordProcessor {
       primaryKey,
       targetDir,
       entityConfig,
-      verbose
+      verbose,
+      existingRecordData
     );
 
     // Process embeds if present (§6)
@@ -191,7 +256,8 @@ export class RecordProcessor {
       embeds,
       currentDepth,
       ancestryPath,
-      verbose
+      verbose,
+      existingRecordData
     );
 
     // Process related entities if configured
@@ -225,12 +291,38 @@ export class RecordProcessor {
     entityConfig: EntityConfig,
     existingRecordData: RecordData | undefined,
     fields: Record<string, any>,
-    verbose?: boolean
+    verbose?: boolean,
+    envOmitted: Set<string> = new Set()
   ): Promise<void> {
     const entityInfo = this.syncEngine.getEntityInfo(entityConfig.entity);
+    const envValues = EnvSourcedValuesOf(existingRecordData, entityInfo);
     
     for (const [fieldName, fieldValue] of Object.entries(allProperties)) {
-      if (this.shouldSkipField(fieldName, fieldValue, primaryKey, entityConfig, entityInfo)) {
+      if (this.shouldSkipField(fieldName, primaryKey, entityConfig, entityInfo)) {
+        continue;
+      }
+
+      const keptValue = await this.keepEnvReferences(
+        fieldName,
+        fieldValue,
+        allProperties,
+        primaryKey,
+        targetDir,
+        entityConfig,
+        existingRecordData,
+        verbose
+      );
+      if (keptValue !== null) {
+        fields[fieldName] = keptValue;
+        continue;
+      }
+
+      if (this.holdsEnvValueReadOnly(fieldName, fieldValue, envValues, entityInfo, primaryKey, entityConfig, existingRecordData, verbose)) {
+        envOmitted.add(fieldName);
+        continue;
+      }
+
+      if (this.shouldSkipNullField(fieldValue, entityConfig)) {
         continue;
       }
       
@@ -249,11 +341,425 @@ export class RecordProcessor {
   }
 
   /**
+   * True when the field is read-only for push (not the key) and its database value holds the value of
+   * an `@env:` reference in the record file. Push ignores such a field, so pull leaves it out. With
+   * verbose, a note names the field and the variable, never the value.
+   */
+  private holdsEnvValueReadOnly(
+    fieldName: string,
+    databaseValue: unknown,
+    envValues: ReadonlyArray<EnvSourcedValue>,
+    entityInfo: EntityInfo | null,
+    primaryKey: Record<string, unknown>,
+    entityConfig: EntityConfig,
+    existingRecordData: RecordData | undefined,
+    verbose?: boolean
+  ): boolean {
+    const fieldInfo = entityInfo?.Fields.find((f) => f.Name === fieldName);
+    if (!fieldInfo?.ReadOnly || fieldInfo.IsPrimaryKey) {
+      return false;
+    }
+    const found = FindEnvSourcedValue(databaseValue, envValues);
+    if (!found) {
+      return false;
+    }
+    if (verbose) {
+      console.log(`${this.describeField(entityConfig, primaryKey, fieldName, existingRecordData)}: left out, it holds the value of @env:${found.VariableName} (read-only field)`);
+    }
+    return true;
+  }
+
+  /**
+   * The field value pull writes when the existing file value holds `@env:` references, so pull
+   * never writes a resolved environment value into a file.
+   * @returns The value to write, or null when the existing value holds no `@env:` reference
+   */
+  private async keepEnvReferences(
+    fieldName: string,
+    databaseValue: unknown,
+    allProperties: Record<string, unknown>,
+    primaryKey: Record<string, unknown>,
+    targetDir: string,
+    entityConfig: EntityConfig,
+    existingRecordData: RecordData | undefined,
+    verbose?: boolean
+  ): Promise<JsonValue | null> {
+    const flat = this.keepEnvReference(fieldName, databaseValue, primaryKey, entityConfig, existingRecordData, verbose);
+    if (flat !== null) {
+      return flat;
+    }
+    const nested = this.keepNestedEnvReferences(fieldName, databaseValue, primaryKey, entityConfig, existingRecordData, verbose);
+    if (nested !== null) {
+      if (nested.KeptFileValue) {
+        return nested.Value;
+      }
+      return await this.applyJsonSubPropertyExternalization(
+        fieldName,
+        nested.Value,
+        allProperties,
+        targetDir,
+        entityConfig,
+        existingRecordData,
+        verbose
+      );
+    }
+    const sideFile = await this.keepEnvReferencesInSideFile(
+      fieldName,
+      databaseValue,
+      primaryKey,
+      targetDir,
+      entityConfig,
+      existingRecordData,
+      verbose
+    );
+    if (sideFile !== null) {
+      return sideFile;
+    }
+    return await this.keepEnvLookupReference(fieldName, databaseValue, primaryKey, entityConfig, existingRecordData, verbose);
+  }
+
+  /**
+   * Keeps an existing `@lookup:` whose criteria or create fields use `@env:`. Loads the record the
+   * database foreign key points at and compares each criteria field the way push looks it up: the
+   * field name and the value without case, the value not trimmed, and `null` matching a null value.
+   * Keeps the lookup in every case: silently when it matches, with a verbose note when it cannot be
+   * checked, with a warning when the record is missing, cannot be read or does not match.
+   * @returns The lookup to keep, or null when the existing value is not such a lookup
+   */
+  private async keepEnvLookupReference(
+    fieldName: string,
+    databaseValue: unknown,
+    primaryKey: Record<string, unknown>,
+    entityConfig: EntityConfig,
+    existingRecordData: RecordData | undefined,
+    verbose?: boolean
+  ): Promise<string | null> {
+    const existingValue = existingRecordData?.fields?.[fieldName];
+    if (typeof existingValue !== 'string' || !existingValue.startsWith(METADATA_KEYWORDS.LOOKUP)) {
+      return null;
+    }
+    const lookup = this.parseEnvLookup(existingValue);
+    if (lookup === null) {
+      return null;
+    }
+
+    const where = this.describeField(entityConfig, primaryKey, fieldName, existingRecordData);
+    const keepUnchecked = (reason: string): string => {
+      if (verbose) {
+        console.log(`${where}: ${reason} Kept ${existingValue} in the file.`);
+      }
+      return existingValue;
+    };
+    if (lookup === 'Unreadable') {
+      return keepUnchecked('the lookup criteria cannot be read, so the lookup was not checked.');
+    }
+    const expected = this.expectedLookupValues(lookup.Criteria);
+    if (typeof expected === 'string') {
+      return keepUnchecked(expected);
+    }
+
+    const problem = await this.lookupTargetProblem(lookup.EntityName, databaseValue, expected, [...lookup.Variables].join(', '));
+    if (problem !== null) {
+      this.warn(`${where}: ${problem} Kept ${existingValue} in the file.`);
+    }
+    return existingValue;
+  }
+
+  /**
+   * Reads a `@lookup:` value for the `@env:` keep.
+   * @returns The parsed lookup; `'Unreadable'` when it holds `@env:` but cannot be parsed; null
+   * when it holds no `@env:` reference
+   */
+  private parseEnvLookup(lookupValue: string): ParsedEnvLookup | 'Unreadable' | null {
+    const split = SplitLookupReference(lookupValue.substring(METADATA_KEYWORDS.LOOKUP.length));
+    const criteria = split ? ParseLookupPairs(split.CriteriaText) : null;
+    const createFields = split ? this.readLookupCreateFields(split.FlagsText) : null;
+    if (!split || !criteria || !createFields) {
+      return lookupValue.includes(METADATA_KEYWORDS.ENV) ? 'Unreadable' : null;
+    }
+    const variables = new Set<string>();
+    for (const pair of [...criteria, ...createFields]) {
+      const reference = ParseEnvReference(pair.Value);
+      if (reference) {
+        variables.add(reference.VariableName);
+      }
+    }
+    return variables.size === 0 ? null : { EntityName: split.EntityName, Criteria: criteria, Variables: variables };
+  }
+
+  /** The lookup's create fields, or null when a value cannot be URI-decoded. */
+  private readLookupCreateFields(flagsText: string): LookupPair[] | null {
+    try {
+      return ParseLookupCreateFields(flagsText);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * The value each criteria field must have, with `@env:` values read from the environment.
+   * @returns The values, or the reason the lookup cannot be checked
+   */
+  private expectedLookupValues(criteria: LookupPair[]): ExpectedLookupValue[] | string {
+    const expected: ExpectedLookupValue[] = [];
+    for (const pair of criteria) {
+      const reference = ParseEnvReference(pair.Value);
+      let value: string;
+      if (reference) {
+        const envValue = process.env[reference.VariableName];
+        if (envValue === undefined) {
+          return `${reference.VariableName} is not set, so the lookup was not checked.`;
+        }
+        value = envValue;
+      } else if (IsMetadataKeyword(pair.Value)) {
+        return 'the lookup criteria use a reference pull cannot check.';
+      } else {
+        value = pair.Value;
+      }
+      expected.push({ Name: pair.Name, Value: value.trim().toLowerCase() === 'null' ? null : value });
+    }
+    return expected;
+  }
+
+  /**
+   * Checks the record the foreign key points at against the expected criteria values.
+   * @returns The warning text without values, or null when the record matches
+   */
+  private async lookupTargetProblem(
+    entityName: string,
+    databaseValue: unknown,
+    expected: ExpectedLookupValue[],
+    variables: string
+  ): Promise<string | null> {
+    if (databaseValue === null || databaseValue === undefined) {
+      return `the database value is null, so it does not match the lookup that uses ${variables}.`;
+    }
+    const target = await this.loadLookupTarget(entityName, String(databaseValue));
+    if (target.Status === 'NotFound') {
+      return `the record the database value points at was not found, so it does not match the lookup that uses ${variables}.`;
+    }
+    if (target.Status === 'Failed') {
+      return `the record the database value points at could not be read, so the lookup that uses ${variables} was not checked.`;
+    }
+    if (!this.lookupRowMatches(target.Row, expected)) {
+      return `the database value does not match the lookup that uses ${variables}.`;
+    }
+    return null;
+  }
+
+  /** Compares a row with the expected values: field names and values without case, values not trimmed. */
+  private lookupRowMatches(row: Record<string, unknown>, expected: ExpectedLookupValue[]): boolean {
+    const valuesByName = new Map(Object.entries(row).map(([name, value]) => [name.toLowerCase(), value]));
+    return expected.every(({ Name, Value }) => {
+      const actual = valuesByName.get(Name.toLowerCase());
+      if (Value === null) {
+        return actual === null || actual === undefined;
+      }
+      return actual !== null && actual !== undefined && String(actual).toLowerCase() === Value.toLowerCase();
+    });
+  }
+
+  /** Reads the record a foreign key points at, as plain values. */
+  private async loadLookupTarget(entityName: string, foreignKeyValue: string): Promise<LookupTargetRead> {
+    try {
+      const entityInfo = this.syncEngine.getEntityInfo(entityName);
+      if (!entityInfo) {
+        return { Status: 'Failed' };
+      }
+      const result = await new RunView().RunView<Record<string, unknown>>(
+        {
+          EntityName: entityName,
+          ExtraFilter: CompositeKey.FromURLSegment(entityInfo, foreignKeyValue).ToWhereClause(),
+          ResultType: 'simple',
+        },
+        this.contextUser
+      );
+      if (!result.Success) {
+        return { Status: 'Failed' };
+      }
+      if (result.Results.length === 0) {
+        return { Status: 'NotFound' };
+      }
+      return { Status: 'Found', Row: result.Results[0] };
+    } catch {
+      return { Status: 'Failed' };
+    }
+  }
+
+  /**
+   * Returns the field's existing `@env:` reference. Warns when the variable differs from the database value.
+   * @returns The reference to keep, or null when the existing value is not an `@env:` reference
+   */
+  private keepEnvReference(
+    fieldName: string,
+    databaseValue: unknown,
+    primaryKey: Record<string, unknown>,
+    entityConfig: EntityConfig,
+    existingRecordData: RecordData | undefined,
+    verbose?: boolean
+  ): string | null {
+    const kept = KeepEnvReference(existingRecordData?.fields?.[fieldName], this.serializeDateValue(databaseValue));
+    if (!kept) {
+      return null;
+    }
+    this.reportKeptReference(this.describeField(entityConfig, primaryKey, fieldName, existingRecordData), kept, verbose);
+    return kept.Reference;
+  }
+
+  /**
+   * Keeps `@env:` references inside a JSON field. When the file value is kept whole, warns why
+   * (a verbose note only when the database value is null).
+   */
+  private keepNestedEnvReferences(
+    fieldName: string,
+    databaseValue: unknown,
+    primaryKey: Record<string, unknown>,
+    entityConfig: EntityConfig,
+    existingRecordData: RecordData | undefined,
+    verbose?: boolean
+  ): { Value: JsonValue; KeptFileValue: boolean } | null {
+    const result = KeepNestedEnvReferences(existingRecordData?.fields?.[fieldName], databaseValue);
+    if (!result) {
+      return null;
+    }
+    const where = this.describeField(entityConfig, primaryKey, fieldName, existingRecordData);
+    this.reportNestedKeep(where, result, databaseValue, verbose);
+    return { Value: result.Value, KeptFileValue: result.KeptFileValue };
+  }
+
+  /**
+   * Gives the warnings and verbose notes for a nested keep. Messages name paths and variables only.
+   * @param sideFile The side file the references are in, named in each message when given
+   */
+  private reportNestedKeep(
+    where: string,
+    result: NestedEnvKeepResult,
+    databaseValue: unknown,
+    verbose?: boolean,
+    sideFile?: string
+  ): void {
+    const inFile = sideFile ? ` (side file ${sideFile})` : '';
+    if (result.KeptFileValue) {
+      if (result.LeftValueVariables.length > 0) {
+        this.warn(
+          `${where}${inFile}: the database value holds the value of ${result.LeftValueVariables.join(', ')} at a path the file does not reference. Kept the file value, which holds @env: references.`
+        );
+      } else if (databaseValue === null || databaseValue === undefined) {
+        if (verbose) {
+          console.log(`${where}${inFile}: the database value is null. Kept the file value, which holds @env: references.`);
+        }
+      } else {
+        this.warn(`${where}${inFile}: the database value is not JSON. Kept the file value, which holds @env: references.`);
+      }
+      return;
+    }
+    for (const item of result.Kept) {
+      const at = item.Path.startsWith('[') ? `${where}${item.Path}` : `${where}.${item.Path}`;
+      this.reportKeptReference(`${at}${inFile}`, item, verbose);
+    }
+  }
+
+  /**
+   * Keeps `@env:` references in the `.json` side file that the field names with `@file:`. Writes the
+   * database JSON with the references put back to the side file when it differs, and keeps the
+   * `@file:` reference in the record. A side file with `@include` directives or nested `@file:`
+   * references is not rewritten.
+   * @returns The `@file:` reference to keep, or null when the field is not such a side file
+   */
+  private async keepEnvReferencesInSideFile(
+    fieldName: string,
+    databaseValue: unknown,
+    primaryKey: Record<string, unknown>,
+    targetDir: string,
+    entityConfig: EntityConfig,
+    existingRecordData: RecordData | undefined,
+    verbose?: boolean
+  ): Promise<string | null> {
+    const existingValue = existingRecordData?.fields?.[fieldName];
+    if (typeof existingValue !== 'string' || !existingValue.startsWith(METADATA_KEYWORDS.FILE)) {
+      return null;
+    }
+    const relativePath = ExtractKeywordValue(existingValue);
+    if (!relativePath || !relativePath.endsWith('.json')) {
+      return null;
+    }
+    const sideFilePath = path.resolve(targetDir, relativePath);
+    const sideFile = await this.readJsonSideFile(sideFilePath);
+    if (!sideFile || !HasNestedEnvReference(sideFile.Json)) {
+      return null;
+    }
+    const where = this.describeField(entityConfig, primaryKey, fieldName, existingRecordData);
+    const parsedText = JSON.stringify(sideFile.Json);
+    if (parsedText.includes('"@include') || parsedText.includes(`"${METADATA_KEYWORDS.FILE}`)) {
+      this.warn(
+        `${where} (side file ${relativePath}): the side file holds @env: references and @include or @file: references. Pull did not rewrite it.`
+      );
+      return existingValue;
+    }
+    const result = KeepNestedEnvReferences(sideFile.Json, databaseValue);
+    if (!result) {
+      return null;
+    }
+    this.reportNestedKeep(where, result, databaseValue, verbose, relativePath);
+    if (!result.KeptFileValue && JSON.stringify(result.Value) !== JSON.stringify(sideFile.Json)) {
+      // The side file is written here, outside the pull's FileWriteBatch and its backup.
+      await fs.writeJson(sideFilePath, result.Value, { spaces: 2 });
+      if (verbose) {
+        console.log(`${where} (side file ${relativePath}): updated the side file and kept its @env: references.`);
+      }
+    }
+    return existingValue;
+  }
+
+  /**
+   * Reads a JSON side file as push does: a leading byte order mark is ignored.
+   * @returns The parsed JSON, or null when the file is missing or does not parse
+   */
+  private async readJsonSideFile(filePath: string): Promise<{ Json: unknown } | null> {
+    if (!(await fs.pathExists(filePath))) {
+      return null;
+    }
+    try {
+      const text = (await fs.readFile(filePath, 'utf8')).replace(/^\uFEFF/, '');
+      return { Json: JSON.parse(text) };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Warns on a drifted kept reference, and notes an unset variable when verbose. Never prints a value. */
+  private reportKeptReference(where: string, kept: KeptEnvReference, verbose: boolean | undefined): void {
+    if (kept.Check === 'Drift') {
+      this.warn(`${where}: the database value does not match ${kept.VariableName}. Kept ${kept.Reference} in the file.`);
+    } else if (kept.Check === 'Unset' && verbose) {
+      console.log(`${where}: ${kept.VariableName} is not set, so it was not compared. Kept ${kept.Reference} in the file.`);
+    }
+  }
+
+  /** Names a field in messages. An `@env:` key value is shown as the file has it, never resolved. */
+  private describeField(
+    entityConfig: EntityConfig,
+    primaryKey: Record<string, unknown>,
+    fieldName: string,
+    existingRecordData: RecordData | undefined
+  ): string {
+    const key = this.keptPrimaryKey(primaryKey, entityConfig, existingRecordData);
+    return `${entityConfig.entity} ${JSON.stringify(key)} field ${fieldName}`;
+  }
+
+  private warn(message: string): void {
+    if (this.WarningSink) {
+      this.WarningSink(message);
+    } else {
+      console.warn(message);
+    }
+  }
+
+  /**
    * Determines if a field should be skipped during processing
    */
   private shouldSkipField(
     fieldName: string,
-    fieldValue: any,
     primaryKey: Record<string, any>,
     entityConfig: EntityConfig,
     entityInfo: EntityInfo | null
@@ -278,12 +784,14 @@ export class RecordProcessor {
       return true;
     }
     
-    // Skip null fields if configured
-    if (entityConfig.pull?.ignoreNullFields && fieldValue === null) {
-      return true;
-    }
-    
     return false;
+  }
+
+  /**
+   * True when the field is null and the config sets `ignoreNullFields`
+   */
+  private shouldSkipNullField(fieldValue: unknown, entityConfig: EntityConfig): boolean {
+    return !!entityConfig.pull?.ignoreNullFields && fieldValue === null;
   }
 
   /**
@@ -598,6 +1106,9 @@ export class RecordProcessor {
           relatedEntities[relationKey] = relatedRecords;
         }
       } catch (error) {
+        if (error instanceof UnsetPrimaryKeyVariableError) {
+          throw error;
+        }
         if (verbose) {
           console.warn(`Failed to load related entities for ${relationKey}: ${error}`);
         }
@@ -621,12 +1132,7 @@ export class RecordProcessor {
     // Determine if we should include external file content in checksum
     const hasExternalizedFields = this.hasExternalizedFields(fields, entityConfig);
 
-    const checksumPayload: Record<string, unknown> = {
-      fields,
-      ...(collections && Object.keys(collections).length > 0 ? { collections } : {}),
-      ...(embeds && Object.keys(embeds).length > 0 ? { embeds } : {}),
-      ...(extension && Object.keys(extension).length > 0 ? { extension } : {}),
-    };
+    const checksumPayload = SyncEngine.BuildRecordChecksumPayload(fields, collections, embeds, extension);
 
     const checksum = hasExternalizedFields
       ? await this.syncEngine.calculateChecksumWithFileContent(checksumPayload, targetDir)
@@ -676,7 +1182,8 @@ export class RecordProcessor {
     collections: Record<string, RecordData[]>,
     currentDepth: number,
     ancestryPath: Set<string>,
-    verbose?: boolean
+    verbose?: boolean,
+    existingRecordData?: RecordData
   ): Promise<void> {
     if (!record.EntityInfo?.RelatedEntities) return;
 
@@ -741,11 +1248,19 @@ export class RecordProcessor {
           return 0;
         });
 
+        const existingChildren = existingRecordData?.collections?.[colName] ?? [];
+        const childIndex = ExistingRecordIndex.Build(
+          existingChildren.map((existingChild) => ({ Record: existingChild })),
+          childEntityInfo
+        );
+        childIndex.ThrowIfUnsetKeyVariables(childEntityInfo.Name);
+
         for (const child of items) {
           const childPK: Record<string, unknown> = {};
           for (const pk of childEntityInfo.PrimaryKeys) {
             childPK[pk.Name] = child.Get(pk.Name);
           }
+          const existingChild = childIndex.Find(childPK)?.Record;
 
           const childData = await this.ProcessRecord(
             child,
@@ -753,8 +1268,8 @@ export class RecordProcessor {
             targetDir,
             childConfig,
             verbose,
-            false,
-            undefined,
+            !existingChild,
+            existingChild,
             currentDepth + 1,
             new Set([...(ancestryPath ?? []), `${record.EntityInfo.Name}:${JSON.stringify(record.PrimaryKey)}`])
           );
@@ -772,7 +1287,8 @@ export class RecordProcessor {
     primaryKey: Record<string, unknown>,
     targetDir: string,
     entityConfig: EntityConfig,
-    verbose?: boolean
+    verbose?: boolean,
+    existingRecordData?: RecordData
   ): Promise<RecordData['extension'] | undefined> {
     const child = record.ISAChild;
     if (!child) return undefined;
@@ -782,11 +1298,17 @@ export class RecordProcessor {
     const childProperties = this.propertyExtractor.extractAllProperties(child);
     const leafFields: Record<string, unknown> = {};
 
+    const childConfig: EntityConfig = { entity: child.EntityInfo.Name };
+    const existingExtension: RecordData = {
+      fields: this.existingExtensionFields(existingRecordData, child.EntityInfo.Name) ?? {},
+      ...(existingRecordData?.primaryKey ? { primaryKey: existingRecordData.primaryKey } : {}),
+    };
     for (const [fName, fVal] of Object.entries(childProperties)) {
       if (parentFieldNames.has(fName.toLowerCase())) continue;
       if (fName.startsWith('__mj_')) continue;
       if (primaryKey[fName] !== undefined) continue;
-      leafFields[fName] = fVal;
+      const kept = await this.keepEnvReferences(fName, fVal, childProperties, primaryKey, targetDir, childConfig, existingExtension, verbose);
+      leafFields[fName] = kept ?? fVal;
     }
 
     // Determine if child type is ambiguous (more than one subtype exists in metadata)
@@ -814,7 +1336,8 @@ export class RecordProcessor {
     embeds: Record<string, RecordData>,
     currentDepth: number,
     ancestryPath: Set<string>,
-    verbose?: boolean
+    verbose?: boolean,
+    existingRecordData?: RecordData
   ): Promise<void> {
     for (const field of record.EntityInfo.Fields) {
       if (!field.RelatedEntity) continue;
@@ -829,17 +1352,53 @@ export class RecordProcessor {
         for (const pk of embedded.EntityInfo.PrimaryKeys) {
           embedPK[pk.Name] = embedded.Get(pk.Name);
         }
+        const existingEmbed = existingRecordData?.embeds?.[field.Name];
+        const embedKey = this.keptEmbedPrimaryKey(embedPK, embedded.EntityInfo, existingEmbed);
+        const embedConfig: EntityConfig = { entity: embedded.EntityInfo.Name };
         for (const [fName, fVal] of Object.entries(embedProperties)) {
           if (fName.startsWith('__mj_') || embedPK[fName] !== undefined) continue;
-          embedFields[fName] = fVal;
+          const kept = await this.keepEnvReferences(fName, fVal, embedProperties, embedPK, targetDir, embedConfig, existingEmbed, verbose);
+          embedFields[fName] = kept ?? fVal;
         }
 
         embeds[field.Name] = {
           fields: embedFields,
-          ...(Object.keys(embedPK).length > 0 ? { primaryKey: embedPK } : {}),
+          ...(Object.keys(embedPK).length > 0 ? { primaryKey: embedKey } : {}),
         };
       }
     }
+  }
+
+  /**
+   * The key pull writes for an embed: the existing embed's `@env:` key values that still resolve to the database key.
+   * @throws UnsetPrimaryKeyVariableError when an existing embed key variable is not set
+   */
+  private keptEmbedPrimaryKey(
+    embedPK: Record<string, unknown>,
+    embedEntityInfo: EntityInfo,
+    existingEmbed: RecordData | undefined
+  ): Record<string, unknown> {
+    if (!existingEmbed?.primaryKey) {
+      return embedPK;
+    }
+    ExistingRecordIndex.Build([{ Record: existingEmbed }], embedEntityInfo).ThrowIfUnsetKeyVariables(embedEntityInfo.Name);
+    return KeepPrimaryKeyEnvReferences(existingEmbed.primaryKey, embedPK, embedEntityInfo);
+  }
+
+  /** The fields of the existing extension, in its shorthand form or its map form keyed by entity name. */
+  private existingExtensionFields(
+    existingRecordData: RecordData | undefined,
+    childEntityName: string
+  ): Record<string, unknown> | undefined {
+    const extension = existingRecordData?.extension;
+    if (!extension) {
+      return undefined;
+    }
+    const shorthandFields = (extension as { fields?: unknown }).fields;
+    if (IsJsonContainer(shorthandFields) && !Array.isArray(shorthandFields)) {
+      return shorthandFields;
+    }
+    return (extension as Record<string, { fields?: Record<string, unknown> }>)[childEntityName]?.fields;
   }
 
   /**

@@ -12,6 +12,7 @@
 import { LogStatus, LogError, UserInfo } from '@memberjunction/core';
 import { DecisionAnswer, DecisionQuestion } from '@memberjunction/ai';
 import { AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import type { AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
 import { PayloadWarning, PayloadWarningType } from './PayloadChangeAnalyzer';
 import { AgentDecisionService } from './AgentDecisionService';
 
@@ -95,6 +96,8 @@ export interface PayloadFeedbackContext {
      * {@link PayloadFeedbackManager.DECISION_TIMEOUT_MS}.
      */
     CancellationToken?: AbortSignal;
+    /** The run's execution scope, so the decision spends the run's credentials, not the platform's. */
+    ExecutionScope?: AIPromptExecutionScope;
 }
 
 /** The probability at or above which a change is judged intended, unless configured. */
@@ -364,7 +367,8 @@ export class PayloadFeedbackManager {
                 ContextUser: contextUser,
                 AgentID: context.AgentID,
                 PromptName: this.config.decisionPromptName,
-                CancellationToken: controller.signal
+                CancellationToken: controller.signal,
+                ExecutionScope: context.ExecutionScope
             });
             return await Promise.race([ask, stopped]);
         } catch (error) {

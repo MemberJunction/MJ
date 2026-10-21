@@ -108,15 +108,15 @@ describe('applyNativeTools — actions plus control tools', () => {
     it('declares actions, one tool per sub-agent, payload_change_request and ask_user, and names the control ones', () => {
         const promptParams = {} as AIPromptParams;
         new DeclaringProbe([anAction], [aSubAgent]).Apply(promptParams, agentParams);
-        expect(promptParams.tools?.map((t) => t.name)).toEqual(['run_ad_hoc_query', 'delegate_to_query_strategist', 'payload_change_request', 'ask_user']);
-        expect(promptParams.controlFlowToolNames).toEqual(['delegate_to_query_strategist', 'payload_change_request', 'ask_user']);
+        expect(promptParams.tools?.map((t) => t.name)).toEqual(['run_ad_hoc_query', 'delegate_to_query_strategist', 'payload_change_request', 'ask_user', 'complete_task']);
+        expect(promptParams.controlFlowToolNames).toEqual(['delegate_to_query_strategist', 'payload_change_request', 'ask_user', 'complete_task']);
         expect(promptParams.toolChoice).toBe('auto');
     });
 
     it('declares for an agent with sub-agents but no actions (pure orchestrator)', () => {
         const promptParams = {} as AIPromptParams;
         new DeclaringProbe([], [aSubAgent]).Apply(promptParams, agentParams);
-        expect(promptParams.tools?.map((t) => t.name)).toEqual(['delegate_to_query_strategist', 'payload_change_request', 'ask_user']);
+        expect(promptParams.tools?.map((t) => t.name)).toEqual(['delegate_to_query_strategist', 'payload_change_request', 'ask_user', 'complete_task']);
     });
 
     it('declares nothing for an agent with neither', () => {

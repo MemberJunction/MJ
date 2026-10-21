@@ -46,7 +46,8 @@ export class LayoutInspectorComponent extends BaseResourceComponent implements O
         super();
     }
 
-    public ngOnInit(): void {
+    public override ngOnInit(): void {
+        super.ngOnInit();
         const p = DevToolsPrefs.Get<{ activeSection?: 'workspace' | 'golden' }>('layoutInspector');
         if (p?.activeSection) this.ActiveSection = p.activeSection;
         this.Refresh();

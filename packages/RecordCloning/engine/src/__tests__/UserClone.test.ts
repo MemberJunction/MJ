@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
     BaseEntity,
     CompositeKey,
@@ -68,6 +68,7 @@ describe('Phase 4.1: MJ: Users Record Cloning Use Case', () => {
                 EmployeeID: null,
                 UserImageURL: null,
                 UserImageIconClass: null,
+                IsTemplate: false,
             },
             Rules: {
                 Rules: [
@@ -156,6 +157,7 @@ describe('Phase 4.1: MJ: Users Record Cloning Use Case', () => {
             { Name: 'Email', PrimaryKey: false, IsPrimaryKey: false, Type: 'nvarchar', IsSPParameter: () => true } as EntityFieldInfo,
             { Name: 'Type', PrimaryKey: false, IsPrimaryKey: false, Type: 'nchar', IsSPParameter: () => true } as EntityFieldInfo,
             { Name: 'IsActive', PrimaryKey: false, IsPrimaryKey: false, Type: 'bit', IsSPParameter: () => true } as EntityFieldInfo,
+            { Name: 'IsTemplate', PrimaryKey: false, IsPrimaryKey: false, Type: 'bit', IsSPParameter: () => true } as EntityFieldInfo,
             { Name: 'LinkedRecordType', PrimaryKey: false, IsPrimaryKey: false, Type: 'nchar', IsSPParameter: () => true } as EntityFieldInfo,
             { Name: 'LinkedEntityID', PrimaryKey: false, IsPrimaryKey: false, Type: 'uniqueidentifier', IsSPParameter: () => true } as EntityFieldInfo,
             { Name: 'LinkedEntityRecordID', PrimaryKey: false, IsPrimaryKey: false, Type: 'nvarchar', IsSPParameter: () => true } as EntityFieldInfo,
@@ -692,5 +694,53 @@ describe('Phase 4.1: MJ: Users Record Cloning Use Case', () => {
         const roleValues = savedRole?.GetAll();
         expect(roleValues?.RoleName).toBe('Developer');
         expect(roleValues?.UserID).toBe(userValues?.ID);
+    });
+
+    describe('template preset', () => {
+        const templatePreset = {
+            Key: 'template',
+            Label: 'Copy this template user',
+            TemplateSourceField: 'IsTemplate',
+            Relationships: { 'MJ: User Settings': { Policy: 'Deep' as const } },
+        };
+        const sourceRow = (isTemplate: boolean) => ({ ID: 'tpl-id', Name: 'demo@company.com', Email: 'demo@company.com', Type: 'User', IsActive: true, IsTemplate: isTemplate });
+        const planWith = (isTemplate: boolean) => {
+            mockRunViewInstance.mockImplementation(async (params: { EntityName: string }) => {
+                if (params.EntityName === 'MJ: Users') return { Success: true, Results: [sourceRow(isTemplate)] };
+                if (params.EntityName === 'MJ: User Settings') {
+                    return { Success: true, Results: [{ ID: 'setting-1', UserID: 'tpl-id', Setting: 'HomeApp.PinnedItems', Value: '[]' }] };
+                }
+                return { Success: true, Results: [] };
+            });
+            return new ClonePlanner({ Provider: mockMetadataProvider }).Plan(
+                {
+                    EntityName: 'MJ: Users',
+                    SourceRecordKey: { KeyValuePairs: [{ FieldName: 'ID', Value: 'tpl-id' }] },
+                    PromptedValues: { Email: 'new@company.com', FirstName: 'New', LastName: 'Person' },
+                    Preset: 'template',
+                },
+                ownerUser
+            );
+        };
+
+        beforeEach(() => {
+            userCloneConfig.Presets.push(templatePreset as (typeof userCloneConfig.Presets)[number]);
+        });
+        afterEach(() => {
+            userCloneConfig.Presets.splice(userCloneConfig.Presets.indexOf(templatePreset as (typeof userCloneConfig.Presets)[number]), 1);
+        });
+
+        it('refuses the template preset for a user that is not a template', async () => {
+            const plan = await planWith(false);
+            expect(plan.Blocked).toBe(true);
+            expect(plan.Nodes).toEqual([]);
+            expect(plan.Warnings.find((w) => w.Code === 'TEMPLATE_SOURCE_REQUIRED')?.Severity).toBe('Error');
+        });
+
+        it('plans the copy for a template user', async () => {
+            const plan = await planWith(true);
+            expect(plan.Warnings.find((w) => w.Code === 'TEMPLATE_SOURCE_REQUIRED')).toBeUndefined();
+            expect(plan.Nodes.filter((n) => n.EntityName === 'MJ: User Settings')).toHaveLength(1);
+        });
     });
 });

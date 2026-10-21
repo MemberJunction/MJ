@@ -6,8 +6,7 @@ import { MentionSuggestion,
   MentionEditorComponent,
   MessageInputBoxComponent,
   PendingAttachment,
-  BeforeSkillsOpenedEventArgs
-} from '@memberjunction/ng-composer';
+  BeforeSkillsOpenedEventArgs, SendSlotMode } from '@memberjunction/ng-composer';
 import { AgentMentionProvider } from '../../composer-plugins/agent-mention.provider';
 import { RecordMentionProvider } from '../../composer-plugins/record-mention.provider';
 import { SkillCommandProvider } from '../../composer-plugins/skill-command.provider';
@@ -54,6 +53,12 @@ import { SkillCommandProvider } from '../../composer-plugins/skill-command.provi
       [EnablePlanMode]="enablePlanMode"
       [EnableSkills]="EnableSkillCommands"
       [PlanModeActive]="planModeActive"
+      [SendSlotMode]="SendSlotMode"
+      [StopCount]="StopCount"
+      [StopLabel]="StopLabel"
+      [StatusText]="StatusText"
+      [StatusElapsed]="StatusElapsed"
+      (StopClicked)="StopClicked.emit()"
       (TextSubmitted)="textSubmitted.emit($event)"
       (Blurred)="blurred.emit()"
       (ValueChange)="onInnerValueChange($event)"
@@ -197,6 +202,18 @@ export class AiComposerComponent {
 
   // ── Proxied inputs (identical names/defaults to MessageInputBoxComponent) ────────
   @Input() Placeholder: string = 'Type your message to start a new conversation...';
+
+  // ── The send slot as a stop control (pass-through; see MessageInputBoxComponent) ──────
+  /** What the send slot is doing; the host decides. */
+  @Input() SendSlotMode: SendSlotMode = 'send';
+  /** How many things a stop would stop; above 1 the slot reads "Stop all". */
+  @Input() StopCount: number = 0;
+  /** Tooltip and accessible name of the slot in `stop` mode. */
+  @Input() StopLabel: string = 'Stop';
+  /** Status line shown bottom-left inside the box while non-null. */
+  @Input() StatusText: string | null = null;
+  /** Elapsed time after the status text, kept out of the live region and dropped on narrow screens. */
+  @Input() StatusElapsed: string | null = null;
 
   /** @deprecated Use {@link Placeholder}. */
   @Input() set placeholder(value: string) {
@@ -362,6 +379,8 @@ export class AiComposerComponent {
 
   // ── Proxied outputs ───────────────────────────────────────────────────────────────
   @Output() TextSubmitted = new EventEmitter<string>();
+  /** The send slot was clicked in `stop` mode. */
+  @Output() StopClicked = new EventEmitter<void>();
 
   /**
    * @deprecated Use {@link TextSubmitted}.
