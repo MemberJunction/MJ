@@ -81,6 +81,33 @@
 <span class="mj-forms-visually-hidden" aria-live="polite" aria-atomic="true">{{ FormIndicatorsAnnouncement }}</span>
 
 <!-- ============================================
+     NON-INTRUSIVE LIVE REMOTE UPDATE SLIDE-IN PILL
+     ============================================ -->
+@if (RemoteUpdatePill) {
+  <div class="mj-forms-remote-update-pill"
+       [class.mj-forms-remote-update-pill--warning]="RemoteUpdatePill.Kind === 'stale-while-editing'"
+       role="status"
+       aria-live="polite">
+    <i [class]="RemoteUpdatePill.Kind === 'refreshed' ? 'fa-solid fa-bolt mj-forms-remote-update-pill-icon' : 'fa-solid fa-arrows-rotate mj-forms-remote-update-pill-icon'"></i>
+    <span class="mj-forms-remote-update-pill-text">{{ RemoteUpdatePill.Summary }}</span>
+    @if (RemoteUpdatePill.Kind === 'stale-while-editing') {
+      <button type="button"
+              class="mj-forms-remote-update-pill-action"
+              (click)="OnReloadFromRemotePill()">
+        Reload
+      </button>
+    }
+    <button type="button"
+            class="mj-forms-remote-update-pill-close"
+            title="Dismiss"
+            aria-label="Dismiss notification"
+            (click)="OnDismissRemoteUpdatePill()">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+}
+
+<!-- ============================================
      POSSIBLE DUPLICATES (entry-time check, new records only)
      Flag only: never blocks a save. A name opens that record through Navigate.
      ============================================ -->
