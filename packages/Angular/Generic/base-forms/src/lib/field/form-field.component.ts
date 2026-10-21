@@ -826,11 +826,18 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   /**
-   * Whether this FK field should display the related entity name
-   * with a hyperlink instead of the raw ID value.
+   * Whether this FK field should display the related entity name (or polymorphic target link)
+   * with a hyperlink instead of plain text.
    */
   get IsFKWithNameField(): boolean {
-    return this.HasRelatedEntity && this.FKDisplayName != null;
+    if (!this.HasRelatedEntity) return false;
+    const displayName = this.FKDisplayName;
+    if (displayName != null) return true;
+    if (this.IsPolymorphicFK) {
+      const val = this.Value;
+      return val != null && String(val).trim().length > 0;
+    }
+    return false;
   }
 
   // ---- Async FK name resolution ----
@@ -888,6 +895,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         this._resolvedFKName = name || null;
         this._fkNameLoading = false;
         this.cdr.markForCheck();
+        Promise.resolve().then(() => {
+          if (!this._destroyed) {
+            this.cdr.detectChanges();
+          }
+        });
       })
       .catch(() => {
         if (this._destroyed) return;
