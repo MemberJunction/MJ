@@ -19,6 +19,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Archive Run Details&Name=ArchiveRun"
+          },
+          "sync": {
+            "lastModified": "2026-10-20T23:17:42.448Z",
+            "checksum": "89d7a968594119ca2055e212a55139077be95644dc82944831db6b5d5336eeca"
           }
         }
       ]
