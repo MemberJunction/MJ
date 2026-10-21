@@ -811,6 +811,25 @@ describe('TemplateEngineServer', () => {
             expect(result.Success).toBe(true);
             expect(result.Output).toBe('c');
         });
+
+        it('should automatically recompile when TemplateText changes in-place for the same contentId (MJ-CORE-5 AutoRefresh)', async () => {
+            const templateEntity = {
+                ID: 't-1',
+                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
+                GetParametersForContent: vi.fn().mockReturnValue([]),
+            };
+            const tc = { ID: 'auto-refresh-id', TemplateText: 'Before: {{ x }}' };
+
+            const first = await engine.RenderTemplate(templateEntity as never, tc as never, { x: 'val' });
+            expect(first.Success).toBe(true);
+            expect(first.Output).toBe('Before: val');
+
+            // Simulate AutoRefresh updating TemplateText on the cached entity
+            tc.TemplateText = 'After: {{ x }}!';
+            const second = await engine.RenderTemplate(templateEntity as never, tc as never, { x: 'val' });
+            expect(second.Success).toBe(true);
+            expect(second.Output).toBe('After: val!');
+        });
     });
 
     describe('AddTemplate', () => {

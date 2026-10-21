@@ -135,4 +135,46 @@ describe('TaskStore', () => {
         expect(TERMINAL_STATUSES.has('pending')).toBe(false);
         expect(TERMINAL_STATUSES.has('in_progress')).toBe(false);
     });
+
+    describe('Event-driven Subscribe / Notify / CancelTask (MJ-AI-10)', () => {
+        it('notifies subscribers immediately on Notify and auto-unsubscribes on terminal status', () => {
+            const store = new TaskStore();
+            const task = makeTask('t1', 'pending', new Date());
+            store.set('t1', task);
+
+            const seenStatuses: TaskStatus[] = [];
+            store.Subscribe('t1', (updated) => {
+                seenStatuses.push(updated.status);
+            });
+
+            task.status = 'in_progress';
+            store.Notify(task);
+
+            task.status = 'completed';
+            store.Notify(task);
+
+            // Any subsequent notify after terminal state should not invoke the auto-cleaned listener
+            store.Notify(task);
+
+            expect(seenStatuses).toEqual(['in_progress', 'completed']);
+        });
+
+        it('CancelTask aborts the registered AbortController and notifies subscribers immediately', () => {
+            const store = new TaskStore();
+            const task = makeTask('t-cancel', 'in_progress', new Date());
+            store.set('t-cancel', task);
+
+            const controller = store.RegisterAbortController('t-cancel');
+            const seenStatuses: TaskStatus[] = [];
+            store.Subscribe('t-cancel', (updated) => {
+                seenStatuses.push(updated.status);
+            });
+
+            expect(store.CancelTask('t-cancel', 'User requested stop')).toBe(true);
+            expect(task.status).toBe('cancelled');
+            expect(controller.signal.aborted).toBe(true);
+            expect(controller.signal.reason).toBe('User requested stop');
+            expect(seenStatuses).toEqual(['cancelled']);
+        });
+    });
 });

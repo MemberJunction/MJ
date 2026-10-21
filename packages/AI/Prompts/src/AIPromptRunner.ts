@@ -2374,12 +2374,69 @@ export class AIPromptRunner extends BaseModelRunner {
       // place streaming is configured for prompt execution, so the single-model path and the parallel
       // path (which bridges its per-task callbacks into params.onStreaming) stream through identical
       // code — no second streaming implementation that can drift.
+      // Coalesce rapid token chunks within a 35ms window (~28 fps) to avoid flooding WebSocket/PubSub
+      // while emitting the first chunk immediately and flushing synchronously on completion.
+      let flushStreamingBuffer: (() => void) | undefined;
       if (params.onStreaming) {
         const onStreaming = params.onStreaming;
+        const coalesceIntervalMs = 35;
+        let bufferedContent = '';
+        let lastEmitMs = 0;
+        let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const clearTimer = (): void => {
+          if (flushTimer !== null) {
+            clearTimeout(flushTimer);
+            flushTimer = null;
+          }
+        };
+
+        const emitNow = (content: string, isComplete: boolean): void => {
+          clearTimer();
+          lastEmitMs = Date.now();
+          onStreaming({ content, isComplete, modelName: model.Name });
+        };
+
+        flushStreamingBuffer = (): void => {
+          clearTimer();
+          if (bufferedContent.length > 0) {
+            const pending = bufferedContent;
+            bufferedContent = '';
+            lastEmitMs = Date.now();
+            onStreaming({ content: pending, isComplete: false, modelName: model.Name });
+          }
+        };
+
         chatParams.streaming = true;
         chatParams.streamingCallbacks = {
-          OnContent: (chunk: string, isComplete: boolean) =>
-            onStreaming({ content: chunk, isComplete, modelName: model.Name }),
+          OnContent: (chunk: string, isComplete: boolean) => {
+            if (isComplete) {
+              const combined = bufferedContent + chunk;
+              bufferedContent = '';
+              emitNow(combined, true);
+              return;
+            }
+            const now = Date.now();
+            if (lastEmitMs === 0 || now - lastEmitMs >= coalesceIntervalMs) {
+              const combined = bufferedContent + chunk;
+              bufferedContent = '';
+              emitNow(combined, false);
+              return;
+            }
+            bufferedContent += chunk;
+            if (flushTimer === null) {
+              const delay = Math.max(1, coalesceIntervalMs - (now - lastEmitMs));
+              flushTimer = setTimeout(() => {
+                flushTimer = null;
+                if (bufferedContent.length > 0) {
+                  const pending = bufferedContent;
+                  bufferedContent = '';
+                  lastEmitMs = Date.now();
+                  onStreaming({ content: pending, isComplete: false, modelName: model.Name });
+                }
+              }, delay);
+            }
+          },
         };
       }
 
@@ -2392,7 +2449,11 @@ export class AIPromptRunner extends BaseModelRunner {
       // for gpt-5.6-luna in /v1/chat/completions`. Both shapes get the same one-shot retry.
       let chatResult: ChatResult;
       try {
-        chatResult = await this.runChatCompletionBounded(llm, chatParams, executionBound);
+        try {
+          chatResult = await this.runChatCompletionBounded(llm, chatParams, executionBound);
+        } finally {
+          flushStreamingBuffer?.();
+        }
       } catch (error) {
         if (!chatParams.tools?.length || !this.isToolSpecificFailureText(error instanceof Error ? error.message : String(error ?? ''))) {
           throw error;

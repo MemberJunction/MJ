@@ -62,6 +62,8 @@ export interface TaskStoreOptions {
  */
 export class TaskStore implements IShutdownable {
     private readonly _tasks: Map<string, Task> = new Map();
+    private readonly _listeners: Map<string, Set<(task: Task) => void>> = new Map();
+    private readonly _abortControllers: Map<string, AbortController> = new Map();
     private readonly _sweepIntervalMs: number;
     private readonly _retentionMs: number;
     private _timer: ReturnType<typeof setInterval> | null = null;
@@ -88,13 +90,20 @@ export class TaskStore implements IShutdownable {
     }
 
     /**
-     * Stop the sweep timer and drop all tasks. Idempotent.
+     * Stop the sweep timer and drop all tasks, listeners, and abort controllers. Idempotent.
      */
     public Shutdown(): void {
         if (this._timer) {
             clearInterval(this._timer);
             this._timer = null;
         }
+        for (const controller of this._abortControllers.values()) {
+            if (!controller.signal.aborted) {
+                controller.abort('A2AServer.TaskStore shutdown');
+            }
+        }
+        this._abortControllers.clear();
+        this._listeners.clear();
         this._tasks.clear();
     }
 
@@ -115,6 +124,8 @@ export class TaskStore implements IShutdownable {
         for (const [id, task] of this._tasks) {
             if (TERMINAL_STATUSES.has(task.status) && task.updated.getTime() <= cutoff) {
                 this._tasks.delete(id);
+                this._listeners.delete(id);
+                this._abortControllers.delete(id);
                 evicted++;
             }
         }
@@ -122,6 +133,74 @@ export class TaskStore implements IShutdownable {
             LogStatus(`A2AServer.TaskStore swept ${evicted} terminal task(s)`);
         }
         return evicted;
+    }
+
+    /**
+     * Subscribe to event-driven updates for a specific task ID (replaces 500ms polling).
+     * Returns an unsubscribe function.
+     */
+    public Subscribe(taskId: string, listener: (task: Task) => void): () => void {
+        let set = this._listeners.get(taskId);
+        if (!set) {
+            set = new Set();
+            this._listeners.set(taskId, set);
+        }
+        set.add(listener);
+        return () => {
+            const current = this._listeners.get(taskId);
+            if (current) {
+                current.delete(listener);
+                if (current.size === 0) {
+                    this._listeners.delete(taskId);
+                }
+            }
+        };
+    }
+
+    /**
+     * Notify all subscribers of a task state change. Automatically cleans up
+     * listeners and abort controllers once the task reaches a terminal state.
+     */
+    public Notify(task: Task): void {
+        this._tasks.set(task.id, task);
+        const set = this._listeners.get(task.id);
+        if (set) {
+            for (const listener of Array.from(set)) {
+                listener(task);
+            }
+        }
+        if (TERMINAL_STATUSES.has(task.status)) {
+            this._listeners.delete(task.id);
+            this._abortControllers.delete(task.id);
+        }
+    }
+
+    /**
+     * Register an `AbortController` for an in-flight task so `CancelTask` can propagate
+     * cancellation down to `AgentOperations` / `AgentRunner`.
+     */
+    public RegisterAbortController(taskId: string, controller: AbortController = new AbortController()): AbortController {
+        this._abortControllers.set(taskId, controller);
+        return controller;
+    }
+
+    /**
+     * Cancel an in-flight task, aborting its registered `AbortController` (if any) and
+     * notifying any active SSE subscribers immediately.
+     */
+    public CancelTask(taskId: string, reason: string = 'Task cancelled via A2A'): boolean {
+        const task = this._tasks.get(taskId);
+        if (!task) {
+            return false;
+        }
+        task.status = 'cancelled';
+        task.updated = new Date();
+        const controller = this._abortControllers.get(taskId);
+        if (controller && !controller.signal.aborted) {
+            controller.abort(reason);
+        }
+        this.Notify(task);
+        return true;
     }
 
     public Set(id: string, task: Task): this {
@@ -150,6 +229,8 @@ export class TaskStore implements IShutdownable {
         return this.Has(id);
     }
     public Delete(id: string): boolean {
+        this._listeners.delete(id);
+        this._abortControllers.delete(id);
         return this._tasks.delete(id);
     }
 

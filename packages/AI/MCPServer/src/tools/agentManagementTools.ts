@@ -83,9 +83,10 @@ function registerAgentCatalogTool(addTool: AddToolFn, sessionContext: MCPSession
             status: z.enum(['Active', 'Disabled', 'Pending', 'all']).optional().default('Active').describe('Filter by agent status')
         }),
         scopeInfo: { scopePath: 'agent:read', resource: '*' },
-        async execute(props) {
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             const aiEngine = AIEngine.Instance;
-            await aiEngine.Config(false, sessionContext.user);
+            await aiEngine.Config(false, sessionUser);
 
             const pattern = props.pattern as string;
             const topLevelOnly = props.topLevelOnly as boolean;
@@ -122,8 +123,8 @@ function registerAgentSpecTool(addTool: AddToolFn, sessionContext: MCPSessionCon
             scopePath: 'agent:read',
             resource: (props.agentName as string) || (props.agentId as string) || '*'
         }),
-        async execute(props) {
-            const sessionUser = sessionContext.user;
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             const agentId = props.agentId as string | undefined;
             const agentName = props.agentName as string | undefined;
             const includeSubAgents = props.includeSubAgents as boolean;
@@ -158,7 +159,8 @@ function registerCreateAgentTool(addTool: AddToolFn, sessionContext: MCPSessionC
             scopePath: 'agent:manage',
             resource: ((props.spec as Partial<AgentSpec> | undefined)?.Name) || '*'
         }),
-        async execute(props) {
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             const spec = props.spec as AgentSpec;
             const validationError = ValidateCreateSpec(spec);
             if (validationError) {
@@ -167,7 +169,7 @@ function registerCreateAgentTool(addTool: AddToolFn, sessionContext: MCPSessionC
 
             try {
                 spec.ID = '';
-                const sync = AgentSpecSync.FromRawSpec(spec, sessionContext.user);
+                const sync = AgentSpecSync.FromRawSpec(spec, sessionUser);
                 sync.markDirty();
                 const result = await sync.SaveToDatabase();
                 return JSON.stringify({
@@ -196,7 +198,8 @@ function registerUpdateAgentTool(addTool: AddToolFn, sessionContext: MCPSessionC
             scopePath: 'agent:manage',
             resource: ((props.spec as Partial<AgentSpec> | undefined)?.Name) || '*'
         }),
-        async execute(props) {
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             const spec = props.spec as AgentSpec;
             const validationError = ValidateUpdateSpec(spec);
             if (validationError) {
@@ -206,9 +209,9 @@ function registerUpdateAgentTool(addTool: AddToolFn, sessionContext: MCPSessionC
             try {
                 // Confirm the target exists (and the session user can read it)
                 // before running the full-replace save with its orphan cleanup.
-                await AgentSpecSync.LoadFromDatabase(spec.ID, sessionContext.user, false);
+                await AgentSpecSync.LoadFromDatabase(spec.ID, sessionUser, false);
 
-                const sync = AgentSpecSync.FromRawSpec(spec, sessionContext.user);
+                const sync = AgentSpecSync.FromRawSpec(spec, sessionUser);
                 sync.markDirty();
                 sync.markLoaded();
                 const result = await sync.SaveToDatabase();
@@ -233,9 +236,10 @@ function registerAgentTypeListTool(addTool: AddToolFn, sessionContext: MCPSessio
         description: 'List available AI agent types (e.g. Loop for iterative LLM-driven agents, Flow for deterministic graph workflows). Use the returned IDs as TypeID in AgentSpec documents.',
         parameters: z.object({}),
         scopeInfo: { scopePath: 'agent:read', resource: '*' },
-        async execute() {
+        async execute(_props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             const aiEngine = AIEngine.Instance;
-            await aiEngine.Config(false, sessionContext.user);
+            await aiEngine.Config(false, sessionUser);
             return JSON.stringify(aiEngine.AgentTypes.map(t => ({
                 id: t.ID,
                 name: t.Name,
@@ -256,9 +260,10 @@ function registerActionCatalogTool(addTool: AddToolFn, sessionContext: MCPSessio
             includeInactive: z.boolean().optional().default(false).describe('Include actions whose status is not Active')
         }),
         scopeInfo: { scopePath: 'action:read', resource: '*' },
-        async execute(props) {
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             const actionEngine = ActionEngineBase.Instance;
-            await actionEngine.Config(false, sessionContext.user);
+            await actionEngine.Config(false, sessionUser);
 
             const pattern = props.pattern as string;
             const category = props.category as string | undefined;

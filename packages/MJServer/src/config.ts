@@ -5,6 +5,7 @@ import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
+import { ResolveServerRole, type ServerRole } from './serverRoleConfigUnits.js';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -316,6 +317,45 @@ const cacheSettingsSchema = z.object({
    * for it. 0 disables the turn-taking. Default: 30.
    */
   startupWarmupLeaseSeconds: z.number().int().nonnegative().optional().default(30),
+  /**
+   * Pluggable cache invalidation broadcast topology configuration.
+   * Defaults to `'SequencedRoleBucket'` (Topology 1 Monotonic Sequence Ring Buffer + Topology 2
+   * Role-Fingerprint $O(\text{Roles})$ evaluation & shaping memoizer).
+   */
+  broadcast: z
+    .object({
+      provider: z.string().optional().default('SequencedRoleBucket'),
+      ringBufferSize: z.number().int().positive().optional().default(5000),
+      excludedEntities: z.array(z.string()).optional().default([]),
+      azureWebPubSub: z
+        .object({
+          endpoint: z.string().optional(),
+          hubName: z.string().optional(),
+          accessKey: z.string().optional(),
+          tokenTtlMinutes: z.number().positive().optional(),
+        })
+        .optional(),
+      awsIoTCore: z
+        .object({
+          endpoint: z.string().optional(),
+          region: z.string().optional(),
+          topicPrefix: z.string().optional(),
+          accessKeyId: z.string().optional(),
+          secretAccessKey: z.string().optional(),
+          tokenTtlSeconds: z.number().positive().optional(),
+        })
+        .optional(),
+      gcpPubSub: z
+        .object({
+          projectId: z.string().optional(),
+          topicPrefix: z.string().optional(),
+          gatewayUrl: z.string().optional(),
+          signingSecret: z.string().optional(),
+          tokenTtlSeconds: z.number().positive().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 const loggingSettingsSchema = z.object({
@@ -913,7 +953,17 @@ const configInfoSchema = z.object({
     .transform((val) => z.record(z.string()).parse(JSON.parse(val)))
     .optional(),
   mjCoreSchema: z.string(),
+  /**
+   * Server execution role for horizontal scaling:
+   * - `'all'` (default): runs both interactive HTTP/GraphQL/WebSocket handlers and background worker loops.
+   * - `'api'`: runs interactive HTTP/GraphQL/WebSocket handlers only; background worker loops are skipped.
+   * - `'worker'`: runs background worker loops (`ScheduledJobsService`, `IntegrationSyncWorkerService`,
+   *   `StartTaskGraphDispatcher`, `StartWorkQueueHost`, `SessionJanitor`, reconcilers).
+   */
+  serverRole: z.enum(['all', 'api', 'worker']).optional().default('all'),
 });
+
+export type { ServerRole };
 
 export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
 export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
@@ -984,6 +1034,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
   enableIntrospection: process.env.ENABLE_INTROSPECTION === 'true',
   apiKey: process.env.MJ_API_KEY,
   websiteRunFromPackage: process.env.WEBSITE_RUN_FROM_PACKAGE ? parseInt(process.env.WEBSITE_RUN_FROM_PACKAGE, 10) : undefined,
+  serverRole: ResolveServerRole(process.env.MJ_SERVER_ROLE),
 
   // User handling defaults
   userHandling: {
