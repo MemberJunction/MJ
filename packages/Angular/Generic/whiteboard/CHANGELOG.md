@@ -1,5 +1,37 @@
 # @memberjunction/ng-whiteboard
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 1aefcb4: `<mj-realtime-whiteboard-host>` gains a `ShowFocusToggle` input (default `true`). The header's Focus toggle ("Move to stage" / "Back to tab") only emits `FocusModeChange`; a host that composes the board into its own chrome has nothing to collapse, so the button was visible and did nothing, and could only be removed by `!important` CSS against an internal class name. Hosts without a stage now pass `[ShowFocusToggle]="false"`. `SetOnStage` and `FocusMode` keep working with the toggle hidden; the rest of the header is unchanged.
+
+  `<mj-livekit-whiteboard-surface>` passes it: the LiveKit room has no stage and never serviced `FocusModeChange`, so its board header no longer carries the inert button.
+
+- 2f9e209: Whiteboard: a resize gesture that doesn't move a markdown panel's top or bottom edge no longer changes its max-height cap. A click on a handle (including the pixel of travel a real mouse or trackpad adds, under the same 3px threshold as a move) commits nothing, and a corner dragged only sideways changes the width but keeps the cap. Before, both lowered the cap to the text's current height, so the agent's next, longer answer clipped there.
+- 382de4d: Trackpad zoom on the whiteboard now tracks the gesture. `OnWheel` read only the sign of `deltaY` and applied a fixed 10% step per event, so a macOS pinch (ctrl+wheel with small fractional deltas at the trackpad's sample rate) zoomed by event COUNT, not finger distance: about nine samples saturated the 25%–200% range, which is the "way too fast and abrupt, hard to fine-tune" report.
+  - **Magnitude-scaled factor.** The zoom factor is `exp(-delta * k)` with the delta capped at 50px per event and `k` tuned so one mouse notch is still exactly the familiar 10% step. A 5px trackpad sample moves ~1%, and ten small samples land where one sample of their sum lands.
+  - **`deltaMode` normalized.** Line and page deltas (Firefox mouse wheels) convert to pixels first instead of reading as a few pixels.
+  - **Only `ctrlKey` zooms.** `metaKey` used to zoom too, so Cmd+two-finger scroll zoomed and macOS momentum kept it zooming after the fingers lifted. Cmd-scroll now pans like a plain scroll.
+  - **Stepped zoom eases.** The zoom cluster's +/− buttons jump between presets (11%, then 25%, then 33%); the viewport now carries a 180ms transform transition for that button path only, honoring `prefers-reduced-motion`. The wheel and the hold-to-zoom tick path stay un-transitioned, since a transition on a continuous gesture lags it. New public `ViewportStepping` flag and `ZOOM_STEP_TRANSITION_MS` export on the board component.
+  - **Board CSS is token-clean.** The six hardcoded colors the hex gate flagged on first touch (sticky paper gradients, sticky ink, the Sage cursor ink, the text-label shadow, the widget frame's fixed white) now derive from the `--mj-color-warning-*` ramp, the neutral ramp, and the board's `--sage` accent, so re-tinting the agent accent re-tints its notes. No visual change intended.
+
+- 8576224: Three fixes in the HTML-widget input bridge's auto-submit fallback (the helper script every widget `srcdoc` carries).
+  - **A typeless `<button>` no longer auto-submits.** The submit-ish click test read the button's `type` PROPERTY, and a `<button>` with no type attribute reports `type === 'submit'`, so clicking "Show hint" or "Play" forwarded the form 150 ms later and told the agent the user had submitted. The test now reads the `type` attribute; a button is submit-ish by its label, or by an explicit `type="submit"`.
+  - **Checkbox groups keep every ticked value.** `collectFields` wrote `out[name] = 'checked'`, so two ticked boxes in a group collapsed to one `"checked"` with no record of which. Every ticked checkbox now lands in an array of its values under the group's label (`{ toppings: ["olives", "chili"] }`). A single ticked checkbox is a one-element array too, so the shape is stable whatever the count. Text, select and textarea values are unchanged.
+  - **A valueless box reports its label.** A ticked checkbox or radio with no `value` attribute used to serialize as the native `"on"`, so a group of valueless boxes still lost which ones were ticked. It now reports the box's own label text (`<label>` wrapper or `for=`), so `{ toppings: ["Olives", "Chili"] }` comes through from agent HTML that never set values. A non-blank `value` always wins (an empty or whitespace-only attribute counts as absent), and a box with neither keeps `"on"`.
+  - A new DOM spec executes the helper against a real document with `parent.postMessage` captured, so all three behaviours are pinned rather than the helper's source text.
+
+- Updated dependencies [81aea34]
+- Updated dependencies [8b62f8c]
+- Updated dependencies [2274f42]
+- Updated dependencies [c271ddf]
+- Updated dependencies [17a4137]
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ng-ui-components@6.2.0-edge.5
+  - @memberjunction/ng-markdown@6.2.0-edge.5
+  - @memberjunction/ng-code-editor@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Patch Changes

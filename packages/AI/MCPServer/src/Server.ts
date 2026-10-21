@@ -766,7 +766,7 @@ export function ClearCompiledToolCache(): void {
  * Computes a cache key reflecting the current MCP server configuration and engine metadata counts.
  */
 function computeCompiledToolCacheKey(): string {
-    const md = Metadata.Provider;
+    const md = Metadata.Provider; // global-provider-ok: process-wide tool cache key, not per-request
     const entityCount = md?.Entities?.length ?? 0;
     const actionCount = ActionEngineServer.Instance.Loaded ? ActionEngineServer.Instance.Actions.length : 0;
     const actionParamCount = ActionEngineServer.Instance.Loaded ? ActionEngineServer.Instance.ActionParams.length : 0;
