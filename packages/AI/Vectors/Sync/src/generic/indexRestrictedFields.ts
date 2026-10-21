@@ -25,21 +25,44 @@ import type { EntityFieldInfo, EntityInfo } from '@memberjunction/core';
  */
 export function GetIndexRestrictedFieldNames(entity: EntityInfo | null | undefined): Set<string> {
     const restricted = new Set<string>();
-    if (!entity?.EnableFieldLevelSecurity) {
+    if (!entity?.FieldLevelSecurityApplies) {
         return restricted;
     }
-    for (const field of entity.Fields ?? []) {
-        if (IsIndexRestrictedField(field)) {
-            restricted.add(field.Name.trim().toLowerCase());
+    if (entity.EnableFieldLevelSecurity) {
+        for (const field of entity.Fields ?? []) {
+            if (IsIndexRestrictedField(field)) {
+                restricted.add(field.Name.trim().toLowerCase());
+            }
         }
     }
+    addFieldsRestrictedOnParent(entity, restricted);
     return restricted;
 }
 
 /**
+ * An IS-A child mirrors each parent field as a field of its own, read from the same row, so a
+ * field restricted on any ancestor stays restricted on the child. Only the child's mirrors of
+ * parent fields are added: a field the child defines itself answers to the child's own rules.
+ */
+function addFieldsRestrictedOnParent(entity: EntityInfo, restricted: Set<string>): void {
+    const parent = entity.ParentID ? entity.ParentEntityInfo : null;
+    if (!parent?.FieldLevelSecurityApplies) {
+        return;
+    }
+    const parentRestricted = GetIndexRestrictedFieldNames(parent);
+    for (const field of entity.Fields ?? []) {
+        const mirrored = parent.FieldByName(field.Name);
+        if (mirrored && parentRestricted.has(mirrored.Name.trim().toLowerCase())) {
+            restricted.add(field.Name.trim().toLowerCase());
+        }
+    }
+}
+
+/**
  * Whether one field of an entity that has field-level security enabled must stay out of shared
- * indexes. See {@link GetIndexRestrictedFieldNames} for the rule. The caller is responsible for
- * checking the entity's `EnableFieldLevelSecurity` flag first.
+ * indexes, judged on its own entity's rules. See {@link GetIndexRestrictedFieldNames} for the rule,
+ * including IS-A inheritance. The caller is responsible for checking the entity's
+ * `EnableFieldLevelSecurity` flag first.
  */
 export function IsIndexRestrictedField(field: EntityFieldInfo): boolean {
     if (field.IsUnrestrictableField || field.IsOnUnrestrictableEntity) {

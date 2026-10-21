@@ -163,6 +163,7 @@ function widgetsEntity(deniedFields: string[] = []): EntityInfo {
         ExternalDataSourceID: null,
         UserViewMaxRows: 0,
         EnableFieldLevelSecurity: deniedFields.length > 0,
+        FieldLevelSecurityApplies: deniedFields.length > 0,
         GetDeniedReadFields: () => new Set(deniedFields.map((f) => f.toLowerCase())),
         HasBinaryFields: false,
         GetUserPermisions: () => ({ CanRead: true }),

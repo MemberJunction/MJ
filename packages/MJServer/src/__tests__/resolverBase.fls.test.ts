@@ -116,7 +116,7 @@ vi.mock('@memberjunction/core-entities', () => ({}));
 
 // ─── Import after mocks ──────────────────────────────────────────────────
 import { ResolverBase } from '../generic/ResolverBase';
-import { EntityInfo, Metadata, RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, Metadata, RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from '@memberjunction/core';
 
 // ─── Metadata builders (mirrors MJCore's fieldSecurity.enforcement tests) ──
 
@@ -562,5 +562,93 @@ describe('ResolverBase.MustLoadTruthFromDatabase: Update row filters (#4919)', (
     it('ignores a Read-only row filter: only the Update filter gates this save', () => {
         const entity = entityWithInternFilter({ ReadRLSFilterID: DRAFTS_ONLY });
         expect(resolver.TestMustLoadTruth(entity, claimsNewStatusAsOld(), false, false, buildUser([INTERN_ROLE_ID]))).toBe(false);
+    });
+});
+
+/**
+ * IS-A children. A child carries its parent's fields as mirror fields of its own and nearly never
+ * has its own `EnableFieldLevelSecurity` on, so both guards must ask whether field security
+ * applies through the chain (`FieldLevelSecurityApplies`), not the child's own flag.
+ */
+describe('ResolverBase field-security guards on an IS-A child', () => {
+    const CHILD_ID = 'entity-contractors';
+    let resolver: TestResolver;
+
+    /** A `Contractors` IS-A `Employees` child with its own flag OFF and a mirror of every parent field. */
+    function childOf(parentInit: Record<string, unknown>): EntityInfo {
+        const entities: EntityInfo[] = [];
+        const provider = {
+            EntityByID: (id: string) => entities.find((e) => e.ID === id),
+            Entities: entities,
+        } as unknown as IMetadataProvider;
+        const parentFields = parentInit['Fields'] as Array<Record<string, unknown>>;
+        const childInit: Record<string, unknown> = {
+            ...parentInit,
+            ID: CHILD_ID,
+            Name: 'Contractors',
+            BaseTable: 'Contractor',
+            BaseView: 'vwContractors',
+            ParentID: ENTITY_ID,
+            EnableFieldLevelSecurity: false,
+            Permissions: (parentInit['Permissions'] as Array<Record<string, unknown>>).map((p) => ({ ...p, EntityID: CHILD_ID })),
+            Fields: parentFields.map((f) => ({ ID: `c-${f['ID']}`, EntityID: CHILD_ID, Sequence: f['Sequence'], Name: f['Name'], Entity: 'Contractors', Type: f['Type'], IsPrimaryKey: f['IsPrimaryKey'] })),
+        };
+        entities.push(new EntityInfo(parentInit, provider), new EntityInfo(childInit, provider));
+        return entities[1];
+    }
+
+    beforeEach(() => {
+        resolver = new TestResolver();
+    });
+
+    it('REGRESSION: StripDeniedReadFieldsFromClientInput strips a field the parent denies from the child\'s input', () => {
+        const child = childOf(employeeEntityInit(true));
+        expect(child.EnableFieldLevelSecurity).toBe(false);
+        const { input, clientNewValues } = makeClientPayload({ ID: '1', Notes: 'edited', Salary: 0 }, [{ Key: 'Salary', Value: '0' }]);
+
+        expect(resolver.TestStrip(child, buildUser([INTERN_ROLE_ID]), input, clientNewValues)).toBe(true);
+        expect(clientNewValues).toEqual({ ID: '1', Notes: 'edited' });
+        expect(input.OldValues___).toEqual([]);
+    });
+
+    it('StripDeniedReadFieldsFromClientInput leaves the child\'s input alone when no ancestor has field security', () => {
+        const child = childOf(employeeEntityInit(false));
+        const { input, clientNewValues } = makeClientPayload({ ID: '1', Salary: 0 });
+        expect(resolver.TestStrip(child, buildUser([INTERN_ROLE_ID]), input, clientNewValues)).toBe(false);
+        expect(clientNewValues).toEqual({ ID: '1', Salary: 0 });
+    });
+
+    /** Employees where the intern may read every field but not update Salary, with tracking off. */
+    function readAllowUpdateDenyInit(withFls: boolean): Record<string, unknown> {
+        const init = employeeEntityInit(withFls);
+        init['TrackRecordChanges'] = false;
+        const fields = init['Fields'] as Array<Record<string, unknown>>;
+        for (const f of fields) {
+            if (f['ID'] !== 'f-id') f['EntityFieldPermissions'] = openTo(f['ID'] as string);
+        }
+        fields.find((f) => f['ID'] === 'f-salary')!['EntityFieldPermissions'] = [
+            ...openTo('f-salary', [HR_ROLE_ID]),
+            { ID: 'f-salary-intern', EntityFieldID: 'f-salary', RoleID: INTERN_ROLE_ID, ReadAccess: 'Allow', UpdateAccess: 'Deny', CreateAccess: 'Deny' },
+        ];
+        return init;
+    }
+
+    const pinnedOldValues = (): ClientInput => ({
+        ID: '1',
+        Notes: 'edited',
+        OldValues___: [{ Key: 'ID', Value: '1' }, { Key: 'Notes', Value: 'original' }, { Key: 'Salary', Value: '999999' }],
+    });
+
+    it('REGRESSION: MustLoadTruthFromDatabase forces the truth-load on a child whose parent has field security', () => {
+        const child = childOf(readAllowUpdateDenyInit(true));
+        child.TrackRecordChanges = false;
+        expect(child.GetDeniedReadFields(buildUser([INTERN_ROLE_ID])).size).toBe(0);
+        expect(resolver.TestMustLoadTruth(child, pinnedOldValues(), false, false)).toBe(true);
+    });
+
+    it('MustLoadTruthFromDatabase keeps the OldValues shortcut on a child when no ancestor has field security', () => {
+        const child = childOf(readAllowUpdateDenyInit(false));
+        child.TrackRecordChanges = false;
+        expect(resolver.TestMustLoadTruth(child, pinnedOldValues(), false, false)).toBe(false);
     });
 });

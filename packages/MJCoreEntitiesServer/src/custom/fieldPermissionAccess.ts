@@ -1,4 +1,4 @@
-import { FieldPermissionAccess, FieldPermissionRuleVerbs } from '@memberjunction/core';
+import { FieldPermissionAccess, FieldPermissionRuleVerbs, IsRestrictingFieldRule } from '@memberjunction/core';
 
 /**
  * Case-insensitive handling of `MJ: Entity Field Permissions` Access values for the server-side
@@ -35,13 +35,11 @@ export function FieldPermissionAccessIs(value: string | null | undefined, expect
 /**
  * True when a single rule takes access away — a `Deny` on any verb, under any spelling.
  *
- * Same question as `IsRestrictingFieldRule` in `@memberjunction/core`, answered case-insensitively
- * so it agrees with the aggregation. Like that function it judges ONE rule: whether a change
- * restricts a user is a property of the projected aggregate across their roles.
+ * Kept for the guards that already import it; it is `IsRestrictingFieldRule` from
+ * `@memberjunction/core`, which compares case-insensitively so it agrees with the aggregation.
+ * Like that function it judges ONE rule: whether a change restricts a user is a property of the
+ * projected aggregate across their roles.
  */
 export function IsRestrictingFieldRuleAnyCase(rule: FieldPermissionRuleVerbs | null | undefined): boolean {
-    if (!rule) {
-        return false;
-    }
-    return FieldPermissionAccessVerbs.some((verb) => FieldPermissionAccessIs(rule[verb], FieldPermissionAccess.Deny));
+    return IsRestrictingFieldRule(rule);
 }

@@ -243,7 +243,7 @@ export class RecordChangeFieldSecurityProjector {
     private callerCarriesDenials(): boolean {
         if (this.carriesDenials === null) {
             this.carriesDenials = this.provider.Entities.some(
-                (e) => e.EnableFieldLevelSecurity && e.GetDeniedReadFields(this.user).size > 0
+                (e) => e.FieldLevelSecurityApplies && e.GetDeniedReadFields(this.user).size > 0
             );
         }
         return this.carriesDenials;

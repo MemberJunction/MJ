@@ -130,7 +130,7 @@ export class ResolverBase {
     if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
 
     const denied = deniedReadFields ?? (
-      entityInfo.EnableFieldLevelSecurity && contextUser
+      entityInfo.FieldLevelSecurityApplies && contextUser
         ? entityInfo.GetDeniedReadFields(contextUser)
         : null
     );
@@ -1951,7 +1951,7 @@ export class ResolverBase {
    * writable fields in `OldValues___`, so {@link hasCompleteOldValues} returns `false` and forces the
    * database load (`InnerLoad`) so untouched columns retain their stored values.
    *
-   * `EnableFieldLevelSecurity` is the security-critical one, and it is NOT redundant with
+   * `FieldLevelSecurityApplies` (own flag or an IS-A ancestor's) is the security-critical one, and it is NOT redundant with
    * `hasDeniedReadFields`. That flag reports READ denials, and the canonical FLS configuration is
    * Read Allow + Update Deny — which leaves it false. Such a caller would be hydrated from its own
    * `OldValues___`, and a value it supplies there for an update-denied field arrives through
@@ -2006,7 +2006,7 @@ export class ResolverBase {
       !this.hasCompleteOldValues(entityInfo, input.OldValues___) ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
-      entityInfo.EnableFieldLevelSecurity ||
+      entityInfo.FieldLevelSecurityApplies ||
       !user ||
       entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Update, '').length > 0
     );
@@ -2038,7 +2038,7 @@ export class ResolverBase {
     input: { OldValues___?: Array<{ Key: string; Value: unknown }> } & Record<string, unknown>,
     clientNewValues: Record<string, unknown>
   ): boolean {
-    if (!entityInfo.EnableFieldLevelSecurity || !userInfo) {
+    if (!entityInfo.FieldLevelSecurityApplies || !userInfo) {
       return false;
     }
     const deniedReadNames = entityInfo.GetDeniedReadFields(userInfo);

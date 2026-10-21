@@ -109,7 +109,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
      * template that references a denied field renders it empty.
      */
     protected StripDeniedReadFields(entityInfo: EntityInfo, rows: EntityCommunicationRecord[], contextUser: UserInfo): EntityCommunicationRecord[] {
-        if (!entityInfo.EnableFieldLevelSecurity)
+        if (!entityInfo.FieldLevelSecurityApplies)
             return rows;
         const denied = entityInfo.GetDeniedReadFields(contextUser);
         if (denied.size === 0)

@@ -1,4 +1,4 @@
-import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager, ComputeContentHashAsync } from '@memberjunction/global';
+import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, UserCacheKeySegment, WarningManager, ComputeContentHashAsync } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
@@ -2114,22 +2114,37 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * The create path's SubtypeSelector lookup memo, partitioned by the provider that ran the lookup. A memo
-     * shared across providers would hand provider B a row loaded through provider A (another connection,
-     * another user's context) or a `null` miss recorded against A's database. Keyed weakly so a
-     * request-scoped provider's memo is collected with it.
+     * The create path's SubtypeSelector lookup memo, partitioned by the provider that ran the lookup and
+     * then by the user it ran for. A memo shared across providers would hand provider B a row loaded
+     * through provider A (another connection) or a `null` miss recorded against A's database. A memo
+     * shared across users would hand one user an entity object shaped to another: an object holds only
+     * the fields its own user may read, so a record loaded for an administrator carries values a
+     * restricted user is denied. Keyed weakly so a request-scoped provider's memo is collected with it.
      */
-    private static _subtypeLookupCache = new WeakMap<object, Map<string, BaseEntity | null>>();
+    private static _subtypeLookupCache = new WeakMap<object, Map<string, Map<string, BaseEntity | null>>>();
 
     /** Partition key for lookups made by an entity that has no provider at all. */
     private static readonly _noProviderSubtypeKey: object = {};
 
-    private static subtypeLookupCacheFor(provider: object | null | undefined): Map<string, BaseEntity | null> {
+    /**
+     * The memo for one provider and user, or null when no user resolves: an entry keyed without a
+     * user would be shared by every caller, so such a lookup is not memoized at all.
+     */
+    private static subtypeLookupCacheFor(provider: object | null | undefined, user: UserInfo | null): Map<string, BaseEntity | null> | null {
+        const userKey = UserCacheKeySegment(user?.ID);
+        if (userKey === null) {
+            return null;
+        }
         const partitionKey = provider ?? BaseEntity._noProviderSubtypeKey;
-        let cache = BaseEntity._subtypeLookupCache.get(partitionKey);
+        let byUser = BaseEntity._subtypeLookupCache.get(partitionKey);
+        if (!byUser) {
+            byUser = new Map<string, Map<string, BaseEntity | null>>();
+            BaseEntity._subtypeLookupCache.set(partitionKey, byUser);
+        }
+        let cache = byUser.get(userKey);
         if (!cache) {
             cache = new Map<string, BaseEntity | null>();
-            BaseEntity._subtypeLookupCache.set(partitionKey, cache);
+            byUser.set(userKey, cache);
         }
         return cache;
     }
@@ -2376,6 +2391,7 @@ export abstract class BaseEntity<T = unknown> {
 
         let currentEntity: BaseEntity = this;
         let currentEntityInfo: EntityInfo = this.EntityInfo;
+        const actingUser = this.resolveActiveUserOrNull();
 
         for (let i = 0; i < segments.length - 1; i++) {
             const fieldName = segments[i];
@@ -2388,6 +2404,9 @@ export abstract class BaseEntity<T = unknown> {
                 );
             }
 
+            if (!this.subtypeSelectorMayRead(currentEntity, fieldInfo.Name, actingUser)) {
+                return null; // a hop the user may not read gives no subtype, as a denied name field gives no name
+            }
             const fkValue = currentEntity.Get(fieldInfo.Name);
             if (fkValue == null || fkValue === '') {
                 return null;
@@ -2419,6 +2438,9 @@ export abstract class BaseEntity<T = unknown> {
             );
         }
 
+        if (!this.subtypeSelectorMayRead(currentEntity, terminalField.Name, actingUser)) {
+            return null;
+        }
         const terminalValue = currentEntity.Get(terminalField.Name);
         if (terminalValue == null || typeof terminalValue !== 'string' || terminalValue.trim() === '') {
             return null;
@@ -2427,34 +2449,49 @@ export abstract class BaseEntity<T = unknown> {
         return terminalValue.trim();
     }
 
+    /**
+     * Whether a `SubtypeSelector` hop may read `fieldName` on `record`, which is this record or
+     * one the path reached. Both the record's own user and the user resolving the subtype must be
+     * allowed: a record reached through an engine cache was loaded as the system user and holds
+     * every column, so its own answer says nothing about the acting user.
+     */
+    private subtypeSelectorMayRead(record: BaseEntity, fieldName: string, actingUser: UserInfo | null): boolean {
+        if (!record.IsFieldReadableByActiveUser(fieldName)) {
+            return false;
+        }
+        return record === this || !actingUser || record.EntityInfo.IsFieldReadableByUser(fieldName, actingUser);
+    }
+
     private async getSubtypePathTargetEntity(entityName: string, pkValue: unknown): Promise<BaseEntity | null> {
         const cacheKey = `${entityName.trim().toLowerCase()}|${String(pkValue).trim().toLowerCase()}`;
         const provider = this.ProviderToUse as unknown as IMetadataProvider;
-        const lookupCache = BaseEntity.subtypeLookupCacheFor(provider);
-        if (lookupCache.has(cacheKey)) {
+        const lookupCache = BaseEntity.subtypeLookupCacheFor(provider, this.resolveActiveUserOrNull());
+        if (lookupCache?.has(cacheKey)) {
             return lookupCache.get(cacheKey) ?? null;
         }
+        const found = await this.findSubtypePathTarget(provider, entityName, pkValue);
+        lookupCache?.set(cacheKey, found);
+        return found;
+    }
 
-        // 1. Check BaseEngineRegistry for loaded cached entities
+    /**
+     * Finds the record a create-time `SubtypeSelector` hop points at: in a loaded engine cache
+     * first, then by loading it through the provider for this record's user. Null when neither
+     * has it, or the load fails.
+     */
+    private async findSubtypePathTarget(provider: IMetadataProvider, entityName: string, pkValue: unknown): Promise<BaseEntity | null> {
         const cached = BaseEntity.findSubtypePathTargetInEngineCache(entityName, pkValue);
         if (cached) {
-            lookupCache.set(cacheKey, cached);
             return cached;
         }
-
-        // 2. Fall back to loading via provider
         if (!provider?.GetEntityObject) {
-            lookupCache.set(cacheKey, null);
             return null;
         }
-
         try {
             const targetObj = await provider.GetEntityObject<BaseEntity>(entityName, this._contextCurrentUser);
             if (!targetObj) {
-                lookupCache.set(cacheKey, null);
                 return null;
             }
-
             let key: CompositeKey;
             if (pkValue instanceof CompositeKey) {
                 key = pkValue;
@@ -2463,18 +2500,10 @@ export abstract class BaseEntity<T = unknown> {
                 const pkName = targetObj.FirstPrimaryKey.Name; // first-pk-ok: FK target — pkValue is one SubtypeSelector FK column's value
                 key.KeyValuePairs.push(new KeyValuePair(pkName, pkValue));
             }
-
-            const loaded = await targetObj.InnerLoad(key);
-            if (loaded) {
-                lookupCache.set(cacheKey, targetObj);
-                return targetObj;
-            }
+            return (await targetObj.InnerLoad(key)) ? targetObj : null;
         } catch {
-            // On load failure, return null
+            return null; // on load failure, no target
         }
-
-        lookupCache.set(cacheKey, null);
-        return null;
     }
 
     /**
@@ -5727,7 +5756,7 @@ export abstract class BaseEntity<T = unknown> {
      *
      * 1. `StripDeniedReadFieldsFromClientInput` removes client-sent values for fields the caller
      *    cannot READ, which `SetMany` would otherwise make genuinely dirty with fabricated data.
-     * 2. `entityInfo.EnableFieldLevelSecurity` forces the truth-load branch, so the entity's
+     * 2. `entityInfo.FieldLevelSecurityApplies` forces the truth-load branch, so the entity's
      *    non-dirty baseline is the real stored row rather than the client's `OldValues___`.
      *
      * (2) is not redundant with (1). A value arriving through `LoadFromData` is recorded by the
@@ -5824,14 +5853,32 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Whether this object's user may READ the named field: the question `Get()` asks before it
+     * throws a `FieldSecurityError`, answered without throwing.
+     *
+     * For code that reads a field it did not choose, such as a configured path or a display
+     * column, and must treat a denied field as having no value rather than fail. Fails open the
+     * way `Get()` does: true when field security does not apply to this entity (or any IS-A
+     * ancestor) or no user resolves.
+     *
+     * @param fieldName the field's Name, matched case-insensitively
+     */
+    public IsFieldReadableByActiveUser(fieldName: string): boolean {
+        if (!fieldName) {
+            return true;
+        }
+        return !this.deniedReadFieldsForActiveUser()?.has(fieldName.trim().toLowerCase());
+    }
+
+    /**
      * The denied-field set for the acting user, or null when field security does not apply —
-     * the entity has it switched off, no user resolves, or the user is denied nothing.
+     * it is off on the entity and every IS-A ancestor, no user resolves, or the user is denied nothing.
      *
      * Returning null rather than an empty Set lets callers skip their loop entirely, and keeps
      * the three cheap short-circuits in one place instead of repeated at each gate.
      */
     private deniedFieldsForActiveUser(select: (user: UserInfo) => Set<string>): Set<string> | null {
-        if (!this.EntityInfo?.EnableFieldLevelSecurity) {
+        if (!this.EntityInfo?.FieldLevelSecurityApplies) {
             return null; // one boolean for the overwhelming majority of entities
         }
         const u: UserInfo = this.resolveActiveUserOrNull();
@@ -7054,7 +7101,7 @@ export abstract class BaseEntity<T = unknown> {
         //
         // Returning null is the same answer callers already handle for "this entity has no name
         // field", and every one of them degrades to the primary key.
-        if (this.deniedReadFieldsForActiveUser()?.has(f.Name.trim().toLowerCase())) {
+        if (!this.IsFieldReadableByActiveUser(f.Name)) {
             return null;
         }
         return this.Get(f.Name);
