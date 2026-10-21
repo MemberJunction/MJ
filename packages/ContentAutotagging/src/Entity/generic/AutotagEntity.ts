@@ -21,6 +21,7 @@ import {
  */
 type IContentSourceConfiguration = MJContentSourceEntity_IContentSourceConfiguration;
 import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
+import { GetIndexRestrictedFieldNames, OmitRestrictedValues, WarnOnTemplateRestrictedFieldReferences } from "@memberjunction/ai-vector-sync";
 import { TemplateEngineServer } from "@memberjunction/templates";
 import { TagEngine, TaxonomyMode } from "@memberjunction/tag-engine";
 import { TagScopeContext } from "@memberjunction/tag-engine-base";
@@ -439,11 +440,13 @@ export class AutotagEntity extends AutotagBase {
         // Process each record: render template → create/update ERD → create/update ContentItem
         const contentItems: MJContentItemEntity[] = [];
         const parser = EntityDocumentTemplateParser.CreateInstance();
+        const restricted = this.indexRestrictedFields(entityInfo, entityDocument, templateText);
 
-        for (const record of modifiedRecords) {
+        for (const sourceRecord of modifiedRecords) {
             // RecordID identifies the record for ANY key shape: the bare value for a single-column key
             // (unchanged), 'F1|v1||F2|v2' for a composite key — never just the first column.
-            const recordID = CompositeKey.FromEntityRecord(entityInfo, record).ToCompactURLSegment();
+            const recordID = CompositeKey.FromEntityRecord(entityInfo, sourceRecord).ToCompactURLSegment();
+            const record = OmitRestrictedValues(sourceRecord, restricted);
             try {
                 const recordName = this.buildContentItemName(entityInfo, record);
                 const contentItem = await this.processSingleRecord(
@@ -460,6 +463,20 @@ export class AutotagEntity extends AutotagBase {
         }
 
         return contentItems;
+    }
+
+    /**
+     * The fields of `entityInfo` that field-level security restricts for any role (lowercased).
+     *
+     * The rendered text becomes a shared Entity Record Document, a Content Item's `Text` and name,
+     * and the prompt the tagging LLM sees — none of which is projected per reader — so these
+     * fields are removed from each record before anything is rendered from it. A template that
+     * references one renders it empty, with a warning logged once.
+     */
+    private indexRestrictedFields(entityInfo: EntityInfo, entityDocument: MJEntityDocumentEntity, templateText: string): Set<string> {
+        const restricted = GetIndexRestrictedFieldNames(entityInfo);
+        WarnOnTemplateRestrictedFieldReferences(entityDocument.Name, templateText, entityInfo.Name, restricted);
+        return restricted;
     }
 
     /**

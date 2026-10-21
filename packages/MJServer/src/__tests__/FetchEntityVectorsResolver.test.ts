@@ -60,6 +60,9 @@ import type { AppContext } from '../types.js';
 const DOC_ID = 'DOC-1';
 const contextUser = new UserInfo();
 
+/** Entity read and field-level security the external-index path checks, per test. */
+const access = { canRead: true, deniedReadFields: new Set<string>() };
+
 const membersEntity = {
     Name: 'Members',
     PrimaryKeys: [{ Name: 'ID' }],
@@ -70,6 +73,8 @@ const membersEntity = {
         { Name: 'Email', IsNameField: false },
     ],
     NameField: undefined,
+    GetUserPermisions: (user: UserInfo) => ({ CanRead: user === contextUser && access.canRead }),
+    GetDeniedReadFields: (user: UserInfo) => (user === contextUser ? access.deniedReadFields : new Set<string>()),
 } as unknown as EntityInfo;
 
 const orderLinesEntity = {
@@ -160,6 +165,8 @@ describe('FetchEntityVectorsResolver', () => {
     beforeEach(() => {
         runViewCalls.length = 0;
         runViewsBatches.length = 0;
+        access.canRead = true;
+        access.deniedReadFields = new Set<string>();
     });
 
     afterEach(() => {
@@ -428,6 +435,45 @@ describe('FetchEntityVectorsResolver', () => {
             expect(result.Results).toEqual([{ ID: 'pc-1', Values: [0.5, 0.5], Metadata: JSON.stringify({ Entity: 'Members', RecordID: 'a' }) }]);
             expect(callsFor('MJ: Entity Record Documents')).toHaveLength(0);
             expect(callsFor('Members')).toHaveLength(0);
+        });
+
+        it('removes metadata keys naming fields the caller may not read', async () => {
+            const { queryIndex } = useVectorDB(false);
+            queryIndex.mockResolvedValueOnce({
+                success: true,
+                data: { matches: [{ id: 'pc-1', values: [0.5, 0.5], metadata: { Entity: 'Members', RecordID: 'a', FirstName: 'Ada', Email: 'ada@secret.org' } }] },
+            });
+            access.deniedReadFields = new Set(['email']);
+            routeViews('Members', {});
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 50, undefined, appContext(membersEntity));
+
+            expect(result.Success).toBe(true);
+            expect(JSON.parse(result.Results[0].Metadata)).toEqual({ Entity: 'Members', RecordID: 'a', FirstName: 'Ada' });
+        });
+
+        it('keeps every metadata key for a caller denied nothing', async () => {
+            const { queryIndex } = useVectorDB(false);
+            const metadata = { Entity: 'Members', RecordID: 'a', FirstName: 'Ada', Email: 'ada@secret.org' };
+            queryIndex.mockResolvedValueOnce({ success: true, data: { matches: [{ id: 'pc-1', values: [0.5, 0.5], metadata }] } });
+            routeViews('Members', {});
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 50, undefined, appContext(membersEntity));
+
+            expect(JSON.parse(result.Results[0].Metadata)).toEqual(metadata);
+        });
+
+        it('refuses, without querying the index, a caller who may not read the source entity', async () => {
+            const { queryIndex } = useVectorDB(false);
+            access.canRead = false;
+            routeViews('Members', {});
+
+            const result = await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 50, undefined, appContext(membersEntity));
+
+            expect(result.Success).toBe(false);
+            expect(result.Results).toEqual([]);
+            expect(result.ErrorMessage).toBe('Entity "Members" does not exist or you do not have permission to read it');
+            expect(queryIndex).not.toHaveBeenCalled();
         });
     });
 });

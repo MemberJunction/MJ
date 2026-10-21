@@ -47,7 +47,7 @@
  * @module @memberjunction/ai-vectors-memory
  */
 
-import { BaseSingleton, EscapeSQLString, MJEventType, MJGlobal, RegisterClass } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, MJEventType, MJGlobal, RegisterClass, UserScopedCacheKey } from '@memberjunction/global';
 import { BaseEntity, BaseEntityEvent, LogError, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import type { RemoteInvalidatePayload } from '@memberjunction/core';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
@@ -92,6 +92,8 @@ interface RecordDocumentVectorMetadata {
  * entity's RecordID as each vector's metadata.
  */
 interface LoadedIndex {
+    /** The EntityDocument the index holds the vectors of */
+    entityDocumentId: string;
     service: SimpleVectorService<RecordDocumentVectorMetadata>;
     loadedAt: number;
     /** The user the index was loaded as; reused to re-read individual changed rows */
@@ -112,6 +114,8 @@ class LoadInProgress {
     public Promise: Promise<LoadedIndex | null> = Promise.resolve(null);
 
     constructor(
+        /** The EntityDocument being loaded */
+        public readonly EntityDocumentID: string,
         /** The EntityDocument's invalidation epoch when the load started; a later epoch supersedes it */
         public readonly Epoch: number,
         /** The user the load reads as */
@@ -137,14 +141,21 @@ const REMOTE_REFRESH_BATCH_SIZE = 500;
  * loads, and subscribes once to BaseEntity events so loaded indexes track
  * EntityRecordDocument changes row by row.
  *
+ * **Indexes are cached per (EntityDocument, user).** An index is loaded with a
+ * RunView as the user who asked for it, so it holds only the documents that
+ * user may read; serving it to anyone else would hand them another user's
+ * record IDs and scores. A request with no user is loaded and answered but
+ * never cached or shared.
+ *
  * The provider class itself (`SimpleVectorServiceProvider`) remains a
  * non-singleton — callers can `new` one freely and they all delegate to this
  * shared cache. That separation matches the existing VectorDBBase contract
  * while giving us process-wide cache coherence.
  */
 export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache> {
+    /** Loaded indexes, keyed by {@link cacheKey} (EntityDocument and user) */
     private indexCache = new Map<string, LoadedIndex>();
-    /** The current load per EntityDocument; a superseded load is dropped from here but finishes for its own callers */
+    /** The current load per {@link cacheKey}; a superseded load is dropped from here but finishes for its own callers */
     private inFlightLoads = new Map<string, LoadInProgress>();
     /** Bumped by an explicit invalidate, so a load that started before it is never cached */
     private loadEpochs = new Map<string, number>();
@@ -168,25 +179,35 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
 
     public get Size(): number { return this.indexCache.size; }
 
+    /** The cache slot of an EntityDocument's index as loaded by `contextUser`; null (do not cache) without a user. */
+    private cacheKey(entityDocumentId: string, contextUser: UserInfo | undefined): string | null {
+        return UserScopedCacheKey(contextUser?.ID, entityDocumentId);
+    }
+
     /**
-     * Get the cached index, or load it. Concurrent callers asking for the same
-     * EntityDocumentID before a load completes share one Promise — only one DB
-     * read and vector-pool build happens. An index past its TTL (or marked
-     * stale) is returned immediately while a background reload replaces it.
+     * Get the user's cached index, or load it. Concurrent callers asking for the
+     * same EntityDocumentID as the same user before a load completes share one
+     * Promise — only one DB read and vector-pool build happens. An index past its
+     * TTL (or marked stale) is returned immediately while a background reload
+     * replaces it. Without a user the loader runs every time and nothing is cached.
      */
     public async GetOrLoad(
         entityDocumentId: string,
         contextUser: UserInfo | undefined,
         loader: () => Promise<LoadedIndex | null>
     ): Promise<LoadedIndex | null> {
-        const cached = this.indexCache.get(entityDocumentId);
+        const key = this.cacheKey(entityDocumentId, contextUser);
+        if (key === null) {
+            return Promise.resolve().then(loader);
+        }
+        const cached = this.indexCache.get(key);
         if (cached) {
             if (cached.stale || (Date.now() - cached.loadedAt) >= this.ttlMs) {
-                void this.startLoad(entityDocumentId, contextUser, loader);
+                void this.startLoad(key, entityDocumentId, contextUser, loader);
             }
             return cached;
         }
-        return this.startLoad(entityDocumentId, contextUser, loader);
+        return this.startLoad(key, entityDocumentId, contextUser, loader);
     }
 
     /**
@@ -195,17 +216,18 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
      * rows the invalidate is about.
      */
     private startLoad(
+        key: string,
         entityDocumentId: string,
         contextUser: UserInfo | undefined,
         loader: () => Promise<LoadedIndex | null>
     ): Promise<LoadedIndex | null> {
         const epoch = this.epochOf(entityDocumentId);
-        const existing = this.inFlightLoads.get(entityDocumentId);
+        const existing = this.inFlightLoads.get(key);
         if (existing && existing.Epoch === epoch) return existing.Promise;
 
-        const load = new LoadInProgress(epoch, contextUser);
-        load.Promise = this.runLoad(entityDocumentId, load, loader);
-        this.inFlightLoads.set(entityDocumentId, load);
+        const load = new LoadInProgress(entityDocumentId, epoch, contextUser);
+        load.Promise = this.runLoad(key, load, loader);
+        this.inFlightLoads.set(key, load);
         // A background refresh has no awaiter; log its failure rather than leave it unhandled.
         load.Promise.catch((e: unknown) => {
             LogError(`SimpleVectorIndexCache: load failed for EntityDocumentID="${entityDocumentId}": ${e instanceof Error ? e.message : String(e)}`);
@@ -214,7 +236,7 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
     }
 
     private async runLoad(
-        entityDocumentId: string,
+        key: string,
         load: LoadInProgress,
         loader: () => Promise<LoadedIndex | null>
     ): Promise<LoadedIndex | null> {
@@ -222,16 +244,16 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
             // Through a microtask, so even a loader that throws synchronously fails
             // only after this load is registered — and is then cleared below.
             const loaded = await Promise.resolve().then(loader);
-            if (loaded && load.Epoch === this.epochOf(entityDocumentId)) {
+            if (loaded && load.Epoch === this.epochOf(load.EntityDocumentID)) {
                 this.replayPendingChanges(load, loaded);
                 if (load.StaleOnArrival) loaded.stale = true;
-                this.indexCache.set(entityDocumentId, loaded);
+                this.indexCache.set(key, loaded);
             }
             return loaded;
         } finally {
             // Clear the slot, success or failure, so the next caller can retry —
             // unless a newer load has already taken it.
-            if (this.inFlightLoads.get(entityDocumentId) === load) this.inFlightLoads.delete(entityDocumentId);
+            if (this.inFlightLoads.get(key) === load) this.inFlightLoads.delete(key);
         }
     }
 
@@ -250,13 +272,15 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
      * it, but its result is not cached and the next query starts a fresh load.
      */
     public Invalidate(entityDocumentId: string): void {
-        this.indexCache.delete(entityDocumentId);
+        this.indexCache.forEach((index, key) => {
+            if (index.entityDocumentId === entityDocumentId) this.indexCache.delete(key);
+        });
         this.bumpEpoch(entityDocumentId);
     }
 
     public InvalidateAll(): void {
         this.indexCache.clear();
-        this.inFlightLoads.forEach((_, entityDocumentId) => this.bumpEpoch(entityDocumentId));
+        this.inFlightLoads.forEach(load => this.bumpEpoch(load.EntityDocumentID));
     }
 
     /**
@@ -289,16 +313,20 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
         if (!row.ID) return;
         const targetDoc = row.EntityDocumentID || null;
         // A row that moved to another EntityDocument must leave its old index — loaded or still loading.
-        this.indexCache.forEach((index, docId) => {
-            if (docId !== targetDoc && includeUser(index.contextUser)) index.service.RemoveVector(row.ID);
+        let dimensionsChanged = false;
+        this.indexCache.forEach(index => {
+            if (!includeUser(index.contextUser)) return;
+            if (index.entityDocumentId !== targetDoc) {
+                index.service.RemoveVector(row.ID);
+            } else if (!this.applyRowToIndex(index, row)) {
+                dimensionsChanged = true;
+            }
         });
-        this.inFlightLoads.forEach((load, docId) => {
+        this.inFlightLoads.forEach(load => {
             if (!includeUser(load.ContextUser)) return;
-            load.Pending.push(docId === targetDoc ? { Kind: 'upsert', Row: row } : { Kind: 'remove', ID: row.ID });
+            load.Pending.push(load.EntityDocumentID === targetDoc ? { Kind: 'upsert', Row: row } : { Kind: 'remove', ID: row.ID });
         });
-        if (!targetDoc) return;
-        const target = this.indexCache.get(targetDoc);
-        if (target && includeUser(target.contextUser) && !this.applyRowToIndex(target, row)) {
+        if (dimensionsChanged && targetDoc) {
             // The new vector's dimensions don't match the index (the embedding
             // model changed). Only a full reload yields a consistent index.
             this.Invalidate(targetDoc);
@@ -649,7 +677,7 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
             }
 
             const service = this.buildService(entityDocumentId, r.Results ?? []);
-            return { service, loadedAt: Date.now(), contextUser, stale: false };
+            return { entityDocumentId, service, loadedAt: Date.now(), contextUser, stale: false };
         });
     }
 

@@ -70,6 +70,8 @@ vi.mock('@memberjunction/ai-vectors', () => ({
         _currentUser: Record<string, unknown> = { ID: 'user-1' };
 
         get RunView() { return this._runView; }
+        /** Mirrors the real VectorBase.Provider: the metadata related entities are looked up on (none here). */
+        get Provider() { return { Entities: [] }; }
         get CurrentUser() { return this._currentUser; }
         set CurrentUser(user: unknown) { this._currentUser = user as Record<string, unknown>; }
         /** Mirrors the real VectorBase.BuildExtraFilter. */

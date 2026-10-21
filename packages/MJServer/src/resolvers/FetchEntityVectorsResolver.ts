@@ -99,11 +99,21 @@ export class FetchEntityVectorsResolver extends ResolverBase {
             // SimpleVectorServiceProvider), can't be listed through QueryIndex: they key by the
             // document ID rather than the index name, and return matches without vector values.
             // Read the stored Entity Record Document rows instead.
+            const md = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }) ?? Metadata.Provider;
             if (vectorDBInstance.QueryKeyIsEntityDocumentID) {
-                const md = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }) ?? Metadata.Provider;
                 const results = await this.fetchStoredVectors(entityDoc, limit, filter, currentUser, md);
                 LogStatus(`FetchEntityVectors: Loaded ${results.length} stored vectors for entity "${entityDoc.Entity}" in ${Date.now() - startTime}ms`);
                 return { Success: true, Results: results, TotalCount: results.length, ElapsedMs: Date.now() - startTime };
+            }
+
+            // The external index was built under whoever ran the sync and is not filtered for this
+            // caller, so check here that they may read the source entity at all.
+            const entityInfo = this.readableEntity(entityDoc.Entity, currentUser, md);
+            if (!entityInfo) {
+                return this.errorResult(
+                    `Entity "${entityDoc.Entity}" does not exist or you do not have permission to read it`,
+                    startTime
+                );
             }
 
             // Step 4: Query with zero vector + Entity metadata filter.
@@ -136,12 +146,13 @@ export class FetchEntityVectorsResolver extends ResolverBase {
                 );
             }
 
-            // Step 5: Convert query matches to result format
+            // Step 5: Convert query matches to result format, without the fields this caller may not read
             const matches = (queryResponse.data as { matches?: Array<{ id: string; values?: number[]; metadata?: Record<string, unknown>; score?: number }> }).matches ?? [];
+            const denied = entityInfo.GetDeniedReadFields(currentUser);
             const results: EntityVectorItem[] = matches.map(match => ({
                 ID: match.id,
                 Values: match.values ?? [],
-                Metadata: JSON.stringify(match.metadata ?? {}),
+                Metadata: JSON.stringify(this.withoutDeniedFields(match.metadata ?? {}, denied)),
             }));
             LogStatus(`FetchEntityVectors: Queried ${results.length} vectors for entity "${entityName}" in ${Date.now() - startTime}ms`);
 
@@ -156,6 +167,25 @@ export class FetchEntityVectorsResolver extends ResolverBase {
             LogError(`FetchEntityVectors query failed: ${msg}`);
             return this.errorResult(msg, startTime);
         }
+    }
+
+    /**
+     * The entity's metadata when `contextUser` may read it, else null — whether it is missing or
+     * unreadable is deliberately not distinguished.
+     */
+    private readableEntity(entityName: string, contextUser: UserInfo, md: IMetadataProvider): EntityInfo | null {
+        const entityInfo = md.EntityByName(entityName);
+        if (!entityInfo) return null;
+        return entityInfo.GetUserPermisions(contextUser)?.CanRead ? entityInfo : null;
+    }
+
+    /**
+     * A copy of a vector's metadata without the keys naming fields in `denied` (lowercased field
+     * names, as `EntityInfo.GetDeniedReadFields` returns them), compared case-insensitively.
+     */
+    private withoutDeniedFields(metadata: Record<string, unknown>, denied: Set<string>): Record<string, unknown> {
+        if (denied.size === 0) return metadata;
+        return Object.fromEntries(Object.entries(metadata).filter(([key]) => !denied.has(key.toLowerCase())));
     }
 
     /** Load EntityDocument by ID */
