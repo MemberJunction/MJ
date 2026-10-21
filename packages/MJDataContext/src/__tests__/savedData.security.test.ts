@@ -50,6 +50,8 @@ function makeEntity(shape: EntityShape) {
     Fields: [{ Name: 'ID', Type: 'uniqueidentifier', Description: '' }],
     EnableFieldLevelSecurity: shape.EnableFieldLevelSecurity,
     ParentChain: shape.parentHasFieldLevelSecurity ? [{ Name: 'People', EnableFieldLevelSecurity: true }] : [],
+    // Mirrors EntityInfo.FieldLevelSecurityApplies: the entity's own flag OR any IS-A ancestor's.
+    FieldLevelSecurityApplies: shape.EnableFieldLevelSecurity || !!shape.parentHasFieldLevelSecurity,
     GetEffectiveRowFilterWhereClause: () => shape.rowFilter,
     GetUserPermisions: () => ({ CanRead: shape.canRead }),
   };

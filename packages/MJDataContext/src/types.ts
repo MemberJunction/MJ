@@ -326,18 +326,13 @@ export class DataContextItem {
         if (this.Type === 'query' || this.Type === 'sql') {
             return false;
         }
-        if (!user || !this.Entity || DataContextItem.HasFieldLevelSecurity(this.Entity)) {
+        if (!user || !this.Entity || this.Entity.FieldLevelSecurityApplies) {
             return false;
         }
         if (!this.Entity.GetUserPermisions(user)?.CanRead) {
             return false;
         }
         return !this.Entity.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
-    }
-
-    /** True when field-level security is enabled on `entity` or on any IS-A ancestor it inherits fields from. */
-    private static HasFieldLevelSecurity(entity: EntityInfo): boolean {
-        return entity.EnableFieldLevelSecurity || (entity.ParentChain ?? []).some((parent) => parent.EnableFieldLevelSecurity);
     }
 
     /**
