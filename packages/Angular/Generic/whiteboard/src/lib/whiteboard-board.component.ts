@@ -167,6 +167,22 @@ const STARTER_MARKDOWN = '## New note\n\n- point one';
 
 /** Zoom presets stepped by the zoom cluster (25%–200%, matching the mockup's range). */
 const ZOOM_STEPS = [0.25, 0.5, 0.75, 0.9, 1, 1.25, 1.5, 2] as const;
+/**
+ * Wheel zoom reads the delta MAGNITUDE, capped per event: a mouse notch is ~100px, a trackpad
+ * pinch sample ~1–10px, so a pinch tracks finger travel instead of the hardware's sample rate.
+ */
+const WHEEL_ZOOM_DELTA_CAP_PX = 50;
+/** Tuned so one capped notch is exactly the familiar 10% step; a 5px trackpad sample is then ~1%. */
+const WHEEL_ZOOM_RATE = Math.log(1.1) / WHEEL_ZOOM_DELTA_CAP_PX;
+/** `deltaMode` → px: a line is ~16px (Firefox mouse wheel); a page is at least a full notch. */
+const WHEEL_LINE_PX = 16;
+const WHEEL_PAGE_PX = 800;
+/**
+ * How long the stepped (button) zoom's transform transition runs — wheel and hold-to-zoom never use it.
+ * MUST match the `transition` duration on `.board-viewport--stepping` in whiteboard-board.component.css:
+ * this timer drops the class, so a CSS duration longer than this is cut short (visible snap).
+ */
+export const ZOOM_STEP_TRANSITION_MS = 180;
 const GRID_SIZE = 22;
 /** How long an agent-added item keeps its pop-in/flash class. */
 const POP_IN_MS = 3200;
@@ -275,6 +291,13 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   public PanX = 0;
   public PanY = 0;
   public Zoom = 0.9;
+  /**
+   * True for {@link ZOOM_STEP_TRANSITION_MS} after a stepped zoom (ZoomIn / ZoomOut), so the
+   * template can transition the transform for the BUTTON path only. The wheel and the
+   * hold-to-zoom tick path leave it false: a transition on a continuous gesture lags it.
+   */
+  public ViewportStepping = false;
+  private steppingTimer: ReturnType<typeof setTimeout> | null = null;
   public MinimapOpen = false;
 
   // transient interaction state
@@ -391,9 +414,15 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     this._inkItems = ink;
     this._connectorItems = connectors;
     this._highlightItems = highlights;
+    this._minimapItemsCache = null;
+    this._contentBoundsCacheComputed = false;
   }
 
   ngOnDestroy(): void {
+    if (this.steppingTimer) {
+      clearTimeout(this.steppingTimer);
+      this.steppingTimer = null;
+    }
     this.changedSub?.unsubscribe();
     for (const t of this.popInTimers) {
       clearTimeout(t);
@@ -401,6 +430,10 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     if (this.widgetMessageListenerAttached) {
       window.removeEventListener('message', this.onWindowMessage);
       this.widgetMessageListenerAttached = false;
+    }
+    if (this.canvasResizeObserver) {
+      this.canvasResizeObserver.disconnect();
+      this.canvasResizeObserver = null;
     }
   }
 
@@ -1085,13 +1118,27 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   public OnWheel(event: WheelEvent): void {
     event.preventDefault();
-    if (event.ctrlKey || event.metaKey) {
-      const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+    // ctrlKey only: a trackpad pinch arrives as ctrl+wheel. metaKey used to zoom too, which made a
+    // Cmd+two-finger scroll zoom — and macOS momentum kept delivering events after the fingers
+    // lifted, so the zoom carried on by itself. Cmd-scroll now pans like a plain scroll.
+    if (event.ctrlKey) {
+      const px = this.wheelDeltaPx(event);
+      const clamped = Math.sign(px) * Math.min(Math.abs(px), WHEEL_ZOOM_DELTA_CAP_PX);
+      const factor = Math.exp(-clamped * WHEEL_ZOOM_RATE);
       this.zoomAt(this.clampZoom(this.Zoom * factor), event.clientX, event.clientY);
     }
     else {
       this.PanX -= event.deltaX;
       this.PanY -= event.deltaY;
+    }
+  }
+
+  /** `deltaY` in pixels whatever the event's `deltaMode` (0 px, 1 lines, 2 pages). */
+  private wheelDeltaPx(event: WheelEvent): number {
+    switch (event.deltaMode) {
+      case 1: return event.deltaY * WHEEL_LINE_PX;
+      case 2: return event.deltaY * WHEEL_PAGE_PX;
+      default: return event.deltaY;
     }
   }
 
@@ -1557,6 +1604,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   public ZoomIn(): void {
     const next = ZOOM_STEPS.find((z) => z > this.Zoom + 0.001);
+    this.flagSteppedZoom();
     this.zoomCentered(next ?? ZOOM_STEPS[ZOOM_STEPS.length - 1]);
   }
 
@@ -1574,7 +1622,21 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   public ZoomOut(): void {
     const lower = [...ZOOM_STEPS].reverse().find((z) => z < this.Zoom - 0.001);
+    this.flagSteppedZoom();
     this.zoomCentered(lower ?? ZOOM_STEPS[0]);
+  }
+
+  /** Arm the stepped-zoom transition; a second step within the window restarts the clock. */
+  private flagSteppedZoom(): void {
+    this.ViewportStepping = true;
+    if (this.steppingTimer) {
+      clearTimeout(this.steppingTimer);
+    }
+    this.steppingTimer = setTimeout(() => {
+      this.steppingTimer = null;
+      this.ViewportStepping = false;
+      this.cdr.markForCheck();
+    }, ZOOM_STEP_TRANSITION_MS);
   }
 
   /** Fit all content into the viewport (25%–200%, 60px padding). */
@@ -1603,19 +1665,30 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     this.ContextMenu = null;
   }
 
+  private _minimapItemsCache: { X: number; Y: number; W: number; H: number; Agent: boolean }[] | null = null;
+  private _contentBoundsCache: WhiteboardBounds | null = null;
+  private _contentBoundsCacheComputed = false;
+
   // minimap render model
   public get MinimapViewBox(): string {
     const world = this.minimapWorld();
     return `${world.X} ${world.Y} ${world.W} ${world.H}`;
   }
 
+  /**
+   * Precomputed minimap item bounds, invalidated when `State.Changed$` fires (via `recomputeRenderBuckets`)
+   * so 60fps pointer-move pan/zoom passes do not recompute `State.Items` or `ItemBounds` across all shapes.
+   */
   public get MinimapItems(): { X: number; Y: number; W: number; H: number; Agent: boolean }[] {
-    return this.State.Items
-      .filter((i) => i.Kind !== 'highlight')
-      .map((i) => {
-        const b = this.State.ItemBounds(i);
-        return { X: b.X, Y: b.Y, W: Math.max(b.W, 8), H: Math.max(b.H, 8), Agent: i.Author === 'agent' };
-      });
+    if (this._minimapItemsCache === null) {
+      this._minimapItemsCache = this.State.Items
+        .filter((i) => i.Kind !== 'highlight')
+        .map((i) => {
+          const b = this.State.ItemBounds(i);
+          return { X: b.X, Y: b.Y, W: Math.max(b.W, 8), H: Math.max(b.H, 8), Agent: i.Author === 'agent' };
+        });
+    }
+    return this._minimapItemsCache;
   }
 
   public get MinimapViewport(): WhiteboardBounds {
@@ -1625,8 +1698,16 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     return { X: -this.PanX / this.Zoom, Y: -this.PanY / this.Zoom, W: w / this.Zoom, H: h / this.Zoom };
   }
 
+  private getCachedContentBounds(): WhiteboardBounds | null {
+    if (!this._contentBoundsCacheComputed) {
+      this._contentBoundsCache = this.State.ContentBounds();
+      this._contentBoundsCacheComputed = true;
+    }
+    return this._contentBoundsCache;
+  }
+
   private minimapWorld(): WhiteboardBounds {
-    const content = this.State.ContentBounds();
+    const content = this.getCachedContentBounds();
     const vp = this.MinimapViewport;
     const minX = Math.min(content?.X ?? vp.X, vp.X) - 40;
     const minY = Math.min(content?.Y ?? vp.Y, vp.Y) - 40;

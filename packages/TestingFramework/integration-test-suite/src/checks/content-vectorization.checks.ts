@@ -151,6 +151,16 @@ async function ensureBase(ctx: IntegrationCheckContext): Promise<void> {
     S.FileTypeID = ft.ID; S.Created.push({ entity: 'MJ: Content File Types', id: ft.ID });
 
     const vi = await ctx.Provider.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes', ctx.User);
+    const viHooks = vi as unknown as {
+        createIndexInProvider?: () => Promise<void>;
+        deleteIndexFromProvider?: () => Promise<void>;
+    };
+    if (typeof viHooks.createIndexInProvider === 'function') {
+        viHooks.createIndexInProvider = async (): Promise<void> => { /* stubbed external provider call */ };
+    }
+    if (typeof viHooks.deleteIndexFromProvider === 'function') {
+        viHooks.deleteIndexFromProvider = async (): Promise<void> => { /* stubbed external provider call */ };
+    }
     vi.NewRecord(); vi.Name = `${S.Prefix}-index ${MARKER}`;
     vi.EmbeddingModelID = S.EmbeddingModelID; vi.VectorDatabaseID = S.VectorDatabaseID;
     vi.Dimensions = 1536;                                                          // CV6: dimensions

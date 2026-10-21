@@ -8,102 +8,11 @@ on:
   # lts/5 got it from a line-only commit (6937c7c050) and lts/6.1 was cut without it.
   pull_request:
     branches: [next, 'lts/**']
-    paths:
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'packages/**'
-      # The citizen-builder template sits outside packages/** but @memberjunction/cli bundles a
-      # copy of it, and the guard that keeps that copy in step runs in the guards job. A PR editing
-      # only citizen-builder/ is exactly the one that can leave the copy behind, so it must trigger.
-      - 'citizen-builder/**'
-      - '.github/scripts/check-citizen-builder-template.mjs'
-      - 'vitest.*'
-      # A change to ONLY a root tsconfig must trigger the workflow — package tsconfigs extend the
-      # root ones, so the grep fallback below matches `tsconfig[^/]*\.json`, but without this paths
-      # entry a root-tsconfig-only PR never triggers the workflow at all (that fallback branch was
-      # dead for exactly the case it guards). Symmetric with the root package.json entry.
-      - 'tsconfig*.json'
-      - 'turbo.json'
-      - '.github/workflows/test.yml'
-      # The shared setup steps every lane of this workflow runs.
-      - '.github/actions/mj-setup/**'
-      # The native-ESM import guard + its vitest suite run in this workflow (see the
-      # "Native-ESM import guard" step), so changes to them must trigger it.
-      - '.github/scripts/check-esm-imports.mjs'
-      - '.github/scripts/check-redis-suites-ran.mjs'
-      # The shard planner decides what the test matrix runs; a break in it silently
-      # narrows or empties the test tier, so it must run its own suite.
-      - '.github/scripts/plan-test-shards.mjs'
-      - '.github/scripts/test-shard-weights.json'
-      # The backstop alarm this workflow fires; its vitest suite runs in the guard step below.
-      - '.github/scripts/backstop-alarm.mjs'
-      - '.github/scripts/vitest.config.mts'
-      - '.github/scripts/__tests__/**'
-      # The release-notes shape gate runs inside generate-release-notes.yml, not here, but
-      # its vitest suite lives in __tests__ — so an edit to the gate script alone must still
-      # run it. Without this entry the one change that most needs the suite skips it.
-      - '.github/scripts/check-release-notes-shape.mjs'
-      # Same reasoning for the dynamic-replace guard (see that step). Without this
-      # entry a PR editing only the gate script runs neither the gate nor its own
-      # vitest suite — the one change that most needs both.
-      - '.github/scripts/check-dynamic-replace.mjs'
-      # Same again for the EntityField Sequence gate: its vitest suite lives in __tests__, but an
-      # edit to the gate script alone must run it too.
-      - '.github/scripts/check-migration-entityfield-sequence.mjs'
-      # The browser-manifest server-leakage gate runs in this workflow (see that step).
-      # The two guarded manifests are listed too: a PR that edits ONLY a generated manifest
-      # is exactly the shape that can introduce a leak, and neither path is under packages/**
-      # in a way the affected-package filter would select.
-      - '.github/scripts/check-browser-manifest-leakage.mjs'
-      - 'packages/Angular/Bootstrap/src/generated/mj-class-registrations.ts'
-      - 'packages/Angular/BootstrapLite/src/generated/mj-class-registrations.ts'
-      # The DOM-spec guards/gates run in this workflow too.
-      - 'scripts/check-dom-spec-placement.mjs'
-      - 'scripts/check-spec-antipatterns.mjs'
-      - 'scripts/classify-explorer-components.mjs'
-      - 'scripts/dom-test-report.mjs'
-      # The PG migration content detector's unit suite lives in __tests__ above but the
-      # script itself lives in scripts/ — without this entry a detector-only PR never
-      # runs its tests.
-      - 'scripts/check-pg-migration-content.mjs'
-      # Same trap, same fix, for the CodeGen-tail guard: its unit suite lives in __tests__
-      # above, but a PR touching only the guard would never run the tests that prove its
-      # parsing is sane. Those extractors are pinned to CodeGen's exact emitted shape, so
-      # "matches zero and therefore passes everything" is the precise regression to catch.
-      - '.github/scripts/check-codegen-tail.mjs'
-      # Same trap again for the MJ CLI resolution guard (guards job). It is what keeps the
-      # root-bin removal from silently breaking manifest regeneration, so a PR weakening the
-      # guard must run it.
-      - '.github/scripts/check-mj-cli-resolution.mjs'
-      # And again for the App-token-never-merges guard (guards job). It encodes an agreement
-      # the platform cannot enforce — the release bot is a `next-protect` bypass actor, so a
-      # workflow that both mints its token and merges a PR writes to next unreviewed — which
-      # means a PR that weakens the guard is exactly the PR that must run its suite.
-      - '.github/scripts/check-app-token-no-merge.mjs'
-      # The MJExplorer @angular/compiler guard (guards job). The manifest it reads is already
-      # under packages/**; the script is not, so a PR weakening only the guard must still run it.
-      - '.github/scripts/check-explorer-angular-compiler.mjs'
-      # The AI model rank-lineage guard (guards job) reads metadata/ai-models, which is outside
-      # packages/**. Without these entries a PR that edits only the catalog — the one change
-      # that can introduce an inversion — never runs the guard.
-      - '.github/scripts/check-ai-model-ranks.mjs'
-      - 'metadata/ai-models/**'
-      # The remote-cache preflight runs as a step in this workflow (see "Verify turbo
-      # remote-cache configuration"), and its own suite lives in __tests__ above.
-      - '.github/scripts/check-turbo-cache-env.mjs'
-      # The turbo remote-cache coverage guard (turbo-remote-cache-coverage.test.mjs) asserts the
-      # env wiring across EVERY workflow, plus the `secrets: inherit` at publish.yml's call site.
-      # Its suite lives in __tests__ above, but without these entries a PR editing only one of
-      # these workflows runs neither the guard nor anything else. Every way of breaking the cache
-      # wiring is silent — a job drops to "Remote caching disabled" or stops uploading and the
-      # run still goes green — so nothing downstream would catch it either.
-      - '.github/workflows/integration.yml'
-      - '.github/workflows/eds-integration.yml'
-      - '.github/workflows/ci-standards.yml'
-      - '.github/workflows/pg-migrations.yml'
-      - '.github/workflows/claude-pack.yml'
-      - '.github/workflows/release-test.yml'
-      - '.github/workflows/publish.yml'
+    # No `paths:` filter, on purpose: `Run unit tests` is a required check in next-protect, and a
+    # workflow skipped by a paths filter never reports its checks, so the PR would wait forever.
+    # The path list lives in the `changes` job below instead; when nothing in it changed, the
+    # build and test lanes skip (Source guards always runs; it is source text only, about a
+    # minute) and `Run unit tests` reports green.
   # Full-suite backstop: every merge into next runs ALL package tests, so a runtime-only
   # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
   # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
@@ -151,6 +60,148 @@ env:
   SHARD_COUNT: '6'
 
 jobs:
+  # ---------------------------------------------------------------------------------------
+  # Change detection. Replaces the workflow-level `paths:` filter (see `on:` above) so the
+  # required `Run unit tests` context reports on EVERY PR. Same list, same GitHub glob rules
+  # (`*` stops at `/`, `**` crosses it); push, schedule and dispatch always run everything.
+  # ---------------------------------------------------------------------------------------
+  changes:
+    name: Detect unit-test changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - name: Check changed paths
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # One glob per line; `#` lines are notes. A PR touching any matching path runs the lanes.
+          cat > "$RUNNER_TEMP/unit-test-paths.txt" <<'PATHS'
+            package.json
+            pnpm-lock.yaml
+            packages/**
+            # The citizen-builder template sits outside packages/** but @memberjunction/cli bundles a
+            # copy of it, and the guard that keeps that copy in step runs in the guards job. A PR editing
+            # only citizen-builder/ is exactly the one that can leave the copy behind, so it must trigger.
+            citizen-builder/**
+            .github/scripts/check-citizen-builder-template.mjs
+            vitest.*
+            # A change to ONLY a root tsconfig must trigger the workflow — package tsconfigs extend the
+            # root ones, so the grep fallback below matches `tsconfig[^/]*\.json`, but without this paths
+            # entry a root-tsconfig-only PR never triggers the workflow at all (that fallback branch was
+            # dead for exactly the case it guards). Symmetric with the root package.json entry.
+            tsconfig*.json
+            turbo.json
+            .github/workflows/test.yml
+            # The shared setup steps every lane of this workflow runs.
+            .github/actions/mj-setup/**
+            # The native-ESM import guard + its vitest suite run in this workflow (see the
+            # "Native-ESM import guard" step), so changes to them must trigger it.
+            .github/scripts/check-esm-imports.mjs
+            .github/scripts/check-redis-suites-ran.mjs
+            # The shard planner decides what the test matrix runs; a break in it silently
+            # narrows or empties the test tier, so it must run its own suite.
+            .github/scripts/plan-test-shards.mjs
+            .github/scripts/test-shard-weights.json
+            # The backstop alarm this workflow fires; its vitest suite runs in the guard step below.
+            .github/scripts/backstop-alarm.mjs
+            .github/scripts/vitest.config.mts
+            .github/scripts/__tests__/**
+            # The release-notes shape gate runs inside generate-release-notes.yml, not here, but
+            # its vitest suite lives in __tests__ — so an edit to the gate script alone must still
+            # run it. Without this entry the one change that most needs the suite skips it.
+            .github/scripts/check-release-notes-shape.mjs
+            # Same reasoning for the dynamic-replace guard (see that step). Without this
+            # entry a PR editing only the gate script runs neither the gate nor its own
+            # vitest suite — the one change that most needs both.
+            .github/scripts/check-dynamic-replace.mjs
+            # Same again for the EntityField Sequence gate: its vitest suite lives in __tests__, but an
+            # edit to the gate script alone must run it too.
+            .github/scripts/check-migration-entityfield-sequence.mjs
+            # The browser-manifest server-leakage gate runs in this workflow (see that step).
+            # The two guarded manifests are listed too: a PR that edits ONLY a generated manifest
+            # is exactly the shape that can introduce a leak, and neither path is under packages/**
+            # in a way the affected-package filter would select.
+            .github/scripts/check-browser-manifest-leakage.mjs
+            packages/Angular/Bootstrap/src/generated/mj-class-registrations.ts
+            packages/Angular/BootstrapLite/src/generated/mj-class-registrations.ts
+            # The DOM-spec guards/gates run in this workflow too.
+            scripts/check-dom-spec-placement.mjs
+            scripts/check-spec-antipatterns.mjs
+            scripts/classify-explorer-components.mjs
+            scripts/dom-test-report.mjs
+            # The PG migration content detector's unit suite lives in __tests__ above but the
+            # script itself lives in scripts/ — without this entry a detector-only PR never
+            # runs its tests.
+            scripts/check-pg-migration-content.mjs
+            # Same trap, same fix, for the CodeGen-tail guard: its unit suite lives in __tests__
+            # above, but a PR touching only the guard would never run the tests that prove its
+            # parsing is sane. Those extractors are pinned to CodeGen's exact emitted shape, so
+            # "matches zero and therefore passes everything" is the precise regression to catch.
+            .github/scripts/check-codegen-tail.mjs
+            # Same trap again for the MJ CLI resolution guard (guards job). It is what keeps the
+            # root-bin removal from silently breaking manifest regeneration, so a PR weakening the
+            # guard must run it.
+            .github/scripts/check-mj-cli-resolution.mjs
+            # And again for the App-token-never-merges guard (guards job). It encodes an agreement
+            # the platform cannot enforce — the release bot is a `next-protect` bypass actor, so a
+            # workflow that both mints its token and merges a PR writes to next unreviewed — which
+            # means a PR that weakens the guard is exactly the PR that must run its suite.
+            .github/scripts/check-app-token-no-merge.mjs
+            # The MJExplorer @angular/compiler guard (guards job). The manifest it reads is already
+            # under packages/**; the script is not, so a PR weakening only the guard must still run it.
+            .github/scripts/check-explorer-angular-compiler.mjs
+            # The AI model rank-lineage guard (guards job) reads metadata/ai-models, which is outside
+            # packages/**. Without these entries a PR that edits only the catalog — the one change
+            # that can introduce an inversion — never runs the guard.
+            .github/scripts/check-ai-model-ranks.mjs
+            metadata/ai-models/**
+            # The remote-cache preflight runs as a step in this workflow (see "Verify turbo
+            # remote-cache configuration"), and its own suite lives in __tests__ above.
+            .github/scripts/check-turbo-cache-env.mjs
+            # The turbo remote-cache coverage guard (turbo-remote-cache-coverage.test.mjs) asserts the
+            # env wiring across EVERY workflow, plus the `secrets: inherit` at publish.yml's call site.
+            # Its suite lives in __tests__ above, but without these entries a PR editing only one of
+            # these workflows runs neither the guard nor anything else. Every way of breaking the cache
+            # wiring is silent — a job drops to "Remote caching disabled" or stops uploading and the
+            # run still goes green — so nothing downstream would catch it either.
+            .github/workflows/integration.yml
+            .github/workflows/eds-integration.yml
+            .github/workflows/ci-standards.yml
+            .github/workflows/pg-migrations.yml
+            .github/workflows/claude-pack.yml
+            .github/workflows/release-test.yml
+            .github/workflows/publish.yml
+          PATHS
+          # Glob -> anchored ERE: escape regex metacharacters, then `**` -> `.*` and `*` -> `[^/]*`.
+          RE="$(sed -e 's/^ *//' -e '/^#/d' -e '/^$/d' \
+            -e 's/[][\.^$+?(){}|]/\\&/g' \
+            -e 's/\*\*/@@GLOBSTAR@@/g' -e 's/\*/[^\/]*/g' -e 's/@@GLOBSTAR@@/.*/g' \
+            -e 's/^/^/' -e 's/$/$/' "$RUNNER_TEMP/unit-test-paths.txt" | paste -sd'|' -)"
+          git fetch --no-tags origin "$PR_BASE_REF"
+          CHANGED="$(git diff --name-only "origin/$PR_BASE_REF...HEAD")"
+          if echo "$CHANGED" | grep -qE "$RE"; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+            echo "No unit-test paths changed: build and test lanes skip."
+          fi
+
   # ---------------------------------------------------------------------------------------
   # Pure-file gates. No pnpm install, no build — these read source text only, so they finish
   # in about a minute and report independently of whether the build or the suite is healthy.
@@ -323,6 +374,15 @@ jobs:
           PR_BASE_REF: ${{ github.base_ref || 'next' }}
         run: node .github/scripts/check-dynamic-replace.mjs --base "origin/$PR_BASE_REF"
 
+      # API-root guard (#5674). MJAPI is often served under a prefix (MJAPI_BASE_PATH=/api, with
+      # the CDN forwarding only /api/*), so an Express-app route mounted at a root-relative
+      # literal works locally and 404s in every prefixed deployment. Flags `app.use('/x')` /
+      # `context.app.get(`/x`)` in the server packages; mount through ApiRoute() instead. Its
+      # runtime twin is MJServer's apiRootBoot.test.ts, which runs in the unit suite.
+      - name: API-root guard
+        if: ${{ !cancelled() }}
+        run: pnpm run check:api-root
+
       # Browser class-registration manifest server-leakage gate. A server-only package reaching
       # `ng-bootstrap` / `ng-bootstrap-lite` breaks the Angular bundle with esbuild
       # `Could not resolve "crypto"`, and only on a COLD build — warm HMR hides it, so the
@@ -376,6 +436,8 @@ jobs:
   # ---------------------------------------------------------------------------------------
   build:
     name: Build
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     timeout-minutes: 60
     runs-on: ubuntu-latest
     permissions:
@@ -866,7 +928,7 @@ jobs:
   unit-tests:
     name: Run unit tests
     if: ${{ always() && !cancelled() }}
-    needs: [guards, build, test, esm-guard]
+    needs: [changes, guards, build, test, esm-guard]
     timeout-minutes: 10
     runs-on: ubuntu-latest
     # issues:write so a red BACKSTOP run (push/schedule) can auto-file an alert issue.
@@ -935,11 +997,13 @@ jobs:
   # in the repo's shared, LRU-evicted Actions cache budget until it aged out — and what it would
   # evict is the `next` turbo seed that makes every PR's build fast, plus the pnpm store.
   # Best-effort by design: a failed cleanup must never red an otherwise green run.
+  # Only `build` saves the entry, so when `build` was skipped (no unit-test paths changed, see
+  # the `changes` job) there is nothing to delete and the job does not spin up a runner.
   # ---------------------------------------------------------------------------------------
   cleanup:
     name: Clean up run cache
-    if: always()
-    needs: [test, esm-guard]
+    if: always() && needs.build.result != 'skipped'
+    needs: [build, test, esm-guard]
     timeout-minutes: 10
     runs-on: ubuntu-latest
     permissions:

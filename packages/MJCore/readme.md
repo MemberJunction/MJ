@@ -146,6 +146,7 @@ flowchart LR
 | `telemetryManager.ts` | `TelemetryManager` for operation tracking and pattern detection |
 | `queryCache.ts` / `QueryCacheConfig.ts` | LRU query result cache with TTL support |
 | `databaseProviderBase.ts` | `DatabaseProviderBase` for server-side SQL execution and transactions |
+| `BaseEntitySaveQueue.ts` | `BaseEntitySaveQueue` for per-record serialized fire-and-forget execution log saves with optional `saveReturnMode` |
 | `util.ts` | Utility functions: `TypeScriptTypeFromSQLType`, `FormatValue`, `CodeNameFromString` |
 | `runView.ts` | `RunView` class and `RunViewParams` for executing stored and dynamic views |
 | `viewInfo.ts` | View metadata classes: `ViewInfo`, `ViewColumnInfo`, `ViewFilterInfo` |
@@ -329,24 +330,48 @@ It is **not** enforced on the low-level `EntityField.Value` accessor. Framework-
 
 > Note: `EntityField.ActiveStatusAssertions` is retained as a **deprecated no-op** for backward compatibility. There is nothing to toggle at the field level anymore, since `EntityField.Value` no longer asserts.
 
+#### Lazy `EntityField` Hydration (`_raw` Fast Path)
+
+When records are loaded via `LoadFromData()` (for example, inside `RunView` with `ResultType: 'entity_object'`), `BaseEntity` stores the database row directly in an internal `_raw` reference without eagerly populating every `EntityField` value via `SetMany()`:
+
+- **Zero-allocation read path**: `Get()`, `GetAll()`, `Dirty`, and `FieldIsDirty()` read directly from `_raw` (with `EntityFieldInfo.DefaultValue` fallback and `NotLoaded` column awareness for partial `Fields` projections), avoiding $N \times F$ `EntityField` setter invocations across large result sets.
+- **Lazy hydration on mutation or `Fields` inspection**: The first call to `Set()`, `SetMany()`, `Revert()`, `Validate()`, `Save()`, or `entity.Fields` transparently hydrates `EntityField` instances from `_raw` and clears `_raw`, preserving full dirty tracking and `OldValue` history.
+
 #### Save and Delete
 
 ```typescript
-import { EntitySaveOptions } from '@memberjunction/core';
+import { EntitySaveOptions, BaseEntitySaveQueue } from '@memberjunction/core';
 
 // Simple save
 const success = await entity.Save();
 
 // Save with options
 const options = new EntitySaveOptions();
-options.IgnoreDirtyState = true;     // Force save even if no changes detected
-options.SkipEntityAIActions = true;  // Skip AI-related actions
-options.SkipEntityActions = true;    // Skip entity actions
+options.IgnoreDirtyState = true;        // Force save even if no changes detected
+options.SkipEntityAIActions = true;     // Skip AI-related actions
+options.SkipEntityActions = true;       // Skip entity actions
+options.SaveReturnMode = 'datestamps_only'; // Return only PK + __mj_CreatedAt/__mj_UpdatedAt
 await entity.Save(options);
+
+// Fire-and-forget per-entity save queue (e.g., high-write execution logs)
+const logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only' });
+logQueue.Insert(stepEntity);
+logQueue.Update(stepEntity, (s) => { s.Status = 'Complete'; });
+await logQueue.Flush();
 
 // Delete
 await entity.Delete();
 ```
+
+##### `SaveReturnMode: 'full' | 'datestamps_only'`
+
+By default (`SaveReturnMode: 'full'`), `spCreate*` and `spUpdate*` re-select the full row (`SELECT * FROM [schema].[BaseView] WHERE [PK] = @ID`) after every `INSERT` or `UPDATE` so joined virtual columns, SQL-computed columns, and trigger mutations are immediately reflected in memory.
+
+For high-write tables whose primary keys are pre-populated UUIDs (`NewRecord()`) and whose `BaseView` performs expensive joins or carries large `NVARCHAR(MAX)` columns (such as `AIPromptRun`, `AIAgentRun`, `AIAgentRunStep`, `ConversationDetail`, or `AuditLog`), you can configure **`SaveReturnMode: 'datestamps_only'`**:
+
+- **Entity-level (`Entity.Configuration`)**: Set `{"SaveReturnMode": "datestamps_only"}` in `Entity.Configuration`. CodeGen emits `spCreate*` and `spUpdate*` routines that query only the primary key(s) and `[__mj_CreatedAt]` / `[__mj_UpdatedAt]` directly from `BaseTable`, completely skipping `BaseView` and its joins.
+- **Per-save override (`EntitySaveOptions.SaveReturnMode`)**: Pass `{ SaveReturnMode: 'datestamps_only' }` to `entity.Save(options)` on any entity. Even if the entity's stored procedure returns the full view row, the data provider projects only the primary key(s) and timestamp columns over the wire and merges them onto the in-memory `BaseEntity` fields without clobbering existing in-memory values.
+- **Why DB timestamps are always returned**: `DatabaseProviderBase.Save()` performs optimistic concurrency checking (`checkRecordSavingInconsistency`) by comparing the entity's in-memory `__mj_UpdatedAt` against the database row before every update. Returning `[__mj_CreatedAt]` and `[__mj_UpdatedAt]` from `BaseTable` (which is a single clustered PK index seek on the row already in the buffer pool) keeps concurrency checking 100% accurate on subsequent saves while avoiding `BaseView` join evaluation and large-column network transfer.
 
 #### GetAll() for Spread Operator
 

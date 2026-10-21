@@ -57,7 +57,7 @@ function build(config: Partial<PipelineProcessorConfig> = {}): PipelineProcessor
     );
 }
 
-const rsContext = { contextUser: {}, provider: {} } as never;
+const rsContext = { ContextUser: {}, Provider: {} } as never;
 function ref() {
     return { EntityID: 'E1', RecordID: 'ID-1' } as never;
 }
@@ -192,8 +192,8 @@ describe('PipelineProcessor Sync mode reconciliation and safeguards', () => {
 
     function syncContext(liveRows: { ID: string; URL: string; __mj_CreatedAt?: Date }[], markedIDs: string[]) {
         return {
-            contextUser: {},
-            provider: {
+            ContextUser: {},
+            Provider: {
                 EntityByName: () => ({ ID: 'E-ITEM' }),
                 RunView: async () => ({ Success: true, Results: liveRows }),
                 GetEntityObject: async () => ({

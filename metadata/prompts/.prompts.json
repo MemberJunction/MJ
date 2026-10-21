@@ -1375,6 +1375,17 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Mercury 3",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "Priority": 110
+          },
+          "primaryKey": {
+            "ID": "4650C83E-6D25-4591-A8C1-6640F2E3318E"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
             "ModelID": "@lookup:MJ: AI Models.Name=Gemma 4 31B Instruct",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 100

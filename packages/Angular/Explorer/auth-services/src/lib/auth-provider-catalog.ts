@@ -8,7 +8,7 @@
  * @module @memberjunction/ng-auth-services
  */
 
-import { LogError, LogStatus, type PublicAuthProviderCatalog, type PublicAuthProviderInfo } from '@memberjunction/core';
+import { LogError, LogStatus, ResolveMJAPIURL, type PublicAuthProviderCatalog, type PublicAuthProviderInfo } from '@memberjunction/core';
 
 /**
  * Storage key holding the provider the user last chose from the login picker.
@@ -77,8 +77,8 @@ export class AuthProviderCatalog {
    * Fetches the catalog and stores it for {@link GetPreloaded}. Call this from the app's
    * bootstrap entry point BEFORE the root module is imported.
    */
-  public static async Preload(graphqlUri: string, timeoutMs?: number): Promise<PublicAuthProviderInfo[]> {
-    this._preloaded = await this.Fetch(graphqlUri, timeoutMs);
+  public static async Preload(graphqlUri: string, timeoutMs?: number, mjapiUri?: string): Promise<PublicAuthProviderInfo[]> {
+    this._preloaded = await this.Fetch(graphqlUri, timeoutMs, mjapiUri);
     return this._preloaded;
   }
 
@@ -88,11 +88,14 @@ export class AuthProviderCatalog {
   }
 
   /**
-   * Builds the catalog URL from the app's GraphQL endpoint. The catalog is served by the
-   * same MJServer instance, mounted ahead of the auth middleware.
+   * Builds the catalog URL. With a configured MJAPI URL (`MJAPI_URI`, MJ #5674) the catalog is
+   * `<MJAPI URL>/auth/providers`. Without one it keeps the pre-#5674 behaviour: `/auth/providers` at the
+   * GraphQL endpoint's origin. The catalog is served by the same MJServer instance, mounted ahead of the
+   * auth middleware.
    */
-  public static BuildCatalogUrl(graphqlUri: string): string {
-    return new URL('/auth/providers', graphqlUri).toString();
+  public static BuildCatalogUrl(graphqlUri: string, mjapiUri?: string): string {
+    const mjapiUrl = ResolveMJAPIURL(mjapiUri);
+    return mjapiUrl ? `${mjapiUrl}/auth/providers` : new URL('/auth/providers', graphqlUri).toString();
   }
 
   /**
@@ -102,8 +105,8 @@ export class AuthProviderCatalog {
    * whose network is briefly unavailable, must still reach its login screen through the
    * compiled `AUTH_TYPE` path. Failure is reported as an empty list.
    */
-  public static async Fetch(graphqlUri: string, timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS): Promise<PublicAuthProviderInfo[]> {
-    const url = this.BuildCatalogUrl(graphqlUri);
+  public static async Fetch(graphqlUri: string, timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS, mjapiUri?: string): Promise<PublicAuthProviderInfo[]> {
+    const url = this.BuildCatalogUrl(graphqlUri, mjapiUri);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 

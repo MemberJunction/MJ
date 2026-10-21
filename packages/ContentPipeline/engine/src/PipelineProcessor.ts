@@ -114,7 +114,7 @@ export class PipelineProcessor implements IRecordProcessor {
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
         const started = Date.now();
         try {
-            const working = await this.storage.Hydrator(context.provider, context.contextUser).Hydrate(this.stages[0].Entity, record.RecordID);
+            const working = await this.storage.Hydrator(context.Provider, context.ContextUser).Hydrate(this.stages[0].Entity, record.RecordID);
             if (this.isPendingDelete(working)) {
                 return this.toRecordResult(Outcome.Skipped('record is pending delete'), started, null);
             }
@@ -153,7 +153,7 @@ export class PipelineProcessor implements IRecordProcessor {
     private async processBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>> {
         const results = new Map<string, RecordResult>();
         const ready = new UUIDMap<{ RecordID: string; Working: WorkingRecord }>();
-        const hydrator = this.storage.Hydrator(context.provider, context.contextUser);
+        const hydrator = this.storage.Hydrator(context.Provider, context.ContextUser);
         for (const record of records) {
             const started = Date.now();
             try {
@@ -303,7 +303,7 @@ export class PipelineProcessor implements IRecordProcessor {
         if (status === null) {
             return null;
         }
-        const committer = this.storage.Committer(context.provider, context.contextUser);
+        const committer = this.storage.Committer(context.Provider, context.ContextUser);
         const result = await committer.Commit(working, this.lastStage.StatusField, status, outcome.Status === 'Complete');
         return [...result.ColumnsWritten];
     }
@@ -318,7 +318,7 @@ export class PipelineProcessor implements IRecordProcessor {
             await this.sweepOrphans(working, context);
             return { Committed: 0, Failed: 0 };
         }
-        const committer = this.storage.Committer(context.provider, context.contextUser);
+        const committer = this.storage.Committer(context.Provider, context.ContextUser);
         const defaults = this.childDefaults(working);
         let committed = 0;
         let failed = 0;
@@ -357,7 +357,7 @@ export class PipelineProcessor implements IRecordProcessor {
         if (this.config.IsTest || !working.Identity.RecordID) {
             return { Orphans: [] };
         }
-        const live = await RunView.FromMetadataProvider(context.provider).RunView<{
+        const live = await RunView.FromMetadataProvider(context.Provider).RunView<{
             ID: string;
             URL: string;
             __mj_CreatedAt?: Date | string;
@@ -368,7 +368,7 @@ export class PipelineProcessor implements IRecordProcessor {
                 Fields: ['ID', 'URL', '__mj_CreatedAt'],
                 ResultType: 'simple',
             },
-            context.contextUser,
+            context.ContextUser,
         );
         if (!live.Success) {
             return {
@@ -423,7 +423,7 @@ export class PipelineProcessor implements IRecordProcessor {
     }
 
     private async markOrphansForDeletion(orphans: readonly Orphan[], context: RecordProcessorContext): Promise<void> {
-        const marker = new ContentPipelineDeleteMarker(context.provider, context.contextUser);
+        const marker = new ContentPipelineDeleteMarker(context.Provider, context.ContextUser);
         for (const orphan of orphans) {
             await marker.MarkForDeletion(orphan.Entity, orphan.ID);
         }
@@ -431,7 +431,7 @@ export class PipelineProcessor implements IRecordProcessor {
 
     /** The MJ entity id for a child's detail row; undefined falls back to the parent's. */
     private entityIDFor(entity: WorkingRecordEntity, context: RecordProcessorContext): string | undefined {
-        return context.provider.EntityByName(GetEntityName(entity))?.ID;
+        return context.Provider.EntityByName(GetEntityName(entity))?.ID;
     }
 
     private async persistOneChild(
@@ -465,7 +465,7 @@ export class PipelineProcessor implements IRecordProcessor {
         if (this.config.IsTest || !working.Identity.RecordID || working.Entity !== 'Content Item') {
             return; // Discover over a source adds; Sync over a source reconciles via evaluateSyncWalk.
         }
-        if (typeof (context.provider as { RunView?: unknown })?.RunView !== 'function') {
+        if (typeof (context.Provider as { RunView?: unknown })?.RunView !== 'function') {
             return;
         }
         try {
@@ -486,14 +486,14 @@ export class PipelineProcessor implements IRecordProcessor {
 
     /** Child items a re-extraction no longer produces, matched by URL. */
     private async orphanedItems(working: WorkingRecord, context: RecordProcessorContext): Promise<Orphan[]> {
-        const existing = await RunView.FromMetadataProvider(context.provider).RunView<{ ID: string; URL: string }>(
+        const existing = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; URL: string }>(
             {
                 EntityName: 'MJ: Content Items',
                 ExtraFilter: `${WhereEqual({ ParentID: working.Identity.RecordID })} AND (DeleteStatus IS NULL OR DeleteStatus <> 'Deleted')`,
                 Fields: ['ID', 'URL'],
                 ResultType: 'simple',
             },
-            context.contextUser,
+            context.ContextUser,
         );
         if (!existing.Success) {
             return [];
@@ -510,14 +510,14 @@ export class PipelineProcessor implements IRecordProcessor {
         const current = new Set(
             working.Children.map((c) => c.Identity.RecordID).filter((id): id is string => !!id).map(NormalizeUUID),
         );
-        const live = await RunView.FromMetadataProvider(context.provider).RunView<{ ID: string }>(
+        const live = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string }>(
             {
                 EntityName: 'MJ: Content Item Chunks',
                 ExtraFilter: WhereEqual({ ContentItemID: working.Identity.RecordID, DeleteStatus: null }),
                 Fields: ['ID'],
                 ResultType: 'simple',
             },
-            context.contextUser,
+            context.ContextUser,
         );
         if (!live.Success) {
             return [];
@@ -588,9 +588,9 @@ export class PipelineProcessor implements IRecordProcessor {
      */
     private access(context: RecordProcessorContext): AccessResolver {
         this._access ??= new AccessResolver(
-            context.provider,
-            context.contextUser,
-            new ContentSourceConfigurationResolver(context.provider, context.contextUser),
+            context.Provider,
+            context.ContextUser,
+            new ContentSourceConfigurationResolver(context.Provider, context.ContextUser),
             this.config.Configuration,
         );
         return this._access;
@@ -605,8 +605,8 @@ export class PipelineProcessor implements IRecordProcessor {
             Error: (message) => LogError(`[${stage.Name}] ${message}`),
         };
         return {
-            ContextUser: context.contextUser,
-            Provider: context.provider,
+            ContextUser: context.ContextUser,
+            Provider: context.Provider,
             Configuration: this.config.Configuration,
             IsTest: this.config.IsTest,
             Signal: signal,

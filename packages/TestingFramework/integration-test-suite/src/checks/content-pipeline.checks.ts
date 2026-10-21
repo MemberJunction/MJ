@@ -306,7 +306,7 @@ async function run(
     extraConfig: Record<string, unknown> = {},
 ): Promise<void> {
     const p = processor(stages, extraConfig);
-    const context = { provider: ctx.Provider, contextUser: ctx.User };
+    const context = { Provider: ctx.Provider, ContextUser: ctx.User };
     if (p.ProcessBatch) {
         const results = await p.ProcessBatch(recordIDs.map((id) => ({ RecordID: id }) as never), context);
         for (const result of results instanceof Map ? results.values() : results) {
@@ -722,7 +722,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
             });
 
             const p = processor(['Discover']);
-            const res = await p.ProcessRecord({ RecordID: S.SourceID } as never, { provider: ctx.Provider, contextUser: ctx.User });
+            const res = await p.ProcessRecord({ RecordID: S.SourceID } as never, { Provider: ctx.Provider, ContextUser: ctx.User });
             AssertEqual(res.Status, 'Failed', 'Discover fails when driver Columns attempts to overwrite a framework-owned column');
             Assert(
                 (res.ErrorMessage ?? '').includes('owned by the pipeline framework'),
@@ -749,7 +749,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
                 ExtractorKey: 'Archive',
                 Tuning: { MaxArchiveDepth: 1, MaxArchiveMembers: 10, MaxArchiveBytes: 1024 * 1024 },
             });
-            const res = await p.ProcessRecord({ RecordID: archiveItem.ID } as never, { provider: ctx.Provider, contextUser: ctx.User });
+            const res = await p.ProcessRecord({ RecordID: archiveItem.ID } as never, { Provider: ctx.Provider, ContextUser: ctx.User });
             AssertEqual(res.Status, 'Failed', 'nested archive exceeding MaxArchiveDepth fails closed');
             Assert(
                 (res.ErrorMessage ?? '').includes('archive nesting depth'),
@@ -783,7 +783,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
             const emptySync = processor(['Discover'], syncConfig);
             const emptyRes = await emptySync.ProcessRecord(
                 { RecordID: S.SourceID } as never,
-                { provider: ctx.Provider, contextUser: ctx.User },
+                { Provider: ctx.Provider, ContextUser: ctx.User },
             );
             AssertEqual(emptyRes.Status, 'Failed', 'empty Sync walk fails closed when live items exist');
             Assert(

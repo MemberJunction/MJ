@@ -1220,6 +1220,28 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT124 - Feature Pipeline Key, Cache and Versions (core)",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CB5BABC8-DCD5-412A-9F6B-29ABF1D9B320"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT126 - Feature Value Only Outputs",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E4D70105-00D2-4F2B-BECA-47FB2A82A390"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT112 - Realtime Session Identity Verification",
             "Sequence": 50,
             "Status": "Active"
@@ -1500,7 +1522,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT123 - Performance and Agent Overhead Benchmark",
+            "TestID": "@lookup:MJ: Tests.Name=IT128 - Performance and Agent Overhead Benchmark",
             "Sequence": 49,
             "Status": "Active"
           },
@@ -1752,7 +1774,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT63 - Agent Wire Callback (fire-and-forget)",
-            "Sequence": 17,
+            "Sequence": 18,
             "Status": "Active"
           },
           "primaryKey": {
@@ -1787,6 +1809,17 @@
           },
           "primaryKey": {
             "ID": "B3816AC6-B2DA-43DD-A091-34A51B833CF0"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT129 - Native Tool Calling and Action Param Schemas",
+            "Sequence": 17,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "275B45D4-EB50-4AC0-8872-E04845D47A24"
           }
         }
       ]

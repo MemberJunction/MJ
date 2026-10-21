@@ -85,14 +85,14 @@ import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { SqlLoggingSessionImpl } from './SqlLogger.js';
+import { ApplyStatementTransforms, SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
-import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from './saveTypes.js';
+import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from './saveTypes.js';
 import type { RecordChangePayload } from '@memberjunction/core';
 
 import {
@@ -267,16 +267,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     /**************************************************************************/
 
     private static _sqlLoggingSessionsKey: string = 'MJ_GenericDatabaseProvider_SqlLoggingSessions';
+    private static _cachedSqlLoggingSessions: Map<string, SqlLoggingSessionImpl> | null = null;
     private get _sqlLoggingSessions(): Map<string, SqlLoggingSessionImpl> {
+        if (GenericDatabaseProvider._cachedSqlLoggingSessions) {
+            return GenericDatabaseProvider._cachedSqlLoggingSessions;
+        }
         const g = MJGlobal.Instance.GetGlobalObjectStore();
         if (g) {
             if (!g[GenericDatabaseProvider._sqlLoggingSessionsKey]) {
                 g[GenericDatabaseProvider._sqlLoggingSessionsKey] = new Map<string, SqlLoggingSessionImpl>();
             }
-            return g[GenericDatabaseProvider._sqlLoggingSessionsKey];
+            GenericDatabaseProvider._cachedSqlLoggingSessions = g[GenericDatabaseProvider._sqlLoggingSessionsKey] as Map<string, SqlLoggingSessionImpl>;
+            return GenericDatabaseProvider._cachedSqlLoggingSessions;
         } else {
             throw new Error('No global object store available for SQL logging session');
         }
+    }
+
+    /**
+     * Fast O(1) check for whether any SQL logging sessions are currently active.
+     */
+    protected get HasActiveSqlLoggingSessions(): boolean {
+        return this._sqlLoggingSessions.size > 0;
     }
 
     /**
@@ -419,7 +431,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         if (hasVerboseSession) {
             console.log('=== SQL LOGGING DEBUG ===');
-            console.log(`Query to log: ${query.substring(0, 100)}...`);
+            console.log(`Query to log: ${ApplyStatementTransforms(query, allSessions).substring(0, 100)}...`);
             console.log(`Context user email: ${contextUser?.Email || 'NOT_PROVIDED'}`);
             console.log(`Active sessions count: ${this._sqlLoggingSessions.size}`);
 
@@ -536,6 +548,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         user: UserInfo,
         originatingEntityActionIDs?: string[],
     ): Promise<ActionResult[]> {
+        const engine = EntityActionEngineServer.Instance;
+        if (engine.Loaded && engine.GetActionsByEntityName(entity.EntityInfo.Name, 'Active').length === 0) {
+            return [];
+        }
         // FIRST STATEMENT, and deliberately before the first `await`. After-hooks are dispatched
         // fire-and-forget, and the moment this method yields, the save completes and `finalizeSave()`
         // reloads the entity — resetting every field's OldValue to its new value. A change context
@@ -547,8 +563,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // rolled-back save never fires it (see RunAfterCommit).
         const postCommitToken = this.CapturePostCommitToken();
         try {
-            const engine = EntityActionEngineServer.Instance;
-            await engine.Config(false, user);
+            if (!engine.Loaded) {
+                await engine.Config(false, user);
+            }
             const newRecord = entityChange.IsCreate;
             const baseTypeType = baseType === 'save' ? (newRecord ? 'Create' : 'Update') : 'Delete';
             const invocationType = baseType === 'validate' ? 'Validate' : before ? 'Before' + baseTypeType : 'After' + baseTypeType;
@@ -627,11 +644,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         try {
             if (baseType === 'delete') return; // delete not yet supported for AI actions
 
-            await AIEngine.Instance.Config(false, user);
+            const ai = AIEngine.Instance;
+            if (!ai.Loaded) {
+                await ai.Config(false, user);
+            }
 
             const actions = this.GetEntityAIActions(entity.EntityInfo, before);
             if (actions && actions.length > 0) {
-                const ai = AIEngine.Instance;
                 for (let i = 0; i < actions.length; i++) {
                     const a = actions[i];
                     if ((a.TriggerEvent === 'before save' && before) || (a.TriggerEvent === 'after save' && !before)) {
@@ -874,8 +893,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             processedRows = await this.AdjustDatetimeFields(processedRows, datetimeFields, entityInfo);
         }
 
-        // Step 2: Encryption decryption
-        const encryptedFields = entityInfo.Fields.filter((field) => field.Encrypt && field.EncryptionKeyID);
+        // Step 2: Encryption decryption — memoized per EntityInfo (like DatetimeFields/BinaryFields)
+        const encryptedFields = GenericDatabaseProvider.getEncryptedFields(entityInfo);
         if (encryptedFields.length === 0) return processedRows;
 
         const encryptionEngine = EncryptionEngine.Instance;
@@ -911,6 +930,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
             return processedRow;
         }));
+    }
+
+    private static _encryptedFieldsCache = new WeakMap<EntityInfo, { fieldCount: number; fields: EntityFieldInfo[] }>();
+    private static getEncryptedFields(entityInfo: EntityInfo): EntityFieldInfo[] {
+        let entry = GenericDatabaseProvider._encryptedFieldsCache.get(entityInfo);
+        if (!entry || entry.fieldCount !== entityInfo.Fields.length) {
+            entry = {
+                fieldCount: entityInfo.Fields.length,
+                fields: entityInfo.Fields.filter((field) => field.Encrypt && field.EncryptionKeyID),
+            };
+            GenericDatabaseProvider._encryptedFieldsCache.set(entityInfo, entry);
+        }
+        return entry.fields;
     }
 
     /**
@@ -1339,6 +1371,53 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     ): SaveCallBinding;
 
     /**
+     * Builds the dialect-quoted, comma-separated column list for {@link EntityInfo.DatestampReturnFields}
+     * (primary key column(s) followed by `__mj_CreatedAt` and `__mj_UpdatedAt`) using {@link QuoteIdentifier}.
+     *
+     * Examples:
+     * - SQL Server: `[ID], [__mj_CreatedAt], [__mj_UpdatedAt]`
+     * - PostgreSQL: `"ID", "__mj_CreatedAt", "__mj_UpdatedAt"`
+     */
+    protected GetDatestampSelectColumnsSQL(entityInfo: EntityInfo): string {
+        const fields = entityInfo.DatestampReturnFields ?? entityInfo.PrimaryKeys ?? [];
+        return fields.map((f) => this.QuoteIdentifier(f.Name)).join(', ');
+    }
+
+    /**
+     * Resolves the compile-time vs. effective runtime {@link SaveReturnContext} for a save operation.
+     *
+     * Centralizes the `SaveReturnMode` decision logic in `GenericDatabaseProvider` so dialect providers
+     * (`SQLServerDataProvider`, `PostgreSQLDataProvider`, and future providers) never duplicate the
+     * rules for:
+     * - `spReturnMode`: the return shape compiled into the stored procedure / function (`EntityInfo.SaveReturnMode`).
+     * - `effectiveReturnMode`: the return shape requested for this call (`options?.SaveReturnMode ?? spReturnMode`).
+     * - `needsDatestampProjection`: `true` when the compiled routine returns the full row (`spReturnMode === 'full'`)
+     *   but the caller requested `'datestamps_only'` at runtime, requiring the provider to project the result down
+     *   to `datestampSelectColumnsSQL` before wire transmission.
+     */
+    protected ResolveSaveReturnContext(
+        entity: BaseEntity,
+        options?: EntitySaveOptions,
+    ): SaveReturnContext {
+        const spReturnMode = entity.EntityInfo.SaveReturnMode ?? 'full';
+        const effectiveReturnMode = options?.SaveReturnMode ?? spReturnMode;
+        const spReturnsDatestampsOnly = spReturnMode === 'datestamps_only';
+        const needsDatestampProjection = !spReturnsDatestampsOnly && effectiveReturnMode === 'datestamps_only';
+        const datestampSelectColumnsSQL = this.GetDatestampSelectColumnsSQL(entity.EntityInfo);
+        const routineSelectColumnsSQL = needsDatestampProjection ? datestampSelectColumnsSQL : '*';
+        const finalSelectColumnsSQL = effectiveReturnMode === 'datestamps_only' ? datestampSelectColumnsSQL : '*';
+        return {
+            spReturnMode,
+            effectiveReturnMode,
+            spReturnsDatestampsOnly,
+            needsDatestampProjection,
+            datestampSelectColumnsSQL,
+            routineSelectColumnsSQL,
+            finalSelectColumnsSQL,
+        };
+    }
+
+    /**
      * Wraps the bare SP-call binding with the dialect's result-capture
      * pattern. SQL Server emits `DECLARE @ResultTable + INSERT INTO @ResultTable EXEC + SELECT * FROM @ResultTable`;
      * PostgreSQL emits the bare `SELECT * FROM schema."fn"(...)`.
@@ -1347,6 +1426,24 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         binding: SaveCallBinding,
         entity: BaseEntity,
         spName: string,
+        options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
+    ): SaveSQLFragment;
+
+    /**
+     * Projects a save call's result set down to {@link SaveReturnContext.datestampSelectColumnsSQL}
+     * when a caller requests `SaveReturnMode: 'datestamps_only'` at runtime on an entity whose
+     * compiled stored procedure / function returns the full row (`returnContext.needsDatestampProjection === true`).
+     *
+     * - SQL Server captures `EXEC` into `DECLARE @ResultTable TABLE (...)` and emits
+     *   `SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;`.
+     * - PostgreSQL emits `SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM schema."fn"(...)`.
+     */
+    protected abstract ProjectSaveCallToDatestamps(
+        binding: SaveCallBinding,
+        entity: BaseEntity,
+        spName: string,
+        returnContext: SaveReturnContext,
     ): SaveSQLFragment;
 
     /**
@@ -1363,6 +1460,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         binding: SaveCallBinding,
         payload: RecordChangePayload,
         entity: BaseEntity,
+        options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
     ): SaveSQLFragment;
 
     /**
@@ -1398,10 +1497,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /** The entries of a save's parameter map whose fields this save actually changed. */
-    private changedFieldValues(entity: BaseEntity, fieldValues: Map<EntityFieldInfo, unknown>): Map<EntityFieldInfo, unknown> {
+    private changedFieldValues(
+        entity: BaseEntity,
+        fieldValues: Map<EntityFieldInfo, unknown>,
+        dirtyFields?: ReadonlySet<EntityFieldInfo>,
+    ): Map<EntityFieldInfo, unknown> {
         const changed = new Map<EntityFieldInfo, unknown>();
         for (const [f, value] of fieldValues) {
-            if (entity.GetFieldByName(f.Name)?.Dirty) changed.set(f, value);
+            const isDirty = dirtyFields ? dirtyFields.has(f) : !!entity.GetFieldByName(f.Name)?.Dirty;
+            if (isDirty) changed.set(f, value);
         }
         return changed;
     }
@@ -1427,6 +1531,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         // 1. Iterate fields, apply IsSPParameter + PK rules, coerce values.
         const fieldValueMap = new Map<EntityFieldInfo, unknown>();
+        const dirtyFields = isUpdate ? new Set<EntityFieldInfo>() : undefined;
         for (const f of entity.EntityInfo.Fields) {
             if (!f.IsSPParameter(isUpdate)) continue;
 
@@ -1465,6 +1570,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const coerced = this.CoerceSaveFieldValue(f, rawValue, isUpdate);
             if (coerced.kind === 'skip') continue;
             fieldValueMap.set(f, coerced.value);
+            if (dirtyFields && theField?.Dirty) {
+                dirtyFields.add(f);
+            }
         }
 
         // 2. Encrypt — between coercion and rendering, mutates the map in place.
@@ -1473,11 +1581,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // 3. Render the provider-specific binding.
         const binding = this.RenderSaveCallBinding(entity, fieldValueMap, isUpdate, spName);
 
-        // 4. Wrap with result capture. This is the "no-record-change" save
-        //    shape; we also keep it as simpleSQL so consumers (e.g.
-        //    DatabaseProviderBase's `simpleSQLFallback` flow) have a
-        //    record-change-free form to fall back to.
-        const baseSaveSQL = this.WrapSaveCallForResult(binding, entity, spName);
+        // 4. Resolve SaveReturnContext and wrap with result capture.
+        //    `unprojectedSaveSQL` is the bare SP/function call (kept for `simpleSQL` fallback so
+        //    SQL logging / migration replay never gets polluted with runtime datestamp projection wrappers).
+        //    When `returnContext.needsDatestampProjection` is true, `ProjectSaveCallToDatestamps`
+        //    projects the executed result down to `datestampSelectColumnsSQL`.
+        const returnContext = this.ResolveSaveReturnContext(entity, options);
+        const unprojectedSaveSQL = this.WrapSaveCallForResult(binding, entity, spName, undefined, {
+            ...returnContext,
+            effectiveReturnMode: returnContext.spReturnMode,
+            needsDatestampProjection: false,
+            routineSelectColumnsSQL: '*',
+            finalSelectColumnsSQL: returnContext.spReturnsDatestampsOnly ? returnContext.datestampSelectColumnsSQL : '*',
+        });
+        const baseSaveSQL = returnContext.needsDatestampProjection
+            ? this.ProjectSaveCallToDatestamps(binding, entity, spName, returnContext)
+            : unprojectedSaveSQL;
         let saveSQL = baseSaveSQL;
         // A CREATE's logged form is guarded on the primary key so a migration replay of
         // the recording converges on a database that already holds the row (#4503). An
@@ -1485,12 +1604,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // resets the target's other columns. A forced save (IgnoreDirtyState, e.g. MetadataSync's
         // `alwaysPush`) asked to re-impose the whole row, so it keeps the full-row form. Dialects
         // without a replay form log the plain save SQL.
-        const replaySQL = isNew
-            ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
-            : options?.IgnoreDirtyState
-              ? undefined
-              : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap));
-        const simpleSQL = replaySQL ?? baseSaveSQL.sql;
+        // Computed lazily and memoized so saves with SQL logging off skip replay/literal rendering.
+        let cachedSimpleSQL: string | undefined;
+        const computeSimpleSQL = (): string => {
+            if (cachedSimpleSQL === undefined) {
+                const replaySQL = isNew
+                    ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
+                    : options?.IgnoreDirtyState
+                      ? undefined
+                      : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap, dirtyFields));
+                // A statement that runs with parameters is logged in its literal form, which replays alone.
+                cachedSimpleSQL = replaySQL ?? unprojectedSaveSQL.literalSQL ?? unprojectedSaveSQL.sql;
+            }
+            return cachedSimpleSQL;
+        };
 
         // 5. Optionally wrap with record-change emission.
         let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
@@ -1499,18 +1626,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (this.ShouldTrackRecordChanges(entity.EntityInfo) && options?.SkipRecordChanges !== true) {
             const newData = entity.GetAll(false);
             const oldData = isUpdate ? entity.GetAll(true) : null;
-
-            // ISA propagation hook: capture the diff for SS subtype propagation.
-            // Returned via `extraData` so the SS subclass can consume it without re-diffing.
-            if (isUpdate && oldData) {
-                const diffChanges = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
-                if (diffChanges && Object.keys(diffChanges).length > 0) {
-                    overlappingChangeData = {
-                        changesJSON: JSON.stringify(diffChanges),
-                        changesDescription: this.CreateUserDescriptionOfChanges(diffChanges),
-                    };
-                }
-            }
 
             const payload = this.BuildRecordChangePayload(
                 newData,
@@ -1524,15 +1639,34 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 entity.CloneContext,
             );
             if (payload) {
-                saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity);
+                // ISA propagation hook: reuse the diff already computed by BuildRecordChangePayload
+                // for SS subtype propagation without running DiffObjects + JSON.stringify twice.
+                if (isUpdate && oldData && payload.changesJSON) {
+                    overlappingChangeData = {
+                        changesJSON: payload.changesJSON,
+                        changesDescription: payload.changesDescription,
+                    };
+                }
+                saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity, options, returnContext);
             }
         }
 
         const result: SaveSQLResult = {
             fullSQL: saveSQL.sql,
-            simpleSQL,
+            get simpleSQL(): string {
+                return computeSimpleSQL();
+            },
             parameters: saveSQL.parameters ?? null,
         };
+        if ('literalSQL' in saveSQL) {
+            Object.defineProperty(result, 'literalSQL', {
+                enumerable: true,
+                configurable: true,
+                get(): string | undefined {
+                    return saveSQL.literalSQL;
+                },
+            });
+        }
         if (overlappingChangeData) {
             (result as unknown as { extraData: Record<string, unknown> }).extraData = { overlappingChangeData };
         }
@@ -1956,6 +2090,33 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Maximum number of concurrent database view executions allowed within a single
+     * {@link InternalRunViews} batch. Prevents large `RunViews` batches from exhausting
+     * the connection pool in a single tick. Set to 0 or Infinity to disable the cap.
+     * Default: 8.
+     */
+    public static MaxConcurrentViewsPerBatch: number = 8;
+
+    /**
+     * Process-wide single-flight coalescing registry for in-flight read-only RunView executions.
+     * When multiple concurrent requests (across any per-request provider instance on the same
+     * server process) execute an identical non-transactional RunView simultaneously, only the
+     * first caller queries the database; joiners await the same promise and receive a shallow-cloned
+     * result object and Results array.
+     */
+    private static readonly _inFlightRunViews = new Map<string, {
+        promise: Promise<RunViewResult<unknown>>;
+        hasJoiners: boolean;
+    }>();
+
+    /**
+     * Number of currently in-flight coalesced RunView executions across this process.
+     */
+    public static get InFlightRunViewCount(): number {
+        return GenericDatabaseProvider._inFlightRunViews.size;
+    }
+
+    /**
      * Shared InternalRunView implementation.
      * Handles: view resolution, permissions, field selection, WHERE clause building
      * (view + extra filter + user search + exclude + RLS), ORDER BY, pagination,
@@ -1966,12 +2127,171 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Determines whether a RunView invocation is eligible for process-wide single-flight
+     * coalescing across concurrent requests.
+     */
+    protected canCoalesceRunViewInFlight(
+        params: RunViewParams | null | undefined,
+        countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
+    ): boolean {
+        if (!params || countExecutor) {
+            return false;
+        }
+        if (params.ResultType && params.ResultType !== 'simple' && params.ResultType !== 'count_only') {
+            return false;
+        }
+        if (params.SaveViewResults || params.ForceAuditLog) {
+            return false;
+        }
+        if (this.IsCallerInAmbientTransaction() || this.CurrentTransactionDepth > 0 || this.HasPhysicalTransaction) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Builds the deterministic single-flight key for an in-flight RunView execution.
+     * Includes connection string, entity/view identity, filter, orderBy, fields, resultType,
+     * pagination/keyset cursor, aggregates, and effective user role/row-filter security context.
+     */
+    protected buildSingleFlightRunViewKey(params: RunViewParams, contextUser?: UserInfo): string | null {
+        try {
+            const user = contextUser ?? this.CurrentUser;
+            if (!user) {
+                return null;
+            }
+            const entityInfo = params.EntityName ? this.EntityByName(params.EntityName) : undefined;
+            if (entityInfo?.AuditViewRuns && (params.ViewID || params.ViewName || params.ViewEntity)) {
+                return null;
+            }
+            const baseFingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
+                params,
+                this.InstanceConnectionString,
+            );
+            const fieldsKey = params.Fields && params.Fields.length > 0
+                ? [...params.Fields].map(f => f.trim().toLowerCase()).sort().join(',')
+                : '*';
+            const rlsClause = entityInfo && typeof entityInfo.GetEffectiveRowFilterWhereClause === 'function'
+                ? entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '')
+                : `user:${user.ID ?? ''}`;
+            const roleKey = user.UserRoles && user.UserRoles.length > 0
+                ? user.UserRoles.map(r => (r.RoleID ?? '').trim().toLowerCase()).sort().join(',')
+                : `user:${user.ID ?? ''}`;
+            const aggregatesKey = params.Aggregates && params.Aggregates.length > 0
+                ? JSON.stringify(params.Aggregates)
+                : '';
+            const afterKey = params.AfterKey ? params.AfterKey.ToConcatenatedString() : '';
+            const ve = params.ViewEntity as MJUserViewEntityExtended | undefined;
+            const viewEntityKey = ve
+                ? `${ve.ID ?? ''}:${ve.WhereClause ?? ''}:${ve.SmartFilterWhereClause ?? ''}`
+                : '';
+            return [
+                baseFingerprint,
+                `f:${fieldsKey}`,
+                `rt:${params.ResultType || 'simple'}`,
+                `uss:${params.UserSearchString ?? ''}`,
+                `vid:${params.ViewID ?? ''}`,
+                `vn:${params.ViewName ?? ''}`,
+                `ve:${viewEntityKey}`,
+                `exRun:${params.ExcludeUserViewRunID ?? ''}`,
+                `exAll:${params.ExcludeDataFromAllPriorViewRuns ? '1' : '0'}`,
+                `ovEx:${params.OverrideExcludeFilter ?? ''}`,
+                `igMax:${params.IgnoreMaxRows ? '1' : '0'}`,
+                `max:${params.MaxRows ?? ''}`,
+                `start:${params.StartRow ?? ''}`,
+                `after:${afterKey}`,
+                `ds:${params.DataSource ?? ''}`,
+                `agg:${aggregatesKey}`,
+                `roles:${roleKey}`,
+                `rls:${rlsClause}`,
+            ].join('|');
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Shallow-clones a shared single-flight RunViewResult and its row objects so concurrent
+     * callers cannot mutate each other's result arrays or row properties in place.
+     */
+    protected cloneSingleFlightRunViewResult<T>(result: RunViewResult<unknown>): RunViewResult<T> {
+        if (!result) {
+            return result as RunViewResult<T>;
+        }
+        return {
+            ...result,
+            Results: Array.isArray(result.Results)
+                ? result.Results.map(row => (row && typeof row === 'object' ? ({ ...(row as Record<string, unknown>) } as T) : (row as T)))
+                : [],
+            AggregateResults: result.AggregateResults
+                ? result.AggregateResults.map(a => ({ ...a }))
+                : undefined,
+        };
+    }
+
+    /**
+     * Returns true when an identical read-only RunView is already in flight in the process-wide
+     * single-flight registry. Used by {@link InternalRunViews} so duplicate views in a batch can
+     * join an active query immediately without consuming a concurrency slot.
+     */
+    protected hasInFlightSingleFlightView(params: RunViewParams, contextUser?: UserInfo): boolean {
+        if (!this.canCoalesceRunViewInFlight(params)) {
+            return false;
+        }
+        const key = this.buildSingleFlightRunViewKey(params, contextUser);
+        return !!key && GenericDatabaseProvider._inFlightRunViews.has(key);
+    }
+
+    /**
      * The body of {@link InternalRunView}. `countExecutor`, when supplied, replaces the
      * direct execution of a `count_only` view's COUNT query — {@link InternalRunViews} uses
      * it to coalesce an all-`count_only` batch into one statement (see countOnlyBatch.ts).
      * Everything before that step — permissions, RLS, filter screening — is unchanged.
      */
     protected async RunViewCore<T = unknown>(
+        params: RunViewParams,
+        contextUser?: UserInfo,
+        countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
+    ): Promise<RunViewResult<T>> {
+        const singleFlightKey = this.canCoalesceRunViewInFlight(params, countExecutor)
+            ? this.buildSingleFlightRunViewKey(params, contextUser)
+            : null;
+
+        if (singleFlightKey) {
+            const existing = GenericDatabaseProvider._inFlightRunViews.get(singleFlightKey);
+            if (existing) {
+                existing.hasJoiners = true;
+                const shared = await existing.promise;
+                return this.cloneSingleFlightRunViewResult<T>(shared);
+            }
+
+            const entry: {
+                promise: Promise<RunViewResult<unknown>>;
+                hasJoiners: boolean;
+            } = {
+                promise: null as unknown as Promise<RunViewResult<unknown>>,
+                hasJoiners: false,
+            };
+
+            const executionPromise = this.executeRunViewCore<unknown>(params, contextUser, countExecutor)
+                .finally(() => {
+                    if (GenericDatabaseProvider._inFlightRunViews.get(singleFlightKey) === entry) {
+                        GenericDatabaseProvider._inFlightRunViews.delete(singleFlightKey);
+                    }
+                });
+            entry.promise = executionPromise;
+            GenericDatabaseProvider._inFlightRunViews.set(singleFlightKey, entry);
+
+            const result = await executionPromise;
+            return entry.hasJoiners
+                ? this.cloneSingleFlightRunViewResult<T>(result)
+                : (result as RunViewResult<T>);
+        }
+
+        return this.executeRunViewCore<T>(params, contextUser, countExecutor);
+    }
+
+    private async executeRunViewCore<T = unknown>(
         params: RunViewParams,
         contextUser?: UserInfo,
         countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
@@ -2315,33 +2635,51 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 aggregateValidationErrors = aggregateBuild.validationErrors;
             }
 
-            // ── Execute queries in parallel ──
-            const queries: Promise<unknown>[] = [];
-            const queryKeys: string[] = [];
+            // ── Execute queries (single TDS batch via ExecuteSQLBatch when multiple SQL statements are needed) ──
+            const sqlQueries: string[] = [];
+            const sqlQueryKeys: string[] = [];
+            let countExecutorPromise: Promise<unknown> | null = null;
 
             if (params.ResultType !== 'count_only') {
-                queries.push(this.ExecuteSQL(viewSQL, undefined, undefined, contextUser));
-                queryKeys.push('data');
+                sqlQueries.push(viewSQL);
+                sqlQueryKeys.push('data');
             }
 
             const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
             const willNeedCount = countSQL && (usingPagination || params.ResultType === 'count_only');
             if (willNeedCount) {
-                queries.push(countExecutor && params.ResultType === 'count_only'
-                    ? countExecutor(countSQL!)
-                    : this.ExecuteSQL(countSQL!, undefined, undefined, contextUser));
-                queryKeys.push('count');
+                if (countExecutor && params.ResultType === 'count_only') {
+                    countExecutorPromise = countExecutor(countSQL!);
+                } else {
+                    sqlQueries.push(countSQL!);
+                    sqlQueryKeys.push('count');
+                }
             }
 
             const aggregateStartTime = Date.now();
             if (aggregateSQL) {
-                queries.push(this.ExecuteSQL(aggregateSQL, undefined, undefined, contextUser));
-                queryKeys.push('aggregate');
+                sqlQueries.push(aggregateSQL);
+                sqlQueryKeys.push('aggregate');
             }
 
-            const results = await Promise.all(queries);
             const resultMap: Record<string, unknown> = {};
-            queryKeys.forEach((key, index) => { resultMap[key] = results[index]; });
+            if (sqlQueries.length === 1 && !countExecutorPromise) {
+                resultMap[sqlQueryKeys[0]] = await this.ExecuteSQL(sqlQueries[0], undefined, undefined, contextUser);
+            } else if (sqlQueries.length > 0 && countExecutorPromise) {
+                const [batchResults, countRes] = await Promise.all([
+                    sqlQueries.length === 1
+                        ? this.ExecuteSQL(sqlQueries[0], undefined, undefined, contextUser).then(r => [r])
+                        : this.ExecuteSQLBatch(sqlQueries, undefined, undefined, contextUser),
+                    countExecutorPromise,
+                ]);
+                sqlQueryKeys.forEach((key, index) => { resultMap[key] = batchResults[index]; });
+                resultMap['count'] = countRes;
+            } else if (sqlQueries.length > 1) {
+                const batchResults = await this.ExecuteSQLBatch(sqlQueries, undefined, undefined, contextUser);
+                sqlQueryKeys.forEach((key, index) => { resultMap[key] = batchResults[index]; });
+            } else if (countExecutorPromise) {
+                resultMap['count'] = await countExecutorPromise;
+            }
 
             // ── Process data rows ──
             let retData = (resultMap['data'] as Record<string, unknown>[]) || [];
@@ -2354,7 +2692,30 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             if (willNeedCount && resultMap['count']) {
                 const countResult = resultMap['count'] as { TotalRowCount: number }[];
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
-            } else if (countSQL && maxRowsUsed && retData.length === maxRowsUsed) {
+            } else if (countSQL && maxRowsUsed && maxRowsUsed > 1 && retData.length === maxRowsUsed) {
+                // A row-limited read that came back FULL may have been truncated, so the total is
+                // worth a second round trip: this is what makes Explorer's "100 of 299" correct.
+                // `maxRowsUsed > 1` carves out the ONE case where it cannot be: a `MaxRows:1`
+                // probe. Those callers ask "does a row exist / give me the one row" — a
+                // record-map lookup, a single-key resolve — and never read TotalRowCount. The
+                // count they triggered was pure cost, and SEQUENTIAL cost: it runs after the data
+                // query has already resolved, so it is a full extra round trip on the critical
+                // path, not a parallel one.
+                //
+                // Measured on a live tenant over a 120-second census: 1,000 record-map lookups
+                // fired 721 of these counts and 800 row lookups fired 600 — 1,321 extra round
+                // trips totalling 9,760 ms, 11.4% of ALL SQL time in the window. Nothing read a
+                // single one of the results.
+                //
+                // Everything with `maxRowsUsed > 1` is untouched, so the "100 of 299" behaviour
+                // is preserved exactly; only the degenerate single-row probe changes.
+                //
+                // What DOES change for `MaxRows:1`, stated plainly: with no `rowCount`, the return
+                // below falls back to `rowCount ?? retData.length`, so a hit now reports
+                // `TotalRowCount: 1` instead of the whole view's row count. That is the entire
+                // observable difference, and it is confined to a limit of exactly one row — a shape
+                // no caller asks for in order to learn a total, because a total is the one thing a
+                // single-row limit cannot tell it anything about.
                 const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, undefined, contextUser);
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
             }
@@ -2435,8 +2796,60 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (IsCoalescibleCountBatch(params)) {
             return this.RunCoalescedCountBatch<T>(params, contextUser);
         }
-        const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
-        return Promise.all(promises);
+        if (params.length === 0) {
+            return [];
+        }
+        const limit = GenericDatabaseProvider.MaxConcurrentViewsPerBatch;
+        if (!limit || !Number.isFinite(limit) || limit <= 0 || params.length <= limit) {
+            const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
+            return Promise.all(promises);
+        }
+
+        const results = new Array<RunViewResult<T>>(params.length);
+        const started = new Array<boolean>(params.length).fill(false);
+        const joinerPromises: Promise<void>[] = [];
+        let cursor = 0;
+
+        const attachInFlightDuplicates = (fromIndex: number): void => {
+            if (typeof this.hasInFlightSingleFlightView !== 'function') {
+                return;
+            }
+            for (let j = fromIndex; j < params.length; j++) {
+                if (!started[j] && this.hasInFlightSingleFlightView(params[j], contextUser)) {
+                    started[j] = true;
+                    const joinIdx = j;
+                    joinerPromises.push(
+                        this.InternalRunView<T>(params[joinIdx], contextUser).then((res) => {
+                            results[joinIdx] = res;
+                        }),
+                    );
+                }
+            }
+        };
+
+        const runWorker = async (): Promise<void> => {
+            while (cursor < params.length) {
+                const idx = cursor++;
+                if (started[idx]) {
+                    continue;
+                }
+                started[idx] = true;
+                const viewPromise = this.InternalRunView<T>(params[idx], contextUser);
+                attachInFlightDuplicates(idx + 1);
+                results[idx] = await viewPromise;
+            }
+        };
+
+        const workerCount = Math.min(limit, params.length);
+        const workers: Promise<void>[] = [];
+        for (let w = 0; w < workerCount; w++) {
+            workers.push(runWorker());
+        }
+        await Promise.all(workers);
+        if (joinerPromises.length > 0) {
+            await Promise.all(joinerPromises);
+        }
+        return results;
     }
 
     /**
@@ -2650,7 +3063,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const ftsCoversDeniedField = deniedSearchFields.size > 0 &&
             entityInfo.Fields.some(f => f.FullTextSearchEnabled && deniedSearchFields.has(f.Name.trim().toLowerCase()));
 
-        if (entityInfo.FullTextSearchEnabled && !ftsCoversDeniedField) {
+        // `FullTextSearchEnabled` alone is NOT enough to take this branch: the branch names
+        // `FullTextSearchFunction` and, when that is null or blank, the `?? ''` below emitted
+        // `... FROM "schema".""('term')` — a syntax error, thrown on EVERY user search of such an
+        // entity, with no fallback. The two columns are independent (the flag can be set by hand
+        // or by a metadata sync before CodeGen has minted the function), so the name has to be
+        // checked, not assumed. A blank name now falls through to the per-field LIKE path, which
+        // needs no database object and returns results.
+        //
+        // Composed with, not substituted for, the field-security condition above — both have to
+        // hold to search through the index.
+        const ftsFunctionName = entityInfo.FullTextSearchFunction;
+        const hasFTSFunction = typeof ftsFunctionName === 'string' && ftsFunctionName.trim().length > 0;
+
+        if (entityInfo.FullTextSearchEnabled && hasFTSFunction && !ftsCoversDeniedField) {
             let u = safeUserSearchString;
             const uUpper = u.toUpperCase();
             // WORD-boundary tests, not substring tests (#4392). As substrings, `OR` matches
@@ -5419,9 +5845,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
             // Trim trailing spaces for fixed-width char fields (char/nchar pad with spaces on both SQL Server and PG)
             for (const field of entityInfo.Fields) {
-                if (field.TSType === EntityFieldTSType.String &&
-                    field.Type.toLowerCase().includes('char') &&
-                    !field.Type.toLowerCase().includes('varchar')) {
+                const isFixedWidth = field.FixedWidthColumn ?? (field.TSType === EntityFieldTSType.String && (field.Type.trim().toLowerCase() === 'char' || field.Type.trim().toLowerCase() === 'nchar'));
+                if (isFixedWidth) {
                     const val = ret[field.Name];
                     if (typeof val === 'string') ret[field.Name] = val.trimEnd();
                 }
@@ -5659,8 +6084,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // the CAST becomes illegal and the RLS post-image gate throws on SQL SERVER: the exact
             // failure this change set out to remove from PostgreSQL, relocated to the primary
             // platform. `MaxLength` does the halving, but flattens the `-1` MAX sentinel to 0, so
-            // the sentinel is passed through explicitly.
-            const charLength = field.Length === -1 ? -1 : field.MaxLength;
+            // the sentinel is passed through explicitly. `MaxLength` is also 0 for `binary`/`varbinary`,
+            // whose length is a byte count, and SQL Server rejects `VARBINARY(0)`, so those keep
+            // `field.Length`.
+            const isBinary = /^(var)?binary$/i.test(baseType.trim());
+            const charLength = field.Length === -1 || isBinary ? field.Length : field.MaxLength;
             // `getDialect()` is nullable on this base. Falling back to `SQLFullType` — the exact
             // string this used to emit — keeps SQL Server, whose vocabulary that already is,
             // byte-identical to its previous behaviour.
@@ -6412,9 +6840,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const matches = data?.matches ?? [];
 
         const out: ScoredCandidate[] = [];
+        const seenRecordIds = new Set<string>();
         for (const m of matches) {
             const recordId = String(m.metadata?.['RecordID'] ?? '');
             if (!recordId) continue;
+            const normalizedKey = recordId.toLowerCase();
+            if (seenRecordIds.has(normalizedKey)) continue;
+            seenRecordIds.add(normalizedKey);
             out.push({
                 ID: recordId,
                 Score: m.score,

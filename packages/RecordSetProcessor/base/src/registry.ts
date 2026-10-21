@@ -12,6 +12,7 @@
  * @module @memberjunction/record-set-processor-base
  */
 
+import type { IMetadataProvider } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 import { IProcessRunTracker, IRecordProcessor } from './interfaces';
 
@@ -41,6 +42,8 @@ export interface RecordProcessorBuildContext {
     DryRun?: boolean;
     /** The run's tracker, when one was supplied, so a processor paired with its own tracker can reach it. */
     Tracker?: IProcessRunTracker;
+    /** The active metadata provider for building the processor. */
+    Provider?: IMetadataProvider;
     /**
      * The loaded Record Process record itself, as an opaque object. The engine passes the real
      * `MJRecordProcessEntity`; a factory that needs fields beyond those projected above can read them

@@ -66,7 +66,7 @@ function build(config: Partial<PipelineProcessorConfig>): PipelineProcessor {
         progress,
     );
 }
-const rsContext = { contextUser: {}, provider: { EntityByName: () => undefined } } as never;
+const rsContext = { ContextUser: {}, Provider: { EntityByName: () => undefined } } as never;
 const ref = { EntityID: 'E1', RecordID: 'ID-1' } as never;
 
 beforeEach(() => {

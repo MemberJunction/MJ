@@ -98,6 +98,8 @@ export * from './realtime/realtime-channel-server-data-context';
 export * from './realtime/agent-media-library';
 export * from './realtime/realtime-recording-capture';
 export * from './realtime/realtime-recording-store';
+export * from './realtime/realtime-recording-ledger';
+export * from './realtime/realtime-recording-opus-assembly';
 
 // Re-export from ai-reranker for backward compatibility
 export {
@@ -109,6 +111,7 @@ export {
   LLMReranker,
 } from '@memberjunction/ai-reranker';
 export * from './native-tools/action-tool-builder';
+export * from './native-tools/action-param-schema';
 export * from './native-tools/dual-channel';
 export * from './native-tools/control-tools';
 export * from './native-tools/tool-result-turns';

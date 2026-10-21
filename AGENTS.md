@@ -30,13 +30,12 @@ Sub-directory `CLAUDE.md` files extend this root guide with topic-specific rules
 
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
 
-### 1. NO COMMITS WITHOUT EXPLICIT APPROVAL
+### 1. SAFE COMMITS & PR WORKFLOW
 
-- **NEVER run `git commit` without the user explicitly asking you to**
-- **Each commit requires ONE-TIME explicit approval** - don't assume ongoing permission
-- **NEVER ask to commit** - wait for the user to request it
-- **ONLY commit what is staged** - never modify or add to staged changes
-- **NEVER commit work-in-progress** that isn't staged by the user
+- **PR & branch tasks**: When asked to create, fix, or update a PR/branch, commit and push your changes to that branch
+- **Shared checkouts**: When not asked for a PR or commit, ask before running `git commit`
+- **Stage explicitly**: Use `git add <file>` for your task's files — **NEVER `git add -A`/`.`** or commit unrelated WIP
+- **NEVER commit or push directly to `next` or `main`**
 
 ### 2. NO `any` TYPES - EVER
 
@@ -237,7 +236,7 @@ MemberJunction supports both standalone and NgModule-declared components. Choose
     }
   }
   ```
-- **Known weak singletons** that need migration: ~26 classes across the codebase including `GraphQLDataProvider`, `UserCache`, `StartupManager`, `RunQuerySQLFilterManager`, `QueueManager`, `SQLExpressionValidator`, `WarningManager`, `AuthProviderFactory`, `MCPClientManager`, `AgentDataPreloader`, and Angular/React services. See GitHub issue tracking this migration.
+- **When a class cannot extend `BaseSingleton<T>`** (e.g. `GraphQLDataProvider extends ProviderBase`, Angular `@Injectable()` services with DI constructor args, or classes whose constructor takes required arguments): back `Instance` with `GetGlobalObjectStore()` from `@memberjunction/global` under `private static readonly _globalStoreKey = '___SINGLETON__ClassName'` instead of a `private static _instance` field.
 
 ### 8. NO DYNAMIC `import()` UNLESS NARROWLY JUSTIFIED
 
@@ -327,6 +326,22 @@ UserInfoEngine.Instance.SetSettingDebounced("mj.somePref", JSON.stringify(value)
 If you're tempted to use `localStorage` because "it's just a little thing" — that's exactly the kind of preference users notice when it disappears on the next laptop. Default to `UserInfoEngine`. Only deviate with a documented reason.
 
 ---
+
+## The API path isn't always at `/`
+
+MJAPI does not know where it is exposed, and Apollo is just one of its routes. Three settings, three jobs. Never derive one from another:
+
+| Setting | What it is | Default |
+|---|---|---|
+| `MJAPI_BASE_PATH` | The prefix MJAPI mounts **every** route under on its own listener: core routes and Open App server extensions alike. Set it only when a proxy forwards a prefix without stripping it (MJ Central's CloudFront sends `/api/*` to MJAPI, so it sets `/api`). | `/` |
+| `GRAPHQL_ROOT_PATH` | Only where Apollo listens (`/`, `/graphql`, anything). Never a base for any other route. | `/` |
+| `MJAPI_PUBLIC_URL` | Where the world reaches MJAPI (`https://host/api`, `https://api.host:4002`). The only base for a URL handed to a browser, an email or a webhook provider. | `baseUrl:port` |
+
+- **Server code:** every mount and every outward URL goes through `ApiRoute()` from `@memberjunction/server`. Wrong: `app.use('/media', …)`, `` `${publicUrl}/media/${id}` `` built by hand. Right: `app.use(ApiRoute('/media'), …)`, ``ApiRoute(`/media/${id}`, { absolute: true })``.
+- **Server extensions** mount on `context.config.RootPath`, which core has already composed under `MJAPI_BASE_PATH` (`context.apiRootPath`). Never add the base path again, and never append `RootPath` to `publicUrl` (that doubles the prefix).
+- **Browser code** uses the MJAPI URL it is told: `MJAPI_URI` in Explorer's environment, read through `ResolveMJAPIURL()` from `@memberjunction/core` or `GraphQLProviderConfigData.MJAPIURL`. GraphQL has its own URL (`GRAPHQL_URI`). A host that moves MJAPI under a prefix (`MJAPI_BASE_PATH`) sets `MJAPI_URI` in the same change. When `MJAPI_URI` is unset, the four existing call sites keep their pre-#5674 derivation so nothing changes; never add a new one. No `new URL('/x', graphqlUri)`, no `window.location`, no `/graphql` stripping in new code.
+- **One known exception:** REST stays at the origin-absolute `/api/v1` (`REST_API_BASE_PATH`).
+- **CI enforces this:** `pnpm run check:api-root` plus `packages/MJServer/src/__tests__/apiRootBoot.test.ts`, which boots the core routes with `MJAPI_BASE_PATH=/api`. Do not disable either.
 
 ## 📚 Development Guides
 

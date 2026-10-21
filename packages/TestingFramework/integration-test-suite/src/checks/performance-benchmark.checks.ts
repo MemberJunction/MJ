@@ -25,6 +25,8 @@
  * structured JSON benchmark report to that path and prints a Markdown summary table.
  */
 import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import {
     BaseEntity,
@@ -47,7 +49,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { PayloadManager } from '@memberjunction/ai-agents';
 import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity, MJErrorLogEntity } from '@memberjunction/core-entities';
 import { RegisterTestLLM, TestLLM, type TestLLMOutcome } from '@memberjunction/unit-testing';
 import {
     Assert,
@@ -101,45 +103,48 @@ const SCRIPTED_API_KEYS = CHAT_DRIVER_CLASSES.map((driverClass) => ({
 }));
 
 export interface PrimitiveBenchmarkMetrics {
-    classFactoryAndObjectCacheMs?: number;
-    entityHydrateAndFlsMs?: number;
-    localCacheWritesAndStatsMs?: number;
-    templateRenderSimpleMs?: number;
-    actionSnapshotAndEngineLookupMs?: number;
-    payloadApplyAndDeepDiffMs?: number;
+    ClassFactoryAndObjectCacheMs?: number;
+    EntityHydrateAndFlsMs?: number;
+    LocalCacheWritesAndStatsMs?: number;
+    TemplateRenderSimpleMs?: number;
+    ActionSnapshotAndEngineLookupMs?: number;
+    PayloadApplyAndDeepDiffMs?: number;
+    DatestampsOnlyEntityCount?: number;
+    DatestampsOnlyEntitiesBySchema?: Record<string, number>;
+    DatestampsOnly10SavesMs?: number;
 }
 
 export interface AgentRunTreeMetrics {
-    label: string;
-    agentName: string;
-    mode: 'deterministic-testllm' | 'live-model';
-    rootRunId: string;
-    wallTimeMs: number;
-    llmPromptExecutionMs: number;
-    frameworkOverheadMs: number;
-    totalRunsInTree: number;
-    totalStepsInTree: number;
-    promptSteps: number;
-    actionSteps: number;
-    subAgentSteps: number;
-    payloadAtStartBytes: number;
-    payloadAtEndBytes: number;
-    inputDataBytes: number;
-    outputDataBytes: number;
-    totalStepStorageBytes: number;
-    payloadAtStartPointerSteps: number;
-    payloadAtEndPointerSteps: number;
-    unDeduplicatedPayloadBytesEstimate: number;
-    storageSavingsPercent: number;
+    Label: string;
+    AgentName: string;
+    Mode: 'deterministic-testllm' | 'live-model';
+    RootRunId: string;
+    WallTimeMs: number;
+    LlmPromptExecutionMs: number;
+    FrameworkOverheadMs: number;
+    TotalRunsInTree: number;
+    TotalStepsInTree: number;
+    PromptSteps: number;
+    ActionSteps: number;
+    SubAgentSteps: number;
+    PayloadAtStartBytes: number;
+    PayloadAtEndBytes: number;
+    InputDataBytes: number;
+    OutputDataBytes: number;
+    TotalStepStorageBytes: number;
+    PayloadAtStartPointerSteps: number;
+    PayloadAtEndPointerSteps: number;
+    UnDeduplicatedPayloadBytesEstimate: number;
+    StorageSavingsPercent: number;
 }
 
 export interface PerformanceBenchmarkReport {
-    timestamp: string;
-    database: string;
-    primitives: PrimitiveBenchmarkMetrics;
-    primitivesTotalMs: number;
-    deterministicAgentRuns: AgentRunTreeMetrics[];
-    liveAgentRuns: AgentRunTreeMetrics[];
+    Timestamp: string;
+    Database: string;
+    Primitives: PrimitiveBenchmarkMetrics;
+    PrimitivesTotalMs: number;
+    DeterministicAgentRuns: AgentRunTreeMetrics[];
+    LiveAgentRuns: AgentRunTreeMetrics[];
 }
 
 interface BenchmarkFixture {
@@ -370,33 +375,33 @@ async function collectAgentRunTreeMetrics(
     const frameworkOverheadMs = Math.max(0, Number((wallTimeMs - llmPromptExecutionMs).toFixed(2)));
 
     const metrics: AgentRunTreeMetrics = {
-        label,
-        agentName,
-        mode,
-        rootRunId,
-        wallTimeMs: Number(wallTimeMs.toFixed(2)),
-        llmPromptExecutionMs: Number(llmPromptExecutionMs.toFixed(2)),
-        frameworkOverheadMs,
-        totalRunsInTree: visitedRuns.size,
-        totalStepsInTree: allSteps.length,
-        promptSteps,
-        actionSteps,
-        subAgentSteps,
-        payloadAtStartBytes,
-        payloadAtEndBytes,
-        inputDataBytes,
-        outputDataBytes,
-        totalStepStorageBytes,
-        payloadAtStartPointerSteps,
-        payloadAtEndPointerSteps,
-        unDeduplicatedPayloadBytesEstimate,
-        storageSavingsPercent,
+        Label: label,
+        AgentName: agentName,
+        Mode: mode,
+        RootRunId: rootRunId,
+        WallTimeMs: Number(wallTimeMs.toFixed(2)),
+        LlmPromptExecutionMs: Number(llmPromptExecutionMs.toFixed(2)),
+        FrameworkOverheadMs: frameworkOverheadMs,
+        TotalRunsInTree: visitedRuns.size,
+        TotalStepsInTree: allSteps.length,
+        PromptSteps: promptSteps,
+        ActionSteps: actionSteps,
+        SubAgentSteps: subAgentSteps,
+        PayloadAtStartBytes: payloadAtStartBytes,
+        PayloadAtEndBytes: payloadAtEndBytes,
+        InputDataBytes: inputDataBytes,
+        OutputDataBytes: outputDataBytes,
+        TotalStepStorageBytes: totalStepStorageBytes,
+        PayloadAtStartPointerSteps: payloadAtStartPointerSteps,
+        PayloadAtEndPointerSteps: payloadAtEndPointerSteps,
+        UnDeduplicatedPayloadBytesEstimate: unDeduplicatedPayloadBytesEstimate,
+        StorageSavingsPercent: storageSavingsPercent,
     };
 
     console.log(
-        `      → [${label}] wall=${metrics.wallTimeMs}ms (llm=${metrics.llmPromptExecutionMs}ms, framework=${metrics.frameworkOverheadMs}ms) | ` +
-            `runs=${metrics.totalRunsInTree}, steps=${metrics.totalStepsInTree} (P:${promptSteps}/A:${actionSteps}/SA:${subAgentSteps}) | ` +
-            `DB bytes=${metrics.totalStepStorageBytes} (start=${payloadAtStartBytes}, end=${payloadAtEndBytes}, in=${inputDataBytes}, out=${outputDataBytes}) | ` +
+        `      → [${label}] wall=${metrics.WallTimeMs}ms (llm=${metrics.LlmPromptExecutionMs}ms, framework=${metrics.FrameworkOverheadMs}ms) | ` +
+            `runs=${metrics.TotalRunsInTree}, steps=${metrics.TotalStepsInTree} (P:${promptSteps}/A:${actionSteps}/SA:${subAgentSteps}) | ` +
+            `DB bytes=${metrics.TotalStepStorageBytes} (start=${payloadAtStartBytes}, end=${payloadAtEndBytes}, in=${inputDataBytes}, out=${outputDataBytes}) | ` +
             `pointers=(start:${payloadAtStartPointerSteps}, end:${payloadAtEndPointerSteps})`
     );
 
@@ -519,7 +524,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 }
             }
             const elapsedMs = Number((performance.now() - t0).toFixed(2));
-            fx.Primitives.classFactoryAndObjectCacheMs = elapsedMs;
+            fx.Primitives.ClassFactoryAndObjectCacheMs = elapsedMs;
             AssertEqual(foundCount, ITERS, 'PB1: all ClassFactory and ObjectCache lookups resolved accurately');
             console.log(`      → PB1 ClassFactory + ObjectCache (10k iters over 450 classes): ${elapsedMs} ms`);
         },
@@ -684,7 +689,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 }
             }
             const elapsedMs = Number((performance.now() - t0).toFixed(2));
-            fx.Primitives.entityHydrateAndFlsMs = elapsedMs;
+            fx.Primitives.EntityHydrateAndFlsMs = elapsedMs;
             AssertEqual(hydratedCount, ROWS, 'PB2: all 2,000 BaseEntity rows hydrated and checked FLS accurately');
             console.log(`      → PB2 BaseEntity Hydration + FLS (2,000 rows x 25 fields): ${elapsedMs} ms`);
         },
@@ -761,7 +766,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             }
             const stats = await lcm.GetStats();
             const elapsedMs = Number((performance.now() - t0).toFixed(2));
-            fx.Primitives.localCacheWritesAndStatsMs = elapsedMs;
+            fx.Primitives.LocalCacheWritesAndStatsMs = elapsedMs;
             Assert(stats.totalEntries >= 80, `PB3: expected >= 80 cached entries, got ${stats.totalEntries}`);
             console.log(`      → PB3 LocalCacheManager writes + GetStats (80 large entries): ${elapsedMs} ms`);
         },
@@ -810,7 +815,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 }
             }
             const elapsedMs = Number((performance.now() - t0).toFixed(2));
-            fx.Primitives.templateRenderSimpleMs = elapsedMs;
+            fx.Primitives.TemplateRenderSimpleMs = elapsedMs;
             AssertEqual(successRenders, 1_000, 'PB4: all 1,000 prompt templates rendered cleanly');
             console.log(`      → PB4 TemplateEngineServer.RenderTemplateSimple (1,000 renders): ${elapsedMs} ms`);
         },
@@ -861,7 +866,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 }
             }
             const elapsedMs = Number((performance.now() - t0).toFixed(2));
-            fx.Primitives.actionSnapshotAndEngineLookupMs = elapsedMs;
+            fx.Primitives.ActionSnapshotAndEngineLookupMs = elapsedMs;
             AssertEqual(checkCount, ITERS, 'PB5: all 500 ActionParam snapshots and AIEngine permission checks succeeded');
             console.log(`      → PB5 RedactParamsToJSON + AIEngineBase permissions (500 iters): ${elapsedMs} ms`);
         },
@@ -922,7 +927,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 currentPayload = res.result;
             }
             const elapsedMs = Number((performance.now() - t0).toFixed(2));
-            fx.Primitives.payloadApplyAndDeepDiffMs = elapsedMs;
+            fx.Primitives.PayloadApplyAndDeepDiffMs = elapsedMs;
             AssertEqual(currentPayload.metadata.version, TURNS + 1, 'PB6: 50 turns of payload change requests applied');
             console.log(`      → PB6 PayloadManager.applyAgentChangeRequest + DeepDiffer (50 turns): ${elapsedMs} ms`);
         },
@@ -982,9 +987,9 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             if (!metrics) {
                 return;
             }
-            Assert(metrics.totalStepsInTree >= 7, `PB7: expected >= 7 steps in Sage run, got ${metrics.totalStepsInTree}`);
-            Assert(metrics.promptSteps >= 4, `PB7: expected >= 4 Prompt steps, got ${metrics.promptSteps}`);
-            Assert(metrics.actionSteps >= 3, `PB7: expected >= 3 Action steps, got ${metrics.actionSteps}`);
+            Assert(metrics.TotalStepsInTree >= 7, `PB7: expected >= 7 steps in Sage run, got ${metrics.TotalStepsInTree}`);
+            Assert(metrics.PromptSteps >= 4, `PB7: expected >= 4 Prompt steps, got ${metrics.PromptSteps}`);
+            Assert(metrics.ActionSteps >= 3, `PB7: expected >= 3 Action steps, got ${metrics.ActionSteps}`);
         },
     },
     {
@@ -1070,10 +1075,10 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 return;
             }
             Assert(
-                metrics.totalRunsInTree >= 2,
-                `PB8: expected >= 2 runs in Query Builder tree (parent + child), got ${metrics.totalRunsInTree}`
+                metrics.TotalRunsInTree >= 2,
+                `PB8: expected >= 2 runs in Query Builder tree (parent + child), got ${metrics.TotalRunsInTree}`
             );
-            Assert(metrics.subAgentSteps >= 1, `PB8: expected >= 1 Sub-Agent step, got ${metrics.subAgentSteps}`);
+            Assert(metrics.SubAgentSteps >= 1, `PB8: expected >= 1 Sub-Agent step, got ${metrics.SubAgentSteps}`);
         },
     },
     {
@@ -1149,10 +1154,10 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 return;
             }
             Assert(
-                metrics.totalRunsInTree >= 2,
-                `PB9: expected >= 2 runs in Research Agent tree (parent + child), got ${metrics.totalRunsInTree}`
+                metrics.TotalRunsInTree >= 2,
+                `PB9: expected >= 2 runs in Research Agent tree (parent + child), got ${metrics.TotalRunsInTree}`
             );
-            Assert(metrics.subAgentSteps >= 1, `PB9: expected >= 1 Sub-Agent step, got ${metrics.subAgentSteps}`);
+            Assert(metrics.SubAgentSteps >= 1, `PB9: expected >= 1 Sub-Agent step, got ${metrics.SubAgentSteps}`);
         },
     },
     {
@@ -1214,7 +1219,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 ctx.User
             );
             fx.LiveAgentRuns.push(metrics);
-            Assert(metrics.totalStepsInTree > 0, 'PB10: Live Sage produced finalized steps');
+            Assert(metrics.TotalStepsInTree > 0, 'PB10: Live Sage produced finalized steps');
         },
     },
     {
@@ -1254,7 +1259,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 ctx.User
             );
             fx.LiveAgentRuns.push(metrics);
-            Assert(metrics.totalStepsInTree > 0, 'PB11: Live Query Builder produced finalized steps');
+            Assert(metrics.TotalStepsInTree > 0, 'PB11: Live Query Builder produced finalized steps');
         },
     },
     {
@@ -1295,7 +1300,154 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 ctx.User
             );
             fx.LiveAgentRuns.push(metrics);
-            Assert(metrics.totalStepsInTree > 0, 'PB12: Live Research Agent produced finalized steps');
+            Assert(metrics.TotalStepsInTree > 0, 'PB12: Live Research Agent produced finalized steps');
+        },
+    },
+    {
+        Id: `${BUNDLE}.PB13`,
+        Name: 'PB13: SaveReturnMode datestamps_only catalog audit & 10-save roundtrip benchmark on large NVARCHAR(MAX) log rows',
+        Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            const fx = requireFixture();
+            const datestampsOnlyEntities = ctx.Provider.Entities.filter(
+                (e) => e.SaveReturnMode === 'datestamps_only'
+            );
+            const bySchema: Record<string, number> = {};
+            for (const ent of datestampsOnlyEntities) {
+                bySchema[ent.SchemaName] = (bySchema[ent.SchemaName] ?? 0) + 1;
+            }
+            fx.Primitives.DatestampsOnlyEntityCount = datestampsOnlyEntities.length;
+            fx.Primitives.DatestampsOnlyEntitiesBySchema = bySchema;
+
+            // Verify key core write-heavy telemetry/execution entities are configured with datestamps_only
+            const requiredCoreEntities = [
+                'MJ: AI Agent Run Steps',
+                'MJ: AI Prompt Runs',
+                'MJ: AI Agent Runs',
+                'MJ: Action Execution Logs',
+                'MJ: Error Logs',
+                'MJ: Audit Logs',
+                'MJ: Record Changes',
+            ];
+            for (const name of requiredCoreEntities) {
+                const ent = ctx.Provider.Entities.find((e) => e.Name === name);
+                Assert(!!ent, `PB13: expected entity '${name}' in metadata`);
+                AssertEqual(
+                    ent!.SaveReturnMode,
+                    'datestamps_only',
+                    `PB13: expected '${name}' to have SaveReturnMode='datestamps_only'`
+                );
+            }
+
+            // Benchmark 10 consecutive saves of MJ: Error Logs carrying a ~32 KB Details payload
+            const largeDetails = JSON.stringify({
+                marker: fx.Marker,
+                stack: Array.from({ length: 120 }, (_, i) => `at Frame_${i} (module_${i}.ts:${i * 10}:15) — diagnostic payload text`).join('\n'),
+            });
+            const createdIds: string[] = [];
+            try {
+                const t0 = performance.now();
+                for (let i = 0; i < 10; i++) {
+                    const errLog = await ctx.Provider.GetEntityObject<MJErrorLogEntity>('MJ: Error Logs', ctx.User);
+                    errLog.NewRecord();
+                    errLog.Code = `PB13-${i}`;
+                    errLog.Message = `PB13 datestamps_only benchmark row #${i} (${fx.Marker})`;
+                    errLog.Details = largeDetails;
+                    errLog.Status = 'Info';
+                    errLog.Category = 'Benchmark';
+                    const saved = await errLog.Save();
+                    Assert(saved, `PB13: ErrorLog save #${i} failed: ${errLog.LatestResult?.CompleteMessage}`);
+                    const id = errLog.ID;
+                    Assert(!!id, `PB13: ErrorLog save #${i} populated ID`);
+                    Assert(!!errLog.__mj_CreatedAt, `PB13: ErrorLog save #${i} populated __mj_CreatedAt`);
+                    Assert(!!errLog.__mj_UpdatedAt, `PB13: ErrorLog save #${i} populated __mj_UpdatedAt`);
+                    createdIds.push(id);
+                }
+                const elapsedMs = Number((performance.now() - t0).toFixed(2));
+                fx.Primitives.DatestampsOnly10SavesMs = elapsedMs;
+                console.log(
+                    `      → PB13 SaveReturnMode='datestamps_only' (${datestampsOnlyEntities.length} entities across ${Object.keys(bySchema).length} schemas; 10x 32KB ErrorLog saves): ${elapsedMs} ms`
+                );
+            } finally {
+                for (const id of createdIds) {
+                    await DeleteById('MJ: Error Logs', id, ctx.Provider, ctx.User);
+                }
+            }
+        },
+    },
+    {
+        Id: `${BUNDLE}.PB14`,
+        Name: 'PB14: Phase 2 Regression Guards — Lazy BaseEntity _raw hydration on RunView entity_object & runtime options.SaveReturnMode datestamps_only on full-SP entities',
+        Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            const fx = requireFixture();
+            const rv = RunView.FromMetadataProvider(ctx.Provider);
+
+            // 1. Verify RunView({ ResultType: 'entity_object' }) keeps _fieldsHydrated === false during read-only access
+            const agentsRes = await rv.RunView<MJAIAgentEntityExtended>(
+                {
+                    EntityName: 'MJ: AI Agents',
+                    MaxRows: 10,
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                },
+                ctx.User
+            );
+            const agents = RequireRows(agentsRes, 'PB14: MJ: AI Agents entity_object load');
+            Assert(agents.length > 0, 'PB14: expected at least 1 AI Agent row');
+
+            for (const ag of agents) {
+                const nameVal = ag.Name;
+                const statusVal = ag.Status;
+                const allObj = ag.GetAll();
+                Assert(typeof nameVal === 'string' && nameVal.length > 0, 'PB14: expected Name via getter in _raw mode');
+                Assert(typeof statusVal === 'string', 'PB14: expected Status via getter in _raw mode');
+                AssertEqual(allObj.Name, nameVal, 'PB14: GetAll() returns Name in _raw mode');
+                const hydratedAfterRead = (ag as unknown as { _fieldsHydrated: boolean })._fieldsHydrated;
+                AssertEqual(
+                    hydratedAfterRead,
+                    false,
+                    `PB14: expected BaseEntity._fieldsHydrated to stay false after read-only Get()/GetAll() on '${nameVal}'`
+                );
+            }
+
+            // Trigger lazy hydration on the first entity via Set() and verify _fieldsHydrated flips to true
+            const firstAgent = agents[0];
+            const originalDesc = firstAgent.Description;
+            firstAgent.Set('Description', originalDesc);
+            const hydratedAfterSet = (firstAgent as unknown as { _fieldsHydrated: boolean })._fieldsHydrated;
+            AssertEqual(hydratedAfterSet, true, 'PB14: expected Set() to lazily hydrate EntityFields');
+
+            // 2. Verify runtime options.SaveReturnMode='datestamps_only' on an entity whose compiled SP is SaveReturnMode='full'
+            const conv = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);
+            AssertEqual(
+                conv.EntityInfo.SaveReturnMode,
+                'full',
+                'PB14: expected MJ: Conversations to have compiled SaveReturnMode="full"'
+            );
+            conv.NewRecord();
+            conv.Name = `PB14 Runtime DatestampsOnly (${fx.Marker})`;
+            conv.Description = 'Initial description';
+            conv.UserID = ctx.User.ID;
+
+            try {
+                const createSaved = await conv.Save({ SaveReturnMode: 'datestamps_only' });
+                Assert(createSaved, `PB14: Conversations create with runtime SaveReturnMode='datestamps_only' failed: ${conv.LatestResult?.CompleteMessage}`);
+                Assert(conv.IsSaved, 'PB14: conv.IsSaved should be true after create');
+                Assert(!!conv.__mj_CreatedAt, 'PB14: conv.__mj_CreatedAt populated from DB');
+                Assert(!!conv.__mj_UpdatedAt, 'PB14: conv.__mj_UpdatedAt populated from DB');
+                AssertEqual(conv.Name, `PB14 Runtime DatestampsOnly (${fx.Marker})`, 'PB14: in-memory Name preserved');
+                AssertEqual(conv.Dirty, false, 'PB14: conv.Dirty reset to false after create');
+
+                // Update with runtime SaveReturnMode='datestamps_only'
+                conv.Description = 'Updated description via datestamps_only';
+                const updateSaved = await conv.Save({ SaveReturnMode: 'datestamps_only' });
+                Assert(updateSaved, `PB14: Conversations update with runtime SaveReturnMode='datestamps_only' failed: ${conv.LatestResult?.CompleteMessage}`);
+                AssertEqual(conv.Description, 'Updated description via datestamps_only', 'PB14: updated Description preserved');
+                AssertEqual(conv.Dirty, false, 'PB14: conv.Dirty reset to false after update');
+            } finally {
+                if (conv.IsSaved && conv.ID) {
+                    await DeleteById('MJ: Conversations', conv.ID, ctx.Provider, ctx.User);
+                }
+            }
         },
     },
 ];
@@ -1308,46 +1460,110 @@ function buildBenchmarkReport(fx: BenchmarkFixture): PerformanceBenchmarkReport 
     const p = fx.Primitives;
     const primitivesTotalMs = Number(
         (
-            (p.classFactoryAndObjectCacheMs ?? 0) +
-            (p.entityHydrateAndFlsMs ?? 0) +
-            (p.localCacheWritesAndStatsMs ?? 0) +
-            (p.templateRenderSimpleMs ?? 0) +
-            (p.actionSnapshotAndEngineLookupMs ?? 0) +
-            (p.payloadApplyAndDeepDiffMs ?? 0)
+            (p.ClassFactoryAndObjectCacheMs ?? 0) +
+            (p.EntityHydrateAndFlsMs ?? 0) +
+            (p.LocalCacheWritesAndStatsMs ?? 0) +
+            (p.TemplateRenderSimpleMs ?? 0) +
+            (p.ActionSnapshotAndEngineLookupMs ?? 0) +
+            (p.PayloadApplyAndDeepDiffMs ?? 0)
         ).toFixed(2)
     );
     return {
-        timestamp: new Date().toISOString(),
-        database: process.env.DB_DATABASE ?? 'unknown',
-        primitives: p,
-        primitivesTotalMs,
-        deterministicAgentRuns: fx.DeterministicAgentRuns,
-        liveAgentRuns: fx.LiveAgentRuns,
+        Timestamp: new Date().toISOString(),
+        Database: process.env.DB_DATABASE ?? 'unknown',
+        Primitives: p,
+        PrimitivesTotalMs: primitivesTotalMs,
+        DeterministicAgentRuns: fx.DeterministicAgentRuns,
+        LiveAgentRuns: fx.LiveAgentRuns,
     };
+}
+
+function formatBenchmarkMarkdown(report: PerformanceBenchmarkReport): string {
+    const lines: string[] = [
+        `# MemberJunction Performance & Agent Overhead Benchmark Report`,
+        ``,
+        `- **Timestamp**: \`${report.Timestamp}\``,
+        `- **Database**: \`${report.Database}\``,
+        `- **Primitives Total CPU Time (PB1–PB6)**: **${report.PrimitivesTotalMs} ms**`,
+        `- **\`SaveReturnMode: 'datestamps_only'\` Entities Active (PB13)**: **${report.Primitives.DatestampsOnlyEntityCount ?? 'n/a'}** (\`${JSON.stringify(report.Primitives.DatestampsOnlyEntitiesBySchema ?? {})}\`)`,
+        `- **10x 32 KB \`ErrorLog\` Saves with \`datestamps_only\` (PB13)**: **${report.Primitives.DatestampsOnly10SavesMs ?? 'n/a'} ms**`,
+        ``,
+        `## 1. Core & AI Primitive Microbenchmarks (PB1–PB6, PB13)`,
+        ``,
+        `| Check | Benchmark | Elapsed (ms) |`,
+        `|---|---|---:|`,
+        `| **PB1** | \`ClassFactory\` (\`GetRegistration\` + \`GetAllRegistrations\`) & \`ObjectCache.Find\` (10k iters / 450 classes) | ${report.Primitives.ClassFactoryAndObjectCacheMs ?? 'n/a'} |`,
+        `| **PB2** | \`EntityInfo.ChildEntities\` + \`BaseEntity\` Hydration (\`LoadFromData\`/\`SetMany\`/\`GetAll\`) + FLS (2,000 rows x 25 fields) | ${report.Primitives.EntityHydrateAndFlsMs ?? 'n/a'} |`,
+        `| **PB3** | \`LocalCacheManager\` \`SetRunViewResult\` + \`SetDataset\` + \`GetStats\` (80 large entries) | ${report.Primitives.LocalCacheWritesAndStatsMs ?? 'n/a'} |`,
+        `| **PB4** | \`TemplateEngineServer.RenderTemplateSimple\` + \`NunjucksSandbox\` (1,000 renders) | ${report.Primitives.TemplateRenderSimpleMs ?? 'n/a'} |`,
+        `| **PB5** | \`RedactParamsToJSON\` + \`AIEngineBase\` permissions & catalog lookup (500 iters) | ${report.Primitives.ActionSnapshotAndEngineLookupMs ?? 'n/a'} |`,
+        `| **PB6** | \`PayloadManager.applyAgentChangeRequest\` + \`DeepDiffer\` (50 turns) | ${report.Primitives.PayloadApplyAndDeepDiffMs ?? 'n/a'} |`,
+        `| **PB13** | \`SaveReturnMode: 'datestamps_only'\` 10x 32 KB \`MJ: Error Logs\` SQL roundtrips (${report.Primitives.DatestampsOnlyEntityCount ?? 0} entities configured) | ${report.Primitives.DatestampsOnly10SavesMs ?? 'n/a'} |`,
+        ``,
+        `## 2. Multi-Turn Agent Loop & SQL Server Footprint Benchmarks (PB7–PB12)`,
+        ``,
+        `| Check / Agent | Mode | Wall Time (ms) | LLM Time (ms) | Framework Overhead (ms) | Runs | Steps | Total Step DB Bytes | Pointer Steps (Start / End) | Est. Dedup Savings |`,
+        `|---|---|---:|---:|---:|---:|---:|---:|---|---:|`,
+    ];
+    for (const r of [...report.DeterministicAgentRuns, ...report.LiveAgentRuns]) {
+        lines.push(
+            `| **${r.Label}** | \`${r.Mode}\` | ${r.WallTimeMs} | ${r.LlmPromptExecutionMs} | ${r.FrameworkOverheadMs} | ${r.TotalRunsInTree} | ${r.TotalStepsInTree} | ${r.TotalStepStorageBytes.toLocaleString()} B | ${r.PayloadAtStartPointerSteps} / ${r.PayloadAtEndPointerSteps} | ${r.StorageSavingsPercent}% |`
+        );
+    }
+    lines.push('');
+    return lines.join('\n');
+}
+
+function writePersistentBenchmarkLogs(report: PerformanceBenchmarkReport): void {
+    const currentDir = path.dirname(fileURLToPath(import.meta.url));
+    const defaultLogDir = path.resolve(currentDir, '../../benchmark-logs');
+    const logDir = process.env.MJ_PERF_BENCHMARK_LOG_DIR ?? defaultLogDir;
+    try {
+        fs.mkdirSync(logDir, { recursive: true });
+        const safeTs = report.Timestamp.replace(/[:.]/g, '-');
+        const jsonPath = path.join(logDir, `benchmark-${safeTs}.json`);
+        const mdPath = path.join(logDir, `benchmark-${safeTs}.md`);
+        const latestJsonPath = path.join(logDir, 'latest.json');
+        const latestMdPath = path.join(logDir, 'latest.md');
+        const historyJsonlPath = path.join(logDir, 'history.jsonl');
+
+        const jsonContent = JSON.stringify(report, null, 2);
+        const mdContent = formatBenchmarkMarkdown(report);
+
+        fs.writeFileSync(jsonPath, jsonContent, 'utf8');
+        fs.writeFileSync(mdPath, mdContent, 'utf8');
+        fs.writeFileSync(latestJsonPath, jsonContent, 'utf8');
+        fs.writeFileSync(latestMdPath, mdContent, 'utf8');
+        fs.appendFileSync(historyJsonlPath, JSON.stringify(report) + '\n', 'utf8');
+        console.log(`  [performance-benchmark] Persisted benchmark logs to ${logDir} (latest.json, latest.md, history.jsonl)`);
+    } catch (e) {
+        console.error(`  [performance-benchmark] Failed to write persistent benchmark logs to ${logDir}:`, e);
+    }
 }
 
 function printBenchmarkSummary(report: PerformanceBenchmarkReport): void {
     console.log('\n╔══════════════════════════════════════════════════════════════════════════════════════════╗');
     console.log('║                    MJ PERFORMANCE & AGENT OVERHEAD BENCHMARK SUMMARY                     ║');
     console.log('╚══════════════════════════════════════════════════════════════════════════════════════════╝');
-    console.log(`  Database: ${report.database}`);
-    console.log(`  Primitives Total CPU Time: ${report.primitivesTotalMs} ms`);
-    console.log(`    - PB1 ClassFactory & ObjectCache (10k iters):         ${report.primitives.classFactoryAndObjectCacheMs ?? 'n/a'} ms`);
-    console.log(`    - PB2 BaseEntity Hydration & FLS (2,000 rows):        ${report.primitives.entityHydrateAndFlsMs ?? 'n/a'} ms`);
-    console.log(`    - PB3 LocalCacheManager Writes & GetStats:            ${report.primitives.localCacheWritesAndStatsMs ?? 'n/a'} ms`);
-    console.log(`    - PB4 TemplateEngineServer RenderSimple (1,000x):     ${report.primitives.templateRenderSimpleMs ?? 'n/a'} ms`);
-    console.log(`    - PB5 SnapshotActionParams & AIEngine Permissions:    ${report.primitives.actionSnapshotAndEngineLookupMs ?? 'n/a'} ms`);
-    console.log(`    - PB6 PayloadManager.applyAgentChangeRequest (50x):   ${report.primitives.payloadApplyAndDeepDiffMs ?? 'n/a'} ms`);
+    console.log(`  Database: ${report.Database}`);
+    console.log(`  Primitives Total CPU Time: ${report.PrimitivesTotalMs} ms`);
+    console.log(`    - PB1 ClassFactory & ObjectCache (10k iters):         ${report.Primitives.ClassFactoryAndObjectCacheMs ?? 'n/a'} ms`);
+    console.log(`    - PB2 BaseEntity Hydration & FLS (2,000 rows):        ${report.Primitives.EntityHydrateAndFlsMs ?? 'n/a'} ms`);
+    console.log(`    - PB3 LocalCacheManager Writes & GetStats:            ${report.Primitives.LocalCacheWritesAndStatsMs ?? 'n/a'} ms`);
+    console.log(`    - PB4 TemplateEngineServer RenderSimple (1,000x):     ${report.Primitives.TemplateRenderSimpleMs ?? 'n/a'} ms`);
+    console.log(`    - PB5 SnapshotActionParams & AIEngine Permissions:    ${report.Primitives.ActionSnapshotAndEngineLookupMs ?? 'n/a'} ms`);
+    console.log(`    - PB6 PayloadManager.applyAgentChangeRequest (50x):   ${report.Primitives.PayloadApplyAndDeepDiffMs ?? 'n/a'} ms`);
+    console.log(`    - PB13 datestamps_only 10x 32KB ErrorLog saves:       ${report.Primitives.DatestampsOnly10SavesMs ?? 'n/a'} ms (${report.Primitives.DatestampsOnlyEntityCount ?? 0} entities)`);
 
-    const allRuns = [...report.deterministicAgentRuns, ...report.liveAgentRuns];
+    const allRuns = [...report.DeterministicAgentRuns, ...report.LiveAgentRuns];
     if (allRuns.length > 0) {
         console.log('\n  Agent Run Benchmarks (Deterministic TestLLM & Live Model):');
         for (const r of allRuns) {
             console.log(
-                `    - ${r.label}: wall=${r.wallTimeMs}ms (llm=${r.llmPromptExecutionMs}ms, framework=${r.frameworkOverheadMs}ms), ` +
-                    `runs=${r.totalRunsInTree}, steps=${r.totalStepsInTree}, ` +
-                    `stepStorageBytes=${r.totalStepStorageBytes} (start=${r.payloadAtStartBytes}, end=${r.payloadAtEndBytes}, in=${r.inputDataBytes}, out=${r.outputDataBytes}), ` +
-                    `pointers=(start:${r.payloadAtStartPointerSteps}, end:${r.payloadAtEndPointerSteps})`
+                `    - ${r.Label}: wall=${r.WallTimeMs}ms (llm=${r.LlmPromptExecutionMs}ms, framework=${r.FrameworkOverheadMs}ms), ` +
+                    `runs=${r.TotalRunsInTree}, steps=${r.TotalStepsInTree}, ` +
+                    `stepStorageBytes=${r.TotalStepStorageBytes} (start=${r.PayloadAtStartBytes}, end=${r.PayloadAtEndBytes}, in=${r.InputDataBytes}, out=${r.OutputDataBytes}), ` +
+                    `pointers=(start:${r.PayloadAtStartPointerSteps}, end:${r.PayloadAtEndPointerSteps})`
             );
         }
     }
@@ -1375,6 +1591,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
 
         const report = buildBenchmarkReport(fx);
         printBenchmarkSummary(report);
+        writePersistentBenchmarkLogs(report);
 
         const outPath = process.env.MJ_PERF_BENCHMARK_OUT;
         if (outPath) {

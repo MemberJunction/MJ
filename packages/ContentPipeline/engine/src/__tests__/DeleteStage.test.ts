@@ -73,7 +73,7 @@ describe('every other stage skips a pending-delete record', () => {
         Committer: () =>
             ({ Commit: async () => ({ RecordID: 'C1', ColumnsWritten: [], Created: false }) }) as unknown as WorkingRecordCommitter,
     });
-    const rsContext = { contextUser: {}, provider: { EntityByName: () => undefined } } as never;
+    const rsContext = { ContextUser: {}, Provider: { EntityByName: () => undefined } } as never;
     const ref = { EntityID: 'E1', RecordID: 'C1' } as never;
 
     it('skips a record marked pending delete', async () => {
