@@ -236,7 +236,7 @@ async function loadRow<T>(
     if (!row) return null;
     // `Load(id)` is a generated-subclass convenience; this is the base entry point, and the only
     // one available for an entity a migration registered rather than CodeGen.
-    const ok = await row.InnerLoad(CompositeKey.FromID(id));
+    const ok = await row.InnerLoad(CompositeKey.FromID(id)); // first-pk-ok: every caller passes an MJ core catalog entity ('MJ: Integration Objects' / '... Object Fields' / their 'MJ: Company Integration ...' twins), all keyed by ID
     return ok ? proxyRow<T>(row, entityName, guard, aliases) : null;
 }
 
