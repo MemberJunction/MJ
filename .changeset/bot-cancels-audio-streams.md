@@ -1,0 +1,5 @@
+---
+"@memberjunction/ai-bridge-livekit-native": patch
+---
+
+The meeting bot now stops reading a participant's audio when the track is unsubscribed, when the participant leaves, and when the bot leaves the room or the room disconnects. It read each track with `for await`, which locks rtc-node's `AudioStream` (a `ReadableStream` with no `close()`), and tried to stop it with `close?.()`, which did nothing, so each stream kept its native handle and a listener on rtc-node's process-wide event emitter until an end of stream that rtc-node 0.13.29 does not send in those cases. Each stream is now read through a reader the client keeps and cancels; a frame already read when the stream is cancelled is dropped, and no stream opens after the bot leaves. `RtcAudioStream` now describes that reader surface (`getReader()`), so a hand-built `RtcNodeModule`, such as a test fake, must return a stream that has it; rtc-node before 0.13.12, whose `AudioStream` was an async iterator, is no longer read (the client logs that it could not open the stream).

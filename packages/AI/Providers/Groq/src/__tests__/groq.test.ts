@@ -37,6 +37,9 @@ vi.mock('@memberjunction/global', () => ({
 // be tested against — a mocked copy would be the second implementation the shared module exists to prevent.
 import * as actualToolMapping from '../../../../Core/src/generic/openAICompatibleTools';
 import { toClassicChatMessageRole as actualToClassicChatMessageRole } from '../../../../Core/src/generic/chat.types';
+// The cancellation classification is likewise pure and shared, so the stand-in BaseLLM below builds
+// its cancelled results from the real module rather than from a hand-copied shape.
+import * as actualCancellation from '../../../../Core/src/generic/cancellation';
 
 vi.mock('@memberjunction/ai', () => {
     class BaseModel {
@@ -86,6 +89,20 @@ vi.mock('@memberjunction/ai', () => {
             }
             return message;
         }
+        /** Mirrors BaseLLM.IsCancellationError: an aborted signal or an abort-named error. */
+        protected IsCancellationError(error: unknown, signal?: AbortSignal | null): boolean {
+            return signal?.aborted === true || actualCancellation.IsAbortError(error);
+        }
+        /** Mirrors BaseLLM.BuildCancelledChatResult, classifying through the real shared module. */
+        protected BuildCancelledChatResult(startTime: Date, options: { error?: unknown; signal?: AbortSignal | null; message?: string } = {}): ChatResult {
+            const result = new ChatResult(false, startTime, new Date());
+            result.data = { choices: [], usage: new ModelUsage(0, 0) };
+            result.statusText = 'cancelled';
+            result.errorMessage = options.message || actualCancellation.DescribeCancellation(options.signal);
+            result.exception = options.error;
+            result.errorInfo = actualCancellation.BuildCancellationErrorInfo({ error: options.error, signal: options.signal, provider: this.constructor.name });
+            return result;
+        }
     }
     class ModelUsage {
         promptTokens: number;
@@ -108,6 +125,7 @@ vi.mock('@memberjunction/ai', () => {
         statusText: string | null = null;
         errorMessage: string | null = null;
         exception: unknown = null;
+        errorInfo: unknown = null;
         modelSpecificResponseDetails: unknown = null;
         constructor(success: boolean, startTime: Date, endTime: Date) {
             this.success = success;
@@ -425,16 +443,19 @@ describe('GroqLLM', () => {
     });
 
     describe('cancellationToken', () => {
-        type CancellableResult = { success: boolean; statusText: string | null; errorMessage: string | null };
+        type CancellableResult = {
+            success: boolean;
+            statusText: string | null;
+            errorMessage: string | null;
+            exception: unknown;
+            errorInfo: { errorType: string; severity: string; canFailover: boolean; providerErrorCode?: string } | null;
+        };
 
         const callNonStreaming = async (params: Record<string, unknown>): Promise<CancellableResult> => {
             return (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion'].bind(instance)(params) as Promise<CancellableResult>;
         };
         const callCreateStream = async (params: Record<string, unknown>): Promise<AsyncIterable<unknown>> => {
             return (instance as ReturnType<typeof Object.create>)['createStreamingRequest'].bind(instance)(params) as Promise<AsyncIterable<unknown>>;
-        };
-        const callFinalize = (content: string): CancellableResult => {
-            return (instance as ReturnType<typeof Object.create>)['finalizeStreamingResponse'].bind(instance)(content, null, null) as CancellableResult;
         };
 
         const baseParams = (signal: AbortSignal) => ({
@@ -455,24 +476,20 @@ describe('GroqLLM', () => {
             expect(mockCreate.mock.calls[0][1]).toEqual({ signal: controller.signal });
         });
 
-        it('should return a cancelled result without calling the SDK when already aborted', async () => {
-            const controller = new AbortController();
-            controller.abort();
-
-            const result = await callNonStreaming(baseParams(controller.signal));
-
-            expect(mockCreate).not.toHaveBeenCalled();
-            expect(result.success).toBe(false);
-            expect(result.statusText).toBe('cancelled');
-        });
-
-        it('should return a cancelled result when the SDK raises an abort error', async () => {
-            mockCreate.mockRejectedValue(new MockAPIUserAbortError());
+        it('should return a Cancelled, non-failover-able result when the SDK raises an abort error', async () => {
+            const abortError = new MockAPIUserAbortError();
+            mockCreate.mockRejectedValue(abortError);
 
             const result = await callNonStreaming(baseParams(new AbortController().signal));
 
             expect(result.success).toBe(false);
             expect(result.statusText).toBe('cancelled');
+            expect(result.errorMessage).toBe('Request was cancelled');
+            expect(result.exception).toBe(abortError);
+            expect(result.errorInfo?.errorType).toBe('Cancelled');
+            expect(result.errorInfo?.severity).toBe('Fatal');
+            expect(result.errorInfo?.canFailover).toBe(false);
+            expect(result.errorInfo?.providerErrorCode).toBe('request_cancelled');
         });
 
         it('should rethrow non-cancellation SDK errors on the non-streaming path', async () => {
@@ -481,28 +498,22 @@ describe('GroqLLM', () => {
             await expect(callNonStreaming(baseParams(new AbortController().signal))).rejects.toThrow('boom');
         });
 
-        it('should forward the cancellation token on the streaming path and report a mid-stream abort as cancelled', async () => {
+        it('should forward the cancellation token on the streaming path and hand the SDK stream back unwrapped', async () => {
             const controller = new AbortController();
-            mockCreate.mockResolvedValue({
+            const sdkStream = {
                 async *[Symbol.asyncIterator]() {
                     yield { choices: [{ delta: { content: 'partial' } }] };
                     controller.abort();
                     throw new MockAPIUserAbortError();
                 }
-            });
+            };
+            mockCreate.mockResolvedValue(sdkStream);
 
             const stream = await callCreateStream(baseParams(controller.signal));
+
             expect(mockCreate.mock.calls[0][1]).toEqual({ signal: controller.signal });
-
-            const chunks: unknown[] = [];
-            for await (const chunk of stream) {
-                chunks.push(chunk);
-            }
-
-            expect(chunks).toHaveLength(1);
-            const result = callFinalize('partial');
-            expect(result.success).toBe(false);
-            expect(result.statusText).toBe('cancelled');
+            // The abort reaches BaseLLM's stream loop, which reports the request as cancelled.
+            expect(stream).toBe(sdkStream);
         });
     });
 });

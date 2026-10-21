@@ -34,6 +34,7 @@ import { ResolveConfiguredPrincipal } from '../principals.js';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
 import { configInfo, type MagicLinkConfig } from '../../config.js';
+import { CreateIsolatedProvider } from '../../isolatedProvider.js';
 import { MagicLinkKeyManager } from './MagicLinkKeys.js';
 import { GenerateRawToken, GenerateSessionId, HashToken, EvaluateInvite, BuildSessionClaims, BuildConsumeInvitePostgresSQL, CanIssueInvites, IsRoleGrantable, MAGIC_LINK_TOKEN_PREFIX } from './magicLinkCore.js';
 import type {
@@ -521,9 +522,11 @@ export class MagicLinkService {
   /** Creates a new user with exactly the restricted role + single app, transactionally. */
   private async createScopedUser(invite: MJMagicLinkInviteEntity, role: RoleInfo, contextUser: UserInfo): Promise<ProvisionResult> {
     // Single provider for BOTH the transaction and the entity writes, so the
-    // BeginTransaction/Save/Commit are provably on the same connection.
-    // global-provider-ok: redemption runs in the pre-auth flow, no per-request provider yet.
-    const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: server-side magic-link service; runs under the server's single default provider
+    // BeginTransaction/Save/Commit are provably on the same connection. Redemption runs
+    // pre-auth, with no per-request provider yet, and the global Metadata.Provider is shared
+    // by every concurrent request: a transaction opened there nests into anyone else's and
+    // swallows their writes. So it gets its own (see CreateIsolatedProvider).
+    const provider = await CreateIsolatedProvider();
     const email = invite.Email;
     // The invite does not persist a name; provision a sensible default. (The
     // create-invite params accept first/last name but there is no column to

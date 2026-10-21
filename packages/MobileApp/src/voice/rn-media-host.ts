@@ -31,6 +31,11 @@ export class RNRealtimeMediaHost implements IRealtimeMediaHost {
      * so the platform applies the right category, route and echo handling from the first frame.
      * Configuring afterwards produces a call whose first seconds sound wrong.
      *
+     * Once permission is granted, this host counts as one open call on the shared audio session
+     * until {@link ReleaseMicrophone}, however many times the runtime asks. Give each runtime its
+     * own host, as `MobileVoiceSession` does: a host shared by two runtimes would count their calls
+     * as one.
+     *
      * @throws when permission is denied or no input device is available. The runtime treats a throw
      *         as a failed session start and tears down cleanly, so there is no need to pre-check.
      */
@@ -40,7 +45,7 @@ export class RNRealtimeMediaHost implements IRealtimeMediaHost {
             throw new Error('Microphone permission was not granted.');
         }
 
-        await ConfigureVoiceAudioSession();
+        await ConfigureVoiceAudioSession(this);
 
         const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
         if (!stream) {
@@ -50,14 +55,20 @@ export class RNRealtimeMediaHost implements IRealtimeMediaHost {
     }
 
     /**
-     * Returns the shared audio session to its normal, non-recording configuration.
+     * Closes this host's call on the shared audio session, which returns to its normal,
+     * non-recording configuration when no other call is open.
      *
      * {@link AcquireMicrophone} puts iOS into a record-and-play category with the speaker route so
      * the call sounds right. That setting is process-wide and outlives the call: without this,
      * every later sound the app plays — a notification, a video in a chat attachment — goes out on
      * the call route at call volume for the rest of the app's lifetime.
+     *
+     * A call abandoned while its microphone was opening releases once the opening returns, which
+     * can be after the user has started a newer call on another runtime; that release leaves the
+     * newer call in the call category. A host whose permission was refused opened no call, and its
+     * release does nothing.
      */
     public async ReleaseMicrophone(): Promise<void> {
-        await ResetVoiceAudioSession();
+        await ResetVoiceAudioSession(this);
     }
 }

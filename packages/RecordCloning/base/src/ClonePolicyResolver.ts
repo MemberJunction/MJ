@@ -9,7 +9,8 @@
  *   entity-specific defaults.
  * - A self-relationship is Deep only when its join column is a hierarchy (IsHierarchy) field.
  * - A unique FK makes Reference impossible, so it turns Reference into Deep; it never overrides Skip.
- * - Locked edges ignore preset and request overrides (LOCKED_EDGE_OVERRIDE_IGNORED).
+ * - Locked edges ignore preset and request overrides (LOCKED_EDGE_OVERRIDE_IGNORED), except a template
+ *   preset's, which may also copy children whose entity is CloneableFromTemplate (see TemplateMode).
  * @see plans/record-cloning/README.md §4.4, §5.3–§5.5, §13.1
  */
 
@@ -50,6 +51,8 @@ export interface EdgePolicyResolutionContext {
         NotCloneable?: boolean;
         NotCloneableReason?: string;
         AllowCreateAPI?: boolean;
+        /** NotCloneable is lifted for this entity in TemplateMode. */
+        CloneableFromTemplate?: boolean;
     };
     RelationshipConfig?: {
         Policy?: CloneEdgePolicy;
@@ -70,6 +73,8 @@ export interface EdgePolicyResolutionContext {
         EdgeOverrides?: Array<{
             RelationshipID?: string;
             ChildEntityName?: string;
+            /** Set for a `<Child>.<JoinField>` preset key: the override applies only to that foreign key. */
+            JoinField?: string;
             Policy: CloneEdgePolicy;
         }>;
     };
@@ -80,6 +85,12 @@ export interface EdgePolicyResolutionContext {
         Policy: CloneEdgePolicy;
     }>;
     AllowUserOverrides?: boolean;
+    /**
+     * The clone runs under a template preset (one with `TemplateSourceField`) and the source record is
+     * flagged as a template. The preset's policies then apply to Locked edges too, and a child entity
+     * that is NotCloneable but CloneableFromTemplate may be copied. Request overrides still respect Locked.
+     */
+    TemplateMode?: boolean;
 }
 
 export interface EdgePolicyResolutionResult {
@@ -103,9 +114,10 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
 
     // TIER 0 / EXCLUSION. Explicit NotCloneable and AllowCreateAPI=false win unconditionally.
     // The name heuristics only apply when no configuration says what to do with this edge.
+    const liftedForTemplate = ctx.TemplateMode === true && ctx.ChildEntityConfig?.CloneableFromTemplate === true;
     const exclusion = EvaluateExclusionClass({
         EntityName: ctx.ChildEntityName,
-        NotCloneable: ctx.ChildEntityConfig?.NotCloneable,
+        NotCloneable: liftedForTemplate ? false : ctx.ChildEntityConfig?.NotCloneable,
         NotCloneableReason: ctx.ChildEntityConfig?.NotCloneableReason,
         AllowCreateAPI: ctx.ChildEntityConfig?.AllowCreateAPI,
         HeuristicsOnly: false,
@@ -214,14 +226,10 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
         }
     }
 
-    // 6. Preset (a Locked edge keeps its configured policy)
+    // 6. Preset (a Locked edge keeps its configured policy, unless this is a template copy)
     if (ctx.PresetConfig?.EdgeOverrides) {
-        const presetOverride = ctx.PresetConfig.EdgeOverrides.find(
-            (o) =>
-                (ctx.RelationshipID && o.RelationshipID === ctx.RelationshipID) ||
-                (o.ChildEntityName && o.ChildEntityName === ctx.ChildEntityName)
-        );
-        if (presetOverride && locked) {
+        const presetOverride = ctx.PresetConfig.EdgeOverrides.find((o) => PresetOverrideMatches(o, ctx));
+        if (presetOverride && locked && ctx.TemplateMode !== true) {
             warnings.push({
                 Code: 'LOCKED_EDGE_OVERRIDE_IGNORED',
                 Severity: 'Warning',
@@ -331,11 +339,39 @@ function wouldCopy(ctx: EdgePolicyResolutionContext, configuredPolicy: CloneEdge
         const deepByDefault = ctx.Kind === 'IsASubtype' || ctx.Kind === 'Embedded' || ctx.Kind === 'Collection' || (ctx.Kind === 'Hierarchy' && ctx.IsHierarchyField === true);
         if (deepByDefault) return true;
     }
-    const preset = ctx.PresetConfig?.EdgeOverrides?.some(
-        (o) => o.Policy === 'Deep' && ((ctx.RelationshipID && o.RelationshipID === ctx.RelationshipID) || o.ChildEntityName === ctx.ChildEntityName)
-    );
+    const preset = ctx.PresetConfig?.EdgeOverrides?.some((o) => o.Policy === 'Deep' && PresetOverrideMatches(o, ctx));
     const request = ctx.RequestOverrides?.some(
         (o) => o.Policy === 'Deep' && ((o.RelationshipID && o.RelationshipID === ctx.RelationshipID) || (o.FromKey === ctx.FromKey && o.ToKey === ctx.ToKey))
     );
     return !!preset || !!request;
+}
+
+/**
+ * Whether a preset override names this edge: by relationship ID, by child entity name (every foreign
+ * key from that child), or by `<Child>.<JoinField>` (that one foreign key; matched ignoring case).
+ */
+export function PresetOverrideMatches(
+    o: { RelationshipID?: string; ChildEntityName?: string; JoinField?: string },
+    ctx: Pick<EdgePolicyResolutionContext, 'RelationshipID' | 'ChildEntityName' | 'JoinField'>
+): boolean {
+    if (ctx.RelationshipID && o.RelationshipID === ctx.RelationshipID) return true;
+    if (!o.ChildEntityName || o.ChildEntityName !== ctx.ChildEntityName) return false;
+    return !o.JoinField || o.JoinField.toLowerCase() === (ctx.JoinField ?? '').toLowerCase();
+}
+
+/**
+ * Reads a preset `Relationships` key: a relationship ID, a related entity name, or
+ * `<Child>.<JoinField>`. An entity name may itself contain a dot, so the part before the last dot is
+ * taken as the child only when `isEntity` knows it.
+ */
+export function SplitPresetKey(
+    key: string,
+    isEntity: (name: string) => boolean
+): { RelationshipID?: string; ChildEntityName?: string; JoinField?: string } {
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key)) return { RelationshipID: key };
+    const dot = key.lastIndexOf('.');
+    if (dot > 0 && !isEntity(key) && isEntity(key.slice(0, dot))) {
+        return { ChildEntityName: key.slice(0, dot), JoinField: key.slice(dot + 1) };
+    }
+    return { ChildEntityName: key };
 }

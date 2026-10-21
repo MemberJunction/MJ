@@ -49,6 +49,22 @@ function createState(): DatabaseDocumentation {
   };
 }
 
+describe('MermaidGenerator columns option', () => {
+  it('draws only primary and foreign keys in keys mode', () => {
+    const output = new MermaidGenerator().Generate(createState(), { columns: 'keys', includeComments: false });
+    expect(output).toContain('int ID "PK,NOT_NULL"');
+    expect(output).toContain('int UserID "FK,NOT_NULL"');
+    expect(output).not.toContain('Name');
+  });
+
+  it('draws no columns in none mode but keeps entities and relationships', () => {
+    const output = new MermaidGenerator().Generate(createState(), { columns: 'none', includeComments: false });
+    expect(output).toContain('Users {');
+    expect(output).not.toContain('int ID');
+    expect(output).toContain('Users ||--o{ Orders');
+  });
+});
+
 describe('MermaidGenerator', () => {
   let generator: MermaidGenerator;
 

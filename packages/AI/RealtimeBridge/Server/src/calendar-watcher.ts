@@ -361,6 +361,7 @@ export class CalendarWatcher {
         row.Direction = 'Inbound';
         row.JoinMethod = 'Invite';
         row.TurnMode = 'Passive';
+        row.TurnAddressing = 'Regex';
         row.Status = 'Scheduled';
         row.ScheduledStartTime = invite.StartTime;
         row.Address = invite.JoinUrl ?? null;

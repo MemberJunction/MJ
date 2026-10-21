@@ -9,12 +9,19 @@ import {
     ReadRelationshipInclusion,
     ReadRelationshipJoinFields,
     ReadRelationshipSortKey,
+    ReadRelationshipShowCount,
+    ReadRelationshipWhenEmpty,
+    ResolveContributionShowCount,
+    ResolveContributionWhenEmpty,
+    ResolveEntitySaveReturnMode,
     RELATED_ROLE_SCORE,
     ResolveFormLayout,
     ResolveRelatedFormRoles,
     ScoreRelatedFormRole,
+    type FormWhenEmpty,
     type RelatedFormRoleCandidate,
 } from '../generic/entityConfiguration';
+import { EntityInfo } from '../generic/entityInfo';
 
 const COMMON = 'MJ_BizApps_Common';
 const ORDERS = 'MJ_BizApps_Orders';
@@ -464,3 +471,132 @@ describe('ApplyFormChromeRules', () => {
         expect(ContributionInclusionFromRules(parentId, 'addresses', [])).toBeNull();
     });
 });
+
+describe('ReadRelationshipWhenEmpty / ReadRelationshipShowCount', () => {
+    it('defaults to show + counts on', () => {
+        expect(ReadRelationshipWhenEmpty(null, null)).toBe('show');
+        expect(ReadRelationshipShowCount(null, null)).toBe(true);
+    });
+    it('relationship (L1) wins over the parent entity default (L2)', () => {
+        const entity = JSON.stringify({ UI: { Form: { RelatedWhenEmpty: 'hide', ShowRelatedCounts: false } } });
+        expect(ReadRelationshipWhenEmpty(JSON.stringify({ UI: { whenEmpty: 'more' } }), entity)).toBe('more');
+        expect(ReadRelationshipShowCount({ UI: { showCount: true } }, entity)).toBe(true);
+    });
+    it('falls back to the parent entity default when the relationship is silent', () => {
+        const entity = { UI: { Form: { RelatedWhenEmpty: 'hide' as const, ShowRelatedCounts: false } } };
+        expect(ReadRelationshipWhenEmpty({ UI: { inclusion: 'Primary' } }, entity)).toBe('hide');
+        expect(ReadRelationshipShowCount({ UI: {} }, entity)).toBe(false);
+    });
+    it('ignores invalid values', () => {
+        expect(ReadRelationshipWhenEmpty('{"UI":{"whenEmpty":"sometimes"}}', '{bad json')).toBe('show');
+    });
+    it('treats an invalid relationship value as unset, so the parent default applies', () => {
+        const entity = { UI: { Form: { RelatedWhenEmpty: 'hide' as const, ShowRelatedCounts: false } } };
+        expect(ReadRelationshipWhenEmpty('{"UI":{"whenEmpty":"sometimes"}}', entity)).toBe('hide');
+        expect(ReadRelationshipShowCount('{"UI":{"showCount":"yes"}}', entity)).toBe(false);
+    });
+});
+
+/**
+ * A related grid and a contribution share one fallback chain. The relationship readers
+ * answer exactly what the contribution resolvers answer for the relationship's own value.
+ */
+describe('relationship readers and contribution resolvers agree', () => {
+    const parents: Array<string | null> = [
+        null,
+        '{bad json',
+        JSON.stringify({ UI: { Form: {} } }),
+        JSON.stringify({ UI: { Form: { RelatedWhenEmpty: 'more', ShowRelatedCounts: false } } }),
+        JSON.stringify({ UI: { Form: { RelatedWhenEmpty: 'hide', ShowRelatedCounts: true } } }),
+        JSON.stringify({ UI: { Form: { RelatedWhenEmpty: 'never', ShowRelatedCounts: 'no' } } }),
+    ];
+    const ownWhenEmpty: Array<string | undefined> = [undefined, 'show', 'hide', 'more', 'sometimes'];
+    const ownShowCount: Array<boolean | string | undefined> = [undefined, true, false, 'yes'];
+
+    it('give the same empty behaviour for every own value and parent default', () => {
+        for (const parent of parents) {
+            for (const own of ownWhenEmpty) {
+                const relationship = JSON.stringify({ UI: { whenEmpty: own } });
+                expect(ReadRelationshipWhenEmpty(relationship, parent))
+                    .toBe(ResolveContributionWhenEmpty(own as FormWhenEmpty | undefined, parent));
+            }
+        }
+    });
+
+    it('give the same count flag for every own value and parent default', () => {
+        for (const parent of parents) {
+            for (const own of ownShowCount) {
+                const relationship = JSON.stringify({ UI: { showCount: own } });
+                expect(ReadRelationshipShowCount(relationship, parent))
+                    .toBe(ResolveContributionShowCount(own as boolean | undefined, parent));
+            }
+        }
+    });
+});
+
+describe('ResolveContributionWhenEmpty / ResolveContributionShowCount', () => {
+    const entity = { UI: { Form: { RelatedWhenEmpty: 'more' as const, ShowRelatedCounts: false } } };
+    it('registration value wins', () => {
+        expect(ResolveContributionWhenEmpty('hide', entity)).toBe('hide');
+        expect(ResolveContributionShowCount(true, entity)).toBe(true);
+    });
+    it('falls back to the entity default, then the built-in default', () => {
+        expect(ResolveContributionWhenEmpty(undefined, entity)).toBe('more');
+        expect(ResolveContributionShowCount(undefined, entity)).toBe(false);
+        expect(ResolveContributionWhenEmpty(undefined, null)).toBe('show');
+        expect(ResolveContributionShowCount(undefined, null)).toBe(true);
+    });
+});
+
+describe('ResolveEntitySaveReturnMode & EntityInfo.SaveReturnMode / DatestampReturnFields', () => {
+    it('defaults to full when Configuration is null, empty, or omits SaveReturnMode', () => {
+        expect(ResolveEntitySaveReturnMode(null)).toBe('full');
+        expect(ResolveEntitySaveReturnMode(undefined)).toBe('full');
+        expect(ResolveEntitySaveReturnMode('')).toBe('full');
+        expect(ResolveEntitySaveReturnMode({})).toBe('full');
+        expect(ResolveEntitySaveReturnMode('{"SaveReturnMode":"full"}')).toBe('full');
+        expect(ResolveEntitySaveReturnMode('{"SaveReturnMode":"invalid"}')).toBe('full');
+    });
+
+    it('resolves datestamps_only from both JSON string and parsed object', () => {
+        expect(ResolveEntitySaveReturnMode('{"SaveReturnMode":"datestamps_only"}')).toBe('datestamps_only');
+        expect(ResolveEntitySaveReturnMode({ SaveReturnMode: 'datestamps_only' })).toBe('datestamps_only');
+    });
+
+    it('exposes SaveReturnMode and DatestampReturnFields on EntityInfo', () => {
+        const defaultEntity = new EntityInfo({
+            ID: 'e-default',
+            Name: 'Default Entity',
+            SchemaName: '__mj',
+            BaseTable: 'DefaultEntity',
+            BaseView: 'vwDefaultEntities',
+            EntityFields: [
+                { ID: 'f1', EntityID: 'e-default', Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, IsVirtual: false },
+                { ID: 'f2', EntityID: 'e-default', Name: 'Name', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: false },
+                { ID: 'f3', EntityID: 'e-default', Name: '__mj_CreatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                { ID: 'f4', EntityID: 'e-default', Name: '__mj_UpdatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                { ID: 'f5', EntityID: 'e-default', Name: 'VirtualLabel', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: true },
+            ],
+        });
+        expect(defaultEntity.SaveReturnMode).toBe('full');
+        expect(defaultEntity.DatestampReturnFields.map((f) => f.Name)).toEqual(['ID', '__mj_CreatedAt', '__mj_UpdatedAt']);
+
+        const datestampsEntity = new EntityInfo({
+            ID: 'e-ds',
+            Name: 'Datestamps Entity',
+            SchemaName: '__mj',
+            BaseTable: 'DatestampsEntity',
+            BaseView: 'vwDatestampsEntities',
+            Configuration: JSON.stringify({ SaveReturnMode: 'datestamps_only' }),
+            EntityFields: [
+                { ID: 'f1', EntityID: 'e-ds', Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, IsVirtual: false },
+                { ID: 'f2', EntityID: 'e-ds', Name: 'Payload', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: false },
+                { ID: 'f3', EntityID: 'e-ds', Name: '__mj_CreatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                { ID: 'f4', EntityID: 'e-ds', Name: '__mj_UpdatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+            ],
+        });
+        expect(datestampsEntity.SaveReturnMode).toBe('datestamps_only');
+        expect(datestampsEntity.DatestampReturnFields.map((f) => f.Name)).toEqual(['ID', '__mj_CreatedAt', '__mj_UpdatedAt']);
+    });
+});
+

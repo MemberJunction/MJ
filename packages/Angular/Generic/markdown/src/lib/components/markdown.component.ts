@@ -18,6 +18,28 @@ import { MarkdownService } from '../services/markdown.service';
 import { MarkdownConfig, DEFAULT_MARKDOWN_CONFIG, MarkdownRenderEvent, HeadingInfo } from '@memberjunction/markdown-core';
 // Collapsible section toggle is handled inline in setupCollapsibleListeners
 
+/** Inputs whose change re-parses the markdown, by camelCase name. */
+const RERENDER_INPUTS = new Set([
+  'data',
+  'enableHighlight',
+  'enableMermaid',
+  'enableMath',
+  'enableCodeCopy',
+  'enableCollapsibleHeadings',
+  'collapsibleHeadingLevel',
+  'collapsibleDefaultExpanded',
+  'autoExpandLevels',
+  'enableAlerts',
+  'enableSmartypants',
+  'enableSvgRenderer',
+  'enableHtml',
+  'enableJavaScript',
+  'enableHeadingIds',
+  'headingIdPrefix',
+  'mermaidTheme',
+  'sanitize',
+]);
+
 /**
  * Angular component for rendering markdown content.
  *
@@ -90,6 +112,11 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   get enableMermaid(): boolean {
     return this.EnableMermaid;
   }
+
+  /**
+   * Enable TeX math (`$…$`, `$$…$$`, `\(…\)`, `\[…\]`), typeset as MathML
+   */
+  @Input() EnableMath: boolean = DEFAULT_MARKDOWN_CONFIG.enableMath;
 
   /**
    * Enable copy button on code blocks
@@ -398,6 +425,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
 
   private renderStartTime: number = 0;
   private hasMermaid: boolean = false;
+  private hasMath: boolean = false;
   private hasCodeBlocks: boolean = false;
   private themeObserver: MutationObserver | null = null;
 
@@ -409,25 +437,11 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
-    // Check if any relevant input changed
-    const needsRerender =
-      changes['data'] ||
-      changes['enableHighlight'] ||
-      changes['enableMermaid'] ||
-      changes['enableCodeCopy'] ||
-      changes['enableCollapsibleHeadings'] ||
-      changes['collapsibleHeadingLevel'] ||
-      changes['collapsibleDefaultExpanded'] ||
-      changes['autoExpandLevels'] ||
-      changes['enableAlerts'] ||
-      changes['enableSmartypants'] ||
-      changes['enableSvgRenderer'] ||
-      changes['enableHtml'] ||
-      changes['enableJavaScript'] ||
-      changes['enableHeadingIds'] ||
-      changes['headingIdPrefix'] ||
-      changes['mermaidTheme'] ||
-      changes['sanitize'];
+    // Each input binds under its PascalCase name and a deprecated camelCase alias (Data / data),
+    // and SimpleChanges keys by whichever name the template bound, so compare camelCased names.
+    const needsRerender = Object.keys(changes).some((name) =>
+      RERENDER_INPUTS.has(name.charAt(0).toLowerCase() + name.slice(1))
+    );
 
     if (needsRerender) {
       this.render();
@@ -465,6 +479,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     const config: MarkdownConfig = {
       enableHighlight: this.EnableHighlight,
       enableMermaid: this.EnableMermaid,
+      enableMath: this.EnableMath,
       enableCodeCopy: this.EnableCodeCopy,
       enableCollapsibleHeadings: this.EnableCollapsibleHeadings,
       collapsibleHeadingLevel: this.CollapsibleHeadingLevel,
@@ -488,6 +503,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     // Check for mermaid and code blocks
     this.hasMermaid = html.includes('language-mermaid') || html.includes('class="mermaid"');
     this.hasCodeBlocks = html.includes('<pre>') && html.includes('<code');
+    this.hasMath = html.includes('class="mj-math') || /<math[\s>]/.test(html);
 
     // Sanitize if enabled
     // Note: We bypass Angular's sanitizer when SVG renderer or HTML passthrough is enabled
@@ -499,7 +515,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     }
 
     // When Angular's sanitizer is bypassed, the HTML has already been sanitized by
-    // MarkdownService.parse() (DOMPurify, HTML + SVG profiles) unless enableJavaScript
+    // MarkdownService.parse() (DOMPurify, HTML, SVG and MathML profiles) unless enableJavaScript
     // opted out. Nothing further to do here.
 
     // Trust the HTML for display
@@ -527,6 +543,16 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     if (this.EnableCollapsibleHeadings) {
       this.markdownService.initializeCollapsibleHeadings(container as HTMLElement);
       this.setupCollapsibleListeners(container as HTMLElement);
+    }
+
+    // Typeset TeX math (async: KaTeX loads on first use). With math off, MathML that arrived as
+    // markup still renders, so it still gets the styled-letter fix.
+    if (this.hasMath) {
+      if (this.EnableMath) {
+        await this.markdownService.RenderMath(container as HTMLElement);
+      } else {
+        this.markdownService.UseUnicodeMathLetters(container as HTMLElement);
+      }
     }
 
     // Render mermaid diagrams (async)

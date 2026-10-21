@@ -42,6 +42,11 @@
 #     A styleUrl pointing at a file that does not exist. Angular silently
 #     falls back to a same-named `.css`, which hides the mistake.
 #
+#   GENERATED stylesheets are skipped. A `.css` styleUrl that git ignores is a
+#   build output its package's `prebuild` writes (e.g. ng-realtime-widget's
+#   compiled global style layer): absent on a bare checkout and written by a
+#   compiler, so RULES 1 and 3 do not apply. An ignored `.scss` is NOT skipped.
+#
 # Usage:
 #   ./check-ngc-scss.sh                 # scan every ngc-only Angular package
 #   ./check-ngc-scss.sh --all           # (alias for the default)
@@ -171,6 +176,7 @@ VIOLATIONS=0
 CHECKED_TS=0
 CHECKED_SCSS=0
 ALLOWLISTED=0
+GENERATED=0
 
 report() {
     local file="$1" msg="$2" detail="$3"
@@ -228,6 +234,18 @@ while IFS= read -r ts_abs; do
         # normalise ./ segments
         style_repo_rel="$(printf '%s' "$style_repo_rel" | sed 's|/\./|/|g')"
 
+        # A git-ignored .css is a build output (a package's prebuild writes it), not source:
+        # it does not exist on a bare checkout, and a tool compiled it, so neither RULE 3 nor
+        # RULE 1 is a question about it. Only .css qualifies — an ignored .scss is still a trap.
+        case "$style_rel" in
+            *.css)
+                if git -C "$REPO_ROOT" check-ignore -q -- "$style_repo_rel" 2>/dev/null; then
+                    GENERATED=$((GENERATED + 1))
+                    continue
+                fi
+                ;;
+        esac
+
         # RULE 3 — dangling reference
         if [ ! -f "$style_abs" ]; then
             report "$ts_rel" \
@@ -261,7 +279,7 @@ done < <(list_component_ts)
 
 echo ""
 echo "─────────────────────────────────────────"
-echo "ngc/Sass trap: $CHECKED_TS components with styleUrls, $CHECKED_SCSS stylesheets checked, $ALLOWLISTED allowlisted, $VIOLATIONS violations"
+echo "ngc/Sass trap: $CHECKED_TS components with styleUrls, $CHECKED_SCSS stylesheets checked, $ALLOWLISTED allowlisted, $GENERATED generated (git-ignored, skipped), $VIOLATIONS violations"
 echo "─────────────────────────────────────────"
 
 if [ "$VIOLATIONS" -gt 0 ]; then

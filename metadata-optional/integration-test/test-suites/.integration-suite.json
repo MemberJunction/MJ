@@ -1135,6 +1135,28 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT99 - JSONType Live Sync",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "08315A24-260C-4D22-BC99-7621B41181C8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT100 - JSONType Live Sync (client transport)",
+            "Sequence": 71,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C71E99EA-27E1-4AC8-A156-34C47256365E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT94 - MetadataSync Push Atomicity",
             "Sequence": 49,
             "Status": "Active"
@@ -1160,6 +1182,72 @@
           "sync": {
             "lastModified": "2026-09-27T22:46:55.633Z",
             "checksum": "a8fb63a94e474e548bbd1ba0e11899872107896c897797662c32f08918e9b2ce"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT98 - Rubric Immutability Triggers",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F30C408B-B1CF-47AC-92A4-D1DF726D75F1"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT102 - RunQuery Rendering Matrix",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5A52D768-D266-479F-9722-9D90500FC7F5"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT111 - Realtime Session Config Guard",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C6B1B073-56CC-4F28-B50E-9783D55FE494"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT124 - Feature Pipeline Key, Cache and Versions (core)",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CB5BABC8-DCD5-412A-9F6B-29ABF1D9B320"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT126 - Feature Value Only Outputs",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E4D70105-00D2-4F2B-BECA-47FB2A82A390"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT112 - Realtime Session Identity Verification",
+            "Sequence": 50,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7696BECA-B4E1-4531-8348-B6D440F0D27C"
           }
         },
         {
@@ -1195,6 +1283,21 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT104 - Form Contributions",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BE0B5BAB-E7AB-4074-815D-EDE0151ADBEA"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T20:05:32.183Z",
+            "checksum": "2e35f7ba0e03b46059e6aa28590909692b9e7f0d6b340ebd264a335c5e402c0c"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT93 - Prompt Eval Harness",
             "Sequence": 48,
             "Status": "Active"
@@ -1221,12 +1324,210 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT122 - Agent Prompt Cancellation",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7A7D504D-15A9-45A2-9BD7-2F7DB12C3E8F"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT108 - Cloudflare Clef Decision Models",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "65821289-4E59-4121-918A-235558EF39A8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT109 - Kev and System One Endpoint Decision Models",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8C476EC0-8B96-476D-81D0-1CDE84141CB7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT110 - Perplexity Decider Decision Model",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3D3B073E-4AE5-4B13-A3C1-62B4B96DFAD3"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT121 - SubQ Snap and Mercury Decide Decision Models",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "92D27276-9AD6-4D1F-BA85-7895757F5349"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT96 - Record Cloning",
             "Sequence": 71,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "D0A93B02-FD0F-4B47-89D0-914DC49D13B6"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT105 - Work Queue Runtime (native host, operators, REST)",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B88AFB7E-06E4-47D4-BC45-8DDE8FF215A8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT116 - Search Origin-Record Gate",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7482F42F-151A-4A5B-84D6-D8BE3B407057"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT117 - Agent Pre-Execution RAG Permission Gate",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "FFC8D637-7E5C-4984-8001-7F0CA59B7541"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT118 - Search Provider Trust and Unresolvable Scopes",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4A7C2445-4C2A-4E58-ACC2-066293F00776"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT119 - Agent Run Audience",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F7DCC04D-1FDC-451E-A975-FF19E193A30C"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT123 - Search Scope Bound",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4CF85E49-88E4-4441-A919-2A3FECD4906D"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT103 - RunQuery Rendering over GraphQL",
+            "Sequence": 72,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F010EDA8-2094-41BA-8E25-0D5EFB0C13FE"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT101 - Binary Fields and Vector Columns",
+            "Sequence": 73,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "80642370-A10B-405B-89CC-536AAAA00397"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT106 - Self-Service Avatar (client transport)",
+            "Sequence": 74,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7364BCB7-A3AA-41D7-B77A-910F0A372E13"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT107 - Cache Architecture Invariants",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3DA009D7-6777-438C-B45A-66BE07808056"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT113 - LiveKit Room Agent Vision Consent",
+            "Sequence": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "84E2D287-9A54-49AC-859C-D796DA5E6182"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT115 - Conversation Message Authorship (client transport)",
+            "Sequence": 76,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3F27D8A1-8E70-49A6-86FF-858A80446494"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT128 - Performance and Agent Overhead Benchmark",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B4E9102C-58D3-4A7E-91F2-3C85A71D6E04"
           }
         }
       ]
@@ -1462,7 +1763,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT63 - Agent Wire Callback (fire-and-forget)",
-            "Sequence": 16,
+            "Sequence": 18,
             "Status": "Active"
           },
           "primaryKey": {
@@ -1486,6 +1787,28 @@
           "sync": {
             "lastModified": "2026-09-09T11:23:36.834Z",
             "checksum": "804747ad27abd437764b0d85a464b9e73f7964bd1b3da6c62cba0620196b60ff"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT114 - AI Vendor Effort Levels",
+            "Sequence": 16,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B3816AC6-B2DA-43DD-A091-34A51B833CF0"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT129 - Native Tool Calling and Action Param Schemas",
+            "Sequence": 17,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "275B45D4-EB50-4AC0-8872-E04845D47A24"
           }
         }
       ]

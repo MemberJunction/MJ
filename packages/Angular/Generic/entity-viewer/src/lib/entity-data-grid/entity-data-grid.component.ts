@@ -16,7 +16,7 @@ import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunctio
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { ExportColumnTypeForSQLType } from '../utils/export-column.util';
-import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType } from '@memberjunction/core';
+import { LogError, LogStatus, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
@@ -754,6 +754,8 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // ========================================
 
   private _visualConfig: GridVisualConfig = {};
+  private _effectiveVisualConfig: Required<GridVisualConfig> = { ...DEFAULT_VISUAL_CONFIG };
+  private _effectiveVisualConfigSource: GridVisualConfig | null = null;
   /**
    * Visual configuration for the grid appearance.
    * Allows customization of header styles, row colors, cell formatting, and more.
@@ -762,6 +764,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   @Input()
   set VisualConfig(value: GridVisualConfig) {
     this._visualConfig = value || {};
+    this._effectiveVisualConfigSource = null;
     this.applyVisualConfig();
   }
   get VisualConfig(): GridVisualConfig {
@@ -769,10 +772,15 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   /**
-   * Get the effective visual config (user config merged with defaults)
+   * Get the effective visual config (user config merged with defaults).
+   * Memoized on `_visualConfig` reference to avoid allocating a new object on every change-detection pass.
    */
   get EffectiveVisualConfig(): Required<GridVisualConfig> {
-    return { ...DEFAULT_VISUAL_CONFIG, ...this._visualConfig };
+    if (this._effectiveVisualConfigSource !== this._visualConfig) {
+      this._effectiveVisualConfigSource = this._visualConfig;
+      this._effectiveVisualConfig = { ...DEFAULT_VISUAL_CONFIG, ...this._visualConfig };
+    }
+    return this._effectiveVisualConfig;
   }
 
   /** @deprecated Use {@link EffectiveVisualConfig}. */
@@ -1225,33 +1233,136 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   /**
+   * Whether `_gridState` can be believed to describe the CURRENT entity.
+   *
+   * The evidence is the one `buildAgColumnDefs()` already relies on: a `columnSettings` list none
+   * of whose names resolve to a field of this entity did not come from this entity. A state with
+   * no `columnSettings` at all is no evidence either way, so it is trusted — refusing there would
+   * break a perfectly valid aggregates-only state.
+   *
+   * Deliberately NOT a check of the aggregate expressions themselves. Those are raw SQL
+   * (`SUM(OrderTotal)`, `COUNT(*)`), so validating them means parsing SQL and would reject valid
+   * expressions over joins or literals. The column list is the honest, already-computed signal.
+   */
+  private gridStateDescribesCurrentEntity(): boolean {
+    const settings = this._gridState?.columnSettings;
+    if (!this._entityInfo || !settings?.length) {
+      return true;
+    }
+    return settings.some(col =>
+      this._entityInfo!.Fields.some(f => f.Name.toLowerCase() === col.Name.toLowerCase())
+    );
+  }
+
+  /**
+   * The aggregates to write into CAPTURED state, as distinct from the ones to compute.
+   *
+   * These differ in exactly one case. {@link effectiveAggregatesConfig} returns `undefined` when it
+   * refuses a foreign grid state, which is right for computing — but `persistGridStateToView()` and
+   * `persistUserDefaultGridState()` both assign `aggregates` unconditionally, so `undefined` does not mean
+   * "no opinion", it means "this view has no aggregates". A single column resize would then erase
+   * the loaded view's real aggregates. Refusing the wrong numbers only to delete the right ones is
+   * not an improvement (raised by @rkihm-BC reviewing #4656).
+   *
+   * So on refusal — and ONLY on refusal, so that nothing about a non-refused state changes — fall
+   * back to what the loaded view record legitimately holds.
+   *
+   * Which hosts this protects. It serves a host that binds `mj-entity-data-grid` DIRECTLY with a
+   * saved-view `[Params]` (`ViewID`/`ViewName`) and a separate `[GridState]`: only there does the
+   * grid hold a `_viewEntity` whose aggregates can differ from the state's. It does NOT reach the
+   * `mj-entity-viewer` path. There `mj-grid-view-renderer` hands the grid `{ EntityName }` unless a
+   * view-type config supplies `params` (nothing in-repo does), so `_viewEntity` is null; and both
+   * in-repo hosts parse the `[GridState]` they bind from the very record the viewer saves to. A
+   * foreign state on that path is therefore a POLLUTED record whose aggregates are the foreign
+   * ones, and capturing `undefined` is what removes them — which is the intended outcome.
+   *
+   * The user-default path needs no equivalent: `loadUserDefaultGridState()` adopts its aggregates
+   * into `_aggregatesConfig`, which outranks the grid state and so never reaches a refusal.
+   */
+  private get capturableAggregatesConfig(): ViewGridAggregatesConfig | undefined {
+    const refusedForeignState =
+      !this._aggregatesConfig &&
+      !!this._gridState?.aggregates &&
+      !this.gridStateDescribesCurrentEntity();
+
+    if (refusedForeignState) {
+      return this._viewEntity?.GridStateObject?.aggregates ?? undefined;
+    }
+    return this.effectiveAggregatesConfig ?? undefined;
+  }
+
+  /**
    * Returns the effective aggregates config, preferring _aggregatesConfig but falling back to _gridState.aggregates.
    * This ensures aggregates work regardless of whether they came from explicit config or from view's GridState.
+   *
+   * The fallback is refused when the grid state is not this entity's. Aggregates are raw SQL
+   * expressions carrying their own labels, so a foreign state does not fail visibly the way a
+   * foreign column list does — `COUNT(*)` evaluates against any entity, so a card reading
+   * "Open Orders" renders a real count of whatever this grid is actually showing. A plausible
+   * number under someone else's label is worse than a blank one, because nothing looks wrong.
+   * An explicit `[AggregatesConfig]` is the host's instruction and always wins.
    */
   private get effectiveAggregatesConfig(): ViewGridAggregatesConfig | null | undefined {
-    return this._aggregatesConfig || this._gridState?.aggregates;
+    if (this._aggregatesConfig) {
+      return this._aggregatesConfig;
+    }
+    return this.gridStateDescribesCurrentEntity() ? this._gridState?.aggregates : undefined;
+  }
+
+  private _cardAggregatesCache: ViewGridAggregate[] = [];
+  private _cardAggregatesKey = '';
+  private _columnAggregatesCache: ViewGridAggregate[] = [];
+  private _columnAggregatesKey = '';
+
+  private buildAggregatesCacheKey(expressions: ViewGridAggregate[] | undefined, displayType: 'card' | 'column'): string {
+    if (!expressions || expressions.length === 0) {
+      return '';
+    }
+    return expressions
+      .filter(a => a.enabled !== false && a.displayType === displayType)
+      .map(a => `${a.id ?? a.expression}:${a.label ?? ''}:${a.order ?? 0}:${a.column ?? ''}`)
+      .join('|');
   }
 
   /**
    * Returns enabled aggregates configured for card display.
+   * Memoized by expression signature so template bindings do not allocate a new array
+   * or trigger `AggregatePanelComponent.ngOnChanges` on unrelated change-detection passes.
    */
   public get CardAggregates(): ViewGridAggregate[] {
     const config = this.effectiveAggregatesConfig;
-    if (!config?.expressions) return [];
-    return config.expressions
-      .filter(a => a.enabled !== false && a.displayType === 'card')
-      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    const expressions = config?.expressions;
+    if (!expressions || expressions.length === 0) {
+      return this._cardAggregatesCache.length === 0 ? this._cardAggregatesCache : (this._cardAggregatesCache = []);
+    }
+    const key = this.buildAggregatesCacheKey(expressions, 'card');
+    if (key !== this._cardAggregatesKey) {
+      this._cardAggregatesKey = key;
+      this._cardAggregatesCache = expressions
+        .filter(a => a.enabled !== false && a.displayType === 'card')
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+    }
+    return this._cardAggregatesCache;
   }
 
   /**
    * Returns enabled aggregates configured for column footer display.
+   * Memoized by expression signature to avoid per-CD array allocation and sorting.
    */
   public get ColumnAggregates(): ViewGridAggregate[] {
     const config = this.effectiveAggregatesConfig;
-    if (!config?.expressions) return [];
-    return config.expressions
-      .filter(a => a.enabled !== false && a.displayType === 'column')
-      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    const expressions = config?.expressions;
+    if (!expressions || expressions.length === 0) {
+      return this._columnAggregatesCache.length === 0 ? this._columnAggregatesCache : (this._columnAggregatesCache = []);
+    }
+    const key = this.buildAggregatesCacheKey(expressions, 'column');
+    if (key !== this._columnAggregatesKey) {
+      this._columnAggregatesKey = key;
+      this._columnAggregatesCache = expressions
+        .filter(a => a.enabled !== false && a.displayType === 'column')
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+    }
+    return this._columnAggregatesCache;
   }
 
   /**
@@ -2311,11 +2422,23 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         }
       }
 
-      // Apply aggregates from GridState if present and fetch their values
-      if (this._gridState.aggregates) {
+      // Apply aggregates from GridState if present and fetch their values. Skipped for a state
+      // that is not this entity's — adopting them here would COPY the foreign config into
+      // `_aggregatesConfig`, which outranks every later check.
+      if (this._gridState.aggregates && this.gridStateDescribesCurrentEntity()) {
         this._aggregatesConfig = this._gridState.aggregates;
         // Fetch aggregate values when gridState aggregates change
         this.RefreshAggregates();
+      } else if (this._gridState.aggregates) {
+        // The refusal is otherwise silent — the cards simply do not appear — so say so, once per
+        // grid-state change, to make a "my aggregates vanished" report traceable. Deliberately
+        // here and NOT in `gridStateDescribesCurrentEntity()`, which runs on every aggregates read
+        // and would flood the console (suggested by @rkihm-BC reviewing #4656).
+        const refusedCount = this._gridState.aggregates.expressions?.length ?? 0;
+        LogStatus(
+          `[entity-data-grid] Ignored ${refusedCount} aggregate(s) from a grid state that names none of ` +
+          `"${this._entityInfo.Name}"'s fields; it describes a different entity.`
+        );
       }
 
       // Clear suppression after AG Grid's async events have been processed.
@@ -4616,7 +4739,9 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return {
       columnSettings,
       sortSettings,
-      aggregates: this._aggregatesConfig || this._gridState?.aggregates
+      // Via the getter, so a foreign state's aggregates are not captured into THIS entity's saved
+      // view. Without it one column resize makes the wrong numbers durable.
+      aggregates: this.capturableAggregatesConfig
     };
   }
 
@@ -5515,14 +5640,47 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // Public Getters
   // ========================================
 
+  private _visibleRowsCache: GridRowData[] = [];
+  private _visibleRowsKey = '';
+  private _visibleColumnStatesCache: ColumnRuntimeState[] = [];
+  private _visibleColumnStatesKey = '';
+
+  /**
+   * Returns the currently loaded grid rows.
+   * Memoized on map size and boundary keys so repeated change-detection checks reuse the same array instance.
+   */
   get VisibleRows(): GridRowData[] {
-    return Array.from(this._rowDataMap.values());
+    const size = this._rowDataMap.size;
+    if (size === 0) {
+      return this._visibleRowsCache.length === 0 ? this._visibleRowsCache : (this._visibleRowsCache = []);
+    }
+    let firstKey = '';
+    let lastKey = '';
+    for (const k of this._rowDataMap.keys()) {
+      if (!firstKey) firstKey = k;
+      lastKey = k;
+    }
+    const key = `${size}:${firstKey}:${lastKey}`;
+    if (key !== this._visibleRowsKey || this._visibleRowsCache.length !== size) {
+      this._visibleRowsKey = key;
+      this._visibleRowsCache = Array.from(this._rowDataMap.values());
+    }
+    return this._visibleRowsCache;
   }
 
+  /**
+   * Returns visible column runtime states sorted by display order.
+   * Memoized on column visibility and order signature to prevent per-CD array allocation and sorting.
+   */
   get VisibleColumnStates(): ColumnRuntimeState[] {
-    return this._columnStates
-      .filter(c => c.visible)
-      .sort((a, b) => a.order - b.order);
+    const key = this._columnStates.map(c => `${c.config.field}:${c.visible ? 1 : 0}:${c.order}`).join('|');
+    if (key !== this._visibleColumnStatesKey) {
+      this._visibleColumnStatesKey = key;
+      this._visibleColumnStatesCache = this._columnStates
+        .filter(c => c.visible)
+        .sort((a, b) => a.order - b.order);
+    }
+    return this._visibleColumnStatesCache;
   }
 }
 
