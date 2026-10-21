@@ -1,0 +1,21 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT130 - FLS Close-out (server)",
+    "Description": "The field-level security close-out fixes, proven against a live database with the seeded FLS principals as the acting user (server transport: every rule here is enforced inside the server, so a real restricted user reaches exactly the code a request does). The fls-closeout lifecycle reuses the fls-enforcement fixture (field security enabled on 'MJ: Employees' through the real entity path, one fixture employee) and adds three tightenings on non-system roles: Reader.Email Deny, Denier.Title Deny (the multi user's read denial, on an identity that can also write), Denier.Phone Allow/Deny/Deny. Eighteen checks. Object width follows its user: CO1 RunView entity_object objects hold no denied value by GetAll, To, GetDataObject, GetDataObjectJSON or Fields[].Value, cold and on a slot an unrestricted user warmed, while the unrestricted user's objects are full width; CO2 an object loaded by a restricted user still holds nothing denied after Save re-reads the row, and the withheld column keeps its stored value; CO3 LoadFromData with a full-width row drops the denied value and does not modify the row. One clause gate: CO4 OverrideExcludeFilter, CO5 a view's stored WhereClause (in-memory ViewEntity, then a saved view run by ViewID), CO6 a CustomWhereClause view by ViewID, CO7 whole-row constructs (CHECKSUM(*), alias.*, FOR JSON) refused only for a caller with denials, CO8 bracketed/quoted/qualified/mixed-case/compatibility-folded spellings refused while the name inside a string literal is not, CO9 an unknown column refused with exactly the denied column's wording, only for a caller with denials. Datasets: CO10 item rows projected cold and on the shared slot, CO11 an ItemFilter on a denied or unknown field refused with the same wording. CO12 a ViewID-only read of Record Changes projects each audit payload against the entity it is about. Guards: CO13 a lowercase 'deny' is stored as 'Deny' and enforced; CO14 a lowercase 'deny' on a system-user role, CO15 re-pointing the RoleID of the rule carrying the system user's last Allow, and CO16 re-pointing a system-user role assignment to another user are refused by the system-user guard (these three touch the system user's own rules and carry RequiresMutation, like IT91). Consumers: CO17 an agent data source cached PerAgent is cached per user and an entity_object source hands the agent no denied value; CO18 search results have the denied field projected out of RawMetadata and the snippet for the reader. Views, datasets and agent data sources are tracked and deleted in teardown; every edit is restored in a finally, so the bundle is repeat-safe. Skips loudly when the seed is absent or the entity is already FLS-enabled; a present seed that fails to provision fails.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A restricted user's entity objects, dataset rows, agent data and search results never carry a denied value; every effective clause (override exclude filter, stored and custom view clauses, whole-row constructs, look-alike spellings) is gated, unknown and denied columns are indistinguishable, Record Changes are projected on ViewID-only reads, and the configuration guards hold against case and re-pointing."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "fls-closeout"
+        }
+      ]
+    },
+    "Status": "Active"
+  }
+}

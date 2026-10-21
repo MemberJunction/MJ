@@ -172,7 +172,7 @@ export async function loadEfpRow(
 }
 
 /** Rewrite one (field, role) rule through the real entity path; returns [ok, message]. */
-async function setRule(
+export async function SetRule(
     ctx: IntegrationCheckContext, fieldId: string, roleId: string,
     read: MJEntityFieldPermissionEntity['ReadAccess'],
     update: MJEntityFieldPermissionEntity['UpdateAccess'],
@@ -268,64 +268,79 @@ async function seedFixtureEmployee(ctx: IntegrationCheckContext, fx: FlsFixture)
     fx.FixtureEmployeeID = emp[0].ID;
 }
 
-IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement', {
-    Setup: async (ctx: IntegrationCheckContext): Promise<void> => {
-        const fx: FlsFixture = { Usable: false, EntityName: SEEDED_FLS_ENTITY, CreatedEmployeeIds: [] };
-        ctx.FlsFixture = fx;
+/**
+ * Provisions the shared FLS fixture on `ctx.FlsFixture`: resolves the seeded principals and roles,
+ * enables field security on the target entity through the real server entity path, refreshes
+ * metadata, and seeds one fixture Employee row. Leaves `Usable=false` with a `Reason` (skip) or an
+ * `EnableError` (failure) when it cannot. Shared by every server-transport bundle that needs the
+ * seeded FLS posture.
+ */
+export async function SetupFlsEnforcementFixture(ctx: IntegrationCheckContext): Promise<void> {
+    const fx: FlsFixture = { Usable: false, EntityName: SEEDED_FLS_ENTITY, CreatedEmployeeIds: [] };
+    ctx.FlsFixture = fx;
 
-        const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
-        if (!entity) {
-            fx.Reason = `'${SEEDED_FLS_ENTITY}' not in provider metadata`;
-            return;
-        }
-        if (entity.EnableFieldLevelSecurity) {
-            fx.Reason = `'${SEEDED_FLS_ENTITY}' already has field security enabled — refusing to mutate a configured entity`;
-            return;
-        }
-        if (!(await resolveFixtureUsers(fx)) || !resolveFixtureRoles(ctx, fx)) {
-            return;
-        }
-        await enableFieldSecurity(ctx, fx);
-        await ctx.Provider.Refresh();
-        if (fx.Usable) {
-            await seedFixtureEmployee(ctx, fx);
-        }
-    },
-
-    Teardown: async (ctx: IntegrationCheckContext): Promise<void> => {
-        const fx = ctx.FlsFixture;
-        if (!fx || (!fx.Usable && !fx.EnableError)) {
-            return; // nothing was mutated
-        }
-        const schema = SchemaOf(ctx);
-        // Fixture + check-created Employee rows (fixture SQL, best-effort).
-        const ids = [...fx.CreatedEmployeeIds, ...(fx.FixtureEmployeeID ? [fx.FixtureEmployeeID] : [])];
-        if (ids.length > 0) {
-            await Q(ctx, `DELETE FROM [${schema}].Employee WHERE ID IN (${ids.map(id => `'${id}'`).join(',')})`)
-                .catch(() => undefined);
-        }
-        await Q(ctx, `DELETE FROM [${schema}].Company WHERE Name LIKE 'IT FLS Fixture Co%'`).catch(() => undefined);
-        // Restore the flag through the entity path (disable is always permitted — 2.5).
-        try {
-            const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
-            if (entity?.EnableFieldLevelSecurity) {
-                const ent = await ctx.Provider.GetEntityObject<MJEntityEntity>('MJ: Entities', ctx.User);
-                if (await ent.Load(entity.ID)) {
-                    ent.EnableFieldLevelSecurity = false;
-                    await ent.Save();
-                }
-            }
-        } catch { /* best-effort — the SQL fallback below still runs */ }
-        // Remove every permission row the snapshot wrote for this entity (flag is off, rows are inert).
-        await Q(ctx,
-            `DELETE p FROM [${schema}].EntityFieldPermission p ` +
-            `JOIN [${schema}].EntityField f ON f.ID = p.EntityFieldID ` +
-            `JOIN [${schema}].Entity e ON e.ID = f.EntityID WHERE e.Name = '${SEEDED_FLS_ENTITY}'`
-        ).catch(() => undefined);
-        await Q(ctx, `UPDATE [${schema}].Entity SET EnableFieldLevelSecurity = 0 WHERE Name = '${SEEDED_FLS_ENTITY}'`)
-            .catch(() => undefined);
-        await ctx.Provider.Refresh().catch(() => undefined);
+    const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
+    if (!entity) {
+        fx.Reason = `'${SEEDED_FLS_ENTITY}' not in provider metadata`;
+        return;
     }
+    if (entity.EnableFieldLevelSecurity) {
+        fx.Reason = `'${SEEDED_FLS_ENTITY}' already has field security enabled — refusing to mutate a configured entity`;
+        return;
+    }
+    if (!(await resolveFixtureUsers(fx)) || !resolveFixtureRoles(ctx, fx)) {
+        return;
+    }
+    await enableFieldSecurity(ctx, fx);
+    await ctx.Provider.Refresh();
+    if (fx.Usable) {
+        await seedFixtureEmployee(ctx, fx);
+    }
+}
+
+/**
+ * Restores everything {@link SetupFlsEnforcementFixture} changed: deletes the fixture and
+ * check-created Employee rows, turns the flag off through the entity path (with a SQL fallback),
+ * and removes every permission row the snapshot wrote. Best-effort; never throws.
+ */
+export async function TeardownFlsEnforcementFixture(ctx: IntegrationCheckContext): Promise<void> {
+    const fx = ctx.FlsFixture;
+    if (!fx || (!fx.Usable && !fx.EnableError)) {
+        return; // nothing was mutated
+    }
+    const schema = SchemaOf(ctx);
+    // Fixture + check-created Employee rows (fixture SQL, best-effort).
+    const ids = [...fx.CreatedEmployeeIds, ...(fx.FixtureEmployeeID ? [fx.FixtureEmployeeID] : [])];
+    if (ids.length > 0) {
+        await Q(ctx, `DELETE FROM [${schema}].Employee WHERE ID IN (${ids.map(id => `'${id}'`).join(',')})`)
+            .catch(() => undefined);
+    }
+    await Q(ctx, `DELETE FROM [${schema}].Company WHERE Name LIKE 'IT FLS Fixture Co%'`).catch(() => undefined);
+    // Restore the flag through the entity path (disable is always permitted — 2.5).
+    try {
+        const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
+        if (entity?.EnableFieldLevelSecurity) {
+            const ent = await ctx.Provider.GetEntityObject<MJEntityEntity>('MJ: Entities', ctx.User);
+            if (await ent.Load(entity.ID)) {
+                ent.EnableFieldLevelSecurity = false;
+                await ent.Save();
+            }
+        }
+    } catch { /* best-effort — the SQL fallback below still runs */ }
+    // Remove every permission row the snapshot wrote for this entity (flag is off, rows are inert).
+    await Q(ctx,
+        `DELETE p FROM [${schema}].EntityFieldPermission p ` +
+        `JOIN [${schema}].EntityField f ON f.ID = p.EntityFieldID ` +
+        `JOIN [${schema}].Entity e ON e.ID = f.EntityID WHERE e.Name = '${SEEDED_FLS_ENTITY}'`
+    ).catch(() => undefined);
+    await Q(ctx, `UPDATE [${schema}].Entity SET EnableFieldLevelSecurity = 0 WHERE Name = '${SEEDED_FLS_ENTITY}'`)
+        .catch(() => undefined);
+    await ctx.Provider.Refresh().catch(() => undefined);
+}
+
+IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement', {
+    Setup: SetupFlsEnforcementFixture,
+    Teardown: TeardownFlsEnforcementFixture
 });
 
 // ─────────────────────────────────────────────────────────────────── checks
@@ -449,7 +464,7 @@ export async function CheckFls3TightenNonSystemRoles(ctx: IntegrationCheckContex
         [FLS_READER_DENIED_FIELD, roleIds.Reader, 'Deny', 'No Access', 'No Access'],
     ];
     for (const [fieldName, roleId, r, u, c] of edits) {
-        const [ok, msg] = await setRule(ctx, FieldOf(entity, fieldName).ID, roleId, r, u, c);
+        const [ok, msg] = await SetRule(ctx, FieldOf(entity, fieldName).ID, roleId, r, u, c);
         Assert(ok, `tightening ${fieldName} for a NON-system role must be permitted, was refused: ${msg}`);
     }
 
@@ -1041,7 +1056,7 @@ export async function CheckFls24RecordNameWithheldFromEveryLookup(ctx: Integrati
     const writerBefore = await RecordNamesAs(ctx, fx, fx.Writer!);
     Assert(writerBefore.Single !== '', 'precondition: the fixture employee must have a name the writer can read');
 
-    const [ok, msg] = await setRule(ctx, nameField.ID, fx.RoleIDs!.Reader, 'Deny', 'No Access', 'No Access');
+    const [ok, msg] = await SetRule(ctx, nameField.ID, fx.RoleIDs!.Reader, 'Deny', 'No Access', 'No Access');
     Assert(ok, `denying the reader the name field must be permitted: ${msg}`);
     try {
         await ctx.Provider.Refresh();
@@ -1054,7 +1069,7 @@ export async function CheckFls24RecordNameWithheldFromEveryLookup(ctx: Integrati
         AssertEqual(writerAfter.Single, writerBefore.Single, 'an unrestricted user must still get the name');
         AssertEqual(writerAfter.Search, writerBefore.Single, 'an unrestricted user must still get the name in search');
     } finally {
-        await setRule(ctx, nameField.ID, fx.RoleIDs!.Reader, ...restore);
+        await SetRule(ctx, nameField.ID, fx.RoleIDs!.Reader, ...restore);
         await ctx.Provider.Refresh().catch(() => undefined);
     }
 }

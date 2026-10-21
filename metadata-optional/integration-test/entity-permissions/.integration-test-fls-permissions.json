@@ -168,5 +168,31 @@
       "lastModified": "2026-09-09T03:44:03.100Z",
       "checksum": "1202ef9733fc6e89c9b1236ebc28774ba565f99063ff681dcfc773b68b5ac226"
     }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Views",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Reader",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "18301E12-99A3-47AD-83AC-1CBCB1D80865"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Views",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Writer",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "EE16E81C-7725-45E4-9BE6-F1D356AD2050"
+    }
   }
 ]
