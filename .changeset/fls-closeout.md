@@ -68,7 +68,7 @@ The rule is no longer "API output is the perimeter". A denied value may sit in s
 
 **Caches.** Server RunView cache slots are segmented by field-security fingerprint, like row-level security, and read-time projection checks every row. A browser's cached view results are answered "stale" when the user's field-security key has changed.
 
-**Datasets** never select a caller's denied columns, project rows on cache hits and misses, and gate item filters. **Record Changes** payloads on `ViewID`-only RunViews are projected per row.
+**Datasets** never select a caller's denied columns, project rows on cache hits and misses, and gate item filters. **Record Changes** payloads on `ViewID`-only RunViews are projected per row. A restricted user's own saves and deletes now store full-width Record Change payloads: when the saving object is narrower than the entity, the provider reads the stored row once (on the save's connection) and builds `FullRecordJSON` and the old-values side from it, so the audit trail and recycle-bin restores keep the columns the user could not read; `ChangesJSON` still lists only what changed. A create no longer records a value for a field the user was not allowed to supply.
 
 **Derived indexes.** Entity Document template data, vector display metadata, Entity Record Document text, duplicate-detection text and autotagging content leave out any field not readable by every role. Search results, external vector metadata and duplicate candidates are projected per reader. **Admins must re-index** after upgrading: re-vectorize Entity Documents on FLS entities (rebuild external stores such as Pinecone), re-run Entity autotagging, and review tags produced from restricted text.
 
