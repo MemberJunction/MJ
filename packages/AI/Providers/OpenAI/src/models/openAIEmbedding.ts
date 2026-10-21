@@ -34,7 +34,7 @@ export class OpenAIEmbedding extends BaseEmbeddings {
         }
 
         try{
-            let response = await this.OpenAI.embeddings.create(body);
+            let response = await this.OpenAI.embeddings.create(body, { signal: params.CancellationToken });
 
             return {
                 object: response.object,
@@ -44,6 +44,8 @@ export class OpenAIEmbedding extends BaseEmbeddings {
             }
         }
         catch(error){
+            // An aborted request is reported as cancelled, not as an empty (failed) vector.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             // Log error details for debugging
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'OpenAI');
             console.error('OpenAI embedding error:', errorInfo);
@@ -66,7 +68,7 @@ export class OpenAIEmbedding extends BaseEmbeddings {
         }
 
         try{
-            let response = await this.OpenAI.embeddings.create(body);
+            let response = await this.OpenAI.embeddings.create(body, { signal: params.CancellationToken });
 
             return {
                 object: response.object,
@@ -76,6 +78,8 @@ export class OpenAIEmbedding extends BaseEmbeddings {
             }
         }
         catch(error){
+            // An aborted request is reported as cancelled, not as an empty (failed) batch.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             // Log error details for debugging
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'OpenAI');
             console.error('OpenAI embedding error:', errorInfo);

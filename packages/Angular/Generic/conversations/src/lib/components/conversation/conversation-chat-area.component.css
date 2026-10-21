@@ -88,13 +88,132 @@
   color: var(--mj-text-primary);
 }
 
+/* Header title: the conversation name in Main; in a fork, the path ending in the open fork */
+.chat-title-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-1);
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
 .chat-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
   font-size: 16px;
   font-weight: 600;
   color: var(--mj-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.chat-title-path {
+  min-width: 0;
+}
+
+.chat-title-crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Parent crumbs shrink first, down to 80px each; the current entry keeps 120px before it truncates */
+.chat-title-crumb {
+  display: flex;
+  flex: 0 100 auto;
+  align-items: center;
+  gap: var(--mj-space-1);
+  min-width: 80px;
+}
+
+.chat-title-crumb.chat-title-ellipsis {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.chat-title-crumb > button {
+  min-width: 0;
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-sm);
+  font-weight: 500;
+}
+
+.chat-title-crumb-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Past three entries the crumbs between the first and the parent collapse into the ellipsis */
+.chat-title-crumb.collapsed-wide,
+.chat-title-ellipsis:not(.collapses-wide) {
+  display: none;
+}
+
+.chat-title-sep {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--mj-border-strong);
+}
+
+.chat-title-current {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--mj-space-1);
+  min-width: 120px;
+}
+
+.chat-title-kind {
+  flex-shrink: 0;
+  margin: 0 var(--mj-space-1);
+  color: var(--mj-status-info);
+}
+
+.chat-title-kind[data-kind='Edit'] {
+  color: var(--mj-status-warning);
+}
+
+.chat-title-kind[data-kind='Regenerate'] {
+  color: var(--mj-brand-tertiary);
+}
+
+.chat-title-bar .chat-title-rename {
+  flex-shrink: 0;
+  color: var(--mj-text-muted);
+  opacity: 0.6;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.chat-title-bar:hover .chat-title-rename,
+.chat-title-bar .chat-title-rename:focus-visible {
+  color: var(--mj-text-primary);
+  opacity: 1;
+}
+
+.chat-title-input {
+  flex: 0 1 360px;
+  min-width: 120px;
+  padding: var(--mj-space-1) var(--mj-space-2);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.chat-title-input:focus-visible {
+  outline: none;
+  border-color: var(--mj-brand-primary);
+  box-shadow: var(--mj-focus-ring);
 }
 
 .shared-by-badge {
@@ -382,6 +501,137 @@
   display: flex;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+}
+
+.chat-task-graph-pane {
+  background: var(--mj-bg-surface);
+  border-left: 1px solid var(--mj-border-default);
+}
+
+.task-graph-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--mj-bg-surface-card);
+  border-bottom: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+}
+
+.task-graph-pane-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.task-graph-pane-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  color: var(--mj-brand-primary);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.task-graph-pane-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.task-graph-pane-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-graph-pane-subtitle {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+
+.task-graph-pane-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.task-graph-pane-save-btn {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--mj-brand-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #ffffff);
+  cursor: pointer;
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+.task-graph-pane-save-btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.task-graph-pane-save-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.task-graph-pane-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.task-graph-pane-btn:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-default);
+}
+
+.task-graph-pane-body {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
+  padding: 12px 16px 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.task-graph-pane-body > mj-task-graph-run-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -911,15 +1161,19 @@
     min-width: 0;
     order: 1;
   }
+  .chat-title-bar {
+    flex: 1;
+  }
   .chat-title {
     font-size: 15px;
     font-weight: 700;
-    width: auto;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex: 1;
-    min-width: 0;
+  }
+  /* The path keeps the first crumb and the current entry; every middle crumb collapses into the ellipsis */
+  .chat-title-crumb.path-middle {
+    display: none;
+  }
+  .chat-title-ellipsis:not(.collapses-wide) {
+    display: flex;
   }
   .project-tag {
     margin-left: 0;
@@ -1250,4 +1504,32 @@
   50% {
     box-shadow: 0 0 0 5px color-mix(in srgb, var(--mj-status-success) 0%, transparent);
   }
+}
+
+/* The fork title above the transcript, shown only when a host header replaces the default one */
+.fork-view-bar {
+  display: flex;
+  align-items: center;
+  padding: var(--mj-space-2) var(--mj-space-4);
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+}
+.fork-composer-hint {
+  padding: var(--mj-space-1) var(--mj-space-4) 0;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+}
+.chat-actions-buttons > .forks-button .forks-count {
+  margin-left: var(--mj-space-1);
+  padding: 0 var(--mj-space-2);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
+  font-size: var(--mj-text-xs);
+  font-weight: 600;
+}
+.chat-actions-buttons > .forks-button.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
 }

@@ -85,6 +85,14 @@ export function SummarizeDriverClasses(considered: ConsideredModelSummary[]): st
   );
 }
 
+/** The run's credential scope, as far as the message needs it. Omitted = the platform's credentials count. */
+export interface NoModelFoundCredentialScope {
+  /** The scope's name, quoted in the message (e.g. `RequestOnly`). */
+  Name: string;
+  /** Whether the scope lets the platform's own credentials (environment or AI Credential settings) count. */
+  PlatformAllowed: boolean;
+}
+
 /**
  * Builds a descriptive error message when no model could be selected for a prompt. Includes which
  * models were considered and why they were unavailable, so the error is actionable for an operator
@@ -92,7 +100,8 @@ export function SummarizeDriverClasses(considered: ConsideredModelSummary[]): st
  */
 export function BuildNoModelFoundMessage(
   promptName: string,
-  selectionInfo?: NoModelFoundSelectionInfo
+  selectionInfo?: NoModelFoundSelectionInfo,
+  credentialScope?: NoModelFoundCredentialScope
 ): string {
   const base = `No suitable model found for prompt ${promptName}`;
 
@@ -119,10 +128,15 @@ export function BuildNoModelFoundMessage(
       .join(', ');
 
     const suffix = unavailableModels.length > 5 ? ` (${unavailableModels.length} total)` : '';
+    // When the scope rules out the platform's credentials, "configure them" would point the reader
+    // at exactly the fallback the caller ruled out.
+    const remedy =
+      !credentialScope || credentialScope.PlatformAllowed
+        ? `Please configure API credentials in your environment or AI Credential settings.`
+        : `The credential scope is ${credentialScope.Name}, so only the API keys supplied with this run count; supply a key for one of these vendors.`;
     return (
       `${base}. No valid API credentials/keys are configured for any of the candidate model-vendor combinations. ` +
-      `Tried: ${triedSummary}${suffix}.${summarySuffix} ` +
-      `Please configure API credentials in your environment or AI Credential settings.`
+      `Tried: ${triedSummary}${suffix}.${summarySuffix} ${remedy}`
     );
   }
 

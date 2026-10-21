@@ -1,0 +1,212 @@
+/**
+ * ORGANIC-KEY DETECTION USED TO BE KILLED BY ITS OWN STRUCTURAL PHASE before it could emit anything.
+ *
+ * Three properties compounded on a large schema:
+ *
+ *  1. `RunStructuralPhase` guarded only `clusters.length === 0`. The register asked for a second gate
+ *     on "no DECLARED foreign keys" — which would not have helped, because `CollectFKEdgesFromState`
+ *     also pulls the SOFT FKs the key-detection phase inferred, and on an imported schema those ARE
+ *     the edges. The gate has to be on the EDGE SET.
+ *  2. `FindBridgePaths` ran one BFS per hub × EVERY TABLE IN THE DATABASE, including every table with
+ *     no join edge at all, each of which can only ever return nothing.
+ *  3. `bfsPaths` pushed a FRESH `Set<string>` and a FRESH path array per neighbour per dequeued node
+ *     onto an unbounded queue, drained with `Array.shift()` (O(n)), into an uncapped result array.
+ *
+ * These tests assert the BOUNDS, not the runtime: a timing assertion on a graph walk is a flake
+ * generator, and the bound is the actual contract. They also pin that bounding did not change what
+ * an unbounded walk finds on a graph small enough to exhaust.
+ */
+import { describe, it, expect } from 'vitest';
+import { RunStructuralPhase } from '../discovery/StructuralPhase';
+import { WalkBridgePaths, FKEdge } from '../discovery/FKGraphWalker';
+import { DatabaseDocumentation } from '../types/state';
+import { OrganicKeyCluster } from '../types/organic-keys';
+
+// ─── Fixtures ────────────────────────────────────────────────────────────────
+
+function table(name: string, columns: string[], dependsOn: Array<{ schema: string; table: string; column: string; referencedColumn: string }> = []) {
+    return {
+        name,
+        rowCount: 100,
+        dependsOn,
+        dependents: [],
+        columns: columns.map((c, i) => ({ name: c, dataType: 'int', isNullable: false, isPrimaryKey: i === 0 })),
+        descriptionIterations: [],
+    };
+}
+
+function state(tables: ReturnType<typeof table>[], softFKs: Array<Record<string, unknown>> = []): DatabaseDocumentation {
+    return {
+        schemas: [{ name: 'dbo', tables, descriptionIterations: [] }],
+        phases: { keyDetection: { discovered: { foreignKeys: softFKs } } },
+    } as unknown as DatabaseDocumentation;
+}
+
+function cluster(members: Array<{ table: string; column: string }>): OrganicKeyCluster {
+    return {
+        id: 'c1', concept: 'customer_id', normalization: 'LowerCaseTrim',
+        members: members.map((m) => ({ schema: 'dbo', table: m.table, column: m.column, participatesInFK: false })),
+        confidence: 1, reasoning: 'test', maxIntraDistance: 0,
+    } as unknown as OrganicKeyCluster;
+}
+
+/** A complete graph on N tables — the densest shape a BFS can be handed. */
+function denseGraph(n: number): { edges: FKEdge[]; tables: Array<{ schema: string; table: string }> } {
+    const edges: FKEdge[] = [];
+    for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+            edges.push({
+                SourceSchema: 'dbo', SourceTable: `T${i}`, SourceColumn: `T${j}ID`,
+                TargetSchema: 'dbo', TargetTable: `T${j}`, TargetColumn: 'ID',
+                Kind: 'hard', confidence: 1,
+            });
+        }
+    }
+    const tables = Array.from({ length: n }, (_, i) => ({ schema: 'dbo', table: `T${i}` }));
+    return { edges, tables };
+}
+
+// ─── The gate ────────────────────────────────────────────────────────────────
+
+describe('RunStructuralPhase — gated on the edge set, not on declared FKs', () => {
+    it('returns immediately when there are no clusters', () => {
+        const r = RunStructuralPhase(state([table('A', ['ID'])]), []);
+        expect(r.Bridges).toEqual([]);
+        expect(r.Summary.walked).toBe(false);
+        expect(r.Summary.skipReason).toBe('no-clusters');
+    });
+
+    it('returns immediately when the state yields NO edges, declared or soft', () => {
+        const r = RunStructuralPhase(state([table('A', ['ID']), table('B', ['ID'])]), [cluster([{ table: 'A', column: 'ID' }])]);
+        expect(r.Summary.walked).toBe(false);
+        expect(r.Summary.skipReason).toBe('no-edges');
+    });
+
+    it('DOES walk a state with zero declared FKs but soft FKs present — the register\'s gate would not have', () => {
+        const s = state(
+            [table('A', ['ID', 'CustNo']), table('B', ['ID', 'CustNo']), table('C', ['ID', 'BID'])],
+            [
+                { schemaName: 'dbo', sourceTable: 'C', sourceColumn: 'BID', targetSchema: 'dbo', targetTable: 'B', targetColumn: 'ID', confidence: 90 },
+                { schemaName: 'dbo', sourceTable: 'B', sourceColumn: 'CustNo', targetSchema: 'dbo', targetTable: 'A', targetColumn: 'CustNo', confidence: 90 },
+            ]
+        );
+        const r = RunStructuralPhase(s, [cluster([{ table: 'A', column: 'CustNo' }])]);
+        expect(r.Summary.walked).toBe(true);
+        expect(r.Summary.skipReason).toBeUndefined();
+    });
+
+    it('can be skipped outright, so a large schema still gets its semantic-phase keys', () => {
+        const s = state([table('A', ['ID', 'BID'], [{ schema: 'dbo', table: 'B', column: 'BID', referencedColumn: 'ID' }]), table('B', ['ID'])]);
+        const r = RunStructuralPhase(s, [cluster([{ table: 'A', column: 'ID' }])], { Skip: true });
+        expect(r.Summary.walked).toBe(false);
+        expect(r.Summary.skipReason).toBe('disabled');
+    });
+});
+
+// ─── The bounds ──────────────────────────────────────────────────────────────
+
+describe('WalkBridgePaths — the walk is bounded and says when a bound fired', () => {
+    it('skips every (hub, spoke) pair whose spoke has no edge at all', () => {
+        const { edges } = denseGraph(3);
+        const spokes = [
+            { schema: 'dbo', table: 'T1' }, { schema: 'dbo', table: 'T2' },
+            // 20 tables that are in the database and in no relationship
+            ...Array.from({ length: 20 }, (_, i) => ({ schema: 'dbo', table: `Orphan${i}` })),
+        ];
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], spokes);
+        expect(r.PairsSearched).toBe(2);
+        expect(r.PairsSkipped).toBe(20);
+    });
+
+    it('skips every spoke for a HUB that has no edge — it is unreachable from all of them', () => {
+        const { edges, tables } = denseGraph(4);
+        // Hub H is a real table in the database and in no relationship.
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'H', keyField: 'ID' }], tables);
+        expect(r.PairsSearched).toBe(0);
+        expect(r.PairsSkipped).toBe(tables.length);
+        expect(r.Paths).toEqual([]);
+    });
+
+    it('returns immediately on an empty edge set without searching any pair', () => {
+        const r = WalkBridgePaths([], [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], [{ schema: 'dbo', table: 'T1' }]);
+        expect(r.Paths).toEqual([]);
+        expect(r.PairsSearched).toBe(0);
+        expect(r.Truncated).toBe(false);
+    });
+
+    it('caps paths per pair and reports the cap, rather than growing the result array', () => {
+        const { edges, tables } = denseGraph(8);
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], tables.slice(1), { MaxPathsPerPair: 2 });
+        expect(r.Truncated).toBe(true);
+        expect(r.TruncationReasons).toContain('pathsPerPair');
+        // 7 spokes, at most 2 paths each, and length-1 paths are dropped as direct FKs.
+        expect(r.Paths.length).toBeLessThanOrEqual(7 * 2);
+    });
+
+    it('caps the total result array and reports the cap', () => {
+        const { edges, tables } = denseGraph(8);
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], tables.slice(1), { MaxTotalPaths: 5 });
+        expect(r.Paths.length).toBe(5);
+        expect(r.TruncationReasons).toContain('totalPaths');
+    });
+
+    it('caps the live BFS frontier and reports the cap', () => {
+        const { edges, tables } = denseGraph(10);
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], tables.slice(1), { MaxFrontier: 2 });
+        expect(r.Truncated).toBe(true);
+        expect(r.TruncationReasons).toContain('frontier');
+    });
+
+    it('an explicitly-undefined bound does not UNSET the ceiling', () => {
+        const { edges, tables } = denseGraph(8);
+        // The one way a caller could accidentally un-bound the walk: spreading an options object
+        // whose keys are present but undefined. Defaults must survive that.
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], tables.slice(1), {
+            MaxFrontier: undefined, MaxPathsPerPair: undefined, MaxTotalPaths: undefined, MaxHops: undefined,
+        });
+        // maxHops back at its default of 3, so no path is longer than that.
+        expect(r.Paths.every((p) => p.PathLength <= 3)).toBe(true);
+        expect(r.Paths.length).toBeLessThanOrEqual(25_000);
+    });
+
+    it('a graph small enough to exhaust is unaffected by the bounds', () => {
+        // A → B → C chain. C reaches A in 2 hops; that is the one bridge.
+        const edges: FKEdge[] = [
+            { SourceSchema: 'dbo', SourceTable: 'B', SourceColumn: 'AID', TargetSchema: 'dbo', TargetTable: 'A', TargetColumn: 'ID', Kind: 'hard', confidence: 1 },
+            { SourceSchema: 'dbo', SourceTable: 'C', SourceColumn: 'BID', TargetSchema: 'dbo', TargetTable: 'B', TargetColumn: 'ID', Kind: 'hard', confidence: 1 },
+        ];
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'A', keyField: 'ID' }], [{ schema: 'dbo', table: 'B' }, { schema: 'dbo', table: 'C' }]);
+        expect(r.Truncated).toBe(false);
+        expect(r.Paths).toHaveLength(1);
+        expect(r.Paths[0].SpokeTable).toBe('C');
+        expect(r.Paths[0].PathLength).toBe(2);
+    });
+
+    it('does NOT return a path longer than maxHops', () => {
+        // A ← B ← C ← D ← E: E reaches A in 4 hops, one more than the default 3.
+        const chain = ['B', 'C', 'D', 'E'];
+        const edges: FKEdge[] = chain.map((t, i) => ({
+            SourceSchema: 'dbo', SourceTable: t, SourceColumn: 'ParentID',
+            TargetSchema: 'dbo', TargetTable: i === 0 ? 'A' : chain[i - 1], TargetColumn: 'ID',
+            Kind: 'hard' as const, confidence: 1,
+        }));
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'A', keyField: 'ID' }], [{ schema: 'dbo', table: 'E' }]);
+        expect(r.Paths).toEqual([]);
+        // ...and the 3-hop spoke on the same chain IS found, so this is the bound and not a bug.
+        const r3 = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'A', keyField: 'ID' }], [{ schema: 'dbo', table: 'D' }]);
+        expect(r3.Paths.map((p) => p.PathLength)).toEqual([3]);
+    });
+
+    it('still finds a maxHops-length path — the index cursor did not break the queue drain', () => {
+        // A ← B ← C ← D, so D reaches A in exactly 3 hops (the default maxHops).
+        const edges: FKEdge[] = [
+            { SourceSchema: 'dbo', SourceTable: 'B', SourceColumn: 'AID', TargetSchema: 'dbo', TargetTable: 'A', TargetColumn: 'ID', Kind: 'hard', confidence: 1 },
+            { SourceSchema: 'dbo', SourceTable: 'C', SourceColumn: 'BID', TargetSchema: 'dbo', TargetTable: 'B', TargetColumn: 'ID', Kind: 'hard', confidence: 1 },
+            { SourceSchema: 'dbo', SourceTable: 'D', SourceColumn: 'CID', TargetSchema: 'dbo', TargetTable: 'C', TargetColumn: 'ID', Kind: 'hard', confidence: 1 },
+        ];
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'A', keyField: 'ID' }], [{ schema: 'dbo', table: 'D' }]);
+        expect(r.Paths).toHaveLength(1);
+        expect(r.Paths[0].PathLength).toBe(3);
+        expect(r.Paths[0].Hops.map((h) => h.fromTable)).toEqual(['D', 'C', 'B']);
+    });
+});

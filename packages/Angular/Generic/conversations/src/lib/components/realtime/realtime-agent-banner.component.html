@@ -28,11 +28,13 @@
     </div>
 
     <div class="bar-actions">
-      <button type="button" class="start-live-pill" (click)="StartLiveRequested.emit()"
-              title="Resume this session as a new live call">
-        <i class="fa-solid fa-phone" aria-hidden="true"></i>
-        <span>Start live session</span>
-      </button>
+      @if (ShowStartLive) {
+        <button type="button" class="start-live-pill" (click)="StartLiveRequested.emit()"
+                title="Resume this session as a new live call">
+          <i class="fa-solid fa-phone" aria-hidden="true"></i>
+          <span>Start live session</span>
+        </button>
+      }
       <button type="button" class="iconb" (click)="CloseRequested.emit()"
               title="Close review" aria-label="Close session review">
         <i class="fa-solid fa-xmark" aria-hidden="true"></i>

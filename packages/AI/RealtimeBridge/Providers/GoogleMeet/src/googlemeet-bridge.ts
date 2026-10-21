@@ -11,10 +11,11 @@
  * deployment, `Connect` throws an explicit "bind the real Google Meet Media API" error (the
  * {@link sdkFactory} default). See {@link GoogleMeetBridge.SetSdkFactory}.
  *
- * ## Google Meet capability coverage (per the §8 seed row)
- * On-demand + scheduled join (⚠️ verification), invite join, inbound routing (⚠️), audio in/out,
- * directional video/screen flags, and a diarized roster (`SpeakerDiarization`, ⚠️) with participant
- * mute (via the Meeting Controls channel, where the tenant grants it).
+ * ## Google Meet capability coverage (per the seed row)
+ * On-demand + scheduled join (⚠️ verification), invite join, inbound routing (⚠️), audio in/out, and a
+ * diarized roster (`SpeakerDiarization`, ⚠️) with participant mute (via the Meeting Controls channel, where
+ * the tenant grants it). No video or screen in either direction: the {@link IGoogleMeetSdk} seam carries
+ * audio only, so the seed row claims none of the video and screen flags.
  *
  * **No hand-raise (➖)** and **no in-meeting chat (⚠️ not exposed)**: the Meet Media API surfaces
  * neither, so — unlike `ZoomBridge` — there is no `onHandRaise` wiring and no `PostChatMessage` helper.
@@ -199,8 +200,8 @@ export class GoogleMeetBridge extends BaseRealtimeBridge {
 
     /**
      * Sends an outbound media frame into the meeting. Audio is fed to the SDK's audio-contribution path;
-     * video/screen frames are gated by the directional capability flags (the transport carries them,
-     * and the SDK send is a deployment-time binding TODO — today the models emit audio).
+     * `video-out` and `screen-out` frames are dropped: the SDK seam has no video or screen send, so the
+     * provider row claims neither `VideoOut` nor `ScreenOut`.
      *
      * @param track The outbound track the frame targets.
      * @param frame The media frame to send.
@@ -219,8 +220,8 @@ export class GoogleMeetBridge extends BaseRealtimeBridge {
             }
             case 'video-out':
             case 'screen-out':
-                // Directional video/screen capability is declared; the SDK send binding lands with the
-                // first realtime model that emits these tracks (TODO at deployment). No-op for now.
+                // Dropped: the SDK seam has no video or screen send yet, and the provider row claims neither flag.
+                // Carrying one takes a seam method, its real binding, and the flag on the provider row.
                 break;
             default:
                 // An inbound track was passed to SendMedia — ignore (defensive).

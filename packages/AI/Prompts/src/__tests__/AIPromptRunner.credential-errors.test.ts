@@ -327,3 +327,28 @@ describe('BuildNoModelFoundMessage — naming the provider implementations', () 
         expect(message).toContain('Please configure API credentials');
     });
 });
+
+describe('BuildNoModelFoundMessage — the remedy follows the credential scope', () => {
+    const allUnkeyed: MockSelectionInfo = {
+        modelsConsidered: [
+            { model: { ID: 'm1', Name: 'GPT-4' }, vendor: { ID: 'v1', Name: 'OpenAI' }, priority: 1, available: false }
+        ],
+        selectionReason: 'No API keys found for any model-vendor combination'
+    };
+
+    it('points at environment / AI Credential settings when no scope is given', () => {
+        const message = BuildNoModelFoundMessage('Test Prompt', allUnkeyed);
+        expect(message).toContain('Please configure API credentials in your environment or AI Credential settings.');
+    });
+
+    it('points at environment / AI Credential settings when the scope allows the platform credentials', () => {
+        const message = BuildNoModelFoundMessage('Test Prompt', allUnkeyed, { Name: 'Any', PlatformAllowed: true });
+        expect(message).toContain('Please configure API credentials in your environment or AI Credential settings.');
+    });
+
+    it('names the scope and asks for a run-supplied key when the scope rules the platform credentials out', () => {
+        const message = BuildNoModelFoundMessage('Test Prompt', allUnkeyed, { Name: 'RuntimeOnly', PlatformAllowed: false });
+        expect(message).toContain('The credential scope is RuntimeOnly, so only the API keys supplied with this run count');
+        expect(message).not.toContain('Please configure API credentials');
+    });
+});

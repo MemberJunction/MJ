@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT102 - RunQuery Rendering Matrix",
+    "Description": "Deterministic server-side bundle. Creates schema mjit_render with one table of 240 deterministic rows, a query category and real MJ: Queries records (with MJ: Query SQLs variants where the platforms differ), then runs every query shape, parameter case and composed query through MaxRows absent, 0, 1, the result size and larger, every page of a three-page walk, a page past the end and StartRow without MaxRows. Every call asserts the returned rows and TotalRowCount against rows computed from the fixture model, so both platforms must return the same rows. It also checks that caller-supplied SQL is refused unless it is a single read query (SET through the spec path, ad-hoc SELECT … INTO) and, on PostgreSQL, that a session setting changed through the spec path is not seen by later calls. Fixtures are removed in teardown.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Each query shape, parameter case, composed query, platform variant, ad-hoc call and spec-path call returns exactly the expected rows and total on every MaxRows / StartRow combination; composition failures name the problem; non-read caller SQL is refused and leaves no session state; fixtures cleaned up."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "runquery-rendering"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "655DB70F-7F49-4FCE-9A17-410F20D5B843"
+  }
+}

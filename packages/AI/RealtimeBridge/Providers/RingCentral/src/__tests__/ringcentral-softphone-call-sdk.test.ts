@@ -194,6 +194,18 @@ describe('RingCentralSoftphoneCallSdk', () => {
         expect(fake.sent).toHaveLength(0);
     });
 
+    it('detach() stops the RTP clock WITHOUT hanging up (a BYE would drop the transferred party)', async () => {
+        const fake = fakeSession();
+        const sdk = new RingCentralSoftphoneCallSdk(fakeSource(fake));
+        await sdk.answer('CALL-1');
+        await sdk.transfer('CALL-1', '+15550001111');
+        await sdk.detach('CALL-1');
+        expect(fake.isHungUp()).toBe(false);
+        sdk.sendAudioFrame(pcm(640));
+        vi.advanceTimersByTime(40);
+        expect(fake.sent).toHaveLength(0);
+    });
+
     it('sendAudioFrame / flushOutbound before a call are safe no-ops', () => {
         const fake = fakeSession();
         const sdk = new RingCentralSoftphoneCallSdk(fakeSource(fake));

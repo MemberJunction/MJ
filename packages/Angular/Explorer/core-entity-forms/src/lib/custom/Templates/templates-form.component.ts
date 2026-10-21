@@ -218,6 +218,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
     }
 
     ngOnDestroy() {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
         

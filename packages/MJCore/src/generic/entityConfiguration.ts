@@ -46,8 +46,11 @@ export type RelatedRolePolicy = 'keep-all-primary' | 'smart';
 export type FormRole = 'Primary' | 'Detail';
 /** L1 membership on a parent form. None never reaches the ranker. */
 export type FormInclusion = 'Primary' | 'More' | 'None';
+/** What a form does with a related section / contribution that has 0 rows. */
+export type FormWhenEmpty = 'show' | 'hide' | 'more';
 
 import {
+    EntitySaveReturnMode,
     IEntityConfiguration,
     IEntityUIConfiguration,
     IEntityFormConfiguration
@@ -64,7 +67,7 @@ import {
 export * from './JSONType-interfaces/IEntityConfiguration';
 export * from './JSONType-interfaces/IEntityFieldConfiguration';
 export * from './JSONType-interfaces/IEntityRelationshipConfiguration';
-export type { IJsonRemapSpec, IJsonRemapColumn, ICloneFieldRules, ICloneRelationshipPolicy, ICloneRowExclusion } from './JSONType-interfaces/IEntityConfiguration';
+export type { EntitySaveReturnMode, IJsonRemapSpec, IJsonRemapColumn, ICloneFieldRules, ICloneRelationshipPolicy, ICloneRowExclusion } from './JSONType-interfaces/IEntityConfiguration';
 
 export interface IEntityRelationshipJoin {
     mode: 'any';
@@ -163,6 +166,18 @@ export function ParseEntityConfiguration(raw: string | IEntityConfiguration | nu
     return SafeJSONParse<IEntityConfiguration>(raw, false) ?? null;
 }
 
+/**
+ * Resolves the effective {@link EntitySaveReturnMode} from an entity configuration bag or JSON string.
+ * Any value other than `'datestamps_only'` (including `null`, `undefined`, or unrecognized strings)
+ * resolves to `'full'`.
+ */
+export function ResolveEntitySaveReturnMode(
+    raw: string | IEntityConfiguration | null | undefined,
+): EntitySaveReturnMode {
+    const parsed = ParseEntityConfiguration(raw);
+    return parsed?.SaveReturnMode === 'datestamps_only' ? 'datestamps_only' : 'full';
+}
+
 export function ParseEntityRelationshipConfiguration(
     raw: string | IEntityRelationshipConfiguration | null | undefined,
 ): IEntityRelationshipConfiguration | null {
@@ -202,6 +217,62 @@ export function ReadRelationshipSortKey(raw: string | IEntityRelationshipConfigu
     const sort = ParseEntityRelationshipConfiguration(raw)?.UI?.sortKey;
     if (typeof sort !== 'number' || !Number.isFinite(sort)) return null;
     return sort;
+}
+
+function asWhenEmpty(value: unknown): FormWhenEmpty | null {
+    return value === 'show' || value === 'hide' || value === 'more' ? value : null;
+}
+
+/**
+ * Resolve a related section's empty behaviour. Precedence: the relationship's
+ * `UI.whenEmpty` (L1) → the parent entity's `UI.Form.RelatedWhenEmpty` (L2) → `'show'`.
+ */
+export function ReadRelationshipWhenEmpty(
+    relationshipConfig: string | IEntityRelationshipConfiguration | null | undefined,
+    parentEntityConfig: string | IEntityConfiguration | null | undefined,
+): FormWhenEmpty {
+    return ResolveContributionWhenEmpty(
+        ParseEntityRelationshipConfiguration(relationshipConfig)?.UI?.whenEmpty,
+        parentEntityConfig,
+    );
+}
+
+/**
+ * Resolve whether a related section's row count is prefetched and badged.
+ * Precedence: `UI.showCount` (L1) → parent `UI.Form.ShowRelatedCounts` (L2) → `true`.
+ */
+export function ReadRelationshipShowCount(
+    relationshipConfig: string | IEntityRelationshipConfiguration | null | undefined,
+    parentEntityConfig: string | IEntityConfiguration | null | undefined,
+): boolean {
+    return ResolveContributionShowCount(
+        ParseEntityRelationshipConfiguration(relationshipConfig)?.UI?.showCount,
+        parentEntityConfig,
+    );
+}
+
+/**
+ * Resolve a form contribution's empty behaviour / count flag: its own
+ * registration value wins, then the parent entity default, then the built-in default.
+ * A value that is not one of the allowed ones counts as unset. The relationship
+ * readers above pass the relationship's own value through these.
+ */
+export function ResolveContributionWhenEmpty(
+    own: FormWhenEmpty | null | undefined,
+    parentEntityConfig: string | IEntityConfiguration | null | undefined,
+): FormWhenEmpty {
+    return asWhenEmpty(own)
+        ?? asWhenEmpty(ParseEntityConfiguration(parentEntityConfig)?.UI?.Form?.RelatedWhenEmpty)
+        ?? 'show';
+}
+
+export function ResolveContributionShowCount(
+    own: boolean | null | undefined,
+    parentEntityConfig: string | IEntityConfiguration | null | undefined,
+): boolean {
+    if (typeof own === 'boolean') return own;
+    const inherited = ParseEntityConfiguration(parentEntityConfig)?.UI?.Form?.ShowRelatedCounts;
+    return typeof inherited === 'boolean' ? inherited : true;
 }
 
 export function ReadRelationshipJoinFields(raw: string | IEntityRelationshipConfiguration | null | undefined): string[] | null {

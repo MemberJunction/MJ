@@ -63,6 +63,7 @@ import {
     EncryptedValueParts,
     KeyConfiguration
 } from './interfaces';
+import { EncryptionKeyUnavailableError } from './EncryptionKeyUnavailableError';
 
 /**
  * Cache entry with TTL for key material.
@@ -820,11 +821,26 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         // Get or create the key source
         const source = await this.getOrCreateKeySource(config.source.driverClass);
 
-        // Get key from source
-        const keyMaterial = await source.GetKey(
-            config.source.lookupValue,
-            config.keyVersion
-        );
+        // Get key from source. A source that doesn't hold this key is a configuration state (an
+        // app's key this install wasn't given), not a fault: say so with a typed error callers can
+        // report once. Asked only after a failure, so a remote source costs nothing extra.
+        let keyMaterial: Buffer;
+        try {
+            keyMaterial = await source.GetKey(
+                config.source.lookupValue,
+                config.keyVersion
+            );
+        } catch (err) {
+            if (!(await source.KeyExists(config.source.lookupValue).catch(() => true))) {
+                throw new EncryptionKeyUnavailableError(
+                    config.keyId,
+                    this.GetKeyConfiguration(config.keyId)?.key.Name ?? config.keyId,
+                    source.SourceName,
+                    config.source.lookupValue
+                );
+            }
+            throw err;
+        }
 
         // Validate key length
         this.validateKeyLength(keyMaterial, config);
@@ -962,6 +978,9 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
      * The engine never touches key material during validation — that stays
      * encapsulated within each provider.
      *
+     * A failed result also says whether the source holds the key at all (`IsConfigured`), so a
+     * key this install was never given can be told from one that is present but unusable.
+     *
      * @param contextUser - User context for database access
      * @returns Array of validation results, one per active key
      */
@@ -971,6 +990,7 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         SourceType: string;
         LookupValue: string;
         IsAccessible: boolean;
+        IsConfigured?: boolean;
         Error?: string;
     }>> {
         await this.ensureConfigured(contextUser);
@@ -992,6 +1012,7 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         SourceType: string;
         LookupValue: string;
         IsAccessible: boolean;
+        IsConfigured?: boolean;
         Error?: string;
     }> {
         const result = {
@@ -1000,6 +1021,7 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
             SourceType: '',
             LookupValue: key.KeyLookupValue || '',
             IsAccessible: false,
+            IsConfigured: undefined as boolean | undefined,
             Error: undefined as string | undefined
         };
 
@@ -1024,6 +1046,15 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
 
             result.IsAccessible = validation.IsAccessible;
             result.Error = validation.Error;
+            // Whether the source holds the key at all, as opposed to holding one that fails
+            // validation. Asked only on failure, so a remote source costs nothing extra.
+            if (!validation.IsAccessible) {
+                try {
+                    result.IsConfigured = await source.KeyExists(keyConfig.source.lookupValue);
+                } catch {
+                    result.IsConfigured = true; // can't tell: keep the validation error as the whole story
+                }
+            }
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             result.Error = message;

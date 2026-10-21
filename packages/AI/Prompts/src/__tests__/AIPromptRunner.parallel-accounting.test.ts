@@ -79,6 +79,7 @@ import { TestLLM, makeModelUsage, makeSuccessChatResult } from '@memberjunction/
 import { buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL_TYPE, type AICatalog } from './__fixtures__/ai-metadata.fixtures';
 import type { ExecutionTaskResult, ResultSelectionConfig } from '../ParallelExecution';
 import type { UserInfo } from '@memberjunction/core';
+import type { AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
 
 const testLLM = new TestLLM();
 
@@ -98,14 +99,20 @@ class FakePromptRun {
   public JudgeID?: string;
   public JudgeScore?: number;
   public contextUser?: UserInfo;
+  public saveOptions: Array<{ IgnoreDirtyState?: boolean } | undefined> = [];
+  public onFirstSave?: (self: FakePromptRun) => Promise<void> | void;
   [k: string]: unknown;
 
   NewRecord(): boolean {
     this.ID = `pr-${++prSeq}`;
     return true;
   }
-  async Save(): Promise<boolean> {
+  async Save(options?: { IgnoreDirtyState?: boolean }): Promise<boolean> {
     this.saveCount++;
+    this.saveOptions.push(options);
+    if (this.saveCount === 1 && this.onFirstSave) {
+      await this.onFirstSave(this);
+    }
     return true;
   }
 }
@@ -224,6 +231,7 @@ describe('Spec §5 — Parallel-execution accounting', () => {
     let passedParentIdToTasks: string | undefined;
     let passedParentIdToSelector: string | undefined;
     let passedUserToSelector: UserInfo | undefined;
+    let passedScopeToSelector: AIPromptExecutionScope | undefined;
 
     // Deterministic execution planner returning 3 tasks
     (runner as unknown as { _executionPlanner: { createExecutionPlan: () => unknown[] } })._executionPlanner = {
@@ -254,18 +262,22 @@ describe('Spec §5 — Parallel-execution accounting', () => {
           endTime: new Date(),
         };
       },
-      selectBestResult: async (_results, _config, parentPromptRunId, _cancellationToken, contextUser) => {
+      selectBestResult: async (_results, _config, parentPromptRunId, _cancellationToken, contextUser, executionScope) => {
         passedParentIdToSelector = parentPromptRunId as string;
         passedUserToSelector = contextUser as UserInfo;
+        passedScopeToSelector = executionScope as AIPromptExecutionScope;
         // Winner is arm 2
         return armResults[1];
       },
     };
 
+    const apiKeys = [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }];
     const execParams = {
       prompt,
       contextUser: testUser,
       provider: fakeProvider,
+      apiKeys,
+      CredentialScope: 'RuntimeOnly',
       conversationMessages: [{ role: 'user', content: 'test question' }],
       templateMessageRole: 'none',
       verbose: false,
@@ -286,8 +298,10 @@ describe('Spec §5 — Parallel-execution accounting', () => {
     expect(passedParentIdToTasks).toBe(parentRun.ID);
     expect(passedParentIdToSelector).toBe(parentRun.ID);
 
-    // 3. Coordinator selectBestResult receives contextUser
+    // 3. Coordinator selectBestResult receives contextUser, and the scope its judge runs under
     expect(passedUserToSelector).toEqual(testUser);
+    expect(passedScopeToSelector?.apiKeys).toBe(apiKeys);
+    expect(passedScopeToSelector?.CredentialScope).toBe('RuntimeOnly');
 
     // 4. Children have ParentID = parent.ID
     expect(arm1Run.ParentID).toBe(parentRun.ID);
@@ -403,6 +417,99 @@ describe('Spec §5 — Parallel-execution accounting', () => {
     expect(child1Run.JudgeID).toBe(judgePrompt.ID);
     expect(child1Run.JudgeScore).toBe(6.0);
   });
+
+  it('executePromptInParallel queues winner WasSelectedResult update via _promptRunQueue and preserves ModelID/VendorID across parent INSERT reload', async () => {
+    const prompt = makePrompt({
+      OutputType: 'string',
+      ParallelizationMode: 'ModelSpecific',
+    });
+    const model = h.state.models[0] as { ID: string; Name: string };
+
+    const winnerChildRun = new FakePromptRun();
+    winnerChildRun.NewRecord();
+    winnerChildRun.RunType = 'ParallelChild';
+
+    const winnerTaskResult: ExecutionTaskResult = {
+      task: {
+        taskId: 't-win',
+        prompt: prompt as never,
+        model: { ID: model.ID, Name: model.Name } as never,
+        vendorId: 'vendor-win-1',
+        executionGroup: 0,
+        priority: 1,
+        renderedPrompt: 'test',
+        contextUser: testUser,
+      },
+      success: true,
+      rawResult: 'winner',
+      executionTimeMS: 25,
+      tokensUsed: 12,
+      ranking: 1,
+      modelResult: makeSuccessChatResult('winner', {
+        usage: makeModelUsage({ promptTokens: 8, completionTokens: 4, cost: 0.002, costCurrency: 'USD' }),
+      }),
+      startTime: new Date(),
+      endTime: new Date(),
+      promptRun: winnerChildRun as never,
+    };
+
+    (runner as unknown as { _executionPlanner: { createExecutionPlan: () => unknown[] } })._executionPlanner = {
+      createExecutionPlan: () => [winnerTaskResult.task],
+    };
+
+    (runner as unknown as {
+      _parallelCoordinator: {
+        executeTasksInParallel: () => Promise<unknown>;
+        selectBestResult: () => Promise<unknown>;
+      };
+    })._parallelCoordinator = {
+      executeTasksInParallel: async () => ({
+        success: true,
+        taskResults: [winnerTaskResult],
+        errors: [],
+        successCount: 1,
+        failureCount: 0,
+        cancelledCount: 0,
+        totalExecutionTimeMS: 25,
+        totalTokensUsed: 12,
+        groupResults: new Map([[0, {}]]),
+        startTime: new Date(),
+        endTime: new Date(),
+      }),
+      selectBestResult: async () => winnerTaskResult,
+    };
+
+    // Simulate an in-flight parent INSERT that finishes after executePromptInParallel stamps fields
+    // and reloads pre-update fields (clearing ModelID / VendorID if they were not inside applyConsolidatedFields)
+    fakeProvider.GetEntityObject.mockImplementationOnce(async (_entityName: string, contextUser?: UserInfo) => {
+      const parentRun = new FakePromptRun();
+      parentRun.contextUser = contextUser;
+      parentRun.onFirstSave = async (self) => {
+        await new Promise((r) => setTimeout(r, 10));
+        self.ModelID = undefined;
+        self.VendorID = undefined;
+      };
+      createdPromptRuns.push(parentRun);
+      return parentRun;
+    });
+
+    const result = await runner.ExecutePrompt({
+      prompt,
+      contextUser: testUser,
+      provider: fakeProvider,
+      conversationMessages: [{ role: 'user', content: 'q' }],
+      templateMessageRole: 'none',
+      verbose: false,
+    } as never);
+    await runner.FlushPendingSaves();
+
+    const parentRun = result.promptRun as unknown as FakePromptRun;
+    expect(parentRun.ModelID).toBe(model.ID);
+    expect(parentRun.VendorID).toBe('vendor-win-1');
+    expect(winnerChildRun.WasSelectedResult).toBe(true);
+    // Queued UPDATE passes IgnoreDirtyState: true through EntitySaveSequenceQueue
+    expect(winnerChildRun.saveOptions.some((opt) => opt?.IgnoreDirtyState === true)).toBe(true);
+  });
 });
 
 /**
@@ -474,5 +581,71 @@ describe('Prompt-run nesting depth (vwAIUsageFacts resolves self, parent, grandp
     // ...and a leaf: a repair is only ever started when attemptJSONRepair is set, and the repair's
     // own run does not set it, so its output can never trigger a second, deeper repair.
     expect(repairParams.attemptJSONRepair).toBeFalsy();
+  });
+
+  it("runs a JSON repair under the repaired prompt's configuration and credentials", async () => {
+    // It forwarded contextUser alone, so inside a customer's run the repair spent the platform's keys.
+    h.state.prompts = [{ ID: 'repair-json', Name: 'Repair JSON', Category: 'MJ: System', Status: 'Active', OutputType: 'object' }];
+    const runner = new AIPromptRunner();
+    const execute = vi.spyOn(runner, 'ExecutePrompt').mockResolvedValue({ success: true, result: '{"total": 1}' } as Awaited<ReturnType<AIPromptRunner['ExecutePrompt']>>);
+    const attemptJSONRepair = (runner as unknown as {
+      attemptJSONRepair(rawOutput: string, originalError: Error, params: Record<string, unknown>, currentPromptRun: { ID: string }): Promise<unknown>;
+    }).attemptJSONRepair.bind(runner);
+    const apiKeys = [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }];
+
+    await attemptJSONRepair(
+      '{"total": }',
+      new Error('Unexpected token }'),
+      { contextUser: testUser, provider: fakeProvider, configurationId: 'config-1', apiKeys, credentialId: 'credential-1', CredentialScope: 'RuntimeOnly' },
+      { ID: 'run-being-repaired' },
+    );
+
+    const repairParams = execute.mock.calls[0][0];
+    expect(repairParams.contextUser).toBe(testUser);
+    expect(repairParams.provider).toBe(fakeProvider);
+    expect(repairParams.configurationId).toBe('config-1');
+    expect(repairParams.apiKeys).toBe(apiKeys);
+    expect(repairParams.credentialId).toBe('credential-1');
+    expect(repairParams.CredentialScope).toBe('RuntimeOnly');
+  });
+});
+
+describe('PromptSelector judge runs under the parallel prompt\'s execution scope', () => {
+  const testUser: UserInfo = { ID: 'u-scope-1', Name: 'Scope User', Email: 'scope@example.com' } as UserInfo;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    loadCatalog(buildRealisticCatalog());
+    h.state.prompts = [makePrompt({ ID: 'judge-prompt-scope', Name: 'Judge Prompt', ParallelizationMode: 'None' })];
+  });
+
+  it("forwards the scope's apiKeys, configurationId and CredentialScope to the judge's ExecutePrompt", async () => {
+    // The judge used to run on contextUser alone, so inside a customer's RuntimeOnly run it spent the platform's keys.
+    const execute = vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt').mockResolvedValue(
+      { success: false, errorMessage: 'judge stubbed' } as Awaited<ReturnType<AIPromptRunner['ExecutePrompt']>>
+    );
+    const coordinator = new ParallelExecutionCoordinator();
+    const apiKeys = [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }];
+    const scope: AIPromptExecutionScope = { contextUser: testUser, configurationId: 'config-1', apiKeys, credentialId: 'credential-1', CredentialScope: 'RuntimeOnly' };
+    const arm = (taskId: string): ExecutionTaskResult => ({
+      task: { taskId, prompt: h.state.prompts[0] as never, model: h.state.models[0] as never, executionGroup: 0, priority: 1, renderedPrompt: taskId, contextUser: testUser },
+      success: true,
+      rawResult: `response ${taskId}`,
+      executionTimeMS: 1,
+      startTime: new Date(),
+      endTime: new Date(),
+    });
+    const config: ResultSelectionConfig = { method: 'PromptSelector', selectorPromptId: 'judge-prompt-scope' };
+
+    await coordinator.selectBestResult([arm('c1'), arm('c2')], config, 'parent-1', undefined, testUser, scope);
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    const judgeParams = execute.mock.calls[0][0];
+    expect(judgeParams.prompt).toBe(h.state.prompts[0]);
+    expect(judgeParams.apiKeys).toBe(apiKeys);
+    expect(judgeParams.configurationId).toBe('config-1');
+    expect(judgeParams.credentialId).toBe('credential-1');
+    expect(judgeParams.CredentialScope).toBe('RuntimeOnly');
+    expect(judgeParams.contextUser).toBe(testUser);
   });
 });
