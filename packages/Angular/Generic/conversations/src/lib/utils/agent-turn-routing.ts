@@ -7,6 +7,7 @@
  */
 
 import { IsAgentAllowed } from '@memberjunction/ai-core-plus';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type { AgentReplyMode, AgentTurnRoute, AgentTurnTarget } from '../models/agent-turn.model';
 
 /** The agent each route would use for one message, before the host's rules are applied. */
@@ -129,3 +130,151 @@ function agentNameOf(configuration: AgentTaskStep['configuration']): string | nu
     }
     return null;
 }
+
+/** Minimal shape of a conversation detail row inspected when resolving continuity routing. */
+export interface ContinuityHistoryMessage {
+    ID?: string | null;
+    Role?: string | null;
+    AgentID?: string | null;
+    ParentID?: string | null;
+    Message?: string | null;
+}
+
+/**
+ * Returns true when a user message explicitly `@`-mentions the given agent (by JSON mention token
+ * `@{..."id":"<agentId>"...}`, JSON token `@{..."name":"<agentName>"...}`, or plain `@<agentName>`).
+ */
+export function MessageMentionsAgent(
+    messageText: string | null | undefined,
+    agentId: string | null | undefined,
+    agentName?: string | null
+): boolean {
+    if (!messageText) {
+        return false;
+    }
+    const normalizedId = NormalizeUUID(agentId ?? '');
+    const normalizedName = (agentName ?? '').trim().toLowerCase();
+
+    let cursor = 0;
+    while (cursor < messageText.length) {
+        const openIdx = messageText.indexOf('@{', cursor);
+        if (openIdx === -1) {
+            break;
+        }
+        const closeIdx = messageText.indexOf('}', openIdx + 2);
+        if (closeIdx === -1) {
+            break;
+        }
+        const body = messageText.slice(openIdx + 2, closeIdx);
+        cursor = closeIdx + 1;
+        if (!body) {
+            continue;
+        }
+        try {
+            const parsed = JSON.parse(`{${body}}`) as { type?: string; id?: string; name?: string };
+            if (parsed.type && parsed.type !== 'agent') {
+                continue;
+            }
+            if (normalizedId && typeof parsed.id === 'string' && UUIDsEqual(parsed.id, normalizedId)) {
+                return true;
+            }
+            if (normalizedName && typeof parsed.name === 'string' && parsed.name.trim().toLowerCase() === normalizedName) {
+                return true;
+            }
+        } catch {
+            // Ignore malformed token and continue scanning
+        }
+    }
+
+    if (normalizedName) {
+        const escaped = normalizedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const plainMention = new RegExp(`(?:^|\\s)@${escaped}(?=\\b|\\s|$)`, 'i');
+        if (plainMention.test(messageText)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Walks conversation history from newest to oldest to find the most recent non-manager `AI` message
+ * that owns continuity for the next turn.
+ *
+ * Stops and returns `null` (returning ownership to the conversation manager) when:
+ * - A `User` message explicitly `@`-mentions the conversation manager and no non-manager `AI`
+ *   message has replied since (e.g. the user said `@Sage …` and Sage answered directly).
+ * - An `AI` message from the conversation manager was handed back from another `AI` message
+ *   (`ParentID` references an `AI` message, or the immediately preceding row is a non-manager `AI`
+ *   message in the same turn).
+ */
+export function FindContinuityAgentMessage<T extends ContinuityHistoryMessage>(
+    messages: readonly T[],
+    conversationManagerAgentId: string | null,
+    options?: {
+        conversationManagerName?: string | null;
+        isWithinFloor?: (msg: T) => boolean;
+        userMentionsManager?: (msg: T) => boolean;
+    }
+): T | null {
+    const normalizedManagerId = NormalizeUUID(conversationManagerAgentId ?? '');
+    const managerName = options?.conversationManagerName ?? 'Sage';
+    const byId = new Map<string, T>();
+    for (const m of messages) {
+        if (m.ID) {
+            byId.set(NormalizeUUID(m.ID), m);
+        }
+    }
+
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i];
+        if (options?.isWithinFloor && !options.isWithinFloor(msg)) {
+            continue;
+        }
+        if (msg.Role === 'AI' && msg.AgentID) {
+            const isManager = normalizedManagerId.length > 0 && UUIDsEqual(msg.AgentID, normalizedManagerId);
+            if (!isManager) {
+                return msg;
+            }
+            // Conversation manager AI row: check if it is a handback from another AI row
+            const parent = msg.ParentID ? byId.get(NormalizeUUID(msg.ParentID)) : undefined;
+            if (parent && parent.Role === 'AI') {
+                return null;
+            }
+            const prev = i > 0 ? messages[i - 1] : undefined;
+            if (
+                prev &&
+                prev.Role === 'AI' &&
+                prev.AgentID &&
+                !UUIDsEqual(prev.AgentID, normalizedManagerId)
+            ) {
+                return null;
+            }
+            continue;
+        }
+        if (msg.Role === 'User') {
+            const mentionsManager = options?.userMentionsManager
+                ? options.userMentionsManager(msg)
+                : MessageMentionsAgent(msg.Message, conversationManagerAgentId, managerName);
+            if (mentionsManager) {
+                return null;
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * Convenience wrapper around {@link FindContinuityAgentMessage} returning only the `AgentID`.
+ */
+export function FindContinuityAgentId<T extends ContinuityHistoryMessage>(
+    messages: readonly T[],
+    conversationManagerAgentId: string | null,
+    options?: {
+        conversationManagerName?: string | null;
+        isWithinFloor?: (msg: T) => boolean;
+        userMentionsManager?: (msg: T) => boolean;
+    }
+): string | null {
+    return FindContinuityAgentMessage(messages, conversationManagerAgentId, options)?.AgentID ?? null;
+}
+

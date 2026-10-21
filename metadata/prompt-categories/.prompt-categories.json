@@ -53,5 +53,15 @@
       "lastModified": "2026-07-01T17:33:35.483Z",
       "checksum": "fbe0f085bbf93eaecd34933637507d5e82cbdc559544c0b8ec998ea7ea7c8e74"
     }
+  },
+  {
+    "fields": {
+      "Name": "Video Studio",
+      "ParentID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Description": "System and stage prompts for the Video Studio agent and its sub-agents"
+    },
+    "primaryKey": {
+      "ID": "B8946C0F-CD37-4F94-AC52-34DFCD4A7006"
+    }
   }
 ]

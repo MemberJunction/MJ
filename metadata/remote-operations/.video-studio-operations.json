@@ -1,0 +1,24 @@
+[
+  {
+    "fields": {
+      "Name": "Video Studio Setup Health",
+      "OperationKey": "VideoStudio.SetupHealth",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Video Studio",
+      "Description": "Checks Video Studio setup readiness across file storage, the render worker, and stage prompt model credentials. Implemented by VideoStudioSetupHealthServerOperation in @memberjunction/video-studio.",
+      "InputTypeName": "VideoStudioSetupHealthInput",
+      "InputTypeDefinition": "@file:types/video-studio-setup-health.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "VideoStudioSetupHealthOutput",
+      "OutputTypeDefinition": "@file:types/video-studio-setup-health.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "717D8596-C0CF-4413-B793-82AD54791DBE"
+    }
+  }
+]

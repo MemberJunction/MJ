@@ -261,7 +261,7 @@ describe('MessageInputComponent — overlapping turns keep their own branch', ()
         const processMessage = vi.fn(async (): Promise<object> => chatResult('run-manager'));
         const invokeSubAgent = vi.fn(async () => chatResult('run-agent'));
         const findPreset = vi.fn(async (..._args: Parameters<ConversationAgentService['FindConfigurationPresetForAgent']>): Promise<string | undefined> => undefined);
-        const findLatestOutput = vi.fn(async () => null);
+        const findLatestOutput = vi.fn(async (..._args: Parameters<ConversationAgentService['FindLatestAgentOutputVersion']>): Promise<null> => null);
         const component = Object.create(MessageInputComponent.prototype) as MessageInputComponent;
         const open = component as unknown as Record<string, unknown>;
         const sent = new EventEmitter<TurnRow>();
@@ -303,7 +303,7 @@ describe('MessageInputComponent — overlapping turns keep their own branch', ()
         vi.restoreAllMocks();
     });
 
-    it("a manager turn's placeholder and delegated row stay on its fork when Main sends meanwhile", async () => {
+    it("a manager turn's placeholder row stays on its fork when Main sends meanwhile", async () => {
         const h = buildTurnHarness();
         const managerA = deferred<object>();
         h.processMessage.mockImplementationOnce(() => managerA.promise);
@@ -314,35 +314,31 @@ describe('MessageInputComponent — overlapping turns keep their own branch', ()
         await h.component.OnTextSubmitted('second, in Main');
         managerA.resolve({
             success: true,
-            agentRun: { ID: 'run-manager', FinalStep: 'Success', Message: 'Handing off' },
-            payload: { invokeAgent: 'Research', reasoning: 'research task' },
+            agentRun: { ID: 'run-manager', FinalStep: 'Chat', Message: 'Answered on fork T1' },
+            payload: {},
         });
         await turnA;
 
-        const [userA, placeholderA, userB, placeholderB, delegateA] = h.created;
-        expect(h.created).toHaveLength(5);
+        const [userA, placeholderA, userB, placeholderB] = h.created;
+        expect(h.created).toHaveLength(4);
         expect([userA.Role, userA.Message, userA.BranchID]).toEqual(['User', 'first, in fork T1', 'T1']);
-        expect([placeholderA.ParentID, placeholderA.BranchID]).toEqual([userA.ID, 'T1']);
+        expect([placeholderA.ParentID, placeholderA.BranchID, placeholderA.Message]).toEqual([userA.ID, 'T1', 'Answered on fork T1']);
         expect([userB.Role, userB.Message, userB.BranchID]).toEqual(['User', 'second, in Main', null]);
         expect([placeholderB.ParentID, placeholderB.BranchID]).toEqual([userB.ID, null]);
-        expect([delegateA.ParentID, delegateA.AgentID, delegateA.BranchID]).toEqual([placeholderA.ID, RESEARCH.ID, 'T1']);
-        // The delegate's history reads stay on turn A's fork too.
-        expect(h.findLatestOutput).toHaveBeenCalledWith('conv-1', RESEARCH.ID, null, 'T1');
-        expect(h.findPreset).toHaveBeenLastCalledWith('conv-1', RESEARCH.ID, 'T1');
     });
 
     it("a continuation's reply row stays on its fork when Main sends before the reply row exists", async () => {
         const earlier = new TurnRow('reply-earlier');
         earlier.AgentID = RESEARCH.ID;
         const h = buildTurnHarness([earlier]);
-        const presetA = deferred<string | undefined>();
-        h.findPreset.mockImplementationOnce(() => presetA.promise);
+        const outputA = deferred<null>();
+        h.findLatestOutput.mockImplementationOnce(() => outputA.promise);
 
         const turnA = h.component.OnTextSubmitted('first, in fork T1');
-        await vi.waitFor(() => expect(h.findPreset).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(h.findLatestOutput).toHaveBeenCalledTimes(1));
         h.open['TargetBranchID'] = null;
         await h.component.OnTextSubmitted('second, in Main');
-        presetA.resolve(undefined);
+        outputA.resolve(null);
         await turnA;
 
         const [userA, userB, replyB, replyA] = h.created;
@@ -350,7 +346,7 @@ describe('MessageInputComponent — overlapping turns keep their own branch', ()
         expect([userA.BranchID, userB.BranchID]).toEqual(['T1', null]);
         expect([replyB.ParentID, replyB.AgentID, replyB.BranchID]).toEqual([userB.ID, RESEARCH.ID, null]);
         expect([replyA.ParentID, replyA.AgentID, replyA.BranchID]).toEqual([userA.ID, RESEARCH.ID, 'T1']);
-        expect(h.findPreset.mock.calls.map(call => call[2])).toEqual(['T1', null]);
+        expect(h.findLatestOutput.mock.calls.map(call => call[3])).toEqual(['T1', null]);
     });
 });
 

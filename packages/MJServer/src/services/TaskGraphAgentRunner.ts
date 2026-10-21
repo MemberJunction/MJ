@@ -43,6 +43,25 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                     };
                 }
             }
+
+            let configurationId: string | undefined;
+            const requestedPreset = params.ConfigurationPresetName?.trim();
+            if (requestedPreset) {
+                const matched = AIEngine.Instance.FindActiveAgentConfigurationPreset(agent.ID, requestedPreset);
+                if (!matched) {
+                    const presets = AIEngine.Instance.GetAgentConfigurationPresets(agent.ID, true);
+                    const available = presets.map((p) => p.Name).join(', ') || 'none';
+                    return {
+                        Success: false,
+                        ErrorMessage: `Agent '${agent.Name || params.AgentID}' has no active preset '${requestedPreset}'. Available: ${available}.`,
+                    };
+                }
+                configurationId = matched.AIConfigurationID ?? undefined;
+            } else {
+                configurationId = parentRun?.ConfigurationID ?? undefined;
+            }
+
+            const parentAgentHierarchy = this.buildParentAgentHierarchy(parentRun, params);
             const taskContext = await this.resolveTaskContext(params);
             const conversationDetailId =
                 parentRun?.ConversationDetailID ?? taskContext.conversationDetailId ?? undefined;
@@ -66,6 +85,8 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 // rather than starting the chain over. Without it MAX_REINVOKE_DEPTH never fires.
                 continuationDepth: params.ContinuationDepth ?? 0,
                 parentRun,
+                parentAgentHierarchy,
+                configurationId,
                 // The bridge from the agent's own progress stream up to graph-level observers: the
                 // dispatcher turns these into rate-limited `NodeProgress` frames, which is how a
                 // running Agent step shows "what it is doing right now" on the workflow canvas.
@@ -219,6 +240,28 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             );
             return undefined;
         }
+    }
+
+    /**
+     * Reads the root-first ancestor agent name hierarchy carried on the task from when its graph was
+     * submitted (`params.ParentAgentHierarchy`), falling back to the submitting run's own agent name
+     * when no hierarchy was persisted on the parent task.
+     */
+    private buildParentAgentHierarchy(
+        parentRun: MJAIAgentRunEntityExtended | undefined,
+        params: TaskAgentRunParams,
+    ): string[] | undefined {
+        if (Array.isArray(params.ParentAgentHierarchy)) {
+            const carried = params.ParentAgentHierarchy
+                .filter((name): name is string => typeof name === 'string')
+                .map((name) => name.trim())
+                .filter((name) => name.length > 0);
+            if (carried.length > 0) {
+                return carried;
+            }
+        }
+        const submittingAgentName = parentRun?.Agent?.trim();
+        return submittingAgentName ? [submittingAgentName] : undefined;
     }
 
     /**

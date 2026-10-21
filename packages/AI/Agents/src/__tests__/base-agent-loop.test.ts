@@ -45,9 +45,11 @@ import { BaseAgentType } from '../agent-types/base-agent-type';
 // (its @RegisterClass decorator) so BaseAgentType.GetAgentTypeInstance resolves DriverClass
 // 'LoopAgentType'. A named-but-unreferenced import would be dropped by the TS transform.
 import '../agent-types/loop-agent-type';
+import { FlowAgentType } from '../agent-types/flow-agent-type';
+import { AgentRunner } from '../AgentRunner';
 import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type';
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
-import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended, MJAIAgentRunStepEntityExtended, AgentDecisionRequest, AgentFinishIf, BaseAgentNextStep, AgentChatMessage } from '@memberjunction/ai-core-plus';
+import { GetTaskGraphSubmitter, type TaskGraphSubmitter, type TaskGraphSpec, type AIPromptParams, type AIPromptRunResult, type ExecuteAgentParams, type MJAIAgentEntityExtended, type MJAIAgentRunStepEntityExtended, type AgentDecisionRequest, type AgentFinishIf, type BaseAgentNextStep, type AgentChatMessage } from '@memberjunction/ai-core-plus';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
@@ -66,6 +68,14 @@ import { UserCache } from '@memberjunction/generic-database-provider';
 // ============================================================================
 // Module mocks (boundaries only)
 // ============================================================================
+
+vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai-core-plus')>();
+    return {
+        ...actual,
+        GetTaskGraphSubmitter: vi.fn(() => actual.GetTaskGraphSubmitter()),
+    };
+});
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -356,6 +366,7 @@ class LoopHarness {
             GetAutoActivatableSkillsForAgent: (): unknown[] => [],
             GetSkillsForAgent: (): unknown[] => [],
             GetClientToolsForAgent: (): unknown[] => [],
+            GetAgentConfigurationPresets: (): unknown[] => [],
             GetAgentBaseCatalog: (agentId: string): unknown => this.catalog.get(agentId),
             SetAgentBaseCatalog: (agentId: string, cat: unknown): void => {
                 this.catalog.set(agentId, cat);
@@ -2626,6 +2637,7 @@ describe('BaseAgent.buildAgentBaseCatalog — relationship targets', () => {
             ],
             AgentActions: [],
             AgentTypes: [],
+            GetAgentConfigurationPresets: (): unknown[] => [],
         };
 
         const catalog = new HarnessAgent().ExposeBuildAgentBaseCatalog(
@@ -2637,6 +2649,536 @@ describe('BaseAgent.buildAgentBaseCatalog — relationship targets', () => {
         expect(catalog.subAgentCount).toBe(1);
         expect(catalog.subAgentDetails).toContain('Research Agent');
         expect(catalog.subAgentDetails).not.toContain('Skip');
+    });
+});
+
+describe('BaseAgent.Execute — Loop agent-type gates read the merged params (VS-SAGE-0)', () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000d7';
+    const CHILD_AGENT_ID = 'aaaaaaaa-5555-4000-8000-000000000001';
+    const FLOW_TYPE_ID = 'aaaaaaaa-5555-4000-8000-000000000002';
+    const FLOW_STEP_ID = 'aaaaaaaa-5555-4000-8000-000000000003';
+    const PARENT_TASK_ID = 'aaaaaaaa-5555-4000-8000-000000000004';
+
+    const twoNodeGraph = (): TaskGraphSpec => ({
+        workflowName: 'Quarterly review',
+        tasks: [
+            {
+                tempId: 'a',
+                name: 'Gather',
+                description: 'gather the data',
+                kind: 'Agent',
+                configuration: { agentName: 'Query Builder' },
+                dependsOn: [],
+            },
+            {
+                tempId: 'b',
+                name: 'Summarize',
+                description: 'summarize it',
+                kind: 'Agent',
+                configuration: { agentName: 'Sage' },
+                dependsOn: ['a'],
+            },
+        ],
+    });
+
+    const tasksEnvelope = (): LoopAgentResponse => ({
+        taskComplete: false,
+        reasoning: 'Schedule durable two-node task graph',
+        nextStep: {
+            type: 'Tasks',
+            tasks: twoNodeGraph(),
+        },
+    });
+
+    let submitSpy: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+        submitSpy = vi.fn().mockResolvedValue({
+            Success: true,
+            ParentTaskID: PARENT_TASK_ID,
+        });
+        vi.mocked(GetTaskGraphSubmitter).mockReturnValue({
+            Submit: submitSpy,
+        } as unknown as TaskGraphSubmitter);
+    });
+
+    afterEach(() => {
+        vi.mocked(GetTaskGraphSubmitter).mockReset();
+        vi.restoreAllMocks();
+    });
+
+    it('1. metadata-only gate: an agent with AgentTypePromptParams.enableTaskGraphs=true and nothing in data reaches executeTasksStep', async () => {
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(tasksEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ parentAgentHierarchy: ['Root Agent'] }));
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).toHaveBeenCalledTimes(1);
+        expect(submitSpy.mock.calls[0][0].Spec.workflowName).toBe('Quarterly review');
+        expect(submitSpy.mock.calls[0][0].ParentAgentHierarchy).toEqual(['Root Agent', 'Loop Test Agent']);
+        expect(harness.steps.map((s) => s.StepType)).toContain('TaskGraph');
+        expect(runner.Calls).toHaveLength(1);
+    });
+
+    it('2. withheld: the same metadata-enabled agent on a run that withholds task graphs is refused', async () => {
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(tasksEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT }));
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(harness.steps.map((s) => s.StepType)).not.toContain('TaskGraph');
+        expect(runner.Calls).toHaveLength(2);
+        const turn2Messages = (runner.Calls[1].conversationMessages ?? []).map((m) =>
+            typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        );
+        expect(turn2Messages.some((c) => /not enabled to emit task graphs/i.test(c))).toBe(true);
+    });
+
+    it('3. off: an agent without the flag in metadata is refused', async () => {
+        harness.agent = makeAgentRow();
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(tasksEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(harness.steps.map((s) => s.StepType)).not.toContain('TaskGraph');
+        expect(runner.Calls).toHaveLength(2);
+        const turn2Messages = (runner.Calls[1].conversationMessages ?? []).map((m) =>
+            typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        );
+        expect(turn2Messages.some((c) => /not enabled to emit task graphs/i.test(c))).toBe(true);
+    });
+
+    it("4. a sub-agent's data never carries the parent's merged params", async () => {
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const childRow = {
+            ...makeAgentRow({ ID: CHILD_AGENT_ID, Name: 'Child Worker' }),
+            ParentID: AGENT_ID,
+            Status: 'Active',
+            ExposeAsAction: false,
+            PayloadDownstreamPaths: '["*"]',
+            PayloadUpstreamPaths: '["*"]',
+        };
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [childRow],
+            GetSubAgents: () => [childRow],
+        });
+
+        const runAgentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValue({
+            success: true,
+            payload: {},
+            agentRun: { ID: 'aaaaaaaa-6666-4000-8000-000000000001', Status: 'Completed' } as unknown as MJAIAgentRunStepEntityExtended['AgentRun'],
+        } as unknown as Awaited<ReturnType<AgentRunner['RunAgent']>>);
+
+        const { agent } = makeAgent([
+            () =>
+                llmEnvelope({
+                    taskComplete: false,
+                    reasoning: 'Delegate to Child Worker',
+                    nextStep: {
+                        type: 'Sub-Agent',
+                        subAgent: {
+                            name: 'Child Worker',
+                            message: 'Do sub-work',
+                            terminateAfter: true,
+                        },
+                    },
+                }),
+        ]);
+
+        const callerData = { callerKey: 'keep-me' };
+        const runParams = makeParams({ data: callerData });
+        const result = await agent.Execute(runParams);
+
+        expect(result.success).toBe(true);
+        expect(callerData).toEqual({ callerKey: 'keep-me' });
+        expect(runParams.data).toBe(callerData);
+        expect(runAgentSpy).toHaveBeenCalledTimes(1);
+        const childParams = runAgentSpy.mock.calls[0][0];
+        expect(childParams.data).toEqual({ callerKey: 'keep-me' });
+        expect(childParams.data).not.toHaveProperty('__agentTypePromptParams');
+    });
+
+    it("5. a Flow agent's DetermineNextStep gets the run's params object unchanged", async () => {
+        const flowAgent = makeAgentRow({
+            TypeID: FLOW_TYPE_ID,
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        harness.agent = flowAgent;
+        const flowStep = {
+            ID: FLOW_STEP_ID,
+            AgentID: AGENT_ID,
+            Name: 'Flow Prompt Step',
+            Description: 'Run prompt',
+            StepType: 'Prompt',
+            StartingStep: true,
+            Status: 'Active',
+            SubAgentID: null,
+            PromptID: CHILD_PROMPT_ID,
+            ActionID: null,
+            ActionInputMapping: null,
+            ActionOutputMapping: null,
+            Configuration: null,
+            LoopBodyType: null,
+            PositionX: 0,
+            PositionY: 0,
+        };
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            AgentTypes: [
+                ...(baseEngine.AgentTypes as unknown[]),
+                {
+                    ID: FLOW_TYPE_ID,
+                    Name: 'Flow',
+                    DriverClass: 'FlowAgentType',
+                    SystemPromptID: SYS_PROMPT_ID,
+                    AgentPromptPlaceholder: '_AGENT_PROMPT_',
+                    PromptParamsSchema: null,
+                    DefaultStorageAccountID: null,
+                },
+            ],
+            GetAgentSteps: () => [flowStep],
+            GetAgentStepByID: (id: string) => (id === FLOW_STEP_ID ? flowStep : null),
+            GetPathsFromStep: () => [],
+        });
+
+        const determineSpy = vi.spyOn(FlowAgentType.prototype, 'DetermineNextStep');
+        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const callerData = { flowConditionKey: 'present' };
+        const runParams = makeParams({
+            agent: flowAgent as unknown as MJAIAgentEntityExtended,
+            data: callerData,
+            agentTypeParams: { executionMode: 'inRun' },
+        });
+
+        const determineStepSpy = vi.spyOn(
+            agent as unknown as { determineNextStep: (...args: unknown[]) => unknown },
+            'determineNextStep',
+        );
+        const result = await agent.Execute(runParams);
+
+        expect(result.success).toBe(true);
+        expect(determineStepSpy).toHaveBeenCalledTimes(1);
+        expect(determineSpy).toHaveBeenCalledTimes(1);
+        const runLevelParams = determineStepSpy.mock.calls[0][0] as ExecuteAgentParams;
+        const passedParams = determineSpy.mock.calls[0][1];
+        expect(passedParams).toBe(runLevelParams);
+        expect(passedParams.data).toBe(callerData);
+        expect(passedParams.data).toEqual({ flowConditionKey: 'present' });
+    });
+});
+
+describe('BaseAgent.Execute — single-node task-graph fold vs unfold (VS-SAGE-4)', () => {
+    const UNRELATED_AGENT_ID = 'aaaaaaaa-7777-4000-8000-000000000001';
+    const CHILD_AGENT_ID = 'aaaaaaaa-7777-4000-8000-000000000002';
+    const RELATED_AGENT_ID = 'aaaaaaaa-7777-4000-8000-000000000003';
+    const SKILL_GRANTED_AGENT_ID = 'aaaaaaaa-7777-4000-8000-000000000004';
+    const PARENT_TASK_ID = 'aaaaaaaa-7777-4000-8000-000000000005';
+
+    const singleNodeGraph = (agentName: string): TaskGraphSpec => ({
+        workflowName: `Single-node ${agentName}`,
+        tasks: [
+            {
+                tempId: 'only',
+                name: `Run ${agentName}`,
+                description: `Delegate to ${agentName}`,
+                kind: 'Agent',
+                configuration: { agentName },
+                dependsOn: [],
+            },
+        ],
+    });
+
+    const singleNodeTasksEnvelope = (agentName: string): LoopAgentResponse => ({
+        taskComplete: false,
+        reasoning: `Emit single-node graph for ${agentName}`,
+        nextStep: {
+            type: 'Tasks',
+            tasks: singleNodeGraph(agentName),
+        },
+    });
+
+    let submitSpy: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+        vi.mocked(LogStatus).mockClear();
+        submitSpy = vi.fn().mockResolvedValue({
+            Success: true,
+            ParentTaskID: PARENT_TASK_ID,
+        });
+        vi.mocked(GetTaskGraphSubmitter).mockReturnValue({
+            Submit: submitSpy,
+        } as unknown as TaskGraphSubmitter);
+    });
+
+    afterEach(() => {
+        vi.mocked(GetTaskGraphSubmitter).mockReset();
+        vi.restoreAllMocks();
+    });
+
+    it('unfolds a single-node graph naming an unrelated root agent and submits durably without a Retry', async () => {
+        harness.agent = makeAgentRow({
+            Name: 'Sage',
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const unrelatedRoot = {
+            ...makeAgentRow({ ID: UNRELATED_AGENT_ID, Name: 'Marketing Agent' }),
+            ParentID: null,
+            Status: 'Active',
+        };
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [harness.agent, unrelatedRoot],
+            AgentRelationships: [],
+            GetSubAgents: () => [],
+        });
+
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('Marketing Agent')),
+            () => llmEnvelope(successEnvelope('should not reach second prompt turn')),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).toHaveBeenCalledTimes(1);
+        expect(submitSpy.mock.calls[0][0].Spec.workflowName).toBe('Single-node Marketing Agent');
+        expect(runner.Calls).toHaveLength(1);
+        expect((agent as unknown as { _generalValidationRetryCount: number })._generalValidationRetryCount).toBe(0);
+        const taskGraphSteps = harness.steps.filter((s) => s.StepType === 'TaskGraph');
+        expect(taskGraphSteps).toHaveLength(1);
+        expect(JSON.parse(taskGraphSteps[0].InputData ?? '{}')).toMatchObject({ folded: false });
+        const statusLogs = vi.mocked(LogStatus).mock.calls.map((c) => String(c[0]));
+        expect(statusLogs.some((m) => m.includes('target is not a sub-agent of Sage; submitting durably'))).toBe(true);
+    });
+
+    it('falls through to "not found or not active" Retry when a single-node graph names an unknown agent', async () => {
+        harness.agent = makeAgentRow({
+            Name: 'Sage',
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [harness.agent],
+            AgentRelationships: [],
+            GetSubAgents: () => [],
+        });
+
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('NonExistent Specialist')),
+            () => llmEnvelope(successEnvelope('Recovered after retry')),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(runner.Calls).toHaveLength(2);
+        expect((agent as unknown as { _generalValidationRetryCount: number })._generalValidationRetryCount).toBe(1);
+        const secondCallText = JSON.stringify(runner.Calls[1].conversationMessages);
+        expect(secondCallText).toContain("Sub-agent 'NonExistent Specialist' not found or not active");
+    });
+
+    it('falls through to "not found or not active" Retry when a single-node graph uses a different case for an Active root agent', async () => {
+        harness.agent = makeAgentRow({
+            Name: 'Sage',
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const activeRootAgent = {
+            ...makeAgentRow({ ID: UNRELATED_AGENT_ID, Name: 'Marketing Agent' }),
+            ParentID: null,
+            Status: 'Active',
+        };
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [harness.agent, activeRootAgent],
+            AgentRelationships: [],
+            GetSubAgents: () => [],
+        });
+
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('marketing agent')),
+            () => llmEnvelope(successEnvelope('Recovered after case-variant retry')),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(runner.Calls).toHaveLength(2);
+        expect((agent as unknown as { _generalValidationRetryCount: number })._generalValidationRetryCount).toBe(1);
+        const secondCallText = JSON.stringify(runner.Calls[1].conversationMessages);
+        expect(secondCallText).toContain("Sub-agent 'marketing agent' not found or not active");
+    });
+
+    it('falls through to "not found or not active" Retry when a single-node graph names a Disabled agent', async () => {
+        harness.agent = makeAgentRow({
+            Name: 'Sage',
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const disabledRootAgent = {
+            ...makeAgentRow({ ID: UNRELATED_AGENT_ID, Name: 'Marketing Agent' }),
+            ParentID: null,
+            Status: 'Disabled',
+        };
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [harness.agent, disabledRootAgent],
+            AgentRelationships: [],
+            GetSubAgents: () => [],
+        });
+
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('Marketing Agent')),
+            () => llmEnvelope(successEnvelope('Recovered after disabled-agent retry')),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(runner.Calls).toHaveLength(2);
+        expect((agent as unknown as { _generalValidationRetryCount: number })._generalValidationRetryCount).toBe(1);
+        const secondCallText = JSON.stringify(runner.Calls[1].conversationMessages);
+        expect(secondCallText).toContain("Sub-agent 'Marketing Agent' not found or not active");
+    });
+
+    it('keeps a single-node graph folded in-run when targeting a ParentID child, relationship target, or skill-granted sub-agent', async () => {
+        // 1) ParentID child
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const childRow = {
+            ...makeAgentRow({ ID: CHILD_AGENT_ID, Name: 'Child Sub-Agent' }),
+            ParentID: AGENT_ID,
+            Status: 'Active',
+            ExposeAsAction: false,
+            PayloadDownstreamPaths: '["*"]',
+            PayloadUpstreamPaths: '["*"]',
+        };
+        const baseEngine1 = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine1,
+            Agents: [harness.agent, childRow],
+            AgentRelationships: [],
+            GetSubAgents: () => [childRow],
+        });
+        const runAgentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValue({
+            success: true,
+            payload: {},
+            agentRun: { ID: 'aaaaaaaa-6666-4000-8000-000000000011', Status: 'Completed' } as unknown as MJAIAgentRunStepEntityExtended['AgentRun'],
+        } as unknown as Awaited<ReturnType<AgentRunner['RunAgent']>>);
+
+        const childRun = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('Child Sub-Agent')),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const childResult = await childRun.agent.Execute(makeParams());
+        expect(childResult.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(runAgentSpy).toHaveBeenCalledTimes(1);
+        expect(harness.steps.find((s) => s.StepType === 'TaskGraph')?.StepName).toContain('Task Graph (folded)');
+
+        // 2) Relationship target
+        harness = new LoopHarness();
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const relatedRow = {
+            ...makeAgentRow({ ID: RELATED_AGENT_ID, Name: 'Related Sub-Agent' }),
+            ParentID: null,
+            Status: 'Active',
+            ExposeAsAction: false,
+        };
+        const relationshipRow = {
+            ID: 'aaaaaaaa-7777-4000-8000-000000000099',
+            AgentID: AGENT_ID,
+            SubAgentID: RELATED_AGENT_ID,
+            Status: 'Active',
+            SubAgentOutputMapping: null,
+            SubAgentInputMapping: null,
+            SubAgentContextPaths: null,
+        };
+        const baseEngine2 = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine2,
+            Agents: [harness.agent, relatedRow],
+            AgentRelationships: [relationshipRow],
+            GetSubAgents: () => [relatedRow],
+        });
+        runAgentSpy.mockClear();
+
+        const relatedRun = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('Related Sub-Agent')),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const relatedResult = await relatedRun.agent.Execute(makeParams());
+        expect(relatedResult.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(runAgentSpy).toHaveBeenCalledTimes(1);
+        expect(harness.steps.find((s) => s.StepType === 'TaskGraph')?.StepName).toContain('Task Graph (folded)');
+
+        // 3) Skill-granted / runtime subAgentChanges sub-agent
+        harness = new LoopHarness();
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const skillGrantedRow = {
+            ...makeAgentRow({ ID: SKILL_GRANTED_AGENT_ID, Name: 'Skill Granted Agent' }),
+            ParentID: null,
+            Status: 'Active',
+            ExposeAsAction: false,
+            PayloadDownstreamPaths: '["*"]',
+            PayloadUpstreamPaths: '["*"]',
+        };
+        const baseEngine3 = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine3,
+            Agents: [harness.agent, skillGrantedRow],
+            AgentRelationships: [],
+            GetSubAgents: () => [],
+        });
+        runAgentSpy.mockClear();
+
+        const skillRun = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('Skill Granted Agent')),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const skillResult = await skillRun.agent.Execute(
+            makeParams({
+                subAgentChanges: [{ scope: 'root', mode: 'add', subAgentIds: [SKILL_GRANTED_AGENT_ID] }],
+            }),
+        );
+        expect(skillResult.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(runAgentSpy).toHaveBeenCalledTimes(1);
+        expect(harness.steps.find((s) => s.StepType === 'TaskGraph')?.StepName).toContain('Task Graph (folded)');
     });
 });
 

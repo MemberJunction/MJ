@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /*  Hoisted mocks                                                     */
 /* ------------------------------------------------------------------ */
 const mockConvert = vi.hoisted(() => vi.fn());
+const mockConvertWithTimestamps = vi.hoisted(() => vi.fn());
 const mockGetAllVoices = vi.hoisted(() => vi.fn());
 const mockListModels = vi.hoisted(() => vi.fn());
 const mockListDictionaries = vi.hoisted(() => vi.fn());
@@ -11,7 +12,7 @@ const mockListDictionaries = vi.hoisted(() => vi.fn());
 vi.mock('@elevenlabs/elevenlabs-js', () => {
   return {
     ElevenLabsClient: class MockElevenLabsClient {
-      textToSpeech = { convert: mockConvert };
+      textToSpeech = { convert: mockConvert, convertWithTimestamps: mockConvertWithTimestamps };
       voices = { getAll: mockGetAllVoices };
       models = { list: mockListModels };
       pronunciationDictionaries = { list: mockListDictionaries };
@@ -35,6 +36,7 @@ vi.mock('@memberjunction/ai', () => {
     content: string = '';
     success: boolean = false;
     errorMessage: string = '';
+    Alignment?: { Characters: string[]; StartSeconds: number[]; EndSeconds: number[] };
   }
   class MockVoiceInfo {
     id: string = '';
@@ -79,6 +81,9 @@ vi.mock('@memberjunction/ai', () => {
     VoiceInfo: MockVoiceInfo,
     AudioModel: MockAudioModel,
     PronounciationDictionary: MockPronounciationDictionary,
+    ThrowIfAborted: vi.fn(),
+    IsRequestAborted: vi.fn().mockReturnValue(false),
+    BuildCancellationErrorInfo: vi.fn(),
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
   };
 });
@@ -222,6 +227,96 @@ describe('ElevenLabsAudioGenerator', () => {
       mockListDictionaries.mockRejectedValueOnce(new Error('API error'));
       const dicts = await audio.GetPronounciationDictionaries();
       expect(dicts).toEqual([]);
+    });
+  });
+
+  /* ---- CreateSpeech ---- */
+  describe('CreateSpeech', () => {
+    function streamFromBytes(bytes: Uint8Array): ReadableStream<Uint8Array> {
+      return new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(bytes);
+          controller.close();
+        },
+      });
+    }
+
+    it('calls convert and leaves Alignment undefined when IncludeTimestamps is omitted or false', async () => {
+      const sampleBytes = new Uint8Array([10, 20, 30, 40]);
+      mockConvert.mockResolvedValueOnce(streamFromBytes(sampleBytes));
+
+      const result = await audio.CreateSpeech({
+        voice: 'voice-1',
+        text: 'Hello there',
+        model_id: 'eleven_monolingual_v1',
+      });
+
+      expect(mockConvert).toHaveBeenCalledTimes(1);
+      expect(mockConvertWithTimestamps).not.toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(Buffer.from(sampleBytes));
+      expect(result.content).toBe(Buffer.from(sampleBytes).toString('base64'));
+      expect(result.Alignment).toBeUndefined();
+    });
+
+    it('calls convertWithTimestamps and populates Alignment when IncludeTimestamps is true', async () => {
+      const audioBase64 = Buffer.from([1, 2, 3, 4, 5]).toString('base64');
+      mockConvertWithTimestamps.mockResolvedValueOnce({
+        audioBase64,
+        alignment: {
+          characters: ['H', 'i', ' ', 'M', 'J'],
+          characterStartTimesSeconds: [0, 0.08, 0.16, 0.22, 0.3],
+          characterEndTimesSeconds: [0.08, 0.16, 0.22, 0.3, 0.42],
+        },
+      });
+
+      const result = await audio.CreateSpeech({
+        voice: 'voice-1',
+        text: 'Hi MJ',
+        model_id: 'eleven_multilingual_v2',
+        IncludeTimestamps: true,
+      });
+
+      expect(mockConvertWithTimestamps).toHaveBeenCalledTimes(1);
+      expect(mockConvertWithTimestamps.mock.calls[0][0]).toBe('voice-1');
+      expect(mockConvertWithTimestamps.mock.calls[0][1]).toMatchObject({
+        text: 'Hi MJ',
+        modelId: 'eleven_multilingual_v2',
+      });
+      expect(mockConvert).not.toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.content).toBe(audioBase64);
+      expect(result.data).toEqual(Buffer.from(audioBase64, 'base64'));
+      expect(result.Alignment).toEqual({
+        Characters: ['H', 'i', ' ', 'M', 'J'],
+        StartSeconds: [0, 0.08, 0.16, 0.22, 0.3],
+        EndSeconds: [0.08, 0.16, 0.22, 0.3, 0.42],
+      });
+    });
+
+    it('falls back to normalizedAlignment when alignment is absent on convertWithTimestamps response', async () => {
+      const audioBase64 = Buffer.from([7, 8, 9]).toString('base64');
+      mockConvertWithTimestamps.mockResolvedValueOnce({
+        audioBase64,
+        normalizedAlignment: {
+          characters: ['1', '0'],
+          characterStartTimesSeconds: [0, 0.1],
+          characterEndTimesSeconds: [0.1, 0.25],
+        },
+      });
+
+      const result = await audio.CreateSpeech({
+        voice: 'voice-1',
+        text: '10',
+        IncludeTimestamps: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.Alignment).toEqual({
+        Characters: ['1', '0'],
+        StartSeconds: [0, 0.1],
+        EndSeconds: [0.1, 0.25],
+      });
     });
   });
 });

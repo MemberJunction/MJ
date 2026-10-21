@@ -78,6 +78,7 @@ import {
     ResolveGraphDecisions,
     StillHoldingDecisionOutput,
     type TaskDecisionStepConfiguration,
+    type TaskStepConfiguration,
 } from './decision-node';
 import { AIDecisionTaskRunner } from './AIDecisionTaskRunner';
 import { HumanTaskSQL, IsHumanTask } from './task-predicates';
@@ -275,6 +276,7 @@ interface GlobalUserCacheLookup {
 type GraphContext = {
     Depth: number;
     SubmittingAgentRunID: string | null;
+    ParentAgentHierarchy?: string[];
     /**
      * The submitting invocation's `data` / `context` — an input mapping's roots of the same names,
      * as in the in-run walker (R3-3). Empty when the graph was submitted without one.
@@ -1899,6 +1901,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         let submittingAgentRunID: string | null = null;
         let invocation: { data?: unknown; context?: unknown } = {};
         let submittedByUserID: string | null | undefined = task.UserID;
+        let parentAgentHierarchy: string[] | undefined = undefined;
 
         if (task.ParentID && prehydrated && (prehydrated.parentMetadata || prehydrated.parentTask)) {
             const parent = prehydrated.parentTask ?? null;
@@ -1918,6 +1921,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
                     depth = meta.reinvokeDepth + 1;
                     submittingAgentRunID = parent.AgentRunID;
+                    parentAgentHierarchy = meta.parentAgentHierarchy;
                     invocation = { data: meta.invocation?.data, context: meta.invocation?.context };
                     submittedByUserID = meta.submittedByUserID ?? parent.UserID ?? task.UserID;
                 }
@@ -1932,6 +1936,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         return {
             Depth: depth,
             SubmittingAgentRunID: submittingAgentRunID,
+            ParentAgentHierarchy: parentAgentHierarchy,
             Invocation: invocation,
             ExecutionUser: executionUser,
         };
@@ -3946,6 +3951,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 DependencyOutputs: dependencyOutputs,
                 ContinuationDepth: graphContext.Depth,
                 SubmittingAgentRunID: graphContext.SubmittingAgentRunID,
+                ...(graphContext.ParentAgentHierarchy ? { ParentAgentHierarchy: graphContext.ParentAgentHierarchy } : {}),
                 Provider: provider,
                 ContextUser: graphContext.ExecutionUser,
             }), agentInput);
@@ -4098,6 +4104,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         resolvedContext?: GraphContext,
     ): Promise<TaskBodyOutcome> {
         const context = resolvedContext ?? await this.graphContext(provider, task);
+        const presetName = (task.ConfigurationObject as TaskStepConfiguration | null)?.agent?.presetName?.trim() || undefined;
         return this.agentRunner.RunAgentForTask({
             TaskID: task.ID,
             AgentID: task.AgentID!,
@@ -4105,6 +4112,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             DependencyOutputs: dependencyOutputs,
             ContinuationDepth: context.Depth,
             SubmittingAgentRunID: context.SubmittingAgentRunID,
+            ...(context.ParentAgentHierarchy ? { ParentAgentHierarchy: context.ParentAgentHierarchy } : {}),
+            ...(presetName ? { ConfigurationPresetName: presetName } : {}),
             Provider: provider,
             ContextUser: context.ExecutionUser,
             OnProgress: onProgress,

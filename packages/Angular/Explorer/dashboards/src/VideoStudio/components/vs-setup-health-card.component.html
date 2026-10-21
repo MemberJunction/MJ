@@ -1,0 +1,128 @@
+<div
+  class="vs-health-card"
+  [class.vs-health-card--healthy]="IsHealthy && NonOkChecks.length === 0"
+  [class.vs-health-card--warning]="IsHealthy && NonOkChecks.length > 0"
+  [class.vs-health-card--unhealthy]="Result !== null && !Result.Healthy"
+  role="status"
+  aria-live="polite"
+  data-testid="vs-setup-health-card"
+>
+  <div class="vs-health-card__bar">
+    @if (Loading && !Result) {
+      <div class="vs-health-card__summary" data-testid="vs-setup-health-loading">
+        <i class="fa-solid fa-spinner fa-spin vs-health-card__icon vs-health-card__icon--muted" aria-hidden="true"></i>
+        <span class="vs-health-card__summary-text">Checking Video Studio setup…</span>
+      </div>
+    } @else if (IsHealthy) {
+      <button
+        type="button"
+        class="vs-health-card__toggle"
+        data-testid="vs-setup-health-ok-toggle"
+        [attr.aria-expanded]="Expanded"
+        (click)="ToggleExpanded()"
+      >
+        <i class="fa-solid fa-circle-check vs-health-card__icon vs-health-card__icon--ok" aria-hidden="true"></i>
+        <span class="vs-health-card__summary-text" data-testid="vs-setup-health-ok-label">Setup OK</span>
+        <i
+          class="fa-solid vs-health-card__chevron"
+          [class.fa-chevron-down]="!Expanded"
+          [class.fa-chevron-up]="Expanded"
+          aria-hidden="true"
+        ></i>
+      </button>
+    } @else if (Result) {
+      <div class="vs-health-card__summary" data-testid="vs-setup-health-issues-heading">
+        <i class="fa-solid fa-circle-exclamation vs-health-card__icon vs-health-card__icon--error" aria-hidden="true"></i>
+        <span class="vs-health-card__summary-text">Setup needs attention</span>
+      </div>
+    }
+
+    <button
+      mjButton
+      variant="flat"
+      size="sm"
+      type="button"
+      class="vs-health-card__recheck"
+      data-testid="vs-setup-health-recheck"
+      [disabled]="Loading"
+      (click)="OnRecheckClick()"
+    >
+      <i
+        class="fa-solid fa-rotate-right"
+        [class.fa-spin]="Loading"
+        aria-hidden="true"
+      ></i>
+      <span>Recheck</span>
+    </button>
+  </div>
+
+  @if (Result && NonOkChecks.length > 0) {
+    <div class="vs-health-card__checks" data-testid="vs-setup-health-non-ok-list">
+      @for (check of NonOkChecks; track check.Key) {
+        <div
+          class="vs-health-card__row"
+          [class.vs-health-card__row--error]="check.Status === 'Error'"
+          [class.vs-health-card__row--warning]="check.Status === 'Warning'"
+          [attr.data-testid]="'vs-setup-health-row-' + check.Key"
+          [attr.data-status]="check.Status"
+        >
+          <i
+            [class]="IconForStatus(check.Status) + ' vs-health-card__icon vs-health-card__icon--' + check.Status.toLowerCase()"
+            aria-hidden="true"
+          ></i>
+          <div class="vs-health-card__row-body">
+            <div class="vs-health-card__row-header">
+              <span class="vs-health-card__row-title" [attr.data-testid]="'vs-setup-health-title-' + check.Key">
+                {{ check.Title }}
+              </span>
+              <span class="vs-health-card__row-message" [attr.data-testid]="'vs-setup-health-message-' + check.Key">
+                {{ check.Message }}
+              </span>
+            </div>
+            @if (check.Action) {
+              <div class="vs-health-card__row-action" [attr.data-testid]="'vs-setup-health-action-' + check.Key">
+                {{ check.Action }}
+              </div>
+            }
+            @if (check.Details && check.Details.length > 0) {
+              <ul class="vs-health-card__details" [attr.data-testid]="'vs-setup-health-details-' + check.Key">
+                @for (detail of check.Details; track detail) {
+                  <li>{{ detail }}</li>
+                }
+              </ul>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  @if (IsHealthy && Expanded) {
+    <div class="vs-health-card__expanded" data-testid="vs-setup-health-expanded-details">
+      @for (check of Checks; track check.Key) {
+        <div
+          class="vs-health-card__detail-item"
+          [attr.data-testid]="'vs-setup-health-expanded-' + check.Key"
+        >
+          <i
+            [class]="IconForStatus(check.Status) + ' vs-health-card__icon vs-health-card__icon--' + check.Status.toLowerCase()"
+            aria-hidden="true"
+          ></i>
+          <div class="vs-health-card__row-body">
+            <div class="vs-health-card__row-header">
+              <span class="vs-health-card__row-title">{{ check.Title }}:</span>
+              <span class="vs-health-card__row-message">{{ check.Message }}</span>
+            </div>
+            @if (check.Details && check.Details.length > 0) {
+              <ul class="vs-health-card__details">
+                @for (detail of check.Details; track detail) {
+                  <li>{{ detail }}</li>
+                }
+              </ul>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

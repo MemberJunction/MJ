@@ -35,6 +35,7 @@ const shipped = [
     '.picture-from-the-data.json',
     '.duplicate-decision.json',
     '.assistant-reply.json',
+    '.video-production-quality.json',
 ];
 
 describe('shipped rubric metadata', () => {
@@ -171,4 +172,65 @@ describe('shipped rubric metadata', () => {
         expect(named).toContain('Rubric Judge - Sage');
         expect(named).toContain('Rubric Judge - Database Research Agent');
     });
+
+    it('pins the Video Production Quality rubric criteria, gates, NotApplicablePolicy, and integrity guidance', () => {
+        const rubric = JSON.parse(readFileSync(join(root, 'rubrics/.video-production-quality.json'), 'utf8'));
+        expect(rubric.fields.Name).toBe('Video Production Quality');
+        expect(rubric.fields.Status).toBe('Active');
+
+        const version = rubric.relatedEntities['MJ: Rubric Versions'][0];
+        expect(version.fields.PassThreshold).toBe(0.7);
+        expect(version.fields.NotApplicablePolicy).toBe('NotAllowed');
+
+        interface CriterionRow {
+            fields: {
+                Key: string;
+                Name: string;
+                Sequence: number;
+                IsGate: boolean;
+                GateMinimumScore?: number;
+                NotApplicablePolicy: string;
+                Guidance: string;
+            };
+        }
+        const criteria = version.relatedEntities['MJ: Rubric Criteria'] as CriterionRow[];
+        expect(criteria.map(c => c.fields.Sequence)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+        expect(criteria.map(c => c.fields.Key)).toEqual([
+            'hook-lands-in-the-first-two-seconds',
+            'readable-at-phone-size',
+            'type-and-color-stay-consistent',
+            'motion-has-weight-and-a-clear-focus',
+            'sound-is-in-sync-with-the-picture',
+            'stays-on-brand',
+            'shown-values-match-the-data-snapshot',
+            'final-frame-works-as-a-poster',
+            'generated-assets-are-honest-and-disclosed',
+        ]);
+
+        const gates = criteria.filter(c => c.fields.IsGate);
+        expect(gates.map(c => c.fields.Key)).toEqual([
+            'shown-values-match-the-data-snapshot',
+            'generated-assets-are-honest-and-disclosed',
+        ]);
+        for (const gate of gates) {
+            expect(gate.fields.GateMinimumScore).toBe(0.6);
+        }
+
+        const excludeAndRedistribute = criteria.filter(
+            c => c.fields.NotApplicablePolicy === 'ExcludeAndRedistribute'
+        );
+        expect(excludeAndRedistribute.map(c => c.fields.Key)).toEqual([
+            'sound-is-in-sync-with-the-picture',
+            'shown-values-match-the-data-snapshot',
+            'generated-assets-are-honest-and-disclosed',
+        ]);
+
+        const integrity = criteria.find(
+            c => c.fields.Key === 'generated-assets-are-honest-and-disclosed'
+        );
+        expect(integrity?.fields.Guidance).toContain('real member');
+        expect(integrity?.fields.Guidance).toContain('look-alike logo');
+        expect(integrity?.fields.Guidance).toContain('human-review notes');
+    });
 });
+

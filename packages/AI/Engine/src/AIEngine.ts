@@ -28,7 +28,8 @@ import { MJAIActionEntity, MJActionEntity,
          MJAIAgentClientToolEntity, MJAIAgentCategoryEntity, IsInjectableNoteStatus,
          MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity, MJAISkillPermissionEntity,
          MJAIPersonaEntity, MJAIPersonaVendorEntity, MJAIModelPersonaEntity, MJAIAgentPersonaEntity } from "@memberjunction/core-entities";
-import { AIEngineBase, ResolvedModelPersona, ResolvedAgentPersona, EffectiveAgentPersona, EffectiveAgentPermissions, UserRunnableAgentSummary } from "@memberjunction/ai-engine-base";
+import { AIEngineBase, ResolvedModelPersona, ResolvedAgentPersona, EffectiveAgentPersona, EffectiveAgentPermissions, AgentStorageAccountResolution, AgentStorageAccountSource, UserRunnableAgentSummary } from "@memberjunction/ai-engine-base";
+export type { AgentStorageAccountResolution, AgentStorageAccountSource, UserRunnableAgentSummary } from "@memberjunction/ai-engine-base";
 import { ReadStoredVector, SimpleVectorService, VectorInputEntry } from "@memberjunction/ai-vectors-memory";
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
@@ -148,10 +149,11 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     private _agentCatalogListenerSetUp: boolean = false;
     /** Entities whose change must coarse-invalidate the agent base-catalog cache (lowercased). */
     private static readonly agentCatalogInvalidatingEntities: ReadonlySet<string> = new Set([
-        'ai agents',
+        'mj: ai agents',
         'mj: ai agent actions',
         'mj: ai agent relationships',
         'mj: ai agent types',
+        'mj: ai agent configurations',
         'mj: ai agent permissions',
     ]);
 
@@ -288,6 +290,13 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get ClientToolDefinitions(): MJAIClientToolDefinitionEntity[] { return this.Base.ClientToolDefinitions; }
     public get AgentClientTools(): MJAIAgentClientToolEntity[] { return this.Base.AgentClientTools; }
     public GetClientToolsForAgent(agentId: string): MJAIClientToolDefinitionEntity[] { return this.Base.GetClientToolsForAgent(agentId); }
+    /** Agent storage-account routing with source tier — see {@link AIEngineBase.ResolveAgentStorageAccount}. */
+    public ResolveAgentStorageAccount(
+        agent: Parameters<AIEngineBase['ResolveAgentStorageAccount']>[0],
+        overrideStorageAccountId?: string | null
+    ): AgentStorageAccountResolution {
+        return this.Base.ResolveAgentStorageAccount(agent, overrideStorageAccountId);
+    }
     /** Agent storage-account routing — see {@link AIEngineBase.ResolveAgentStorageAccountID}. */
     public ResolveAgentStorageAccountID(
         agent: Parameters<AIEngineBase['ResolveAgentStorageAccountID']>[0],
@@ -432,6 +441,19 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     }
     public GetAgentConfigurationPresetByName(agentId: string, presetName: string): MJAIAgentConfigurationEntity | undefined {
         return this.Base.GetAgentConfigurationPresetByName(agentId, presetName);
+    }
+    /**
+     * Finds an active configuration preset for `agentId` matching `presetName` by `Name` first,
+     * then `DisplayName` (both trimmed and case-insensitive).
+     */
+    public FindActiveAgentConfigurationPreset(agentId: string, presetName: string): MJAIAgentConfigurationEntity | undefined {
+        const target = presetName.trim().toLowerCase();
+        if (!target) {
+            return undefined;
+        }
+        const presets = this.GetAgentConfigurationPresets(agentId, true);
+        return presets.find((p) => p.Name?.trim().toLowerCase() === target)
+            ?? presets.find((p) => p.DisplayName?.trim().toLowerCase() === target);
     }
     public AgenteNoteTypeIDByName(agentNoteTypeName: string): string {
         return this.Base.AgenteNoteTypeIDByName(agentNoteTypeName);

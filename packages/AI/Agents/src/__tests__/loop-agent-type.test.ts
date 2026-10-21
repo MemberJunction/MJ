@@ -222,6 +222,55 @@ describe('LoopAgentType', () => {
             expect(result.subAgents![1].name).toBe('WebAgent');
         });
 
+        it('should copy resumeRunId when non-empty string on single subAgent and parallel subAgents[]', async () => {
+            const single = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: {
+                        type: 'Sub-Agent',
+                        subAgent: {
+                            name: 'DataGatherAgent',
+                            message: 'Use customer ID 42',
+                            terminateAfter: false,
+                            resumeRunId: '11111111-2222-4333-8444-555555555555',
+                        },
+                    },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+            expect(single.subAgent?.resumeRunId).toBe('11111111-2222-4333-8444-555555555555');
+
+            const parallel = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: {
+                        type: 'Sub-Agent',
+                        subAgents: [
+                            {
+                                name: 'DbAgent',
+                                message: 'Answer 1',
+                                terminateAfter: false,
+                                resumeRunId: '22222222-3333-4444-8555-666666666666',
+                            },
+                            {
+                                name: 'WebAgent',
+                                message: 'Fresh query',
+                                terminateAfter: false,
+                                resumeRunId: '   ',
+                            },
+                        ],
+                    },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+            expect(parallel.subAgents?.[0].resumeRunId).toBe('22222222-3333-4444-8555-666666666666');
+            expect(parallel.subAgents?.[1].resumeRunId).toBeUndefined();
+        });
+
         it('should infer type "Sub-Agent" when type is missing but subAgents array is present', async () => {
             const result = await agent.DetermineNextStep(
                 mockPromptResult({

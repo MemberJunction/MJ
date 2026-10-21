@@ -158,9 +158,14 @@ export interface AgentSpec {
     DefaultPromptEffortLevel?: number;
 
     /**
-    * Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.
+    * Controls how Chat next steps are handled. NULL (default): Chat propagates to the caller. Success, Failed or Retry: the Chat is remapped to that step. Consult: when a sub-agent of this agent returns Chat, this agent answers it itself (or asks its own caller) instead of ending its run; this agent's own Chat still goes to its caller. AIAgentRelationship.ChatHandlingOption overrides this per sub-agent.
     */
-    ChatHandlingOption?: 'Failed' | 'Retry' | 'Success';
+    ChatHandlingOption?: 'Consult' | 'Failed' | 'Retry' | 'Success';
+
+    /**
+    * Maximum number of times a single sub-agent may return a Chat step and be answered by this agent (when ChatHandlingOption resolves to Consult) within one run of this agent (> 0; absent uses the framework default (3)). After this many consult rounds for that sub-agent, the next Chat from it escalates to this agent's caller.
+    */
+    MaxSubAgentConsultRounds?: number;
 
     /**
     * Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.
@@ -288,6 +293,16 @@ export interface SubAgentSpec {
      * doesn't fit the sub-agent's payload structure, this is where that info can go.
      */
     SubAgentContextPaths?: Record<string, string>;
+    /**
+     * Only used when Type === 'related'. Optional per-relationship override for how Chat next steps from this sub-agent
+     * are handled by the parent. When absent, inherits `AIAgent.ChatHandlingOption` from the parent agent.
+     */
+    ChatHandlingOption?: 'Consult' | 'Failed' | 'Retry' | 'Success';
+    /**
+     * Only used when Type === 'related'. Optional ID of an `MJ: AI Agent Configurations` preset on the sub-agent
+     * to use by default when the parent invokes this sub-agent without an explicit `presetName`.
+     */
+    ConfigurationPresetID?: string;
 }
 
 /**

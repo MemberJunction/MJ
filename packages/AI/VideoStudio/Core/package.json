@@ -1,0 +1,32 @@
+{
+  "name": "@memberjunction/video-studio-core",
+  "version": "6.2.0-edge.4",
+  "description": "Shared types, contracts, and pure validators for MemberJunction Video Studio (browser and server safe)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "postbuild": "node ../../CorePlus/scripts/generate-prompt-types.mjs --package . --config ./prompt-types.config.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "tsc-alias": "^1.8.10",
+    "vitest": "^4.0.18"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

@@ -135,6 +135,15 @@ describe('LoopAgentType — implicit control flow routing (spec §2.1)', () => {
             { name: 'delegate_to_editor_agent', arguments: { message: 'b' } }], 'NativeImplicit'), full);
         expect(step?.subAgents?.map((s) => [s.name, s.terminateAfter])).toEqual([['Query Strategist', true], ['Editor Agent', false]]);
     });
+    it('sub-agent tool call with resumeRunId copies resumeRunId onto AgentSubAgentRequest when non-empty string', () => {
+        const step = P().Call(resultWith([
+            {
+                name: 'delegate_to_query_strategist',
+                arguments: { message: 'Use table Users', resumeRunId: '33333333-4444-4555-8666-777777777777' }
+            }
+        ], 'NativeImplicit'), full);
+        expect(step?.subAgent?.resumeRunId).toBe('33333333-4444-4555-8666-777777777777');
+    });
     it('sub-agent + action in one turn → Retry', () => {
         const step = P().Call(resultWith([{ name: 'delegate_to_editor_agent', arguments: { message: 'b' } }, { name: 'run_ad_hoc_query', arguments: {} }], 'NativeImplicit'), full);
         expect(step?.step).toBe('Retry');

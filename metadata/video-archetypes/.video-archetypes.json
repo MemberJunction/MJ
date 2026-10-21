@@ -1,0 +1,586 @@
+[
+  {
+    "fields": {
+      "Name": "Topic Explainer",
+      "Description": "Explains a technical concept, architecture, or workflow from first principles through progressive visual disclosure. Best when the audience needs clear cause-and-effect understanding within 60 to 120 seconds.",
+      "Category": "Explainer",
+      "MinDurationSeconds": 60,
+      "DefaultDurationSeconds": 90,
+      "MaxDurationSeconds": 120,
+      "DefaultFormats": "16:9",
+      "BeatTemplate": [
+        {
+          "Key": "hook",
+          "Label": "Hook & Core Question",
+          "Purpose": "Open immediately with the central question or misconception and an active visual focal point.",
+          "MinDurationSeconds": 2,
+          "DefaultDurationSeconds": 3,
+          "MaxDurationSeconds": 3,
+          "Guidance": "State the core question on screen in eight words or fewer while the primary mechanism begins moving."
+        },
+        {
+          "Key": "context",
+          "Label": "Why It Matters",
+          "Purpose": "Frame the operational problem or gap that makes this concept important right now.",
+          "MinDurationSeconds": 10,
+          "DefaultDurationSeconds": 15,
+          "MaxDurationSeconds": 22,
+          "Guidance": "Contrast the fragmented or opaque state before introducing the mechanism."
+        },
+        {
+          "Key": "mechanism",
+          "Label": "How It Works",
+          "Purpose": "Walk through the architecture or process one node and transition at a time.",
+          "MinDurationSeconds": 24,
+          "DefaultDurationSeconds": 38,
+          "MaxDurationSeconds": 50,
+          "Guidance": "Reveal each step sequentially and dim inactive nodes so the viewer's eye tracks the active flow."
+        },
+        {
+          "Key": "example",
+          "Label": "Concrete Walkthrough",
+          "Purpose": "Ground the abstract mechanism in a specific end-to-end scenario showing input and outcome.",
+          "MinDurationSeconds": 16,
+          "DefaultDurationSeconds": 24,
+          "MaxDurationSeconds": 32,
+          "Guidance": "Show a realistic input flowing through the system to produce a verifiable output state."
+        },
+        {
+          "Key": "close",
+          "Label": "Summary Takeaway",
+          "Purpose": "Restate the one-sentence takeaway so the viewer leaves with a durable mental model.",
+          "MinDurationSeconds": 6,
+          "DefaultDurationSeconds": 10,
+          "MaxDurationSeconds": 15,
+          "Guidance": "Hold the final summary card for at least two seconds after narration finishes."
+        }
+      ],
+      "Pacing": {
+        "AvgSecondsBetweenChanges": 4,
+        "HoldRules": "Hold each newly revealed diagram node for at least 1.5 seconds and hold the closing takeaway card for at least 2.0 seconds.",
+        "MinBeatDurationSeconds": 2,
+        "MaxBeatDurationSeconds": 50
+      },
+      "Guidance": "@file:guidance/topic-explainer.md",
+      "DefaultInteractionMode": "Autonomous",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "DF2CD84A-F5E8-4105-8F2F-24F42EC519C7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Product Launch",
+      "Description": "Introduces a new product capability or release with crisp kinetic typography and authentic UI state progressions. Designed for high-impact 15 to 30 second spots across widescreen and vertical formats.",
+      "Category": "Product",
+      "MinDurationSeconds": 15,
+      "DefaultDurationSeconds": 25,
+      "MaxDurationSeconds": 30,
+      "DefaultFormats": "16:9,9:16",
+      "BeatTemplate": [
+        {
+          "Key": "hook",
+          "Label": "Capability Hook",
+          "Purpose": "Land the headline outcome in the first two seconds alongside an authentic glimpse of the UI.",
+          "MinDurationSeconds": 2,
+          "DefaultDurationSeconds": 2.5,
+          "MaxDurationSeconds": 3,
+          "Guidance": "Lead with the outcome, not a slow logo intro. Keep the headline to six words or fewer."
+        },
+        {
+          "Key": "friction",
+          "Label": "The Old Friction",
+          "Purpose": "Name the slow or manual step the audience recognizes immediately.",
+          "MinDurationSeconds": 3,
+          "DefaultDurationSeconds": 5,
+          "MaxDurationSeconds": 6,
+          "Guidance": "Use a single clean contrast card before cutting straight into the product reveal."
+        },
+        {
+          "Key": "reveal",
+          "Label": "Product Reveal",
+          "Purpose": "Show the new interface control or workflow in action using real captured screens.",
+          "MinDurationSeconds": 4,
+          "DefaultDurationSeconds": 7,
+          "MaxDurationSeconds": 9,
+          "Guidance": "Zoom into the active UI region so labels remain legible on both 16:9 and 9:16 compositions."
+        },
+        {
+          "Key": "proof",
+          "Label": "Workflow Proof",
+          "Purpose": "Demonstrate two or three rapid state transitions completing a real task end to end.",
+          "MinDurationSeconds": 3,
+          "DefaultDurationSeconds": 6.5,
+          "MaxDurationSeconds": 8,
+          "Guidance": "Synchronize UI state transitions with audio cues and hold the completed state for 1.5 seconds."
+        },
+        {
+          "Key": "close",
+          "Label": "Release Callout",
+          "Purpose": "Finish on the feature name, availability, and next step.",
+          "MinDurationSeconds": 2,
+          "DefaultDurationSeconds": 4,
+          "MaxDurationSeconds": 5,
+          "Guidance": "Hold the closing release card cleanly for at least 2.0 seconds."
+        }
+      ],
+      "Pacing": {
+        "AvgSecondsBetweenChanges": 2.5,
+        "HoldRules": "Hold active UI callouts for at least 1.5 seconds and hold the final release card for at least 2.0 seconds.",
+        "MinBeatDurationSeconds": 2,
+        "MaxBeatDurationSeconds": 9
+      },
+      "Guidance": "@file:guidance/product-launch.md",
+      "DefaultInteractionMode": "Autonomous",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "887C0E01-9B95-4622-BC77-16CECBCC1B08"
+    }
+  },
+  {
+    "fields": {
+      "Name": "KPI Briefing",
+      "Description": "Delivers a recurring operational metric update backed by live MemberJunction queries or views. Pairs headline KPI deltas with trend charts, top drivers, and an explicit data provenance footer.",
+      "Category": "DataStory",
+      "MinDurationSeconds": 45,
+      "DefaultDurationSeconds": 60,
+      "MaxDurationSeconds": 90,
+      "DefaultFormats": "16:9",
+      "BeatTemplate": [
+        {
+          "Key": "hook",
+          "Label": "Headline Metric & Delta",
+          "Purpose": "Surface the primary KPI value and period-over-period delta in the opening three seconds.",
+          "MinDurationSeconds": 2,
+          "DefaultDurationSeconds": 3,
+          "MaxDurationSeconds": 3,
+          "RequiresDataBinding": true,
+          "Guidance": "Display the bound headline metric and directional comparison immediately with high-contrast typography."
+        },
+        {
+          "Key": "scorecard",
+          "Label": "Core KPI Scorecard",
+          "Purpose": "Present the supporting KPI tiles with current values and baseline comparisons.",
+          "MinDurationSeconds": 10,
+          "DefaultDurationSeconds": 14,
+          "MaxDurationSeconds": 22,
+          "RequiresDataBinding": true,
+          "Guidance": "Show at most four KPI tiles on screen and hold for 2.0 seconds after counter animations settle."
+        },
+        {
+          "Key": "trend",
+          "Label": "Period Trend Analysis",
+          "Purpose": "Animate the primary time-series chart to show trajectory and key inflection points.",
+          "MinDurationSeconds": 14,
+          "DefaultDurationSeconds": 20,
+          "MaxDurationSeconds": 30,
+          "RequiresDataBinding": true,
+          "Guidance": "Highlight the peak, trough, or threshold crossing on a single primary chart."
+        },
+        {
+          "Key": "drivers",
+          "Label": "Top Contributors",
+          "Purpose": "Break down the segments, regions, or categories driving the period variance.",
+          "MinDurationSeconds": 10,
+          "DefaultDurationSeconds": 15,
+          "MaxDurationSeconds": 23,
+          "RequiresDataBinding": true,
+          "Guidance": "Rank the top positive and negative contributors from the bound series or table."
+        },
+        {
+          "Key": "close",
+          "Label": "Takeaway & Provenance",
+          "Purpose": "Summarize the operational takeaway and display the authoritative data snapshot timestamp.",
+          "MinDurationSeconds": 6,
+          "DefaultDurationSeconds": 8,
+          "MaxDurationSeconds": 14,
+          "RequiresDataBinding": true,
+          "Guidance": "State the operational takeaway and show \"Data as of {AsOf}\" with the resolved source names in the provenance footer."
+        }
+      ],
+      "Pacing": {
+        "AvgSecondsBetweenChanges": 3.5,
+        "HoldRules": "Hold every bound KPI figure and chart callout for at least 2.0 seconds after animation settles, and hold the closing provenance card for 2.5 seconds.",
+        "MinBeatDurationSeconds": 2,
+        "MaxBeatDurationSeconds": 30
+      },
+      "Guidance": "@file:guidance/kpi-briefing.md",
+      "DefaultInteractionMode": "Autonomous",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "85780765-A09A-4B50-9F6B-43BF46FFD19F"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Data Story",
+      "Description": "Builds an evidence-based analytical narrative across multiple datasets to explain why a trend occurred and what action it supports. Ideal for deeper 60 to 180 second cohort, funnel, or variance investigations.",
+      "Category": "DataStory",
+      "MinDurationSeconds": 60,
+      "DefaultDurationSeconds": 90,
+      "MaxDurationSeconds": 180,
+      "DefaultFormats": "16:9",
+      "BeatTemplate": [
+        {
+          "Key": "hook",
+          "Label": "Surprising Finding",
+          "Purpose": "Open with the most compelling bound delta or anomaly that frames the analytical question.",
+          "MinDurationSeconds": 2,
+          "DefaultDurationSeconds": 3,
+          "MaxDurationSeconds": 3,
+          "RequiresDataBinding": true,
+          "Guidance": "Put the bound headline number and the question it raises on screen within the first three seconds."
+        },
+        {
+          "Key": "baseline",
+          "Label": "Historical Baseline",
+          "Purpose": "Establish the prior trend or benchmark distribution so the audience understands the starting norm.",
+          "MinDurationSeconds": 10,
+          "DefaultDurationSeconds": 16,
+          "MaxDurationSeconds": 32,
+          "RequiresDataBinding": true,
+          "Guidance": "Plot the baseline period clearly with zero-anchored axes and explicit unit labels."
+        },
+        {
+          "Key": "turning-point",
+          "Label": "The Inflection Point",
+          "Purpose": "Reveal where and when the dataset diverged from the baseline trajectory.",
+          "MinDurationSeconds": 14,
+          "DefaultDurationSeconds": 24,
+          "MaxDurationSeconds": 48,
+          "RequiresDataBinding": true,
+          "Guidance": "Use a localized callout on the exact date or cohort where the shift occurred."
+        },
+        {
+          "Key": "comparison",
+          "Label": "Segment & Cohort Breakdown",
+          "Purpose": "Compare segments or cohorts to isolate which group drove the change.",
+          "MinDurationSeconds": 14,
+          "DefaultDurationSeconds": 22,
+          "MaxDurationSeconds": 46,
+          "RequiresDataBinding": true,
+          "Guidance": "Use a horizontal bar or ranked table view with consistent palette tokens per cohort."
+        },
+        {
+          "Key": "implication",
+          "Label": "Operational Implication",
+          "Purpose": "Connect the quantitative proof to its practical business or engineering consequence.",
+          "MinDurationSeconds": 10,
+          "DefaultDurationSeconds": 15,
+          "MaxDurationSeconds": 32,
+          "Guidance": "Distill the analytical proof into two or three concise bullet callouts."
+        },
+        {
+          "Key": "close",
+          "Label": "Recommendation & Provenance",
+          "Purpose": "Deliver the recommended decision alongside the data snapshot timestamp and source list.",
+          "MinDurationSeconds": 8,
+          "DefaultDurationSeconds": 10,
+          "MaxDurationSeconds": 22,
+          "RequiresDataBinding": true,
+          "Guidance": "Present the final recommendation card and show \"Data as of {AsOf}\" with the underlying query or view sources."
+        }
+      ],
+      "Pacing": {
+        "AvgSecondsBetweenChanges": 4,
+        "HoldRules": "Hold chart annotations and cohort comparisons for at least 2.0 seconds after motion completes, and hold the closing provenance card for 2.5 seconds.",
+        "MinBeatDurationSeconds": 2,
+        "MaxBeatDurationSeconds": 48
+      },
+      "Guidance": "@file:guidance/data-story.md",
+      "DefaultInteractionMode": "Autonomous",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "47FCD5AA-9C8B-4996-974B-D3C5A47F6F52"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Social Short",
+      "Description": "Produces punchy 10 to 30 second vertical (9:16) films tailored for mobile feeds and sound-off viewing. Uses bold vertical-safe typography and rapid visual turns to land a single memorable takeaway.",
+      "Category": "Social",
+      "MinDurationSeconds": 10,
+      "DefaultDurationSeconds": 20,
+      "MaxDurationSeconds": 30,
+      "DefaultFormats": "9:16",
+      "BeatTemplate": [
+        {
+          "Key": "hook",
+          "Label": "Scroll-Stopping Hook",
+          "Purpose": "Capture attention in the first two seconds with a bold claim, question, or visual contrast.",
+          "MinDurationSeconds": 1.5,
+          "DefaultDurationSeconds": 2,
+          "MaxDurationSeconds": 3,
+          "Guidance": "Place the headline in the center-upper vertical safe zone at large mobile-legible scale."
+        },
+        {
+          "Key": "turn",
+          "Label": "Core Visual Turn",
+          "Purpose": "Show the key transformation, workflow step, or surprising comparison.",
+          "MinDurationSeconds": 3.5,
+          "DefaultDurationSeconds": 8,
+          "MaxDurationSeconds": 12,
+          "Guidance": "Stack visual elements vertically and change visual state every two to three seconds."
+        },
+        {
+          "Key": "payoff",
+          "Label": "The Payoff",
+          "Purpose": "Deliver the concrete outcome or proof point in a single unmistakable frame.",
+          "MinDurationSeconds": 3,
+          "DefaultDurationSeconds": 6,
+          "MaxDurationSeconds": 10,
+          "Guidance": "Ensure the payoff reads clearly with sound muted."
+        },
+        {
+          "Key": "close",
+          "Label": "Takeaway Card",
+          "Purpose": "Lock in the one-sentence takeaway inside the mobile safe zone.",
+          "MinDurationSeconds": 2,
+          "DefaultDurationSeconds": 4,
+          "MaxDurationSeconds": 6,
+          "Guidance": "Keep closing text clear of the bottom 20% and top 12% platform UI overlay zones."
+        }
+      ],
+      "Pacing": {
+        "AvgSecondsBetweenChanges": 2,
+        "HoldRules": "Hold the payoff figure or visual for at least 1.5 seconds and hold the closing card for at least 1.8 seconds.",
+        "MinBeatDurationSeconds": 1.5,
+        "MaxBeatDurationSeconds": 12
+      },
+      "Guidance": "@file:guidance/social-short.md",
+      "DefaultInteractionMode": "Autonomous",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "67496073-9444-445F-9DDB-0192FE8DD070"
+    }
+  },
+  {
+    "fields": {
+      "Name": "How-To Tutorial",
+      "Description": "Guides viewers through a practical workflow step by step using numbered state transitions and authentic interface callouts. Structured for 60 to 180 second instructional videos where clarity and reproducibility come first.",
+      "Category": "Tutorial",
+      "MinDurationSeconds": 60,
+      "DefaultDurationSeconds": 90,
+      "MaxDurationSeconds": 180,
+      "DefaultFormats": "16:9",
+      "BeatTemplate": [
+        {
+          "Key": "hook",
+          "Label": "Finished Outcome Preview",
+          "Purpose": "Show the completed result in the first three seconds so viewers know what they will accomplish.",
+          "MinDurationSeconds": 2,
+          "DefaultDurationSeconds": 3,
+          "MaxDurationSeconds": 3,
+          "Guidance": "Display the finished state immediately with a concise title naming the task."
+        },
+        {
+          "Key": "prerequisites",
+          "Label": "Starting State & Inputs",
+          "Purpose": "Identify the starting screen, configuration, or permissions needed before step one.",
+          "MinDurationSeconds": 8,
+          "DefaultDurationSeconds": 12,
+          "MaxDurationSeconds": 24,
+          "Guidance": "Keep prerequisites to a clean two-or-three-item checklist."
+        },
+        {
+          "Key": "step-one",
+          "Label": "Step 1: Initial Action",
+          "Purpose": "Walk through the first concrete action with a focused highlight on the active control.",
+          "MinDurationSeconds": 16,
+          "DefaultDurationSeconds": 25,
+          "MaxDurationSeconds": 52,
+          "Guidance": "Show the exact navigation path and control label without paraphrasing."
+        },
+        {
+          "Key": "step-two",
+          "Label": "Step 2: Configure & Execute",
+          "Purpose": "Demonstrate the core configuration or execution step and its immediate UI feedback.",
+          "MinDurationSeconds": 16,
+          "DefaultDurationSeconds": 25,
+          "MaxDurationSeconds": 52,
+          "Guidance": "Hold on the configured state long enough for a viewer following along to verify their inputs."
+        },
+        {
+          "Key": "verification",
+          "Label": "Verify the Result",
+          "Purpose": "Show how to confirm that the workflow completed accurately.",
+          "MinDurationSeconds": 10,
+          "DefaultDurationSeconds": 15,
+          "MaxDurationSeconds": 30,
+          "Guidance": "Highlight the confirmation state or output artifact that proves success."
+        },
+        {
+          "Key": "close",
+          "Label": "Step Recap",
+          "Purpose": "Summarize the numbered steps on a single reference card.",
+          "MinDurationSeconds": 6,
+          "DefaultDurationSeconds": 10,
+          "MaxDurationSeconds": 22,
+          "Guidance": "Hold the numbered recap checklist for at least 2.5 seconds."
+        }
+      ],
+      "Pacing": {
+        "AvgSecondsBetweenChanges": 4.5,
+        "HoldRules": "Hold each highlighted UI control or command for at least 2.0 seconds and hold the final step recap card for 2.5 seconds.",
+        "MinBeatDurationSeconds": 2,
+        "MaxBeatDurationSeconds": 52
+      },
+      "Guidance": "@file:guidance/how-to-tutorial.md",
+      "DefaultInteractionMode": "Autonomous",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "90E1D457-9720-46CA-90F6-7C036ED14B76"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Announcement",
+      "Description": "Communicates an organizational update, milestone, event, or policy change in 15 to 45 seconds across widescreen and vertical formats. Leads directly with the news, who it impacts, and what action or date matters.",
+      "Category": "Announcement",
+      "MinDurationSeconds": 15,
+      "DefaultDurationSeconds": 30,
+      "MaxDurationSeconds": 45,
+      "DefaultFormats": "16:9,9:16",
+      "BeatTemplate": [
+        {
+          "Key": "hook",
+          "Label": "Headline News",
+          "Purpose": "Deliver the announcement headline in the first three seconds with clear typographic hierarchy.",
+          "MinDurationSeconds": 2,
+          "DefaultDurationSeconds": 3,
+          "MaxDurationSeconds": 3,
+          "Guidance": "State the news directly on the opening frame without a slow preamble."
+        },
+        {
+          "Key": "what-changed",
+          "Label": "What Is Changing",
+          "Purpose": "Explain the core update, milestone, or event details in a focused card.",
+          "MinDurationSeconds": 5,
+          "DefaultDurationSeconds": 10,
+          "MaxDurationSeconds": 16,
+          "Guidance": "Limit on-screen copy to the essential facts while voiceover carries supporting context."
+        },
+        {
+          "Key": "impact",
+          "Label": "Who It Affects & When",
+          "Purpose": "Clarify the teams, workflows, or timelines impacted by the announcement.",
+          "MinDurationSeconds": 5,
+          "DefaultDurationSeconds": 11,
+          "MaxDurationSeconds": 18,
+          "Guidance": "Highlight key dates and affected groups with distinct visual badges."
+        },
+        {
+          "Key": "close",
+          "Label": "Next Step & Effective Date",
+          "Purpose": "Close on the effective date and required action or resource location.",
+          "MinDurationSeconds": 3,
+          "DefaultDurationSeconds": 6,
+          "MaxDurationSeconds": 10,
+          "Guidance": "Hold the closing date and action card for at least 2.0 seconds."
+        }
+      ],
+      "Pacing": {
+        "AvgSecondsBetweenChanges": 3,
+        "HoldRules": "Hold key dates and action items for at least 2.0 seconds before transitioning.",
+        "MinBeatDurationSeconds": 2,
+        "MaxBeatDurationSeconds": 18
+      },
+      "Guidance": "@file:guidance/announcement.md",
+      "DefaultInteractionMode": "Autonomous",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D86BE155-CF49-4807-A50D-E99389960D2B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Executive Briefing",
+      "Description": "Synthesizes strategic posture, bound financial and operational KPIs, key risks, and recommended leadership decisions in 90 to 180 seconds. Defaults to ApproveStoryboard so stakeholders validate the narrative and data bindings at Gate G2 before rendering.",
+      "Category": "Briefing",
+      "MinDurationSeconds": 90,
+      "DefaultDurationSeconds": 120,
+      "MaxDurationSeconds": 180,
+      "DefaultFormats": "16:9",
+      "BeatTemplate": [
+        {
+          "Key": "hook",
+          "Label": "Executive Bottom Line",
+          "Purpose": "Lead with the strategic bottom line and primary bound metric in the first three seconds.",
+          "MinDurationSeconds": 2,
+          "DefaultDurationSeconds": 3,
+          "MaxDurationSeconds": 3,
+          "RequiresDataBinding": true,
+          "Guidance": "State the executive conclusion and headline bound KPI immediately on a restrained editorial card."
+        },
+        {
+          "Key": "posture",
+          "Label": "Strategic Scorecard",
+          "Purpose": "Review performance across core pillars against target baselines.",
+          "MinDurationSeconds": 18,
+          "DefaultDurationSeconds": 25,
+          "MaxDurationSeconds": 38,
+          "RequiresDataBinding": true,
+          "Guidance": "Present up to four bound pillar metrics with explicit period-over-period comparisons."
+        },
+        {
+          "Key": "deep-dive",
+          "Label": "Variance & Root Cause",
+          "Purpose": "Examine the most consequential trend or variance chart in detail.",
+          "MinDurationSeconds": 24,
+          "DefaultDurationSeconds": 35,
+          "MaxDurationSeconds": 52,
+          "RequiresDataBinding": true,
+          "Guidance": "Focus on a single primary chart with clear callouts on the underlying root causes."
+        },
+        {
+          "Key": "risks-and-options",
+          "Label": "Key Risks & Trade-Offs",
+          "Purpose": "Frame the primary operational risks and strategic options supported by the data.",
+          "MinDurationSeconds": 18,
+          "DefaultDurationSeconds": 25,
+          "MaxDurationSeconds": 38,
+          "RequiresDataBinding": true,
+          "Guidance": "Compare options side by side with bound impact metrics."
+        },
+        {
+          "Key": "decision",
+          "Label": "Recommended Decision",
+          "Purpose": "State the recommended leadership action, owner, and expected outcome.",
+          "MinDurationSeconds": 16,
+          "DefaultDurationSeconds": 20,
+          "MaxDurationSeconds": 30,
+          "Guidance": "Keep the recommendation card unambiguous with clear ownership and timeline."
+        },
+        {
+          "Key": "close",
+          "Label": "Decision Summary & Provenance",
+          "Purpose": "Close on the decision summary and authoritative data snapshot timestamp.",
+          "MinDurationSeconds": 10,
+          "DefaultDurationSeconds": 12,
+          "MaxDurationSeconds": 22,
+          "RequiresDataBinding": true,
+          "Guidance": "Hold the decision summary and show \"Data as of {AsOf}\" alongside all authoritative data sources."
+        }
+      ],
+      "Pacing": {
+        "AvgSecondsBetweenChanges": 4.5,
+        "HoldRules": "Use restrained editorial motion; hold every executive scorecard and chart annotation for at least 2.5 seconds and hold the closing provenance card for 3.0 seconds.",
+        "MinBeatDurationSeconds": 2,
+        "MaxBeatDurationSeconds": 52
+      },
+      "Guidance": "@file:guidance/executive-briefing.md",
+      "DefaultInteractionMode": "ApproveStoryboard",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "C48F5336-22F6-4FC7-AA33-854D986AF9FF"
+    }
+  }
+]

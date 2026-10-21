@@ -115,4 +115,111 @@ describe('MJStorageMediaPlayerComponent — streaming-URL resolution', () => {
     expect(tracks).toHaveLength(1);
     expect(tracks[0].Kind).toBe('audio');
   });
+
+  it('sets PosterUrl on the first video track when PosterFileID is set and calls MintMediaAccessUrl once per file', async () => {
+    const provider = stubProvider({
+      'FILE-V1': { Success: true, Url: 'http://localhost:4000/media/FILE-V1?token=v1', MimeType: 'video/mp4' },
+      'FILE-V2': { Success: true, Url: 'http://localhost:4000/media/FILE-V2?token=v2', MimeType: 'video/mp4' },
+      'POSTER-1': { Success: true, Url: 'http://localhost:4000/media/POSTER-1?token=p1', MimeType: 'image/png' },
+    });
+    const fixture = renderComponentFixture(MJStorageMediaPlayerComponent, {
+      inputs: { Provider: provider, FileIDs: ['FILE-V1', 'FILE-V2'], PosterFileID: 'POSTER-1' },
+    });
+    await flush();
+
+    const tracks = fixture.componentInstance.ResolvedTracks;
+    expect(tracks).toHaveLength(2);
+    expect(tracks[0].PosterUrl).toBe('http://localhost:4000/media/POSTER-1?token=p1');
+    expect(tracks[1].PosterUrl).toBeUndefined();
+
+    const executeGql = (provider as unknown as { ExecuteGQL: ReturnType<typeof vi.fn> }).ExecuteGQL;
+    expect(executeGql).toHaveBeenCalledTimes(3);
+    expect(executeGql.mock.calls.map((c: unknown[]) => (c[1] as { fileId: string }).fileId)).toEqual([
+      'FILE-V1',
+      'FILE-V2',
+      'POSTER-1',
+    ]);
+  });
+
+  it('reuses a non-expired cached poster URL and re-mints the poster when ExpiresAt has passed or is within the expiry margin (30s away)', async () => {
+    let posterMintCount = 0;
+    let posterExpiresAt = new Date(Date.now() + 300_000).toISOString();
+    const ExecuteGQL = vi.fn(async (_query: string, vars: { fileId: string }) => {
+      if (vars.fileId === 'POSTER-1') {
+        posterMintCount += 1;
+        return {
+          CreateMediaAccessToken: {
+            Success: true,
+            Url: `http://localhost:4000/media/POSTER-1?token=p${posterMintCount}`,
+            ExpiresAt: posterExpiresAt,
+            MimeType: 'image/png',
+          },
+        };
+      }
+      return {
+        CreateMediaAccessToken: {
+          Success: true,
+          Url: `http://localhost:4000/media/${vars.fileId}?token=v`,
+          MimeType: 'video/mp4',
+        },
+      };
+    });
+    const provider = { ExecuteGQL } as unknown as IMetadataProvider;
+
+    const fixture = renderComponentFixture(MJStorageMediaPlayerComponent, {
+      inputs: { Provider: provider, FileID: 'FILE-V1', PosterFileID: 'POSTER-1' },
+    });
+    await flush();
+    expect(fixture.componentInstance.ResolvedTracks[0].PosterUrl).toBe(
+      'http://localhost:4000/media/POSTER-1?token=p1',
+    );
+    expect(posterMintCount).toBe(1);
+
+    // Switching FileID while poster token is still well outside the margin reuses cached poster without re-minting
+    fixture.componentInstance.FileID = 'FILE-V2';
+    await flush();
+    expect(fixture.componentInstance.ResolvedTracks[0].PosterUrl).toBe(
+      'http://localhost:4000/media/POSTER-1?token=p1',
+    );
+    expect(posterMintCount).toBe(1);
+
+    // A cached poster whose ExpiresAt is 30 s away (within the 60 s margin) is re-minted on the next resolve
+    posterExpiresAt = new Date(Date.now() + 30_000).toISOString();
+    ExecuteGQL.mockImplementation(async (_query: string, vars: { fileId: string }) => {
+      if (vars.fileId === 'POSTER-1-SOON') {
+        posterMintCount += 1;
+        return {
+          CreateMediaAccessToken: {
+            Success: true,
+            Url: `http://localhost:4000/media/POSTER-1-SOON?token=p${posterMintCount}`,
+            ExpiresAt: posterExpiresAt,
+            MimeType: 'image/png',
+          },
+        };
+      }
+      return {
+        CreateMediaAccessToken: {
+          Success: true,
+          Url: `http://localhost:4000/media/${vars.fileId}?token=v`,
+          MimeType: 'video/mp4',
+        },
+      };
+    });
+    fixture.componentInstance.PosterFileID = 'POSTER-1-SOON';
+    await flush();
+    expect(fixture.componentInstance.ResolvedTracks[0].PosterUrl).toBe(
+      'http://localhost:4000/media/POSTER-1-SOON?token=p2',
+    );
+
+    // Next track resolution sees ExpiresAt 30 s away (within margin) and re-mints -> p3
+    posterExpiresAt = new Date(Date.now() + 300_000).toISOString();
+    fixture.componentInstance.FileID = 'FILE-V3';
+    await flush();
+    expect(fixture.componentInstance.ResolvedTracks[0].PosterUrl).toBe(
+      'http://localhost:4000/media/POSTER-1-SOON?token=p3',
+    );
+    expect(posterMintCount).toBe(3);
+  });
 });
+
+

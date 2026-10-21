@@ -1,4 +1,8 @@
-<div [class]="messageClasses" [attr.data-message-id]="message.ID" (click)="onMessageBubbleClick($event)">
+<div [class]="messageClasses"
+     [attr.data-message-id]="message.ID"
+     [style.--mj-handoff-target]="HandedOffFrom ? TargetAccentVar : null"
+     [style.--mj-handoff-source]="HandedOffFrom ? HandedOffFromAccentVar : null"
+     (click)="onMessageBubbleClick($event)">
   <div class="message-avatar">
     <div class="avatar-circle" [class.ai-avatar]="isAIMessage" [class.user-avatar]="isUserMessage"
          [class.avatar-has-image]="isAIMessage && effectiveAssistantAvatarUrl !== null">
@@ -26,6 +30,23 @@
       <span class="message-sender" [title]="isAIMessage ? (aiAgentInfo?.role || 'AI Assistant') : ''">
         {{ isAIMessage ? (aiAgentInfo?.name || 'AI Assistant') : messageSenderName }}
       </span>
+      @if (isAIMessage && HandedOffFrom) {
+        <span class="via">
+          <span class="mini" aria-hidden="true">
+            @if (HandedOffFrom.SourceAgent.AvatarUrl) {
+              <img [src]="HandedOffFrom.SourceAgent.AvatarUrl" alt="" />
+            } @else if (HandedOffFrom.SourceAgent.IconClass) {
+              <i [class]="HandedOffFrom.SourceAgent.IconClass"></i>
+            } @else {
+              {{ HandedOffFrom.SourceAgent.Name.charAt(0) }}
+            }
+          </span>
+          via {{ HandedOffFrom.SourceAgent.Name }}
+        </span>
+        @if (HandedOffFrom.PresetName) {
+          <span class="pill pill--target">{{ HandedOffFrom.PresetName }}</span>
+        }
+      }
       <span class="message-time">{{ message.__mj_CreatedAt | date:'short' }}</span>
 
       <!-- Status indicator for user messages -->
@@ -153,12 +174,26 @@
             </span>
           </button>
         }
-        <div class="message-text">
-          <mj-markdown [data]="displayMessage" [enableCollapsibleHeadings]="true"></mj-markdown>
-          @if (isMessageEdited) {
-            <span class="edited-badge">(edited)</span>
-          }
-        </div>
+        @if (IsHandedOffTargetJoining) {
+          <div class="joining">
+            <span>Joining the conversation…</span>
+          </div>
+          <div class="joining-skeletons" aria-hidden="true">
+            <div class="skeleton skeleton--wide"></div>
+            <div class="skeleton skeleton--narrow"></div>
+          </div>
+        } @else {
+          <div class="message-text">
+            <mj-markdown [data]="displayMessage" [enableCollapsibleHeadings]="true"></mj-markdown>
+            @if (isMessageEdited) {
+              <span class="edited-badge">(edited)</span>
+            }
+          </div>
+        }
+
+        @if (Handoff) {
+          <mj-agent-handoff-card [Handoff]="Handoff"></mj-agent-handoff-card>
+        }
 
         <!-- A stopped reply: what the run kept, and the way to pick it up again. Any message
              resumes the stopped run; the Continue control just sends one that says so. -->

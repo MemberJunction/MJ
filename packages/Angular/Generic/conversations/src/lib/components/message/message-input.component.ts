@@ -2,14 +2,15 @@ import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, O
 import { ConnectedPosition } from '@angular/cdk/overlay';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, Metadata, LogStatusEx } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine, UserInfoEngine, TaskGraphSubmitOperation, type TaskGraphSubmitInput } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, ConversationEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, AppContextSnapshot } from "@memberjunction/ai-core-plus";
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { BeforeAgentTurnEventArgs, AfterAgentTurnEventArgs } from '../../events/chat-events';
 import type { AgentReplyMode, AgentTurnHandler, AgentTurnRequest, AgentTurnResult, AgentTurnTarget } from '../../models/agent-turn.model';
-import { ResolveAgentTurn, FindDisallowedTaskGraphAgents, type AgentTurnCandidates, type AgentTurnRules } from '../../utils/agent-turn-routing';
+import { ResolveAgentTurn, FindContinuityAgentMessage, type AgentTurnCandidates, type AgentTurnRules } from '../../utils/agent-turn-routing';
+import { AgentAccentVar } from './agent-handoff-card.component';
 import {
   ApplyRoutingDecision,
   ArtifactVersionForTurn,
@@ -34,7 +35,7 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMetadata } from '../../services/conversation-streaming.service';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIEngineBase, ResolveConversationAgentPreset } from '@memberjunction/ai-engine-base';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility, agentFailureDisposition, agentFailureMessage } from '@memberjunction/ai-core-plus';
 import { PendingAttachment, SendSlotMode } from '@memberjunction/ng-composer';
 import { AiComposerComponent } from '../composer/ai-composer.component';
@@ -1245,6 +1246,109 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   /** @deprecated Use {@link PickerTargetAgentId}. */
   public get pickerTargetAgentId(): string | null {
     return this.PickerTargetAgentId;
+  }
+
+  private _cachedRouteAgentKey?: string;
+  private _cachedRouteAgent: { ID: string; Name: string; IsConversationManager: boolean } | null = null;
+
+  /**
+   * Agent that will receive the next turn based on an explicit `@agent` draft chip
+   * or continuity / default routing ({@link PickerTargetAgentId}).
+   * Memoized by message count and routing inputs so template evaluation does not
+   * scan `ConversationHistory` on every change-detection cycle.
+   */
+  public get CurrentRouteAgent(): { ID: string; Name: string; IsConversationManager: boolean } | null {
+    if (this.mentionedAgentId === undefined) {
+      const chips = this.InputBox?.getMentionChipsData() || [];
+      this.mentionedAgentId = chips.find(chip => chip.type === 'agent')?.id ?? null;
+    }
+    const history = this.ConversationHistory ?? [];
+    const lastRow = history.length > 0 ? history[history.length - 1] : null;
+    const manager = this.ConverationManagerAgent;
+    const floorMs = this.AgentHistoryFrom ? new Date(this.AgentHistoryFrom).getTime() : '';
+    const allowedKey = this.AllowedAgentIDs ? this.AllowedAgentIDs.join(',') : '';
+    const cacheKey = `${history.length}|${lastRow?.ID ?? ''}|${lastRow?.AgentID ?? ''}|${this.mentionedAgentId ?? ''}|${this.ConversationDefaultAgentId ?? ''}|${this.DefaultAgentId ?? ''}|${manager?.ID ?? ''}|${floorMs}|${allowedKey}`;
+    if (this._cachedRouteAgentKey === cacheKey) {
+      return this._cachedRouteAgent ?? null;
+    }
+
+    const targetId = this.PickerTargetAgentId;
+    let resolved: { ID: string; Name: string; IsConversationManager: boolean } | null = null;
+    if (!targetId) {
+      if (manager?.ID) {
+        resolved = { ID: manager.ID, Name: manager.Name || 'Sage', IsConversationManager: true };
+      }
+    } else if (manager?.ID && UUIDsEqual(targetId, manager.ID)) {
+      resolved = { ID: manager.ID, Name: manager.Name || 'Sage', IsConversationManager: true };
+    } else {
+      const found = AIEngineBase.Instance.ReadableAgents?.find(a => UUIDsEqual(a.ID, targetId));
+      if (found) {
+        resolved = { ID: found.ID, Name: found.Name || 'Agent', IsConversationManager: false };
+      } else {
+        const chips = this.InputBox?.getMentionChipsData() || [];
+        const chipMatch = chips.find(c => c.type === 'agent' && UUIDsEqual(c.id, targetId));
+        if (chipMatch) {
+          resolved = { ID: targetId, Name: chipMatch.name || 'Agent', IsConversationManager: false };
+        } else {
+          const lastReply = this.findLastNonSageReply();
+          if (lastReply?.AgentID && UUIDsEqual(lastReply.AgentID, targetId)) {
+            resolved = { ID: targetId, Name: lastReply.Agent || 'Agent', IsConversationManager: false };
+          } else {
+            resolved = { ID: targetId, Name: 'Agent', IsConversationManager: false };
+          }
+        }
+      }
+    }
+    this._cachedRouteAgentKey = cacheKey;
+    this._cachedRouteAgent = resolved;
+    return resolved;
+  }
+
+  public get CurrentRouteAgentName(): string {
+    return this.CurrentRouteAgent?.Name || this.ConverationManagerAgent?.Name || 'Sage';
+  }
+
+  public get CurrentRouteAccentVar(): string {
+    return AgentAccentVar(this.CurrentRouteAgent?.ID);
+  }
+
+  public get ShowReturnToSage(): boolean {
+    const route = this.CurrentRouteAgent;
+    return Boolean(!this.EmptyStateMode && route && !route.IsConversationManager && this.ConverationManagerAgent);
+  }
+
+  /**
+   * Inserts a `@Sage` mention chip into the composer (preserving any typed draft text)
+   * and focuses the editor so the next turn routes back to the conversation manager.
+   */
+  public async ReturnToSage(): Promise<boolean> {
+    const manager = this.ConverationManagerAgent;
+    if (!manager) {
+      return false;
+    }
+    const name = manager.Name || 'Sage';
+    if (this.InputBox) {
+      const inserted = this.InputBox.InsertMention(
+        {
+          id: manager.ID,
+          type: 'agent',
+          name,
+          displayName: name,
+          icon: manager.IconClass || undefined,
+          imageUrl: manager.LogoURL || undefined,
+        },
+        true
+      );
+      if (inserted) {
+        this.mentionedAgentId = manager.ID;
+        return true;
+      }
+    }
+    const prefix = name.includes(' ') ? `@"${name}" ` : `@${name} `;
+    const existing = this.MessageText ?? '';
+    this.SetDraft(`${prefix}${existing}`, true);
+    this.mentionedAgentId = manager.ID;
+    return true;
   }
 
   /**
@@ -2591,20 +2695,36 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     await this.processMessageThroughAgent(messageDetail, mentionResult, branchId);
   }
 
+  private _cachedContinuityReplyKey?: string;
+  private _cachedContinuityReply: MJConversationDetailEntity | null = null;
+
   /**
    * The newest reply from an agent other than the conversation manager — among the replies a
-   * turn may read, so from {@link AgentHistoryFrom} onward when it's set.
+   * turn may read, so from {@link AgentHistoryFrom} onward when it's set. Resets to null when
+   * a newer user message `@`-mentions the conversation manager or when the conversation manager
+   * received a handback from another agent.
    */
   private findLastNonSageReply(): MJConversationDetailEntity | null {
-    return this.ConversationHistory
-      .slice()
-      .reverse()
-      .find(msg =>
-        msg.Role === 'AI' &&
-        !!msg.AgentID &&
-        !UUIDsEqual(msg.AgentID, this.ConverationManagerAgent?.ID) &&
-        this.isWithinHistoryFloor(msg)
-      ) ?? null;
+    const history = this.ConversationHistory ?? [];
+    const lastRow = history.length > 0 ? history[history.length - 1] : null;
+    const managerId = this.ConverationManagerAgent?.ID ?? null;
+    const floorMs = this.AgentHistoryFrom ? new Date(this.AgentHistoryFrom).getTime() : '';
+    const cacheKey = `${history.length}|${lastRow?.ID ?? ''}|${lastRow?.AgentID ?? ''}|${managerId ?? ''}|${floorMs}`;
+    if (this._cachedContinuityReplyKey === cacheKey) {
+      return this._cachedContinuityReply ?? null;
+    }
+
+    const reply = FindContinuityAgentMessage(
+      history,
+      managerId,
+      {
+        conversationManagerName: this.ConverationManagerAgent?.Name ?? 'Sage',
+        isWithinFloor: msg => this.isWithinHistoryFloor(msg),
+      }
+    );
+    this._cachedContinuityReplyKey = cacheKey;
+    this._cachedContinuityReply = reply;
+    return reply;
   }
 
   /**
@@ -2634,11 +2754,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     return AIEngineBase.Instance.ReadableAgents.find(a => UUIDsEqual(a.ID, agentId))?.Name ?? null;
   }
 
-  /** The ID of the agent with this name, or null when there is none. */
-  private agentIdByName(agentName: string): string | null {
-    return AIEngineBase.Instance.ReadableAgents.find(a => a.Name === agentName)?.ID ?? null;
-  }
-
   /** True when the agent is MJ's conversation manager. */
   private isConversationManager(agentId: string): boolean {
     return !!this.ConverationManagerAgent?.ID && UUIDsEqual(agentId, this.ConverationManagerAgent.ID);
@@ -2647,21 +2762,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   /** Shows the person why an agent turn didn't happen, or didn't finish. */
   private notifyAgentTurnProblem(message: string, style: 'warning' | 'error'): void {
     MJNotificationService.Instance?.CreateSimpleNotification(message, style, 5000);
-  }
-
-  /**
-   * Refuses agents the host doesn't allow — named by the conversation manager's delegation or
-   * by a workflow it planned — and settles the person's message.
-   */
-  private async refuseDisallowedAgents(userMessage: MJConversationDetailEntity, agentNames: string[]): Promise<void> {
-    const subject = agentNames.join(', ');
-    this.notifyAgentTurnProblem(
-      agentNames.length === 1
-        ? `${subject} isn't available in this chat, so it didn't run.`
-        : `${subject} aren't available in this chat, so they didn't run.`,
-      'warning'
-    );
-    await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
   }
 
   /**
@@ -2988,25 +3088,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         return;
       }
 
-      // Stage 2: Check for task graph (multi-step orchestration)
-      if (result.payload?.taskGraph) {
-        await this.handleTaskGraphExecution(userMessage, result, conversationId, branchId, conversationManagerMessage);
-        // Remove CM from active tasks
-        if (taskId) {
-          // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
-        }
-      }
-      // Stage 3: Check for sub-agent invocation (single-step delegation)
-      else if (result.agentRun.FinalStep === 'Success' && result.payload?.invokeAgent) {
-        // Reuse the existing conversationManagerMessage instead of creating new ones
-        await this.handleSubAgentInvocation(userMessage, result, conversationId, branchId, conversationManagerMessage);
-        // Remove CM from active tasks
-        if (taskId) {
-          // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
-        }
-      }
-      // Stage 4: Direct chat response from Agent
-      else if (result.agentRun.FinalStep === 'Chat' && result.agentRun.Message) {
+      // Direct chat response from Agent (handoffs and task graphs now execute server-side in AgentRunner)
+      if (result.agentRun.FinalStep === 'Chat' && result.agentRun.Message) {
         // Normal chat response
         // use update helper to ensure that if there is a race condition with more streaming updates we don't allow that to override this final message
         // Note: updateConversationDetail will call markMessageComplete() for us
@@ -3029,9 +3112,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Clean up completion timestamp after delay
         this.cleanupCompletionTimestamp(conversationManagerMessage.ID);
       }
-      // Stage 5: Silent observation - but check for message content first
+      // Silent observation or server-completed handoff/workflow turn - check for message content first
       else {
-        // Check if there's a message to display even without payload/taskGraph
+        // Check if there's a message to display
         if (result.agentRun.Message) {
           // Mark message as completing BEFORE setting final content
           this.markMessageComplete(conversationManagerMessage);
@@ -3042,6 +3125,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete', result);
 
           this.MessageSent.emit(conversationManagerMessage);
+
+          await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
 
           // Clean up completion timestamp after delay
           this.cleanupCompletionTimestamp(conversationManagerMessage.ID);
@@ -3091,111 +3176,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       }
     }
   }
-
-  /** Detaches the progress callback for one message — used when submission never starts. */
-  private releaseProgressCallback(messageId: string): void {
-    const callback = this.registeredCallbacks.get(messageId);
-    if (callback) {
-      this.streamingService.unregisterMessageCallback(messageId, callback);
-      this.registeredCallbacks.delete(messageId);
-    }
-  }
-
-  /**
-   * Submits a task graph to the server and returns — the client no longer drives execution.
-   *
-   * This used to call the `ExecuteTaskGraph` mutation and await the ENTIRE workflow inside one
-   * long-lived GraphQL request. That had three unfixable problems: a page reload lost the awaited
-   * promise (leaving a workflow running with nobody watching), a server restart orphaned every
-   * in-flight task, and no other channel could reach the substrate at all.
-   *
-   * Now submission returns as soon as the graph is durable and the server-side dispatcher executes
-   * it. The client is purely an observer: progress arrives over the existing PubSub frames, and
-   * because the work lives in Task rows rather than in a promise, a reload can re-attach to a
-   * workflow already in flight.
-   *
-   * Single-task graphs are no longer special-cased here. The old client-side fork ran them through
-   * a different code path entirely; they now submit like any other graph, and the decision about
-   * whether a one-node graph is worth durable machinery moves server-side where it can be recorded.
-   *
-   * @param branchId The turn's branch (null is Main); the task-graph message is written there.
-   */
-  private async handleTaskGraphExecution(
-    userMessage: MJConversationDetailEntity,
-    managerResult: ExecuteAgentResult,
-    conversationId: string,
-    branchId: string | null,
-    conversationManagerMessage: MJConversationDetailEntity
-  ): Promise<void> {
-    // `payload` is untyped by construction (an agent's payload shape is agent-specific), so pin the
-    // graph to the operation's own input contract at the boundary rather than letting it stay loose.
-    const taskGraph: TaskGraphSubmitInput['spec'] | undefined = managerResult.payload?.taskGraph;
-    if (!taskGraph) return;
-
-    // The host's allowed list holds for every agent step of the plan, not only for a single
-    // delegation: a workflow naming an agent the chat doesn't allow is not submitted at all.
-    const disallowedAgents = FindDisallowedTaskGraphAgents(
-      Array.isArray(taskGraph.tasks) ? taskGraph.tasks : [],
-      this.AllowedAgentIDs,
-      agentName => this.agentIdByName(agentName)
-    );
-    if (disallowedAgents.length > 0) {
-      await this.refuseDisallowedAgents(userMessage, disallowedAgents);
-      return;
-    }
-
-    const workflowName = taskGraph.workflowName || 'Workflow';
-    const reasoning = taskGraph.reasoning || 'Executing multi-step workflow';
-    const taskCount = Array.isArray(taskGraph.tasks) ? taskGraph.tasks.length : 0;
-
-    // A message the user can watch. Progress frames from the dispatcher land against this ID.
-    const taskExecutionMessage = await this.createTurnRow(conversationId, branchId);
-    taskExecutionMessage.Message = `⏳ **${workflowName}**\n\n${reasoning}\n\nSubmitting ${taskCount} task(s)…`;
-    taskExecutionMessage.ParentID = conversationManagerMessage.ID;
-    taskExecutionMessage.Status = 'In-Progress';
-    await taskExecutionMessage.Save();
-    this.MessageSent.emit(taskExecutionMessage);
-
-    const callback = this.createMessageProgressCallback(taskExecutionMessage.ID);
-    this.registeredCallbacks.set(taskExecutionMessage.ID, callback);
-    this.streamingService.registerMessageCallback(taskExecutionMessage.ID, callback);
-
-    try {
-      // `TaskGraph.Submit` is a Remote Operation, not a bespoke mutation: the same call site is
-      // reachable from MCP, an Action wrapper, and this UI. `Execute` marshals over the generic
-      // `ExecuteRemoteOperation` transport, so there is no hand-written GraphQL document here.
-      const result = await new TaskGraphSubmitOperation().Execute({
-        spec: taskGraph,
-        environmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
-        conversationDetailID: taskExecutionMessage.ID,
-      });
-
-      if (result.Success && result.Output?.success) {
-        // Deliberately NOT "completed" — submission means the work is durable and running, and
-        // claiming completion here is exactly the lie the old await-everything path told when it
-        // returned early. The dispatcher's progress frames update this message as tasks finish.
-        await this.updateConversationDetail(
-          taskExecutionMessage,
-          `▶️ **${workflowName}** started — ${taskCount} task(s) running.`,
-          'In-Progress'
-        );
-      } else {
-        const errorMsg = result.Output?.errorMessage || result.ErrorMessage || 'Unknown error';
-        console.error('Task graph submission rejected:', errorMsg);
-        taskExecutionMessage.Error = errorMsg;
-        await this.updateConversationDetail(taskExecutionMessage, `❌ **${workflowName}** rejected: ${errorMsg}`, 'Error');
-        this.releaseProgressCallback(taskExecutionMessage.ID);
-      }
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      console.error('Task graph submission failed:', error);
-      taskExecutionMessage.Error = msg;
-      await this.updateConversationDetail(taskExecutionMessage, `❌ **${workflowName}** failed to submit: ${msg}`, 'Error');
-      this.releaseProgressCallback(taskExecutionMessage.ID);
-    }
-  }
-
-
 
   protected async updateConversationDetail(convoDetail: MJConversationDetailEntity, message: string, status: 'In-Progress' | 'Complete' | 'Error', result?: ExecuteAgentResult): Promise<void> {
     // Mark as completing FIRST if status is Complete or Error
@@ -3292,203 +3272,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         versionNumber: source.versionNumber
       }
     };
-  }
-
-  /**
-   * Handle sub-agent invocation based on Sage's payload
-   * Reuses the existing conversationManagerMessage to avoid creating multiple records
-   *
-   * @param branchId The turn's branch (null is Main).
-   */
-  private async handleSubAgentInvocation(
-    userMessage: MJConversationDetailEntity,
-    managerResult: ExecuteAgentResult,
-    conversationId: string,
-    branchId: string | null,
-    conversationManagerMessage: MJConversationDetailEntity
-  ): Promise<void> {
-    const payload = managerResult.payload;
-    const agentName = payload.invokeAgent;
-    const reasoning = payload.reasoning || 'Delegating to specialist agent';
-
-    // Now create a NEW message for the sub-agent execution
-    let agentResponseMessage: MJConversationDetailEntity | null = null;
-    try {
-      // Look up the agent to get its ID
-      const agent = AIEngineBase.Instance.ReadableAgents.find(a => a.Name === agentName);
-
-      // The manager routes only among the allowed agents, but its answer is model output: hold
-      // the host's list here too, before any row is written for the delegate.
-      if (this.AllowedAgentIDs != null && !IsAgentAllowed(agent?.ID, this.AllowedAgentIDs)) {
-        await this.refuseDisallowedAgents(userMessage, [agentName]);
-        return;
-      }
-
-      // Create AI response message BEFORE invoking agent (for duration tracking)
-      agentResponseMessage = await this.createTurnRow(conversationId, branchId);
-
-      agentResponseMessage.Message = '⏳ Starting...'; // Initial message
-      agentResponseMessage.ParentID = conversationManagerMessage.ID; // Thread under delegation message
-      agentResponseMessage.Status = 'In-Progress';
-      // Set AgentID immediately for proper attribution
-      if (agent?.ID) {
-        agentResponseMessage.AgentID = agent.ID;
-      }
-
-      // Save the record to establish __mj_CreatedAt timestamp
-      await agentResponseMessage.Save();
-      this.MessageSent.emit(agentResponseMessage);
-
-      // Add sub-agent to active tasks
-      const newTaskId = this.activeTasks.add({
-        agentName: agentName,
-        status: 'Starting...',
-        relatedMessageId: userMessage.ID,
-        conversationDetailId: agentResponseMessage.ID,
-        conversationId,
-        conversationName: this.ConversationName
-      });
-
-      // Load previous payload if agent has been invoked before
-      const { payload: previousPayload, artifactInfo } = agent?.ID
-        ? await this.loadPreviousPayloadForAgent(agent.ID, branchId)
-        : { payload: null, artifactInfo: null };
-
-      // Find configuration preset from previous @mention in conversation history
-      const configurationPresetId = agent?.ID
-        ? await this.agentService.FindConfigurationPresetForAgent(conversationId, agent.ID, branchId)
-        : undefined;
-
-      // Invoke the sub-agent with progress callback
-      const subResult = await this.agentService.invokeSubAgent(
-        agentName,
-        conversationId,
-        userMessage,
-        this.ConversationHistory,
-        reasoning,
-        agentResponseMessage.ID,
-        previousPayload, // Pass previous payload for continuity
-        this.createProgressCallback(agentResponseMessage, agentName),
-        artifactInfo?.artifactId,
-        artifactInfo?.versionId,
-        configurationPresetId, // Pass configuration from previous @mention for continuity
-        this.AppContext, // Embedder-supplied app/form context
-        this.PlanModeEnabled, // per-request Plan Mode toggle
-        this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
-        this.AgentHistoryFrom, // the first moment of the conversation the run may read
-      );
-
-      // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
-      // DO NOT remove here - allows UI to show task during entire execution
-
-      if (subResult && subResult.success) {
-        // Update the response message with agent result
-        // Store the agent ID for display
-        if (subResult.agentRun.AgentID) {
-          agentResponseMessage.AgentID = subResult.agentRun.AgentID;
-        }
-
-        await this.updateConversationDetail(agentResponseMessage, subResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', subResult);
-
-        // Always emit artifactCreated to trigger UI reload — the server may have created
-        // artifacts even when the result payload is empty (e.g., remote stage server).
-        // onArtifactCreated will reload from DB and discover any artifacts that exist.
-        this.emitArtifactReload(agentResponseMessage);
-        this.MessageSent.emit(agentResponseMessage);
-
-        // Mark user message as complete
-        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
-      } else {
-        // A post-ACK disconnect means the first run may still be executing on this
-        // detail — do not start a second run on the same conversationDetailId.
-        if (agentFailureDisposition(subResult).status === 'In-Progress') {
-          await this.applyAgentFailureToDetail(agentResponseMessage, userMessage, agentName, subResult);
-          return;
-        }
-
-        // Sub-agent failed - attempt auto-retry once
-        console.log(`⚠️ ${agentName} failed, attempting auto-retry...`);
-
-        await this.updateConversationDetail(conversationManagerMessage, `👉 **${agentName}** will handle this request...\n\n⚠️ First attempt failed, retrying...`, conversationManagerMessage.Status);
-
-        // Update the existing agentResponseMessage to show retry status
-        await this.updateConversationDetail(agentResponseMessage, "Retrying...", agentResponseMessage.Status);
-
-        // Retry the sub-agent (reuse previously loaded payload and config from first attempt)
-        const retryResult = await this.agentService.invokeSubAgent(
-          agentName,
-          conversationId,
-          userMessage,
-          this.ConversationHistory,
-          reasoning,
-          agentResponseMessage.ID,
-          previousPayload, // Pass same payload as first attempt
-          this.createProgressCallback(agentResponseMessage, `${agentName} (retry)`),
-          artifactInfo?.artifactId,
-          artifactInfo?.versionId,
-          configurationPresetId, // Pass same config as first attempt
-          this.AppContext, // Embedder-supplied app/form context
-          this.PlanModeEnabled, // per-request Plan Mode toggle
-          this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
-          this.AgentHistoryFrom, // the first moment of the conversation the run may read
-        );
-
-        if (retryResult && retryResult.success) {
-          // Retry succeeded - update the same message
-          if (retryResult.agentRun.AgentID) {
-            agentResponseMessage.AgentID = retryResult.agentRun.AgentID;
-          }
-
-          await this.updateConversationDetail(agentResponseMessage, retryResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', retryResult);
-
-          // Always emit artifactCreated to trigger UI reload (same as initial attempt)
-          this.emitArtifactReload(agentResponseMessage);
-          this.MessageSent.emit(agentResponseMessage);
-
-          await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
-        } else {
-          // Retry also failed — terminate the agent bubble (the red-pill timer lives here),
-          // not only the Sage delegation message.
-          await this.applyAgentFailureToDetail(
-            agentResponseMessage,
-            userMessage,
-            agentName,
-            retryResult,
-            'failed after retry',
-          );
-          const retryDisposition = agentFailureDisposition(retryResult);
-          if (retryDisposition.status === 'Error') {
-            conversationManagerMessage.Error = retryDisposition.message;
-            await this.updateConversationDetail(
-              conversationManagerMessage,
-              `❌ **${agentName}** failed after retry\n\n${retryDisposition.message}`,
-              'Error',
-            );
-          }
-        }
-      }
-    } catch (error) {
-      console.error(`❌ Error invoking sub-agent ${agentName}:`, error);
-
-      const catchResult = {
-        success: false,
-        errorMessage: error instanceof Error ? error.message : String(error),
-      } as ExecuteAgentResult;
-      if (agentResponseMessage) {
-        await this.applyAgentFailureToDetail(agentResponseMessage, userMessage, agentName, catchResult);
-      } else {
-        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
-      }
-      const catchDisposition = agentFailureDisposition(catchResult);
-      if (catchDisposition.status === 'Error') {
-        conversationManagerMessage.Error = catchDisposition.message;
-        await this.updateConversationDetail(
-          conversationManagerMessage,
-          `❌ **${agentName}** encountered an error\n\n${catchDisposition.message}`,
-          'Error',
-        );
-      }
-    }
   }
 
   /**
@@ -3716,30 +3499,17 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         }
         this.emitAfterAgentTurn(conversationId, result);
 
-        // Multi-stage response handling (same logic as ambient Sage)
-        // Stage 1: Check for task graph (multi-step orchestration)
-        if (result.payload?.taskGraph) {
-          console.log('📋 Task graph detected from @mention, starting task orchestration');
-          await this.handleTaskGraphExecution(userMessage, result, conversationId, branchId, agentResponseMessage);
-        }
-        // Stage 2: Check for sub-agent invocation (single-step delegation)
-        else if (result.agentRun.FinalStep === 'Success' && result.payload?.invokeAgent) {
-          console.log('🎯 Sub-agent invocation detected from @mention');
-          await this.handleSubAgentInvocation(userMessage, result, conversationId, branchId, agentResponseMessage);
-        }
-        // Stage 3: Normal chat response
-        else {
-          await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', result)
+        // Normal chat response (handoffs and task graphs now execute server-side in AgentRunner)
+        await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', result);
 
-          // Server created artifacts - emit event to trigger UI reload
-          if (result.payload && Object.keys(result.payload).length > 0) {
-            this.emitArtifactReload(agentResponseMessage);
-            this.MessageSent.emit(agentResponseMessage);
-          }
-
-          // Mark user message as complete
-          await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+        // Server created artifacts - emit event to trigger UI reload
+        if (result.payload && Object.keys(result.payload).length > 0) {
+          this.emitArtifactReload(agentResponseMessage);
+          this.MessageSent.emit(agentResponseMessage);
         }
+
+        // Mark user message as complete
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       } else {
         await this.applyAgentFailureToDetail(agentResponseMessage, userMessage, agentName, result);
       }
@@ -3757,6 +3527,50 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       }
     }
+  }
+
+  /**
+   * Resolves the configuration preset for an implicit continuation turn on `agentId` using
+   * `ResolveConversationAgentPreset`. Uses `this.AgentConfigurationPresetId` only when that
+   * preset belongs to `agentId` (`preset.AgentID`), else falls back to `agentId`'s resolved preset.
+   */
+  private async resolveContinuationPresetForAgent(
+    conversationId: string,
+    agentId: string,
+    branchId: string | null
+  ): Promise<string | undefined> {
+    const resolved = await ResolveConversationAgentPreset({
+      ConversationID: conversationId,
+      AgentID: agentId,
+      BranchID: branchId,
+      ContextUser: this.CurrentUser,
+      Provider: this.ProviderToUse,
+    });
+    if (resolved?.Preset?.ID && resolved.Source !== 'Default') {
+      return resolved.Preset.ID;
+    }
+
+    const headerPresetId = this.headerPresetForAgent(agentId);
+    if (headerPresetId) {
+      return headerPresetId;
+    }
+
+    return resolved?.Preset?.ID ?? undefined;
+  }
+
+  /**
+   * Returns `this.AgentConfigurationPresetId` only when it belongs to `agentId` (`preset.AgentID === agentId`).
+   */
+  private headerPresetForAgent(agentId: string): string | undefined {
+    const candidateId = this.AgentConfigurationPresetId;
+    if (!candidateId) {
+      return undefined;
+    }
+    const allForAgent = AIEngineBase.Instance.GetAgentConfigurationPresets(agentId, false);
+    const matched = (allForAgent ?? []).find(
+      p => UUIDsEqual(p.ID, candidateId) && (!p.AgentID || UUIDsEqual(p.AgentID, agentId))
+    );
+    return matched?.ID ?? undefined;
   }
 
   /**
@@ -3790,7 +3604,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     let previousPayload: Record<string, unknown> | null = null;
     let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
-    let previousConfigurationId: string | undefined = undefined;
 
     // Use targetArtifactVersionId if specified (from intent check).
     // Resolved by ID against the database, not against artifactsByDetailId: the intent check
@@ -3811,19 +3624,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       }
     }
 
-    // Extract configuration preset from the User message that @mentioned this agent
-    // Uses the shared helper method in the agent service
-    previousConfigurationId = await this.agentService.FindConfigurationPresetForAgent(conversationId, agentId, branchId);
-
-    // Fall back to the chat header's mode-picker selection when nothing
-    // in the message history pinned a preset. The picker reflects the
-    // user's persistent per-agent mode preference (Draft / Standard /
-    // High) and applies to all subsequent non-mention routes. A
-    // history-derived preset still wins because it represents an
-    // explicit per-message intent the user expressed earlier.
-    if (!previousConfigurationId && this.AgentConfigurationPresetId) {
-      previousConfigurationId = this.AgentConfigurationPresetId;
-    }
+    // Resolve a preset for the continued agent via ResolveConversationAgentPreset (which checks
+    // @mention pins first, then user settings, then the agent's default preset).
+    // The header mode-picker selection (this.AgentConfigurationPresetId) is used only when it
+    // belongs to this agent (preset.AgentID === agentId); otherwise the agent's own default
+    // preset is resolved so a pre-handoff picker selection from another agent never leaks.
+    const previousConfigurationId = await this.resolveContinuationPresetForAgent(conversationId, agentId, branchId);
 
     // Fall back to searching through all agent messages for an artifact
     // This ensures payload continuity even after clarifying exchanges without artifacts

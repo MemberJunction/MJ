@@ -242,18 +242,19 @@ When the LLM determines it needs to delegate work, it returns a `Sub-Agent` step
 
 ### Resolution Order
 
-The agent framework resolves the sub-agent name in this order:
+`BaseAgent.resolveSubAgentByName` resolves the requested sub-agent name by exact case-insensitive match (`name.trim().toLowerCase()`) across three sources in order:
 
-1. **Child agents**: Search agents where `ParentID` matches the current agent
-2. **Related agents**: Search `AIAgentRelationship` records for the current agent
+1. **Child agents**: Active `AIAgent` records where `ParentID` matches the current agent (`Status === 'Active'`)
+2. **Related agents**: Active `AIAgentRelationship` records (`Status === 'Active'`) for the current agent whose target sub-agent is active
+3. **Runtime-granted sub-agents**: Active agents granted for the current run via skill activation (`AISkillSubAgent`) or caller `subAgentChanges` (`getEffectiveSubAgentsForValidation(params.agent.ID)`)
 
-If the name doesn't match exactly, fuzzy matching (contains search) is attempted. Ambiguous matches produce an error.
+There is **no** fuzzy or substring matching. Unrelated top-level peer agents are never resolved by `Sub-Agent`: to transfer a conversation to another top-level agent so it speaks to the user as itself, use `nextStep.type = "Handoff"`; to dispatch durable multi-step work across peer agents, use `nextStep.type = "Tasks"`.
 
 ### Dispatch
 
 Once resolved, the framework dispatches to the appropriate handler:
 
-- **Child agents** → `executeChildSubAgentStep()`: Computes payload via downstream paths, applies scope wrapping, executes, then merges upstream
+- **Child agents and runtime-granted sub-agents** → `executeChildSubAgentStep()`: Computes payload via downstream paths, applies scope wrapping, executes, then merges upstream
 - **Related agents** → `executeRelatedSubAgentStep()`: Applies input mapping, prepares context paths, configures message mode, executes, then applies output mapping
 
 ### Execution Flow
@@ -356,6 +357,7 @@ User scopes (primary entity/record and secondary scopes) are propagated unchange
 2. **Step tracking**: Step entity linked to child's `AIAgentRun` via `TargetLogID`
 3. **Media outputs**: Collected and merged into parent's media accumulator
 4. **Conversation**: Result formatted as markdown and injected as user message
+5. **Chat handling**: If the child sub-agent returns a `Chat` step, `AIAgent.ChatHandlingOption` on the parent agent determines whether the Chat is answered by the parent (`Consult`), remapped (`Success`, `Failed`, `Retry`), or propagated to the caller (`NULL`).
 
 Result message format:
 ```markdown
@@ -376,7 +378,31 @@ Result message format:
    ```
    The message carries `messageType: 'sub-agent-result'` metadata with standard expiration/compaction fields. By default, sub-agent results persist for 3 turns then are removed. The `messageExpirationOverride` on `ExecuteAgentParams` can override this.
 3. **Media outputs**: Collected and merged into parent's media accumulator
-4. **Chat handling**: If the sub-agent returns a `Chat` step (wants to talk to the user), the relationship's `ChatHandlingOption` determines behavior — it can remap the Chat to Success, Failed, or Retry
+4. **Chat handling**: If the sub-agent returns a `Chat` step, the effective `ChatHandlingOption` determines behavior (see below)
+
+### Sub-Agent `ChatHandlingOption` Resolution & Values
+
+When a sub-agent returns a `Chat` step, the parent resolves `ChatHandlingOption` in this order:
+
+1. `AIAgentRelationship.ChatHandlingOption` (for related sub-agents when non-null)
+2. `AIAgent.ChatHandlingOption` on the parent agent (when non-null)
+3. `NULL` — propagate the `Chat` step to the parent's caller (`shouldTerminate: true`)
+
+| Value | Behavior when a sub-agent returns `Chat` |
+|---|---|
+| `NULL` (default) | Propagates the `Chat` step and any `responseForm` to the parent's caller, terminating the parent run (`AwaitingFeedback` at root). |
+| `Consult` | On Loop-like parents (`InjectLoopResultsAsMessage !== false`), keeps the parent loop running (`shouldTerminate: false`), records an open consult for that sub-agent, and injects a `"Sub-agent <Name> is asking you"` message into the parent conversation so the parent can answer via `resumeRunId`, escalate via its own `Chat` step, or instruct the sub-agent to proceed without the answer. Bounded per sub-agent by `AIAgent.MaxSubAgentConsultRounds` (`> 0`; `NULL` uses the framework default `3`). On Flow parents, downgrades to `NULL` (propagate). |
+| `Retry` | Remaps the sub-agent's `Chat` step to a `Retry` step (`terminate: false`), merges any output payload, and injects the sub-agent's result message so the parent loop continues on the next turn. |
+| `Success` | Remaps the sub-agent's `Chat` step to `Success` and terminates the parent step accordingly. |
+| `Failed` | Remaps the sub-agent's `Chat` step to `Failed` and marks the parent step failed. |
+
+### Sub-Agent Configuration Presets
+
+A sub-agent can define named configuration presets in `MJ: AI Agent Configurations` (`Status = 'Active'`). When a parent invokes a sub-agent, the sub-agent's `configurationParams` are resolved in this precedence order:
+
+1. **Per-call `presetName`**: If the parent specifies `presetName` on `subAgent` or `subAgents[i]` (available when at least one active preset exists on an effective sub-agent), the runtime matches an `Active` `AIAgentConfiguration` owned by that sub-agent by `Name` first, then `DisplayName` (trimmed, case-insensitive), passes its `AIConfigurationID`, and records the preset's own `Name`.
+2. **Relationship `ConfigurationPresetID`**: For related sub-agents, if `AIAgentRelationship.ConfigurationPresetID` matches an `Active` `AIAgentConfiguration.ID` (the FK target) owned by that sub-agent, the runtime passes its `AIConfigurationID` and records the preset's own `Name`.
+3. **Inherit parent**: Otherwise, the sub-agent inherits `params.configurationParams` from the parent run.
 
 ### Parent Continuation
 

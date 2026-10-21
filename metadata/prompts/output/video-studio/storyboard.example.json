@@ -1,0 +1,109 @@
+{
+  "taskComplete": true,
+  "message": "Created a contiguous 3-beat storyboard covering 0s to 18s with {BindingKey} placeholders, per-format LayoutNotes, StateList, Audio.Narration.Script, Audio.Cues, and Audio.Captions.",
+  "payloadChangeRequest": {
+    "replaceElements": {
+      "Beats": [
+        {
+          "Key": "beat-1",
+          "Label": "Hook",
+          "StartSeconds": 0,
+          "EndSeconds": 5,
+          "EntryState": "HERO_INTRO",
+          "ExitState": "ARR_SETTLED",
+          "Purpose": "Hook the audience with the headline Q3 ARR milestone",
+          "OnScreenText": ["Q3 Revenue Momentum", "ARR: {arr_total}"],
+          "DataRefs": ["arr_total"],
+          "AssetRefs": ["company_logo"],
+          "NarrationKey": "nar-1",
+          "LayoutNotes": {
+            "16:9": "Two-column hero header with KPI tile on right and title on left.",
+            "9:16": "Vertical stack with logo top, title center-top, and KPI tile center."
+          }
+        },
+        {
+          "Key": "beat-2",
+          "Label": "Proof",
+          "StartSeconds": 5,
+          "EndSeconds": 13,
+          "EntryState": "ARR_SETTLED",
+          "ExitState": "NDR_SETTLED",
+          "Purpose": "Highlight enterprise net dollar retention expansion",
+          "OnScreenText": ["Net Dollar Retention", "{ndr_pct}"],
+          "DataRefs": ["ndr_pct"],
+          "AssetRefs": ["company_logo"],
+          "NarrationKey": "nar-2",
+          "LayoutNotes": {
+            "16:9": "Centered KPI tile with callout on right.",
+            "9:16": "Full-width KPI card stacked above callout text."
+          }
+        },
+        {
+          "Key": "beat-3",
+          "Label": "Close",
+          "StartSeconds": 13,
+          "EndSeconds": 18,
+          "EntryState": "NDR_SETTLED",
+          "ExitState": "SUMMARY_POSTER",
+          "Purpose": "Closing executive summary poster frame with data-as-of attribution",
+          "OnScreenText": ["Q3 Summary", "ARR {arr_total} • NDR {ndr_pct}"],
+          "DataRefs": ["arr_total", "ndr_pct"],
+          "AssetRefs": ["company_logo"],
+          "NarrationKey": "nar-3",
+          "LayoutNotes": {
+            "16:9": "Two side-by-side summary KPI tiles above bottom-right AsOf attribution.",
+            "9:16": "Stacked summary KPI tiles above centered AsOf attribution."
+          }
+        }
+      ],
+      "StateList": [
+        "HERO_INTRO",
+        "ARR_SETTLED",
+        "NDR_SETTLED",
+        "SUMMARY_POSTER"
+      ],
+      "Audio": {
+        "Narration": {
+          "VoiceID": "brand-voice-default",
+          "Provider": "ElevenLabs",
+          "Script": [
+            {
+              "Key": "nar-1",
+              "BeatKey": "beat-1",
+              "Text": "In Q3, annual recurring revenue reached {arr_total}."
+            },
+            {
+              "Key": "nar-2",
+              "BeatKey": "beat-2",
+              "Text": "Enterprise expansion pushed net dollar retention to {ndr_pct}."
+            },
+            {
+              "Key": "nar-3",
+              "BeatKey": "beat-3",
+              "Text": "Disciplined execution continues to compound growth."
+            }
+          ]
+        },
+        "Cues": [
+          {
+            "Key": "cue-1",
+            "TimestampSeconds": 0,
+            "Kind": "MusicSwell",
+            "BeatKey": "beat-1",
+            "Notes": "Gentle opening swell under headline reveal"
+          },
+          {
+            "Key": "cue-2",
+            "TimestampSeconds": 5,
+            "Kind": "MusicDuck",
+            "BeatKey": "beat-2",
+            "Notes": "Duck music under retention narration"
+          }
+        ],
+        "Captions": "Sidecar"
+      }
+    }
+  },
+  "reasoning": "Beats are contiguous from 0s to 18s, every number uses a {BindingKey} placeholder listed in DataRefs, and LayoutNotes cover both 16:9 and 9:16.",
+  "confidence": 0.93
+}

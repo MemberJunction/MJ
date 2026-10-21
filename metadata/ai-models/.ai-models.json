@@ -24972,6 +24972,38 @@
             "checksum": "90e8f9254bfaa3dff4c8430693eb1e4b041911b5a559139c9ae12967845b1707"
           }
         }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "AE716540-1FAE-4DDD-9F62-B1003C0AC0FF"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "5F9B92B6-CF8D-4081-B966-6DBE0A9F8F81"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -25363,6 +25395,68 @@
           "sync": {
             "lastModified": "2026-09-10T17:40:34.449Z",
             "checksum": "c04c5558e327ecb53522adf5d3afabf805f83be22ed7bc23f672a89e20186ca6"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "1E2AAB59-4075-4C9F-A276-7F20C736DFAB"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "audio/mp3,audio/wav,audio/ogg",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "F301C48F-BE96-49F5-AF9A-C9BCF2A1C4F4"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Video",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "video/mp4,video/webm",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "645E6041-270C-443C-9356-E59A48C892ED"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "8E3003CB-2644-4A55-93B9-48A1FE054703"
           }
         }
       ]
@@ -26663,6 +26757,38 @@
             "checksum": "883069baf372dddcefdc409fe613d9939ed2d6f2ed16def6357eec29b062cbdb"
           }
         }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "4D7FA56D-5EA8-42EC-B680-7460837DBCE2"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "7EAD0516-4D00-446B-AB6C-C43C53C10B6F"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -27905,6 +28031,38 @@
             "checksum": "6cfb406cc94c499b138b25dbcb2eb1bdabdb5d7244d8d2e1c26cd0d5152ca1af"
           }
         }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "8B150E82-F4CD-444D-808D-A3B11D15E458"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "40033019-353B-40A2-BFF2-0FFF317BA7A6"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -28678,6 +28836,209 @@
     },
     "primaryKey": {
       "ID": "A207B3C3-0CF0-41D8-9CB4-04FE747DDDD6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "FLUX 3 Video",
+      "Description": "Black Forest Labs' FLUX 3 unified audiovisual generation model for video. Supports text-to-video, image-to-video, keyframes, continuation and synchronized audio in 5-20 s clips (vendor-reported, October 2026; checked against docs.bfl.ai on 2026-10-16 (VS-GEN-3)).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Video",
+      "PowerRank": 10,
+      "SpeedRank": 2,
+      "CostRank": 9,
+      "IsActive": true,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "F86417BD-3F9E-4A34-BD5F-A21A0773923E"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "FLUX3VideoGenerator",
+            "APIName": "flux-3-video",
+            "MaxInputTokens": 10000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6FFB611C-E418-4EE0-BCE4-28B573FC74AD"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "StartedAt": "2026-10-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "InputPricePerUnit": 0,
+            "OutputPricePerUnit": 0.45,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Second",
+            "ProcessingType": "Realtime",
+            "Comments": "Fallback estimate only: the driver records BFL's own cost per call. Per second of output at the highest published rate, video-to-video (continuation) UHD, $0.45/s (45 credits; 1 credit = $0.01). Published range: Draft HD $0.06/s; text/image to video HD $0.15, FHD $0.24, QHD $0.28, UHD $0.41; video to video HD $0.21, FHD $0.27, QHD $0.31, UHD $0.45. MJ: AI Model Costs holds one price per model, so this errs high. Source: https://bfl.ai/pricing, read 2026-10-16.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "7290F8F0-6BB6-4053-A912-5BEDCE835B7C"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/webp",
+            "MaxCountPerMessage": 10,
+            "Comments": "reference images and keyframes, up to 10, vendor-reported"
+          },
+          "primaryKey": {
+            "ID": "EB46428D-AE90-4745-8264-F7710D11CE0A"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Video",
+            "Direction": "Input",
+            "IsSupported": true,
+            "MaxCountPerMessage": 1,
+            "Comments": "source clip for continuation (v2v)"
+          },
+          "primaryKey": {
+            "ID": "2FEB1262-7E67-46AA-844B-6608EEFEE7F3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Output",
+            "IsSupported": true,
+            "Comments": "synchronized audio"
+          },
+          "primaryKey": {
+            "ID": "0CF82BC5-E82C-4235-9D3B-608605E5CEA4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CC202FFC-2015-4C8C-8A6D-8BB30ADBFE2D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "FLUX 3 Image",
+      "Description": "Black Forest Labs' FLUX 3 image generation and editing model. Supports text-to-image and multi-reference image input (up to 10 reference images, vendor-reported, October 2026; checked against docs.bfl.ai on 2026-10-16 (VS-GEN-3)).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
+      "PowerRank": 11,
+      "SpeedRank": 7,
+      "CostRank": 6,
+      "IsActive": true,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "A16EB867-6ED6-460C-AAB7-EEAB71665918"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "FLUXImageGenerator",
+            "APIName": "flux-3-image",
+            "MaxInputTokens": 10000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A55AAC36-729E-46C8-8912-830FF7FA991F"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "StartedAt": "2026-10-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "InputPricePerUnit": 0,
+            "OutputPricePerUnit": 0.607,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
+            "ProcessingType": "Realtime",
+            "Comments": "Fallback estimate only: the driver records BFL's own cost per call. Per image at the highest published tier, 4K, $0.607. Published tiers: 768x768 $0.041, 1K $0.048, 1.5K $0.07, 2K $0.10, 4K $0.607. Reference images and prompts are not charged. MJ: AI Model Costs holds one price per model, so this errs high. Source: https://bfl.ai/pricing, read 2026-10-16.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "B024CB0E-7FAA-4455-94A1-764F3C1F11FD"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/webp",
+            "MaxCountPerMessage": 10,
+            "Comments": "reference images, up to 10, vendor-reported"
+          },
+          "primaryKey": {
+            "ID": "33E8D1E4-2B4F-4960-A3A5-EC470C607FD7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DADFD72E-77AB-4699-AE68-578AB4EF0534"
     }
   },
   {

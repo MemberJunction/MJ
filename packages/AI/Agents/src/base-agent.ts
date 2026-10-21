@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
+import { MJAIAgentEntity, MJAIAgentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentConfigurationEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
 import { BuildActionToolSet, CoerceActionArguments, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { DescribeValueSchemaInline, GetStoredValueSchema } from './native-tools/action-param-schema';
 import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
@@ -23,10 +23,11 @@ import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
+import { LoopAgentType } from './agent-types/loop-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID, IndexByUUID } from '@memberjunction/global';
+import { CopyScalarsAndArrays, GroupByUUID, IndexByUUID, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -131,6 +132,7 @@ import {
     type AgentPostRunCompactionConfig,
     type AIPromptExecutionScope,
     type AgentRunAudience,
+    type AgentHandoffResult,
     ConfigOf,
     type TaskGraphSpec,
     type TaskGraphSpecNode
@@ -202,6 +204,7 @@ import {
     IsOpeningTurn,
     MentionsAgent,
 } from './decision-discovery';
+import { ResolveHandoffTarget } from './handoff-target';
 import {
     BuildFinishIfQuestions,
     CapFinishIfState,
@@ -231,6 +234,15 @@ import { GetValueFromPath, SetMappedValue } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
 import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE } from './client-tool-results';
+import {
+    CanAgentOwnSubAgentConsults,
+    DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS,
+    FormatReloadedConsultsMessage,
+    FormatResponseFormSummary,
+    FormatSubAgentConsultMessage,
+    LoadOpenSubAgentConsults,
+    SubAgentConsultRecord
+} from './sub-agent-consult';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import _ from 'lodash';
@@ -257,6 +269,8 @@ interface AgentRunTokenStats {
 interface PromptWithholding {
     /** Task graphs are not offered (an audience, or a tenant-scoped run). */
     TaskGraphs: boolean;
+    /** Handoff is not offered (a sub-agent run, no conversation detail row, or a host that does not carry handoffs). */
+    Handoff: boolean;
     /** The caller's browser and view are not: no client tools, no app context (an audience). */
     CallerContext: boolean;
 }
@@ -469,6 +483,8 @@ interface ParallelSubAgentExecution<SR> {
     /** Undefined only for synthetic entries representing an unresolved sub-agent. */
     stepEntity?: MJAIAgentRunStepEntityExtended;
     upstreamPaths: string[];
+    consult?: SubAgentConsultRecord;
+    maxConsultRounds?: number;
 }
 
 /**
@@ -1201,6 +1217,17 @@ export class BaseAgent {
      */
     private _feedbackRequestId: string | null = null;
 
+    /**
+     * Stores the handoff outcome when a Handoff step fires.
+     * Populated by executeHandoffStep(), returned in ExecuteAgentResult.handoff.
+     */
+    private _handoffResult: AgentHandoffResult | null = null;
+
+    /**
+     * Stores the target agent resolved during validateHandoffNextStep() for executeHandoffStep().
+     */
+    private _resolvedHandoffTarget: { id: string; name: string } | null = null;
+
     private _resolvedStorageAccountId: string | null = null;
 
     /**
@@ -1402,8 +1429,8 @@ export class BaseAgent {
 
                 for (let i = 0; i < mediaItems.length; i++) {
                     const media = mediaItems[i];
-                    // Only intercept if there's substantial data
-                    if (media.data && media.data.length > BaseAgent.LARGE_BINARY_THRESHOLD) {
+                    // Intercept when already stored in MJ Storage (fileId) or when inline data exceeds threshold
+                    if (media.fileId || (media.data && media.data.length > BaseAgent.LARGE_BINARY_THRESHOLD)) {
                         // Generate unique reference ID
                         const refId = `media-${Date.now().toString(36)}-${i}-${Math.random().toString(36).substring(2, 8)}`;
 
@@ -1469,19 +1496,20 @@ export class BaseAgent {
 
     /**
      * Substitutes `${media:<refId>}` placeholders in a string with the actual
-     * data URI (`data:<mime>;base64,<bytes>`) of the matching intercepted media item.
+     * data URI (`data:<mime>;base64,<bytes>`) or stored `fileId` (for `fileId`-only
+     * media items) of the matching intercepted media item.
      *
      * Used for payload / actionable-command resolution at the terminal step, where the
-     * LLM wants to embed image (or other media) data inline at a specific position in
-     * its structured output rather than as a trailing attachment card. The string
-     * variant of placeholder resolution; recursive walker lives in
-     * {@link resolveMediaPlaceholdersInPayload}.
+     * LLM wants to embed image (or other media) data or a stored file ID inline at a
+     * specific position in its structured output rather than only as a trailing
+     * attachment card. The string variant of placeholder resolution; recursive walker
+     * lives in {@link resolveMediaPlaceholdersInPayload}.
      *
      * This function only does substitution — it has no persistence side effects.
      *
      * @param text - The string that may contain media placeholders
-     * @returns String with placeholders resolved to actual data URIs (or the original
-     *          placeholder if the refId is unknown — defensive, shouldn't happen)
+     * @returns String with placeholders resolved to data URIs or stored file IDs (or the
+     *          original placeholder if the refId is unknown — defensive, shouldn't happen)
      * @private
      * @since 3.1.0
      */
@@ -1500,6 +1528,9 @@ export class BaseAgent {
             const media = this._mediaOutputs.find(m => m.refId === refId);
             if (media?.data) {
                 return `data:${media.mimeType};base64,${media.data}`;
+            }
+            if (media?.fileId) {
+                return media.fileId;
             }
             // Unknown refId — leave the placeholder in place rather than emit a broken
             // data URI. Defensive; this branch should not fire in normal flow.
@@ -1885,6 +1916,32 @@ export class BaseAgent {
      * @private
      */
     private _validationRetryCount: number = 0;
+
+    /**
+     * Per-parent-run consultation round counter keyed by `subAgentEntity.ID`.
+     * Tracks how many times each sub-agent has returned `FinalStep === 'Chat'`
+     * under `ChatHandlingOption = 'Consult'` during this run.
+     * Reset at the start of each agent run.
+     * @private
+     */
+    private _subAgentConsultRounds: Map<string, number> = new Map();
+
+    /**
+     * Open sub-agent consultations keyed by `childRunId`.
+     * Populated when a child sub-agent pauses with `FinalStep === 'Chat'` under `'Consult'`,
+     * and removed when the parent resumes that child run.
+     * Reset at the start of each agent run.
+     * @private
+     */
+    private _openSubAgentConsults: Map<string, SubAgentConsultRecord> = new Map();
+
+    /**
+     * Tracks whether we have already logged the warning that `'Consult'` is not
+     * supported on agent types where `InjectLoopResultsAsMessage` is `false`.
+     * Reset at the start of each agent run.
+     * @private
+     */
+    private _loggedConsultUnsupportedAgentType: boolean = false;
 
     /**
      * Counter tracking the number of context recovery attempts made in this run.
@@ -2438,9 +2495,14 @@ export class BaseAgent {
             this._validationRetryCount = 0;
             this._generalValidationRetryCount = 0;
             this._contextRecoveryAttempts = 0;
+            this._subAgentConsultRounds.clear();
+            this._openSubAgentConsults.clear();
+            this._loggedConsultUnsupportedAgentType = false;
             this._effectiveActions = [];
             this._dynamicActionLimits = {};
             this._mediaOutputs = [];
+            this._handoffResult = null;
+            this._resolvedHandoffTarget = null;
             this._lastSubAgentArtifactDirective = undefined;
             this._messageLifecycleCallback = params.onMessageLifecycle;
             this._catalogNarrowing = undefined;
@@ -2504,8 +2566,8 @@ export class BaseAgent {
             // resumed stopped run can be spliced in ahead of it once the parallel phase settles.
             const continuationMessage = wrappedParams.conversationMessages[wrappedParams.conversationMessages.length - 1];
 
-            // Positions matter: [0] is the config and [5] the stopped-run continuation.
-            const [config, , , , , stoppedRunContinuation] = await Promise.all([
+            // Positions matter: [0] is the config, [5] the stopped-run continuation, and [7] open sub-agent consults.
+            const [config, , , , , stoppedRunContinuation, , openConsults] = await Promise.all([
                 this.loadAgentConfiguration(params.agent),
                 this.preloadAgentData(wrappedParams),
                 this.InjectContextMemory(
@@ -2546,7 +2608,10 @@ export class BaseAgent {
                 this.loadStoppedRunContinuation(wrappedParams),
                 // Decision discovery (plan Task 3.1), off unless the decisionsEnabled and decisionDiscovery prompt
                 // params are true: may add a <suggested_agent> system message, within DECISION_DISCOVERY_TIMEOUT_MS.
-                this.InjectDecisionDiscovery(params.agent, params.contextUser, wrappedParams.conversationMessages, params.data)
+                this.InjectDecisionDiscovery(params.agent, params.contextUser, wrappedParams.conversationMessages, params.data),
+                // If this run resumes a prior run that paused with FinalStep === 'Chat', reload any unanswered
+                // sub-agent consults so the caller's answer can be relayed back to the waiting sub-agent.
+                this.loadOpenConsults(wrappedParams)
             ]);
 
             // Resume (or summarize) a run the user stopped, now that nothing else is writing the list.
@@ -2557,6 +2622,10 @@ export class BaseAgent {
             const messagesBeforeParts = new Set(wrappedParams.conversationMessages);
             this.InjectScopedPromptParts(params.agent, wrappedParams.conversationMessages, runScope.EntityID, runScope.RecordID, runScope.Secondary);
             await this.replaceScopedPartPlaceholders(wrappedParams.conversationMessages, messagesBeforeParts, params.contextUser);
+
+            // Restore open sub-agent consults from a resumed Chat run and splice the reminder immediately
+            // before the caller's answer (continuationMessage).
+            this.applyOpenConsults(wrappedParams, openConsults, continuationMessage);
 
             if (!config.success) {
                 this.logError(`Failed to load agent configuration: ${config.errorMessage}`, {
@@ -2797,12 +2866,39 @@ export class BaseAgent {
     }
 
     /**
-     * What this run's prompt leaves out: task graphs ({@link taskGraphWithholdingReason}), and — when the audience adds a
-     * reader — the caller's own browser and view (`CallerContext`): client tools run in the caller's browser and what they
-     * return reaches the room, and the app context (`data.appContext`, with its `AdditionalContext`) is the caller's screen.
+     * Whether this run withholds Handoff (`enableHandoff` off and the `handoff` response section hidden).
+     * True when the run has a `parentRun` (sub-agents cannot transfer the conversation), has no
+     * `conversationDetailId` (there is no conversation reply row to hand over), has no `handoffChain`
+     * (the host does not carry out handoffs), or runs for an anonymous/widget guest without a trusted
+     * host allow-list (`TrustReservedRunData === true` and `HostAllowedAgentIDs(params.data)` defined).
+     */
+    private runWithholdsHandoff(params: ExecuteAgentParams): boolean {
+        const hasTrustedHostAllowList =
+            params.TrustReservedRunData === true &&
+            HostAllowedAgentIDs(params.data) !== undefined;
+        const isUnscopedGuest =
+            Boolean(params.contextUser?.IsMagicLinkAnonymous || params.contextUser?.WidgetGuestContext) &&
+            !hasTrustedHostAllowList;
+        return (
+            Boolean(params.parentRun) ||
+            !params.conversationDetailId ||
+            !Array.isArray(params.handoffChain) ||
+            isUnscopedGuest
+        );
+    }
+
+    /**
+     * What this run's prompt leaves out: task graphs ({@link taskGraphWithholdingReason}), handoff
+     * ({@link runWithholdsHandoff}), and — when the audience adds a reader — the caller's own browser
+     * and view (`CallerContext`): client tools run in the caller's browser and what they return reaches
+     * the room, and the app context (`data.appContext`, with its `AdditionalContext`) is the caller's screen.
      */
     private promptWithholding(params: ExecuteAgentParams): PromptWithholding {
-        return { TaskGraphs: this.runWithholdsTaskGraphs(params), CallerContext: this.runAudienceAddsReader(params) };
+        return {
+            TaskGraphs: this.runWithholdsTaskGraphs(params),
+            Handoff: this.runWithholdsHandoff(params),
+            CallerContext: this.runAudienceAddsReader(params)
+        };
     }
 
     /**
@@ -2859,6 +2955,17 @@ export class BaseAgent {
             ? (promptParams.includeResponseTypeDefinition as Record<string, unknown>)
             : {};
         return { ...promptParams, enableTaskGraphs: false, includeResponseTypeDefinition: { ...responseType, tasks: false } };
+    }
+
+    /**
+     * A copy of the agent-type prompt params with handoff withheld (`enableHandoff` off and the `handoff`
+     * response section hidden). A copy, never a write: the input may be the process-wide cached base.
+     */
+    private withoutHandoff(promptParams: Record<string, unknown>): Record<string, unknown> {
+        const responseType = IsPlainObject(promptParams.includeResponseTypeDefinition)
+            ? (promptParams.includeResponseTypeDefinition as Record<string, unknown>)
+            : {};
+        return { ...promptParams, enableHandoff: false, includeResponseTypeDefinition: { ...responseType, handoff: false } };
     }
 
     /**
@@ -5405,7 +5512,13 @@ export class BaseAgent {
             // set — Actions plus the control-flow tools (one per sub-agent, payload_change_request,
             // ask_user) — and NAMES the control ones. The runner keeps them only when the selected
             // model's LLM.NativeControlFlow resolves to 'implicit'; a hybrid model never sees them.
-            const toolSet = BuildNativeToolSet(actionSet, subAgents);
+            const toolSet = BuildNativeToolSet(actionSet, subAgents, (sa) => {
+                const presetNames = AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true).map(p => p.Name);
+                return {
+                    consultEnabled: this.isSubAgentConsultEnabledForSubAgent(params.agent, sa),
+                    ...(presetNames.length > 0 ? { presetNames } : {})
+                };
+            });
             promptParams.tools = toolSet.tools;
             promptParams.controlFlowToolNames = toolSet.controlToolNames;
             promptParams.toolChoice = this.resolveToolChoiceForTurn(params);
@@ -5500,7 +5613,8 @@ export class BaseAgent {
             params.data,
             params.actionChanges,
             params.subAgentChanges,
-            this.promptWithholding(params)
+            this.promptWithholding(params),
+            params.parentRun
         );
 
         // Set up the hierarchical prompt execution
@@ -6174,8 +6288,10 @@ export class BaseAgent {
         // (schema defaults -> agent.AgentTypePromptParams -> runtime override) without mutating
         // the caller's ExecuteAgentParams or params.data object.
         this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
-        const paramsForAgentType: ExecuteAgentParams =
-            this._agentTypePromptParams && params?.data?.__agentTypePromptParams === undefined
+        const stepParams: ExecuteAgentParams =
+            this._agentTypePromptParams &&
+            this.AgentTypeInstance instanceof LoopAgentType &&
+            params?.data?.__agentTypePromptParams === undefined
                 ? {
                       ...params,
                       data: {
@@ -6184,7 +6300,7 @@ export class BaseAgent {
                       },
                   }
                 : params;
-        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, paramsForAgentType, currentPayload, this.AgentTypeState, this._nativeToolBindings);
+        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, stepParams, currentPayload, this.AgentTypeState, this._nativeToolBindings);
         return nextStep;
     }
 
@@ -6225,7 +6341,37 @@ export class BaseAgent {
 
         // for next step, let's do a little quick validation here for sub-agent and actions to ensure requests are valid
         switch (nextStep.step) {
-            case 'Sub-Agent':           
+            case 'Sub-Agent':
+                if (
+                    nextStep.taskGraph?.folded &&
+                    nextStep.subAgent?.name &&
+                    Boolean(GetTaskGraphSubmitter()) &&
+                    !this.resolveSubAgentByName(params, nextStep.subAgent.name)
+                ) {
+                    const activeAgentExists = AIEngine.Instance.Agents.some(
+                        (a) =>
+                            a.Status === 'Active' &&
+                            a.Name === nextStep.subAgent!.name &&
+                            !UUIDsEqual(a.ID, params.agent.ID),
+                    );
+                    if (activeAgentExists) {
+                        this.logStatus(
+                            `target is not a sub-agent of ${params.agent.Name}; submitting durably`,
+                            false,
+                            params
+                        );
+                        const unfolded: BaseAgentNextStep<P> = {
+                            ...nextStep,
+                            step: 'Tasks' as typeof nextStep.step,
+                            subAgent: undefined,
+                            taskGraph: {
+                                spec: nextStep.taskGraph.spec,
+                                folded: false,
+                            },
+                        };
+                        return this.validateTasksNextStep<P>(params, unfolded, currentPayload, agentRun, currentStep);
+                    }
+                }
                 return this.validateSubAgentNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'Actions':
                 return this.validateActionsNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
@@ -6262,6 +6408,10 @@ export class BaseAgent {
             // Retry step instead of hard-failing the run in executeTasksStep.
             case 'Tasks' as typeof nextStep.step:
                 return this.validateTasksNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
+            // Type assertion required because 'Handoff' is not part of the BaseAgentNextStep step
+            // union (transfer-and-detach — the terminal step it produces is 'Success').
+            case 'Handoff' as typeof nextStep.step:
+                return this.validateHandoffNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             default:
                 // if we get here, the next step is not recognized, we can return a retry step
                 this.logError(`Invalid next step '${nextStep.step}' for agent '${params.agent.Name}'`, {
@@ -6311,7 +6461,7 @@ export class BaseAgent {
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         const curAgentSubAgents = this.getEffectiveSubAgentsForValidation(params.agent.ID);
-        const allowFoldedTaskGraphTarget = nextStep.taskGraph?.folded === true;
+        const allowFoldedTaskGraphTarget = nextStep.taskGraph?.folded === true && !GetTaskGraphSubmitter();
 
         // Collect requested sub-agents. Prefer plural `subAgents` (parallel fan-out);
         // fall back to singular `subAgent` for the classic single-sub-agent next step.
@@ -6333,6 +6483,8 @@ export class BaseAgent {
         }
 
         // Validate each requested sub-agent: existence + user run permission + MaxExecutionsPerRun
+        const seenResumeRunIds = new Set<string>();
+        const openConsultsBySubAgent = GroupByUUID(this._openSubAgentConsults.values(), c => c.subAgentId);
         for (const req of requested) {
             const name = req?.name;
             const normalizedName = name?.trim().toLowerCase();
@@ -6386,6 +6538,86 @@ export class BaseAgent {
                         step: 'Retry',
                         terminate: false,
                         errorMessage: `Sub-agent '${name}' has reached its maximum execution limit of ${subAgent.MaxExecutionsPerRun}`
+                    };
+                }
+            }
+
+            if (req.resumeRunId != null && req.resumeRunId !== '') {
+                const openForSubAgent = openConsultsBySubAgent.Get(subAgent.ID) ?? [];
+                const matchingConsult = IsValidUUID(req.resumeRunId)
+                    ? IndexByUUID(openForSubAgent, c => c.childRunId).Get(req.resumeRunId)
+                    : undefined;
+                if (!matchingConsult) {
+                    const openIds = openForSubAgent.length > 0
+                        ? openForSubAgent.map(c => c.childRunId).join(', ')
+                        : 'none';
+                    const errorMessage = `Invalid resumeRunId '${req.resumeRunId}' for sub-agent '${subAgent.Name}'. Open consult run IDs for '${subAgent.Name}': ${openIds}`;
+                    this.logError(errorMessage, {
+                        agent: params.agent,
+                        category: 'SubAgentExecution',
+                        metadata: {
+                            subAgentName: name,
+                            resumeRunId: req.resumeRunId,
+                            openConsultIds: openIds
+                        }
+                    });
+                    if (nextStep.step !== 'Retry') {
+                        this._generalValidationRetryCount++;
+                    }
+                    return {
+                        step: 'Retry',
+                        terminate: false,
+                        errorMessage
+                    };
+                }
+
+                const normalizedResumeId = matchingConsult.childRunId.trim().toLowerCase();
+                if (seenResumeRunIds.has(normalizedResumeId)) {
+                    const errorMessage = `resumeRunId '${req.resumeRunId}' is used more than once`;
+                    this.logError(errorMessage, {
+                        agent: params.agent,
+                        category: 'SubAgentExecution',
+                        metadata: {
+                            subAgentName: name,
+                            resumeRunId: req.resumeRunId
+                        }
+                    });
+                    if (nextStep.step !== 'Retry') {
+                        this._generalValidationRetryCount++;
+                    }
+                    return {
+                        step: 'Retry',
+                        terminate: false,
+                        errorMessage
+                    };
+                }
+                seenResumeRunIds.add(normalizedResumeId);
+            }
+
+            if (req.presetName != null && req.presetName.trim() !== '') {
+                const matchedPreset = AIEngine.Instance.FindActiveAgentConfigurationPreset(subAgent.ID, req.presetName);
+                if (!matchedPreset) {
+                    const availablePresets = AIEngine.Instance.GetAgentConfigurationPresets(subAgent.ID, true)
+                        .map(p => p.Name);
+                    const availableList = availablePresets.length > 0 ? availablePresets.join(', ') : 'none';
+                    const errorMessage = `Sub-agent '${subAgent.Name}' has no preset '${req.presetName}'. Available: ${availableList}.`;
+                    this.logError(errorMessage, {
+                        agent: params.agent,
+                        category: 'SubAgentExecution',
+                        metadata: {
+                            subAgentName: name,
+                            presetName: req.presetName,
+                            availablePresets: availableList
+                        }
+                    });
+                    if (nextStep.step !== 'Retry') {
+                        this._generalValidationRetryCount++;
+                    }
+                    return {
+                        ...nextStep,
+                        step: 'Retry',
+                        terminate: false,
+                        errorMessage
                     };
                 }
             }
@@ -6811,6 +7043,95 @@ export class BaseAgent {
     }
 
     /**
+     * Validates a `'Handoff'` next step: re-checks the runtime withholding conditions (sub-agent run,
+     * missing `conversationDetailId`, or missing `handoffChain`) and validates the requested target
+     * via {@link ResolveHandoffTarget} (Active status, `'view'` and `'run'` permissions, direct
+     * discoverability, host allow-list, cycle check, and hop limit). On refusal, writes a Failed
+     * `'Handoff'` step and returns a `'Retry'` step naming up to 20 candidate agents; on approval,
+     * stores the resolved target ID and name for {@link executeHandoffStep}.
+     *
+     * @protected
+     */
+    protected async validateHandoffNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        _currentPayload: P,
+        _agentRun: MJAIAgentRunEntityExtended,
+        _currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        if (this.runWithholdsHandoff(params)) {
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                message:
+                    'Handoff is not available here, so nextStep.type must never be "Handoff". ' +
+                    'Answer directly, or use nextStep.type "Sub-Agent" or "Actions" instead.',
+                errorMessage: 'Handoff is not available on this run'
+            };
+        }
+
+        const requestedName = nextStep.handoff?.agentName ?? '';
+        const brief = nextStep.handoff?.brief ?? '';
+        const reason = nextStep.handoff?.reason ?? '';
+        const data = WithAgentRunDataTrustApplied(params).Params.data;
+        const resolution = await ResolveHandoffTarget({
+            AgentName: requestedName,
+            SourceAgentID: params.agent.ID,
+            HandoffChain: params.handoffChain ?? [],
+            HostAllowedIDs: HostAllowedAgentIDs(data),
+            ContextUser: params.contextUser,
+            Agents: AIEngine.Instance.Agents,
+        });
+
+        if (resolution.Refusal) {
+            const refusal = resolution.Refusal;
+            this.logError(`Handoff target agent '${requestedName}' refused (${refusal.Reason}) for agent '${params.agent.Name}': ${refusal.Message}`, {
+                agent: params.agent,
+                category: 'NextStepValidation'
+            });
+            await this.createStepEntity({
+                stepType: 'Handoff',
+                stepName: `Handoff: ${requestedName.trim() || '(unknown)'}`,
+                contextUser: params.contextUser,
+                inputData: {
+                    agentName: requestedName,
+                    brief,
+                    reason
+                },
+                completed: {
+                    success: false,
+                    errorMessage: refusal.Message,
+                    outputData: {
+                        RefusalReason: refusal.Reason,
+                        AgentName: requestedName,
+                        Brief: brief,
+                        Reason: reason
+                    }
+                }
+            });
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                message: refusal.Message,
+                errorMessage: refusal.Message
+            };
+        }
+
+        const target = resolution.Target;
+        this._resolvedHandoffTarget = { id: target.ID, name: target.Name };
+        if (nextStep.handoff) {
+            nextStep.handoff = { ...nextStep.handoff, agentName: target.Name };
+        }
+        return nextStep;
+    }
+
+    /**
      * Validates that the Success next step is valid and can be executed by the current agent. Subclasses can override
      * this method to implement custom validation logic if needed.
      * @param params 
@@ -7099,9 +7420,95 @@ export class BaseAgent {
     }
 
     /**
+     * Resolves the effective `ChatHandlingOption` for a sub-agent execution:
+     * `relationship?.ChatHandlingOption ?? parentAgent.ChatHandlingOption ?? null`.
+     * @private
+     */
+    private resolveSubAgentChatHandlingOption(
+        parentAgent: MJAIAgentEntityExtended,
+        relationship?: MJAIAgentRelationshipEntity
+    ): MJAIAgentEntity['ChatHandlingOption'] {
+        return relationship?.ChatHandlingOption ?? parentAgent.ChatHandlingOption ?? null;
+    }
+
+    /**
+     * Returns `true` only when `resolvedOption === 'Consult'` AND the parent agent's
+     * type supports injecting loop/consult messages into conversation history
+     * (`this.AgentTypeInstance?.InjectLoopResultsAsMessage !== false`).
+     *
+     * When `resolvedOption === 'Consult'` and `this.AgentTypeInstance?.InjectLoopResultsAsMessage === false`
+     * (e.g., a Flow parent), logs a warning once per run and returns `false` so `'Consult'`
+     * is treated as `null` (propagate).
+     * @private
+     */
+    private isSubAgentConsultActive(
+        resolvedOption: MJAIAgentEntity['ChatHandlingOption'],
+        params?: ExecuteAgentParams
+    ): boolean {
+        if (resolvedOption !== 'Consult') {
+            return false;
+        }
+        if (this.AgentTypeInstance?.InjectLoopResultsAsMessage === false) {
+            if (!this._loggedConsultUnsupportedAgentType) {
+                this._loggedConsultUnsupportedAgentType = true;
+                this.logStatus(
+                    "⚠️ ChatHandlingOption 'Consult' is not supported for agent types where InjectLoopResultsAsMessage is false; treating as null (propagate).",
+                    false,
+                    params
+                );
+            }
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Resolves the sub-agent `ChatHandlingOption` and downgrades `'Consult'` to `null`
+     * when `isSubAgentConsultActive` returns `false` (e.g., on Flow parents).
+     * @private
+     */
+    private effectiveSubAgentChatHandlingOption(
+        parentAgent: MJAIAgentEntityExtended,
+        relationship?: MJAIAgentRelationshipEntity,
+        params?: ExecuteAgentParams
+    ): MJAIAgentEntity['ChatHandlingOption'] {
+        const resolved = this.resolveSubAgentChatHandlingOption(parentAgent, relationship);
+        if (resolved === 'Consult' && !this.isSubAgentConsultActive(resolved, params)) {
+            return null;
+        }
+        return resolved;
+    }
+
+    /**
+     * Side-effect-free check used during prompt and native-tool construction to determine
+     * whether `'Consult'` is active for a specific sub-agent of `parentAgent`.
+     * @private
+     */
+    private isSubAgentConsultEnabledForSubAgent(
+        parentAgent: MJAIAgentEntityExtended,
+        subAgent: MJAIAgentEntityExtended
+    ): boolean {
+        if (this.AgentTypeInstance?.InjectLoopResultsAsMessage === false) {
+            return false;
+        }
+        const isDirectChild = subAgent.ParentID != null && UUIDsEqual(subAgent.ParentID, parentAgent.ID);
+        const relationship = isDirectChild
+            ? undefined
+            : (AIEngine.Instance.AgentRelationships ?? []).find(
+                r => UUIDsEqual(r.AgentID, parentAgent.ID) && UUIDsEqual(r.SubAgentID, subAgent.ID) && r.Status === 'Active'
+            );
+        return this.resolveSubAgentChatHandlingOption(parentAgent, relationship) === 'Consult';
+    }
+
+    /**
      * Validates that the Chat next step is valid and can be executed by the current agent. 
-     * Implements ChatHandlingOption remapping logic - if the agent has ChatHandlingOption set,
-     * the Chat step is remapped to the specified value (Success, Fail, or Retry).
+     * Implements ChatHandlingOption remapping logic - if the agent (or sub-agent relationship)
+     * has ChatHandlingOption set:
+     * - `'Consult'`: leaves the Chat step unchanged (an agent's own Chat propagates to its caller;
+     *   sub-agent Consult is intercepted before this validator).
+     * - `'Success'` / `'Failed'`: remaps `step` while preserving `terminate: true` to end the run.
+     * - `'Retry'`: remaps `step` to `'Retry'`, sets `terminate: false` so the loop continues, and
+     *   populates `errorMessage` so the unproductive-retry safety net bounds repeated Chat attempts.
      * Subclasses can override this method to implement custom validation logic if needed.
      * @param params 
      * @param nextStep 
@@ -7112,16 +7519,21 @@ export class BaseAgent {
         nextStep: BaseAgentNextStep<P>,
         currentPayload: P,
         agentRun: MJAIAgentRunEntityExtended,
-        currentStep: MJAIAgentRunStepEntityExtended
+        currentStep: MJAIAgentRunStepEntityExtended,
+        chatHandlingOption?: MJAIAgentEntity['ChatHandlingOption']
     ): Promise<BaseAgentNextStep<P>> {
-        // Check if the agent has ChatHandlingOption configured
-        const chatHandlingOption = params.agent.ChatHandlingOption;
+        // Use caller-resolved option when provided; otherwise fall back to params.agent.ChatHandlingOption
+        const effectiveOption = chatHandlingOption !== undefined
+            ? chatHandlingOption
+            : params.agent.ChatHandlingOption;
         
-        if (chatHandlingOption) {
+        if (effectiveOption) {
             // Use a switch to validate and map the ChatHandlingOption value
             let mappedStep: 'Success' | 'Failed' | 'Retry';
             
-            switch (chatHandlingOption) {
+            switch (effectiveOption) {
+                case 'Consult':
+                    return nextStep;
                 case 'Success':
                     mappedStep = 'Success';
                     break;
@@ -7133,19 +7545,28 @@ export class BaseAgent {
                     break;
                 default:
                     // Log error and treat as null (default behavior)
-                    LogError(`Invalid ChatHandlingOption value: ${chatHandlingOption}. Expected 'Success', 'Failed', or 'Retry'. Treating as null and allowing Chat to propagate.`);
+                    LogError(`Invalid ChatHandlingOption value: ${effectiveOption}. Expected 'Consult', 'Success', 'Failed', or 'Retry'. Treating as null and allowing Chat to propagate.`);
                     return nextStep;
             }
             
-            // Remap the Chat step to the configured option
-            const remappedStep: BaseAgentNextStep<P> = {
-                ...nextStep,
-                step: mappedStep
-            };
+            // Remap the Chat step to the configured option.
+            // Retry sets terminate to false so the loop continues and sets errorMessage so the
+            // unproductive-retry cap bounds a model that repeatedly emits Chat.
+            const remappedStep: BaseAgentNextStep<P> = mappedStep === 'Retry'
+                ? {
+                    ...nextStep,
+                    step: 'Retry',
+                    terminate: false,
+                    errorMessage: nextStep.errorMessage || 'Chat was remapped to Retry by ChatHandlingOption'
+                }
+                : {
+                    ...nextStep,
+                    step: mappedStep
+                };
             
             // Log the remapping for debugging
             if (params.verbose === true || IsVerboseLoggingEnabled()) {
-                LogStatus(`Remapping Chat step to ${chatHandlingOption} based on agent's ChatHandlingOption`);
+                LogStatus(`Remapping Chat step to ${effectiveOption} based on agent's ChatHandlingOption`);
             }
             
             // Re-validate the remapped step using the appropriate validator
@@ -8795,6 +9216,125 @@ The context is now within limits. Please retry your request with the recovered c
             this.logStatus(`[StoppedRunResults] Carried ${steps.length} completed step result(s) forward from stopped run ${continuation.RunID}`, true, params);
         } catch (error) {
             this.logStatus(`[StoppedRunResults] Skipped (contained error): ${error instanceof Error ? error.message : error}`, true, params);
+        }
+    }
+
+    /**
+     * Loads unanswered sub-agent consultations (`OutputData.consult`) from `params.lastRunId` when that
+     * prior run paused with `FinalStep === 'Chat'` (and was not stopped by the user). Runs at any depth
+     * so a middle agent resumed via `resumeRunId` also reloads its own open child consults. Fail-soft.
+     * @private
+     */
+    private async loadOpenConsults(params: ExecuteAgentParams): Promise<SubAgentConsultRecord[]> {
+        if (!params.lastRunId || !IsValidUUID(params.lastRunId) || !CanAgentOwnSubAgentConsults(params.agent)) {
+            return [];
+        }
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const runResult = await rv.RunView<{
+                ID: string;
+                FinalStep: string | null;
+                Status: string;
+                CancellationReason: string | null;
+            }>({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: `ID='${params.lastRunId}'`,
+                MaxRows: 1,
+                Fields: ['ID', 'FinalStep', 'Status', 'CancellationReason'],
+                ResultType: 'simple',
+                BypassCache: true,
+            }, params.contextUser);
+
+            const priorRun = runResult.Success ? runResult.Results?.[0] : undefined;
+            if (
+                !priorRun ||
+                priorRun.FinalStep !== 'Chat' ||
+                MJAIAgentRunEntityExtended.IsUserStopped(priorRun.Status, priorRun.CancellationReason)
+            ) {
+                return [];
+            }
+
+            return await LoadOpenSubAgentConsults(this.ProviderToUse, params.lastRunId, params.contextUser);
+        } catch (error) {
+            this.logStatus(
+                `[SubAgentConsult] Skipped loading open consults (contained error): ${error instanceof Error ? error.message : error}`,
+                true,
+                params
+            );
+            return [];
+        }
+    }
+
+    /**
+     * Restores reloaded open sub-agent consults into `this._openSubAgentConsults` (so `resumeRunId`
+     * validation accepts them) and splices a `sub-agent-consult` reminder message immediately before
+     * `continuationMessage` (the caller's answer). Fail-soft.
+     * @private
+     */
+    private applyOpenConsults(
+        params: ExecuteAgentParams,
+        openConsults: SubAgentConsultRecord[],
+        continuationMessage: ChatMessage | undefined
+    ): void {
+        if (!openConsults || openConsults.length === 0) {
+            return;
+        }
+        try {
+            for (const consult of openConsults) {
+                if (consult.childRunId) {
+                    this._openSubAgentConsults.set(consult.childRunId, consult);
+                }
+            }
+            const content = FormatReloadedConsultsMessage(openConsults);
+            if (!content) {
+                return;
+            }
+            const metadata: AgentChatMessageMetadata = {
+                turnAdded: 0,
+                messageType: 'sub-agent-consult',
+                ...(openConsults.length === 1
+                    ? {
+                          subAgentName: openConsults[0].subAgentName,
+                          subAgentId: openConsults[0].subAgentId,
+                      }
+                    : {}),
+                expirationTurns: 3,
+                expirationMode: 'Remove',
+            };
+            const consultReminder: AgentChatMessage = {
+                role: 'user',
+                content,
+                metadata,
+            };
+
+            const at = continuationMessage ? params.conversationMessages.indexOf(continuationMessage) : -1;
+            if (at >= 0) {
+                params.conversationMessages.splice(at, 0, consultReminder);
+            } else {
+                let lastUserIdx = -1;
+                for (let i = params.conversationMessages.length - 1; i >= 0; i--) {
+                    if (params.conversationMessages[i].role === 'user') {
+                        lastUserIdx = i;
+                        break;
+                    }
+                }
+                if (lastUserIdx >= 0) {
+                    params.conversationMessages.splice(lastUserIdx, 0, consultReminder);
+                } else {
+                    params.conversationMessages.push(consultReminder);
+                }
+            }
+            this.logStatus(
+                `[SubAgentConsult] Reloaded ${openConsults.length} open consult(s) from prior run ${params.lastRunId}`,
+                true,
+                params
+            );
+        } catch (error) {
+            this.logStatus(
+                `[SubAgentConsult] Skipped applying open consults (contained error): ${error instanceof Error ? error.message : error}`,
+                true,
+                params
+            );
         }
     }
 
@@ -10715,7 +11255,8 @@ The context is now within limits. Please retry your request with the recovered c
         extraData?: any,
         actionChanges?: ActionChange[],
         subAgentChanges?: SubAgentChange[],
-        withholding?: PromptWithholding
+        withholding?: PromptWithholding,
+        parentRun?: MJAIAgentRunEntityExtended
     ): Promise<AgentContextData> {
         try {
             const engine = AIEngine.Instance;
@@ -10789,6 +11330,9 @@ The context is now within limits. Please retry your request with the recovered c
             if (withholding?.TaskGraphs) {
                 agentTypePromptParams = this.withoutTaskGraphs(agentTypePromptParams);
             }
+            if (withholding?.Handoff) {
+                agentTypePromptParams = this.withoutHandoff(agentTypePromptParams);
+            }
             // Store for the finishIf gate, which runs after this prompt in executeActionsStep / executeNextStep
             this._agentTypePromptParams = agentTypePromptParams;
 
@@ -10816,6 +11360,30 @@ The context is now within limits. Please retry your request with the recovered c
 
             // The client tools and the app context (per-run, from extraData) — neither under an audience (callerContextSections).
             const { clientToolDetails, appContext } = this.callerContextSections(agent, extraData, withholding?.CallerContext === true);
+
+            const subAgentConsultEnabled = uniqueActiveSubAgents.some(
+                sa => this.isSubAgentConsultEnabledForSubAgent(agent, sa)
+            );
+            const subAgentPresetsAvailable = uniqueActiveSubAgents.some(
+                sa => AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true).length > 0
+            );
+
+            let parentConsults = false;
+            const effectiveParentRun = parentRun ?? this._executeParams?.parentRun;
+            if (!isRoot && effectiveParentRun?.AgentID) {
+                const parentAgent = (engine.Agents ?? []).find(
+                    a => UUIDsEqual(a.ID, effectiveParentRun.AgentID)
+                );
+                if (parentAgent) {
+                    const isDirectChild = agent.ParentID != null && UUIDsEqual(agent.ParentID, parentAgent.ID);
+                    const relationship = isDirectChild
+                        ? undefined
+                        : (engine.AgentRelationships ?? []).find(
+                            r => UUIDsEqual(r.AgentID, parentAgent.ID) && UUIDsEqual(r.SubAgentID, agent.ID) && r.Status === 'Active'
+                        );
+                    parentConsults = this.resolveSubAgentChatHandlingOption(parentAgent, relationship) === 'Consult';
+                }
+            }
 
             const cachedUserPolicy = _contextUser?.ID
                 ? AgentUserPolicyEngine.Instance.GetCachedPolicy(agent.ID, _contextUser.ID)
@@ -10852,6 +11420,9 @@ The context is now within limits. Please retry your request with the recovered c
                 skillsCatalog: skillsCatalog,
                 planModeActive: this._planModeActive,
                 planApproved: this._planApproved,
+                ...(subAgentConsultEnabled ? { subAgentConsultEnabled: true } : {}),
+                ...(parentConsults ? { parentConsults: true } : {}),
+                ...(subAgentPresetsAvailable ? { subAgentPresetsAvailable: true } : {}),
                 appContext: appContext,
             };
 
@@ -11485,7 +12056,8 @@ The context is now within limits. Please retry your request with the recovered c
         // that loop's `else` branch defaults an unset key to true, which is exactly what a gated
         // capability must never do.
         const gateMappings: Array<{ gateFlag: string; responseTypeKey: string }> = [
-            { gateFlag: 'enableTaskGraphs', responseTypeKey: 'tasks' }
+            { gateFlag: 'enableTaskGraphs', responseTypeKey: 'tasks' },
+            { gateFlag: 'enableHandoff', responseTypeKey: 'handoff' }
         ];
 
         for (const { gateFlag, responseTypeKey } of gateMappings) {
@@ -12296,6 +12868,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @param {AgentSubAgentRequest} subAgentRequest - Sub-agent request details
      * @param {MJAIAgentEntityExtended} subAgent - The sub-agent entity
      * @param {ChatMessage | undefined} contextMessage - Optional context from SubAgentContextPaths
+     * @param {string | null | undefined} consultQuestion - Optional open-consult question when resuming a child run
      * @returns {ChatMessage[]} Prepared message array for sub-agent execution
      *
      * @protected
@@ -12304,7 +12877,8 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
         subAgentRequest: AgentSubAgentRequest,
         subAgent: MJAIAgentEntityExtended,
-        contextMessage?: ChatMessage
+        contextMessage?: ChatMessage,
+        consultQuestion?: string | null
     ): ChatMessage[] {
         const engine = AIEngine.Instance;
         let messages: ChatMessage[] = [];
@@ -12373,6 +12947,14 @@ The context is now within limits. Please retry your request with the recovered c
             messages.push(contextMessage);
         }
 
+        // On resume, insert the consult's question as an assistant turn right before the request message
+        if (consultQuestion) {
+            messages.push({
+                role: 'assistant',
+                content: consultQuestion
+            });
+        }
+
         if (subAgentRequest.message) {
             messages.push({
                 role: 'user',
@@ -12424,12 +13006,39 @@ The context is now within limits. Please retry your request with the recovered c
             // Create a new AgentRunner instance with the same isolated provider
             const runner = new AgentRunner(params.provider || this._activeProvider);
 
+            // Look up an open consult matching both childRunId and subAgent.ID once.
+            // Only resume when the consult is open for this sub-agent; otherwise log an error and run fresh.
+            const requestedResumeRunId = subAgentRequest.resumeRunId?.trim() || undefined;
+            let matchedConsult: SubAgentConsultRecord | undefined;
+            if (requestedResumeRunId) {
+                matchedConsult = Array.from(this._openSubAgentConsults.values()).find(
+                    c => UUIDsEqual(c.childRunId, requestedResumeRunId) && UUIDsEqual(c.subAgentId, subAgent.ID)
+                );
+                if (matchedConsult) {
+                    this._openSubAgentConsults.delete(matchedConsult.childRunId);
+                } else {
+                    this.logError(
+                        `ExecuteSubAgent: ignoring unknown or mismatched resumeRunId '${requestedResumeRunId}' for sub-agent '${subAgent.Name}'`,
+                        {
+                            agent: params.agent,
+                            category: 'SubAgentExecution',
+                            metadata: {
+                                subAgentName: subAgent.Name,
+                                resumeRunId: requestedResumeRunId
+                            }
+                        }
+                    );
+                }
+            }
+            const verifiedResumeRunId = matchedConsult?.childRunId;
+
             // Prepare messages for sub-agent using database-configured message mode
             const subAgentMessages = this.prepareSubAgentMessages(
                 params,
                 subAgentRequest,
                 subAgent,
-                contextMessage
+                contextMessage,
+                matchedConsult?.question
             );
             
             // Set parent run ID in the sub-agent's execution
@@ -12455,6 +13064,17 @@ The context is now within limits. Please retry your request with the recovered c
             // Use subAgentRequest.context if provided, otherwise fall back to params.context
             // This allows Flow agents and Loop agents to propagate context through sub-agent requests
             const subAgentContext = subAgentRequest.context !== undefined ? subAgentRequest.context : params.context;
+            const resolvedConfig = this.resolveSubAgentConfiguration(params, subAgentRequest, subAgent);
+            if (resolvedConfig.presetId && stepEntity) {
+                const parsedInput = stepEntity.InputData
+                    ? (JSON.parse(stepEntity.InputData) as Record<string, unknown>)
+                    : {};
+                parsedInput.presetName = resolvedConfig.presetName;
+                parsedInput.presetId = resolvedConfig.presetId;
+                const updatedInputJson = JSON.stringify(parsedInput);
+                stepEntity.InputData = updatedInputJson;
+                this.queueStepSave(stepEntity, (s) => { s.InputData = updatedInputJson; });
+            }
 
             const result = await runner.RunAgent<SC, SR>({
                 agent: subAgent,
@@ -12468,8 +13088,9 @@ The context is now within limits. Please retry your request with the recovered c
                 parentStepCounts: parentStepCountsToPass,
                 parentRun: this._agentRun,
                 parentActivatedSkillIDs: this.activeSkillIDsForRun(params), // the root's active skills reach the sub-agent's actions
-                payload: payload, // pass the payload if provided
-                configurationId: params.configurationId, // propagate configuration ID to sub-agent
+                payload: verifiedResumeRunId ? undefined : payload, // on resume, ignore computed/mapped payload so autoPopulateLastRunPayload loads the child's prior FinalPayload
+                ...(verifiedResumeRunId ? { lastRunId: verifiedResumeRunId, autoPopulateLastRunPayload: true } : {}),
+                configurationId: resolvedConfig.configurationId, // resolved preset configuration ID or inherited parent configurationId
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
                 apiKeys: params.apiKeys, // propagate API keys to sub-agent
                 CredentialScope: params.CredentialScope, // a sub-agent may not spend keys its parent could not
@@ -12522,6 +13143,66 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Resolves the configuration to pass to a sub-agent run in precedence order:
+     * 1. Per-call `subAgentRequest.presetName` -> matching Active preset of `subAgent`.
+     * 2. Active `AIAgentRelationship.ConfigurationPresetID` -> that preset if Active and owned by `subAgent`;
+     *    otherwise logs a warning and falls through.
+     * 3. Inherit `params.configurationId`.
+     *
+     * When a preset is selected, `configurationId` is `preset.AIConfigurationID ?? undefined` (a NULL
+     * `AIConfigurationID` means default rows and intentionally does NOT inherit `params.configurationId`).
+     */
+    private resolveSubAgentConfiguration(
+        params: ExecuteAgentParams,
+        subAgentRequest: AgentSubAgentRequest,
+        subAgent: MJAIAgentEntityExtended
+    ): { configurationId: string | undefined; presetName?: string; presetId?: string } {
+        if (subAgentRequest.presetName != null && subAgentRequest.presetName.trim() !== '') {
+            const preset = AIEngine.Instance.FindActiveAgentConfigurationPreset(subAgent.ID, subAgentRequest.presetName);
+            if (preset) {
+                return {
+                    configurationId: preset.AIConfigurationID ?? undefined,
+                    presetName: preset.Name,
+                    presetId: preset.ID
+                };
+            }
+            this.logStatus(
+                `⚠️ Sub-agent '${subAgent.Name}' has no active preset matching '${subAgentRequest.presetName}'; falling through.`,
+                false,
+                params
+            );
+        }
+
+        const isDirectChild = subAgent.ParentID != null && UUIDsEqual(subAgent.ParentID, params.agent.ID);
+        if (!isDirectChild) {
+            const relationship = AIEngine.Instance.AgentRelationships.find(
+                r => UUIDsEqual(r.AgentID, params.agent.ID) &&
+                     UUIDsEqual(r.SubAgentID, subAgent.ID) &&
+                     r.Status === 'Active'
+            );
+            if (relationship?.ConfigurationPresetID) {
+                const preset = AIEngine.Instance.AgentConfigurations.find(
+                    p => UUIDsEqual(p.ID, relationship.ConfigurationPresetID)
+                );
+                if (preset && preset.Status === 'Active' && UUIDsEqual(preset.AgentID, subAgent.ID)) {
+                    return {
+                        configurationId: preset.AIConfigurationID ?? undefined,
+                        presetName: preset.Name,
+                        presetId: preset.ID
+                    };
+                }
+                this.logStatus(
+                    `⚠️ Sub-agent relationship for '${subAgent.Name}' references preset '${relationship.ConfigurationPresetID}' which is missing, inactive, or belongs to another agent; inheriting parent configuration.`,
+                    false,
+                    params
+                );
+            }
+        }
+
+        return { configurationId: params.configurationId };
+    }
+
+    /**
      * A sub-agent request's template parameters without the host-only run-data keys
      * (`HOST_ONLY_AGENT_RUN_DATA_KEYS` in `@memberjunction/ai-core-plus`: the reserved scope family and
      * `__agentTypePromptParams`, and the browser, conversation and realtime controls — `clientTools`, `sessionID`,
@@ -12560,6 +13241,23 @@ The context is now within limits. Please retry your request with the recovered c
             let line = `- **${sa.Name}** — ${sa.Description}`;
             if (sa.ExecutionMode !== 'Sequential') {
                 line += ` _(${sa.ExecutionMode}, order: ${sa.ExecutionOrder})_`;
+            }
+            const presets = AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true);
+            if (presets.length > 0) {
+                const presetSummary = presets.map(p => {
+                    const desc = p.Description?.trim();
+                    if (p.IsDefault && desc) {
+                        return `${p.Name} (default: ${desc})`;
+                    }
+                    if (p.IsDefault) {
+                        return `${p.Name} (default)`;
+                    }
+                    if (desc) {
+                        return `${p.Name} (${desc})`;
+                    }
+                    return p.Name;
+                }).join(', ');
+                line += `\n  Presets: ${presetSummary}`;
             }
             return line;
         }).join('\n');
@@ -12926,6 +13624,19 @@ The context is now within limits. Please retry your request with the recovered c
         // Status / error from the agent run
         const status = result.agentRun?.Status || (result.success ? 'Completed' : 'Failed');
         lines.push(`**Status:** ${status}`);
+
+        if (result.agentRun?.FinalStep) {
+            lines.push(`**Final step:** ${result.agentRun.FinalStep}`);
+        }
+
+        if (result.agentRun?.Message) {
+            lines.push(`**Message:** ${result.agentRun.Message}`);
+        }
+
+        const formSummary = FormatResponseFormSummary(result.responseForm);
+        if (formSummary) {
+            lines.push(`**Form:**\n${formSummary}`);
+        }
 
         if (!result.success && result.agentRun?.ErrorMessage) {
             lines.push(`**Error:** ${result.agentRun.ErrorMessage}`);
@@ -14504,6 +15215,11 @@ The context is now within limits. Please retry your request with the recovered c
             // durable task graph. executeTasksStep detaches (see its doc comment).
             case 'Tasks' as typeof previousDecision.step:
                 return await this.executeTasksStep(params, previousDecision);
+            // Type assertion required because 'Handoff' is not part of the BaseAgentNextStep step
+            // union — LoopAgentType.DetermineNextStep() emits it when an opted-in agent transfers
+            // the conversation to another agent. executeHandoffStep records the step and ends Success.
+            case 'Handoff' as typeof previousDecision.step:
+                return await this.executeHandoffStep(params, previousDecision);
             // Type assertion required because 'ClientTools' is not part of the BaseAgentNextStep
             // step union — LoopAgentType.DetermineNextStep() emits it when the LLM chooses client tools.
             case 'ClientTools' as typeof previousDecision.step:
@@ -15400,6 +16116,8 @@ The context is now within limits. Please retry your request with the recovered c
             subAgentName: subAgentRequest.name,
             message: subAgentRequest.message,
             terminateAfter: subAgentRequest.terminateAfter,
+            ...(subAgentRequest.resumeRunId ? { resumeRunId: subAgentRequest.resumeRunId } : {}),
+            ...(subAgentRequest.presetName ? { presetName: subAgentRequest.presetName } : {}),
             parentAgentHierarchy: this._agentHierarchy
         };
         
@@ -15630,30 +16348,24 @@ The context is now within limits. Please retry your request with the recovered c
                 })
             }; 
 
+            // Check if sub-agent returned a Chat step (handled before finalizeStepEntity so Consult can update outputData)
+            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
+                return await this.handleSingleSubAgentChatStep(
+                    params,
+                    previousDecision,
+                    subAgentRequest,
+                    subAgentEntity,
+                    undefined,
+                    subAgentResult,
+                    mergedPayload,
+                    stepEntity,
+                    outputData
+                );
+            }
+
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, subAgentResult.success,
                 subAgentResult.agentRun?.ErrorMessage, outputData);
-
-            // Check if sub-agent returned a Chat step
-            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
-                // Create Chat nextStep but validate it through parent's ChatHandlingOption
-                // This allows parent agents to remap Chat -> Success/Failed/Retry if configured
-                const chatStep: BaseAgentNextStep<SR, SC> = {
-                    step: 'Chat',
-                    terminate: true,
-                    message: subAgentResult.agentRun?.Message || null,
-                    previousPayload: previousDecision?.newPayload,
-                    newPayload: mergedPayload, // Preserve sub-agent payload changes
-                    responseForm: subAgentResult.responseForm,
-                    actionableCommands: subAgentResult.actionableCommands,
-                    automaticCommands: subAgentResult.automaticCommands,
-                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
-                };
-
-                // Validate through parent's ChatHandlingOption (if configured)
-                // This ensures parent agents can override child Chat steps
-                return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
-            }
 
             // When a sub-agent (e.g. Workflow Planner) submits a durable task graph, its run parks
             // with Status === 'Paused'. Propagate the parked state to the parent run and terminate
@@ -15674,47 +16386,23 @@ The context is now within limits. Please retry your request with the recovered c
                     responseForm: subAgentResult.responseForm,
                     actionableCommands: subAgentResult.actionableCommands,
                     automaticCommands: subAgentResult.automaticCommands,
-                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
+                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective,
+                    handoff: undefined
                 };
             }
             
             // Add user message with the sub-agent results using markdown format
             // and expiration metadata so it persists across multiple prompt turns
             const resultMessage = this.formatSubAgentResultAsMarkdown(subAgentRequest.name, subAgentResult);
-
-            const subAgentMetadata: AgentChatMessageMetadata = {
-                turnAdded: this._promptTurnCount,
-                messageType: 'sub-agent-result',
-                subAgentName: subAgentRequest.name,
-                subAgentId: subAgentEntity.ID,
-                // Default: keep sub-agent results for 3 turns then remove
-                expirationTurns: 3,
-                expirationMode: 'Remove'
-            };
-
-            // Apply global override if configured
-            if (params.messageExpirationOverride) {
-                const override = params.messageExpirationOverride;
-                if (override.expirationTurns != null) {
-                    subAgentMetadata.expirationTurns = override.expirationTurns;
-                    subAgentMetadata.expirationMode = override.expirationMode || 'Remove';
-                    subAgentMetadata.compactMode = override.compactMode;
-                    subAgentMetadata.compactLength = override.compactLength;
-                    subAgentMetadata.compactPromptId = override.compactPromptId;
-                }
-            }
-
-            if (previousDecision?.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
-                // the delegate_to_* call is answered as a tool result.
-                params.conversationMessages.push(BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
-                    toolCallId: subAgentRequest.toolCallId,
-                    toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
-                    content: resultMessage,
-                    isError: !subAgentResult.success
-                }], subAgentMetadata) as AgentChatMessage);
-            } else {
-                params.conversationMessages.push({ role: 'user', content: resultMessage, metadata: subAgentMetadata } as AgentChatMessage);
-            }
+            this.pushSubAgentConversationMessage(
+                params,
+                previousDecision,
+                subAgentRequest,
+                subAgentEntity,
+                resultMessage,
+                'sub-agent-result',
+                !subAgentResult.success
+            );
 
             // Update the agent run's current payload with the merged result
             if (this._agentRun) {
@@ -15741,7 +16429,8 @@ The context is now within limits. Please retry your request with the recovered c
                 // terminates the parent run directly (shouldTerminate=true), carry the terminal
                 // sub-agent's directive if the parent did not specify one.
                 artifactDirective: previousDecision?.artifactDirective
-                    ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined)
+                    ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined),
+                handoff: undefined
             };            
         } catch (error) {
             // Preserve payload on error
@@ -16191,14 +16880,33 @@ The context is now within limits. Please retry your request with the recovered c
         return executions
             .map(execution => {
                 const statusEmoji = execution.result.success ? '✅' : '❌';
-                const baseInfo =
-                    `${statusEmoji} **Sub-Agent: ${execution.request.name}**\n` +
-                    `* Message: "${execution.request.message}"\n` +
-                    `* Status: ${execution.result.agentRun?.FinalStep || 'Failed'}`;
-                if (execution.result.agentRun?.ErrorMessage) {
-                    return `${baseInfo}\n* Error: ${execution.result.agentRun.ErrorMessage}`;
+                const lines: string[] = [
+                    `${statusEmoji} **Sub-Agent: ${execution.request.name}**`,
+                    `* Message: "${execution.request.message}"`,
+                    `* Status: ${execution.result.agentRun?.FinalStep || 'Failed'}`
+                ];
+                const isChat = execution.result.agentRun?.FinalStep === 'Chat';
+                const question = execution.result.agentRun?.Message;
+                if (execution.consult) {
+                    const maxRounds = execution.maxConsultRounds ?? DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS;
+                    lines.push(
+                        `* Question (round ${execution.consult.round} of ${maxRounds}): ${question?.trim() ? question : '(no message provided)'}`
+                    );
+                    const formSummary = FormatResponseFormSummary(execution.result.responseForm);
+                    if (formSummary) {
+                        lines.push(`* Form:\n${formSummary}`);
+                    }
+                    lines.push(`* Child run ID: ${execution.consult.childRunId || '(unknown)'}`);
+                    lines.push(
+                        `* To answer, call ${execution.request.name} again with resumeRunId: "${execution.consult.childRunId}" and your answer as the message.`
+                    );
+                } else if (isChat && question?.trim()) {
+                    lines.push(`* Question: ${question}`);
                 }
-                return baseInfo;
+                if (execution.result.agentRun?.ErrorMessage) {
+                    lines.push(`* Error: ${execution.result.agentRun.ErrorMessage}`);
+                }
+                return lines.join('\n');
             })
             .join('\n\n---\n\n');
     }
@@ -16253,6 +16961,8 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgentName: request.name,
                 message: request.message,
                 terminateAfter: request.terminateAfter,
+                ...(request.resumeRunId ? { resumeRunId: request.resumeRunId } : {}),
+                ...(request.presetName ? { presetName: request.presetName } : {}),
                 parentAgentHierarchy: this._agentHierarchy,
                 relationshipType: relationship ? 'related' : 'child'
             },
@@ -16331,6 +17041,31 @@ The context is now within limits. Please retry your request with the recovered c
             if (execution.result.mediaOutputs?.length) this._mediaOutputs.push(...execution.result.mediaOutputs);
             if (execution.result.fileOutputs?.length) this._fileOutputs.push(...execution.result.fileOutputs);
 
+            if (execution.result.agentRun?.FinalStep === 'Chat') {
+                const resolvedOption = this.resolveSubAgentChatHandlingOption(params.agent, execution.relationship);
+                if (this.isSubAgentConsultActive(resolvedOption, params)) {
+                    const round = (this._subAgentConsultRounds.get(execution.subAgentEntity.ID) ?? 0) + 1;
+                    this._subAgentConsultRounds.set(execution.subAgentEntity.ID, round);
+                    const maxRounds = params.agent.MaxSubAgentConsultRounds ?? DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS;
+                    if (round <= maxRounds) {
+                        const childRunId = execution.result.agentRun?.ID || '';
+                        const question = execution.result.agentRun?.Message || null;
+                        const consultRecord: SubAgentConsultRecord = {
+                            childRunId,
+                            subAgentId: execution.subAgentEntity.ID,
+                            subAgentName: execution.request.name,
+                            round,
+                            question
+                        };
+                        if (childRunId) {
+                            this._openSubAgentConsults.set(childRunId, consultRecord);
+                        }
+                        execution.consult = consultRecord;
+                        execution.maxConsultRounds = maxRounds;
+                    }
+                }
+            }
+
             const { mergedPayload: newMerged, stepPayloadAtEnd } = this.mergeParallelSubAgentResult(
                 params, execution, mergedPayload
             );
@@ -16354,6 +17089,7 @@ The context is now within limits. Please retry your request with the recovered c
     ): Promise<void> {
         if (!execution.stepEntity) return;
         execution.stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(stepPayloadAtEnd);
+        const shouldTerminate = execution.request.terminateAfter === true && !execution.consult;
         await this.finalizeStepEntity(
             execution.stepEntity,
             execution.result.success,
@@ -16365,8 +17101,9 @@ The context is now within limits. Please retry your request with the recovered c
                     errorMessage: execution.result.agentRun?.ErrorMessage,
                     stepCount: execution.result.agentRun?.Steps?.length || 0,
                 },
-                shouldTerminate: execution.request.terminateAfter === true,
-                nextStep: execution.request.terminateAfter === true ? 'success' : 'retry'
+                shouldTerminate,
+                nextStep: shouldTerminate ? 'success' : 'retry',
+                ...(execution.consult && { consult: execution.consult })
             }
         );
     }
@@ -16430,10 +17167,10 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Termination semantics: matches the single sub-agent path —
         // `terminateAfter` triggers parent termination regardless of the child's
-        // success/failure. The parent's step reflects whether any child failed:
-        // Failed if any did, Success if terminating cleanly, otherwise Retry.
+        // success/failure, EXCEPT when a Chat child is handled under Consult
+        // (the parent must get its turn to answer).
         const shouldTerminateParent = allExecutions.some(e =>
-            e.request.terminateAfter === true
+            e.request.terminateAfter === true && !e.consult
         );
         const subAgentNames = allExecutions.map(e => e.request.name).join(', ');
         return {
@@ -16445,6 +17182,200 @@ The context is now within limits. Please retry your request with the recovered c
             newPayload: mergedPayload,
             previousPayload: previousDecision.newPayload
         };
+    }
+
+    /**
+     * Pushes a sub-agent result or consult message to the parent's conversation history,
+     * answering natively-invoked `delegate_to_*` calls as a tool-result turn when applicable
+     * and applying expiration defaults / overrides.
+     *
+     * @private
+     */
+    private pushSubAgentConversationMessage<SC, SR>(
+        params: ExecuteAgentParams<SC>,
+        previousDecision: BaseAgentNextStep<SR, SC>,
+        subAgentRequest: AgentSubAgentRequest<SC>,
+        subAgentEntity: MJAIAgentEntityExtended,
+        messageContent: string,
+        messageType: 'sub-agent-result' | 'sub-agent-consult',
+        isError: boolean
+    ): void {
+        const metadata: AgentChatMessageMetadata = {
+            turnAdded: this._promptTurnCount,
+            messageType,
+            subAgentName: subAgentRequest.name,
+            subAgentId: subAgentEntity.ID,
+            expirationTurns: 3,
+            expirationMode: 'Remove'
+        };
+
+        if (params.messageExpirationOverride) {
+            const override = params.messageExpirationOverride;
+            if (override.expirationTurns != null) {
+                metadata.expirationTurns = override.expirationTurns;
+                metadata.expirationMode = override.expirationMode || 'Remove';
+                metadata.compactMode = override.compactMode;
+                metadata.compactLength = override.compactLength;
+                metadata.compactPromptId = override.compactPromptId;
+            }
+        }
+
+        if (previousDecision?.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
+            params.conversationMessages.push(BuildToolResultTurn([
+                ...this.payloadToolResult(previousDecision),
+                {
+                    toolCallId: subAgentRequest.toolCallId,
+                    toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
+                    content: messageContent,
+                    isError
+                }
+            ], metadata) as AgentChatMessage);
+        } else {
+            params.conversationMessages.push({
+                role: 'user',
+                content: messageContent,
+                metadata
+            } as AgentChatMessage);
+        }
+    }
+
+    /**
+     * Unified handler for a single sub-agent (child, related, or runtime-granted) that
+     * finished with `FinalStep === 'Chat'`. Resolves `ChatHandlingOption` for the pairing,
+     * runs the consult flow when `'Consult'` is active and within the per-sub-agent round
+     * bound, and otherwise finalizes the step and delegates to `validateChatNextStep`.
+     *
+     * @private
+     */
+    private async handleSingleSubAgentChatStep<SC, SR>(
+        params: ExecuteAgentParams<SC>,
+        previousDecision: BaseAgentNextStep<SR, SC>,
+        subAgentRequest: AgentSubAgentRequest<SC>,
+        subAgentEntity: MJAIAgentEntityExtended,
+        relationship: MJAIAgentRelationshipEntity | undefined,
+        subAgentResult: ExecuteAgentResult<SR>,
+        mergedPayload: SR,
+        stepEntity: MJAIAgentRunStepEntityExtended,
+        outputData: Record<string, unknown>
+    ): Promise<BaseAgentNextStep<SR, SC>> {
+        const resolvedOption = this.resolveSubAgentChatHandlingOption(params.agent, relationship);
+
+        if (this.isSubAgentConsultActive(resolvedOption, params)) {
+            const round = (this._subAgentConsultRounds.get(subAgentEntity.ID) ?? 0) + 1;
+            this._subAgentConsultRounds.set(subAgentEntity.ID, round);
+            const maxRounds = params.agent.MaxSubAgentConsultRounds ?? DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS;
+
+            const childRunId = subAgentResult.agentRun?.ID || '';
+            const question = subAgentResult.agentRun?.Message || null;
+            const consultRecord: SubAgentConsultRecord = {
+                childRunId,
+                subAgentId: subAgentEntity.ID,
+                subAgentName: subAgentRequest.name,
+                round,
+                question
+            };
+            if (childRunId) {
+                this._openSubAgentConsults.set(childRunId, consultRecord);
+            }
+            outputData.consult = consultRecord;
+
+            if (round <= maxRounds) {
+                outputData.shouldTerminate = false;
+                outputData.nextStep = 'retry';
+
+                await this.finalizeStepEntity(
+                    stepEntity,
+                    subAgentResult.success,
+                    subAgentResult.agentRun?.ErrorMessage,
+                    outputData
+                );
+
+                const consultMessage = FormatSubAgentConsultMessage({
+                    subAgentName: subAgentRequest.name,
+                    round,
+                    maxRounds,
+                    question,
+                    responseForm: subAgentResult.responseForm,
+                    childRunId
+                });
+
+                this.pushSubAgentConversationMessage(
+                    params,
+                    previousDecision,
+                    subAgentRequest,
+                    subAgentEntity,
+                    consultMessage,
+                    'sub-agent-consult',
+                    false
+                );
+
+                if (this._agentRun) {
+                    this._agentRun.FinalPayloadObject = mergedPayload;
+                }
+
+                this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
+                return {
+                    ...subAgentResult,
+                    step: 'Success',
+                    errorMessage: undefined,
+                    terminate: false,
+                    previousPayload: previousDecision?.newPayload,
+                    newPayload: mergedPayload,
+                    artifactDirective: undefined,
+                    handoff: undefined
+                };
+            }
+        }
+
+        // Not under active Consult (or round exceeded bound): finalize step and validate/propagate Chat
+        await this.finalizeStepEntity(
+            stepEntity,
+            subAgentResult.success,
+            subAgentResult.agentRun?.ErrorMessage,
+            outputData
+        );
+
+        const chatStep: BaseAgentNextStep<SR, SC> = {
+            step: 'Chat',
+            terminate: true,
+            message: subAgentResult.agentRun?.Message || null,
+            previousPayload: previousDecision?.newPayload,
+            newPayload: mergedPayload,
+            responseForm: subAgentResult.responseForm,
+            actionableCommands: subAgentResult.actionableCommands,
+            automaticCommands: subAgentResult.automaticCommands,
+            artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
+        };
+
+        const effectiveOption = this.effectiveSubAgentChatHandlingOption(params.agent, relationship, params);
+        const validatedStep = await this.validateChatNextStep(
+            params,
+            chatStep,
+            mergedPayload,
+            this._agentRun!,
+            stepEntity!,
+            effectiveOption
+        );
+
+        if (validatedStep.step === 'Chat' && effectiveOption === 'Consult' && this._depth === 0) {
+            await this.raiseFeedbackRequest(params, stepEntity, chatStep);
+        } else if (validatedStep.step === 'Retry') {
+            const resultMessage = this.formatSubAgentResultAsMarkdown(subAgentRequest.name, subAgentResult);
+            this.pushSubAgentConversationMessage(
+                params,
+                previousDecision,
+                subAgentRequest,
+                subAgentEntity,
+                resultMessage,
+                'sub-agent-result',
+                !subAgentResult.success
+            );
+            if (this._agentRun) {
+                this._agentRun.FinalPayloadObject = mergedPayload;
+            }
+        }
+
+        return validatedStep;
     }
 
     /**
@@ -16506,6 +17437,8 @@ The context is now within limits. Please retry your request with the recovered c
             subAgentName: subAgentRequest.name,
             message: subAgentRequest.message,
             terminateAfter: subAgentRequest.terminateAfter,
+            ...(subAgentRequest.resumeRunId ? { resumeRunId: subAgentRequest.resumeRunId } : {}),
+            ...(subAgentRequest.presetName ? { presetName: subAgentRequest.presetName } : {}),
             parentAgentHierarchy: this._agentHierarchy,
             relationshipType: 'related'
         };
@@ -16634,7 +17567,7 @@ The context is now within limits. Please retry your request with the recovered c
             const shouldTerminate = subAgentRequest.terminateAfter === true || subAgentParkedOnWorkflow;
 
             // Prepare output data
-            const outputData = {
+            const outputData: Record<string, unknown> = {
                 subAgentResult: {
                     success: subAgentResult.success,
                     finalStep: subAgentResult.agentRun?.FinalStep,
@@ -16654,6 +17587,21 @@ The context is now within limits. Please retry your request with the recovered c
                 stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
             }
 
+            // Check if sub-agent returned a Chat step (handled before finalizeStepEntity so Consult can update outputData)
+            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
+                return await this.handleSingleSubAgentChatStep(
+                    params,
+                    previousDecision,
+                    subAgentRequest,
+                    subAgentEntity,
+                    relationship,
+                    subAgentResult,
+                    mergedPayload,
+                    stepEntity,
+                    outputData
+                );
+            }
+
             // Finalize step entity
             await this.finalizeStepEntity(
                 stepEntity,
@@ -16661,27 +17609,6 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgentResult.agentRun?.ErrorMessage,
                 outputData
             );
-
-            // Check if sub-agent returned a Chat step
-            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
-                // Create Chat nextStep but validate it through parent's ChatHandlingOption
-                // This allows parent agents to remap Chat -> Success/Failed/Retry if configured
-                const chatStep: BaseAgentNextStep<SR, SC> = {
-                    step: 'Chat',
-                    terminate: true,
-                    message: subAgentResult.agentRun?.Message || null,
-                    previousPayload: previousDecision?.newPayload,
-                    newPayload: mergedPayload, // Preserve sub-agent payload changes
-                    responseForm: subAgentResult.responseForm,
-                    actionableCommands: subAgentResult.actionableCommands,
-                    automaticCommands: subAgentResult.automaticCommands,
-                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
-                };
-
-                // Validate through parent's ChatHandlingOption (if configured)
-                // This ensures parent agents can override child Chat steps
-                return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
-            }
 
             // When a related sub-agent submits a durable task graph, its run parks with Status === 'Paused'.
             // Propagate the parked state to the parent run and terminate immediately with the sub-agent's
@@ -16701,49 +17628,23 @@ The context is now within limits. Please retry your request with the recovered c
                     responseForm: subAgentResult.responseForm,
                     actionableCommands: subAgentResult.actionableCommands,
                     automaticCommands: subAgentResult.automaticCommands,
-                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
+                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective,
+                    handoff: undefined
                 };
             }
 
             // Add sub-agent result to conversation as user message using markdown format
             // and expiration metadata so it persists across multiple prompt turns
             const relatedResultMessage = this.formatSubAgentResultAsMarkdown(subAgentRequest.name, subAgentResult);
-
-            const relatedMetadata: AgentChatMessageMetadata = {
-                turnAdded: this._promptTurnCount,
-                messageType: 'sub-agent-result',
-                subAgentName: subAgentRequest.name,
-                subAgentId: subAgentEntity.ID,
-                expirationTurns: 3,
-                expirationMode: 'Remove'
-            };
-
-            if (params.messageExpirationOverride) {
-                const override = params.messageExpirationOverride;
-                if (override.expirationTurns != null) {
-                    relatedMetadata.expirationTurns = override.expirationTurns;
-                    relatedMetadata.expirationMode = override.expirationMode || 'Remove';
-                    relatedMetadata.compactMode = override.compactMode;
-                    relatedMetadata.compactLength = override.compactLength;
-                    relatedMetadata.compactPromptId = override.compactPromptId;
-                }
-            }
-
-            if (previousDecision.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
-                // the delegate_to_* call is answered as a tool result (same as the child path).
-                params.conversationMessages.push(BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
-                    toolCallId: subAgentRequest.toolCallId,
-                    toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
-                    content: relatedResultMessage,
-                    isError: !subAgentResult.success
-                }], relatedMetadata) as AgentChatMessage);
-            } else {
-                params.conversationMessages.push({
-                    role: 'user',
-                    content: relatedResultMessage,
-                    metadata: relatedMetadata
-                } as AgentChatMessage);
-            }
+            this.pushSubAgentConversationMessage(
+                params,
+                previousDecision,
+                subAgentRequest,
+                subAgentEntity,
+                relatedResultMessage,
+                'sub-agent-result',
+                !subAgentResult.success
+            );
 
             // Update the agent run's current payload
             if (this._agentRun) {
@@ -16765,7 +17666,8 @@ The context is now within limits. Please retry your request with the recovered c
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload,
                 artifactDirective: previousDecision?.artifactDirective
-                    ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined)
+                    ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined),
+                handoff: undefined
             };
         } catch (error) {
             // Preserve payload on error
@@ -18275,6 +19177,7 @@ The context is now within limits. Please retry your request with the recovered c
             EnvironmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
             ConversationDetailID: params.conversationDetailId ?? null,
             AgentRunID: this._agentRun?.ID ?? null,
+            ParentAgentHierarchy: this._agentHierarchy.length > 0 ? [...this._agentHierarchy] : undefined,
             // If THIS run was itself started by a finished graph, the graph it emits inherits that
             // depth + 1. Without this the chain restarts at zero on every hop and
             // MAX_REINVOKE_DEPTH never fires — a graph reinvoking an agent that emits a graph would
@@ -18325,6 +19228,88 @@ The context is now within limits. Please retry your request with the recovered c
                 previousDecision.message ||
                 `Started **${spec.workflowName}** — ${spec.tasks.length} task(s) running. ` +
                 `I'll follow up when it finishes.`,
+            reasoning: previousDecision.reasoning,
+            confidence: previousDecision.confidence,
+            previousPayload: previousDecision.previousPayload,
+            newPayload: previousDecision.newPayload || previousDecision.previousPayload
+        };
+    }
+
+    /**
+     * Executes a `'Handoff'` next step: records the `'Handoff'` step entity with the resolved
+     * target agent ID, stores {@link _handoffResult} for {@link ExecuteAgentResult.handoff},
+     * and ends this run `'Success'` with the handoff message so the host can invoke the target agent.
+     *
+     * @protected
+     */
+    protected async executeHandoffStep(
+        params: ExecuteAgentParams,
+        previousDecision: BaseAgentNextStep
+    ): Promise<BaseAgentNextStep> {
+        const handoff = previousDecision.handoff;
+        const resolved = this._resolvedHandoffTarget;
+        if (!handoff || !resolved) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: 'A Handoff step reached execution without a validated handoff target.',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+
+        if (this.runWithholdsHandoff(params)) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: 'Handoff is not available on this run.',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Handoff',
+            stepName: `Handoff: ${resolved.name}`,
+            targetId: resolved.id,
+            contextUser: params.contextUser,
+            inputData: {
+                agentName: handoff.agentName,
+                brief: handoff.brief,
+                reason: handoff.reason
+            }
+        });
+
+        const chain = [...(params.handoffChain ?? []), params.agent.ID];
+        const hop = chain.length;
+
+        await this.finalizeStepEntity(
+            stepEntity,
+            true,
+            undefined,
+            {
+                HandoffToAgentID: resolved.id,
+                TargetAgentName: resolved.name,
+                Brief: handoff.brief,
+                Reason: handoff.reason,
+                Hop: hop,
+                Chain: chain
+            }
+        );
+
+        this._handoffResult = {
+            targetAgentId: resolved.id,
+            targetAgentName: resolved.name,
+            sourceAgentId: params.agent.ID,
+            brief: handoff.brief,
+            reason: handoff.reason,
+            runStepId: stepEntity.ID
+        };
+
+        return {
+            step: 'Success',
+            terminate: true,
+            message: previousDecision.message || `Transferring you to **${resolved.name}**…`,
             reasoning: previousDecision.reasoning,
             confidence: previousDecision.confidence,
             previousPayload: previousDecision.previousPayload,
@@ -20038,6 +21023,7 @@ The context is now within limits. Please retry your request with the recovered c
             mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined,
             fileOutputs: this._fileOutputs.length > 0 ? this._fileOutputs : undefined,
             feedbackRequestId: this._feedbackRequestId || undefined,
+            handoff: this._handoffResult || undefined,
             resolvedStorageAccountId: this._resolvedStorageAccountId || undefined
         };
     }
@@ -21148,6 +22134,7 @@ The context is now within limits. Please retry your request with the recovered c
             || messageType === 'client-tool-result'
             || messageType === BaseAgent.toolResultMessageType
             || messageType === 'sub-agent-result'
+            || messageType === 'sub-agent-consult'
             || messageType === 'loop-result';
     }
 

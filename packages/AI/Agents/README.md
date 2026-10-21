@@ -127,10 +127,12 @@ Abstract base that all agent types extend. Defines the `DetermineNextStep()` int
 | `Chat` | Send a message back to the user |
 | `Actions` | Execute one or more server-side actions |
 | `ClientTools` | Invoke browser-side tools (navigate, switch tabs, show results) |
-| `SubAgents` | Delegate to sub-agents |
+| `SubAgents` / `Sub-Agent` | Delegate to child, related, or runtime-granted sub-agents and receive their result in-run |
+| `Handoff` | Transfer a top-level interactive conversation to a directly discoverable peer agent (hosts that pass `handoffChain` only) |
+| `Tasks` | Submit a durable `TaskGraphSpec` to the task-graph dispatcher and detach |
 | `MoreInfo` | Ask the user for additional information |
 | `Retry` | Retry the current step (e.g., after validation failure) |
-| `End` | Complete execution |
+| `End` / `Success` / `Failed` | Complete execution |
 | `ForEach` | Iterate over a collection |
 | `While` | Loop while a condition is true |
 

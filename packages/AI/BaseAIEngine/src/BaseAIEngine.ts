@@ -125,6 +125,23 @@ export interface EffectiveAgentPersona {
 }
 
 /**
+ * The tier that supplied an agent's resolved file storage account.
+ */
+export type AgentStorageAccountSource = 'Override' | 'Agent' | 'Category' | 'AgentType' | 'Fallback' | 'None';
+
+/**
+ * Result of resolving the file storage account for an agent via {@link AIEngineBase.ResolveAgentStorageAccount}.
+ */
+export interface AgentStorageAccountResolution {
+    /** Resolved storage account ID, or `null` when no account is configured or active */
+    AccountID: string | null;
+    /** Tier in the resolution chain that supplied the account */
+    Source: AgentStorageAccountSource;
+    /** True when `Source === 'Fallback'` and multiple active accounts existed */
+    Ambiguous: boolean;
+}
+
+/**
  * Compact summary entry for a directly discoverable, user-runnable AI agent.
  * Cached per user on AIEngineBase so orchestrator prompts and task-graph validators
  * can access a user's permitted agent directory in O(1) without recomputing permissions.
@@ -1120,6 +1137,58 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _storageFallbackWarnedAgents = new Set<string>();
 
     /**
+     * Resolves the file storage account an agent's files should go to, along with the tier that
+     * supplied it (`Override`, `Agent`, `Category`, `AgentType`, `Fallback`, or `None`) and whether
+     * a system fallback had to choose among multiple active accounts (`Ambiguous`).
+     *
+     * Resolution chain (first non-null wins):
+     * 1. `overrideStorageAccountId` — a runtime override (`Source: 'Override'`)
+     * 2. Agent-level `DefaultStorageAccountID` (`Source: 'Agent'`)
+     * 3. Category hierarchy — walks up the agent's category tree via `ParentID` (`Source: 'Category'`)
+     * 4. Agent Type-level `DefaultStorageAccountID` (`Source: 'AgentType'`)
+     * 5. System fallback — {@link FileStorageEngineBase.ResolveDefaultAccount} over the active accounts
+     *    (`Source: 'Fallback'`, `Ambiguous: resolution.Ambiguous`), or `Source: 'None'` when none is active.
+     *
+     * @param agent - The agent being resolved for
+     * @param overrideStorageAccountId - Optional runtime override; wins outright when set
+     * @returns The storage account ID, source tier, and ambiguity flag
+     */
+    public ResolveAgentStorageAccount(
+        agent: Pick<MJAIAgentEntity, 'ID' | 'Name' | 'CategoryID' | 'TypeID' | 'DefaultStorageAccountID'>,
+        overrideStorageAccountId?: string | null
+    ): AgentStorageAccountResolution {
+        if (overrideStorageAccountId) {
+            return { AccountID: overrideStorageAccountId, Source: 'Override', Ambiguous: false };
+        }
+        if (agent.DefaultStorageAccountID) {
+            return { AccountID: agent.DefaultStorageAccountID, Source: 'Agent', Ambiguous: false };
+        }
+
+        const categoryAccountId = this.resolveCategoryStorageAccountID(agent.CategoryID);
+        if (categoryAccountId) {
+            return { AccountID: categoryAccountId, Source: 'Category', Ambiguous: false };
+        }
+
+        const agentType = agent.TypeID ? this.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID)) : undefined;
+        if (agentType?.DefaultStorageAccountID) {
+            return { AccountID: agentType.DefaultStorageAccountID, Source: 'AgentType', Ambiguous: false };
+        }
+
+        const resolution = FileStorageEngineBase.Instance.ResolveDefaultAccount();
+        if (resolution.Ambiguous && resolution.Chosen) {
+            this.warnAmbiguousStorageFallback(agent, agentType?.Name, resolution.Candidates.map(c => `'${c.account.Name}' (${c.provider.Name})`), resolution.Chosen.account.Name);
+        }
+        if (resolution.Chosen) {
+            return {
+                AccountID: resolution.Chosen.account.ID,
+                Source: 'Fallback',
+                Ambiguous: resolution.Ambiguous,
+            };
+        }
+        return { AccountID: null, Source: 'None', Ambiguous: false };
+    }
+
+    /**
      * Resolves the file storage account an agent's files should go to. This is the golden path for
      * agent storage routing, so agents, actions and UI that need "where would this agent store a file?"
      * all get the same answer. It reads only cached metadata (this engine plus `FileStorageEngineBase`,
@@ -1142,20 +1211,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         agent: Pick<MJAIAgentEntity, 'ID' | 'Name' | 'CategoryID' | 'TypeID' | 'DefaultStorageAccountID'>,
         overrideStorageAccountId?: string | null
     ): string | null {
-        if (overrideStorageAccountId) return overrideStorageAccountId;
-        if (agent.DefaultStorageAccountID) return agent.DefaultStorageAccountID;
-
-        const categoryAccountId = this.resolveCategoryStorageAccountID(agent.CategoryID);
-        if (categoryAccountId) return categoryAccountId;
-
-        const agentType = agent.TypeID ? this.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID)) : undefined;
-        if (agentType?.DefaultStorageAccountID) return agentType.DefaultStorageAccountID;
-
-        const resolution = FileStorageEngineBase.Instance.ResolveDefaultAccount();
-        if (resolution.Ambiguous && resolution.Chosen) {
-            this.warnAmbiguousStorageFallback(agent, agentType?.Name, resolution.Candidates.map(c => `'${c.account.Name}' (${c.provider.Name})`), resolution.Chosen.account.Name);
-        }
-        return resolution.Chosen?.account.ID ?? null;
+        return this.ResolveAgentStorageAccount(agent, overrideStorageAccountId).AccountID;
     }
 
     /** Walks up the category tree from `categoryId` and returns the first `DefaultStorageAccountID` found. */

@@ -255,3 +255,8 @@ export { WorkQueueDashboardComponent } from './WorkQueue/work-queue-dashboard.co
 
 // Routines app — schedule AI agents to run on a cron cadence
 export { UserRoutinesResourceComponent, LoadUserRoutinesResource } from './UserRoutines/user-routines-resource.component';
+
+// Video Studio app — Productions, Brand Kits, and Archetypes resource tabs
+export * from './video-studio-dashboards.module';
+export * from './VideoStudio';
+

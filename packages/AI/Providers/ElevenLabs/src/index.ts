@@ -1,6 +1,6 @@
 import { RegisterClass } from "@memberjunction/global";
 import { AIErrorInfo, BaseAudioGenerator, BaseTextToSpeech, BuildCancellationErrorInfo, IsRequestAborted, ThrowIfAborted, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
-import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import { ElevenLabs, ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
 // Realtime (Agents Platform) driver — BaseRealtimeModel implementation
 export * from './elevenLabsRealtime';
@@ -26,28 +26,61 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     /**
      * Speaks `params.text`. `params.CancellationToken` is passed to the request, and reading the audio
      * stops as soon as it aborts; the failure is then classified as a cancellation.
+     *
+     * When `params.IncludeTimestamps` is `true`, calls `textToSpeech.convertWithTimestamps` and populates
+     * `SpeechResult.Alignment` alongside `content` and `data`.
      */
     public async CreateSpeech(params: TextToSpeechParams): Promise<SpeechResult> {
         const speechResult = new SpeechResult();
         const signal = params.CancellationToken;
         try {
-            // New API uses textToSpeech.convert instead of generate
-            const audioStream = await this._elevenLabs.textToSpeech.convert(
-                params.voice,
-                {
+            if (params.IncludeTimestamps) {
+                const request: ElevenLabs.BodyTextToSpeechFullWithTimestamps = {
                     text: params.text,
                     modelId: params.model_id,
                     voiceSettings: params.voice_settings,
                     applyTextNormalization: params.apply_text_normalization,
                     pronunciationDictionaryLocators: params.pronunciation_dictionary_locators,
-                },
-                { abortSignal: signal }
-            )
+                };
+                const response: ElevenLabs.AudioWithTimestampsResponse =
+                    await this._elevenLabs.textToSpeech.convertWithTimestamps(
+                        params.voice,
+                        request,
+                        { abortSignal: signal }
+                    );
+                ThrowIfAborted(signal, 'ElevenLabs');
 
-            const audioBuffer = await this.readAudio(audioStream, signal);
-            speechResult.data = audioBuffer;
-            speechResult.content = audioBuffer.toString('base64'); // Convert to base64 string
-            speechResult.success = true;
+                speechResult.content = response.audioBase64;
+                speechResult.data = Buffer.from(response.audioBase64, 'base64');
+                const alignment: ElevenLabs.CharacterAlignmentResponseModel | undefined =
+                    response.alignment ?? response.normalizedAlignment;
+                if (alignment) {
+                    speechResult.Alignment = {
+                        Characters: alignment.characters,
+                        StartSeconds: alignment.characterStartTimesSeconds,
+                        EndSeconds: alignment.characterEndTimesSeconds,
+                    };
+                }
+                speechResult.success = true;
+            } else {
+                // New API uses textToSpeech.convert instead of generate
+                const audioStream = await this._elevenLabs.textToSpeech.convert(
+                    params.voice,
+                    {
+                        text: params.text,
+                        modelId: params.model_id,
+                        voiceSettings: params.voice_settings,
+                        applyTextNormalization: params.apply_text_normalization,
+                        pronunciationDictionaryLocators: params.pronunciation_dictionary_locators,
+                    },
+                    { abortSignal: signal }
+                )
+
+                const audioBuffer = await this.readAudio(audioStream, signal);
+                speechResult.data = audioBuffer;
+                speechResult.content = audioBuffer.toString('base64'); // Convert to base64 string
+                speechResult.success = true;
+            }
         } catch (error) {
             const errorInfo = this.classifySpeechError(error, signal);
             speechResult.success = false;

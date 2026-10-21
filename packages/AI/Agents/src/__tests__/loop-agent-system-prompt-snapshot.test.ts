@@ -35,9 +35,6 @@ const FIXTURE_PATH = join(__dirname_, 'fixtures/loop-agent-system-prompt.default
  */
 function buildFrozenContext(promptParams: LoopAgentTypePromptParams, extra: Record<string, unknown> = {}): Record<string, unknown> {
     return {
-        ...extra,
-        __agentTypePromptParams: promptParams,
-
         // Identity + child prompt
         agentName: 'Snapshot Agent',
         agentDescription: 'Fixture agent used only by the prompt snapshot test.',
@@ -77,6 +74,9 @@ function buildFrozenContext(promptParams: LoopAgentTypePromptParams, extra: Reco
         _SCRATCHPAD_TASK_SUMMARY: '0 of 0 tasks complete',
         _SCRATCHPAD_TASKS: '[[SCRATCHPAD TASKS — frozen]]',
         _CURRENT_PAYLOAD: { snapshot: 'frozen' },
+
+        ...extra,
+        __agentTypePromptParams: promptParams,
     };
 }
 
@@ -137,6 +137,80 @@ describe('Loop Agent Type system prompt — rendered snapshot', () => {
         expect(template).toContain(`<${AGENT_SPECIALIZATION_TAG}>`);
     });
 
+    it('renders resumeRunId?: string in both subAgent and subAgents only when subAgentConsultEnabled is true', () => {
+        const def = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS });
+        expect(def).not.toContain('resumeRunId?: string');
+
+        const withConsult = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS }, { subAgentConsultEnabled: true });
+        expect(withConsult).toContain('{ name: string; message: string; terminateAfter: boolean; resumeRunId?: string }');
+        expect(withConsult).toContain('Array<{ name: string; message: string; terminateAfter: boolean; resumeRunId?: string }>');
+    });
+
+    it('renders presetName?: string in both subAgent and subAgents only when subAgentPresetsAvailable is true', () => {
+        const def = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS });
+        expect(def).not.toContain('presetName?: string');
+
+        const withPresets = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS }, { subAgentPresetsAvailable: true });
+        expect(withPresets).toContain('{ name: string; message: string; terminateAfter: boolean; presetName?: string }');
+        expect(withPresets).toContain('Array<{ name: string; message: string; terminateAfter: boolean; presetName?: string }>');
+    });
+
+    it('renders the Sub-Agent Consults section when subAgentConsultEnabled is true with subAgentCount: 1', () => {
+        const def = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS });
+        expect(def).not.toContain('## Sub-Agent Consults');
+
+        const withConsult = renderSystemPrompt(
+            { ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS },
+            { subAgentConsultEnabled: true, subAgentCount: 1 }
+        );
+        expect(withConsult).toContain('# Role: Top-Level Agent');
+        expect(withConsult).toContain('## Sub-Agent Consults');
+        expect(withConsult).toContain('Sub-agent X is asking you');
+        expect(withConsult).toContain('call it again with `resumeRunId`');
+        expect(withConsult).toContain('After the round limit, its question goes to your caller.');
+    });
+
+    it('renders the parentConsults sentence both with parentAgentName set (child) and empty (related)', () => {
+        const def = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS });
+        expect(def).not.toContain('When you need input, your Chat goes to your parent agent, which may answer you. It is not shown to a user.');
+
+        const childRendered = renderSystemPrompt(
+            { ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS },
+            { parentConsults: true, parentAgentName: 'Parent Orchestrator' }
+        );
+        expect(childRendered).toContain('# Role: Sub-Agent');
+        expect(childRendered).toContain('Parent: Parent Orchestrator.');
+        expect(childRendered).toContain('When you need input, your Chat goes to your parent agent, which may answer you. It is not shown to a user.');
+
+        const relatedRendered = renderSystemPrompt(
+            { ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS },
+            { parentConsults: true, parentAgentName: '' }
+        );
+        expect(relatedRendered).not.toContain('# Role: Sub-Agent');
+        expect(relatedRendered).toContain('When you need input, your Chat goes to your parent agent, which may answer you. It is not shown to a user.');
+    });
+
+    it('renders the Handoff union member, field, and section when enableHandoff and includeResponseTypeDefinition.handoff are true', () => {
+        const def = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS });
+        expect(def).not.toContain("| 'Handoff'");
+        expect(def).not.toContain('handoff?: { agentName: string; brief: string; reason: string }');
+        expect(def).not.toContain("## Transferring the conversation (nextStep.type = 'Handoff')");
+
+        const withHandoff = renderSystemPrompt({
+            ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS,
+            enableHandoff: true,
+            includeResponseTypeDefinition: {
+                ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeResponseTypeDefinition,
+                handoff: true,
+            },
+        });
+        expect(withHandoff).toContain("| 'Handoff'");
+        expect(withHandoff).toContain("/** Transfer the conversation to another agent (when type='Handoff') — see Transferring the conversation below. Ends your turn. */");
+        expect(withHandoff).toContain('handoff?: { agentName: string; brief: string; reason: string };');
+        expect(withHandoff).toContain("## Transferring the conversation (nextStep.type = 'Handoff')");
+        expect(withHandoff).toContain("- Use `'Handoff'` when another agent should own the request, and use `'Sub-Agent'` when you need a result back.");
+    });
+
     it('includes artifactDirective and Artifact Lifecycle section when _ARTIFACTS_ENABLED is true and omits both when false', () => {
         const enabled = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS }, { _ARTIFACTS_ENABLED: true });
         expect(enabled).toContain('artifactDirective?:');
@@ -147,3 +221,4 @@ describe('Loop Agent Type system prompt — rendered snapshot', () => {
         expect(disabled).not.toContain('## Artifact Lifecycle: Creating a New Artifact vs. Versioning an Existing One (`artifactDirective`)');
     });
 });
+

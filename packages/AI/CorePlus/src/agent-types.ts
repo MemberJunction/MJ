@@ -181,6 +181,12 @@ export interface MediaOutput {
     /** Base64 encoded data (only if NOT from prompt run) */
     data?: string;
 
+    /**
+     * `MJ: Files` ID set once the media bytes are in MJStorage; downstream consumers
+     * reuse it instead of uploading the same bytes again.
+     */
+    fileId?: string;
+
     /** URL if available (some providers return URLs) */
     url?: string;
 
@@ -442,6 +448,17 @@ export type AgentSubAgentRequest<TContext = any> = {
     message: string;
     /** Whether to terminate the parent agent after sub-agent completes */
     terminateAfter: boolean;
+    /**
+     * The ID of this sub-agent's earlier run that ended with a question to this agent;
+     * set it only to answer that question; the framework resumes that run (its payload,
+     * its question, then your message).
+     */
+    resumeRunId?: string;
+    /**
+     * Optional configuration preset of the target sub-agent, by name (or display name).
+     * Overrides the relationship's default `ConfigurationPresetID` and the parent's `configurationId`.
+     */
+    presetName?: string;
     /** The native tool call (ChatToolCall.id) this dispatch answers — set only on native turns. */
     toolCallId?: string;
     /** Optional template parameters for sub-agent invocation */
@@ -577,6 +594,43 @@ export type ArtifactDirective = {
 };
 
 /**
+ * Maximum number of agent-to-agent handoffs allowed within a single user turn.
+ * Shared across `BaseAgent` handoff validation/execution and messaging adapters.
+ */
+export const MAX_HANDOFF_HOPS = 3;
+
+/**
+ * Request emitted by an agent to transfer the conversation turn to another agent (`step === 'Handoff'`).
+ * The target agent runs as itself in the same conversation rather than as a nested sub-agent.
+ */
+export type AgentHandoffRequest = {
+    /** Name of the target agent to transfer the conversation to. */
+    agentName: string;
+    /** Self-contained brief carrying the context and requirements the target agent needs to handle the turn. */
+    brief: string;
+    /** Explanation of why the source agent is transferring the turn to the target agent. */
+    reason: string;
+};
+
+/**
+ * Outcome recorded when a run ends with a `'Handoff'` step, read by the host to execute the transfer.
+ */
+export type AgentHandoffResult = {
+    /** Resolved ID of the target agent receiving the handoff. */
+    targetAgentId: string;
+    /** Canonical Name of the target agent receiving the handoff. */
+    targetAgentName: string;
+    /** ID of the source agent that initiated the handoff. */
+    sourceAgentId: string;
+    /** Self-contained brief passed from the source agent to the target agent. */
+    brief: string;
+    /** Explanation of why the turn was transferred. */
+    reason: string;
+    /** ID of the recorded `AIAgentRunStep` row (`StepType = 'Handoff'`). */
+    runStepId: string;
+};
+
+/**
  * Represents the next step determination from an agent type.
  * 
  * Agent types analyze the output of prompt execution and determine what should
@@ -610,6 +664,9 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * - 'Decision': non-terminal in the same way. Runs {@link decisions} as `Decision` run steps with
      *   no LLM turn, and returns a 'Retry' carrying {@link decisionResults}. A Flow agent's Decision
      *   step emits it.
+     * - 'Handoff': detaches by recording a `Handoff` run step, storing {@link AgentHandoffResult} on
+     *   `ExecuteAgentResult.handoff`, and concluding the source agent's run with `'Success'`. Use
+     *   `'Handoff' as typeof nextStep.step` at assignment and switch sites.
      *
      * Note: To expand a compacted message, set step to 'Retry', set messageIndex to the message to expand,
      * and optionally set expandReason to explain why expansion is needed. The framework will expand the message
@@ -802,6 +859,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
         foldReason?: string;
     };
     /**
+     * Request to transfer the conversation turn to another agent when `step` is `'Handoff'`.
+     * Records a `Handoff` run step and terminates the current agent run with `Success` so the
+     * host can invoke the target agent in the same conversation.
+     */
+    handoff?: AgentHandoffRequest;
+    /**
      * When true, the agent should terminate after executing the current step.
      * Used by ClientTools: the main loop needs `terminate: false` so it continues
      * to dispatch the tool execution, but `executeClientToolsStep` checks this
@@ -931,6 +994,12 @@ export type ExecuteAgentResult<P = any> = {
      * @since 5.12.0
      */
     feedbackRequestId?: string;
+
+    /**
+     * Populated when the run concluded with a `'Handoff'` step. Carries the resolved target agent
+     * and brief so the conversation host can execute the transfer in the same conversation.
+     */
+    handoff?: AgentHandoffResult;
 
     /**
      * The resolved FileStorageAccount ID for file artifact storage, determined during
@@ -1496,6 +1565,15 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     ConversationBranchID?: string;
 
     /**
+     * Ordered list of agent IDs that have already handed this user turn on, oldest first.
+     *
+     * A host that carries out handoffs sets this property, even to `[]` on the initial run.
+     * When absent (`undefined`), this host does not carry out handoffs (e.g., MCP, scheduled jobs,
+     * evals, or API-key callers), so the run is not offered the `Handoff` step type.
+     */
+    handoffChain?: string[];
+
+    /**
      * Optional flag to automatically populate the payload from the last run.
      * When true and lastRunId is provided, the framework will:
      * 1. Load the last run's FinalPayload
@@ -1554,8 +1632,9 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     /**
      * Optional AI Configuration ID to use for this agent execution.
      * When provided, this configuration will be passed to all prompts executed
-     * by this agent and its sub-agents, enabling environment-specific model
-     * selection (e.g., Prod vs Dev configurations).
+     * by this agent, enabling environment-specific model selection (e.g., Prod vs Dev configurations).
+     * Sub-agents inherit this configuration ID by default unless overridden by a
+     * per-call `presetName` or the relationship's `ConfigurationPresetID`.
      * 
      * The configuration ID filters which AI models are available for prompt
      * execution and can provide configuration parameters for dynamic behavior.
@@ -2171,6 +2250,12 @@ export type AgentContextData = {
     planModeActive?: boolean;
     /** Whether Plan Mode's gate has already been satisfied (a prior plan was approved on this run chain) */
     planApproved?: boolean;
+    /** Whether ChatHandlingOption='Consult' is active for at least one listed sub-agent */
+    subAgentConsultEnabled?: boolean;
+    /** Whether this sub-agent's parent resolves ChatHandlingOption='Consult' for this pairing */
+    parentConsults?: boolean;
+    /** Whether at least one listed sub-agent has one or more active configuration presets */
+    subAgentPresetsAvailable?: boolean;
     /** Markdown formatted snapshot of the user's current application context */
     appContext?: string;
 }
@@ -2221,10 +2306,10 @@ export type AgentChatMessageMetadata = {
     /** Whether this message has expired */
     isExpired?: boolean;
     /** Type of message (for lifecycle management and logging) */
-    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'skill-activation' | 'skill-activation-refused' | 'chat' | 'system' | 'user';
-    /** Name of the sub-agent (only for sub-agent-result messages) */
+    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'sub-agent-consult' | 'skill-activation' | 'skill-activation-refused' | 'chat' | 'system' | 'user';
+    /** Name of the sub-agent (only for sub-agent-result and sub-agent-consult messages) */
     subAgentName?: string;
-    /** ID of the sub-agent (only for sub-agent-result messages) */
+    /** ID of the sub-agent (only for sub-agent-result and sub-agent-consult messages) */
     subAgentId?: string;
     /**
      * `ConversationDetail.Sequence` of the row this message came from. Stamped by

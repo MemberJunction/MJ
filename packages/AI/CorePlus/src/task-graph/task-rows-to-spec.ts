@@ -145,6 +145,7 @@ function nodeFor(
             return TaskNode.Agent(base, {
                 agentName: row.Agent?.trim() || row.AgentID?.trim() || row.Name,
                 message: config?.agent?.message,
+                ...(config?.agent?.presetName ? { presetName: config.agent.presetName } : {}),
             });
         case 'Action':
             return TaskNode.Action(base, {
@@ -179,7 +180,7 @@ function nodeFor(
 
 /** The parts of `Task.Configuration` this projection reads. */
 type StoredConfiguration = {
-    agent?: { message?: string };
+    agent?: { message?: string; presetName?: string };
     human?: { instructions?: string };
     forEach?: { collectionPath: string };
     while?: { condition: string };

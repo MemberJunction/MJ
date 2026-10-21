@@ -76,6 +76,15 @@ graph TD
 the two are not mutually exclusive. What makes a Flow agent different is that its graph is *drawn*
 rather than *inferred*, so it is reviewable, diffable and rerunnable.
 
+When a Loop agent needs another agent's help, pick the mechanism that matches who owns the rest of the turn:
+
+| Mechanism | When to use it | What happens to the caller's run |
+|---|---|---|
+| **Sub-Agent** (`nextStep.type = "Sub-Agent"`) | You need a child or related sub-agent to compute a result and hand it back inside your run. | Stays alive; the sub-agent's output merges into your payload/messages and your loop continues. |
+| **Consult** (`ChatHandlingOption = "Consult"` on a Sub-Agent) | A sub-agent pauses mid-run to ask a clarifying question and you want the parent agent to answer (or escalate) without losing the sub-agent's run. See [Sub-Agent `ChatHandlingOption` Resolution & Values](../packages/AI/Agents/docs/sub-agents-guide.md#sub-agent-chathandlingoption-resolution--values). | Both runs stay coordinated; the parent answers via `resumeRunId` up to `MaxSubAgentConsultRounds`. |
+| **Tasks** (`nextStep.type = "Tasks"`) | The work is a multi-step or long-running DAG that should outlive the request and execute durably on the task-graph dispatcher. | Submission ends the current run immediately; the dispatcher claims and runs the `Task` rows asynchronously. |
+| **Handoff** (`nextStep.type = "Handoff"`) | Another top-level peer agent should take over the conversation and speak directly to the user as itself (and stay sticky for follow-up turns). | The source agent's run completes cleanly (`FinalStep = "Success"`), and the host starts a fresh top-level run of the target agent on the same conversation. |
+
 ---
 
 ## What happens when a workflow runs

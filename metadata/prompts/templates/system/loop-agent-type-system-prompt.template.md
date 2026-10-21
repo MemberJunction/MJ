@@ -59,7 +59,7 @@ interface LoopAgentResponse {
     /** Next action{% if not _IMPLICIT %}. Required when taskComplete=false{% endif %} */
     nextStep?: {
         /** Operation type */
-        type: {% if not _NATIVE_TOOL_CALLING %}'Actions' | {% endif %}{% if _NATIVE_CONTROL_FLOW != 'implicit' %}'Sub-Agent' | 'Chat' | {% endif %}'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if skillCount > 0 %} | 'Skill'{% endif %}{% if planModeActive and not planApproved %} | 'Plan'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.tasks %} | 'Tasks'{% endif %};
+        type: {% if not _NATIVE_TOOL_CALLING %}'Actions' | {% endif %}{% if _NATIVE_CONTROL_FLOW != 'implicit' %}'Sub-Agent' | 'Chat' | {% endif %}'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if skillCount > 0 %} | 'Skill'{% endif %}{% if planModeActive and not planApproved %} | 'Plan'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.tasks %} | 'Tasks'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.handoff %} | 'Handoff'{% endif %};
 {% if not _NATIVE_TOOL_CALLING %}        /** Actions to execute — server-side tools (when type='Actions') */
         actions?: Array<{ name: string; params: Record<string, unknown> }>;
 {% endif %}{% if skillCount > 0 %}
@@ -86,7 +86,7 @@ interface LoopAgentResponse {
                 /** What runs this step. Picks which `configuration` shape applies. */
                 kind: 'Agent' | 'Action' | 'Human' | 'Prompt';
                 configuration:
-                    | { agentName: string; message?: string }      // kind: 'Agent'
+                    | { agentName: string; message?: string; presetName?: string }      // kind: 'Agent'
                     | { actionName: string }                        // kind: 'Action'
                     | { assignToUserID?: string; instructions?: string }  // kind: 'Human'
                     | { promptName: string };                       // kind: 'Prompt'
@@ -97,6 +97,9 @@ interface LoopAgentResponse {
             continuation?: 'message' | 'reinvoke' | 'none';
             durable?: boolean;
         };
+{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.handoff %}
+        /** Transfer the conversation to another agent (when type='Handoff') — see Transferring the conversation below. Ends your turn. */
+        handoff?: { agentName: string; brief: string; reason: string };
 {% endif %}
 {% if clientToolDetails %}
         /** Client tools to execute — browser-side UI tools (when type='ClientTools') */
@@ -107,7 +110,7 @@ interface LoopAgentResponse {
          * Use `subAgent` for a single sub-agent OR `subAgents` for parallel fan-out.
          * Only one of the two should be set per response.
          */
-        subAgent?: { name: string; message: string; terminateAfter: boolean };
+        subAgent?: { name: string; message: string; terminateAfter: boolean{% if subAgentConsultEnabled %}; resumeRunId?: string{% endif %}{% if subAgentPresetsAvailable %}; presetName?: string{% endif %} };
         /**
          * Multiple sub-agents to run IN PARALLEL (when type='Sub-Agent').
          * Use only when the sub-tasks are genuinely independent — their result
@@ -116,7 +119,7 @@ interface LoopAgentResponse {
          * terminates after the parallel batch regardless of that child's
          * success — same semantics as a single `subAgent` call.
          */
-        subAgents?: Array<{ name: string; message: string; terminateAfter: boolean }>;
+        subAgents?: Array<{ name: string; message: string; terminateAfter: boolean{% if subAgentConsultEnabled %}; resumeRunId?: string{% endif %}{% if subAgentPresetsAvailable %}; presetName?: string{% endif %} }>;
         /** Message index to expand (when type='Retry' and expanding a compacted message) */
         messageIndex?: number;
 {% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %}
@@ -773,6 +776,17 @@ You have {{subAgentCount}} sub-agents. Delegate appropriately.
 # Role: Sub-Agent
 Parent: {{ parentAgentName }}. Your results return to parent, not user.
 {% endif -%}
+{%- if subAgentConsultEnabled %}
+## Sub-Agent Consults
+A sub-agent may ask you something; it shows up as "Sub-agent X is asking you".
+- Answer from your own context: call it again with `resumeRunId` and your answer in `message`.
+- Ask your own caller (`Chat`) only when only they can answer.
+- Or tell it to proceed without the answer (`resumeRunId` with instructions).
+- After the round limit, its question goes to your caller.
+{% endif -%}
+{%- if parentConsults %}
+When you need input, your Chat goes to your parent agent, which may answer you. It is not shown to a user.
+{% endif -%}
 
 {%- if subAgentCount > 0 or actionCount > 0 or skillCount > 0 or (planModeActive and not planApproved) %}
 # Capabilities
@@ -1012,6 +1026,14 @@ only if you specifically want a durable background Task row.
 
 If your graph is malformed you will get every problem back at once — fix them all and re-emit the
 **complete** graph, not a patch.
+{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.handoff %}
+## Transferring the conversation (nextStep.type = 'Handoff')
+
+Use `nextStep.type = 'Handoff'` when another agent should own the request instead of you:
+
+- It ends your turn; the other agent answers in this conversation as itself, with its own settings.
+- Put everything it needs in `brief`, and explain why you are transferring in `reason`.
+- Use `'Handoff'` when another agent should own the request, and use `'Sub-Agent'` when you need a result back.
 {% endif %}
 
 {# ── Volatile blocks delivered in trailing user message ────────────────────────

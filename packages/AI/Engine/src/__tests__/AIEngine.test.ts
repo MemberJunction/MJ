@@ -559,10 +559,11 @@ describe('AIEngine', () => {
         }
 
         const invalidatingEntities = [
-            'AI Agents',
+            'MJ: AI Agents',
             'MJ: AI Agent Actions',
             'MJ: AI Agent Relationships',
             'MJ: AI Agent Types',
+            'MJ: AI Agent Configurations',
         ];
         const invalidatingEventTypes: Array<'save' | 'delete' | 'remote-invalidate'> = [
             'save', 'delete', 'remote-invalidate',
@@ -585,7 +586,7 @@ describe('AIEngine', () => {
 
         it('is case-insensitive on the entity name (lowercased comparison)', () => {
             const e = primeEngineWithCatalog();
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'ai AGENTS' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'mj: ai AGENTS' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toBeUndefined();
         });
 
@@ -612,21 +613,21 @@ describe('AIEngine', () => {
             // e.g. a 'new_record' / 'transaction_complete' event must be ignored — only
             // save/delete/remote-invalidate trigger a wipe.
             const e = primeEngineWithCatalog();
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'new_record', entityName: 'AI Agents' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'new_record', entityName: 'MJ: AI Agents' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toEqual({ v: 1 });
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'transaction_complete', entityName: 'AI Agents' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'transaction_complete', entityName: 'MJ: AI Agents' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toEqual({ v: 1 });
         });
 
         it('ignores non-BaseEntity ComponentEvents (wrong eventCode)', () => {
             const e = primeEngineWithCatalog();
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'AI Agents', eventCode: 'SomeOtherCode' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'MJ: AI Agents', eventCode: 'SomeOtherCode' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toEqual({ v: 1 });
         });
 
         it('ignores events whose event type is not ComponentEvent', () => {
             const e = primeEngineWithCatalog();
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'AI Agents', event: 'LoggingEnabledChanged' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'MJ: AI Agents', event: 'LoggingEnabledChanged' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toEqual({ v: 1 });
         });
 
@@ -640,7 +641,7 @@ describe('AIEngine', () => {
 
         it('a fresh catalog set after a wipe survives until the next invalidating event', () => {
             const e = primeEngineWithCatalog();
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'delete', entityName: 'AI Agents' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'delete', entityName: 'MJ: AI Agents' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toBeUndefined();
 
             e.SetAgentBaseCatalog('agent-3', { v: 3 });
@@ -1893,6 +1894,53 @@ describe('AIEngine', () => {
                 expect(service.AddOrUpdateVector).not.toHaveBeenCalled();
                 expect(service.RemoveVector).toHaveBeenCalledWith('e2');
             });
+        });
+    });
+
+    // ======================================================================
+    // FindActiveAgentConfigurationPreset
+    // ======================================================================
+    describe('FindActiveAgentConfigurationPreset', () => {
+        it('matches Name before DisplayName, trims and compares case-insensitively, and excludes inactive presets', () => {
+            const activePresets = [
+                {
+                    ID: 'p-1',
+                    AgentID: 'agent-1',
+                    Name: 'Standard',
+                    DisplayName: 'Draft',
+                    Status: 'Active',
+                },
+                {
+                    ID: 'p-2',
+                    AgentID: 'agent-1',
+                    Name: 'Draft',
+                    DisplayName: 'Draft Mode (Fast)',
+                    Status: 'Active',
+                },
+            ];
+            mockBaseInstance.GetAgentConfigurationPresets.mockImplementation((agentId: string, activeOnly = true) => {
+                if (agentId !== 'agent-1') return [];
+                const all = [
+                    ...activePresets,
+                    {
+                        ID: 'p-inactive',
+                        AgentID: 'agent-1',
+                        Name: 'Retired',
+                        DisplayName: 'Retired Mode',
+                        Status: 'Inactive',
+                    },
+                ];
+                return activeOnly ? all.filter((p) => p.Status === 'Active') : all;
+            });
+
+            // Name beats DisplayName when another preset has DisplayName='Draft'
+            expect(engine.FindActiveAgentConfigurationPreset('agent-1', '  draft  ')?.ID).toBe('p-2');
+            // Falls back to DisplayName when no Name matches, trimmed and case-insensitive
+            expect(engine.FindActiveAgentConfigurationPreset('agent-1', '  DRAFT MODE (FAST) ')?.ID).toBe('p-2');
+            // Excludes inactive presets because GetAgentConfigurationPresets(agentId, true) is used
+            expect(engine.FindActiveAgentConfigurationPreset('agent-1', 'Retired')).toBeUndefined();
+            // Blank presetName returns undefined
+            expect(engine.FindActiveAgentConfigurationPreset('agent-1', '   ')).toBeUndefined();
         });
     });
 

@@ -13,6 +13,7 @@ export * from './lib/models/navigation-request.model';
 // Host rules for an agent turn: reply mode, routes, and the host turn handler contract
 export * from './lib/models/agent-turn.model';
 export * from './lib/utils/agent-turn-routing';
+export * from './lib/utils/agent-handoff-map';
 // Opt-in decision routing for an unmentioned message (EnableDecisionRouting)
 // NOTE: the routing decision's builders and types, and IsAgentAllowed, live in
 // @memberjunction/ai-core-plus — import them from there directly.
@@ -66,6 +67,7 @@ export * from './lib/components/conversation/conversation-list.component';
 export * from './lib/components/conversation/conversation-chat-area.component';
 export * from './lib/components/conversation/conversation-empty-state.component';
 export * from './lib/components/message/message-item.component';
+export * from './lib/components/message/agent-handoff-card.component';
 export * from './lib/components/message/message-list.component';
 export * from './lib/components/message/message-input.component';
 // AI-aware composer wrapper (mj-ai-composer): mj-message-input-box + the three AI trigger

@@ -62,6 +62,7 @@ packages:
   - 'packages/AI/DatabaseDesigner/*'
   - 'packages/AI/FormBuilder/*'
   - 'packages/AI/PredictiveStudio/*'
+  - 'packages/AI/VideoStudio/*'
   - 'packages/AI/AICLI'
   - 'packages/Communication/*'
   - 'packages/Communication/providers/*'
