@@ -1,0 +1,49 @@
+<form class="rubric-panel" aria-label="Rubric answers" (submit)="$event.preventDefault(); OnSubmit()">
+  @for (node of Leaves; track node.id) {
+    <fieldset (keydown)="OnKey(node, $event)">
+      <legend>{{ node.name }}</legend>
+      @if (node.guidance) {
+        <p>{{ node.guidance }}</p>
+      }
+      @if (IsNumeric(node)) {
+        <label>
+          {{ IsPercentage(node) ? 'Percentage' : 'Value' }}
+          <input type="number" [attr.min]="Scale(node)?.minValue" [attr.max]="Scale(node)?.maxValue" [attr.step]="Scale(node)?.step ?? 'any'" [value]="Raw(node)" (input)="OnRaw(node, $event)">
+        </label>
+      } @else {
+        @for (level of Scale(node)?.levels ?? []; track level.id; let index = $index) {
+          <button mjButton variant="outline" size="sm" type="button" [attr.aria-pressed]="Selected(node, level.id)" (click)="OnLevel(node, level.id)">
+            {{ index + 1 }}. {{ level.label }}
+          </button>
+          @for (anchor of Anchors(node, level.id); track anchor.descriptor) {
+            <p>{{ anchor.descriptor }}</p>
+          }
+        }
+      }
+      <button mjButton variant="outline" size="sm" type="button" [attr.aria-pressed]="IsNotApplicable(node)" (click)="OnNotApplicable(node)">N/A</button>
+      @if (node.rationaleRequired) {
+        <label>
+          Rationale
+          <textarea [value]="Text(node, 'rationale')" (input)="OnText(node, 'rationale', $event)"></textarea>
+        </label>
+      }
+      @if (node.evidenceRequired) {
+        <label>
+          Evidence
+          <textarea [value]="Text(node, 'evidence')" (input)="OnText(node, 'evidence', $event)"></textarea>
+        </label>
+      }
+    </fieldset>
+  }
+  @if (Problems.length) {
+    <ul>
+      @for (problem of Problems; track problem) {
+        <li>{{ problem }}</li>
+      }
+    </ul>
+  }
+  @if (Completeness != null) {
+    <p>Completeness {{ Completeness }}</p>
+  }
+  <button mjButton variant="primary" type="submit" [disabled]="!CanSubmit">Submit</button>
+</form>

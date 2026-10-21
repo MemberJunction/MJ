@@ -118,6 +118,55 @@ export function CheckRenderedTemplate(source: string | null | undefined, rendere
 }
 
 /**
+ * Check a **rendered** storage-lane `FolderPath` against its source.
+ *
+ * A FolderPath restricts: it is what keeps a storage lane inside one folder of an account. So it is
+ * checked like every restricting template ({@link CheckRenderedTemplate} — rendered empty, or raw
+ * template syntax leaked through) and then as a path:
+ *
+ *  - a `..` segment is traversal;
+ *  - for a templated source, an empty segment means an interpolation rendered nothing.
+ *    `clients/{{ context.X }}` with X absent renders `clients/` — every client's folder. A leading
+ *    or trailing separator counts only when the source template does not have one itself.
+ *
+ * A static (untemplated) path is the author's literal intent, so only the traversal rule applies.
+ *
+ * @param source   the un-rendered FolderPath from the scope row
+ * @param rendered the output of RenderScopeTemplate on the `path` lane
+ */
+export function CheckRenderedFolderPath(source: string | null | undefined, rendered: unknown): ScopeFilterCheck<string> {
+    const base = CheckRenderedTemplate(source, rendered);
+    if (base.Status !== 'usable') return base;
+    const path = String(base.Value);
+    const problem = folderPathSegmentProblem(String(source), path);
+    if (problem) {
+        return { Status: 'unusable', Reason: `${problem}. Template: ${String(source).substring(0, 120)} Rendered: ${path.substring(0, 120)}` };
+    }
+    return { Status: 'usable', Value: path };
+}
+
+/** Why a rendered FolderPath's segments widen or escape the folder, or null when they do not. */
+function folderPathSegmentProblem(source: string, rendered: string): string | null {
+    const segments = trimSeparatorsLike(source.trim(), rendered.trim()).split(/[/\\]/);
+    if (segments.some((segment) => segment.trim() === '..')) {
+        return 'the rendered FolderPath contains a ".." segment (path traversal)';
+    }
+    const templated = source.includes('{{') || source.includes('{%');
+    if (templated && segments.some((segment) => segment.trim() === '')) {
+        return 'the rendered FolderPath has an empty segment — a value it interpolates rendered nothing, which would widen the lane to the enclosing folder';
+    }
+    return null;
+}
+
+/** `rendered` without the leading/trailing separator that `source` itself has (so only an interpolated one remains). */
+function trimSeparatorsLike(source: string, rendered: string): string {
+    let body = rendered;
+    if (/^[/\\]/.test(source)) body = body.replace(/^[/\\]/, '');
+    if (/[/\\]$/.test(source)) body = body.replace(/[/\\]$/, '');
+    return body;
+}
+
+/**
  * Parse a `RequiredMetadataKeys` declaration into a list of key names.
  *
  * Accepts a JSON array (`["OrganizationID","ContentSourceID"]`) or a comma-separated

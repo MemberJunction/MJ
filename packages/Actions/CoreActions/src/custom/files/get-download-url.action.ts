@@ -36,7 +36,7 @@ export class GetDownloadUrlAction extends BaseFileStorageAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // Get and initialize storage driver
-            const { driver, error } = await this.getDriverFromParams(params);
+            const { driver, account, error } = await this.getDriverFromParams(params);
             if (error) return error;
 
             // Get required parameter
@@ -47,6 +47,10 @@ export class GetDownloadUrlAction extends BaseFileStorageAction {
                     "MISSING_OBJECTNAME"
                 );
             }
+
+            // Tracked-file rule: never sign a URL for an object behind an MJ: Files row the caller cannot read
+            const refused = await this.CheckObjectsReadable(account!, driver!, [objectName], params.ContextUser);
+            if (refused) return refused;
 
             // Execute the create download URL operation
             const url: string = await driver!.CreatePreAuthDownloadUrl(objectName);

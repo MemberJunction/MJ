@@ -742,6 +742,52 @@ function InsertBeforeModuleExportsClose(content: string, section: string): strin
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// NEW USER TEMPLATE (MJAPI userHandling)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Sets `userHandling.newUserTemplate` in mj.config.cjs, so MJAPI builds every user it creates at
+ * first sign-in as a copy of the template user `email` (through the `MJ: Users` clone `preset`).
+ * Replaces an existing `newUserTemplate`, adds it to an existing `userHandling` object, or adds a
+ * `userHandling` section. Autocreation itself is still `userHandling.autoCreateNewUsers`.
+ *
+ * @param repoRoot - Absolute path to the monorepo root
+ * @param email - Email of the template user
+ * @param preset - MJ: Users clone preset to apply (normally `template`)
+ * @param serverPackagePath - Optional server package path for config resolution
+ * @returns Operation result
+ */
+export function SetNewUserTemplate(
+    repoRoot: string,
+    email: string,
+    preset: string,
+    serverPackagePath?: string
+): ConfigOperationResult {
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'set userHandling.newUserTemplate', (content) =>
+        UpsertNewUserTemplate(content, email, preset));
+}
+
+/** Writes `newUserTemplate: { email, preset }` into the config's `userHandling`, creating what is missing. */
+function UpsertNewUserTemplate(content: string, email: string, preset: string): string {
+    const literal = `{ email: ${JSON.stringify(email)}, preset: ${JSON.stringify(preset)} }`;
+    const existing = /newUserTemplate\s*:\s*\{/.exec(content);
+    if (existing) {
+        const open = content.indexOf('{', existing.index);
+        const close = FindMatchingBracket(content, open);
+        if (close === -1) {
+            throw new Error('Could not locate the end of userHandling.newUserTemplate in mj.config.cjs.');
+        }
+        return content.slice(0, open) + literal + content.slice(close + 1);
+    }
+    const handling = /userHandling\s*:\s*\{/.exec(content);
+    if (handling) {
+        const open = content.indexOf('{', handling.index);
+        return content.slice(0, open + 1) + `\n    newUserTemplate: ${literal},` + content.slice(open + 1);
+    }
+    return InsertBeforeModuleExportsClose(content, `\n  userHandling: {\n    newUserTemplate: ${literal},\n  },\n`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // EXCLUDE SCHEMAS (CodeGen)
 // ─────────────────────────────────────────────────────────────────────────────
 

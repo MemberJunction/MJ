@@ -800,6 +800,9 @@ coverage loss):
 | `ai-skills` | AS1–AS21 (21) | server | 4 skills + grants/junctions | IT12 | Skills gates, resolution, SKILL.md round-trip, activation governance — no LLM |
 | `api-keys` | AK1–AK3 (3) | server | key fixtures | IT13 | API Keys engine `Config` + end-to-end `Authorize` allow/deny |
 | `predictive-studio` | PS1–PS5 (5) | server | Pipeline → Model → Binding chain | IT14 | PS stack seams (entities, work-type registration, Actions) — no sidecar |
+| `feature-pipeline-core` | FP1–FP7 (7) | server | stub driver, pipeline, prompt | IT124 | Feature Value key, Dedup Cache, version gate, dry run and breaker on MJ core tables, no model calls |
+| `fp-live-jobtitle` | L1 (1, live-model) | server | bizapps-common people + pipeline | IT125 | Job-title Feature Pipeline answers identically over three runs; gate suite only |
+| `feature-value-only` | FV1–FV5 (5) | server | stub driver, pipeline, prompt | IT126 | A pipeline whose outputs have no write target stores only its own typed Feature Values; dry-run preview, idempotent rerun, low-confidence withholding, no model calls |
 | `remote-op-wire-progress` | WIRE1 (1) | client | over-the-wire fixtures | IT15 | Remote Operation progress streamed over GraphQL |
 | `prompt-runner` | PR1 (1) | server | lifecycle | IT16 (live-model) | Real prompt run + persisted `MJ: AI Prompt Runs` verification |
 | `agent-runner` | AR1 (1) | server | lifecycle | IT17 (live-model) | Real agent run, deep-verified (steps → prompt runs → action logs → sub-agents) |
@@ -816,6 +819,16 @@ coverage loss):
 | `cache-gauntlet` | 8 | server | — | IT29 | The subset-slot × mutation cell that shipped two production cache bugs |
 | `conversation-compaction` | CC1–CC12 (12) | server | — | IT30 | Compaction assembly layer (graduated from PR #2732) |
 | `self-test` | cache-warm (1) | server | — | smoke script | Proves the instrumented cache observes RunView traffic (lives in the framework package) |
+
+**Predictive Studio gate suite.** `Predictive Studio Gates — Feature Pipelines` holds the four Feature Pipeline gate
+bundles (`fp-gate-*`) and IT125. It needs bizapps-common installed and `RUN_MUTATION_TESTS=1`, and must run where the
+bizapps-common entity classes load: from `packages/MJAPI`, with its own `.env`, and the repo-root `mj.config.cjs`
+naming the host's generated entities package as a local edit (see the [Dynamic Package Loading guide](DYNAMIC_PACKAGE_LOADING_GUIDE.md)):
+
+```bash
+cd packages/MJAPI
+MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm exec mj test suite "Predictive Studio Gates — Feature Pipelines"
+```
 
 There are no script-only suites anymore — the former `lists` / `user-routines` /
 `open-app-teardown` scripts graduated to bundles (IT20–IT22), and the multi-process /

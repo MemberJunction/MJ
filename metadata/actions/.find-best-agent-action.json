@@ -38,7 +38,10 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Maximum number of agents to return (1-20). Defaults to 5.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "648BAD68-DD3E-4D2A-B1DF-968F50E8C501"
@@ -57,7 +60,10 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Minimum similarity score (0-1) for matching agents. Agents with scores below this threshold will be excluded. Defaults to 0.5 (50% match).",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "number"
+            }
           },
           "primaryKey": {
             "ID": "6833C542-0EA7-4BFA-9D23-477332ECA0C6"
@@ -76,7 +82,10 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Whether to include inactive agents in search results. Defaults to false.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "8B6F7322-9D6D-44E2-AE16-4C86D9063009"
@@ -95,7 +104,10 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Whether to exclude agents with invocation mode 'Sub-Agent' from search results. Sub-agents are typically called by other agents. Defaults to true.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "4195795C-0613-453E-9688-CEE6CD390C46"

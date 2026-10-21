@@ -445,4 +445,41 @@ describe('AutotagEntity', () => {
             expect(result[0].Name).toBe('Widget');
         });
     });
+
+    // ========================================================================
+    // Entity Record Documents reads skip the server RunView cache
+    // ========================================================================
+
+    // On the server a cached RunView widens Fields to every column (DocumentText, VectorJSON) so its
+    // slot can serve any field set. These reads are single-use or find-or-create, so they bypass it.
+    describe('Entity Record Documents reads', () => {
+        it('loads existing ERDs for the upsert straight from the database', async () => {
+            mockRunView.mockResolvedValueOnce({ Success: true, Results: [{ RecordID: 'rec-1' }] });
+
+            const map = await provider['loadExistingERDs']('doc-1', 'ent-1');
+
+            expect(map.get('rec-1')).toEqual({ RecordID: 'rec-1' });
+            const params = mockRunView.mock.calls[0][0];
+            expect(params.EntityName).toBe('MJ: Entity Record Documents');
+            expect(params.ExtraFilter).toBe("EntityDocumentID='doc-1' AND EntityID='ent-1'");
+            expect(params.ResultType).toBe('entity_object');
+            expect(params.BypassCache).toBe(true);
+        });
+
+        it('looks up the source record of a bridged tag by ERD ID with only the fields it reads', async () => {
+            mockRunView
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'ci-1', ContentSourceID: 'src-1', EntityRecordDocumentID: 'erd-1' }] })
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'erd-1', EntityID: 'ent-1', RecordID: 'rec-1' }] });
+            const contentItemTag = { ItemID: 'ci-1', Tag: 'Technology', Weight: 0.9, TagID: null, Save: vi.fn().mockResolvedValue(true) };
+
+            await provider['bridgeContentItemTagToTaxonomy'](contentItemTag as never, null, { ID: 'user-1' } as never);
+
+            const params = mockRunView.mock.calls[1][0];
+            expect(params.EntityName).toBe('MJ: Entity Record Documents');
+            expect(params.ExtraFilter).toBe("ID='erd-1'");
+            expect(params.Fields).toEqual(['ID', 'EntityID', 'RecordID']);
+            expect(params.BypassCache).toBe(true);
+            expect(mockTagEngineInstance.CreateTaggedItem).toHaveBeenCalledWith('tag-resolved', 'ent-1', 'rec-1', expect.anything(), expect.anything());
+        });
+    });
 });
