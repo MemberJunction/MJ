@@ -121,4 +121,19 @@ describe('LoadInheritedVerifiedIdentity', () => {
         expect(await LoadInheritedVerifiedIdentity(PRIOR, guest('scope-B'), prov)).toBeUndefined();
         expect(await LoadInheritedVerifiedIdentity(PRIOR, guest('scope-A'), prov)).toEqual(VERIFIED);
     });
+
+    it('logs an error and returns undefined when reading the prior session throws', async () => {
+        const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const throwingProvider = {
+                GetEntityObject: vi.fn(async () => {
+                    throw new Error('db connection lost');
+                }),
+            } as unknown as IMetadataProvider;
+            expect(await LoadInheritedVerifiedIdentity(PRIOR, user(), throwingProvider)).toBeUndefined();
+            expect(errSpy).toHaveBeenCalledWith(expect.stringContaining(`LoadInheritedVerifiedIdentity: could not read prior session ${PRIOR}: db connection lost`));
+        } finally {
+            errSpy.mockRestore();
+        }
+    });
 });

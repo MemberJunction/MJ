@@ -235,14 +235,15 @@ describe('WidgetSessionService — RefreshGuestSession preserves sessionId (issu
     expect(body.sessionId).toBe('sid-grace-visitor');
   });
 
-  it('returns 403 when the Authorization: Bearer header is missing', async () => {
+  it('returns 403 with invalid_token (not origin_not_allowed) when the Authorization: Bearer header is missing', async () => {
     const service = makeStubbedService();
     const { status, body } = await postRefreshToRouter(service, undefined);
     expect(status).toBe(403);
     expect(body.success).toBe(false);
+    expect(body.errorCode).toBe('invalid_token');
   });
 
-  it('returns 403 when the Bearer token is forged (signed with a different key)', async () => {
+  it('returns 403 with invalid_token when the Bearer token is forged (signed with a different key)', async () => {
     const service = makeStubbedService();
     const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
     const nowSeconds = Math.floor(Date.now() / 1000);
@@ -262,9 +263,10 @@ describe('WidgetSessionService — RefreshGuestSession preserves sessionId (issu
     const { status, body } = await postRefreshToRouter(service, `Bearer ${forgedToken}`);
     expect(status).toBe(403);
     expect(body.success).toBe(false);
+    expect(body.errorCode).toBe('invalid_token');
   });
 
-  it('returns 403 when the Bearer token is expired past the 5-minute grace window', async () => {
+  it('returns 403 with invalid_token when the Bearer token is expired past the 5-minute grace window', async () => {
     const service = makeStubbedService();
     const nowSeconds = Math.floor(Date.now() / 1000);
     // Expired 305 seconds ago (past the 300s grace window).
@@ -277,9 +279,10 @@ describe('WidgetSessionService — RefreshGuestSession preserves sessionId (issu
     const { status, body } = await postRefreshToRouter(service, `Bearer ${expiredPastGrace}`);
     expect(status).toBe(403);
     expect(body.success).toBe(false);
+    expect(body.errorCode).toBe('invalid_token');
   });
 
-  it('returns 403 when the Bearer token belongs to another widget instance', async () => {
+  it('returns 403 with invalid_token when the Bearer token belongs to another widget instance', async () => {
     const service = makeStubbedService();
     const nowSeconds = Math.floor(Date.now() / 1000);
     const wrongWidgetToken = signWidgetToken({
@@ -292,5 +295,6 @@ describe('WidgetSessionService — RefreshGuestSession preserves sessionId (issu
     const { status, body } = await postRefreshToRouter(service, `Bearer ${wrongWidgetToken}`);
     expect(status).toBe(403);
     expect(body.success).toBe(false);
+    expect(body.errorCode).toBe('invalid_token');
   });
 });

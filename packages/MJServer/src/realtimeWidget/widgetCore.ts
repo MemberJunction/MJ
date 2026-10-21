@@ -27,6 +27,7 @@ export type WidgetMintErrorCode =
     | 'not_found'
     | 'disabled'
     | 'origin_not_allowed'
+    | 'invalid_token'
     | 'modality_not_enabled'
     | 'host_assertion_invalid'
     | 'upgrade_not_enabled'

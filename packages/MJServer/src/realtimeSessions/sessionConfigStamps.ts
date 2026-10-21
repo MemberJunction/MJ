@@ -26,7 +26,7 @@
  * @module @memberjunction/server/realtimeSessions
  */
 
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { AuthorizeSessionAccess, LoadSessionForAccess } from './sessionAccess.js';
 import {
     ExtractIdentityVerificationPolicyFromRealtimeConfig,
@@ -121,7 +121,9 @@ export async function LoadInheritedVerifiedIdentity(
             return undefined;
         }
         return ReadIdentityVerificationState(prior.Session.Config_, ReadIdentityVerificationPolicyLayer).Verified;
-    } catch {
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        LogError(`LoadInheritedVerifiedIdentity: could not read prior session ${lastSessionId}: ${message}`);
         return undefined;
     }
 }

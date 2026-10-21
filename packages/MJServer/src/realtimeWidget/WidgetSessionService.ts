@@ -271,7 +271,7 @@ export class WidgetSessionService {
         const verifiedSid = this.verifyRefreshBearerToken(input.bearerToken, widget.ID);
         if (!verifiedSid) {
           return this.audited(
-            { success: false, errorCode: 'origin_not_allowed', error: 'Widget refresh rejected.' },
+            { success: false, errorCode: 'invalid_token', error: 'Widget refresh rejected.' },
             input,
             widget,
           );
