@@ -103,9 +103,26 @@ export class QueryParameterProcessor {
                     this._nunjucksEnv.addFilter(filter.name, filter.implementation);
                 }
             }
+            this.removeNonDeterministicFilters(this._nunjucksEnv);
             this._envPlatform = currentPlatform;
         }
         return this._nunjucksEnv;
+    }
+
+    /**
+     * Nunjucks built-ins whose output can differ between two renders of the same template with the
+     * same parameters. The SQL a caller is checked against and the SQL that runs are rendered
+     * separately, so every filter must render the same way each time.
+     */
+    private static readonly nonDeterministicFilters: readonly string[] = ['random'];
+
+    /** Replaces each non-deterministic built-in filter with one that refuses to render. */
+    private static removeNonDeterministicFilters(env: nunjucks.Environment): void {
+        for (const name of this.nonDeterministicFilters) {
+            env.addFilter(name, () => {
+                throw new Error(`The '${name}' filter is not available in query templates: a query must render the same SQL every time.`);
+            });
+        }
     }
 
     /**

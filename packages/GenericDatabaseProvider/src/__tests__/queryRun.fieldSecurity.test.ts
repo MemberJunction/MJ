@@ -152,7 +152,7 @@ function makeQuery(spec: QuerySpec): MJQueryEntityExtended {
     const own: Record<string, unknown> = {
         ID: spec.ID, Name: spec.Name ?? spec.ID, SQL: spec.SQL, Status: 'Approved', Reusable: spec.Reusable ?? false,
         UsesTemplate: spec.UsesTemplate ?? false, CacheEnabled: false, AuditQueryRuns: false, ExternalDataSourceID: null,
-        CategoryID: null, CategoryPath: spec.CategoryPath ?? '', IsApproved: true,
+        CategoryID: null, CategoryPath: spec.CategoryPath ?? '', IsApproved: true, CacheValidationSQL: null,
         QueryPermissions: permissions, QueryEntities: [], QueryDependencies: [], QueryParameters: [], QueryFields: [],
     };
     for (const [key, value] of Object.entries(own)) {

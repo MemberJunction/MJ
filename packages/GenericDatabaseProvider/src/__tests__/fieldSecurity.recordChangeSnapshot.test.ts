@@ -168,6 +168,17 @@ class SnapshotTestProvider extends GenericDatabaseProvider {
 // ---------------------------------------------------------------------------
 
 const ENTITY_ID = 'entity-employees';
+const HR_ROLE = 'role-hr';
+const STAFF_ROLE = 'role-staff';
+
+/** Rules opening a field to `roles`: Salary is open to HR only, every other field to both roles. */
+function openTo(fieldId: string, roles: string[]): Record<string, unknown>[] {
+    return roles.map((roleId) => ({ ID: `p-${fieldId}-${roleId}`, EntityFieldID: fieldId, RoleID: roleId, ReadAccess: 'Allow', UpdateAccess: 'Allow', CreateAccess: 'Allow' }));
+}
+const BOTH = [HR_ROLE, STAFF_ROLE];
+/** Staff may write Salary without reading it. */
+const staffMayWriteSalaryBlind = { ID: 'p-salary-staff', EntityFieldID: 'f-salary', RoleID: STAFF_ROLE, ReadAccess: 'Deny', UpdateAccess: 'Allow', CreateAccess: 'Allow' };
+
 function employeesInit(trackRecordChanges: boolean): Record<string, unknown> {
     return {
         ID: ENTITY_ID,
@@ -178,12 +189,13 @@ function employeesInit(trackRecordChanges: boolean): Record<string, unknown> {
         IncludeInAPI: true,
         AllowUpdateAPI: true,
         TrackRecordChanges: trackRecordChanges,
+        EnableFieldLevelSecurity: true,
         Permissions: [],
         Fields: [
-            { ID: 'f-id', EntityID: ENTITY_ID, Sequence: 1, Name: 'ID', Entity: 'Employees', Type: 'uniqueidentifier', IsPrimaryKey: true, AllowUpdateAPI: false },
-            { ID: 'f-name', EntityID: ENTITY_ID, Sequence: 2, Name: 'Name', Entity: 'Employees', Type: 'nvarchar', Length: 200, AllowsNull: false, AllowUpdateAPI: true },
-            { ID: 'f-notes', EntityID: ENTITY_ID, Sequence: 3, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar', Length: 400, AllowsNull: true, AllowUpdateAPI: true },
-            { ID: 'f-salary', EntityID: ENTITY_ID, Sequence: 4, Name: 'Salary', Entity: 'Employees', Type: 'money', AllowsNull: true, AllowUpdateAPI: true },
+            { ID: 'f-id', EntityID: ENTITY_ID, Sequence: 1, Name: 'ID', Entity: 'Employees', Type: 'uniqueidentifier', IsPrimaryKey: true, AllowUpdateAPI: false, EntityFieldPermissions: openTo('f-id', BOTH) },
+            { ID: 'f-name', EntityID: ENTITY_ID, Sequence: 2, Name: 'Name', Entity: 'Employees', Type: 'nvarchar', Length: 200, AllowsNull: false, AllowUpdateAPI: true, EntityFieldPermissions: openTo('f-name', BOTH) },
+            { ID: 'f-notes', EntityID: ENTITY_ID, Sequence: 3, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar', Length: 400, AllowsNull: true, AllowUpdateAPI: true, EntityFieldPermissions: openTo('f-notes', BOTH) },
+            { ID: 'f-salary', EntityID: ENTITY_ID, Sequence: 4, Name: 'Salary', Entity: 'Employees', Type: 'money', AllowsNull: true, AllowUpdateAPI: true, EntityFieldPermissions: [...openTo('f-salary', [HR_ROLE]), staffMayWriteSalaryBlind] },
         ],
     };
 }
@@ -192,21 +204,28 @@ class MJTestEntity extends BaseEntity {}
 const PK = 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE';
 const STORED_ROW = { ID: PK, Name: 'Ada', Notes: 'n1', Salary: 123456 };
 
-function setup(trackRecordChanges = true): { provider: SnapshotTestProvider; entity: MJTestEntity; user: UserInfo } {
+function userWithRole(roleId: string): UserInfo {
+    return new UserInfo(undefined, { ID: 'u-1', Name: 'T', Email: 't@t', IsActive: true, UserRoles: [{ UserID: 'u-1', RoleID: roleId, Role: roleId }] });
+}
+
+/**
+ * The saving user defaults to staff, who may not read Salary: a staff object never holds it, so
+ * it is the field a snapshot must widen. Pass `HR_ROLE` for a user denied nothing.
+ */
+function setup(trackRecordChanges = true, roleId: string = STAFF_ROLE): { provider: SnapshotTestProvider; entity: MJTestEntity; user: UserInfo } {
     const entityInfo = new EntityInfo(employeesInit(trackRecordChanges));
     const provider = new SnapshotTestProvider();
     provider.storedRow = { ...STORED_ROW };
+    const user = userWithRole(roleId);
     const mockMd = {
         Entities: [entityInfo],
-        CurrentUser: { ID: 'u-1', Name: 'T', Email: 't@t', UserRoles: [] },
+        CurrentUser: user,
         SetCachedRecordName: () => { /* noop */ },
         GetCachedRecordName: () => null,
     } as unknown as IMetadataProvider & IEntityDataProvider;
     Metadata.Provider = mockMd as never;
     BaseEntity.Provider = mockMd;
     const entity = new MJTestEntity(entityInfo);
-    const user = new UserInfo();
-    user.ID = 'u-1';
     return { provider, entity, user };
 }
 
@@ -241,7 +260,7 @@ describe('GenerateSaveSQL — Record Change snapshot of a narrowed (restricted) 
         expect(changes.Notes).toEqual({ field: 'Notes', oldValue: 'n1', newValue: 'n2' });
     });
 
-    it('reads the stored row once, by primary key, full width and out of the SQL log', async () => {
+    it('reads the stored row once, by primary key, only the missing columns and out of the SQL log', async () => {
         const { provider, entity, user } = setup();
         entity.Hydrate({ ID: PK, Name: 'Ada', Notes: 'n1' });
         entity.Set('Notes', 'n2');
@@ -250,14 +269,30 @@ describe('GenerateSaveSQL — Record Change snapshot of a narrowed (restricted) 
 
         expect(provider.executed).toHaveLength(1);
         const read = provider.executed[0];
-        expect(read.sql).toBe(`SELECT * FROM [dbo].[vwEmployees] WHERE [ID]='${PK}'`);
+        expect(read.sql).toBe(`SELECT [Salary] FROM [dbo].[vwEmployees] WHERE [ID]='${PK}'`);
         expect(read.options?.ignoreLogging).toBe(true);
+    });
+
+    it('reads on the connection the save is generated for, when one is named', async () => {
+        const { provider, entity, user } = setup();
+        entity.Hydrate({ ID: PK, Name: 'Ada', Notes: 'n1' });
+        entity.Set('Notes', 'n2');
+        const transaction = { name: 'the group transaction' };
+
+        await provider['GenerateSaveSQLReadingOn'](entity, false, user, transaction);
+
+        expect(provider.executed).toHaveLength(1);
+        expect(provider.executed[0].options?.connectionSource).toBe(transaction);
+        expect(parse(provider.capturedPayload?.fullRecordJSON).Salary).toBe(123456);
+        // The connection belongs to that one save: a later save of the same object reads on its own.
+        await provider.buildSaveSQL(entity, false, user);
+        expect(provider.executed[1].options?.connectionSource).toBeUndefined();
     });
 
     it('a blind write onto a not-loaded field records the stored value as its old value', async () => {
         const { provider, entity, user } = setup();
         entity.Hydrate({ ID: PK, Name: 'Ada', Notes: 'n1' });
-        entity.Set('Salary', 150000); // write-only: the saver never saw the stored 123456
+        entity.SetMany({ Salary: 150000 }); // write-only (the resolver-apply path): the saver never saw the stored 123456
 
         await provider.buildSaveSQL(entity, false, user);
 
@@ -281,7 +316,7 @@ describe('GenerateSaveSQL — Record Change snapshot of a narrowed (restricted) 
 
 describe('GenerateSaveSQL — no extra query when nothing needs widening', () => {
     it('a full-width object saves without reading the stored row; payload unchanged', async () => {
-        const { provider, entity, user } = setup();
+        const { provider, entity, user } = setup(true, HR_ROLE);
         entity.Hydrate({ ID: PK, Name: 'Ada', Notes: 'n1', Salary: 90000 });
         entity.Set('Notes', 'n2');
 
@@ -290,6 +325,26 @@ describe('GenerateSaveSQL — no extra query when nothing needs widening', () =>
         expect(provider.executed).toHaveLength(0);
         expect(parse(provider.capturedPayload?.fullRecordJSON)).toEqual({ ID: PK, Name: 'Ada', Notes: 'n2', Salary: 90000 });
         expect(Object.keys(parse(provider.capturedPayload?.changesJSON))).toEqual(['Notes']);
+    });
+
+    it('an unrestricted save of an object loaded without a column reads nothing (a binary column a list load left out)', async () => {
+        const { provider, entity, user } = setup(true, HR_ROLE);
+        entity.Hydrate({ ID: PK, Name: 'Ada', Notes: 'n1' }); // Salary not loaded, but HR may read it
+        entity.Set('Notes', 'n2');
+
+        await provider.buildSaveSQL(entity, false, user);
+
+        expect(provider.executed).toHaveLength(0);
+        expect(parse(provider.capturedPayload?.fullRecordJSON)).not.toHaveProperty('Salary');
+    });
+
+    it('an unrestricted delete of an object loaded without a column reads nothing', async () => {
+        const { provider, entity, user } = setup(true, HR_ROLE);
+        entity.Hydrate({ ID: PK, Name: 'Ada', Notes: 'n1' });
+
+        await provider.deleteSnapshot(entity, user);
+
+        expect(provider.executed).toHaveLength(0);
     });
 
     it('an entity that does not track record changes never reads the stored row', async () => {
@@ -306,7 +361,7 @@ describe('GenerateSaveSQL — no extra query when nothing needs widening', () =>
 
 describe('GenerateSaveSQL — Record Change snapshot of a create', () => {
     it('a field the INSERT omits (create-suppressed) is not recorded with a value it never got', async () => {
-        const { provider, entity, user } = setup();
+        const { provider, entity, user } = setup(true, HR_ROLE);
         entity.NewRecord();
         entity.Set('ID', PK);
         entity.Set('Name', 'Grace');
@@ -322,7 +377,7 @@ describe('GenerateSaveSQL — Record Change snapshot of a create', () => {
     });
 
     it('an unrestricted create records every field and reads nothing', async () => {
-        const { provider, entity, user } = setup();
+        const { provider, entity, user } = setup(true, HR_ROLE);
         entity.NewRecord();
         entity.Set('ID', PK);
         entity.Set('Name', 'Grace');
@@ -348,7 +403,7 @@ describe('Delete — Record Change snapshot of a narrowed (restricted) object', 
     });
 
     it('a full-width object deletes without reading the stored row', async () => {
-        const { provider, entity, user } = setup();
+        const { provider, entity, user } = setup(true, HR_ROLE);
         entity.Hydrate({ ID: PK, Name: 'Ada', Notes: 'n1', Salary: 90000 });
 
         const snapshot = await provider.deleteSnapshot(entity, user);
