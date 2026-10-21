@@ -29,6 +29,7 @@ export * from "./generic/applicationInfo";
 export * from "./generic/providerBase";
 export * from "./generic/entityRecordNameCache";
 export * from "./generic/recordChangeFieldSecurity";
+export * from "./generic/entityValueFieldSecurity";
 export * from "./generic/baseRemotableOperation";
 export * from "./generic/remoteOperationDispatch";
 export * from "./generic/entityInfo";
