@@ -2,4 +2,4 @@
 "@memberjunction/codegen-lib": patch
 ---
 
-CodeGen no longer records a column as its own hierarchy parent: a self-referencing foreign key whose column is the table's primary key is skipped when CodeGen infers parent/child hierarchies, so a recursive tree is never built from a row pointing at itself.
+CodeGen no longer treats an entity's own primary key as its hierarchy parent. FK auto-detection can mark a `<prefix>_key` primary key as referencing its own table; the recursive root-id view CodeGen then generated joined the key to itself and failed to compile ("column reference is ambiguous"), taking the base view and its CRUD routines with it.
