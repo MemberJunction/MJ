@@ -3554,7 +3554,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             headers['x-api-key'] = userAPIKey;
 
         const client = new GraphQLClient(url, {
-            headers
+            headers,
+            responseMiddleware: (response) => {
+                this.inspectResponseCacheHeaders(response);
+            },
         });
 
         // Re-apply any dynamic headers so they survive client re-creation (e.g., token refresh)
@@ -4318,16 +4321,219 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      **************************************************************************/
 
     private _cacheInvalidationSubscription: Subscription | null = null;
+    private _lastCacheInvalidationSequence = 0;
+    private _lastCacheServerProcessId: string | null = null;
+    private _catchUpInFlight: Promise<boolean> | null = null;
 
     /**
-     * Subscribes to server-side cache invalidation events and raises MJGlobal
-     * BaseEntityEvent with type='remote-invalidate' for each notification.
-     * This enables BaseEngine instances to automatically re-fetch stale data
-     * when another server modifies entities.
-     *
-     * Call this after the provider is configured and WebSocket URL is available.
-     * Safe to call multiple times — subsequent calls are no-ops if already subscribed.
+     * Latest monotonic cache invalidation sequence number observed from the server.
      */
+    public get LastCacheInvalidationSequence(): number {
+        return this._lastCacheInvalidationSequence;
+    }
+
+    /**
+     * Server process ID (`X-MJ-Server-ID`) associated with {@link LastCacheInvalidationSequence}.
+     */
+    public get LastCacheServerProcessId(): string | null {
+        return this._lastCacheServerProcessId;
+    }
+
+    /**
+     * Inspects `X-MJ-Cache-Seq` and `X-MJ-Server-ID` HTTP response headers returned by MJServer.
+     */
+    private inspectResponseCacheHeaders(response: unknown): void {
+        if (!response || typeof response !== 'object' || response instanceof Error) {
+            return;
+        }
+        const headers = (response as { headers?: { get?: (name: string) => string | null } }).headers;
+        if (!headers || typeof headers.get !== 'function') {
+            return;
+        }
+        const seqHeader = headers.get('x-mj-cache-seq');
+        const serverIdHeader = headers.get('x-mj-server-id');
+        if (seqHeader !== null && seqHeader !== undefined) {
+            const parsedSeq = parseInt(seqHeader, 10);
+            if (!Number.isNaN(parsedSeq) && parsedSeq >= 0) {
+                this.ProcessServerCacheSequenceHeader(parsedSeq, serverIdHeader);
+            }
+        }
+    }
+
+    /**
+     * Resets the client-side cache invalidation sequence watermarks and server process ID.
+     * Useful when reconnecting to a new server endpoint or resetting state in tests.
+     */
+    public ResetCacheSequenceState(): void {
+        this._lastCacheInvalidationSequence = 0;
+        this._lastCacheServerProcessId = null;
+        this._catchUpInFlight = null;
+    }
+
+    /**
+     * Processes a server cache invalidation sequence number and server process ID observed
+     * from an `X-MJ-Cache-Seq` / `X-MJ-Server-ID` HTTP header. When a sequence gap is detected
+     * on the same server process, triggers {@link CatchUpCacheInvalidations} in the background.
+     */
+    public ProcessServerCacheSequenceHeader(
+        serverSequence: number,
+        serverProcessId?: string | null
+    ): void {
+        if (serverProcessId && this._lastCacheServerProcessId && this._lastCacheServerProcessId !== serverProcessId) {
+            // Server process changed (restart or different replica): adopt the new baseline
+            this._lastCacheServerProcessId = serverProcessId;
+            this._lastCacheInvalidationSequence = serverSequence;
+            return;
+        }
+        if (serverProcessId && !this._lastCacheServerProcessId) {
+            this._lastCacheServerProcessId = serverProcessId;
+        }
+        if (this._lastCacheInvalidationSequence === 0) {
+            this._lastCacheInvalidationSequence = serverSequence;
+            return;
+        }
+        if (serverSequence > this._lastCacheInvalidationSequence) {
+            void this.CatchUpCacheInvalidations(this._lastCacheInvalidationSequence);
+        }
+    }
+
+    /**
+     * Queries `GetCacheInvalidationsSince` on the server to replay any cache invalidation events
+     * missed between `sinceSequence` and the server's current sequence number.
+     *
+     * @returns `true` if the delta was replayed cleanly, or `false` if the server indicated
+     *          `RequiresFullRefresh = true` (e.g., sequence fell off the ring buffer).
+     */
+    public async CatchUpCacheInvalidations(sinceSequence?: number): Promise<boolean> {
+        if (this._catchUpInFlight) {
+            return this._catchUpInFlight;
+        }
+        const targetSince = sinceSequence ?? this._lastCacheInvalidationSequence;
+        const promise = this.performCacheInvalidationCatchUp(targetSince);
+        this._catchUpInFlight = promise;
+        try {
+            return await promise;
+        } finally {
+            this._catchUpInFlight = null;
+        }
+    }
+
+    private async performCacheInvalidationCatchUp(sinceSequence: number): Promise<boolean> {
+        if (!this._client) {
+            return false;
+        }
+        const query = gql`
+            query GetCacheInvalidationsSince($sinceSequence: Int!) {
+                GetCacheInvalidationsSince(sinceSequence: $sinceSequence) {
+                    RequiresFullRefresh
+                    CurrentSequence
+                    ServerProcessID
+                    Events {
+                        EntityName
+                        PrimaryKeyValues
+                        Action
+                        SourceServerID
+                        Timestamp
+                        OriginSessionID
+                        RecordData
+                        Sequence
+                    }
+                }
+            }
+        `;
+        try {
+            const response = await this._client.request<{
+                GetCacheInvalidationsSince?: {
+                    RequiresFullRefresh: boolean;
+                    CurrentSequence: number;
+                    ServerProcessID: string;
+                    Events: Array<{
+                        EntityName: string;
+                        PrimaryKeyValues: string | null;
+                        Action: string;
+                        SourceServerID: string;
+                        Timestamp: string;
+                        OriginSessionID?: string;
+                        RecordData?: string;
+                        Sequence?: number;
+                    }>;
+                };
+            }>(query, { sinceSequence });
+            const catchUp = response?.GetCacheInvalidationsSince;
+            if (!catchUp) {
+                return false;
+            }
+            this._lastCacheServerProcessId = catchUp.ServerProcessID;
+            if (catchUp.CurrentSequence > this._lastCacheInvalidationSequence) {
+                this._lastCacheInvalidationSequence = catchUp.CurrentSequence;
+            }
+            if (catchUp.RequiresFullRefresh) {
+                return false;
+            }
+            for (const event of catchUp.Events) {
+                this.dispatchCacheInvalidationEvent(event);
+            }
+            return true;
+        } catch (err) {
+            if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
+                console.warn('[GraphQLDataProvider] CatchUpCacheInvalidations failed:', err);
+            }
+            return false;
+        }
+    }
+
+    private dispatchCacheInvalidationEvent(event: {
+        EntityName: string;
+        PrimaryKeyValues: string | null;
+        Action: string;
+        SourceServerID: string;
+        Timestamp: string;
+        OriginSessionID?: string;
+        RecordData?: string;
+        Sequence?: number;
+    }): void {
+        if (typeof event.Sequence === 'number' && event.Sequence > this._lastCacheInvalidationSequence) {
+            this._lastCacheInvalidationSequence = event.Sequence;
+        }
+
+        // Skip events that originated from this browser session — we already
+        // handled the cache update locally via the BaseEntity.Save()/Delete() event.
+        if (event.OriginSessionID && event.OriginSessionID === this.sessionId) {
+            if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
+                console.debug(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
+            }
+            return;
+        }
+
+        if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
+            console.debug(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
+        }
+
+        // Raise a MJGlobal event so BaseEngine instances can react
+        const baseEntityEvent: BaseEntityEvent = {
+            type: 'remote-invalidate',
+            entityName: event.EntityName,
+            baseEntity: null,
+            // Attach the publishing provider so multi-provider client setups can resolve
+            // entity metadata against the correct server (instead of the global default).
+            provider: this,
+            payload: {
+                primaryKeyValues: event.PrimaryKeyValues,
+                action: event.Action,
+                sourceServerId: event.SourceServerID,
+                timestamp: event.Timestamp,
+                recordData: event.RecordData,
+            },
+        };
+
+        MJGlobal.Instance.RaiseEvent({
+            event: MJEventType.ComponentEvent,
+            eventCode: BaseEntity.BaseEventCode,
+            args: baseEntityEvent,
+            component: this,
+        });
+    }
+
     /**
      * Subscribe to client tool requests for a specific agent session.
      * The returned Observable emits ClientToolRequestNotification objects
@@ -4371,57 +4577,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 Timestamp
                 OriginSessionID
                 RecordData
+                Sequence
             }
         }`;
 
         const observable = this.Subscribe(CACHE_INVALIDATION_SUB);
 
         this._cacheInvalidationSubscription = observable.subscribe({
-            next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string; RecordData?: string }>) => {
+            next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string; RecordData?: string; Sequence?: number }>) => {
                 const event = data?.cacheInvalidation;
                 if (!event) return;
-
-                // Skip events that originated from this browser session — we already
-                // handled the cache update locally via the BaseEntity.Save()/Delete() event.
-                if (event.OriginSessionID && event.OriginSessionID === this.sessionId) {
-                    if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
-                        console.debug(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
-                    }
-                    return;
-                }
-
-                if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
-                    console.debug(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
-                }
-
-                // Raise a MJGlobal event so BaseEngine instances can react
-                const baseEntityEvent: BaseEntityEvent = {
-                    type: 'remote-invalidate',
-                    entityName: event.EntityName,
-                    baseEntity: null,
-                    // Attach the publishing provider so multi-provider client setups can resolve
-                    // entity metadata against the correct server (instead of the global default).
-                    provider: this,
-                    payload: {
-                        primaryKeyValues: event.PrimaryKeyValues,
-                        action: event.Action,
-                        sourceServerId: event.SourceServerID,
-                        timestamp: event.Timestamp,
-                        recordData: event.RecordData,
-                    },
-                };
-
-                // The event drives BaseEngine caches directly, AND — because this provider
-                // registers the entities its metadata is built from (the MJ_Metadata dataset's
-                // items) with ProviderBase's static event fan-out — it also schedules a debounced
-                // metadata staleness check when the written entity is one of them. See
-                // ProviderBase.handleMetadataMemberEntityEvent; no entity names are listed here.
-                MJGlobal.Instance.RaiseEvent({
-                    event: MJEventType.ComponentEvent,
-                    eventCode: BaseEntity.BaseEventCode,
-                    args: baseEntityEvent,
-                    component: this,
-                });
+                this.dispatchCacheInvalidationEvent(event);
             },
             error: (error: unknown) => {
                 console.error('[GraphQLDataProvider] Cache invalidation subscription error:', error);
