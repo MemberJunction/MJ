@@ -8,6 +8,7 @@
 import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
+import { AuthorizeSessionAccess, LoadSessionConversationExternalID } from './sessionAccess.js';
 
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 
@@ -28,13 +29,15 @@ export class RealtimeSessionOwnershipError extends Error {
 }
 
 /**
- * Loads a session under the caller's identity and enforces ownership (`UserID === contextUser.ID`). It
- * deliberately does NOT reject `Closed` sessions: the final channel-state flush and the recording terminal
- * signal legitimately arrive after the session closed. A scoped-anonymous widget guest owns the session it
- * minted, so the same check covers it; loading as the caller also applies the entity's row-level security.
+ * Loads a session under the caller's identity and enforces ownership (`UserID === contextUser.ID` plus
+ * {@link AuthorizeSessionAccess} for anonymous/scoped callers). It deliberately does NOT reject `Closed`
+ * sessions: the final channel-state flush and the recording terminal signal legitimately arrive after the
+ * session closed. A scoped-anonymous widget guest owns the session it minted, so the conversation scope
+ * check isolates visitors sharing the anonymous guest user; loading as the caller also applies the
+ * entity's row-level security.
  *
  * @throws RealtimeSessionNotFoundError when the row does not load
- * @throws RealtimeSessionOwnershipError when the caller is not the owner (logged with both user ids)
+ * @throws RealtimeSessionOwnershipError when the caller is not the owner (logged with refusal reason)
  */
 export async function LoadOwnedRealtimeSession(
     agentSessionId: string,
@@ -48,6 +51,17 @@ export async function LoadOwnedRealtimeSession(
     if (!UUIDsEqual(session.UserID, contextUser.ID)) {
         LogError(
             `LoadOwnedRealtimeSession: ownership check failed — user ${contextUser.ID} attempted to operate on session ${agentSessionId} owned by ${session.UserID}`,
+        );
+        throw new RealtimeSessionOwnershipError(agentSessionId);
+    }
+    const conversationExternalID = await LoadSessionConversationExternalID(session, contextUser, provider);
+    const decision = AuthorizeSessionAccess(
+        { SessionUserID: session.UserID, ConversationExternalID: conversationExternalID },
+        contextUser,
+    );
+    if (decision.Allowed === false) {
+        LogError(
+            `LoadOwnedRealtimeSession: ownership check failed (${decision.Reason}) — user ${contextUser.ID} attempted to operate on session ${agentSessionId}`,
         );
         throw new RealtimeSessionOwnershipError(agentSessionId);
     }

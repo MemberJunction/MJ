@@ -117,7 +117,8 @@ describe('LoadInheritedVerifiedIdentity', () => {
 
     it('refuses another anonymous guest (same Anonymous user, different scope) and accepts the same guest', async () => {
         const prov = provider({ externalId: 'scope-A' });
-        const guest = (scope: string) => user({ IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: scope } });
+        const guest = (scope: string) =>
+            user({ IsMagicLinkAnonymous: true, AnonymousVisitorID: scope, MagicLinkScope: { ResourceID: scope } });
         expect(await LoadInheritedVerifiedIdentity(PRIOR, guest('scope-B'), prov)).toBeUndefined();
         expect(await LoadInheritedVerifiedIdentity(PRIOR, guest('scope-A'), prov)).toEqual(VERIFIED);
     });

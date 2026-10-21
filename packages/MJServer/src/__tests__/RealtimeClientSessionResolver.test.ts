@@ -238,6 +238,7 @@ function makeSessionEntity(overrides: Partial<FakeSession> = {}): FakeSession {
         ID: 'session-1',
         Status: 'Active',
         ConversationID: 'conv-1',
+        ExternalID: 'scope-res-1',
         UserID: 'user-1',
         Config_: JSON.stringify({ targetAgentID: 'target-1' }),
         NewRecord: vi.fn(),
@@ -1519,6 +1520,29 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         expect(restoreQueryCalls(runView)).toHaveLength(0);
     });
 
+    it('omits the field when an anonymous visitor passes ANOTHER anonymous visitor\'s prior session (same Anonymous user, different visitor scope)', async () => {
+        setupHappyStart();
+        const { provider, runView } = makeRestoreProvider({
+            prior: makeSessionEntity({ ID: 'prior-1', UserID: 'anon-1', ExternalID: 'visitor-sid-1' }),
+            rows: [{ Channel: 'Whiteboard', Config: '{"secret":true}' }],
+        });
+        currentProvider = provider;
+        const visitorB = {
+            ID: 'anon-1',
+            Email: 'anonymous@magic-link.local',
+            IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: 'visitor-sid-2',
+            MagicLinkScope: { ResourceID: 'shared-res' },
+        };
+        const resolver = new RealtimeClientSessionResolver();
+        (resolver as unknown as { GetUserFromPayload: () => unknown }).GetUserFromPayload = () => visitorB;
+
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+
+        expect(result.PriorChannelStatesJson).toBeUndefined();
+        expect(restoreQueryCalls(runView)).toHaveLength(0);
+    });
+
     it('omits the field when the prior session does not exist', async () => {
         setupHappyStart();
         const { provider, runView } = makeRestoreProvider({
@@ -2233,6 +2257,32 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
         });
         currentProvider = provider;
         const resolver = makeResolver();
+
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+
+        expect(prepTranscriptArg()).toBeUndefined();
+    });
+
+    it('omits PriorTranscript when an anonymous visitor passes ANOTHER anonymous visitor\'s prior session (same Anonymous user, different visitor scope)', async () => {
+        setupHappyStart();
+        const runView = vi.fn(async () => ({ Success: true, Results: [turn('User', 'their words')] }));
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) =>
+                name === 'MJ: Conversations'
+                    ? makeSessionEntity({ ID: 'conv-1', ExternalID: 'visitor-sid-1' })
+                    : makeSessionEntity({ ID: 'prior-1', UserID: 'anon-1', ConversationID: 'conv-1' }),
+            ),
+            RunView: runView,
+        };
+        const visitorB = {
+            ID: 'anon-1',
+            Email: 'anonymous@magic-link.local',
+            IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: 'visitor-sid-2',
+            MagicLinkScope: { ResourceID: 'shared-res' },
+        };
+        const resolver = new RealtimeClientSessionResolver();
+        (resolver as unknown as { GetUserFromPayload: () => unknown }).GetUserFromPayload = () => visitorB;
 
         await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
 
@@ -3106,6 +3156,7 @@ describe('RealtimeClientSessionResolver — delegated runs get the browser sessi
             ID: 'anon-1',
             Email: 'anonymous@magic-link.local',
             IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: 'scope-res-1',
             MagicLinkScope: { ResourceID: 'scope-res-1' },
         } as UserInfo;
         /** A resolver whose caller is a scoped anonymous magic-link visitor. */
@@ -3157,6 +3208,7 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         ID: 'anon-1',
         Email: 'anonymous@magic-link.local',
         IsMagicLinkAnonymous: true,
+        AnonymousVisitorID: 'scope-res-1',
         MagicLinkScope: { ResourceID: 'scope-res-1' },
     };
     const SYSTEM_USER = { ID: 'system-1', Email: 'system@system.org' } as UserInfo;
@@ -3728,6 +3780,7 @@ describe('RealtimeClientSessionResolver — colleague authorization (allowedAgen
             ID: 'anon-1',
             Email: 'anonymous@magic-link.local',
             IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: 'scope-res-1',
             MagicLinkScope: { ResourceID: 'scope-res-1' },
         };
         currentProvider = makeProvider(() => makeMultiTargetSession('anon-1'));

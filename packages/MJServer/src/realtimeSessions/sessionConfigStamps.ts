@@ -26,7 +26,7 @@
  * @module @memberjunction/server/realtimeSessions
  */
 
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { AuthorizeSessionAccess, LoadSessionForAccess } from './sessionAccess.js';
 import {
     ExtractIdentityVerificationPolicyFromRealtimeConfig,
@@ -108,16 +108,24 @@ export async function LoadInheritedVerifiedIdentity(
     if (!lastSessionId) {
         return undefined;
     }
-    const prior = await LoadSessionForAccess(lastSessionId, contextUser, provider);
-    if (!prior) {
+    try {
+        const prior = await LoadSessionForAccess(lastSessionId, contextUser, provider);
+        if (!prior) {
+            return undefined;
+        }
+        const decision = AuthorizeSessionAccess(
+            { SessionUserID: prior.Session.UserID, ConversationExternalID: prior.ConversationExternalID },
+            contextUser,
+        );
+        if (decision.Allowed === false) {
+            return undefined;
+        }
+        return ReadIdentityVerificationState(prior.Session.Config_, ReadIdentityVerificationPolicyLayer).Verified;
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        LogError(
+            `LoadInheritedVerifiedIdentity: could not read prior session ${lastSessionId} for user ${contextUser.ID}: ${message}`,
+        );
         return undefined;
     }
-    const decision = AuthorizeSessionAccess(
-        { SessionUserID: prior.Session.UserID, ConversationExternalID: prior.ConversationExternalID },
-        contextUser,
-    );
-    if (decision.Allowed === false) {
-        return undefined;
-    }
-    return ReadIdentityVerificationState(prior.Session.Config_, ReadIdentityVerificationPolicyLayer).Verified;
 }

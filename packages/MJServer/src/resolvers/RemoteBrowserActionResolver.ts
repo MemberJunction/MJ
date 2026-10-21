@@ -19,12 +19,16 @@
 import { Resolver, Mutation, Query, Arg, Ctx, Float, Int, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { NormalizeInstanceKey, RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
 import { BeginBrowserGoalStep, FinalizeBrowserGoalStep, ExtractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
 import { RemoteBrowserGoalRegistry } from '../agentSessions/remoteBrowserGoalRegistry.js';
 import { SessionRunIDVerifier } from '../agentSessions/SessionRunIDVerifier.js';
+import {
+  LoadOwnedRealtimeSession,
+  RealtimeSessionNotFoundError,
+  RealtimeSessionOwnershipError,
+} from '../realtimeSessions/ownedRealtimeSession.js';
 import { randomUUID } from 'node:crypto';
 import {
   RemoteBrowserAction,
@@ -40,8 +44,6 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 
-/** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
-const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 /** Entity name for the agent whose `TypeConfiguration` carries the remote-browser provider preference. */
 const AGENT_ENTITY = 'MJ: AI Agents';
 /**
@@ -1077,21 +1079,25 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   }
 
   /**
-   * Loads the agent session and enforces inbound ownership: the session's `UserID` must equal the
-   * caller's. Throws when the session is missing or owned by another user.
+   * Loads the agent session and enforces inbound ownership via {@link LoadOwnedRealtimeSession}
+   * (both `UserID` equality and {@link AuthorizeSessionAccess} for anonymous/scoped callers),
+   * mapping its typed errors to this resolver's error message contract.
    *
    * @param agentSessionID The `AIAgentSession` id.
    * @returns The loaded, owned session entity.
    */
   protected async loadOwnedSession(agentSessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<MJAIAgentSessionEntity> {
-    const session = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
-    if (!(await session.Load(agentSessionID))) {
-      throw new Error(`Remote-browser session ${agentSessionID} not found.`);
+    try {
+      return await LoadOwnedRealtimeSession(agentSessionID, contextUser, provider);
+    } catch (error) {
+      if (error instanceof RealtimeSessionNotFoundError) {
+        throw new Error(`Remote-browser session ${agentSessionID} not found.`);
+      }
+      if (error instanceof RealtimeSessionOwnershipError) {
+        throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
+      }
+      throw error;
     }
-    if (!UUIDsEqual(session.UserID, contextUser.ID)) {
-      throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
-    }
-    return session;
   }
 
   /**
