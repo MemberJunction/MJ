@@ -40,7 +40,7 @@ DatabaseProviderBase (@memberjunction/core — no heavy deps, abstract)
 | `DisposeAllSqlLoggingSessions()` | Disposes all active logging sessions (used on shutdown) |
 | `LogSQLStatement()` | Static method to log SQL from external sources (e.g., transaction groups) |
 | `RenderViewWhereClause()` | Resolves `{%UserView "id"%}` templates in saved view WHERE clauses |
-| `InternalRunView()` | Shared view execution engine: view resolution, permissions, field selection, WHERE clause, ORDER BY, OFFSET *or* keyset (`AfterKey`) pagination, aggregates, audit logging |
+| `InternalRunView()` | Shared view execution engine: view resolution, permissions, field selection, WHERE clause, ORDER BY, OFFSET *or* keyset (`AfterKey`) pagination, aggregates, audit logging. When a view requires multiple SQL statements (e.g., rows + total row count + aggregates), executes them in a single `ExecuteSQLBatch` call to collapse round-trips on providers that support multi-result-set batching (such as SQL Server) |
 | `InternalRunViews()` | Parallel wrapper for multiple InternalRunView calls |
 | `getRunTimeViewFieldString()` | Builds dialect-neutral field list string for view queries |
 | `getRunTimeViewFieldArray()` | Resolves EntityFieldInfo list from params/view/entity |
