@@ -11,7 +11,7 @@ import { EntityOperations, OperationResult } from './EntityOperations.js';
 import { AgentOperations } from './AgentOperations.js';
 import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
-import { ShutdownRegistry } from "@memberjunction/global";
+import { ShutdownRegistry, UUIDsEqual } from "@memberjunction/global";
 import { TaskStore, Task, TaskStatus, Message, Artifact, Part } from "./TaskStore.js";
 
 // A2A Server Configuration
@@ -121,7 +121,7 @@ async function authorizeOperation(
     scopePath: string,
     resource: string
 ): Promise<{ allowed: boolean; error?: string }> {
-    const systemUser = UserCache.Instance.Users[0];
+    const systemUser = UserCache.Instance.GetSystemUser();
     if (!systemUser) {
         return { allowed: false, error: 'System user not available for authorization' };
     }
@@ -172,7 +172,7 @@ async function authenticateRequest(req: Request, res: Response, next: NextFuncti
 
     try {
         // Get system user for validation context
-        const systemUser = UserCache.Instance.Users[0];
+        const systemUser = UserCache.Instance.GetSystemUser();
         if (!systemUser) {
             LogError('A2A Server: No system user available for API key validation');
             res.status(500).json({
@@ -239,6 +239,11 @@ interface RequestWithUser extends Request {
     apiKeyHash?: string;
 }
 
+/** The authenticated caller's user ID, or an empty string, which owns no task, when there is none. */
+function callerId(req: Request): string {
+    return (req as RequestWithUser).authenticatedUser?.ID ?? '';
+}
+
 /** Process ID this server identifies itself with to the dynamic-package loader (entry `Processes` filters match it). */
 export const A2A_SERVER_PROCESS_ID = 'a2a';
 
@@ -286,8 +291,13 @@ export async function initializeA2AServer() {
 function setupRoutes() {
     // Agent Card endpoint (public - for discovery)
     app.get('/a2a/agent-card', async (req, res) => {
-        const agentCard = await generateAgentCard();
-        res.json(agentCard);
+        try {
+            const agentCard = await generateAgentCard();
+            res.json(agentCard);
+        } catch (error) {
+            LogError('A2A Server: Agent card generation failed', undefined, error);
+            res.status(503).json({ error: { code: 503, message: 'Agent card unavailable' } });
+        }
     });
 
     // Apply authentication middleware to all /a2a/tasks routes
@@ -330,7 +340,7 @@ function setupRoutes() {
     // Get a task's status
     app.get('/a2a/tasks/:taskId', (req: Request, res: Response) => {
         const taskId = req.params.taskId as string;
-        const task = tasks.get(taskId);
+        const task = tasks.GetForUser(taskId, callerId(req));
 
         if (!task) {
             res.status(404).json({
@@ -348,7 +358,7 @@ function setupRoutes() {
     // Cancel a task
     app.post('/a2a/tasks/:taskId/cancel', (req: Request, res: Response) => {
         const taskId = req.params.taskId as string;
-        const task = tasks.get(taskId);
+        const task = tasks.GetForUser(taskId, callerId(req));
 
         if (!task) {
             res.status(404).json({
@@ -391,8 +401,41 @@ export function ClearAgentCardCache(): void {
     cachedAgentCardAgentCount = -1;
 }
 
+/**
+ * The identity server-internal A2A work runs as when no caller is involved, such as building the
+ * public agent card: the service user named by `a2aServerSettings.userEmail` when one is
+ * configured, otherwise the system user. Undefined when the configured user does not resolve,
+ * rather than substituting some other user.
+ */
+function resolveServiceUser(): UserInfo | undefined {
+    const email = a2aServerSettings?.userEmail?.trim();
+    if (email) {
+        return UserCache.Instance.Users.find((u: UserInfo) => u.Email?.toLowerCase() === email.toLowerCase());
+    }
+    return UserCache.Instance.GetSystemUser();
+}
+
+/**
+ * The user a task runs as: the authenticated caller, taken from the user cache so that it carries
+ * the caller's roles, which the API key's own user record does not. Throws rather than running a
+ * task as anyone else.
+ */
+function resolveTaskCaller(authenticatedUser?: UserInfo): UserInfo {
+    if (!authenticatedUser) {
+        throw new Error("No authenticated caller available for processing task");
+    }
+    const cached = UserCache.Instance.Users.find((u: UserInfo) => UUIDsEqual(u.ID, authenticatedUser.ID));
+    if (!cached) {
+        throw new Error("The authenticated caller is not an active user");
+    }
+    return cached;
+}
+
 async function generateAgentCard(): Promise<AgentCard> {
-    const contextUser = UserCache.Instance.Users[0];
+    const contextUser = resolveServiceUser();
+    if (!contextUser) {
+        throw new Error('No service user is available to build the agent card; check a2aServerSettings.userEmail.');
+    }
     const md = resolveProviderForRequest();
     const aiEngine = AIEngine.Instance;
     await aiEngine.Config(false, contextUser);
@@ -601,7 +644,7 @@ function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?
             task.messages.push(newMessage);
         }
 
-        tasks.set(newTaskId, task);
+        tasks.Set(newTaskId, task, authenticatedUser?.ID);
 
         // Process the task asynchronously with the authenticated user
         processTask(task, authenticatedUser, authContext);
@@ -611,8 +654,8 @@ function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?
             status: task.status
         };
     } else {
-        // Update an existing task
-        const task = tasks.get(taskId);
+        // Update an existing task: only the caller's own, so another user's task reads as missing
+        const task = authenticatedUser ? tasks.GetForUser(taskId, authenticatedUser.ID) : undefined;
 
         if (!task) {
             throw {
@@ -656,7 +699,7 @@ function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?
 
 function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Response, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
     const result = handleTaskSend(requestBody, authenticatedUser, authContext);
-    const task = tasks.get(result.taskId);
+    const task = authenticatedUser ? tasks.GetForUser(result.taskId, authenticatedUser.ID) : undefined;
 
     if (!task) {
         res.write(`data: ${JSON.stringify({ error: { code: 404, message: "Task not found" } })}\n\n`);
@@ -723,17 +766,14 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
             throw new Error("No user message found");
         }
 
-        // Use authenticated user or fall back to first cached user (for backwards compatibility)
-        const contextUser = authenticatedUser || UserCache.Instance.Users[0];
-        if (!contextUser) {
-            throw new Error("No user context available for processing task");
-        }
+        // Work on behalf of the caller runs as the caller: never as a fallback user.
+        const contextUser = resolveTaskCaller(authenticatedUser);
 
         // Initialize operations handlers with the authenticated user and the request's
         // metadata provider so every downstream entity operation routes through the right
         // connection (see resolveProviderForRequest for the multi-tenant migration plan).
         const provider = resolveProviderForRequest();
-        const entityOps = new EntityOperations(provider);
+        const entityOps = new EntityOperations(provider, contextUser);
         const agentOps = new AgentOperations(contextUser, provider);
 
         // Extract text content and parse operation
