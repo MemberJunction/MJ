@@ -120,4 +120,17 @@ describe('RecordProcessEditorComponent (DOM)', () => {
     input.dispatchEvent(new Event('input'));
     expect(rec.Name).toBe('Typed name');
   });
+
+  const entitySelect = (f: Fx) => queryAll(f, 'select').find((s) => (s as HTMLSelectElement).options[0]?.textContent?.includes('choose an entity')) as HTMLSelectElement;
+
+  it('selects the stored entity (UUIDs compared case-insensitively), not the first option', () => {
+    const f = render(makeRecord({ Name: 'Job titles', EntityID: 'E2' }));
+    const select = entitySelect(f);
+    expect(select.selectedOptions[0]?.textContent?.trim()).toBe('Contacts');
+  });
+
+  it('selects the placeholder when the stored entity is not listed', () => {
+    const f = render(makeRecord({ Name: 'Job titles', EntityID: 'zzz-unlisted' }));
+    expect(entitySelect(f).selectedIndex).toBe(0);
+  });
 });

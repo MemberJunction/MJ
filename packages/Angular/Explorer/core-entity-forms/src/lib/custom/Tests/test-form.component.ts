@@ -12,7 +12,8 @@ import {
   TestingDialogService,
   TagsHelper,
   EvaluationPreferencesService,
-  EvaluationPreferences
+  EvaluationPreferences,
+  RubricPickerOptions
 } from '@memberjunction/ng-testing';
 import { createCopyOnlyToolbar, ToolbarConfig } from '@memberjunction/ng-code-editor';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
@@ -335,6 +336,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
     this.IsSaving = value;
   }
   TestTypeOptions: MJTestTypeEntity[] = [];
+  RubricOptions: { id: string; name: string }[] = [];
 
   /** @deprecated Use {@link TestTypeOptions}. */
   get testTypeOptions(): MJTestTypeEntity[] {
@@ -366,6 +368,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
     this.loadShortcutsSetting();
     // Fire-and-forget: test type list for the edit form
     this.loadTestTypeOptions();
+    void this.loadRubricOptions();
 
     // Subscribe to evaluation preferences
     this.evalPrefsService.preferences$
@@ -388,6 +391,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -1325,6 +1329,18 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
   /** Parsed tags as a plain array — derived from record.Tags JSON. */
   get tags(): string[] {
     return TagsHelper.parseTags(this.record?.Tags);
+  }
+
+  /** Active rubrics for the RubricID picker. */
+  private async loadRubricOptions(): Promise<void> {
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView({ EntityName: 'MJ: Rubrics', ExtraFilter: `Status='Active'`, OrderBy: 'Name', ResultType: 'simple', MaxRows: 500 });
+      this.RubricOptions = RubricPickerOptions((result.Results ?? []) as { ID: string; Name: string; Status: string }[]);
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.warn('Failed to load rubric options:', error);
+    }
   }
 
   /** Load test types for the Type dropdown. */

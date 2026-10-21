@@ -64,7 +64,7 @@ export class ActionRecordProcessor implements IRecordProcessor {
     }
 
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
-        await ActionEngineServer.Instance.Config(false, context.contextUser);
+        await ActionEngineServer.Instance.Config(false, context.ContextUser);
         const action = ActionEngineServer.Instance.Actions.find((a) => UUIDsEqual(a.ID, this.actionID));
         if (!action) {
             return { Status: 'Failed', ErrorMessage: `Action '${this.actionID}' not found` };
@@ -72,7 +72,7 @@ export class ActionRecordProcessor implements IRecordProcessor {
 
         const result = await ActionEngineServer.Instance.RunAction({
             Action: action,
-            ContextUser: context.contextUser,
+            ContextUser: context.ContextUser,
             Params: ActionRecordProcessor.buildActionParams(this.inputMapping, record),
             Filters: [],
         });

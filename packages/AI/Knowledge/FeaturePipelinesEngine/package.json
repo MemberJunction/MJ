@@ -1,0 +1,47 @@
+{
+  "name": "@memberjunction/feature-pipelines-engine",
+  "type": "module",
+  "version": "6.2.0-edge.4",
+  "description": "MemberJunction: Feature Pipelines Engine - server-side execution, drivers, golden-set test driver, and version steward for Knowledge Hub Feature Pipelines.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/actions": "6.2.0-edge.4",
+    "@memberjunction/actions-base": "6.2.0-edge.4",
+    "@memberjunction/ai": "6.2.0-edge.4",
+    "@memberjunction/ai-core-plus": "6.2.0-edge.4",
+    "@memberjunction/ai-prompts": "6.2.0-edge.4",
+    "@memberjunction/aiengine": "6.2.0-edge.4",
+    "@memberjunction/core": "6.2.0-edge.4",
+    "@memberjunction/core-entities": "6.2.0-edge.4",
+    "@memberjunction/entity-documents": "6.2.0-edge.4",
+    "@memberjunction/feature-pipelines": "6.2.0-edge.4",
+    "@memberjunction/global": "6.2.0-edge.4",
+    "@memberjunction/record-set-processor": "6.2.0-edge.4",
+    "@memberjunction/record-set-processor-base": "6.2.0-edge.4",
+    "@memberjunction/templates": "6.2.0-edge.4",
+    "@memberjunction/testing-engine": "6.2.0-edge.4",
+    "@memberjunction/testing-engine-base": "6.2.0-edge.4"
+  },
+  "devDependencies": {
+    "@memberjunction/unit-testing": "6.2.0-edge.4",
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

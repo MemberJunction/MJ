@@ -692,6 +692,37 @@ describe('DecisionReranker', () => {
             expect((await rerankInFlight.Response).errorMessage).toContain(`within ${DEFAULT_DECISION_RERANK_TIMEOUT_MS} ms`);
         });
 
+        it('stops, and aborts its decision calls, as soon as the caller cancels, reporting a cancellation', async () => {
+            stubDecisions(neverAnswer);
+            const caller = new AbortController();
+            const pending = new DecisionReranker('', '', '', contextUser).Rerank({ query: QUERY, documents: notes(2), CancellationToken: caller.signal });
+            await vi.advanceTimersByTimeAsync(10);
+            expect(decisionCalls[0].cancellationToken?.aborted).toBe(false);
+
+            caller.abort('user stopped it');
+            const response = await pending;
+
+            expect(response.success).toBe(false);
+            expect(response.errorInfo?.errorType).toBe('Cancelled');
+            expect(response.errorInfo?.canFailover).toBe(false);
+            expect(decisionCalls[0].cancellationToken?.aborted).toBe(true);
+            expect(vi.getTimerCount()).toBe(0);
+        });
+
+        it('keeps its own budget when the caller passes a signal that never fires, and stops listening to it afterwards', async () => {
+            stubDecisions(neverAnswer);
+            const caller = new AbortController();
+            const removeListener = vi.spyOn(caller.signal, 'removeEventListener');
+            const pending = new DecisionReranker('', '', '', contextUser).Rerank({ query: QUERY, documents: notes(2), CancellationToken: caller.signal });
+
+            await vi.advanceTimersByTimeAsync(DEFAULT_DECISION_RERANK_TIMEOUT_MS);
+            const response = await pending;
+
+            expect(response.errorMessage).toBe(`DecisionReranker: The decision calls did not finish within ${DEFAULT_DECISION_RERANK_TIMEOUT_MS} ms`);
+            expect(response.errorInfo).toBeUndefined();
+            expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+        });
+
         it('clears its timer when the calls finish in time', async () => {
             stubDecisions();
 

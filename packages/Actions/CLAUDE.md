@@ -697,7 +697,7 @@ export class Create_Conversation_Record_Action extends BaseAction {
 
         // Invokes parent via ActionEngine (runtime composition)
         const parentAction = ActionEngineServer.Instance.Actions.find(a =>
-            a.ID === '2504e288-...'
+            UUIDsEqual(a.ID, '2504e288-...')
         );
         return await ActionEngineServer.Instance.RunAction({
             Action: parentAction,

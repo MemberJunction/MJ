@@ -1,9 +1,9 @@
-import { DatabasePlatform, UserInfo, QueryDependencySpec } from '@memberjunction/core';
+import { DatabasePlatform, UserInfo, QueryDependencySpec, LogStatus } from '@memberjunction/core';
 import { MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { GetDialect } from '@memberjunction/sql-dialect';
-import { SQLParser } from '@memberjunction/sql-parser';
+import { SQLParser, IsReadOnlyQuery, FindForbiddenFunctionCalls } from '@memberjunction/sql-parser';
 import { QueryCompositionEngine, CompositionResult, CompositionCTEInfo } from './queryCompositionEngine.js';
-import { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
+import { QueryPagingEngine, PagingWrappedSQL, RowCapOutcome } from './queryPagingEngine.js';
 import { QueryParameterProcessor, type QueryTemplateInput } from '@memberjunction/query-processor';
 
 // ════════════════════════════════════════════════════════════════════
@@ -69,6 +69,14 @@ export interface RenderContext {
     Paging?: { StartRow: number; MaxRows: number };
     /** MaxRows safety limit. Mutually exclusive with {@link Paging}. */
     MaxRows?: number;
+    /**
+     * Require the rendered SQL to be a single read query: one statement that starts with `SELECT`
+     * or `WITH`, reads in every CTE, and does not `SELECT … INTO` a table. Set it wherever the
+     * caller, not a saved query, supplies the SQL (ad-hoc SQL, transient test queries). Anything
+     * else is refused with an error that says why. Saved queries are admin-authored and are not
+     * held to it.
+     */
+    RequireReadStatement?: boolean;
 }
 
 /**
@@ -87,6 +95,11 @@ export interface RenderResult {
     Trace: RenderTrace;
     /** Paging result (if paging was applied) */
     PagingResult: PagingWrappedSQL | null;
+    /**
+     * Whether the {@link RenderContext.MaxRows} cap holds for {@link FinalSQL}, and how it was
+     * applied; `null` when no MaxRows cap was requested.
+     */
+    RowCap: RowCapOutcome | null;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -160,11 +173,17 @@ export class RenderPipeline {
         // StatementKind reflects the user's actual statement (paging wrapping
         // below always produces a SELECT). Saved queries otherwise skip the
         // dangerous-keyword validation that ad-hoc queries get at execution.
-        RenderPipeline.assertSafeToExecute(afterTemplates, ctx.Platform);
+        RenderPipeline.assertSafeToExecute(afterTemplates, ctx.Platform, ctx.RequireReadStatement ?? false);
 
         // ── Step 3: MaxRows safety limit (if specified) ──────────────
+        let rowCap: RowCapOutcome | null = null;
         if (hasMaxRows) {
-            currentSQL = QueryPagingEngine.WrapWithMaxRows(currentSQL, ctx.MaxRows!, ctx.Platform);
+            const capResult = QueryPagingEngine.ApplyMaxRows(currentSQL, ctx.MaxRows!, ctx.Platform);
+            currentSQL = capResult.SQL;
+            rowCap = capResult.Outcome;
+            if (!rowCap.Applied) {
+                LogStatus(`RenderPipeline: MaxRows ${ctx.MaxRows} was not applied — ${rowCap.Reason}. The query runs uncapped.`);
+            }
         }
 
         // ── Step 4: Paging (if requested) ────────────────────────────
@@ -191,6 +210,7 @@ export class RenderPipeline {
                 AfterPaging: afterPaging,
             },
             PagingResult: pagingResult,
+            RowCap: rowCap,
         };
     }
 
@@ -216,14 +236,37 @@ export class RenderPipeline {
      * parse, so there is no AST to classify). A rendered read query must be a
      * single statement.
      *
+     * When `requireReadStatement` is set (SQL a caller supplied rather than a
+     * saved query), the statement must first pass {@link IsReadOnlyQuery}: one
+     * statement, starting with SELECT or WITH, reading in every CTE, and not
+     * writing its rows into a table. That check works from tokens, so it also
+     * refuses a `SET` or `DECLARE` the AST check lets through, and it still
+     * accepts read queries the parser cannot read. Such SQL also may not call
+     * the functions the dialect lists in `CallerSQLForbiddenFunctions`
+     * (`query_to_xml`, `pg_read_file`, `OPENROWSET`, …): they read what a check
+     * of the tables the SQL references cannot see.
+     *
      * The broader dangerous-keyword scan
      * ({@link SQLExpressionValidator.validateFullQuery}) deliberately stays on
      * the ad-hoc execution path (untrusted free-text input); it is unsuitable as
      * a blanket gate here because it rejects legitimate read constructs (the
      * `REPLACE()` string function, parenthesized SELECTs, etc.).
      */
-    private static assertSafeToExecute(sql: string, platform: DatabasePlatform): void {
+    private static assertSafeToExecute(sql: string, platform: DatabasePlatform, requireReadStatement: boolean): void {
         const dialect = GetDialect(platform);
+        if (requireReadStatement) {
+            const check = IsReadOnlyQuery(sql, dialect);
+            if (!check.IsReadOnly) {
+                throw new Error(`RenderPipeline: only a single read query may be run here, and this SQL is not one: ${check.Reason}.`);
+            }
+            const forbidden = FindForbiddenFunctionCalls(sql, dialect);
+            if (forbidden.length > 0) {
+                throw new Error(
+                    `RenderPipeline: SQL supplied here may not call ${forbidden.join(', ')}. These functions run SQL ` +
+                    'given as a string, or read files or other databases, so what they read cannot be checked.',
+                );
+            }
+        }
         const parsed = new SQLParser(sql, dialect);
         if (parsed.HasWriteStatement) {
             throw new Error(

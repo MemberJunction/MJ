@@ -1,0 +1,552 @@
+{
+  "url": "https://api.peopledatalabs.com/v5/person/search",
+  "status": 200,
+  "headers": {
+    "x-call-credits-spent": "1",
+    "x-call-credits-type": "search",
+    "x-ratelimit-limit": "{\"minute\": 10}",
+    "x-ratelimit-remaining": "{\"minute\": 9}",
+    "x-ratelimit-reset": "2026-10-12 21:53:52",
+    "x-totallimit-overages-remaining": "0",
+    "x-totallimit-purchased-remaining": "99",
+    "x-totallimit-remaining": "98"
+  },
+  "body": {
+    "status": 200,
+    "data": [
+      {
+        "id": "pdl-fixture-3",
+        "full_name": "[full_name]",
+        "first_name": "[first_name]",
+        "middle_initial": "[middle_initial]",
+        "middle_name": "[middle_name]",
+        "last_initial": "p",
+        "last_name": "[last_name]",
+        "sex": "[sex]",
+        "birth_year": "[birth_year]",
+        "birth_date": "[birth_date]",
+        "linkedin_url": "https://www.linkedin.com/in/fixture-person",
+        "linkedin_username": "[linkedin_username]",
+        "linkedin_id": "[linkedin_id]",
+        "facebook_url": "[facebook_url]",
+        "facebook_username": "[facebook_username]",
+        "facebook_id": "[facebook_id]",
+        "twitter_url": null,
+        "twitter_username": null,
+        "github_url": null,
+        "github_username": null,
+        "work_email": "[work_email]",
+        "personal_emails": "[personal_emails]",
+        "recommended_personal_email": "[recommended_personal_email]",
+        "mobile_phone": "[mobile_phone]",
+        "industry": "biotechnology",
+        "job_title": "member of the management board / chief business officer",
+        "job_title_role": null,
+        "job_title_sub_role": null,
+        "job_title_class": null,
+        "job_title_levels": [
+          "cxo"
+        ],
+        "job_company_id": "XjBISQm0GweE3QCONPi2bQbhXO0t",
+        "job_company_name": "demerx",
+        "job_company_website": "demerx.com",
+        "job_company_size": "11-50",
+        "job_company_founded": 2010,
+        "job_company_industry": "biotechnology",
+        "job_company_industry_v2": "biotechnology research",
+        "job_company_linkedin_url": "linkedin.com/company/demerx-inc.",
+        "job_company_linkedin_id": "63394281",
+        "job_company_facebook_url": "facebook.com/demerxibogaine",
+        "job_company_twitter_url": null,
+        "job_company_location_name": "miami, florida, united states",
+        "job_company_location_locality": "miami",
+        "job_company_location_metro": "miami, florida",
+        "job_company_location_region": "florida",
+        "job_company_location_geo": "25.85,-80.17",
+        "job_company_location_street_address": "1951 northwest 7th avenue",
+        "job_company_location_address_line_2": "suite 600",
+        "job_company_location_postal_code": "33136",
+        "job_company_location_country": "united states",
+        "job_company_location_continent": "north america",
+        "job_last_changed": "2025-08-23",
+        "job_last_verified": "2026-08-03",
+        "job_start_date": "2024-07",
+        "location_name": "[location_name]",
+        "location_locality": "[location_locality]",
+        "location_metro": "[location_metro]",
+        "location_region": "[location_region]",
+        "location_country": "[location_country]",
+        "location_continent": "[location_continent]",
+        "location_street_address": "[location_street_address]",
+        "location_address_line_2": null,
+        "location_postal_code": "[location_postal_code]",
+        "location_geo": "[location_geo]",
+        "location_last_updated": "[location_last_updated]",
+        "phone_numbers": "[phone_numbers]",
+        "emails": "[emails]",
+        "interests": [],
+        "skills": [],
+        "location_names": "[location_names]",
+        "regions": "[regions]",
+        "countries": [],
+        "street_addresses": "[street_addresses]",
+        "experience": [
+          {
+            "company": {
+              "name": "demerx",
+              "size": "11-50",
+              "id": "XjBISQm0GweE3QCONPi2bQbhXO0t",
+              "founded": 2010,
+              "industry": "biotechnology",
+              "industry_v2": "biotechnology research",
+              "location": {
+                "name": "miami, florida, united states",
+                "locality": "miami",
+                "region": "florida",
+                "metro": "miami, florida",
+                "country": "united states",
+                "continent": "north america",
+                "street_address": "1951 northwest 7th avenue",
+                "address_line_2": "suite 600",
+                "postal_code": "33136",
+                "geo": "25.85,-80.17"
+              },
+              "linkedin_url": "linkedin.com/company/demerx-inc.",
+              "linkedin_id": "[linkedin_id]",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": null,
+              "website": "demerx.com"
+            },
+            "location_names": [],
+            "end_date": null,
+            "start_date": "2024-07",
+            "title": {
+              "name": "member of the management board / chief business officer",
+              "class": null,
+              "role": null,
+              "sub_role": null,
+              "levels": [
+                "cxo"
+              ]
+            },
+            "is_primary": true
+          },
+          {
+            "company": {
+              "name": "ataibeckley",
+              "size": "51-200",
+              "id": "ifTBDDuEivjG2HDZxacm6QHKZ0LK",
+              "founded": 2018,
+              "industry": "biotechnology",
+              "industry_v2": "biotechnology research",
+              "location": {
+                "name": "new york, new york, united states",
+                "locality": "new york",
+                "region": "new york",
+                "metro": "new york, new york",
+                "country": "united states",
+                "continent": "north america",
+                "street_address": "250 west 34th street",
+                "address_line_2": null,
+                "postal_code": "10119",
+                "geo": "40.71,-73.99"
+              },
+              "linkedin_url": "linkedin.com/company/ataibeckley",
+              "linkedin_id": "[linkedin_id]",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": "[twitter_url]",
+              "website": "ataibeckley.com"
+            },
+            "location_names": [],
+            "end_date": "2022-12",
+            "start_date": "2021-01",
+            "title": {
+              "name": "portfolio manager / venture director",
+              "class": "services",
+              "role": "professional_service",
+              "sub_role": "investment_[name-0]king",
+              "levels": [
+                "director",
+                "manager"
+              ]
+            },
+            "is_primary": false
+          },
+          {
+            "company": {
+              "name": "xdna",
+              "size": "1-10",
+              "id": "aS1ONslgNrJ47hDDpEwj3w2AC8Ip",
+              "founded": null,
+              "industry": "biotechnology",
+              "industry_v2": "biotechnology research",
+              "location": null,
+              "linkedin_url": "linkedin.com/company/xdnavc",
+              "linkedin_id": "[linkedin_id]",
+              "facebook_url": null,
+              "twitter_url": null,
+              "website": null
+            },
+            "location_names": [],
+            "end_date": null,
+            "start_date": "2020-08",
+            "title": {
+              "name": "partner / strategic advisor",
+              "class": null,
+              "role": null,
+              "sub_role": null,
+              "levels": []
+            },
+            "is_primary": false
+          },
+          {
+            "company": {
+              "name": "gates foundation",
+              "size": "1001-5000",
+              "id": "09IF4d5OkWc6YekD0yIuSA2Cyp7d",
+              "founded": 2000,
+              "industry": "non-profit organization management",
+              "industry_v2": "non-profit organizations",
+              "location": {
+                "name": "seattle, washington, united states",
+                "locality": "seattle",
+                "region": "washington",
+                "metro": "seattle, washington",
+                "country": "united states",
+                "continent": "north america",
+                "street_address": null,
+                "address_line_2": null,
+                "postal_code": "98109",
+                "geo": "47.58,-122.35"
+              },
+              "linkedin_url": "linkedin.com/company/gates-foundation",
+              "linkedin_id": "[linkedin_id]",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": "[twitter_url]",
+              "website": "gatesfoundation.org"
+            },
+            "location_names": [],
+            "end_date": "2021-01",
+            "start_date": "2020-03",
+            "title": {
+              "name": "program lead",
+              "class": null,
+              "role": null,
+              "sub_role": null,
+              "levels": [
+                "manager"
+              ]
+            },
+            "is_primary": false
+          },
+          {
+            "company": {
+              "name": "biotine consulting",
+              "size": "1-10",
+              "id": "AcwSBNxAkpJKkCIKOaDrQAQ8qBk5",
+              "founded": null,
+              "industry": "biotechnology",
+              "industry_v2": "biotechnology research",
+              "location": null,
+              "linkedin_url": "linkedin.com/company/biotine-consulting",
+              "linkedin_id": "[linkedin_id]",
+              "facebook_url": null,
+              "twitter_url": null,
+              "website": null
+            },
+            "location_names": [],
+            "end_date": "2020",
+            "start_date": "2014-03",
+            "title": {
+              "name": "partner, program leadership & corporate development",
+              "class": "general_and_administrative",
+              "role": "operations",
+              "sub_role": "corporate_development",
+              "levels": []
+            },
+            "is_primary": false
+          },
+          {
+            "company": {
+              "name": "fresenius medical care",
+              "size": "10001+",
+              "id": "HsstC3dJg1N0GFZnUC0TKAsO0Whd",
+              "founded": 1996,
+              "industry": "hospital & health care",
+              "industry_v2": "hospitals and health care",
+              "location": {
+                "name": "bad homburg, hesse, germany",
+                "locality": "bad homburg",
+                "region": "hesse",
+                "metro": null,
+                "country": "germany",
+                "continent": "europe",
+                "street_address": "1 else-kröner-strasse",
+                "address_line_2": null,
+                "postal_code": "61352",
+                "geo": "50.21,8.6"
+              },
+              "linkedin_url": "linkedin.com/company/freseniusmedicalcare",
+              "linkedin_id": "[linkedin_id]",
+              "facebook_url": null,
+              "twitter_url": "[twitter_url]",
+              "website": "freseniusmedicalcare.com"
+            },
+            "location_names": [],
+            "end_date": "2014-03",
+            "start_date": "2007-04",
+            "title": {
+              "name": "program / product lead",
+              "class": "research_and_development",
+              "role": "product",
+              "sub_role": "product_management",
+              "levels": [
+                "manager"
+              ]
+            },
+            "is_primary": false
+          },
+          {
+            "company": {
+              "name": "cambridge healthtech institute",
+              "size": "51-200",
+              "id": "3XGPYD4jYkCZtGOZvUlfZAxYHJv7",
+              "founded": 1992,
+              "industry": "biotechnology",
+              "industry_v2": "biotechnology research",
+              "location": {
+                "name": "needham heights, massachusetts, united states",
+                "locality": "needham heights",
+                "region": "massachusetts",
+                "metro": "boston, massachusetts",
+                "country": "united states",
+                "continent": "north america",
+                "street_address": "250 first avenue",
+                "address_line_2": "suite 300",
+                "postal_code": "02494",
+                "geo": "42.29,-71.23"
+              },
+              "linkedin_url": "linkedin.com/company/cambridge-healthtech-institute",
+              "linkedin_id": "[linkedin_id]",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": "[twitter_url]",
+              "website": "healthtech.com"
+            },
+            "location_names": [],
+            "end_date": "2007-03",
+            "start_date": "2006-04",
+            "title": {
+              "name": "industry analyst",
+              "class": "general_and_administrative",
+              "role": "analyst",
+              "sub_role": null,
+              "levels": []
+            },
+            "is_primary": false
+          },
+          {
+            "company": {
+              "name": "pfizer",
+              "size": "10001+",
+              "id": "w9C0Znhx6QgUFVBDCwL5kQhGY93j",
+              "founded": 1848,
+              "industry": "pharmaceuticals",
+              "industry_v2": "pharmaceutical manufacturing",
+              "location": {
+                "name": "new york, new york, united states",
+                "locality": "new york",
+                "region": "new york",
+                "metro": "new york, new york",
+                "country": "united states",
+                "continent": "north america",
+                "street_address": null,
+                "address_line_2": null,
+                "postal_code": "10017",
+                "geo": "40.71,-73.99"
+              },
+              "linkedin_url": "linkedin.com/company/pfizer",
+              "linkedin_id": "[linkedin_id]",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": null,
+              "website": "pfizer.com"
+            },
+            "location_names": [],
+            "end_date": "2006-03",
+            "start_date": "2002-01",
+            "title": {
+              "name": "project manager",
+              "class": "services",
+              "role": "fulfillment",
+              "sub_role": "project_management",
+              "levels": []
+            },
+            "is_primary": false
+          },
+          {
+            "company": {
+              "name": "boehringer ingelheim",
+              "size": "10001+",
+              "id": "p6RktD1CPF9TVIgxHWAJaAdxXCbI",
+              "founded": 1885,
+              "industry": "pharmaceuticals",
+              "industry_v2": "pharmaceutical manufacturing",
+              "location": {
+                "name": "ingelheim, rhineland-palatinate, germany",
+                "locality": "ingelheim",
+                "region": "rhineland-palatinate",
+                "metro": null,
+                "country": "germany",
+                "continent": "europe",
+                "street_address": null,
+                "address_line_2": null,
+                "postal_code": "55218",
+                "geo": "49.97,8.05"
+              },
+              "linkedin_url": "linkedin.com/company/boehringer-ingelheim",
+              "linkedin_id": "[linkedin_id]",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": "[twitter_url]",
+              "website": "boehringer-ingelheim.com"
+            },
+            "location_names": [],
+            "end_date": "2000-01",
+            "start_date": "1998-09",
+            "title": {
+              "name": "analytical chemist",
+              "class": "research_and_development",
+              "role": "research",
+              "sub_role": "scientific",
+              "levels": []
+            },
+            "is_primary": false
+          }
+        ],
+        "education": [
+          {
+            "school": {
+              "name": "harvard kennedy school",
+              "type": "post-secondary institution",
+              "id": "wFf8bchauioIdYC6xBTKBA_0000",
+              "location": {
+                "name": "cambridge, massachusetts, united states",
+                "locality": "cambridge",
+                "region": "massachusetts",
+                "country": "united states",
+                "continent": "north america"
+              },
+              "linkedin_url": "linkedin.com/school/harvard-kennedy-school-of-government",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": "[twitter_url]",
+              "linkedin_id": "[linkedin_id]",
+              "website": "hks.harvard.edu",
+              "domain": "harvard.edu"
+            },
+            "degrees": [],
+            "start_date": "2009",
+            "end_date": "2009",
+            "majors": [
+              "education",
+              "leadership"
+            ],
+            "minors": [],
+            "gpa": null
+          },
+          {
+            "school": {
+              "name": "virginia commonwealth university",
+              "type": "post-secondary institution",
+              "id": "g-DXLc-P4jIpg8B69uO1Sg_0000",
+              "location": {
+                "name": "richmond, virginia, united states",
+                "locality": "richmond",
+                "region": "virginia",
+                "country": "united states",
+                "continent": "north america"
+              },
+              "linkedin_url": "linkedin.com/school/virginia-commonwealth-university",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": "[twitter_url]",
+              "linkedin_id": "[linkedin_id]",
+              "website": "vcu.edu",
+              "domain": "vcu.edu"
+            },
+            "degrees": [
+              "master of business administration",
+              "masters"
+            ],
+            "start_date": "2000",
+            "end_date": "2001-05",
+            "majors": [
+              "management",
+              "marketing"
+            ],
+            "minors": [],
+            "gpa": null
+          },
+          {
+            "school": {
+              "name": "samara state technical university",
+              "type": "post-secondary institution",
+              "id": "sHM-PyeF7GzD55AIl0vaKQ_0000",
+              "location": {
+                "name": "samara, samara oblast, russia",
+                "locality": "samara",
+                "region": "samara oblast",
+                "country": "russia",
+                "continent": "europe"
+              },
+              "linkedin_url": "linkedin.com/school/самарский-государственный-технический-университет",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": "[twitter_url]",
+              "linkedin_id": "[linkedin_id]",
+              "website": "samgtu.ru",
+              "domain": "samgtu.ru"
+            },
+            "degrees": [
+              "master of science",
+              "masters"
+            ],
+            "start_date": "1992",
+            "end_date": "1998",
+            "majors": [
+              "chemistry"
+            ],
+            "minors": [],
+            "gpa": null
+          },
+          {
+            "school": {
+              "name": "harvard university",
+              "type": "post-secondary institution",
+              "id": "5Ic6qaBcxe2DlWHRIVFnZg_0000",
+              "location": {
+                "name": "cambridge, massachusetts, united states",
+                "locality": "cambridge",
+                "region": "massachusetts",
+                "country": "united states",
+                "continent": "north america"
+              },
+              "linkedin_url": "linkedin.com/school/harvard-university",
+              "facebook_url": "[facebook_url]",
+              "twitter_url": "[twitter_url]",
+              "linkedin_id": "[linkedin_id]",
+              "website": "harvard.edu",
+              "domain": "harvard.edu"
+            },
+            "degrees": [],
+            "start_date": null,
+            "end_date": null,
+            "majors": [],
+            "minors": [],
+            "gpa": null
+          }
+        ],
+        "profiles": [],
+        "dataset_version": "35.2"
+      }
+    ],
+    "scroll_token": "0$11.641662",
+    "total": 39647,
+    "dataset_version": "35.2"
+  }
+}

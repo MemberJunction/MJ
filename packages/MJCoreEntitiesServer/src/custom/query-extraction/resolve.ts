@@ -5,12 +5,12 @@
  * Every function is stateless: context is passed in as parameters rather than via `this`.
  */
 
-import { EntityInfo, IMetadataProvider, TypeScriptTypeFromSQLType } from "@memberjunction/core";
+import { DatabasePlatform, EntityInfo, IMetadataProvider, TypeScriptTypeFromSQLType } from "@memberjunction/core";
 import { MJQueryEntityExtended, MJQueryFieldEntity, MJQueryDependencyEntity, QueryEngine } from "@memberjunction/core-entities";
 import { QueryCompositionEngine } from "@memberjunction/generic-database-provider";
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLParser } from "@memberjunction/sql-parser";
-import { SQLServerDialect } from "@memberjunction/sql-dialect";
+import { GetDialect } from "@memberjunction/sql-dialect";
 import type { MJParameterInfo, SQLSelectColumn, SQLTableReference } from "@memberjunction/sql-parser";
 
 import type {
@@ -526,16 +526,20 @@ export function ExpandWildcardFields(
 /**
  * Extracts entity metadata from the SQL to provide context for parameter type inference.
  * Uses SQLParser for robust SQL parsing with MJ template support.
+ *
+ * @param platform The platform the SQL is written for; selects the grammar used to read its
+ *   column references. Defaults to SQL Server.
  */
 export function ExtractEntityMetadataFromSQL(
     sql: string,
     tableRefs: SQLTableReference[],
-    md: IMetadataProvider
+    md: Pick<IMetadataProvider, 'Entities'>,
+    platform: DatabasePlatform = 'sqlserver'
 ): EntityMetadataEntry[] {
     const results: EntityMetadataEntry[] = [];
 
     try {
-        const columnRefs = SQLParser.ExtractColumnRefs(sql, new SQLServerDialect());
+        const columnRefs = SQLParser.ExtractColumnRefs(sql, GetDialect(platform));
 
         for (const tableRef of tableRefs) {
             const matchingEntity = findEntityByTableRef(md, tableRef);
@@ -962,7 +966,7 @@ function findEntityNameByID(md: IMetadataProvider, entityID: string): string | n
 /**
  * Finds an entity by matching a SQL table reference against BaseView/BaseTable + SchemaName.
  */
-function findEntityByTableRef(md: IMetadataProvider, tableRef: SQLTableReference): EntityInfo | undefined {
+function findEntityByTableRef(md: Pick<IMetadataProvider, 'Entities'>, tableRef: SQLTableReference): EntityInfo | undefined {
     return md.Entities.find(e =>
         (e.BaseView.toLowerCase() === tableRef.TableName.toLowerCase() ||
          e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase()) &&

@@ -1,0 +1,11 @@
+/* Fills its container. The root node grows to fill the space inside the margin.
+   The font is set here because a container such as a button does not pass its font down. */
+:host {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  overflow: hidden;
+  font-family: var(--mj-font-family);
+}

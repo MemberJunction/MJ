@@ -1,3 +1,4 @@
+import '@angular/compiler';
 /**
  * Tests for the AI Agents form's tab rules.
  *
@@ -6,17 +7,22 @@
  * form with nothing to explain it), and a hardcoded default sends every Flow agent back to Details —
  * re-burying the diagram that tabbing this form exists to surface.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import {
     AGENT_TAB_DESIGNER,
     AGENT_TAB_DETAILS,
     AGENT_TAB_INVOCATIONS,
+    AGENT_TAB_RUBRICS,
     BuildAgentFormTabs,
     DesignerTabLabel,
     HasDesignerTab,
     ResolveActiveTab,
     type AgentFormTabContext,
 } from '../lib/custom/AIAgents/agent-form-tabs';
+import { SortAgentRubrics } from '@memberjunction/ng-agents';
 
 const flow: AgentFormTabContext = { AgentTypeName: 'Flow', UIFormSectionKey: 'FlowAgentType', HasRecordID: true };
 const loop: AgentFormTabContext = { AgentTypeName: 'Loop', UIFormSectionKey: null, HasRecordID: true };
@@ -25,12 +31,17 @@ const keys = (c: AgentFormTabContext, stored: string | null = null) =>
     BuildAgentFormTabs(c, stored).Tabs.map((t) => t.key);
 
 describe('which tabs exist', () => {
+    it('does not re-export the agent rubric sort', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../lib/custom/AIAgents/agent-form-tabs.ts'), 'utf8');
+        expect(source).not.toContain('export { SortAgentRubrics }');
+    });
+
     it('a Flow agent gets the designer, Details and Invocations — designer first', () => {
-        expect(keys(flow)).toEqual([AGENT_TAB_DESIGNER, AGENT_TAB_DETAILS, AGENT_TAB_INVOCATIONS]);
+        expect(keys(flow)).toEqual([AGENT_TAB_DESIGNER, AGENT_TAB_DETAILS, AGENT_TAB_INVOCATIONS, AGENT_TAB_RUBRICS]);
     });
 
     it('a Loop agent gets no designer, because its type ships none', () => {
-        expect(keys(loop)).toEqual([AGENT_TAB_DETAILS, AGENT_TAB_INVOCATIONS]);
+        expect(keys(loop)).toEqual([AGENT_TAB_DETAILS, AGENT_TAB_INVOCATIONS, AGENT_TAB_RUBRICS]);
     });
 
     it('an unsaved record gets Details only', () => {
@@ -64,6 +75,17 @@ describe('which tabs exist', () => {
         const swarmTab = BuildAgentFormTabs({ ...flow, AgentTypeName: 'Swarm' }, null).Tabs[0];
         expect(flowTab.icon).toContain('diagram-project');
         expect(swarmTab.icon).not.toContain('diagram-project');
+    });
+});
+
+describe('rubric link order', () => {
+    it('puts the default Evaluation link first', () => {
+        const ordered = SortAgentRubrics([
+            { Purpose: 'SelfCheck', IsDefault: true, Sequence: 0, Rubric: 'Check' },
+            { Purpose: 'Evaluation', IsDefault: false, Sequence: 0, Rubric: 'Other' },
+            { Purpose: 'Evaluation', IsDefault: true, Sequence: 1, Rubric: 'Judge' },
+        ]);
+        expect(ordered.map(row => row.Rubric)).toEqual(['Judge', 'Check', 'Other']);
     });
 });
 

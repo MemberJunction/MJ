@@ -96,6 +96,16 @@ The following columns in this table were identified as potential foreign keys by
 *Value overlap = % of source values that exist in the target column. 100% = strong FK evidence. Cardinality ratio = source distinct / target distinct — values > 1 suggest child→parent direction.*
 {% endif %}
 
+{% if existingIndexes and existingIndexes.length > 0 %}
+## Existing Indexes
+These indexes exist on this table in the database. Developers index the columns they join and filter on, so indexes are clues to keys even when no primary or foreign key is declared:
+{% for ix in existingIndexes %}
+- {{ ix }}
+{% endfor %}
+
+*A UNIQUE index or PRIMARY KEY on non-null columns is strong evidence of the primary key (or an alternate key). A non-unique index led by an ID- or code-like column often marks a foreign key. Indexes are evidence, not proof — weigh them with names, statistics and value overlap. "(expression)" is a computed key part.*
+{% endif %}
+
 {% if allTables %}
 ## All Database Tables
 **IMPORTANT**: When referring to foreign key relationships, you MUST use one of these exact table names:
@@ -168,6 +178,7 @@ Based on the evidence above, generate a JSON response with this exact structure:
    - Use `"columns": ["Col1", "Col2"]` for composite keys
    - Confidence should reflect how certain you are (0-1 scale)
    - If a PK is already marked in the column list above, you may confirm it or propose a different one
+   - A UNIQUE index on non-null column(s) under "Existing Indexes" is strong evidence for those columns as the key
 6. **Foreign Keys**: **CRITICAL** - Use structured format for ALL foreign key relationships:
    - Include EVERY column that references another table
    - Use EXACT schema and table names from the "All Database Tables" list above
