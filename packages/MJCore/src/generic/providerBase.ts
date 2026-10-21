@@ -5391,11 +5391,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * customized adoption through CloneAllMetadata. Remove the CloneAllMetadata
      * override to activate a CreateSharedMetadataShell override.
      */
+    /**
+     * Builds this instance's AllMetadata as a zero-copy prototype-delegated shell over
+     * another provider's already-loaded metadata (`Object.create(shared)`), keeping
+     * `CurrentUser` as an own property on the shell instance.
+     *
+     * Why zero-copy prototype delegation is safe: the metadata graph (`AllMetadata` and its
+     * arrays) is treated as immutable after `Config`. Refreshes swap the entire `AllMetadata`
+     * reference via `UpdateLocalMetadata` rather than mutating the previous `AllMetadata`
+     * instance in place, so in-flight shells continue reading a consistent snapshot while
+     * avoiding 19 array shallow-copies on every per-request provider creation.
+     */
     protected CreateSharedMetadataShell(shared: AllMetadata): AllMetadata {
-        const shell = new AllMetadata();
-        for (const m of AllMetadataArrays) {
-            shell[m.key] = [...(shared[m.key] ?? [])];
-        }
+        const shell = Object.create(shared) as AllMetadata;
         shell.CurrentUser = this.CurrentUser; // same semantics the deep clone had — per-instance, not shared
         return shell;
     }
@@ -5403,7 +5411,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Adopts the global provider's metadata for this instance without reloading it
      * from the server: shares the (immutable post-Config) metadata arrays by
-     * reference via {@link CreateSharedMetadataShell} and builds this instance's
+     * reference via {@link CreateSharedMetadataShell} and shares or builds this instance's
      * entity lookup maps.
      */
     protected CopyMetadataFromGlobalProvider(): boolean {
@@ -5412,7 +5420,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // registered-but-not-yet-configured global would otherwise donate an empty graph
             // and this Config would "succeed" with zero entities. Falling through to the
             // normal load path is the correct behavior in that case.
-            const globalMetadata = Metadata.Provider !== this ? Metadata.Provider?.AllMetadata : undefined; // global-provider-ok: this method adopts metadata FROM the global provider on bootstrap
+            const globalProvider = Metadata.Provider !== this ? Metadata.Provider : undefined; // global-provider-ok: this method adopts metadata FROM the global provider on bootstrap
+            const globalMetadata = globalProvider?.AllMetadata;
             if ((globalMetadata?.AllEntities?.length ?? 0) > 0) {
                 // Back-compat: before #3083 this path called the overridable CloneAllMetadata,
                 // so external subclasses could customize adoption (e.g. tenant-filtered deep
@@ -5422,7 +5431,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const adopted = subclassOverridesClone
                     ? this.CloneAllMetadata(globalMetadata)
                     : this.CreateSharedMetadataShell(globalMetadata);
-                this.UpdateLocalMetadata(adopted);
+                if (
+                    !subclassOverridesClone &&
+                    globalProvider instanceof ProviderBase &&
+                    adopted.AllEntities === globalMetadata.AllEntities &&
+                    globalProvider._entityMapByName.size > 0
+                ) {
+                    this._localMetadata = adopted;
+                    this._entityMapByName = globalProvider._entityMapByName;
+                    this._entityMapByID = globalProvider._entityMapByID;
+                } else {
+                    this.UpdateLocalMetadata(adopted);
+                }
                 return true;
             }
             return false;
@@ -6609,18 +6629,22 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /**
      * Rebuilds the O(1) entity lookup Maps from the current AllEntities array.
+     * Allocates fresh Map instances so any per-request provider sharing a previous
+     * snapshot's maps is unaffected by a subsequent refresh.
      * Called automatically from UpdateLocalMetadata().
      */
     protected RebuildEntityMaps(): void {
         const entities = this._localMetadata?.AllEntities;
-        this._entityMapByName.clear();
-        this._entityMapByID.clear();
+        const byName = new Map<string, EntityInfo>();
+        const byID = new Map<string, EntityInfo>();
         if (entities) {
             for (const e of entities) {
-                this._entityMapByName.set(e.Name.trim().toLowerCase(), e);
-                this._entityMapByID.set(NormalizeUUID(e.ID), e);
+                byName.set(e.Name.trim().toLowerCase(), e);
+                byID.set(NormalizeUUID(e.ID), e);
             }
         }
+        this._entityMapByName = byName;
+        this._entityMapByID = byID;
     }
 
     /**

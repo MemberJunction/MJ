@@ -829,6 +829,14 @@ For the warm-load smart-cache-check flow this matters a lot — the client reads
 
 For the full architecture — differential updates, Redis cross-server sync, session-based deduplication, and deployment topologies — see the [**Caching & Pub/Sub Guide**](../../guides/CACHING_AND_PUBSUB_GUIDE.md).
 
+### Sequenced Cache Invalidation & Delta Catch-Up
+
+`GraphQLDataProvider` tracks the server's monotonically increasing cache invalidation sequence number (`LastCacheInvalidationSequence` and `LastCacheServerProcessId`) delivered via both:
+- `X-MJ-Cache-Seq` and `X-MJ-Server-ID` HTTP response headers on GraphQL requests (`ProcessServerCacheSequenceHeader`), and
+- the `Sequence` field on `CacheInvalidation` WebSocket subscription events.
+
+When the client detects a sequence gap on the same server process (e.g., after a momentary WebSocket disconnect or background tab wake-up), it automatically calls `CatchUpCacheInvalidations(sinceSequence)` against the server's `GetCacheInvalidationsSince` query to replay missed invalidations in order without requiring a full cache flush. See the [**Server Scaling and Broadcast Architecture Guide**](../../guides/SERVER_SCALING_AND_BROADCAST_ARCHITECTURE.md).
+
 ## Dependencies
 
 - `@memberjunction/core` - Core MemberJunction functionality

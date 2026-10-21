@@ -415,6 +415,8 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     this._inkItems = ink;
     this._connectorItems = connectors;
     this._highlightItems = highlights;
+    this._minimapItemsCache = null;
+    this._contentBoundsCacheComputed = false;
   }
 
   ngOnDestroy(): void {
@@ -429,6 +431,10 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     if (this.widgetMessageListenerAttached) {
       window.removeEventListener('message', this.onWindowMessage);
       this.widgetMessageListenerAttached = false;
+    }
+    if (this.canvasResizeObserver) {
+      this.canvasResizeObserver.disconnect();
+      this.canvasResizeObserver = null;
     }
   }
 
@@ -1665,19 +1671,30 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     this.ContextMenu = null;
   }
 
+  private _minimapItemsCache: { X: number; Y: number; W: number; H: number; Agent: boolean }[] | null = null;
+  private _contentBoundsCache: WhiteboardBounds | null = null;
+  private _contentBoundsCacheComputed = false;
+
   // minimap render model
   public get MinimapViewBox(): string {
     const world = this.minimapWorld();
     return `${world.X} ${world.Y} ${world.W} ${world.H}`;
   }
 
+  /**
+   * Precomputed minimap item bounds, invalidated when `State.Changed$` fires (via `recomputeRenderBuckets`)
+   * so 60fps pointer-move pan/zoom passes do not recompute `State.Items` or `ItemBounds` across all shapes.
+   */
   public get MinimapItems(): { X: number; Y: number; W: number; H: number; Agent: boolean }[] {
-    return this.State.Items
-      .filter((i) => i.Kind !== 'highlight')
-      .map((i) => {
-        const b = this.State.ItemBounds(i);
-        return { X: b.X, Y: b.Y, W: Math.max(b.W, 8), H: Math.max(b.H, 8), Agent: i.Author === 'agent' };
-      });
+    if (this._minimapItemsCache === null) {
+      this._minimapItemsCache = this.State.Items
+        .filter((i) => i.Kind !== 'highlight')
+        .map((i) => {
+          const b = this.State.ItemBounds(i);
+          return { X: b.X, Y: b.Y, W: Math.max(b.W, 8), H: Math.max(b.H, 8), Agent: i.Author === 'agent' };
+        });
+    }
+    return this._minimapItemsCache;
   }
 
   public get MinimapViewport(): WhiteboardBounds {
@@ -1687,8 +1704,16 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
     return { X: -this.PanX / this.Zoom, Y: -this.PanY / this.Zoom, W: w / this.Zoom, H: h / this.Zoom };
   }
 
+  private getCachedContentBounds(): WhiteboardBounds | null {
+    if (!this._contentBoundsCacheComputed) {
+      this._contentBoundsCache = this.State.ContentBounds();
+      this._contentBoundsCacheComputed = true;
+    }
+    return this._contentBoundsCache;
+  }
+
   private minimapWorld(): WhiteboardBounds {
-    const content = this.State.ContentBounds();
+    const content = this.getCachedContentBounds();
     const vp = this.MinimapViewport;
     const minX = Math.min(content?.X ?? vp.X, vp.X) - 40;
     const minY = Math.min(content?.Y ?? vp.Y, vp.Y) - 40;
