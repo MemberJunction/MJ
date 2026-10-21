@@ -28,6 +28,15 @@ export abstract class BaseArchiveDriver {
     }
 
     /**
+     * Whether this driver can run when StorageMode is 'Purge', where the context has no
+     * storage driver and no copy is kept. False by default. `DefaultArchiveDriver` returns
+     * true, and its subclasses inherit that unless they override it.
+     */
+    public get SupportsPurge(): boolean {
+        return false;
+    }
+
+    /**
      * Determines whether a given record should be archived based on its current field values.
      * @param context - The archive context including record, field config, etc.
      * @returns True if the record should be archived, false to skip it
@@ -35,8 +44,10 @@ export abstract class BaseArchiveDriver {
     public abstract ShouldArchiveRecord(context: ArchiveRecordContext): boolean;
 
     /**
-     * Archives a single record: writes the archive document to storage and
-     * optionally nullifies the archived fields on the source record.
+     * Archives a single record and applies the configured mode to the source record.
+     * On a Store run `context.StorageDriver` is set, and the driver writes the archive
+     * document before it applies the mode. On a Purge run `context.StorageDriver` is null,
+     * and the driver must write nothing and only apply the mode.
      * @param context - The archive context including record, storage driver, etc.
      * @returns Result indicating success/failure and storage details
      */

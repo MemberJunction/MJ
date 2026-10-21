@@ -11,6 +11,10 @@ on:
       - 'packages/Standards/**'
       - '.github/workflows/ci-standards.yml'
 
+# Least-privilege token: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   standards:
     name: adopted standards

@@ -28,9 +28,10 @@ export class MJAIAgentExampleEntityServer extends MJAIAgentExampleEntity {
             const shouldGenerateEmbedding = !this.IsSaved || inputField.Dirty;
 
             if (shouldGenerateEmbedding && this.ExampleInput && this.ExampleInput.trim().length > 0) {
-                await this.GenerateEmbeddingByFieldName("ExampleInput", "EmbeddingVector", "EmbeddingModelID");
+                await this.GenerateEmbeddingByFieldName("ExampleInput", "EmbeddingVector", "EmbeddingModelID", "EmbeddingVectorBinary");
             } else if (!this.ExampleInput || this.ExampleInput.trim().length === 0) {
                 this.EmbeddingVector = null;
+                this.EmbeddingVectorBinary = null;
                 this.EmbeddingModelID = null;
             }
 
@@ -42,7 +43,7 @@ export class MJAIAgentExampleEntityServer extends MJAIAgentExampleEntity {
             //    AIEngine is registered as deferred — EnsureLoaded blocks until the
             //    background load completes so the underlying vector service exists.
             await AIEngine.Instance.EnsureLoaded();
-            if (this.Status === 'Active' && this.EmbeddingVector) {
+            if (this.Status === 'Active' && (this.EmbeddingVectorBinary || this.EmbeddingVector)) {
                 AIEngine.Instance.AddOrUpdateSingleExampleEmbedding(this);
             } else {
                 AIEngine.Instance.RemoveSingleExampleEmbedding(this.ID);

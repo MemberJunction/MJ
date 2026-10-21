@@ -1,5 +1,138 @@
 # @memberjunction/db-auto-doc
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- df30e5c: DBAutoDoc gets a plugin system, and its first built-in plugin, the Index Advisor, which proposes missing indexes and exports them as a SQL migration.
+  - **Plugins.** A plugin is a class registered with `@RegisterClass(BaseAutoDocPlugin, '<Name>')` and enabled in the new `plugins` config section. External plugins load at startup from an npm package or file path (`Module`). Hooks run at six points of an analysis (`OnPreRun`, `OnAfterIntrospection`, `OnAfterDiscovery`, `OnAfterDescriptions`, `OnAfterPruning`, `OnPostRun`, the last with the database connection still open), in `Priority` order. A hook that throws is logged and recorded, and the run continues. Each plugin keeps its run history and data in `state.plugins.<Name>`. Built-in plugins run by default and can be turned off with `Enabled: false`. An unregistered plugin name fails the run at startup. With no plugins enabled, runs write the same state files as before.
+  - **Plugin export formats.** `db-auto-doc export --format <name>` (repeatable) runs a plugin's exporter; `--list-formats` lists them, `--provider` overrides the platform, and `--file-prefix` overrides a format's file-name prefix.
+  - **Index Advisor (built-in, on by default).** At the end of a run it reads existing indexes on every analyzed schema (new `GetIndexes(schemaName)` on the SQL Server, PostgreSQL and MySQL drivers). It proposes indexes for foreign keys with no index starting with them (declared, or discovered and confirmed at `KeyMinConfidence`, default 90) and for confirmed discovered primary keys. It skips tables under `MinRowCount` (default 1000) and poor leading keys. It flags redundant indexes (report only, never dropped). An LLM review (`LLMReview`, default on; up to `MaxLLMTables` tables, default 40; model override key `indexAdvisor`) can keep, drop, modify or add proposals, using column statistics, descriptions, existing indexes and sample queries. The model returns structured decisions, never SQL, and every change is validated. The advisor never changes the database.
+  - **Index migration export.** `export --format index-migration` writes `V<yyyyMMddHHmm>__dbautodoc_indexes.sql`:
+    - SQL Server: `CREATE NONCLUSTERED INDEX`, guarded by `IF NOT EXISTS`.
+    - PostgreSQL: `CREATE INDEX CONCURRENTLY IF NOT EXISTS` by default, plus a Flyway `.sql.conf` with `executeInTransaction=false`. Skyway 0.6.x runs every migration in a transaction, so apply a CONCURRENTLY migration with `psql` or Flyway, or set `Concurrently: false`.
+    - MySQL: `CREATE INDEX`.
+    - PostgreSQL index names always end in a hash of the exact table and columns, because PostgreSQL requires index names to be unique per schema and the readable part can collide (`Order.Line_ID` and `Order_Line.ID`).
+    - Each index's reason is written on one comment line, so multi-line text from the LLM or a column name can't end the comment and run as SQL.
+  - **State file.** `state.database.provider` now records the platform a run connected to (absent in older state files).
+  - **Fix: MySQL login.** The MySQL driver overrode `mysql_native_password` and `caching_sha2_password` with handlers that sent an empty password, so every password-protected MySQL 8 connection failed ("using password: NO"). The override is removed; `mysql2` handles both methods itself.
+  - **Default model.** New configs (`init`, and the built-in default) use `gemini-3.8-flash`, replacing `gemini-3-flash-preview`. Existing config files keep the model they name.
+
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [1da00cb]
+- Updated dependencies [b699a37]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [91be34f]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [c0ebd97]
+- Updated dependencies [7dc604e]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [22c9074]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [6c8798b]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [bea2386]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [513e608]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [2ceedb4]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [369e229]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes

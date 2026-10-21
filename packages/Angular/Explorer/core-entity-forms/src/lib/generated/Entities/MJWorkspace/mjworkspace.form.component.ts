@@ -16,7 +16,6 @@ export class MJWorkspaceFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'workspaceIdentification', sectionName: 'Workspace Identification', isExpanded: true },
             { sectionKey: 'workspaceDetails', sectionName: 'Workspace Details', isExpanded: true },
             { sectionKey: 'administrativeInfo', sectionName: 'Administrative Info', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },

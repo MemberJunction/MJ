@@ -204,6 +204,14 @@ const mockPrompts = [
   },
 ];
 
+// Vector index fixtures — shared by the AIEngine mock (which owns the Vector Indexes cache) and the
+// KnowledgeHubMetadataEngine mock (whose VectorIndexes getter proxies it). Hoisted so both factories see one array.
+const { mockVectorIndexes } = vi.hoisted(() => ({
+  mockVectorIndexes: [
+    { ID: 'idx-1', Name: 'test-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1', Dimensions: null },
+  ] as Array<{ ID: string; Name: string; VectorDatabaseID: string; EmbeddingModelID: string; Dimensions?: number | null; ExternalID?: string | null }>,
+}));
+
 vi.mock('@memberjunction/aiengine', () => ({
   AIEngine: class MockAIEngine {
     static getInstance() {
@@ -215,6 +223,10 @@ vi.mock('@memberjunction/aiengine', () => ({
         Models: mockModels,
         Prompts: mockPrompts,
         VectorDatabases: [{ ID: 'vdb-1', Name: 'Pinecone', ClassKey: 'PineconeDB' }],
+        VectorIndexes: mockVectorIndexes,
+        GetVectorIndexByID: (id: string) => mockVectorIndexes.find(v => v.ID === id),
+        // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+        GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
       };
     }
     Config = vi.fn().mockResolvedValue(undefined);
@@ -235,15 +247,6 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
   // MJAICredentialBindingEntity, pulled in via BaseAIEngine) always exist —
   // otherwise adding any new core-entities export breaks this mock's load.
   const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
-  const mockVectorIndexes: Array<{
-    ID: string;
-    Name: string;
-    VectorDatabaseID: string;
-    EmbeddingModelID: string;
-    Dimensions?: number | null;
-  }> = [
-    { ID: 'idx-1', Name: 'test-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1', Dimensions: null },
-  ];
   const mockKHInstance = {
     ContentSources: [],
     ContentTypes: [],
@@ -656,6 +659,37 @@ describe('AutotagBaseEngine', () => {
 
       // Should not throw
       await expect(engine.saveLLMResults(results, mockUser)).resolves.not.toThrow();
+    });
+  });
+
+  // On the server a cached RunView widens Fields to every column (DocumentText, VectorJSON) so its slot
+  // can serve any field set. A lookup by ERD ID is single-use, so it bypasses the cache.
+  describe('createTaggedItemFromContentItemTag — Entity Record Documents lookup', () => {
+    it('reads EntityID and RecordID by ERD ID, bypassing the RunView cache', async () => {
+      const calls: Array<Record<string, unknown>> = [];
+      mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
+        calls.push(params);
+        if (params.EntityName === 'MJ: Content Items') {
+          return { Success: true, Results: [{ ID: 'ci-1', EntityRecordDocumentID: 'erd-1', ContentSourceID: 'src-1' }] };
+        }
+        if (params.EntityName === 'MJ: Entity Record Documents') {
+          return { Success: true, Results: [{ EntityID: 'ent-1', RecordID: 'rec-1' }] };
+        }
+        return { Success: true, Results: [] };
+      });
+      const contentItemTag = { ItemID: 'ci-1', Tag: 'Technology', Weight: 0.9 };
+
+      await engine['createTaggedItemFromContentItemTag'](contentItemTag as never, 'tag-1', { ID: 'user-1' } as never);
+
+      const erdCall = calls.find((c) => c.EntityName === 'MJ: Entity Record Documents');
+      expect(erdCall).toMatchObject({
+        ExtraFilter: "ID='erd-1'",
+        Fields: ['EntityID', 'RecordID'],
+        MaxRows: 1,
+        BypassCache: true,
+      });
+      const taggedItemCheck = calls.find((c) => c.EntityName === 'MJ: Tagged Items');
+      expect(taggedItemCheck?.ExtraFilter).toBe("TagID='tag-1' AND EntityID='ent-1' AND RecordID='rec-1'");
     });
   });
 

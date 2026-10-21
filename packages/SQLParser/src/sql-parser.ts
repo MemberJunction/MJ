@@ -16,9 +16,12 @@
 import NodeSqlParser from 'node-sql-parser';
 const { Parser } = NodeSqlParser;
 import { MJLexer } from './mj-lexer.js';
+import { ReplaceVariableInTag, VARIABLE_READING_TAGS } from './templateTagVariables.js';
 import { MJPlaceholderSubstitution } from './mj-placeholder.js';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
+import { PostgreSQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
 import { GetASTDialectAdapter, type ASTDialectAdapter, type RowCapInfo } from './ASTDialectAdapter.js';
+import { IsKeyword, LexSQL, SignificantTokens } from './sqlLexer.js';
 import {
     MJToken,
     MJTemplateExpr,
@@ -58,6 +61,27 @@ export interface MJAstifyResult {
     /** The SQL dialect used */
     dialect: string;
 }
+
+/** Lexing rules for FOR XML, which only SQL Server has. */
+const SQL_SERVER_LEXING: SQLParserDialect = new SQLServerDialect();
+
+/** Lexing rules for PostgreSQL fallback token scans. */
+const POSTGRES_LEXING: SQLParserDialect = new PostgreSQLDialect();
+
+/**
+ * Standard SQL niladic user functions written without parentheses in T-SQL and PostgreSQL
+ * (`SELECT CURRENT_USER`, `SELECT SESSION_USER`, `SELECT SYSTEM_USER`). node-sql-parser's
+ * T-SQL and PostgreSQL grammars require `()` on these three keywords even though the
+ * databases themselves reject `()`.
+ */
+const NILADIC_USER_FUNCTIONS: ReadonlySet<string> = new Set([
+    'CURRENT_USER',
+    'SESSION_USER',
+    'SYSTEM_USER',
+]);
+
+/** The FOR XML modes node-sql-parser knows. */
+const FOR_XML_DIRECTIVES = ['PATH', 'RAW', 'AUTO', 'EXPLICIT'];
 
 /** A table/view reference extracted from SQL */
 export interface SQLTableReference {
@@ -195,8 +219,8 @@ export class SQLParser {
      *
      * On a direct-parse failure, applies preprocessing fallbacks — splitting a
      * trailing `OPTION (...)` clause and aliasing bracket-quoted identifiers
-     * whose interior contains parser-defeating characters (`[Active People]`,
-     * `[my-cte]`) — so a wider class of SQL becomes AST-addressable. {@link ToSQL}
+     * (`[Active People]`, `[my-cte]`, bracket-quoted CTE names) — so a wider
+     * class of SQL becomes AST-addressable. {@link ToSQL}
      * transparently restores both transforms.
      *
      * Never throws on unparseable SQL — check {@link IsValid}.
@@ -232,9 +256,33 @@ export class SQLParser {
         return this._ast;
     }
 
+    /**
+     * The bracket identifiers the fallback parse renamed, as the name in {@link AST} mapped to the
+     * original bracketed text (for example `[My CTE]`). Null when the direct parse succeeded, so
+     * every identifier in the tree is as written. A name in this map is in the tree only where the
+     * fallback put it: no such name occurs in the SQL, and none runs into the text next to it.
+     */
+    get IdentifierAliases(): ReadonlyMap<string, string> | null {
+        return this._aliasMap;
+    }
+
+    /**
+     * True when `name` has the form of a name the fallback parse gives a renamed bracket
+     * identifier ({@link IdentifierAliases}), ignoring case: `_mjid_<n>`, or `_mjid<k>_<n>` when
+     * the SQL already contains `_mjid_`.
+     */
+    static IsIdentifierAliasName(name: string): boolean {
+        return SQLParser.ALIAS_NAME.test(name);
+    }
+
     /** The dialect supplied at construction. */
     get Dialect(): SQLParserDialect {
         return this._dialect;
+    }
+
+    /** The SQL supplied at construction, as written. */
+    get SQL(): string {
+        return this._sql;
     }
 
     /**
@@ -477,78 +525,21 @@ export class SQLParser {
     }
 
     /**
-     * Token-aware scan for SQL clauses that cannot legally appear inside a
-     * derived table — wrapping a query that contains one of these in
-     * `SELECT ... FROM (<sql>) AS t` would produce invalid SQL.
+     * Whether the statement ends in a clause that cannot legally appear inside a derived table,
+     * so wrapping it in `SELECT ... FROM (<sql>) AS t` would produce invalid SQL:
+     *   - `FOR JSON …` / `FOR XML …` at the top level
+     *   - a trailing query-hint clause ({@link SQLParserDialect.QueryHintKeyword}, `OPTION (…)` on SQL Server)
      *
-     * Detects (case-insensitive, outside string literals and quoted
-     * identifiers):
-     *   - `FOR JSON …`
-     *   - `FOR XML …`
-     *   - `OPTION (…)`
-     *
-     * The dialect determines which identifier quoting styles are recognized
-     * (`[…]` for SQL Server, `` `…` `` for MySQL, `"…"` always).
+     * Only the top level of the statement counts. The same words inside a subquery (a correlated
+     * `(SELECT … FOR JSON PATH)` column), a string literal, a quoted identifier or a comment do
+     * not stop a wrap.
      */
     static HasUnwrappableTrailingClause(sql: string, dialect: SQLParserDialect): boolean {
-        const quoteSample = dialect.QuoteIdentifier('x');
-        const recognizeBrackets = quoteSample.startsWith('[');
-        const recognizeBackticks = quoteSample.startsWith('`');
-
-        const len = sql.length;
-        let i = 0;
-
-        const isWordChar = (ch: string): boolean =>
-            (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
-            (ch >= '0' && ch <= '9') || ch === '_';
-
-        const isWS = (ch: string): boolean =>
-            ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r';
-
-        const matchWord = (start: number, word: string): boolean => {
-            if (start + word.length > len) return false;
-            if (sql.substring(start, start + word.length).toUpperCase() !== word) return false;
-            const after = start + word.length;
-            return after === len || !isWordChar(sql[after]);
-        };
-
-        const skipQuoted = (close: string): void => {
-            i++;
-            while (i < len) {
-                if (sql[i] === close) {
-                    if (i + 1 < len && sql[i + 1] === close) { i += 2; continue; }
-                    i++; break;
-                }
-                i++;
-            }
-        };
-
-        while (i < len) {
-            const c = sql[i];
-
-            if (c === "'") { skipQuoted("'"); continue; }
-            if (recognizeBrackets && c === '[') { skipQuoted(']'); continue; }
-            if (c === '"') { skipQuoted('"'); continue; }
-            if (recognizeBackticks && c === '`') { skipQuoted('`'); continue; }
-
-            const prevIsWord = i > 0 && isWordChar(sql[i - 1]);
-            if (!prevIsWord) {
-                if (matchWord(i, 'FOR')) {
-                    let j = i + 3;
-                    while (j < len && isWS(sql[j])) j++;
-                    if (matchWord(j, 'JSON') || matchWord(j, 'XML')) return true;
-                }
-                if (matchWord(i, 'OPTION')) {
-                    let j = i + 6;
-                    while (j < len && isWS(sql[j])) j++;
-                    if (j < len && sql[j] === '(') return true;
-                }
-            }
-
-            i++;
-        }
-
-        return false;
+        const top = SignificantTokens(LexSQL(sql, dialect)).filter(t => t.Depth === 0);
+        const hintKeyword = dialect.QueryHintKeyword?.toUpperCase();
+        return top.some((t, i) =>
+            (IsKeyword(t, 'FOR') && (IsKeyword(top[i + 1], 'JSON') || IsKeyword(top[i + 1], 'XML'))) ||
+            (hintKeyword !== undefined && IsKeyword(t, hintKeyword) && top[i + 1]?.Kind === 'open'));
     }
 
     /**
@@ -557,6 +548,11 @@ export class SQLParser {
      * quoted identifiers, and comments). A single trailing semicolon — or a run
      * of them followed only by whitespace/comments — is allowed.
      *
+     * Reads the tokens {@link LexSQL} produces for the dialect, so every quoted
+     * form the database recognizes hides its contents: `[…]` identifiers on SQL
+     * Server, `E'…'` strings with backslash escapes and dollar-quoted strings on
+     * PostgreSQL, and nested block comments on both.
+     *
      * Unlike an AST check, this fires even when the trailing payload makes the
      * SQL unparseable (`SELECT 1; EXEC xp_cmdshell '…'`, `SELECT 1; WAITFOR
      * DELAY '…'`), which is exactly the stacked-injection class an AST scan
@@ -564,181 +560,34 @@ export class SQLParser {
      * read query must be a single statement, so any internal `;` is rejected.
      */
     static HasStackedStatements(sql: string, dialect: SQLParserDialect): boolean {
-        const quoteSample = dialect.QuoteIdentifier('x');
-        const recognizeBrackets = quoteSample.startsWith('[');
-        const recognizeBackticks = quoteSample.startsWith('`');
-        const n = sql.length;
-        let i = 0;
         let sawSemicolon = false;
-
-        while (i < n) {
-            const c = sql[i];
-
-            // line / block comments
-            if (c === '-' && i + 1 < n && sql[i + 1] === '-') {
-                while (i < n && sql[i] !== '\n') i++;
+        // A semicolon before any content (the `;WITH` idiom) separates nothing.
+        let sawContent = false;
+        for (const token of SignificantTokens(LexSQL(sql, dialect))) {
+            if (token.Kind === 'semicolon') {
+                if (sawContent) sawSemicolon = true;
                 continue;
             }
-            if (c === '/' && i + 1 < n && sql[i + 1] === '*') {
-                i += 2;
-                while (i < n && !(sql[i] === '*' && i + 1 < n && sql[i + 1] === '/')) i++;
-                if (i < n) i += 2;
-                continue;
-            }
-
-            // string literals + quoted identifiers (skip wholesale)
-            if (c === "'" || c === '"' ||
-                (recognizeBrackets && c === '[') ||
-                (recognizeBackticks && c === '`')) {
-                const close = c === '[' ? ']' : c;
-                i = SQLParser.skipQuotedFrom(sql, i, close);
-                continue;
-            }
-
-            if (c === ';') { sawSemicolon = true; i++; continue; }
-            if (c === ' ' || c === '\t' || c === '\n' || c === '\r') { i++; continue; }
-
-            // any other character is real statement content; if a top-level
-            // semicolon already appeared, this content is a second statement
+            // Real content after a separating semicolon is a second statement.
             if (sawSemicolon) return true;
-            i++;
+            sawContent = true;
         }
-
         return false;
     }
 
     /**
-     * Strip line and block comments from SQL, preserving content inside
-     * string literals and quoted identifiers. Block comments support nesting.
+     * Strip line and block comments from SQL, preserving content inside string literals and
+     * quoted identifiers. Block comments nest. A block comment is replaced by a space, so two
+     * tokens it separated with no whitespace stay apart; a line comment's ending newline is kept.
      *
-     * The dialect determines which identifier quoting styles are recognized:
-     * SQL Server uses `[…]`, PostgreSQL uses `"…"`, MySQL uses `` `…` ``.
-     * Double-quoted identifiers are honored on every dialect.
+     * The dialect determines which literal and identifier forms are recognized: SQL Server
+     * `[…]`, PostgreSQL `E'…'` and dollar-quoted strings (`$$…$$`, `$tag$…$tag$`), MySQL
+     * `` `…` ``. Double-quoted identifiers are honored on every dialect.
      */
     static StripComments(sql: string, dialect: SQLParserDialect): string {
-        const quoteSample = dialect.QuoteIdentifier('x');
-        const recognizeBrackets = quoteSample.startsWith('[');
-        const recognizeBackticks = quoteSample.startsWith('`');
-
-        let out = '';
-        let i = 0;
-        const n = sql.length;
-
-        while (i < n) {
-            const ch = sql[i];
-            const next = i + 1 < n ? sql[i + 1] : '';
-
-            if (ch === '-' && next === '-') {
-                while (i < n && sql[i] !== '\n') i++;
-                continue;
-            }
-
-            if (ch === '/' && next === '*') {
-                i += 2;
-                let depth = 1;
-                while (i < n && depth > 0) {
-                    if (i + 1 < n && sql[i] === '/' && sql[i + 1] === '*') {
-                        depth++;
-                        i += 2;
-                    } else if (i + 1 < n && sql[i] === '*' && sql[i + 1] === '/') {
-                        depth--;
-                        i += 2;
-                    } else {
-                        i++;
-                    }
-                }
-                continue;
-            }
-
-            if (ch === "'") {
-                out += ch;
-                i++;
-                while (i < n) {
-                    if (sql[i] === "'") {
-                        if (i + 1 < n && sql[i + 1] === "'") {
-                            out += "''";
-                            i += 2;
-                        } else {
-                            out += "'";
-                            i++;
-                            break;
-                        }
-                    } else {
-                        out += sql[i];
-                        i++;
-                    }
-                }
-                continue;
-            }
-
-            if (recognizeBrackets && ch === '[') {
-                out += ch;
-                i++;
-                while (i < n) {
-                    if (sql[i] === ']') {
-                        if (i + 1 < n && sql[i + 1] === ']') {
-                            out += ']]';
-                            i += 2;
-                        } else {
-                            out += ']';
-                            i++;
-                            break;
-                        }
-                    } else {
-                        out += sql[i];
-                        i++;
-                    }
-                }
-                continue;
-            }
-
-            if (ch === '"') {
-                out += ch;
-                i++;
-                while (i < n) {
-                    if (sql[i] === '"') {
-                        if (i + 1 < n && sql[i + 1] === '"') {
-                            out += '""';
-                            i += 2;
-                        } else {
-                            out += '"';
-                            i++;
-                            break;
-                        }
-                    } else {
-                        out += sql[i];
-                        i++;
-                    }
-                }
-                continue;
-            }
-
-            if (recognizeBackticks && ch === '`') {
-                out += ch;
-                i++;
-                while (i < n) {
-                    if (sql[i] === '`') {
-                        if (i + 1 < n && sql[i + 1] === '`') {
-                            out += '``';
-                            i += 2;
-                        } else {
-                            out += '`';
-                            i++;
-                            break;
-                        }
-                    } else {
-                        out += sql[i];
-                        i++;
-                    }
-                }
-                continue;
-            }
-
-            out += ch;
-            i++;
-        }
-
-        return out;
+        return LexSQL(sql, dialect)
+            .map(t => t.Kind !== 'comment' ? t.Text : t.Text.startsWith('/*') ? ' ' : '')
+            .join('');
     }
 
     /**
@@ -817,8 +666,7 @@ export class SQLParser {
 
         if (usedAST) {
             try {
-                const parser = new Parser();
-                const ast = parser.astify(cleanSQL, { database: parserDialect });
+                const ast = SQLParser.astifyChecked(cleanSQL, parserDialect);
                 const statements = Array.isArray(ast) ? ast : [ast];
                 for (const stmt of statements) {
                     SQLParser.walkASTForExtraction(stmt as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
@@ -890,8 +738,7 @@ export class SQLParser {
         const columnRefs = new Set<string>();
 
         try {
-            const parser = new Parser();
-            const ast = parser.astify(cleanSQL, { database: parserDialect });
+            const ast = SQLParser.astifyChecked(cleanSQL, parserDialect);
             const statements = Array.isArray(ast) ? ast : [ast];
             for (const statement of statements) {
                 SQLParser.walkASTForExtraction(statement as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
@@ -927,8 +774,7 @@ export class SQLParser {
         const cleanSQL = SQLParser.getCleanSQL(sql);
 
         try {
-            const parser = new Parser();
-            const ast = parser.astify(cleanSQL, { database: dialect.ParserDialect });
+            const ast = SQLParser.astifyChecked(cleanSQL, dialect.ParserDialect);
             const statements = Array.isArray(ast) ? ast : [ast];
             const columns: SQLSelectColumn[] = [];
 
@@ -1108,8 +954,9 @@ export class SQLParser {
     // ─── MJ Template Extraction ────────────────────────
 
     /**
-     * Renames a template variable in all `{{ variable | filters }}` expressions throughout the SQL.
-     * Preserves the filter chain and whitespace formatting.
+     * Renames a template variable throughout the SQL: in every `{{ variable | filters }}`
+     * expression, preserving the filter chain, and in every read of it inside `{% if %}`,
+     * `{% elif %}`, `{% for %}` and `{% set %}` tags.
      *
      * Example: `RenameTemplateVariable("WHERE x = {{ region | sqlString }}", "region", "userRegion")`
      *   → `"WHERE x = {{ userRegion | sqlString }}"`
@@ -1117,24 +964,9 @@ export class SQLParser {
      * Uses MJLexer for deterministic token identification — no regex guessing.
      */
     static RenameTemplateVariable(sql: string, oldName: string, newName: string): string {
-        const tokens = MJLexer.Tokenize(sql);
-        const oldNameLower = oldName.toLowerCase();
-
-        // Collect matching tokens in reverse order so positional replacements don't shift offsets
-        const matches = tokens
-            .filter(t =>
-                t.type === 'MJ_TEMPLATE_EXPR' &&
-                (t.parsed as MJTemplateExprContent).variable.toLowerCase() === oldNameLower
-            )
-            .sort((a, b) => b.start - a.start); // reverse order
-
-        let result = sql;
-        for (const token of matches) {
-            const rebuilt = SQLParser.rebuildTemplateExpr(newName, (token.parsed as MJTemplateExprContent).filters);
-            result = result.substring(0, token.start) + rebuilt + result.substring(token.end);
-        }
-
-        return result;
+        return SQLParser.replaceTemplateVariable(sql, oldName,
+            token => SQLParser.rebuildTemplateExpr(newName, (token.parsed as MJTemplateExprContent).filters),
+            newName);
     }
 
     /**
@@ -1145,25 +977,40 @@ export class SQLParser {
      * Example: `SubstituteTemplateVariable("WHERE x = {{ region | sqlString }}", "region", "'West'")`
      *   → `"WHERE x = 'West'"`
      *
+     * When `tagLiteral` is given, reads of the variable inside `{% if %}`, `{% elif %}`,
+     * `{% for %}` and `{% set %}` tags are replaced with it too, so conditions see the value.
+     * It must be a template-language literal (`"West"`, `42`), not a SQL one.
+     *
      * Uses MJLexer for deterministic token identification — no regex guessing.
      */
-    static SubstituteTemplateVariable(sql: string, variableName: string, literalValue: string): string {
-        const tokens = MJLexer.Tokenize(sql);
-        const varNameLower = variableName.toLowerCase();
+    static SubstituteTemplateVariable(sql: string, variableName: string, literalValue: string, tagLiteral?: string): string {
+        return SQLParser.replaceTemplateVariable(sql, variableName, () => literalValue, tagLiteral);
+    }
 
-        // Collect matching tokens in reverse order
-        const matches = tokens
-            .filter(t =>
-                t.type === 'MJ_TEMPLATE_EXPR' &&
-                (t.parsed as MJTemplateExprContent).variable.toLowerCase() === varNameLower
-            )
-            .sort((a, b) => b.start - a.start);
-
-        let result = sql;
-        for (const token of matches) {
-            result = result.substring(0, token.start) + literalValue + result.substring(token.end);
+    /**
+     * Replaces a variable's `{{ }}` expressions with `exprText(token)` and, when `tagText` is
+     * given, its reads inside block tags with `tagText`. Edits apply from the end of the SQL so
+     * earlier offsets stay valid.
+     */
+    private static replaceTemplateVariable(
+        sql: string,
+        variableName: string,
+        exprText: (token: MJToken) => string,
+        tagText: string | undefined
+    ): string {
+        const nameLower = variableName.toLowerCase();
+        const edits: Array<{ token: MJToken; text: string }> = [];
+        for (const token of MJLexer.Tokenize(sql)) {
+            if (token.type === 'MJ_TEMPLATE_EXPR' && (token.parsed as MJTemplateExprContent).variable.toLowerCase() === nameLower) {
+                edits.push({ token, text: exprText(token) });
+            } else if (tagText !== undefined && VARIABLE_READING_TAGS.has(token.type)) {
+                edits.push({ token, text: ReplaceVariableInTag(token.raw, variableName, tagText) });
+            }
         }
-
+        let result = sql;
+        for (const { token, text } of edits.sort((a, b) => b.token.start - a.token.start)) {
+            result = result.substring(0, token.start) + text + result.substring(token.end);
+        }
         return result;
     }
 
@@ -1377,15 +1224,23 @@ export class SQLParser {
                     const root = varName.split(/[.\s]/, 1)[0];
                     if (root.toLowerCase() === 'loop') break;
 
-                    if (!paramMap.has(varName)) {
+                    // A `default(…)` filter renders the expression without the parameter, so a use
+                    // with one does not make the parameter required; any use without one does.
+                    const defaultValue = SQLParser.extractDefaultValue(parsed.filters);
+                    const hasDefault = parsed.filters.some(f => f.name === 'default');
+                    const existing = paramMap.get(varName);
+                    if (!existing) {
                         paramMap.set(varName, {
                             name: varName,
                             type: SQLParser.inferTypeFromFilters(parsed.filters),
-                            isRequired: true,
-                            defaultValue: SQLParser.extractDefaultValue(parsed.filters),
+                            isRequired: !hasDefault,
+                            defaultValue,
                             filters: parsed.filters,
                             usageLocations: [],
                         });
+                    } else {
+                        if (!hasDefault) existing.isRequired = true;
+                        if (existing.defaultValue === null) existing.defaultValue = defaultValue;
                     }
 
                     paramMap.get(varName)!.usageLocations.push(token.raw);
@@ -1769,15 +1624,13 @@ export class SQLParser {
     }
     private static parseSQL(sql: string, dialect: string): NodeSqlParser.AST | NodeSqlParser.AST[] | null {
         try {
-            const parser = new Parser();
-            return parser.astify(sql, { database: dialect });
+            return SQLParser.astifyChecked(sql, dialect);
         } catch {
             // If direct parse fails, try with FOR XML workaround
             const forXmlResult = SQLParser.stripForXmlDirectives(sql);
             if (forXmlResult) {
                 try {
-                    const parser = new Parser();
-                    const ast = parser.astify(forXmlResult.cleanedSQL, { database: dialect });
+                    const ast = SQLParser.astifyChecked(forXmlResult.cleanedSQL, dialect);
                     // Restore the original FOR XML clause on the AST
                     SQLParser.restoreForXmlOnAST(ast, forXmlResult.originalForXml);
                     return ast;
@@ -1789,6 +1642,127 @@ export class SQLParser {
         }
     }
 
+    /**
+     * Parses with node-sql-parser and throws when the result is not a real reading of the SQL.
+     *
+     * The T-SQL grammar accepts some statements it cannot parse — notably a CTE with a
+     * bracket-quoted name, `WITH [x] AS (…) SELECT …` — as a run of bare `name = value`
+     * assignments (`WITH = [x]`, `AS = (…)`, `SELECT = …`). No real statement has that shape, so
+     * such a result is treated as a parse failure and callers take their fallback paths instead
+     * of reading a meaningless tree.
+     */
+    private static astifyChecked(sql: string, dialect: string): NodeSqlParser.AST | NodeSqlParser.AST[] {
+        try {
+            const ast = new Parser().astify(sql, { database: dialect });
+            if (SQLParser.isMisreadAsAssignments(ast)) {
+                throw new Error('SQLParser: the statement was read as variable assignments, not as SQL');
+            }
+            return ast;
+        } catch (err) {
+            const niladic = SQLParser.parenthesizeNiladicUserFunctions(sql, dialect);
+            if (niladic.rewrittenNames.size === 0) throw err;
+            const ast = new Parser().astify(niladic.rewritten, { database: dialect });
+            if (SQLParser.isMisreadAsAssignments(ast)) {
+                throw new Error('SQLParser: the statement was read as variable assignments, not as SQL');
+            }
+            SQLParser.stripNiladicUserFunctionArgs(ast, niladic.rewrittenNames);
+            return ast;
+        }
+    }
+
+    /**
+     * Rewrites bare `CURRENT_USER`, `SESSION_USER`, and `SYSTEM_USER` keywords (outside strings,
+     * comments, and quoted identifiers) to `CURRENT_USER()` / `SESSION_USER()` / `SYSTEM_USER()`
+     * so node-sql-parser's T-SQL and PostgreSQL grammars accept them. Qualified column references
+     * (`t.current_user`), aliases (`AS current_user`), and calls that already carry `()` are left
+     * untouched.
+     */
+    private static parenthesizeNiladicUserFunctions(
+        sql: string,
+        parserDialect: string,
+    ): { rewritten: string; rewrittenNames: Set<string> } {
+        const rewrittenNames = new Set<string>();
+        const lexDialect = /postgres/i.test(parserDialect) ? POSTGRES_LEXING : SQL_SERVER_LEXING;
+        const tokens = SignificantTokens(LexSQL(sql, lexDialect));
+        let out = '';
+        let cursor = 0;
+        for (let i = 0; i < tokens.length; i++) {
+            const t = tokens[i];
+            const upper = t.Kind === 'word' ? t.Text.toUpperCase() : '';
+            if (
+                upper &&
+                NILADIC_USER_FUNCTIONS.has(upper) &&
+                tokens[i - 1]?.Kind !== 'dot' &&
+                tokens[i + 1]?.Kind !== 'dot' &&
+                tokens[i + 1]?.Kind !== 'open' &&
+                !IsKeyword(tokens[i - 1], 'AS')
+            ) {
+                out += sql.substring(cursor, t.End) + '()';
+                cursor = t.End;
+                rewrittenNames.add(upper);
+            }
+        }
+        if (rewrittenNames.size === 0) return { rewritten: sql, rewrittenNames };
+        return { rewritten: out + sql.substring(cursor), rewrittenNames };
+    }
+
+    /**
+     * Removes empty `args` from `CURRENT_USER` / `SESSION_USER` / `SYSTEM_USER` function AST nodes
+     * produced by {@link parenthesizeNiladicUserFunctions}, matching the AST shape node-sql-parser
+     * produces for `CURRENT_TIMESTAMP` so `SqlifyAST` emits the standard niladic form without `()`.
+     */
+    private static stripNiladicUserFunctionArgs(node: unknown, rewrittenNames: ReadonlySet<string>): void {
+        if (!node || typeof node !== 'object') return;
+        if (Array.isArray(node)) {
+            for (const item of node) SQLParser.stripNiladicUserFunctionArgs(item, rewrittenNames);
+            return;
+        }
+        const obj = node as Record<string, unknown>;
+        if (obj.type === 'function') {
+            const fnName = SQLParser.extractFunctionNodeName(obj);
+            const args = obj.args as { value?: unknown } | null | undefined;
+            if (
+                fnName &&
+                rewrittenNames.has(fnName.toUpperCase()) &&
+                args &&
+                Array.isArray(args.value) &&
+                args.value.length === 0
+            ) {
+                delete obj.args;
+            }
+        }
+        for (const value of Object.values(obj)) {
+            SQLParser.stripNiladicUserFunctionArgs(value, rewrittenNames);
+        }
+    }
+
+    /** Extracts the simple function name from a node-sql-parser `function` AST node. */
+    private static extractFunctionNodeName(fnNode: Record<string, unknown>): string | null {
+        const rawName = fnNode.name;
+        if (typeof rawName === 'string') return rawName;
+        if (rawName && typeof rawName === 'object') {
+            const inner = (rawName as Record<string, unknown>).name;
+            if (typeof inner === 'string') return inner;
+            if (Array.isArray(inner) && inner.length === 1) {
+                const first = inner[0];
+                if (typeof first === 'string') return first;
+                if (first && typeof first === 'object' && typeof (first as Record<string, unknown>).value === 'string') {
+                    return (first as Record<string, unknown>).value as string;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Whether any top-level node is a bare assignment wrapper rather than a statement. */
+    private static isMisreadAsAssignments(ast: NodeSqlParser.AST | NodeSqlParser.AST[]): boolean {
+        const statements = Array.isArray(ast) ? ast : [ast];
+        return statements.some(statement => {
+            const node = statement as unknown as { type?: unknown; stmt?: { type?: unknown } } | null;
+            return !node || (typeof node.type !== 'string' && node.stmt?.type === 'assign');
+        });
+    }
+
     // ═══════════════════════════════════════════════════
     // Private: Parse Preprocessing (fallback + restoration)
     // ═══════════════════════════════════════════════════
@@ -1797,8 +1771,8 @@ export class SQLParser {
      * Last-resort parse used when a direct parse fails. Rewrites SQL into a
      * form node-sql-parser accepts:
      *   1. Split a trailing `OPTION (...)` query hint (SQL Server).
-     *   2. Alias bracket-quoted identifiers whose interior contains
-     *      parser-defeating characters (`[Active People]`, `[my-cte]`).
+     *   2. Alias bracket-quoted identifiers (`[Active People]`, `[my-cte]`,
+     *      bracket-quoted CTE names).
      *
      * Returns the AST plus the data needed to restore the original SQL on
      * {@link ToSQL}. `ast` is `null` when even the rewritten SQL is unparseable
@@ -1838,86 +1812,61 @@ export class SQLParser {
     }
 
     /**
-     * Token-aware scan for a trailing `OPTION (...)` query hint at the
-     * outermost level (outside string literals, quoted identifiers, and
-     * comments). Returns the SQL without the clause plus the clause text, or
-     * `null` when there is no trailing OPTION.
+     * Finds a trailing query-hint clause (the dialect's {@link SQLParserDialect.QueryHintKeyword},
+     * `OPTION (...)` on SQL Server) at the top level of the statement, outside string literals,
+     * quoted identifiers and comments. Returns the SQL without the clause plus the clause text, or
+     * `null` when the dialect has no hint clause or the statement does not end in one (only a
+     * semicolon may follow it).
      */
     private static splitTrailingOption(
         sql: string,
         dialect: SQLParserDialect,
     ): { sqlWithoutOption: string; optionClause: string } | null {
-        const quoteSample = dialect.QuoteIdentifier('x');
-        const recognizeBrackets = quoteSample.startsWith('[');
-        const recognizeBackticks = quoteSample.startsWith('`');
-        const n = sql.length;
-        const isWordChar = (ch: string): boolean =>
-            (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
-            (ch >= '0' && ch <= '9') || ch === '_';
-
-        let i = 0;
-        let optionStart = -1;
-        while (i < n) {
-            const ch = sql[i];
-            if (ch === "'") { i = SQLParser.skipQuotedFrom(sql, i, "'"); continue; }
-            if (ch === '"') { i = SQLParser.skipQuotedFrom(sql, i, '"'); continue; }
-            if (recognizeBrackets && ch === '[') { i = SQLParser.skipQuotedFrom(sql, i, ']'); continue; }
-            if (recognizeBackticks && ch === '`') { i = SQLParser.skipQuotedFrom(sql, i, '`'); continue; }
-            if (ch === '-' && i + 1 < n && sql[i + 1] === '-') { while (i < n && sql[i] !== '\n') i++; continue; }
-            if (ch === '/' && i + 1 < n && sql[i + 1] === '*') {
-                i += 2;
-                while (i < n && !(sql[i] === '*' && i + 1 < n && sql[i + 1] === '/')) i++;
-                if (i < n) i += 2;
-                continue;
-            }
-
-            const prevIsWord = i > 0 && isWordChar(sql[i - 1]);
-            if (!prevIsWord && i + 6 <= n && sql.substring(i, i + 6).toUpperCase() === 'OPTION' &&
-                (i + 6 === n || !isWordChar(sql[i + 6]))) {
-                let j = i + 6;
-                while (j < n && /\s/.test(sql[j])) j++;
-                if (j < n && sql[j] === '(') {
-                    optionStart = i; // remember the last top-level OPTION (
-                    i = j;
-                    continue;
-                }
-            }
-            i++;
+        const keyword = dialect.QueryHintKeyword?.toUpperCase();
+        if (!keyword) return null;
+        const tokens = SignificantTokens(LexSQL(sql, dialect));
+        let open = -1;
+        for (let i = 0; i < tokens.length - 1; i++) {
+            if (tokens[i].Depth === 0 && IsKeyword(tokens[i], keyword) && tokens[i + 1].Kind === 'open') open = i;
         }
-
-        if (optionStart === -1) return null;
-
-        // Match the balanced paren group following OPTION.
-        let k = optionStart + 6;
-        while (k < n && /\s/.test(sql[k])) k++;
-        let depth = 0;
-        for (; k < n; k++) {
-            const ch = sql[k];
-            if (ch === "'") { k = SQLParser.skipQuotedFrom(sql, k, "'") - 1; continue; }
-            if (ch === '(') depth++;
-            else if (ch === ')') { depth--; if (depth === 0) { k++; break; } }
-        }
-        if (depth !== 0) return null; // unbalanced — leave alone
-
-        const rest = sql.substring(k).trim();
-        if (rest !== '' && rest !== ';') return null; // not a trailing OPTION
-
+        if (open === -1) return null;
+        const close = tokens.findIndex((t, k) => k > open + 1 && t.Kind === 'close' && t.Depth === 0);
+        if (close === -1) return null; // unbalanced — leave alone
+        if (tokens.slice(close + 1).some(t => t.Kind !== 'semicolon')) return null; // not trailing
         return {
-            sqlWithoutOption: sql.substring(0, optionStart).trimEnd(),
-            optionClause: sql.substring(optionStart, k).trim(),
+            sqlWithoutOption: sql.substring(0, tokens[open].Start).trimEnd(),
+            optionClause: sql.substring(tokens[open].Start, tokens[close].End).trim(),
         };
     }
 
+    /** The start of every alias name the fallback gives a bracket identifier. */
+    private static readonly BRACKET_ALIAS_STEM = '_mjid';
+
+    /** Every alias name {@link aliasPrefixFor} and {@link aliasBracketIdentifiers} can produce. */
+    private static readonly ALIAS_NAME = /^_mjid\d*_\d+$/i;
+
     /**
-     * Token-aware scan that aliases bracket-quoted identifiers whose interior
-     * contains characters node-sql-parser can't handle (`[Active People]`,
-     * `[my-cte]`, `[dbo.table]`). Aliases are stable, collision-safe tokens
-     * (`_mjid_<seq>`). Applies only to bracket-quoting dialects (SQL Server).
+     * An alias prefix in lower-case text, with its digits captured. The lookahead leaves the
+     * closing `_` unread, so a prefix that starts on that `_` is found too (`_mjid_mjid1_`).
+     */
+    private static readonly ALIAS_PREFIX_IN_TEXT = /_mjid(\d*)(?=_)/g;
+
+    /** A character that would join an alias written next to it into one longer name. */
+    private static readonly NAME_CHAR = /[\w@#$\u0080-\uffff]/;
+
+    /**
+     * Token-aware scan that aliases every bracket-quoted identifier. node-sql-parser
+     * cannot handle brackets around some identifiers at all — interiors with spaces
+     * or punctuation (`[Active People]`, `[my-cte]`, `[dbo.table]`), and CTE names of
+     * any kind (`WITH [x] AS …`). Applies only to bracket-quoting dialects (SQL Server).
+     *
+     * Each alias is `<prefix><seq>`, with a prefix that does not occur in the SQL
+     * ({@link aliasPrefixFor}). A space keeps an alias apart from a name character or
+     * bracket written right next to the brackets, as SQL Server keeps them apart. So
+     * an alias name appears in the rewritten SQL only where this scan put it.
      *
      * Returns the rewritten SQL plus a forward map (original interior → alias).
      */
-    private static readonly BRACKET_ALIAS_PREFIX = '_mjid_';
-
     private static aliasBracketIdentifiers(
         sql: string,
         dialect: SQLParserDialect,
@@ -1925,6 +1874,7 @@ export class SQLParser {
         const forward = new Map<string, string>();
         if (!dialect.QuoteIdentifier('x').startsWith('[')) return { rewritten: sql, forward };
 
+        const prefix = SQLParser.aliasPrefixFor(sql);
         const n = sql.length;
         let out = '';
         let i = 0;
@@ -1959,13 +1909,17 @@ export class SQLParser {
                     }
                     interior += sql[j]; j++;
                 }
-                if (interior.length > 0 && /[^A-Za-z0-9_]/.test(interior)) {
+                if (interior.length > 0) {
                     let alias = forward.get(interior);
-                    if (!alias) { alias = `${SQLParser.BRACKET_ALIAS_PREFIX}${seq++}`; forward.set(interior, alias); }
+                    if (!alias) { alias = `${prefix}${seq++}`; forward.set(interior, alias); }
                     // Emit a BARE identifier — node-sql-parser rejects bracket-quoted
                     // CTE names entirely, so the alias must be unbracketed. sqlify
                     // re-quotes it ([_mjid_0]); restoreAliases handles every form.
-                    out += alias;
+                    // The character before the brackets comes from `sql`. A read from `out`, which
+                    // grows by `+=`, copies all of `out` each time.
+                    const before = i > 0 && SQLParser.NAME_CHAR.test(sql[i - 1]) ? ' ' : '';
+                    const after = j < n && (SQLParser.NAME_CHAR.test(sql[j]) || sql[j] === '[') ? ' ' : '';
+                    out += `${before}${alias}${after}`;
                 } else {
                     out += sql.substring(i, j); // leave non-problematic identifiers untouched
                 }
@@ -1978,10 +1932,23 @@ export class SQLParser {
     }
 
     /**
+     * The alias prefix for one SQL text: the first of `_mjid_`, `_mjid1_`, `_mjid2_`, … that does
+     * not occur in it, ignoring case. No name the SQL writes can then equal or contain an alias.
+     * One scan of the text collects the digits of every prefix it contains.
+     */
+    private static aliasPrefixFor(sql: string): string {
+        const used = new Set<string>();
+        for (const match of sql.toLowerCase().matchAll(SQLParser.ALIAS_PREFIX_IN_TEXT)) used.add(match[1]);
+        let digits = '';
+        for (let k = 1; used.has(digits); k++) digits = String(k);
+        return `${SQLParser.BRACKET_ALIAS_STEM}${digits}_`;
+    }
+
+    /**
      * Reverses bracket-identifier aliasing on a sqlify result. node-sql-parser
      * may emit the alias bare, bracketed, or backticked; all three forms are
-     * restored to the original bracketed identifier. Aliases are unique
-     * `BRACKET_ALIAS_PREFIX<seq>` tokens, so replacement is unambiguous.
+     * restored to the original bracketed identifier. No alias occurs in the
+     * caller's SQL ({@link aliasPrefixFor}), so replacement is unambiguous.
      */
     private static restoreAliases(sql: string, aliasMap: Map<string, string>): string {
         let out = sql;
@@ -2027,36 +1994,43 @@ export class SQLParser {
      * Returns null if no problematic FOR XML pattern is found.
      */
     private static stripForXmlDirectives(sql: string): { cleanedSQL: string; originalForXml: string } | null {
-        // Match FOR XML <directive> with optional quoted arg and optional comma-separated extras
-        const forXmlRegex = /\bFOR\s+XML\s+(PATH|RAW|AUTO|EXPLICIT)(\s*\('[^']*'\))?(\s*,\s*[^;]*)?$/i;
-        const match = sql.match(forXmlRegex);
-        if (!match) return null;
+        // Read from tokens, not a regex: a trailing-clause regex backtracks polynomially on long
+        // whitespace runs, and tokens also keep a FOR XML inside a subquery or string out of it.
+        const tokens = SignificantTokens(LexSQL(sql, SQL_SERVER_LEXING));
+        const forAt = tokens.findIndex((t, i) =>
+            t.Depth === 0 && IsKeyword(t, 'FOR') && IsKeyword(tokens[i + 1], 'XML') &&
+            FOR_XML_DIRECTIVES.some(d => IsKeyword(tokens[i + 2], d)));
+        if (forAt === -1) return null;
 
-        const fullForXml = match[0];
-        const directive = match[1].toUpperCase(); // PATH, RAW, etc.
-        const hasQuotedArg = !!match[2];
-        const hasExtraDirectives = !!match[3];
+        const directive = tokens[forAt + 2].Text.toUpperCase(); // PATH, RAW, etc.
+        let next = forAt + 3;
+        let quotedArg: string | null = null;
+        if (tokens[next]?.Kind === 'open' && tokens[next + 1]?.Kind === 'string' && tokens[next + 2]?.Kind === 'close') {
+            quotedArg = sql.substring(tokens[next].Start, tokens[next + 2].End);
+            next += 3;
+        }
+        const rest = tokens.slice(next);
+        // The clause must run to the end of the statement: nothing may follow it except
+        // comma-separated directives, and no statement may follow a semicolon.
+        if (rest.some(t => t.Kind === 'semicolon')) return null;
+        const hasExtraDirectives = rest.length > 0 && rest[0].Kind === 'comma';
+        if (rest.length > 0 && !hasExtraDirectives) return null;
 
         // Only needs workaround if there are extra comma-separated directives
         // OR if it's RAW/EXPLICIT with a quoted arg (parser can't handle those)
         const needsWorkaround = hasExtraDirectives ||
-            (hasQuotedArg && (directive === 'RAW' || directive === 'EXPLICIT'));
-
+            (quotedArg !== null && (directive === 'RAW' || directive === 'EXPLICIT'));
         if (!needsWorkaround) return null;
 
         // Simplify to a form the parser accepts:
         // PATH('arg') → PATH('arg')  (parser handles this)
         // RAW('arg')  → RAW          (parser can't handle quoted arg on RAW)
         // Any + comma extras → strip extras
-        let simplifiedDirective: string;
-        if (directive === 'PATH' && hasQuotedArg) {
-            simplifiedDirective = `FOR XML PATH${match[2]}`;
-        } else {
-            simplifiedDirective = `FOR XML ${directive}`;
-        }
-
-        const cleanedSQL = sql.substring(0, match.index!) + simplifiedDirective;
-        return { cleanedSQL, originalForXml: fullForXml };
+        const simplifiedDirective = directive === 'PATH' && quotedArg !== null
+            ? `FOR XML PATH${quotedArg}`
+            : `FOR XML ${directive}`;
+        const clauseStart = tokens[forAt].Start;
+        return { cleanedSQL: sql.substring(0, clauseStart) + simplifiedDirective, originalForXml: sql.substring(clauseStart) };
     }
 
     /**
@@ -2093,8 +2067,7 @@ export class SQLParser {
 
     private static extractTablesViaAST(sql: string, dialect: string): SQLTableReference[] | null {
         try {
-            const parser = new Parser();
-            const ast = parser.astify(sql, { database: dialect });
+            const ast = SQLParser.astifyChecked(sql, dialect);
             const tableAliasMap = new Map<string, { schemaName: string; tableName: string }>();
             const columnRefs = new Set<string>();
 
@@ -2163,7 +2136,7 @@ export class SQLParser {
     private static extractCTEsViaAST(sql: string, dialect: string): SQLCTEExtraction | null {
         try {
             const parser = new Parser();
-            const ast = parser.astify(sql, { database: dialect });
+            const ast = SQLParser.astifyChecked(sql, dialect);
             const singleAst = (Array.isArray(ast) ? ast[0] : ast) as unknown as Record<string, unknown>;
 
             if (!singleAst.with || !Array.isArray(singleAst.with) || singleAst.with.length === 0) {
@@ -2335,11 +2308,12 @@ export class SQLParser {
     ): void {
         if (!fromItem) return;
 
-        if (fromItem.table) {
-            const alias = (fromItem.as || fromItem.table) as string;
+        const tableName = SQLParser.unwrapIdentifier(fromItem.table);
+        if (tableName) {
+            const alias = SQLParser.unwrapIdentifier(fromItem.as) ?? tableName;
             tableAliasMap.set(alias, {
-                schemaName: (fromItem.db as string) || 'dbo',
-                tableName: fromItem.table as string,
+                schemaName: SQLParser.unwrapIdentifier(fromItem.db) || 'dbo',
+                tableName,
             });
         }
 
@@ -2356,11 +2330,10 @@ export class SQLParser {
         if (fromItem.using) {
             const usings = Array.isArray(fromItem.using) ? fromItem.using : [fromItem.using];
             for (const col of usings) {
-                if (typeof col === 'string') {
-                    columnRefs.add(col);
-                } else if (col && typeof col === 'object' && 'column' in col) {
-                    columnRefs.add((col as Record<string, string>).column);
-                }
+                const name = col && typeof col === 'object' && 'column' in col
+                    ? SQLParser.unwrapIdentifier((col as Record<string, unknown>).column)
+                    : SQLParser.unwrapIdentifier(col);
+                if (name) columnRefs.add(name);
             }
         }
     }
@@ -2373,8 +2346,10 @@ export class SQLParser {
         if (!expr || typeof expr !== 'object') return;
 
         if (expr.type === 'column_ref') {
-            const colName = expr.table ? `${expr.table}.${expr.column}` : expr.column as string;
-            columnRefs.add(colName);
+            // The PostgreSQL grammar returns identifier nodes here, not strings.
+            const column = SQLParser.unwrapIdentifier(expr.column);
+            const table = SQLParser.unwrapIdentifier(expr.table);
+            if (column) columnRefs.add(table ? `${table}.${column}` : column);
         }
 
         if (expr.ast && tableAliasMap) {

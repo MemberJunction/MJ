@@ -96,4 +96,21 @@ describe('Generate Image — keys for every driver class a run may reach', () =>
             { driverClass: 'FLUXImageGenerator', apiKey: 'sk-customer-bfl' },
         ]);
     });
+
+    it("under RuntimeOnly carries only the run's own keys — never the platform's, by driver class or vendor name", () => {
+        // A RuntimeOnly resolver answers from the run's keys alone (BaseAgent passes the scope to GetAIAPIKey).
+        const runOnly: RuntimeAPIKeyResolver = (driverClass) => driverClass === 'FLUXImageGenerator' ? 'sk-customer-bfl' : undefined;
+        const keys = BuildImageGenerationAPIKeys(
+            [{ DriverClass: 'OpenAIImageGenerator', VendorName: 'OpenAI' }, { DriverClass: 'FLUXImageGenerator', VendorName: 'Black Forest Labs' }],
+            runOnly,
+            'RuntimeOnly'
+        );
+
+        expect(keys).toEqual([{ driverClass: 'FLUXImageGenerator', apiKey: 'sk-customer-bfl' }]);
+    });
+
+    it('under RuntimeOnly with no resolver (a run with no keys) carries nothing', () => {
+        const keys = BuildImageGenerationAPIKeys([{ DriverClass: 'OpenAIImageGenerator', VendorName: 'OpenAI' }], undefined, 'RuntimeOnly');
+        expect(keys).toEqual([]);
+    });
 });

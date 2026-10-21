@@ -60,7 +60,8 @@ export class LazyModuleStatusComponent extends BaseResourceComponent implements 
         super();
     }
 
-    public ngOnInit(): void {
+    public override ngOnInit(): void {
+        super.ngOnInit();
         const prefs = DevToolsPrefs.Get<{ filter?: 'all' | 'loaded' | 'not-loaded'; expanded?: string[] }>('lazyModule');
         if (prefs?.filter) this.Filter = prefs.filter;
         this.Refresh();

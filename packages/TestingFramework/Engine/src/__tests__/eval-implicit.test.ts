@@ -9,7 +9,8 @@ import { EvaluateWellFormed } from '../eval/wellFormed';
 const controlToolMap = {
     delegate_to_query_strategist: { kind: 'subAgent' as const, name: 'Query Strategist' },
     payload_change_request: { kind: 'payloadChange' as const },
-    ask_user: { kind: 'chat' as const }
+    ask_user: { kind: 'chat' as const },
+    complete_task: { kind: 'taskComplete' as const }
 };
 const toolNameMap = { run_ad_hoc_query: 'Run Ad-hoc Query' };
 const turn = (text: string, toolCalls: RawTurn['toolCalls']) => NormalizeDecision({ text, toolCalls, toolNameMap, controlToolMap, protocol: 'implicit' });
@@ -33,6 +34,15 @@ describe('normalizeDecision — implicit control flow', () => {
         expect(d.kind).toBe('action');
         expect(d.actions.map((a) => a.name)).toEqual(['Run Ad-hoc Query']);
         expect(d.payloadChange).toEqual({ updateElements: { iterations: 2 } });
+    });
+    it('complete_task → taskComplete, native, carrying its message and payload change', () => {
+        const d = turn('', [{ name: 'complete_task', arguments: { message: 'Done.', payloadChangeRequest: { updateElements: { query: { sql: 'SELECT 1' } } } } }]);
+        expect(d).toMatchObject({ kind: 'taskComplete', encoding: 'native', taskComplete: true, message: 'Done.' });
+        expect(d.payloadChange).toEqual({ updateElements: { query: { sql: 'SELECT 1' } } });
+    });
+    it('complete_task with its payload change as a JSON string → decoded', () => {
+        const d = turn('', [{ name: 'complete_task', arguments: { message: 'Done.', payloadChangeRequest: '{"updateElements":{"query":{"sql":"SELECT 1"}}}' } }]);
+        expect(d.payloadChange).toEqual({ updateElements: { query: { sql: 'SELECT 1' } } });
     });
     it('plain text with no call → taskComplete, encoding text', () => {
         expect(turn('Revenue grew 12%.', null)).toMatchObject({ kind: 'taskComplete', encoding: 'text', taskComplete: true, message: 'Revenue grew 12%.', envelopeParsed: null });
