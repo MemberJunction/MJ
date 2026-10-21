@@ -1,5 +1,79 @@
 # Change Log - @memberjunction/ai-gemini
 
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- e5675dc: The AI model catalog learns Google's current image models, and the Gemini image generator defaults to the Stable Nano Banana Pro ID.
+  - **Three new `MJ: AI Models` rows (Image Generator, vendor Google, driver `GeminiImageGenerator`)** with their inference-vendor and cost rows: **Nano Banana 2** (`gemini-3.1-flash-image`, 2026-02-26; $0.067 per 1K image), **Nano Banana 2 Lite** (`gemini-3.1-flash-lite-image`, 2026-06-30; $0.0336 per 1K image) and **Nano Banana 2.1** (`gemini-nano-banana-2.1`, 2026-10-06, Stable; $0.0336 per 1K image). Prices from Google's pricing page as of 2026-10-13, per-resolution tiers in each cost row's Comments.
+  - **Nano Banana Pro** gets its Stable endpoint: its existing Google inference-vendor row is updated in place to `gemini-3-pro-image` with `Status: Active` (a model holds one inference row per vendor, so the `-preview` ID lives on only in the driver's `GetModels()` list), a current cost row ($0.134 per 1K/2K image, $0.24 at 4K), the model re-activated, and its description no longer claims the preview endpoint shut down on 2026-06-25 — Google lists `gemini-3-pro-image` as Stable and the preview ID still answers.
+  - **`GeminiImageGenerator`** defaults to `gemini-3-pro-image` when no model is pinned (callers on the catalog pin one and never see the default) and `GetModels()` lists all five IDs with their sizes and editing support.
+
+  New records carry CLI-generated UUIDs and no `sync` blocks (the release-time push writes them); no Metadata_Sync migration is authored, per the metadata rules.
+
+### Patch Changes
+
+- 55184f1: `effortLevel` now controls how much Gemini and Vertex models think (#5171, and the Gemini part of #5530).
+
+  **Behavior change:** prompts, prompt-model rows and agents that already set an effort level on a Gemini model will start thinking at that level. Until now the value never reached Google, so every Gemini prompt ran at the model's default. A prompt at effort 10 on a model whose default is high becomes faster and cheaper and may answer worse; re-evaluate such prompts after upgrading. Prompts with no effort level are unchanged.
+  - **The thinking setting is sent with each request**, on streaming and non-streaming calls, for `GeminiLLM` and `VertexLLM`.
+  - **Gemini 3 and later**, and unversioned ids such as `gemini-flash-latest`, get `thinkingLevel`. Effort 1–33 is `LOW`, 34–66 `MEDIUM`, 67–100 `HIGH`, the same bands the OpenAI, Groq and Cerebras drivers use. A number never maps to `MINIMAL`, which several models reject (Gemini 3.8 Flash among them); a named effort (`minimal`, `low`, `medium`, `high`, and other vendors' `none` / `xhigh` / `max`) is sent as that level.
+  - **Gemini 2.5** gets `thinkingBudget`: 1024, 8192 or 24576 tokens by band, 512 for `minimal`. Earlier models and Gemma get no thinking setting, with a one-time warning when an effort is set.
+  - **A level the model rejects does not fail the request.** On a 400 the request is sent once more: a rejected `MINIMAL` with `LOW` (Gemini 3.8 Flash accepts only low, medium and high), any other setting without one. If that succeeds, the replacement is used for that setting on that driver and model for the rest of the process, with a one-time warning; other levels are still sent as asked.
+  - **Thought summaries are requested** whenever a thinking setting is sent, and every thought part is kept (non-streaming kept only the first).
+  - **Thinking tokens count as completion tokens.** Google bills `thoughtsTokenCount` as output, but it was left out of `ModelUsage.completionTokens`, so reported tokens and cost for thinking Gemini models were too low and now rise to match the bill.
+
+  **New live integration test, IT114 - AI Vendor Effort Levels** (Live Model suite). It runs a seeded probe prompt (`IT: Effort Probe`) through `AIPromptRunner` on each effort-capable model the environment has a credential for, and records the request bodies the drivers' SDKs send. Gemini and Vertex are checked strictly (thinking setting sent, `minimal` never fails, thinking tokens counted); every other driver is surveyed and its findings logged, with known gaps listed in the bundle. Models with no credential are skipped.
+
+- c6d1232: The Gemini provider (and Vertex, which inherits it) stops sending `temperature`, `topP` and `topK` to the models that no longer honor them. Google has announced that upcoming Gemini models return 400 INVALID_ARGUMENT for these fields.
+  - **Sampling fields stop at Gemini 3.6.** Models before 3.6 still honor `temperature`, `topP` and `topK`, so they keep them unchanged, including the 0.5 `temperature` default. Gemini 3.6+ and Gemini ids with no version (such as `gemini-flash-latest`) get none of the three. A caller-supplied value is dropped for those models with one console warning per model and field per process. Google has ignored these values since Gemini 3.6 Flash, so output from those models does not change. The cutoff is read from the version in the model id, so a newly released model needs no code change. Non-Gemini models served by these drivers (Gemma on Vertex) are unaffected.
+  - **`topP` / `topK` now reach models before 3.6.** They were sent as `top_p` / `top_k`, which `@google/genai` silently drops, so they never took effect. They are now sent as `topP` / `topK`.
+  - **An explicit `temperature: 0` is sent as 0.** `params.temperature || 0.5` turned it into 0.5.
+  - **Removed the thinking configuration, which has not reached Google since November 2025.** The provider built a `thinkingConfig` (`thinkingBudget` on Gemini 2.5, `thinkingLevel` on Gemini 3) and set it on the chat session. `@google/genai` replaces the session config with the per-request config whenever a request passes one, and since November 2025 this provider always passes one, so the thinking config was not sent. Since then Gemini has run at each model's default thinking. `effortLevel` was mapped only after that point, so it has never had an effect. This change removes that code, the private `getThinkingBudget` and `supportsThinking` methods, and the `-3` through `-7` model-name check. What goes out on the wire does not change. Making `effortLevel` work on Gemini is separate follow-up work.
+
+- 4e4c82d: A cancelled model call now stops where it is: it is never failed over or retried, a call cancelled in flight is reported as `Cancelled` (a non-chat call cancelled before it starts is refused before a run row exists), and the cancellation reaches the vendor's SDK so the request is torn down rather than abandoned (#5548, #3132).
+
+  **Prompts and agents (#5548)**
+  - **No failover walk after a cancel.** `ExecuteWithFailover` stops before each candidate once the caller's token is aborted, and after any attempt that fails while it is aborted or that reports a cancellation. Before, one abort walked every model candidate (113 real driver calls in a live test) and logged an `[ERROR] [ModelExecution]` with a stack trace for each. Real failures before the cancel are still recorded as failover attempts. A timeout is not a cancellation and still fails over.
+  - **Logged once, recorded as cancelled.** One info line instead of an error per candidate. The prompt run is saved `Cancelled` / `user_requested`, and the `AIPromptRunResult` carries `status: 'Cancelled'` and `cancelled: true`.
+  - **Agent runs end Cancelled.** `BaseAgent` checks the token before treating a failed prompt as a failure, and before counting a failed step toward the consecutive-failure limit, so a run cancelled mid-prompt no longer ends `Failed`. A final answer that had already finished when Stop landed still completes the run.
+  - **Failover fields persist.** A prompt run's `FailoverAttempts`, `FailoverErrors`, `FailoverDurations`, `TotalFailoverDuration` and failed-over `ModelID` / `VendorID` were written while its `Running` INSERT could still be in flight, and the INSERT's reload reset them, so a run that failed over could be saved with `FailoverAttempts = 0`. They are now set again in the queued finalize update, after the reload. This affected every runner, not only cancellation.
+
+  **Cancellation in `@memberjunction/ai` (#3132)**
+  - **`AIErrorType` has `'Cancelled'`**: Fatal and never failed over. `ErrorAnalyzer` on its own classifies an error named `AbortError`, `APIUserAbortError` or `RequestAbortedError` as `Cancelled`. The signal-aware helpers that `BaseLLM`, `BaseDecision` and every runner use (`BuildCancellationErrorInfo`) decide by why the signal was aborted, so an abort caused by a timeout stays a retriable `NetworkError`. A timeout is recognized by the abort reason's type — a `TimeoutError`, or a reason flagged `IsTimeout` (new `TimeoutAbortReason`; `AIPromptTimeoutError` sets it) — never by the words of a caller's reason.
+  - **Shared helpers** (exported): `IsAbortError`, `IsTimeoutAbort`, `IsRequestAborted`, `BuildCancellationErrorInfo`, `IsCancellationErrorInfo`, `DescribeCancellation`, `CreateCancellationError`, `ThrowIfAborted`, `AbortableDelay`, and the `REQUEST_CANCELLED_CODE` / `REQUEST_TIMEOUT_CODE` codes.
+  - **`BaseLLM` owns chat cancellation, per request.** It answers an already-aborted request without calling the driver, turns an abort (thrown, or a failed result while the signal is aborted) into one cancelled result, and decides a streaming cancellation from the request's own signal, so drivers no longer keep cancellation state on a shared instance. New protected `BuildCancelledChatResult`, `IsCancellationError` and the `IsProviderAbortError` hook. A pre-aborted streaming request now resolves cancelled on every driver instead of rejecting with a generic error.
+  - **Every chat driver uses it.** The duplicated cancelled-result builders, predicates and stream-cancel flags are gone from Anthropic, Azure, Bedrock, Betty, BettyBot, Cerebras, Fireworks, Gemini (and Vertex), Groq, Inception, LMStudio, Mistral, Ollama and OpenAI (and its subclasses). Anthropic, Bedrock, Gemini, Mistral and Ollama used to report a cancel as a retriable `Unknown` error. Cancel messages now read "Request was cancelled[: reason]".
+  - **Bedrock streaming** iterated the response envelope instead of its body, so every streaming call failed with "stream is not async iterable". Fixed.
+  - `BaseDecision` and the decision runner classify an aborted decision by its signal, so a timeout fails over and a cancel does not.
+
+  **Non-chat models**
+  - **Media** (text-to-speech, speech-to-text, video): the driver params carry `CancellationToken`, the runner passes the call's bound signal, and the OpenAI, Groq, ElevenLabs and HeyGen drivers forward it. `MediaOperation.Invoke` takes the signal as a third argument.
+  - **Embeddings, rerank and image generation** gain timeout and cancellation: `TimeoutMS` / `CancellationToken` on their run options, a pre-aborted run refused before a run row exists, a cancelled run recorded `Cancelled` and not failed over, and a timeout failed over. The param types gain `CancellationToken`, and the OpenAI, Azure, Bedrock, Cohere, Gemini, Mistral, Ollama and local embedding drivers, the Cohere, LLM and decision rerankers, and the OpenAI, Gemini and FLUX image drivers forward it. A cancelled `BaseEmbeddings.EmbedTexts` now throws a cancellation error instead of returning an empty result. The local embedding model can only stop between texts or batches.
+
+  **Testing**
+  - `TestLLM` gains a `hangUntilAborted` outcome. The LLM conformance suite drops `PreAbortedStreamingBehavior`: every driver must resolve a pre-aborted request as `Cancelled`.
+  - New integration bundle **IT122 - Agent Prompt Cancellation**: a real agent run cancelled mid-call stops at that call and is recorded cancelled throughout.
+
+- 72dd65c: Adds `realtime.session.transcriptionLanguages`, a caption-language hint for realtime voice sessions, and makes a rejected Gemini Live connect fail instead of hang.
+  - Gemini Live captions both sides of a call with its own transcription, and with no hint it guesses each utterance's language, so an English call could show captions in Arabic, Tamil or Korean script. `"transcriptionLanguages": ["en-US"]` (BCP-47 codes) under `realtime.session` is sent as `languageCodes` on both caption streams. It is a hint, not a lock: other languages still caption in their own script. Unset, nothing changes.
+  - Set it on the target agent's `TypeConfiguration` (agent types without a `ConfigSchema`), an agent type's `DefaultConfiguration`, or a runtime override. A Realtime-type co-agent cannot save it yet: that type's schema does not declare `realtime.session`, which was already true for every session key.
+  - The OpenAI-protocol drivers scrub the key, and the other drivers drop it with the rest of the shared session keys.
+  - The relay's Live setup writer now keeps `languageCodes` on the Developer API, as SDK 2.14+ does, so relayed sessions carry the hint too.
+  - Raises `@google/genai` from `^2.8.0` to `^2.16.0`, because SDKs before 2.14.0 throw on `languageCodes`. Set the key only after every browser bundle that opens Gemini sessions is rebuilt on this release.
+  - A Gemini Live connect now rejects with the close reason when the socket errors or closes before setup completes, in the server and browser drivers for both the Developer API and Gemini Enterprise. Before, a close before the socket opened hung on any SDK, and from SDK 2.11 so did a rejected key, model or setup field.
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [3080e83]
+- Updated dependencies [81aea34]
+- Updated dependencies [2274f42]
+- Updated dependencies [230cdad]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [72dd65c]
+- Updated dependencies [17a4137]
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Minor Changes
