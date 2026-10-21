@@ -1,5 +1,170 @@
 # @memberjunction/ai-core-plus
 
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- 39b35f1: Real-time task graph workflow UX, continuation synthesis with step outputs and artifacts, single-step delegation folding, per-user runnable agent directory & task graph validation, and a redesigned AI Agent Workflows & Tasks Command Center (#5878).
+  - **Single-step task graph folding (`@memberjunction/ai-agents`).** `LoopAgentType.DetermineNextStep` automatically folds single-node `Tasks` emissions with no dependencies into an in-turn `Sub-Agent` step (`terminateAfter: false`) so single-agent delegations complete in a single conversation turn without spawning a background task graph, while preserving durable `Tasks` execution for multi-step (`2+` node) workflows. When an orchestrator with `ArtifactCreationMode = 'Never'` or `'System Only'` delegates a folded step to a specialist agent that produces artifacts, `AgentRunner.ProcessAgentArtifacts` resolves the specialist's `DefaultArtifactTypeID` and creation mode so deliverables are persisted and attached to the conversation message.
+  - **Per-user runnable agent directory, pre-submission task graph validation, and sub-agent workflow propagation (`@memberjunction/ai-engine-base`, `@memberjunction/aiengine`, `@memberjunction/ai-core-plus`, `@memberjunction/ai-agents`, `@memberjunction/task-graph`, `@memberjunction/server`).** `AIEngineBase.GetUserRunnableAgentDirectory(user)` caches a per-user directory of active top-level agents permitted by `CanUserRunAgent`, invalidated on agent and permission changes. `BaseAgent` preloads `availableAgentCount` / `availableAgentDetails` into prompt templates, validates `Tasks` step targets before submission (converting unknown or restricted agent/action references into a self-correcting `Retry` step with the user's permitted agent list), propagates `conversationDetailId` and `Paused` workflow-awaiting state from sub-agents (`Workflow Planner`) to parent runs (`Sage`), includes `agentRun.Message` in sub-agent result markdown, and settles/reinvokes ancestor runs along `ParentRunID` in `TaskGraphDispatcher` and `TaskGraphContinuationDeliverer`.
+  - **Live task graph telemetry, isolated step artifact persistence, and adaptive continuation delivery (`@memberjunction/server`, `@memberjunction/ai-agents`, `@memberjunction/conversations-runtime`).** `TaskGraphAgentRunner` resolves the originating `ConversationDetailID`, passes `inputArtifacts: []` to isolate task-graph step runs from earlier conversation turn artifacts, and forces `behavior: 'create-new'` when persisting step deliverables so sibling/prior artifacts are never overwritten as `v2`. `AgentRunner.ProcessAgentArtifacts` infers `Research Content` (`report.html`) and extracts `report.name` / `report.description` / `synthesis.executiveSummary` for report-producing specialist steps. `TaskGraphContinuationDeliverer` strips inherited upstream keys from merged `OutputPayload`s, updates the originating workflow message in-place when no intervening messages were sent (`origin.IsLatest`), or posts a bottom continuation reply linked via `ConversationDetail.ParentID` when intervening messages were sent while the workflow ran.
+  - **First-class inline Workflow Execution Card, Workflow Context Header, & real-time chat reconciliation (`@memberjunction/ng-conversations`).** `ConversationChatAreaComponent` and `MessageItemComponent` reconcile live `TaskGraphProgress` frames in place, deduplicate parent container tasks from executable step rows, strip inherited upstream payload keys from step summaries, and render a relational `.workflow-continuation-banner` (`Completed workflow · <Name> · View workflow ↑`) on bottom continuation replies that scrolls to and highlights the originating workflow turn.
+  - **AI Agent Workflows & Tasks Command Center (`@memberjunction/ng-conversations`, `@memberjunction/ng-tasks`, `@memberjunction/ng-explorer-core`).** Redesigned `TasksFullViewComponent` with a 5-metric KPI telemetry ribbon, instant search and status/agent filters, a **Workflow Cards** DAG view, a second-resolution **Execution Timeline & DAG** waterfall view, and a slide-over **Step Inspector Drawer** with one-click navigation back to the originating conversation.
+
+- b14c72f: Add the personal Chief of Staff (`Chief of Staff`) AI agent, per-user narrowed governance (`MJ: AI Agent User Policies` + `AgentUserPolicyEngine`), 3-Tier Wake Gate on `MJ: User Routines` (`RoutineType = 'AgentWake'`), user-scoped calendar/email/availability actions (`EnterpriseMailboxSecurityGate`), and Communication Dashboard enterprise governance cards.
+- 5fed75a: Agent runs no longer write `AIAgentRun.Result`; use `FinalPayload`, which holds the same value. The `Result` column remains, deprecated, for existing rows.
+
+  New column `AIAgentRunStep.PayloadAtStartSourceStepID`. When a step starts from the same payload an earlier step in the run ended with, `PayloadAtStart` is stored as NULL and this column points at that step. Readers resolve the value with `ResolvePayloadAtStart` / `ApplyResolvedPayloadAtStart` from `@memberjunction/ai-core-plus`. External API clients that read `PayloadAtStart` directly must follow the pointer.
+
+- 5fed75a: Prompt runs store less template data in `AIPromptRun.Messages` (#5526). `Messages` always holds the messages the model received. The template inputs (`data`, `templateData`) are stored per a capture mode: `None` (default: top-level keys and byte sizes only), `Referenced` (only keys the prompt's templates read) or `Full`. Set it per prompt with the new `AIPrompt.TemplateDataCapture` column, per call with `AIPromptParams.TemplateDataCapture`, or per server with `aiPromptRuns.templateDataCapture` in mj.config.cjs. `_CURRENT_PAYLOAD` is never stored; agent-run steps hold the payload. New `TemplateEngineServer.GetReferencedVariables()` lists the variables a template reads.
+
+  **API note:** clients that read `data` or `templateData` out of `AIPromptRun.Messages` get less than before.
+  - The capture mode comes from the call, then the prompt, then the server default. The most specific prompt wins: the run's child prompts come before its main prompt. So for a Loop or Harness agent, a value on the agent's own prompt beats a value on the agent-type system prompt.
+  - In `None` mode (the default), `Messages` holds no `data` or `templateData`, only the `dataShape` sizes. `ParseMessagesData().inputData` and `GetDataContext()` return null.
+  - In `Referenced` mode, clients find only the keys that the templates read.
+  - `data` never holds `_CURRENT_PAYLOAD`, in any mode, `Full` included.
+  - `ParseMessagesData()` now also returns `dataCapture`, `dataShape` and `dataCaptureNote`.
+  - If the capture step fails, the run still saves, with `dataCapture: 'None'`, a fixed `dataCaptureNote` and no template data.
+  - The `GetReferencedVariables()` result has `ParseFailed: true` when a template does not parse.
+
+- ce758af: Feature Pipelines: keyed, versioned Feature Values and honest runs (migration `V202610201100__v6.2.x__Feature_Value_Key_And_Versions.sql`).
+  - Feature Values upsert on a key (record, feature, pipeline version, prompt version, primary model, parameters, input); a value a person entered (`Source='Human'`) is never overwritten unless the run sets `overwriteHumanValues`. Child write-back can `reconcile` rows on a key.
+  - `MJ: Feature Pipeline Versions` registers each pipeline pin; a gated pipeline runs only under a version whose golden-set result meets its threshold. The `Steward Feature Pipeline Version` Action (`StewardFeaturePipelineVersionAction`) and `Feature Pipeline Version Steward` Record Process (`WorkType='Action'`, scheduled via `RecordProcessScheduledJobDriver`) evaluate and backfill changed versions; golden sets carry a label-quality record, `Required` and `ExpectAbstain` cases.
+  - New `@memberjunction/feature-pipelines-engine` package houses server-side Feature Pipeline execution (`InferProcessor`, `BaseFeaturePipelineDriver`, `LLMFeaturePipelineDriver`, `DecisionFeaturePipelineDriver`, `FeaturePipelineEscalation`, `FeaturePipelineHumanValueGuard`, `FeaturePipelineErrors`), golden-set testing (`FeaturePipelineGoldenSetDriver`, `golden-set-scoring`, `golden-label-quality`), and version stewardship (`FeaturePipelineVersionSteward`, `StewardFeaturePipelineVersionAction`, `RegisterInferRecordProcessor`), keeping `@memberjunction/record-set-processor-base`, `@memberjunction/record-set-processor`, `@memberjunction/scheduling-engine`, and `@memberjunction/testing-engine` free of Feature Pipeline dependencies.
+  - Outputs are checked against `lookup` constraints (per item with `ItemRef`); an output below its `MinConfidence` is withheld (`OnLowConfidence: 'null'`); `Context.RecordAsUserMessage` sends the record as a JSON user turn.
+  - Dry runs write nothing, preview only what the real write would change, cap at 25 records and report `WouldRefuse`; a Feature Pipeline run with a failed record ends `Failed` with a `FeaturePipelineRunResult` summary; the breaker counts attempted records.
+  - An output may omit its write target (builder target mode `Feature value only (no write-back)`): the answer is stored in `MJ: Feature Values` only, typed by its constraint (`numeric`/`money`, `boolean`, `date`), and no entity field is written. The Bulk Operations dry-run dialog shows each as a `<Feature> (feature value)` row with the previous and proposed value, and loads only the non-skipped details so a large scope counts every changed record.
+  - A Feature Values panel on every record form shows the latest answer per pipeline and feature (Source, Confidence, version, Computed, Reasoning) and expands to its history; a latest answer that withheld its value reads "no value". `@memberjunction/ng-base-forms` re-resolves the form chrome when a panel mounts after first render, so a late panel gets its left-nav entry.
+  - The Version Steward beats on a timer while its backfill runs, defers a backfill while a run is Running, marks only a clean run as backfilled, and ignores a Running Process Run not checkpointed for 30 minutes. A Feature Value insert that loses the race on its key to an equal value is `Unchanged`.
+  - Bedrock sends a configured temperature of 0 as 0 (F-FP-13).
+  - `AIPromptParams.templateAutoescape` (set by the Feature Pipeline drivers) renders a prompt template without HTML escaping; a Feature Pipeline run reads its prompt's template from the database at run start, so a template edit takes effect on the next run.
+  - API moves & PascalCase standardization: `WriteBackResult`, `TagWriteBackPreview`, `FieldRulesResultPayload`, and `MetadataProviderCapabilities` live in `@memberjunction/record-set-processor-base`; `FeaturePipelineRunResults` lives in `@memberjunction/feature-pipelines`; `RunRecordProcessOptions`, `RecordProcessorContext`, `RecordSetProcessOptions`, `ProcessRunSummary`, and `WriteBackValuePreview` use `PascalCase` properties across `@memberjunction/record-set-processor-base` and `@memberjunction/record-set-processor`.
+
+- 8420f36: Client-direct realtime recordings no longer depend on the browser surviving the end of the call (#5294).
+  - **Opus shards during the call.** The browser captures at 48 kHz into one continuous Opus encoder (WebCodecs, or libopus WebAssembly in a Worker where WebCodecs cannot encode Opus) and uploads a 5 s `MJOPUS1` shard as raw bytes to `POST /realtime/recording/:agentSessionId/shard/:index`. Each shard is kept in IndexedDB until the server acknowledges it, so shards survive network drops and reloads and are uploaded on the next page load.
+  - **Keepalive terminal.** End, `pagehide` and `visibilitychange`→hidden send `POST /realtime/recording/:agentSessionId/end` with the last partial window as a `keepalive` request, then re-send every unacknowledged shard with `keepalive`. A hidden tab's terminal carries `final=false`: the server stamps the counts but assembles only after the grace period, so switching tabs does not rewrite the recording. `EndRealtimeSession()` waits for the terminal's acknowledgement for at most 3 s. The whole-call `UploadRealtimeRecording` upload and the `beforeunload` prompt are gone from new clients. The mutations remain for older clients.
+  - **Server ledger and assembly.** Migration `V202610151535` adds `RecordingStatus`, `RecordingExpectedShards`, `RecordingCapturedSamples`, `RecordingGaps` and `RecordingAssemblyVersion` to `AIAgentSession`, and the new `MJ: AI Agent Session Recording Shards` entity, written through guarded stored procedures. MJAPI assembles `recording.wav` and `peaks.json` within seconds of the terminal. A recording with missing shards is assembled as `Partial` after `realtime.recordingAssemblyGraceSeconds` (default 90): each gap is silence and is listed in `RecordingGaps`. The session janitor assembles sessions that never sent a terminal. Recovery of legacy `seg-*.pcm` storage shards is unchanged.
+  - **Breaking for custom hosts:** `IRealtimeSessionRecorder` now returns Opus packets (`TakeEncodedPackets()`, `Stop(): Promise<number>`) instead of base64 audio. `BrowserRecordingUnloadGuard` is removed. A host that wires its own page-lifecycle events calls `SendRecordingTerminal({ Final: false })` when the page is hidden and `SendRecordingTerminal()` on `pagehide`.
+
+### Patch Changes
+
+- 0cc6b08: Review fixes for agent run audiences and run scope. No migration, no metadata change.
+  - **Audience validation.** A `Mode` naming something `Object.prototype` carries (`'toString'`, `'constructor'`, `'__proto__'`...) passed validation and added no reader, so every gate was skipped. It now fails the run like any unknown mode.
+  - **Task graphs in a tenant-scoped run.** A graph's action and agent nodes run with no `RunScope` and no run context, so a Scoped Search node searched outside the run's tenant. Graphs are now withheld, and a model-written graph refused, when the audience adds a reader or the run's validated scope carries a tenant or a secondary dimension. The predicate is `ActionRunScopeIsBounded`, new in actions-base.
+  - **The Search action in a tenant-scoped run** is refused (`RUN_SCOPE_UNSUPPORTED`) and the model is pointed at Scoped Search. Search takes no tenant, so it would search across tenants.
+  - **One scope for the whole run.** Notes and examples, pre-execution RAG, scoped prompt parts and scoped prompt configs read the scope `initializeAgentRun` validated. That is the scope on the run row and on every action dispatch: trimmed, with `ScopeConfig` defaults applied. A `SecondaryScopes` value that is not a plain object is logged and ignored, not cast.
+  - **More paths under an audience.** Client tools are not offered and a client-tools step is refused. The caller's app context is not injected. Memory writes are not saved. Scoped Search's streamed `ProgressEvents`, and the RAG streaming trace, carry no provider counts. No `MJ: AI Agent Requests` row is raised for a Chat or Plan step: answered on the dashboard or the API, it would resume the run without the audience, and no existing field can carry the audience without misusing one the UI shows. The room still answers in the conversation.
+  - **Lockout wording.** An action refused for the audience (`AUDIENCE_UNSUPPORTED`) is locked out under a new `'audience'` circuit-breaker reason. The model is told it is unavailable in a shared conversation, not that it hit a configuration or credential error.
+  - **Malformed audiences on actions.** `ActionEngine.CheckAudience` refuses every action under a malformed audience. Search and Scoped Search test `!== undefined`, so a `null` audience no longer runs an unbounded search or returns `SourceCounts`.
+  - **Execute Agent** passes the calling run's `RunScope` and audience to the nested run as first-class fields. It still does not declare `SupportsAudience`, so it is refused under an audience.
+  - **Sub-agent template parameters** also lose the host-only browser, conversation and realtime keys (`HOST_ONLY_AGENT_RUN_DATA_KEYS`, `WithoutHostOnlyAgentRunDataKeys` in ai-core-plus): `clientTools`, `sessionID`, `appContext`, `applicationId`, `conversationId`, `targetAgentID`, `agentSessionId`, `recording` and `realtime*`.
+  - **Smaller fixes.**
+    - Hydrated readers are cleared when the run ends.
+    - Dispatch readers exclude the user the action actually runs as.
+    - Inactive users are documented as accepted readers.
+    - `Forbidden` rows for a refused reader name the reader's ID and the verdict `Source` only.
+    - The `ActionRunScopeValue` drift-guard TSDoc is corrected.
+    - Scoped Search's `INVALID_PARAM` messages say exactly what to pass.
+  - **Tests.** Unit tests in each package, and `agent-run-audience` (IT119) gains AU8 (prototype-name mode) and AU9 (Search refused in a tenant-scoped run).
+
+  Follow-up: the Scoped Search parameter descriptions in `metadata/actions/.scoped-search.json` are stale. They describe the tenant as supplied per call and say malformed `SecondaryScopes` are skipped. Update them in a metadata PR (a `minor` changeset).
+
+- 0cc6b08: Agent runs bounded by an audience (A6, run level). `ExecuteAgentParams.Audience` (`{ Mode: 'Caller' | 'Intersection', UserIDs }`) names everyone besides the caller who will see a run's output — a shared conversation's other participants — and the run then shows only what the caller **and** every reader may see. It is server-only: a typed field, never read from `data`, so no GraphQL, MCP or A2A client can set it.
+  - **Validation and hydration.** `BaseAgent` validates the audience and loads each reader from the server's `UserCache` right after the permission check, refreshing the cache once for an unknown ID. A malformed audience, or an ID no user has, fails the run before any prompt, as a refused permission does. An `'Intersection'` whose only reader is the caller behaves exactly as `'Caller'`. Sub-agents and realtime delegation targets inherit the audience and hydrate it again. `ResolveAudienceUsers` is the override point. Adds a dependency on `@memberjunction/generic-database-provider` (for `UserCache`).
+  - **Pre-execution RAG** runs the scope-permission gate for every reader (the reader as `User`, the caller as `ContextUser`); a refused reader skips the scope and writes a `Forbidden` search-log row naming them. Both `Search` and `streamSearch` carry `SearchParams.Audience`.
+  - **Notes and examples**: under an audience only shared ones (`UserID` empty) are injected, via a new `SharedOnly` option on `AgentContextInjector` that filters `UserID == null` explicitly on the cache and semantic paths (an undefined `userId` does not mean "shared only" to `AIEngine`'s base filter).
+  - **Skipped or refused**: agent data-source preloading and the previous turn's tool-result carry-forward are skipped; task graphs are withheld (a copy of the cached prompt params) and a model-written graph is refused; session-driven (realtime / voice / bridge) runs are refused.
+  - **Actions**: `RunActionParams.Audience` is set per dispatch (never on the shared `Context`). `ActionEngineServer.RunAction` refuses, with result code `AUDIENCE_UNSUPPORTED` and without running the action or writing an execution log row, every action whose class does not declare `BaseAction.SupportsAudience` (new, default `false`) and every runtime-defined or deferred action, and normalizes the audience for an action it lets through. `BaseAgent` locks a refused action out for the run. The Search and Scoped Search actions declare support: they pass the audience to the search, Scoped Search runs the per-reader scope gate, and both withhold `SourceCounts`. New in `@memberjunction/actions-base`: `ActionRunAudience`, `ActionAudienceReaders`, `ActionAudienceAddsReader`, `AUDIENCE_UNSUPPORTED_RESULT_CODE`, and `ActionResult.ResultCode` (the raw result code, set whether or not it matches a metadata result code).
+
+  Deferred and documented (TSDoc, `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md`): per-reader scope expansion queries (`ScopeDimensionResolver` binds one `UserID`); `Union`, anchor and narrowing modes (use `PrimaryScope*` / `SecondaryScopes`); a resumed run (`MJAIAgentRequestEntityServer.resumeAgent`) runs as the responder with no audience, because persisting the audience needs a column — an open design point shared with bound action parameters; conversation history and artifacts remain the host's to choose. Agents whose work needs actions other than the two search actions are refused those actions in shared rooms, by design.
+
+  Tests: unit suites for each package, and a new deterministic integration bundle `agent-run-audience` (IT119, AU1–AU6). No migration.
+
+- 0cc6b08: Behaviour change: an agent run now reads its scope and agent-type parameters from `data` only when the server says it may, whatever started the run. The reserved keys are `PrimaryScopeEntityName`, `PrimaryScopeEntityID`, `PrimaryScopeRecordID`, `SecondaryScopes` and `__agentTypePromptParams`. `BaseAgent.Execute` removes them from every run's `data` unless the params set the new server-only `ExecuteAgentParams.TrustReservedRunData`. It logs the removed key names, never the values. The GraphQL resolvers used to strip these keys themselves; the Execute Agent action, MCP (`Run_Agent`, `Execute_*_Agent`), A2A and the Runtime Action bridge (`utilities.agents.Run`) passed them through. That let any user, or a model calling Execute Agent inside a run, choose a run's tenant or turn on task graphs. Now:
+  - **Who loses a scope in `data`.** A browser, an Execute Agent action call (from `RunAction`, a user routine or a model), an MCP or A2A request, and a Runtime Action script. Their other `data` keys are unchanged.
+  - **Who keeps it.** MJServer's agent-run resolvers set `TrustReservedRunData` for the system user and for API keys holding the `agent:trusted` scope, never for a browser or a widget guest; they now forward `data` as sent. A sub-agent and a realtime delegation target inherit their parent's marker. The model-authored template parameters merged into a sub-agent's `data` still lose the reserved keys either way.
+  - **What server code does instead.** It sets the first-class `PrimaryScopeEntityName` / `PrimaryScopeRecordID` / `SecondaryScopes` fields, or sets `TrustReservedRunData` when `data` comes from a caller it trusts.
+  - **Shared rule.** `WithAgentRunDataTrustApplied` in ai-core-plus is the one implementation. `AgentRunner`'s returning-visitor scope and `ExecuteSingleAction` called outside a run use it too, so an untrusted data scope no longer suppresses a widget guest's derived visitor scope.
+  - **Tests.** Tests that pass `__agentTypePromptParams` as a per-run override now set the marker. The agent memory scoping doc states the rule.
+
+- 81aea34: Enable full-conversation artifact manifest visibility (`artifactId`, `versionId`, `versionNumber`, `description`, `title`, and table/row summaries), `artifactDirective` forwarding across `LoopAgentResponse`/`LoopAgentType`/`BaseAgent` (including alpha-ID resolution to UUIDs and clean base payloads for `create-new`), `Data` artifact extract rules and payload title/description fallback on `MJ: Artifacts` and `MJ: Artifact Versions`, `QueryBuilderAgent` single-table vs. multi-table normalization on `Chat` and `Success` steps, and conversation artifact panel auto-opening on active branch paths.
+- 7e72c86: Phase 2 fresh efficiency and quality audit across Core Data Primitives, Task Graph Engine, AI Agent Runtime & PayloadManager, High-Volume Telemetry SaveReturnMode, and Angular Chat / Step Inspector UI:
+  - **Core Data Primitives (`@memberjunction/core`, `@memberjunction/generic-database-provider`, `@memberjunction/sqlserver-dataprovider`, `@memberjunction/server`, `@memberjunction/templates-base-types`)**:
+    - Restore lazy `_raw` `BaseEntity` hydration on `GetEntityObject()` + `LoadFromData()` (`20.87x` faster, `-100%` `EntityField` allocations on read-only `entity_object` views) while guarding subsequent `LoadFromData()` calls on already-loaded instances.
+    - Support runtime `options.SaveReturnMode === 'datestamps_only'` projection in `SQLServerDataProvider.WrapSaveCallForResult`.
+    - Eliminate duplicate `DiffObjects()` and `CreateUserDescriptionOfChanges()` calls in `GenericDatabaseProvider.Save()`.
+    - Add precomputed `FieldMappingPlan` in `ResolverBase.ArrayMapFieldNamesToCodeNames` and `O(1)` `EntityInfo.FieldByCodeName()` lookup.
+    - Deduplicate `entity.GetAll()` across `DatabaseProviderBase.Save()` and `BaseEntity.finalizeSave()` via `__mj_preMerged`, mark unpopulated virtual fields `NotLoaded = true` on new `datestamps_only` inserts, compute `ProviderBase.prepareSmartCacheCheckParams` fingerprint before widening `param.Fields`, and avoid double property reads in `NunjucksSandbox.guardMemberLookup`.
+  - **Task Graph Engine (`@memberjunction/task-graph`)**:
+    - Collapse `TaskGraphDispatcher.pollOnce` from `6 + 13G` to `3 + 2G` DB queries via a single `loadGraphState` per active graph per poll, gate `checkHumanTaskCompletion` with an in-memory `pendingHumanTasks` set, pass pre-hydrated `ClaimedTaskCandidate` into `executeClaimed` (`0` re-queries), parallelize `TaskGraphService.Submit` and `persistComputedLayout`, and complete `AgentSpecSync.LoadFromDatabase` round-trip hydration.
+  - **AI Agent Runtime, Prompts & PayloadManager (`@memberjunction/ai-agents`, `@memberjunction/ai-prompts`)**:
+    - Gate `BaseAgent.runPostRunCompaction` on `!IsVolatileResultMessage(msg)` and `!msg.toolCalls?.length`, reuse `_promptRunner`, queue compaction steps via `_stepSaveQueue`, and account for compaction steps in `_treeBudget`.
+    - Remove synchronous `stepEntity.Save()` queue bypasses in `checkExecutionGuardrails` and `validateSuccessNextStep`, and route `AIPromptRunner.executePromptInParallel` parent completion save through `queuePromptRunCompletionUpdate`.
+    - Fix `PayloadManager.mergeAllowedPaths` `arguments[2]` warning bug and cache compiled glob/wildcard `RegExp` and parsed path specs statically (`49,150x` fewer regex compilations).
+    - Add `O(1)` reference + metadata snapshot fast path to `BaseAgent.capturePromptStepMessages` (`16.2x` faster) and memoize child template placeholder analysis.
+  - **High-Volume Telemetry `SaveReturnMode: 'datestamps_only'` (`@memberjunction/ai-core-plus`, `@memberjunction/ai-agents`, `@memberjunction/ai-prompts`, `@memberjunction/actions`)**:
+    - Pass `{ SaveReturnMode: 'datestamps_only' }` in `AgentRunStepSaveQueue`, `BaseAgent._agentRun.Save`, `BaseModelRunner._promptRunQueue`, and `ActionEngineServer._logQueue`.
+  - **Angular Chat, Task Graph & Step Inspector (`@memberjunction/ng-conversations`, `@memberjunction/ng-ai-test-harness`, `@memberjunction/ng-core-entity-forms`)**:
+    - Memoize `DisplayArtifacts`, `SupportingArtifacts`, and single-pass `buildWorkflowStepSummaries` in `MessageItemComponent`, memoize JSON parsing and graph layout positions in `AIAgentRunStepDetailComponent` and `MJAIAgentRunFormComponentExtended`, add `ShouldReplaceDetailAgentRun` guard and `RefreshRenderedMessage` in `ConversationMessageListComponent`, migrate `artifactPaneWidth` from `localStorage` to `UserInfoEngine`, and remove redundant `MJ: AI Agent Runs` query in `AIAgentRunDataHelper`.
+
+- 1d29837: System placeholders now resolve in scoped prompt parts. After `BaseAgent.InjectScopedPromptParts` adds the parts (including from a subclass override), the agent passes the added messages to the new `SystemPlaceholderManager.ReplaceAvailablePlaceholders`, which replaces each bare token such as `{{ _CURRENT_DATE }}` with its value. Part text is not rendered as a template: every other character, including other `{{ ... }}` text, filters and tags, is sent as written, and so is a token that cannot be resolved before the prompt runs (prompt and Execution Context placeholders, or a user one without a context user). System placeholders declare what they need with the new optional `requires` field; one without it resolves only through `ResolveAllPlaceholders`, as before. Code that assembles parts itself with `PromptComponentResolver.AssembleMessages` can pass the result to `ReplaceAvailablePlaceholders` to get the same behavior.
+- 0cc6b08: The Scoped Search action takes its tenant from the agent run, not from the model (A12.14).
+
+  **Behaviour change.** Inside an agent run, the run's scope is authoritative for Scoped Search. A `PrimaryScopeRecordID` the run does not carry (a different tenant, or any tenant when the run has none) is refused with `INVALID_PARAM` and a `Forbidden` search-log row; with no `PrimaryScopeRecordID` the action searches the run's tenant. `SecondaryScopes` may restate a dimension the run sets only with an equal value; a dimension the run does not set is still added. The host sets the run's scope (`ExecuteAgentParams.PrimaryScopeEntityName` / `PrimaryScopeRecordID` / `SecondaryScopes`), never the model. The resolved tenant goes into both the permission decision and the search, so omitting it no longer drops tenant-scoped deny rows from the decision. A single agent run can no longer search several tenants by passing different values; run one run per tenant. Direct action calls outside an agent run are unaffected.
+
+  **Malformed `SecondaryScopes` now refuses.** Input that is not valid JSON, is not an object, or holds a value other than a string, number, boolean or string array is refused with `INVALID_PARAM`, inside and outside a run. Before, it was logged and dropped, so the search ran without those dimensions. An object value is now accepted as well as a JSON string.
+  - **`@memberjunction/actions-base`**: new `RunActionParams.RunScope` (`ActionRunScope`, `ActionRunScopeValue`). It is the run's tenant and secondary dimensions, set per dispatch beside `Audience`, never on the shared `Context`. Fields are `null` when the run is unscoped; the field is absent outside an agent run.
+  - **`@memberjunction/ai-agents`**: `ExecuteSingleAction` always stamps `RunScope`. Inside `Execute` it uses the scope `initializeAgentRun` validated and wrote to the run row, with the agent's `ScopeConfig` defaults applied; called directly, it resolves the scope from its params the same way. `ExecuteSubAgent` strips the reserved run-data keys from the model-authored `templateParameters` before merging them into the child's `data`, and logs the key names once. The reserved keys are the scope family and `__agentTypePromptParams`. Without this a model could set a sub-agent's tenant whenever the parent's scope arrived through `data`. The parent's own `data` is passed on unchanged.
+  - **`@memberjunction/ai-core-plus`**: new `RESERVED_AGENT_RUN_DATA_KEYS` and `WithoutReservedAgentRunDataKeys`. `@memberjunction/server`'s agent-run `data` guard now uses this shared list instead of its own copy.
+  - **`@memberjunction/core-actions`**: Scoped Search resolves the tenant (`resolveTenant`). Forbidden rows now record the tenant they were judged under. TSDoc and `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` updated.
+
+  Tests: unit tests in each package, and a new check in the deterministic `agent-run-audience` bundle (IT119, AU7). No migration.
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0ab85d7]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/actions-base@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/templates-base-types@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Minor Changes
