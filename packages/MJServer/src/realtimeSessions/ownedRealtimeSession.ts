@@ -8,6 +8,7 @@
 import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
+import { AuthorizeSessionAccess, LoadSessionConversationExternalID } from './sessionAccess.js';
 
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 
@@ -48,6 +49,17 @@ export async function LoadOwnedRealtimeSession(
     if (!UUIDsEqual(session.UserID, contextUser.ID)) {
         LogError(
             `LoadOwnedRealtimeSession: ownership check failed — user ${contextUser.ID} attempted to operate on session ${agentSessionId} owned by ${session.UserID}`,
+        );
+        throw new RealtimeSessionOwnershipError(agentSessionId);
+    }
+    const conversationExternalId = await LoadSessionConversationExternalID(session, contextUser, provider);
+    const decision = AuthorizeSessionAccess(
+        { SessionUserID: session.UserID, ConversationExternalID: conversationExternalId },
+        contextUser,
+    );
+    if (decision.Allowed === false) {
+        LogError(
+            `LoadOwnedRealtimeSession: ownership check failed (${decision.Reason}) — user ${contextUser.ID} attempted to operate on session ${agentSessionId}`,
         );
         throw new RealtimeSessionOwnershipError(agentSessionId);
     }

@@ -108,16 +108,20 @@ export async function LoadInheritedVerifiedIdentity(
     if (!lastSessionId) {
         return undefined;
     }
-    const prior = await LoadSessionForAccess(lastSessionId, contextUser, provider);
-    if (!prior) {
+    try {
+        const prior = await LoadSessionForAccess(lastSessionId, contextUser, provider);
+        if (!prior) {
+            return undefined;
+        }
+        const decision = AuthorizeSessionAccess(
+            { SessionUserID: prior.Session.UserID, ConversationExternalID: prior.ConversationExternalID },
+            contextUser,
+        );
+        if (decision.Allowed === false) {
+            return undefined;
+        }
+        return ReadIdentityVerificationState(prior.Session.Config_, ReadIdentityVerificationPolicyLayer).Verified;
+    } catch {
         return undefined;
     }
-    const decision = AuthorizeSessionAccess(
-        { SessionUserID: prior.Session.UserID, ConversationExternalID: prior.ConversationExternalID },
-        contextUser,
-    );
-    if (decision.Allowed === false) {
-        return undefined;
-    }
-    return ReadIdentityVerificationState(prior.Session.Config_, ReadIdentityVerificationPolicyLayer).Verified;
 }
