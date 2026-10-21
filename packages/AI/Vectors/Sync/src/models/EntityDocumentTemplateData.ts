@@ -1,8 +1,8 @@
-import { LogError, Metadata } from '@memberjunction/core';
+import { GetIndexRestrictedFieldNames, LogError, Metadata } from '@memberjunction/core';
 import type { EntityInfo, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import type { MJTemplateEntityExtended, MJTemplateParamEntity } from '@memberjunction/core-entities';
 import type { TemplateParamData } from '../generic/vectorSync.types';
-import { GetIndexRestrictedFieldNames, OmitRestrictedValues, WarnOnTemplateRestrictedFieldReferences } from '../generic/indexRestrictedFields';
+import { OmitRestrictedValues, WarnOnTemplateRestrictedFieldReferences } from '../generic/indexRestrictedFields';
 
 /**
  * Builds the data an entity document's template renders for each record.

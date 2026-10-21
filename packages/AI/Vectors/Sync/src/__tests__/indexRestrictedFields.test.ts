@@ -18,7 +18,8 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 import { EntityDocumentTemplateDataBuilder } from '../models/EntityDocumentTemplateData';
-import { GetIndexRestrictedFieldNames, ResetTemplateRestrictedFieldWarnings } from '../generic/indexRestrictedFields';
+import { GetIndexRestrictedFieldNames } from '@memberjunction/core';
+import { ResetTemplateRestrictedFieldWarnings } from '../generic/indexRestrictedFields';
 
 const HR_ROLE = 'A0000000-0000-0000-0000-000000000001';
 const STAFF_ROLE = 'A0000000-0000-0000-0000-000000000002';
@@ -160,5 +161,42 @@ describe('index-time field-level security on an IS-A child', () => {
         expect(restricted.has('level')).toBe(false);
         expect(restricted.has('name')).toBe(false);
         expect(restricted.has('id')).toBe(false);
+    });
+});
+
+describe('index-time field-level security: roles with entity read but no rule row', () => {
+    const AUDITOR_ROLE = 'A0000000-0000-0000-0000-000000000003';
+    const GUEST_ROLE = 'A0000000-0000-0000-0000-000000000004';
+
+    /** Like `entity()`, but with entity-level permission rows for the given roles. */
+    function entityWithReaders(fields: Record<string, Rule[]>, permissions: Array<{ RoleID: string; CanRead: boolean; Type?: string }>): EntityInfo {
+        const base = entity('Payroll', fields);
+        return new EntityInfo({
+            ...base,
+            Fields: base.Fields.map((f) => ({ ...f, EntityFieldPermissions: f.FieldPermissions })),
+            Permissions: permissions.map((p, i) => ({ ID: `EP-${i}`, EntityID: base.ID, CanCreate: false, CanUpdate: false, CanDelete: false, ...p })),
+        });
+    }
+
+    it('restricts a field that a role with entity-level Read has no rule row for', () => {
+        const payroll = entityWithReaders(
+            { Salary: allowAll, Name: [...allowAll, { RoleID: AUDITOR_ROLE, ReadAccess: 'Allow' }] },
+            [{ RoleID: HR_ROLE, CanRead: true }, { RoleID: STAFF_ROLE, CanRead: true }, { RoleID: AUDITOR_ROLE, CanRead: true }]
+        );
+        const restricted = GetIndexRestrictedFieldNames(payroll);
+        expect(restricted.has('salary')).toBe(true);
+        expect(restricted.has('name')).toBe(false);
+    });
+
+    it('ignores roles that cannot read the entity at all: no Read grant, or a Deny row', () => {
+        const payroll = entityWithReaders(
+            { Salary: allowAll },
+            [
+                { RoleID: HR_ROLE, CanRead: true }, { RoleID: STAFF_ROLE, CanRead: true },
+                { RoleID: GUEST_ROLE, CanRead: false },
+                { RoleID: AUDITOR_ROLE, CanRead: true }, { RoleID: AUDITOR_ROLE, CanRead: true, Type: 'Deny' },
+            ]
+        );
+        expect(GetIndexRestrictedFieldNames(payroll).has('salary')).toBe(false);
     });
 });

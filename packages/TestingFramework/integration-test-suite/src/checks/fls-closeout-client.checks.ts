@@ -41,7 +41,7 @@
 import { RunView, FieldSecurityDenialMessage, FieldSecurityClientInputMessage } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { Assert, AssertEqual, IntegrationCheckRegistry, LoadClientConfig } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, LoadClientConfig, SkipCheck } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext, FlsClientFixture } from '@memberjunction/testing-integration';
 import {
     SEEDED_FLS_ENTITY, SEED_FIXTURES_COMMAND, FLS_DENIER_ROLE, FLS_DENY_READ_FIELD, FLS_READER_DENIED_FIELD
@@ -49,10 +49,10 @@ import {
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJEmployeeEntity, MJEntityFieldPermissionEntity } from '@memberjunction/core-entities';
 import {
-    SetupFlsClientFixture, TeardownFlsClientFixture, SetFieldRuleOverWire, WaitForWirePropagation,
+    SetupFlsClientFixture, TeardownFlsClientFixture, ReplaceFieldRuleOverWire, WaitForWirePropagation,
     FirstCompanyIdOverWire, MintFullAccessUserKey, DeleteMintedUserKeys
 } from './fls-client.checks';
-import type { MintedUserKeyIds } from './fls-client.checks';
+import type { FieldRuleAccess, MintedUserKeyIds } from './fls-client.checks';
 import {
     ErrorText, AssertDeniedEqualsUnknown, AssertValuesWithheld, AssertValuePresent, AssertEntityObjectWithholds, UNKNOWN_FIELD
 } from './fls-closeout-shared';
@@ -94,6 +94,8 @@ interface CloseoutClientState extends MintedUserKeyIds {
     /** Why the multi-identity checks skip (the multi user is not seeded). */
     MultiSkipReason?: string;
     TitleRuleID?: string;
+    /** The Title rule as it stood before setup denied it; teardown puts it back. */
+    TitleRuleBefore?: FieldRuleAccess;
     CompanyID?: string;
     ReaderRawKey?: string;
     MultiRawKey?: string;
@@ -139,8 +141,10 @@ function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function skip(checkId: string, reason: string): void {
+/** Ends the running check as SKIPPED (never scored as a pass), logging why. */
+function skip(checkId: string, reason: string): never {
     console.warn(`  ⚠ ${BUNDLE}.${checkId} SKIPPED — ${reason}`);
+    return SkipCheck(`${checkId}: ${reason}`);
 }
 
 function hasGraphQLErrors(e: unknown): e is GraphQLErrorShape {
@@ -152,26 +156,23 @@ function wireErrorText(e: unknown): string {
     return (hasGraphQLErrors(e) ? e.response?.errors?.[0]?.message : undefined) ?? ErrorText(e);
 }
 
-/** The fixture, or undefined after a loud skip. A seed that is present but failed to provision fails. */
-function ready(ctx: IntegrationCheckContext, checkId: string): ReadyWire | undefined {
+/** The fixture; the check is SKIPPED without one. A seed that is present but failed to provision fails. */
+function ready(ctx: IntegrationCheckContext, checkId: string): ReadyWire {
     const fx = ctx.FlsClientFixture;
     if (fx?.ProvisionError || state.ProvisionError) {
         Assert(false, `${checkId}: the wire fixture could not be provisioned: ${fx?.ProvisionError ?? state.ProvisionError}`);
     }
     if (!fx || !fx.Usable || !state.Markers) {
-        skip(checkId, `${fx?.Reason ?? 'fixture not provisioned'}. Seed with \`${SEED_FIXTURES_COMMAND}\` and start MJAPI.`);
-        return undefined;
+        return skip(checkId, `${fx?.Reason ?? 'fixture not provisioned'}. Seed with \`${SEED_FIXTURES_COMMAND}\` and start MJAPI.`);
     }
     return { Fx: fx, Markers: state.Markers };
 }
 
 /** {@link ready} for a check that writes as the multi user. */
-function readyForMulti(ctx: IntegrationCheckContext, checkId: string): (ReadyWire & { Multi: GraphQLDataProvider }) | undefined {
+function readyForMulti(ctx: IntegrationCheckContext, checkId: string): ReadyWire & { Multi: GraphQLDataProvider } {
     const r = ready(ctx, checkId);
-    if (!r) return undefined;
     if (!r.Fx.MultiProvider || state.MultiSkipReason) {
-        skip(checkId, state.MultiSkipReason ?? 'the multi-role wire identity is not provisioned');
-        return undefined;
+        return skip(checkId, state.MultiSkipReason ?? 'the multi-role wire identity is not provisioned');
     }
     // BuildUserKeyProviderWithRetry builds a GraphQLDataProvider; the raw-wire checks need its ExecuteGQL.
     return { ...r, Multi: r.Fx.MultiProvider as GraphQLDataProvider };
@@ -312,7 +313,9 @@ async function prepareMarkers(fx: FlsClientFixture): Promise<WireMarkers> {
 
 /** Denies the multi user Title (through the Denier role) and waits until MJAPI enforces it on the multi connection. */
 async function denyTitleForMulti(ctx: IntegrationCheckContext, fx: FlsClientFixture): Promise<void> {
-    state.TitleRuleID = await SetFieldRuleOverWire(ctx, FLS_DENY_READ_FIELD, FLS_DENIER_ROLE, { Read: 'Deny', Update: 'No Access', Create: 'No Access' });
+    const replaced = await ReplaceFieldRuleOverWire(ctx, FLS_DENY_READ_FIELD, FLS_DENIER_ROLE, { Read: 'Deny', Update: 'No Access', Create: 'No Access' });
+    state.TitleRuleID = replaced.ID;
+    state.TitleRuleBefore = replaced.Previous;
     await WaitForWirePropagation(fx.MultiProvider!,
         rows => rows.length > 0 && rows.every(row => !(FLS_DENY_READ_FIELD in row)), 'Title stripped from the multi user\'s results');
     // The server now enforces the rule, but the multi connection still holds the metadata it
@@ -342,7 +345,7 @@ async function provisionRest(ctx: IntegrationCheckContext, fx: FlsClientFixture)
 
 async function setupCloseoutClient(ctx: IntegrationCheckContext): Promise<void> {
     Object.assign(state, {
-        Markers: undefined, ProvisionError: undefined, MultiSkipReason: undefined, TitleRuleID: undefined, CompanyID: undefined,
+        Markers: undefined, ProvisionError: undefined, MultiSkipReason: undefined, TitleRuleID: undefined, TitleRuleBefore: undefined, CompanyID: undefined,
         ReaderRawKey: undefined, MultiRawKey: undefined, RestBase: undefined, RestSkipReason: undefined,
         CreatedKeyIds: [], CreatedScopeRuleIds: [],
     });
@@ -365,15 +368,16 @@ async function setupCloseoutClient(ctx: IntegrationCheckContext): Promise<void> 
     }
 }
 
-/** Restores the multi user's Title rule to the read-only role's snapshot default. */
+/** Restores the multi user's Title rule to what it was before setup denied it. */
 async function restoreTitleRule(ctx: IntegrationCheckContext): Promise<void> {
-    if (!state.TitleRuleID) return;
+    const before = state.TitleRuleBefore;
+    if (!state.TitleRuleID || !before) return;
     try {
         const efp = await ctx.Provider.GetEntityObject<MJEntityFieldPermissionEntity>('MJ: Entity Field Permissions', ctx.User);
         if (await efp.Load(state.TitleRuleID)) {
-            efp.ReadAccess = 'Allow';
-            efp.UpdateAccess = 'No Access';
-            efp.CreateAccess = 'No Access';
+            efp.ReadAccess = before.Read;
+            efp.UpdateAccess = before.Update;
+            efp.CreateAccess = before.Create;
             await efp.Save();
         }
     } catch { /* best-effort */ }
@@ -392,7 +396,6 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, { Setup: setupCloseo
 /** CW1 — over the wire, the multi user's object holds no Title after Load and after Save; the stored Title is untouched. */
 export async function CheckCw1WireObjectWidth(ctx: IntegrationCheckContext): Promise<void> {
     const r = readyForMulti(ctx, 'CW1');
-    if (!r) return;
     const emp = await r.Multi.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY);
     Assert(await emp.Load(r.Fx.FixtureEmployeeID!), 'CW1: the multi user must load the fixture employee over the wire');
     await AssertEntityObjectWithholds(emp, FLS_DENY_READ_FIELD, r.Markers.Title, 'CW1 after a wire Load');
@@ -412,7 +415,6 @@ export async function CheckCw1WireObjectWidth(ctx: IntegrationCheckContext): Pro
 /** CW2 — a GraphQL create carrying a denied key is refused with the client-input wording; nothing is written. */
 export async function CheckCw2GraphQLCreateDeniedKeyRefused(ctx: IntegrationCheckContext): Promise<void> {
     const r = readyForMulti(ctx, 'CW2');
-    if (!r) return;
     const created = newEmployeeValues(state.CompanyID!, 'CW2', { [FLS_DENY_READ_FIELD]: 'fabricated' });
     const outcome = await sendGQL(r.Multi, CREATE_EMPLOYEE_MUTATION, { input: created.Values });
     Assert(!outcome.Done, 'CW2: a create naming a field the caller cannot read must be refused');
@@ -424,7 +426,6 @@ export async function CheckCw2GraphQLCreateDeniedKeyRefused(ctx: IntegrationChec
 /** CW3 — GraphQL update: a denied key and an unknown OldValues___ key are refused with the same wording; nothing moves. */
 export async function CheckCw3GraphQLUpdateDeniedEqualsUnknown(ctx: IntegrationCheckContext): Promise<void> {
     const r = readyForMulti(ctx, 'CW3');
-    if (!r) return;
     const id = r.Fx.FixtureEmployeeID!;
     const denied = await sendGQL(r.Multi, UPDATE_EMPLOYEE_MUTATION, { input: { ID: id, FirstName: 'CW3Denied', [FLS_DENY_READ_FIELD]: 'fabricated' } });
     const unknown = await sendGQL(r.Multi, UPDATE_EMPLOYEE_MUTATION,
@@ -440,7 +441,6 @@ export async function CheckCw3GraphQLUpdateDeniedEqualsUnknown(ctx: IntegrationC
 /** CW4 — transaction-group create and update: a denied key and an unknown key get the same refusal; nothing is written. */
 export async function CheckCw4TransactionGroupDeniedEqualsUnknown(ctx: IntegrationCheckContext): Promise<void> {
     const r = readyForMulti(ctx, 'CW4');
-    if (!r) return;
     const create = async (key: string) => {
         const created = newEmployeeValues(state.CompanyID!, `CW4 ${key}`, { [key]: 'fabricated' });
         const outcome = await sendTransactionGroup(r.Multi, [{ EntityName: SEEDED_FLS_ENTITY, EntityObjectJSON: JSON.stringify(created.Values), OperationType: 'Create' }]);
@@ -465,7 +465,6 @@ export async function CheckCw4TransactionGroupDeniedEqualsUnknown(ctx: Integrati
 /** CW5 — a transaction-group update's returned delta carries no value the caller may not read. */
 export async function CheckCw5TransactionGroupDeltaProjected(ctx: IntegrationCheckContext): Promise<void> {
     const r = readyForMulti(ctx, 'CW5');
-    if (!r) return;
     const send = (firstName: string) => sendTransactionGroup(r.Multi, [{
         EntityName: SEEDED_FLS_ENTITY, OperationType: 'Update', EntityObjectJSON: JSON.stringify({ ID: r.Fx.FixtureEmployeeID, FirstName: firstName }),
     }]);
@@ -484,7 +483,6 @@ export async function CheckCw5TransactionGroupDeltaProjected(ctx: IntegrationChe
 /** CW6 — the client's transaction group creates a record for a restricted user, and the result carries no denied value. */
 export async function CheckCw6ClientTransactionGroupCreate(ctx: IntegrationCheckContext): Promise<void> {
     const r = readyForMulti(ctx, 'CW6');
-    if (!r) return;
     const tg = await r.Multi.CreateTransactionGroup();
     const emp = await r.Multi.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY);
     emp.NewRecord();
@@ -506,12 +504,10 @@ export async function CheckCw6ClientTransactionGroupCreate(ctx: IntegrationCheck
 }
 
 /** The REST checks' preconditions: the fixture, and REST answering with the minted keys. */
-function readyForRest(ctx: IntegrationCheckContext, checkId: string): ReadyWire | undefined {
+function readyForRest(ctx: IntegrationCheckContext, checkId: string): ReadyWire {
     const r = ready(ctx, checkId);
-    if (!r) return undefined;
     if (!state.RestBase) {
-        skip(checkId, state.RestSkipReason ?? 'REST was not provisioned');
-        return undefined;
+        return skip(checkId, state.RestSkipReason ?? 'REST was not provisioned');
     }
     return r;
 }
@@ -519,7 +515,6 @@ function readyForRest(ctx: IntegrationCheckContext, checkId: string): ReadyWire 
 /** CW7 — REST get and REST runView (entity_object is answered as simple rows) carry no denied value. */
 export async function CheckCw7RestReadsProjected(ctx: IntegrationCheckContext): Promise<void> {
     const r = readyForRest(ctx, 'CW7');
-    if (!r) return;
     const one = await rest(state.ReaderRawKey!, 'GET', restPath(r.Fx.FixtureEmployeeID));
     AssertEqual(one.Status, 200, `CW7: REST get as the reader must succeed: ${restText(one.Body)}`);
     AssertValuesWithheld(one.Body, FLS_READER_DENIED_FIELD, r.Markers.Email, 'CW7 REST get');
@@ -538,7 +533,6 @@ export async function CheckCw7RestReadsProjected(ctx: IntegrationCheckContext): 
 /** CW8 — REST create and update: denied and unknown keys get the same refusal; an allowed update's response carries no denied value. */
 export async function CheckCw8RestWritesGated(ctx: IntegrationCheckContext): Promise<void> {
     const r = readyForRest(ctx, 'CW8');
-    if (!r) return;
     if (!state.MultiRawKey) return skip('CW8', 'no REST key for the multi user (the multi user is not seeded)');
     const key = state.MultiRawKey;
     const create = async (field: string) => {
@@ -610,7 +604,6 @@ async function rawOverrideExcludeFilterRefusal(provider: GraphQLDataProvider, ov
 /** CW9 — over the wire: an unknown column gets the denied column's wording; OverrideExcludeFilter on a denied column is refused. */
 export async function CheckCw9WireFilterGate(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CW9');
-    if (!r) return;
     const reader = r.Fx.ReaderProvider!;
     const denied = await wireRunViewRefusal(reader, { ExtraFilter: `${FLS_READER_DENIED_FIELD} LIKE '%@%'` }, 'CW9 denied column');
     const unknown = await wireRunViewRefusal(reader, { ExtraFilter: `${UNKNOWN_FIELD} LIKE '%@%'` }, 'CW9 unknown column');

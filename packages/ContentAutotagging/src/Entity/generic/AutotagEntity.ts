@@ -1,7 +1,7 @@
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
 import { AutotagBase, AutotagProgressCallback } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
-import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError, EntityInfo, CompositeKey } from "@memberjunction/core";
+import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError, EntityInfo, CompositeKey, GetIndexRestrictedFieldNames } from "@memberjunction/core";
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentItemTagEntity,
     MJEntityDocumentEntity, MJEntityRecordDocumentEntity,
@@ -14,7 +14,7 @@ import {
  */
 type IContentSourceConfiguration = MJContentSourceEntity_IContentSourceConfiguration;
 import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
-import { GetIndexRestrictedFieldNames, OmitRestrictedValues, WarnOnTemplateRestrictedFieldReferences } from "@memberjunction/ai-vector-sync";
+import { OmitRestrictedValues, WarnOnTemplateRestrictedFieldReferences } from "@memberjunction/ai-vector-sync";
 import { TemplateEngineServer } from "@memberjunction/templates";
 import { TagEngine, TaxonomyMode } from "@memberjunction/tag-engine";
 import { TagScopeContext } from "@memberjunction/tag-engine-base";

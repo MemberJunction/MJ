@@ -186,6 +186,13 @@ async function enableOverWire(ctx: IntegrationCheckContext, entityId: string): P
     }
 }
 
+/** The three verbs of one field permission rule. */
+export type FieldRuleAccess = {
+    Read: 'Allow' | 'Deny' | 'No Access';
+    Update: 'Allow' | 'Deny' | 'No Access';
+    Create: 'Allow' | 'Deny' | 'No Access';
+};
+
 /**
  * Set a role's rule for one field through the wire, returning the row ID so teardown can restore
  * it. Shared by the reader's Email tightening (read denial) and the denier's Phone tightening
@@ -196,8 +203,21 @@ export async function SetFieldRuleOverWire(
     ctx: IntegrationCheckContext,
     fieldName: string,
     roleName: string,
-    access: { Read: 'Allow' | 'Deny' | 'No Access'; Update: 'Allow' | 'Deny' | 'No Access'; Create: 'Allow' | 'Deny' | 'No Access' }
+    access: FieldRuleAccess
 ): Promise<string> {
+    return (await ReplaceFieldRuleOverWire(ctx, fieldName, roleName, access)).ID;
+}
+
+/**
+ * {@link SetFieldRuleOverWire}, also returning the rule as it stood before, so teardown can put
+ * back exactly what was there rather than an assumed default.
+ */
+export async function ReplaceFieldRuleOverWire(
+    ctx: IntegrationCheckContext,
+    fieldName: string,
+    roleName: string,
+    access: FieldRuleAccess
+): Promise<{ ID: string; Previous: FieldRuleAccess }> {
     const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
     const field = entity?.Fields.find(f => f.Name === fieldName);
     const role = ctx.Provider.Roles.find(r => r.Name === roleName);
@@ -214,13 +234,14 @@ export async function SetFieldRuleOverWire(
     if (!(await efp.Load(rows.Results[0].ID))) {
         throw new Error(`failed to load the ${fieldName}/${roleName} permission row over the wire`);
     }
+    const previous: FieldRuleAccess = { Read: efp.ReadAccess, Update: efp.UpdateAccess, Create: efp.CreateAccess };
     efp.ReadAccess = access.Read;
     efp.UpdateAccess = access.Update;
     efp.CreateAccess = access.Create;
     if (!(await efp.Save())) {
         throw new Error(`setting ${fieldName}/${roleName} over the wire failed: ${efp.LatestResult?.CompleteMessage ?? ''}`);
     }
-    return rows.Results[0].ID;
+    return { ID: rows.Results[0].ID, Previous: previous };
 }
 
 /** Tighten the reader role's Email rule to Deny through the wire; returns the row ID for restore. */

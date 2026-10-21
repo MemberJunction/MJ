@@ -51,7 +51,7 @@
 import { RunView, FieldSecurityDenialMessage, FieldSecurityWholeRowMessage, CompositeKey } from '@memberjunction/core';
 import type { BaseEntity, DatasetResultType, IMetadataProvider, UserInfo, RunViewParams } from '@memberjunction/core';
 import { UUIDsEqual, ordinalCompare } from '@memberjunction/global';
-import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext, FlsFixture } from '@memberjunction/testing-integration';
 import {
     SEEDED_FLS_ENTITY, SEED_FIXTURES_COMMAND, FLS_DENY_READ_FIELD, FLS_READER_DENIED_FIELD
@@ -100,21 +100,22 @@ const state: CloseoutState = { CreatedViewIDs: [], CreatedDatasetIDs: [], Create
 
 // ─────────────────────────────────────────────────────────────────── fixture
 
-/** The usable fixture and its markers, or undefined after a loud skip. A provisioned-but-broken fixture fails. */
-function ready(ctx: IntegrationCheckContext, checkId: string): { Fx: FlsFixture; Markers: CloseoutMarkers } | undefined {
+/** The usable fixture and its markers; the check is SKIPPED without one. A provisioned-but-broken fixture fails. */
+function ready(ctx: IntegrationCheckContext, checkId: string): { Fx: FlsFixture; Markers: CloseoutMarkers } {
     const fx = ctx.FlsFixture;
     if (fx?.EnableError || state.ProvisionError) {
         Assert(false, `${checkId}: the FLS fixture could not be provisioned: ${fx?.EnableError ?? state.ProvisionError}`);
     }
     if (!fx || !fx.Usable || !state.Markers) {
-        console.warn(`  ⚠ ${BUNDLE}.${checkId} SKIPPED — ${fx?.Reason ?? 'fixture not provisioned'}. Seed with \`${SEED_FIXTURES_COMMAND}\`.`);
-        return undefined;
+        return skip(checkId, `${fx?.Reason ?? 'fixture not provisioned'}. Seed with \`${SEED_FIXTURES_COMMAND}\`.`);
     }
     return { Fx: fx, Markers: state.Markers };
 }
 
-function skip(checkId: string, reason: string): void {
+/** Ends the running check as SKIPPED (never scored as a pass), logging why. */
+function skip(checkId: string, reason: string): never {
     console.warn(`  ⚠ ${BUNDLE}.${checkId} SKIPPED — ${reason}`);
+    return SkipCheck(`${checkId}: ${reason}`);
 }
 
 async function setupCloseout(ctx: IntegrationCheckContext): Promise<void> {
@@ -260,7 +261,6 @@ async function withKeeperCarryingLastAllow(
 /** CO1 — RunView `entity_object`: the reader's objects hold no denied value by any accessor; the writer's are full width. */
 export async function CheckCo1EntityObjectRunViewWidth(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO1');
-    if (!r) return;
     const params = (tag: string): RunViewParams => ({
         EntityName: SEEDED_FLS_ENTITY, ExtraFilter: `ID = '${r.Fx.FixtureEmployeeID}' AND ${ColdFilter(tag)}`, ResultType: 'entity_object'
     });
@@ -281,7 +281,6 @@ export async function CheckCo1EntityObjectRunViewWidth(ctx: IntegrationCheckCont
 /** CO2 — Load then Save as the multi user: Title is never held, before or after the save re-reads the row. */
 export async function CheckCo2LoadAndSaveWidth(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO2');
-    if (!r) return;
     const emp = await ctx.Provider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY, r.Fx.Multi!);
     Assert(await emp.Load(r.Fx.FixtureEmployeeID!), 'CO2: the multi user must be able to load the fixture employee');
     await AssertEntityObjectWithholds(emp, FLS_DENY_READ_FIELD, r.Markers.Title, 'CO2 after Load');
@@ -304,7 +303,6 @@ export async function CheckCo2LoadAndSaveWidth(ctx: IntegrationCheckContext): Pr
 /** CO3 — LoadFromData with a full-width row: the reader's object drops the denied value; the row it was given is untouched. */
 export async function CheckCo3LoadFromDataWidth(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO3');
-    if (!r) return;
     const fullRow = await fixtureRowAs(r.Fx, r.Fx.Writer!, `co3-${Date.now()}`);
     AssertValuePresent(fullRow, FLS_READER_DENIED_FIELD, r.Markers.Email, 'CO3 source row (precondition)');
 
@@ -323,7 +321,6 @@ export async function CheckCo3LoadFromDataWidth(ctx: IntegrationCheckContext): P
 /** CO4 — OverrideExcludeFilter naming a denied field is refused with the ambiguous wording. */
 export async function CheckCo4OverrideExcludeFilterRefused(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO4');
-    if (!r) return;
     const message = await RunViewRefusal({
         EntityName: SEEDED_FLS_ENTITY,
         OverrideExcludeFilter: `${FLS_READER_DENIED_FIELD} LIKE '%@%'`, ResultType: 'simple', BypassCache: true
@@ -334,7 +331,6 @@ export async function CheckCo4OverrideExcludeFilterRefused(ctx: IntegrationCheck
 /** CO5 — a view's stored WhereClause naming a denied field is refused: an in-memory view, then a saved one run by ViewID. */
 export async function CheckCo5StoredWhereClauseRefused(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO5');
-    if (!r) return;
     const clause = `${FLS_READER_DENIED_FIELD} LIKE '%@%'`;
     const expected = FieldSecurityDenialMessage(FLS_READER_DENIED_FIELD, SEEDED_FLS_ENTITY);
 
@@ -349,12 +345,12 @@ export async function CheckCo5StoredWhereClauseRefused(ctx: IntegrationCheckCont
     Assert(viaEntity.includes(expected), `CO5 (ViewEntity): ambiguous wording expected, got '${viaEntity}'`);
 
     if (!canRead(ctx, USER_VIEWS_ENTITY, r.Fx.Reader!)) {
-        skip('CO5 (ViewID leg)', `${r.Fx.Reader!.Email} lacks read on '${USER_VIEWS_ENTITY}' (older seed). Re-seed with \`${SEED_FIXTURES_COMMAND}\`.`);
+        skip('CO5 (ViewID leg)', `${r.Fx.Reader!.Email} lacks read on '${USER_VIEWS_ENTITY}' (older seed); only the in-memory leg ran. Re-seed with \`${SEED_FIXTURES_COMMAND}\`.`);
         return;
     }
     const saved = await saveFixtureView(ctx, SEEDED_FLS_ENTITY, clause, false);
     if (!(await storedWhereClause(ctx, saved.ID)).includes(FLS_READER_DENIED_FIELD)) {
-        skip('CO5 (ViewID leg)', 'saving the view regenerated its WhereClause without the denied column; the in-memory leg ran');
+        skip('CO5 (ViewID leg)', 'saving the view regenerated its WhereClause without the denied column; only the in-memory leg ran');
         return;
     }
     const viaID = await RunViewRefusal({ ViewID: saved.ID, ResultType: 'simple', BypassCache: true }, r.Fx.Reader!, 'CO5 ViewID');
@@ -364,7 +360,6 @@ export async function CheckCo5StoredWhereClauseRefused(ctx: IntegrationCheckCont
 /** CO6 — a CustomWhereClause view run by ViewID is refused for the reader and runs for the writer. */
 export async function CheckCo6CustomWhereClauseViewRefused(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO6');
-    if (!r) return;
     if (!canRead(ctx, USER_VIEWS_ENTITY, r.Fx.Reader!) || !canRead(ctx, USER_VIEWS_ENTITY, r.Fx.Writer!)) {
         skip('CO6', `the seeded FLS users lack read on '${USER_VIEWS_ENTITY}' (older seed). Re-seed with \`${SEED_FIXTURES_COMMAND}\`.`);
         return;
@@ -391,7 +386,6 @@ function wholeRowProbes(ctx: IntegrationCheckContext): Array<{ Sql: string; Cons
 /** CO7 — whole-row constructs are refused for the reader, and are not refused AS whole-row reads for the writer. */
 export async function CheckCo7WholeRowConstructsRefused(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO7');
-    if (!r) return;
     for (const probe of wholeRowProbes(ctx)) {
         const message = await RunViewRefusal({ EntityName: SEEDED_FLS_ENTITY, ExtraFilter: probe.Sql, ResultType: 'simple', BypassCache: true },
             r.Fx.Reader!, `CO7 ${probe.Construct}`);
@@ -414,7 +408,6 @@ export async function CheckCo7WholeRowConstructsRefused(ctx: IntegrationCheckCon
 /** CO8 — look-alike spellings of the denied column are refused; its name inside a string literal or comment is not. */
 export async function CheckCo8LookAlikeSpellings(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO8');
-    if (!r) return;
     const view = FlsEntity(ctx).BaseView;
     const spellings = [`[EMAIL] LIKE '%@%'`, `[${view}].[eMaIl] IS NOT NULL`, `"Email" IS NOT NULL`, `ＥＭＡＩＬ IS NOT NULL`];
     for (const sql of spellings) {
@@ -431,7 +424,6 @@ export async function CheckCo8LookAlikeSpellings(ctx: IntegrationCheckContext): 
 /** CO9 — an unknown column is refused with the denied wording, in ExtraFilter and OrderBy; only for a caller with denials. */
 export async function CheckCo9UnknownEqualsDenied(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO9');
-    if (!r) return;
     for (const slot of ['ExtraFilter', 'OrderBy'] as const) {
         const clause = (name: string) => slot === 'ExtraFilter' ? `${name} LIKE '%@%'` : `${name} DESC`;
         const params = (name: string): RunViewParams => ({ EntityName: SEEDED_FLS_ENTITY, [slot]: clause(name), ResultType: 'simple', BypassCache: true });
@@ -492,7 +484,6 @@ function datasetRows(result: DatasetResultType, what: string): Record<string, un
 /** CO10 — dataset item rows are projected for the reader, cold and on the slot the writer warmed. */
 export async function CheckCo10DatasetRowsProjected(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO10');
-    if (!r) return;
     const name = await ensureFixtureDataset(ctx, r.Fx);
     const coldReader = datasetRows(await ctx.Provider.GetDatasetByName(name, undefined, r.Fx.Reader!), 'CO10 reader (cold)');
     AssertValuesWithheld(coldReader[0], FLS_READER_DENIED_FIELD, r.Markers.Email, 'CO10 reader row (cold)');
@@ -514,7 +505,6 @@ function datasetRefusalText(result: DatasetResultType): { Refused: boolean; Text
 /** CO11 — an ItemFilter on a denied field, or on an unknown one, is refused with the same wording. */
 export async function CheckCo11DatasetItemFilterRefused(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO11');
-    if (!r) return;
     const name = await ensureFixtureDataset(ctx, r.Fx);
     const read = async (column: string) => datasetRefusalText(
         await ctx.Provider.GetDatasetByName(name, [{ ItemCode: 'Employees', Filter: `${column} LIKE '%@%'` }], r.Fx.Reader!));
@@ -538,7 +528,6 @@ const AUDIT_PAYLOAD_FIELDS = ['ID', 'ChangesJSON', 'ChangesDescription', 'FullRe
 /** CO12 — a ViewID-only read of the audit trail projects each row's payload against the entity it is about. */
 export async function CheckCo12RecordChangesViewIDProjected(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO12');
-    if (!r) return;
     if (!FlsEntity(ctx).TrackRecordChanges) return skip('CO12', `'${SEEDED_FLS_ENTITY}' has TrackRecordChanges off, so no audit row exists`);
     for (const user of [r.Fx.Reader!, r.Fx.Writer!]) {
         if (!canRead(ctx, RECORD_CHANGES_ENTITY, user) || !canRead(ctx, USER_VIEWS_ENTITY, user)) {
@@ -595,7 +584,6 @@ async function auditRowCarrying(ctx: IntegrationCheckContext, fx: FlsFixture, ma
  */
 export async function CheckCo19RestrictedSaveStoresFullSnapshot(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO19');
-    if (!r) return;
     if (!FlsEntity(ctx).TrackRecordChanges) return skip('CO19', `'${SEEDED_FLS_ENTITY}' has TrackRecordChanges off, so no audit row exists`);
     for (const user of [r.Fx.Multi!, r.Fx.Writer!]) {
         if (!canRead(ctx, RECORD_CHANGES_ENTITY, user)) {
@@ -646,7 +634,6 @@ async function saveWithSpellings(efp: MJEntityFieldPermissionEntity, spellings: 
 /** CO13 — a lowercase 'deny' on a non-system role is stored as 'Deny' and enforced. */
 export async function CheckCo13LowercaseDenyNormalized(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO13');
-    if (!r) return;
     const field = FieldOf(FlsEntity(ctx), FLS_DENY_READ_FIELD);
     const efp = await LoadEfpRow(ctx, field.ID, r.Fx.RoleIDs!.Reader);
     try {
@@ -665,7 +652,6 @@ export async function CheckCo13LowercaseDenyNormalized(ctx: IntegrationCheckCont
 /** CO14 — a lowercase 'deny' aimed at a role the system user holds is refused, and the stored rule is unchanged. */
 export async function CheckCo14LowercaseDenyOnSystemRoleRefused(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO14');
-    if (!r) return;
     const field = FieldOf(FlsEntity(ctx), 'FirstName');
     const [role] = await systemRolesAllowingRead(ctx, field.ID);
     if (!role) return skip('CO14', 'no role the system user holds carries a rule on the field (none holds entity read)');
@@ -696,7 +682,6 @@ async function roleWithoutRule(ctx: IntegrationCheckContext, fieldID: string, ex
 /** CO15 — re-pointing the RoleID of the rule carrying the system user's last Allow is refused; the row does not move. */
 export async function CheckCo15RuleRePointRefused(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO15');
-    if (!r) return;
     const { Roles } = systemRoleIDs();
     const field = FieldOf(FlsEntity(ctx), 'LastName');
     const allowing = await systemRolesAllowingRead(ctx, field.ID);
@@ -728,7 +713,6 @@ export async function CheckCo15RuleRePointRefused(ctx: IntegrationCheckContext):
 /** CO16 — re-pointing a system-user role assignment to another user is refused when that role carries the last Allow. */
 export async function CheckCo16UserRoleRePointRefused(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO16');
-    if (!r) return;
     const { User: sysUser } = systemRoleIDs();
     const field = FieldOf(FlsEntity(ctx), 'LastName');
     const allowing = await systemRolesAllowingRead(ctx, field.ID);
@@ -796,7 +780,6 @@ async function preloadAs(agentID: string, user: UserInfo): Promise<Record<string
 /** CO17 — a PerAgent-cached data source is cached per user, and an entity_object source hands the agent no denied value. */
 export async function CheckCo17AgentDataSourcePerUser(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO17');
-    if (!r) return;
     const agents = await new RunView().RunView<{ ID: string }>(
         { EntityName: 'MJ: AI Agents', ExtraFilter: `Name = '${DATA_SOURCE_AGENT_NAME}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, ctx.User);
     if (!agents.Success || agents.Results.length !== 1) return skip('CO17', `the seeded '${DATA_SOURCE_AGENT_NAME}' agent is not present. Seed with \`${SEED_FIXTURES_COMMAND}\`.`);
@@ -863,7 +846,6 @@ function indexedHit(fx: FlsFixture, markers: CloseoutMarkers): SearchResultItem 
 /** CO18 — search results the reader may see have the denied field projected out of RawMetadata and the snippet. */
 export async function CheckCo18SearchResultsProjected(ctx: IntegrationCheckContext): Promise<void> {
     const r = ready(ctx, 'CO18');
-    if (!r) return;
     const probe = FlsCloseoutSearchProbe.For(ctx.Provider);
     const forReader = await probe.FilterByPermissions([indexedHit(r.Fx, r.Markers)], r.Fx.Reader!);
     Assert(forReader.length === 1, `CO18: the reader may read the row, so the hit must survive (got ${forReader.length})`);
