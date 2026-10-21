@@ -1,0 +1,8 @@
+{
+  "extends": "../../../../tsconfig.angular.json",
+  "compilerOptions": {
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["**/*.test.ts", "**/*.spec.ts", "src/lib/internal/testing/**"]
+}

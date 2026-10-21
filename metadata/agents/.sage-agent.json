@@ -36,6 +36,10 @@
       },
       "TypeConfiguration": {
         "realtime": {
+          "video": {
+            "enabled": true,
+            "avatarId": "Ben"
+          },
           "directActions": {
             "enabled": true,
             "timeoutMs": 8000,
@@ -616,6 +620,8 @@
             "ModelSelectionMode": "Agent",
             "ArtifactCreationMode": "Never",
             "ExposeAsAction": false,
+            "MessageMode": "Latest",
+            "MaxMessages": 10,
             "AgentTypePromptParams": {
               "includeForEachDocs": false,
               "includeWhileDocs": false,
@@ -713,6 +719,8 @@
             "ExposeAsAction": false,
             "DriverClass": "FormBuilderAgent",
             "IconClass": "fa-solid fa-pen-ruler",
+            "MessageMode": "Latest",
+            "MaxMessages": 10,
             "AgentTypePromptParams": {
               "includeForEachDocs": false,
               "includeWhileDocs": false,
@@ -736,6 +744,8 @@
                   "ExposeAsAction": false,
                   "DriverClass": "FormBuilderDesignerAgent",
                   "IconClass": "fa-solid fa-drafting-compass",
+                  "MessageMode": "Latest",
+                  "MaxMessages": 10,
                   "PayloadDownstreamPaths": [
                     "*"
                   ],
@@ -951,14 +961,36 @@
             "checksum": "167c748e117490d99585d05fea6b73b34d3281c1543e03d8e78ef01c37246ef6"
           }
         }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Assistant reply",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Sage"
+            }
+          },
+          "primaryKey": {
+            "ID": "40A4B461-4123-4B7E-8209-99AA50D9F29A"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:55.598Z",
+            "checksum": "da9b39d28e84d56d51a18c8e0400e5949f71ddb98d302ee95323f672984ba5bd"
+          }
+        }
       ]
     },
     "primaryKey": {
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-09-21T02:45:37.105Z",
-      "checksum": "4fe54fe156517a51154e5277e2ccf1eec0b5a875bca4d52d7b6d66bb0d3a9b00"
+      "lastModified": "2026-10-18T13:09:46.268Z",
+      "checksum": "cbe4237db70e69afbd5c52b260d8773f8cf73b9148bc70fcfa55d525671b74d5"
     }
   }
 ]

@@ -144,6 +144,34 @@ describe('applyNativeToolCalling — filling the outgoing request', () => {
         expect(GetToolCallingMode(chatParams)).toBe('Native');
     });
 
+    it('keeps a forced complete_task when the implicit model receives it', () => {
+        engineState.configuration = { LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true, NativeControlFlow: 'implicit' } };
+        const chatParams = new ChatParams();
+        const tools = [{ name: 'run_ad_hoc_query', description: 'x', inputSchema: { type: 'object' } }, { name: 'complete_task', description: 'y', inputSchema: { type: 'object' } }];
+        priv(runner).applyNativeToolCalling(chatParams, prompt(), { tools, controlFlowToolNames: ['complete_task'], toolChoice: { name: 'complete_task' } }, model(), VENDOR_ID);
+        expect(chatParams.toolChoice).toEqual({ name: 'complete_task' });
+    });
+
+    it("sends 'auto' in place of a forced complete_task to a model whose catalog rejects forced tool choice", () => {
+        engineState.configuration = { LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true, NativeControlFlow: 'implicit', SupportsForcedToolChoice: false } };
+        const chatParams = new ChatParams();
+        const tools = [{ name: 'run_ad_hoc_query', description: 'x', inputSchema: { type: 'object' } }, { name: 'complete_task', description: 'y', inputSchema: { type: 'object' } }];
+        priv(runner).applyNativeToolCalling(chatParams, prompt(), { tools, controlFlowToolNames: ['complete_task'], toolChoice: { name: 'complete_task' } }, model(), VENDOR_ID);
+        expect(chatParams.tools?.map((t) => t.name)).toEqual(['run_ad_hoc_query', 'complete_task']);
+        expect(chatParams.toolChoice).toBe('auto');
+    });
+
+    it("downgrades a forced complete_task to 'none' on a hybrid model, which never receives it", () => {
+        // A named choice for an undeclared tool is rejected by every provider; the hybrid's terminal
+        // answer is the envelope, which 'none' asks for.
+        engineState.configuration = { LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true } };
+        const chatParams = new ChatParams();
+        const tools = [{ name: 'run_ad_hoc_query', description: 'x', inputSchema: { type: 'object' } }, { name: 'complete_task', description: 'y', inputSchema: { type: 'object' } }];
+        priv(runner).applyNativeToolCalling(chatParams, prompt(), { tools, controlFlowToolNames: ['complete_task'], toolChoice: { name: 'complete_task' } }, model(), VENDOR_ID);
+        expect(chatParams.tools?.map((t) => t.name)).toEqual(['run_ad_hoc_query']);
+        expect(chatParams.toolChoice).toBe('none');
+    });
+
     it('an orchestrator with only control tools sends nothing on a hybrid model (Envelope)', () => {
         engineState.configuration = { LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true } };
         const chatParams = new ChatParams();
@@ -246,6 +274,46 @@ describe('applyNativeToolCalling — filling the outgoing request', () => {
 
         expect(chatParams.tools).toBeUndefined();
         expect(GetToolCallingMode(chatParams)).toBe('Envelope');
+    });
+});
+
+describe('hierarchical runs — the child (agent) prompt is a layer of the cascade', () => {
+    // An agent runs its agent type's system prompt as the parent, with its own prompt as the first
+    // child. The cascade is parent → child → AI Prompt Model row.
+    const withChild = (childUseNative?: boolean) => ({
+        tools: [WEATHER_TOOL],
+        childPrompts: [{ childPrompt: { prompt: prompt(childUseNative) }, parentPlaceholder: 'agentPrompt' }]
+    });
+    const decide = (parent: ReturnType<typeof prompt>, params: unknown, row?: unknown) =>
+        runner.ResolveNativeToolCallingDecision(
+            parent as never, params as never, model() as never, VENDOR_ID, row as never
+        );
+
+    beforeEach(() => {
+        engineState.configuration = { LLM: { SupportsNativeToolCalling: true } };
+    });
+
+    it('opens the gate when only the child prompt opts in', () => {
+        expect(decide(prompt(), withChild(true)).useNativeTools).toBe(true);
+    });
+
+    it('lets the prompt-model row override the child', () => {
+        expect(decide(prompt(), withChild(true), { LLM: { UseNativeToolCalling: false } }).useNativeTools).toBe(false);
+    });
+
+    it('lets the child override the parent, including an explicit false', () => {
+        expect(decide(prompt(true), withChild(false)).useNativeTools).toBe(false);
+    });
+
+    it('inherits the parent when the child sets nothing', () => {
+        expect(decide(prompt(true), withChild()).useNativeTools).toBe(true);
+    });
+
+    it('still loses to capability, with the warning', () => {
+        engineState.configuration = { LLM: { SupportsNativeToolCalling: false } };
+        const decision = decide(prompt(), withChild(true));
+        expect(decision.useNativeTools).toBe(false);
+        expect(decision.warning).toContain('SupportsNativeToolCalling');
     });
 });
 

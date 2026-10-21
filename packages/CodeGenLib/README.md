@@ -466,6 +466,19 @@ export const AIPromptSchema = z.object({
 });
 ```
 
+### JSONType Accessors and Opt-In JSON Validation
+
+For a field with `EntityField.JSONType`, CodeGen emits a typed `<Field>Object` accessor that delegates to
+`BaseEntity.GetJSONFieldObject` / `SetJSONFieldObject` (a live view: in-place edits persist on `Save()`).
+A `@mjValidate` (or `@mjValidate warn`) JSDoc tag on the root interface in `JSONTypeDefinition` opts the type
+in to: exported structural Zod schema consts (`src/Misc/json-type-zod.ts`, TypeScript AST to Zod, used by the generated `Validate()`; the entity's column entry in `<Entity>Schema` stays `z.any()` because the column value is JSON text; unsupported constructs degrade to a permissive sub-schema plus a warning), JSON-Schema-style tags (`@minimum`, `@maxLength`,
+`@pattern`, `@format`, `@minItems`, ...), `@CHECK ts:(...)` rules compiled as written, and `@CHECK (SQL)` rules
+translated by the `CodeGen: JSON Check Parser` prompt (`AdvancedGeneration.ParseJSONCheck`), compile-checked, executed against the model's own `TestCases` (`RunJSONRuleTestCases`),
+and cached in `__mj.GeneratedCode` under the `CodeGen: JSON Validators` category keyed by JSONType name, path
+and normalized text (`src/Database/json-check-validators.ts`). The generated `Validate()` calls
+`ValidateJSONField` per opted-in field. Untagged JSONTypes generate exactly what they did before, apart from the
+accessor delegation. Full reference: [JSONType Guide](../../guides/JSONTYPE_GUIDE.md).
+
 ### SQL Views & Hierarchy Traversal Engine
 
 For tables with self-referential foreign keys configured as hierarchies (`EntityField.Configuration` setting `{ "Hierarchy": { "IsHierarchy": true } }`) and single-column primary keys, CodeGen automatically generates a 4-routine Table-Valued Function (TVF) suite and projects enriched hierarchy columns into base views via `OUTER APPLY` (T-SQL) or `LEFT JOIN LATERAL` (PostgreSQL):
@@ -963,6 +976,13 @@ The `CodeGenDatabaseProvider` is the abstract base class that encapsulates **all
 | `PostgreSQLCodeGenProvider` | `@memberjunction/postgresql-dataprovider` | PostgreSQL (PL/pgSQL functions, DROP IF EXISTS, psql) |
 
 Providers are registered via `@RegisterClass(CodeGenDatabaseProvider, 'ProviderName')` and selected at runtime based on the configured database platform.
+
+#### CRUD Routine Return Modes (`SaveReturnMode: 'full' | 'datestamps_only'`)
+
+Both `SQLServerCodeGenProvider` and `PostgreSQLCodeGenProvider` inspect `entity.SaveReturnMode` (configured via `{"SaveReturnMode": "datestamps_only"}` in `Entity.Configuration`, defaulting to `'full'`) when generating `spCreate*` and `spUpdate*`:
+
+- **`'full'` (default)**: The generated routine finishes with `SELECT * FROM [schema].[BaseView] WHERE [PK] = @ID` (PostgreSQL: `RETURNS SETOF schema."BaseView"`), returning all base-table and joined virtual columns.
+- **`'datestamps_only'`**: For high-write tables whose UUIDs are pre-populated and whose `BaseView` has expensive joins or large `NVARCHAR(MAX)` columns, the generated routine queries only the primary key(s) and `[__mj_CreatedAt]` / `[__mj_UpdatedAt]` directly from `BaseTable` (PostgreSQL: `RETURNS TABLE(...)` with `#variable_conflict use_column`), bypassing `BaseView` while still returning the database-generated timestamps required by `DatabaseProviderBase` concurrency checking.
 
 #### Adding a New Database Backend
 

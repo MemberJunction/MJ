@@ -1,0 +1,49 @@
+import { describe, it, expect } from 'vitest';
+import { WorkQueueProcedures } from '../sql/procedures';
+import { SampleCalls } from './builderCalls';
+import { RecordingExecutor } from './fakes';
+import { ParseSqlServerCall, ReadMigrationProcedures } from './migrationProcedures';
+
+/**
+ * The builders and the migration are two halves of one contract (plan 12 / CD9): a builder that names a procedure
+ * the migration does not create, or binds arguments in an order the procedure does not declare, fails only at
+ * runtime — and on PostgreSQL, where arguments are positional, silently binds the wrong values. This test reads the
+ * migration and checks both halves agree.
+ */
+const migration = ReadMigrationProcedures();
+const sqlServerCalls = SampleCalls(new RecordingExecutor('sqlserver'));
+const postgresCalls = SampleCalls(new RecordingExecutor('postgresql'));
+
+describe('procedure inventory', () => {
+    it('the migration creates every procedure the engine names, and nothing else', () => {
+        const named = Object.values(WorkQueueProcedures).sort();
+        expect([...migration.keys()].sort()).toEqual(named);
+    });
+
+    it('grants EXECUTE to exactly the roles that hold the driver-owned entities (03 §6.7): never cdp_UI', () => {
+        for (const procedure of migration.values()) {
+            expect(procedure.Grants, procedure.Name).toEqual(['cdp_Developer', 'cdp_Integration']);
+        }
+    });
+
+    it('every procedure is exercised by exactly one builder method', () => {
+        const called = sqlServerCalls.map(call => ParseSqlServerCall(call.Statement).Procedure);
+        expect([...called].sort()).toEqual(Object.values(WorkQueueProcedures).sort());
+    });
+});
+
+describe('builder ↔ procedure parameter parity', () => {
+    for (const [index, call] of sqlServerCalls.entries()) {
+        it(`${call.Method} binds the declared parameters in declared order`, () => {
+            const rendered = ParseSqlServerCall(call.Statement);
+            const declared = migration.get(rendered.Procedure);
+            expect(declared, `${rendered.Procedure} is not in the migration`).toBeDefined();
+            expect(rendered.Params).toEqual(declared?.Params);
+            expect(call.Statement.Params).toHaveLength(rendered.Params.length);
+
+            const positional = postgresCalls[index].Statement;
+            expect(positional.SQL).toBe(`SELECT * FROM __mj."${rendered.Procedure}"(${rendered.Params.map((_, i) => `$${i + 1}`).join(', ')})`);
+            expect(positional.Params).toEqual(call.Statement.Params);
+        });
+    }
+});

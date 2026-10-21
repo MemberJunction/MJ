@@ -1,5 +1,299 @@
 # Change Log - @memberjunction/aiengine
 
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- 432cb73: Weekly AI model/vendor metadata refresh (2026-10-12) — two new models and two first-party price corrections in `metadata/ai-models/.ai-models.json`.
+  - **Claude Haiku 5.5 added** (`claude-haiku-5-5`, released 2026-10-07). 1M context, 128K max output, first Haiku-class model with an adjustable effort setting. Routes for Anthropic (Model Developer + Inference Provider) and Amazon Bedrock (`anthropic.claude-haiku-5-5`). Cost rows record the base tier, $0.10/$0.50 per 1M tokens with cache reads $0.01; the over-100K-prompt tier at $0.50/$2.50 is documented in `Comments` but not modelled, because MJ stores one price pair per route.
+  - **Mistral Large 4 added** (`mistral-large-4`, public preview 2026-10-06). 1.05T-parameter MoE with 52B active, 1M context. Cost row records Mistral's launch promotion ($0.68/$2.09, cached input $0.07) and names the standard post-promotion rate ($1.36/$4.18) so the row can be expired when the two-week discount lapses around 2026-10-20.
+  - **Claude Sonnet 5.5 cache-read price corrected** on the Anthropic route, $0.20 → $0.10 per 1M. Anthropic prices cache hits and refreshes on Sonnet 5.5 at 0.05x the base input price rather than the standard 0.1x. The Bedrock and OpenRouter rows keep $0.20, which came from those vendors' own price lists.
+  - **Claude Opus 5 cache-write price filled** on the Anthropic route ($6.25 per 1M, 5-minute writes), previously null. Base rates unchanged.
+
+  No vendor rows were deprecated and no existing cost row was expired this week. Verification sweeps against the vendors' own rate cards found MJ's GPT-6 family, Gemini 3.x family, Grok 4.x family and GLM 5.x family already matching current published prices.
+
+- af6f892: Gemini 3.8 Live Extended Thinking now counts video into its turns, as Gemini 3.8 Live does: its model row and its Google model-vendor row set `ModelConfiguration.Realtime.TurnDetection.Coverage` to `audioActivityAndAllVideo`. Without it the Gemini driver states `audioActivityOnly`, so camera and screen frames sent while nobody speaks may not be part of a turn. Metadata only, no code change.
+- 7316ac3: Gemini 3.8 Live gets a Vertex AI (Gemini Enterprise) model-vendor row, its voices and one example avatar persona on Vertex AI, an avatar video price and a default Vertex AI token price. The AI configuration JSON type catches up with its `@memberjunction/ai` mirror, and `spCreateAIModelCost` lets a cost row omit the deprecated `PriceTypeID`.
+  - **Vertex AI row:** `GeminiEnterpriseRealtime`, API name `gemini-3.8-live`, the Google row's `ModelConfiguration.Realtime`, Priority 1 (Google's is 0). Realtime sessions select it only where `AI_VENDOR_API_KEY__GeminiEnterpriseRealtime` is set. Gemini 3.8 Live also gains a Video / Output modality row.
+  - **Voices and avatar on Vertex AI:** Puck, Charon, Kore, Fenrir and Aoede get Audio bindings on Vertex AI with the same voice names as on Google, and the new persona "Ben" pairs Google's "Ben" avatar preset (Video binding, `VendorSettings.Avatar.Kind` `preset`) with the Puck voice. With the existing model persona rows plus Ben's, Gemini 3.8 Live lists all six on Vertex AI; the Google listing is unchanged. The Vertex AI names are unverified until Vertex AI access, and each binding says so.
+  - **Avatar video price:** `ModelConfiguration.Realtime.Pricing.AvatarVideoOutput` on the Vertex AI row is $1.00 per 1M avatar video output tokens in USD, Google's list price.
+  - **Token price:** a default cost row for Gemini 3.8 Live on Vertex AI mirrors Google's Developer API list price ($0.75 input and $4.50 output per 1M tokens, Realtime), to be checked against the Vertex AI price list. It leaves `PriceTypeID` to the database default.
+  - **AI configuration types:** `IAIConfiguration` now declares everything the `@memberjunction/ai` mirror does: `TurnDetection.Coverage`, `Reasoning.Level` (new in both, with `RealtimeReasoningEffort`), `Reasoning.IncludeThoughtSummaries`, `Tooling`, `RequestedTracks` (with a copy of the track descriptor types), `IdleSignal`, and the new `Pricing`. Members the mirror declares without `| null` lose it in the JSON type, so the generated `ModelConfigurationObject` / `PromptConfigurationObject` / `ConfigurationObject` types on the six AI entities match the mirror exactly. A Core test now fails when the two drift.
+  - **`spCreateAIModelCost`:** a migration drops the procedure so CodeGen regenerates it with `@PriceTypeID` optional, defaulting to the Tokens price type (the column default since 6.1). Cost rows can now omit the deprecated column, as its description asks.
+
+- 6d5c6ad: Add the Nano Banana 2.1 image model (`gemini-nano-banana-2.1`, Google, `GeminiImageGenerator`) with its Gemini API price: $0.0336 per 1K image ($0.0504 at 2K, $0.113 at 4K). It is not bound to the `Default Image Generation` prompt, so image generation routing is unchanged until it is added there.
+
+### Patch Changes
+
+- a709bb6: Agents no longer fail when several file storage accounts are active and none is configured as the default. The system fallback now picks the most recently updated account (ties broken by ID) and logs a warning once per agent naming the candidates and where to set `DefaultStorageAccountID`. The logic lives in shared engines so any caller gets the same answer: `FileStorageEngineBase.ActiveAccounts` / `ResolveDefaultAccount()` / `ResolveDefaultAccountID()` pick the system default, and `AIEngineBase.ResolveAgentStorageAccountID()` (delegated from `AIEngine`) runs the full agent → category → agent type → system chain. `BaseAgent.getStorageAccountID` now delegates to it.
+- 64b6fa5: `AIEngine.EmbedText` and `AIEngine.EmbedContent` now resolve the embedding driver's API key with `GetAIAPIKey(model.DriverClass)` when the caller passes none, the same fallback `PrepareLLMInstance` already applies to chat models. Semantic `SearchEntity` embeds the query with the Entity Document's model and no key, so an index built with a keyed model (Gemini, OpenAI, ...) could be written but not queried, which broke Sage's Find Candidate Agents. A caller-supplied key still wins, and local drivers are unaffected.
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [51c469d]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [822ed69]
+- Updated dependencies [1da00cb]
+- Updated dependencies [92ecdf9]
+- Updated dependencies [b699a37]
+- Updated dependencies [0dbd455]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [6c8798b]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [02bb563]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai-core-plus@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/ai-engine-base@6.2.0-edge.4
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/storage@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/actions-base@6.2.0-edge.4
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Minor Changes
+
+- 25bb295: AI model & vendor metadata refresh (weekly research run, 2026-10-05).
+
+  Most vendor documentation sites are unreachable from this session, but three first-party sources are:
+  `platform.claude.com`, AWS's machine-readable Price List API, and the documentation repositories
+  several vendors publish their docs sites from. Everything below is verified against one of those, or
+  is a self-contained consistency repair needing no vendor data. No new model and no new vendor is
+  included. The full candidate list — including three live mispricings on hosts that could not be
+  reached, and four MJ routes that retire within 15 days — is in
+  `reports/ai-model-research/2026-10-05-weekly-report.md`.
+  - **Fixes two Cohere reranker API ids that would 404 on every call.** Cohere spells its v4 rerankers
+    `rerank-v4.0-pro` and `rerank-v4.0-fast`; MJ had the `.0` missing on both. The record _names_ are
+    deliberately unchanged, because `metadata/prompts/.default-rerank-prompt.json` resolves these
+    models by name — renaming them would break `mj sync push`. Also sets the published 4,096-token
+    context length on `rerank-v3.5` and `rerank-multilingual-v3.0`.
+  - **Corrects Claude Sonnet 4.5's output cap from 8,192 to 64,000** on all three routes — Anthropic
+    publishes 64K, so the recorded figure was wrong by nearly 8× and would have truncated long
+    generations. Marks the Anthropic route `Deprecated` (announced 2026-09-30, retires 2026-11-30,
+    replaced by Claude Sonnet 5.5) while leaving the cost row `Active`, since it serves until then.
+  - **Corrects Claude Sonnet 4.6's context window to 1,000,000 and its output cap to 128,000** on all
+    three routes (recorded as 200,000 / 64,000).
+  - **Corrects three prices**, expiring the superseded row in each case: `mistral-large-latest`
+    $4/$12 → **$0.50/$1.50** (the alias now resolves to Mistral Large 3; an 8× overstatement on
+    input), `mistral-medium-latest` $2.75/$8.10 → **$1.50/$7.50**, and Amazon Bedrock GPT-OSS-20B
+    output $0.20 → **$0.30**. Also corrects the Mistral Medium 3.5 id to `mistral-medium-3-5`.
+  - **Fills the published prompt-cache rates** on eight cost rows that had none — Anthropic's own rows
+    for Opus 4.8, Sonnet 5 and Fable 5, and Amazon Bedrock's for Opus 4.8, Sonnet 5, Fable 5 and
+    Fable 5.1. Base rates are unchanged, so the rows are amended rather than superseded.
+  - **Retires the Magistral 1.2 pair on their Mistral-direct route**, which Mistral shut down
+    2026-07-31: vendor row `Inactive`, cost row `Expired` with `EndedAt`. The Amazon Bedrock and
+    OpenRouter routes are untouched — AWS still sells the Bedrock edition.
+  - **Expires nine never-closed duplicate cost rows**, cutting concurrent-`Active` rows on the same
+    model + vendor + processing type from 13 pairs to 2. Claude Sonnet 5 on three vendors (the launch
+    row recorded introductory pricing through 2026-08-31 and a second row was added when that became
+    standard; Anthropic now confirms the increase to $3/$15 will not occur); Claude 4 Opus, Claude 4
+    Sonnet, Llama 4 Maverick and Llama 4 Scout (exact duplicates from the January 2026 seed import);
+    and GPT 5.6-terra and GPT 5.6-luna (older rows the 2026-07-30 rows already superseded). Every row
+    is expired, never deleted, so the pricing history stays intact.
+  - **Sets `IsActive: false` on five models whose every inference route was already dropped** —
+    Llama 2 70B / Groq, Gemini 1.5 Flash, Gemini 1.5 Pro, Gemini 2.5 Pro Preview and Gemini 2.5 Flash
+    Preview. They were advertising themselves as active while being unreachable on every route.
+
+- dfe40a4: Binary fields work end to end, and persisted embeddings gain a binary float32 copy that loads about 14× faster than the JSON one.
+
+  **Binary fields (varbinary / binary / image on SQL Server, bytea on PostgreSQL).** Previously a binary column reached `BaseEntity` as whatever the driver returned. A Node `Buffer` then serialized over GraphQL as `{"type":"Buffer","data":[…]}`, and saves wrote the base64 text into the column. Now a binary field's value is a **base64 string** everywhere above the database: in `BaseEntity`, every cache, RunView results and the GraphQL wire. Providers convert at the boundary. SQL Server binds a `0x…` hex literal, PostgreSQL binds a `Buffer`, and rows read back become base64, including rows returned from a transaction group save. CodeGen now declares a length-less `varbinary` parameter as `varbinary(MAX)`; it used to emit `varbinary`, which T-SQL truncates to one byte. Generated getters document the encoding, and generated forms skip binary fields.
+  - **`RunView` omits binary fields by default.** Set `IncludeBinaryFields: true`, or name a binary field in `Fields`, which sets it for you. The flag is part of the cache fingerprint, so the two shapes never share an entry. A single-record `Load()` always includes binary fields. Engine configs take `IncludeBinaryFields: true | 'DatabaseProviderOnly'`; the second loads binary fields only in server processes.
+  - **Validation.** Saving a value that is not canonical base64 into a binary field fails `Validate()` with a message naming base64. A value whose decoded length exceeds a fixed-length column also fails.
+  - **`@memberjunction/global` codecs.** `BytesToBase64` / `Base64ToBytes` / `TryBase64ToBytes` pick the fastest host implementation: native `Uint8Array.fromBase64`, then Node `Buffer`, then `atob`. On Node, validation is fused into the decode and is fuzz-tested to accept exactly what `IsValidBase64` accepts. `Float32VectorToBase64` / `Base64ToFloat32Vector` handle little-endian float32 vectors. `ReplaceByteArraysWithBase64` makes any raw query row JSON-safe.
+
+  **Binary vector columns (migration `V202610021716`).** These nullable `varbinary(MAX)` companions of the JSON vector columns are added:
+  - `EntityRecordDocument.VectorBinary`
+  - `EmbeddingVectorBinary` on `AIAgentNote`, `AIAgentExample`, `Query` and `Tag`
+  - `Component.FunctionalRequirementsVectorBinary` and `Component.TechnicalDesignVectorBinary`
+
+  Every writer now fills both columns: `BaseEntity.GenerateEmbedding*` (new optional binary field parameter), the note, example, component, query and tag entity servers, `TagEngine`, and the entity vectorizer (`EntityVectorSyncer`). Readers prefer the binary column through the new `ReadStoredVector` and `DecodeVectorBinary` in `@memberjunction/ai-vectors-memory`, and fall back to JSON for rows written before the column existed or for invalid binary values. The readers are `SimpleVectorServiceProvider`, `SimpleVectorDatabase` (new `binaryVectorField` ProviderConfig key), `AIEngine`, `TagEngine`, `TagHealthJob`, `QueryEngineServer` and clustering. For 20,000 × 1,536 vectors, decoding takes 0.28 s, against 3.9 s to parse the JSON.
+
+  Fixes found along the way:
+  - Clustering no longer counts a binary-only row as having no vector.
+  - A note, example or tag whose stored JSON vector is malformed is now dropped from the in-memory index instead of throwing.
+  - A PostgreSQL transaction group post-processes each row with its entity's own provider rather than the process-global one.
+
+### Patch Changes
+
+- 28df136: In-memory vector search is faster, keeps its index current incrementally, and on a server no longer blocks the event loop.
+
+  **`@memberjunction/ai-vectors-memory`** (browser-safe; same public API)
+  - **Packed storage.** Vectors are stored in one contiguous typed array with cached norms, not a `Map` of number arrays. `float64` (the default) gives results bit-identical to before. `new SimpleVectorService({ Precision: 'float32' })` halves the memory for embeddings. Results are re-scored with the same kernels, so `FindNearest`, `FindSimilar`, `FindAboveThreshold`, K-Means and DBSCAN return exactly what they did before.
+  - **Faster kernels.** Cosine, euclidean and dot product scans are specialised per precision and reuse cached norms. In JavaScript alone, a top-10 cosine search over 20,000 × 1,536 vectors drops from 80 ms to 65 ms. With a metadata filter it drops from 12 ms to 9 ms.
+  - **Async variants.** `FindNearestAsync`, `KMeansClusterAsync` and `DBSCANClusterAsync` let a registered `BaseVectorAccelerator` run the work elsewhere. Without one they run in-process.
+  - **Incremental index cache.** `SimpleVectorServiceProvider` applies entity saves and deletes to a loaded index in place instead of discarding it. Patching one row takes about 0.2 ms; the old rebuild re-read and re-parsed every row, about 4.4 s of parsing alone for 20,000 vectors. A remote invalidate without record data is re-read in one batched query, once per user an index was loaded as. A stale index keeps serving while it reloads. `InvalidateIndex` now also supersedes a load already in flight, so the next query cannot be answered from rows read before the invalidate.
+  - **`SimpleVectorDatabase` no longer serves one user's cached rows to another.** Rows are read as the calling user, but the parsed index was reused whenever the row count matched. A user who could see a different set of rows of the same size got the first user's rows. The cache is now reused only when the rows' keys, `__mj_UpdatedAt` values and vector presence, and the index config, all match. A row whose vector size differs from the rest is now skipped, with one log line, instead of failing every query. An empty query vector now returns a failure response instead of throwing.
+  - **`SimpleVectorDatabase` applies metadata filters.** `QueryIndex` used to ignore `filter`, so a search scope's `MetadataFilter` — including a tenant push-down — had no effect on this driver. It is now evaluated in memory (`$eq $ne $gt $gte $lt $lte $in $nin $exists $and $or`), and a filter it cannot apply fails the query instead of running unfiltered. The evaluator is exported as `CompileMetadataFilter`. The driver now also reports `IsReadOnly = true` and `RequiresAPIKey = false`, and `ListVectorIDs` returns the contract's `NextPaginationToken` (it returned `NextCursor`); `SimpleVectorServiceProvider.ListVectorIDs` had the same bug.
+  - **Fixes.** A query whose dimensions differ from the index, or an unknown metric, is logged once rather than once per row. `GetVector` and `ExportVectors` return copies, never live storage.
+
+  **`@memberjunction/ai-vectors-memory-server`** (new, server-only)
+
+  Registers a `WorkerPoolVectorAccelerator`. Under 32 concurrent searches the longest event-loop stall drops from 2.5 s to 13 ms. Stores are allocated in `SharedArrayBuffer`, so large searches and clustering run on a worker-thread pool without copying. Exact searches use the optional `usearch` native SIMD backend, but only when its candidate set can be proven complete. Otherwise they fall back to JavaScript. Opt-in HNSW approximate search (`MJ_VECTOR_ANN=1`) is available for very large cosine indexes. Every failure degrades to in-process work. The browser-manifest leakage gate denies the package.
+
+  **`@memberjunction/core-entities-server`.** When the embedder returns an empty vector or throws, `MJQueryEntityServer` now clears the stored vector (both columns and the model ID) and logs the error, as `MJTagEntityServer` already did, instead of keeping a vector computed from the previous text. The save still succeeds.
+
+  **Consumers.** `AIEngine` (notes, examples), `TagEngine` and `QueryEngineServer` use `float32` storage and `FindNearestAsync`. `ClusteringEngine` uses the async clustering methods. `@memberjunction/server-bootstrap` loads the server accelerator, so a standard MJAPI gets it with no configuration.
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [bea2386]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [28df136]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.3
+  - @memberjunction/ai-engine-base@6.2.0-edge.3
+  - @memberjunction/ai-core-plus@6.2.0-edge.3
+  - @memberjunction/actions-base@6.2.0-edge.3
+  - @memberjunction/storage@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 2552b1e: AI model & vendor metadata refresh (off-cycle research run for v6.2.0-edge.2, 2026-10-02).
+  - Adds **Claude Sonnet 5.5** (`claude-sonnet-5-5`, released 2026-09-28) on Anthropic, Amazon Bedrock and OpenRouter at $2/$10 per 1M, cache read $0.20.
+  - Adds **GPT-6.1 Sol** (`gpt-6.1-sol`, released 2026-09-29) on OpenAI, Azure, Amazon Bedrock and OpenRouter at $2/$10 per 1M, cache read $0.10. No Azure cost row: Microsoft has not published the rate.
+  - Adds the missing cost rows for Claude Opus 5.5 on Bedrock ($4/$20) and GPT-6 Sol ($2/$10) and GPT-6 Luna ($0.10/$0.50) on Azure, and a GLM 5.3 OpenRouter row ($1.40/$4.40). GLM 5.3's OpenRouter output cap becomes 131,072.
+  - Re-rates Groq GPT-OSS-120B ($0.15/$0.60) and GPT-OSS-20B ($0.075/$0.30), Cerebras GPT-OSS-120B ($0.35/$0.75) and Z.AI GLM 5.1 ($1.40/$4.40), expiring the superseded rows.
+  - Retires seven routes their vendors have already shut down: Cerebras `gemma-4-31b` and `llama3.1-8b`, Fireworks `glm-5p2`, Google `gemini-3-pro-image-preview`, `gemini-2.0-flash` and `gemini-2.0-flash-lite`, and Groq `compound-beta` (Groq Compound becomes inactive).
+
+- 8fd1c46: Moves the seven CodeGen AI prompts to current models, and makes AI model catalog ranks consistent within each model's version lineage. Metadata only, plus a new CI guard. (#4912)
+  - **CodeGen prompts** (Check Constraint Parser, Entity Description Generation, Entity Name Generation, Transitive Join Intelligence, Virtual Entity Field Decoration, Form Layout Generation, Smart Field Identification):
+    - Gemini 3.5 Flash → **Gemini 3.8 Flash**, on the same Google and Vertex AI routes.
+    - Gemini 3.1 Flash-Lite → **Gemini 3.5 Flash-Lite** (Form Layout Generation, Smart Field Identification). Google now comes before Vertex AI, matching Flash.
+    - GPT 5.5 Instant → **GPT-6 Luna** on OpenAI. GPT 5.5 Instant only ever called `gpt-5.5`.
+    - Claude Haiku 4.5 and GPT-OSS-120B are unchanged; they are still the newest in their families. The failover order is unchanged.
+  - **Review regenerated output.** CodeGen commits its AI output into each app: `Validate*()` methods parsed from CHECK constraints, entity and field descriptions, display names and form layouts. Apps that regenerate after upgrading may see different AI-written output and should review it before committing.
+  - **Catalog PowerRank fixes.** Within a lineage, a newer model no longer ranks below the model it replaces, and ranks above it where it is the more capable one (rank-based selection does not break ties):
+    - The GPT-5 generation (GPT 5, 5-mini, 5-nano) was ranked above its successors and now ranks 10, 9 and 8.
+    - GPT 5.5 → 15, GPT 5.5 Instant → 15 (the same `gpt-5.5` API model), GPT 5.5 Pro → 16, GPT 5.6 → 16, o3-mini → 9, o4-mini → 10, Claude Sonnet 5 → 21, MiniMax-M3 → 21 (ties M2.7, which it complements rather than replaces), Grok 4.3 → 23, Qwen3.8-Flash → 16.
+    - Prompts and agents that choose models by rank can pick a different model as a result.
+  - **`PriorVersionID` lineage.** Two links that pointed across tiers are corrected (Gemini 3.1 Flash-Lite, Qwen3.8-Flash). Three variants with no earlier version in the catalog are cleared (GLM-5.3-Flash, GLM 5V Turbo, Mercury Edit 2). Missing links are added for the GPT 5, GPT mini/nano, o-series mini and Gemini Flash lines.
+  - **New guard:** `.github/scripts/check-ai-model-ranks.mjs` (`pnpm run check:ai-model-ranks`, run in the Source guards CI job) fails when a model ranks below the prior version it names, or names a prior version that doesn't exist.
+
+- 01fafc6: Removes four duplicate `MJ: AI Model Costs` entries from `metadata/ai-models/.ai-models.json`. Llama 4 Maverick, Llama 4 Scout (Groq), Claude 4 Sonnet and Claude 4 Opus (Anthropic) each listed the same cost record twice, identical field for field and with the same primary key, so both copies pointed at one database row. No database row changes; the file just stops tripping duplicate-ID checks.
+
+### Patch Changes
+
+- 2854a2e: Address vector indexes by their provider-side name (`ExternalID`), not the MJ display `Name`. Entity vectorization, duplicate detection and the entity-vectors resolver passed `Name`, so any index whose label differs from its provider name (e.g. "More Cheese Content (Pinecone)" vs `morecheese-content`) returned 404 on every upsert/query.
+
+  `AIEngineBase` now owns the single `MJ: Vector Indexes` cache (`VectorIndexes`, `GetVectorIndexByID`) and the one rule for the provider name (`GetProviderIndexName`: ExternalID, falling back to `Name`), proxied on `AIEngine`. `KnowledgeHubMetadataEngine` no longer caches Vector Indexes; its `VectorIndexes` / `GetVectorIndexByID` proxy the AIEngineBase cache. Every caller, including `MJVectorIndexEntityServer`'s delete path, now resolves the provider name through `GetProviderIndexName`.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [bb33c77]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ai-engine-base@6.2.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/storage@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Minor Changes

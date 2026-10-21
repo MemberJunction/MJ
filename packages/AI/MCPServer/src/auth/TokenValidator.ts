@@ -510,6 +510,11 @@ async function verifyTokenSignatureWithKeys(
     const verifyOptions: jwt.VerifyOptions = {
       clockTolerance: 30, // Allow 30 seconds of clock skew
       // Don't validate issuer - we've already matched it
+      // SECURITY: pin the accepted signature algorithms to the asymmetric family, mirroring
+      // verifyTokenSignature above. The signing key is resolved from Azure AD's v1 JWKS (an
+      // RSA/EC public key); an explicit allow-list prevents `alg=none` and RS256->HS256
+      // confusion attacks should the key format or library behavior change.
+      algorithms: ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512', 'PS256'],
     };
 
     if (Array.isArray(audience)) {
