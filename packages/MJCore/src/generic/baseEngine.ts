@@ -1006,8 +1006,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     return true;
                 }
 
-                // Check if ALL matching entity configs can use immediate mutation
-                const allCanUseImmediate = matchingConfigs.every(config => this.canUseImmediateMutation(config));
+                // Check if ALL matching entity configs can use immediate mutation. A saved object
+                // that lacks columns (its saver could not read them) would put a narrowed row into
+                // an engine every user reads, so that save takes the full-refresh path instead,
+                // which reloads the row as this engine's own user.
+                const allCanUseImmediate = matchingConfigs.every(config => this.canUseImmediateMutation(config))
+                    && this.savedRowIsComplete(event);
 
                 if (allCanUseImmediate) {
                     const applyAll = async (): Promise<void> => {
@@ -1350,7 +1354,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
                     if (needingWork.length > 0) {
                         // Check if we can use immediate array mutation instead of running a view
-                        if (this.canUseImmediateMutation(config)) {
+                        // A save carrying a row with missing columns can't replace an engine row
+                        // in place (see savedRowIsComplete), so the whole window refreshes instead.
+                        if (this.canUseImmediateMutation(config) && needingWork.every(c => this.savedRowIsComplete(c.event))) {
                             // Apply, in order, every event the array hasn't seen yet
                             for (const c of needingWork) {
                                 await this.applyImmediateMutation(config, c.event);
@@ -1672,6 +1678,17 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param config - The configuration for the property being mutated
      * @param event - The entity event containing the affected entity and event type
      */
+    /**
+     * Whether a save event's entity carries every column, so it can replace an engine row in
+     * place. Deletes and non-save events always qualify.
+     */
+    protected savedRowIsComplete(event: BaseEntityEvent): boolean {
+        if (event.type !== 'save' || !event.baseEntity) {
+            return true;
+        }
+        return LocalCacheManager.RowHasEveryField(event.baseEntity.EntityInfo, event.baseEntity.GetAll());
+    }
+
     protected async applyImmediateMutation(config: BaseEnginePropertyConfig, event: BaseEntityEvent): Promise<void> {
         const currentData = (this as Record<string, unknown>)[config.PropertyName] as BaseEntity[] | undefined;
         if (!currentData) {
