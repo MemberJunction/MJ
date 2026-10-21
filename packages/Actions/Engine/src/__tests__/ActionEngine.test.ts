@@ -210,6 +210,9 @@ vi.mock('@memberjunction/actions-base', async (importOriginal) => {
         // engine's own use of the redactor — snapshot-at-call-time, Params vs ResultParams, provenance,
         // LoggingMode — is covered in ActionEngine.logging.test.ts.
         RedactParamsToJSON: (params: unknown[] | null | undefined) => JSON.stringify(params ?? []),
+        // The real field-security projection the engine applies before redaction; its behaviour is
+        // covered in actions-base/ActionParamFieldSecurity.test.ts and ActionEngine.logging.test.ts.
+        ProjectActionParamValuesForUser: actual.ProjectActionParamValuesForUser,
         ActionAudienceReaders: actual.ActionAudienceReaders,
         ActionAudienceAddsReader: actual.ActionAudienceAddsReader,
         AUDIENCE_UNSUPPORTED_RESULT_CODE: actual.AUDIENCE_UNSUPPORTED_RESULT_CODE,
