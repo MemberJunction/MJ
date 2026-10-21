@@ -165,6 +165,17 @@ async function deleteUser(userId: number) {
 }
 ```
 
+#### Delta-Only `Save()` Wire Protocol on `Update` Mutations
+
+When saving an existing entity (`entity.IsSaved === true`) over `GraphQLDataProvider.Save()`, the provider transmits **only** the record's primary key(s) and dirty writable fields (`f.Dirty === true`, including dirty parent-chain fields in an IS-A hierarchy):
+
+- **`vars.input`**: Contains only primary keys and dirty writable fields. Clean fields, read-only fields (`__mj_CreatedAt`, `__mj_UpdatedAt`), virtual fields, and `NotLoaded` fields are omitted from the mutation input.
+- **`vars.input.OldValues___`**: Contains `Key`/`Value` pairs **only** for primary keys and dirty writable fields (recording their pre-mutation `OldValue` for server-side concurrency conflict detection).
+- **Server-Side Partial-Delta Handling (`ResolverBase`)**: When `ResolverBase.UpdateRecord` receives a partial-delta `OldValues___`, `MustLoadTruthFromDatabase` loads the authoritative row from the database (`InnerLoad`) before `TestAndSetClientOldValuesToDBValues` compares the dirty fields' old values against the database and applies `entityObject.SetMany(clientNewValues)` — preserving all untouched columns in the database.
+- **Full Response Selection**: The GraphQL mutation response selection set still requests all readable fields so `BaseEntity.finalizeSave()` refreshes server-generated timestamps and computed/virtual columns without marking clean fields `NotLoaded`.
+- **Forcing a Full Save (`IgnoreDirtyState: true`)**: Passing `options.IgnoreDirtyState = true` in `EntitySaveOptions` bypasses the dirty-only filter and sends all loaded writable fields in both `vars.input` and `vars.input.OldValues___`.
+- **`Create` Mutations Unchanged**: Creating a new record (`!entity.IsSaved`, or an IS-A promotion create) continues to send all loaded writable fields so client-initialized `NewRecord()` defaults and required `Create*Input` fields are transmitted.
+
 ### Executing Views and Reports
 
 ```typescript
@@ -681,6 +692,57 @@ console.log(prompt.PromptRole); // From AIPrompt
 For comprehensive information about IS-A relationships in MemberJunction:
 - [IS-A Relationships Architecture](../MJCore/docs/isa-relationships.md) - Server-side implementation details, entity structure, and transaction management
 
+## Realtime session client (`GraphQLRealtimeSessionClient`)
+
+Typed transport for the realtime **session** surface of MJServer: mid-session **identity verification** and the
+**session event** subscription. It is what the browser realtime runtime and the embeddable widget call; it holds no
+logic (see `guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md`). The server side is documented in
+`packages/MJServer/src/realtimeSessions/README.md`; the event types live in `@memberjunction/ai-core-plus`.
+
+```typescript
+import { GraphQLDataProvider, GraphQLRealtimeSessionClient } from '@memberjunction/graphql-dataprovider';
+
+const client = new GraphQLRealtimeSessionClient(provider as GraphQLDataProvider);
+
+// 1. Listen first, so an event fired right after the request cannot be missed.
+const sub = client.SubscribeToSessionEventsOfType(agentSessionId, 'identity.verified').subscribe((event) => {
+    show(`Verified as ${event.Payload.VerifiedEmail}`); // typed payload
+});
+
+// 2. Ask for an emailed link + code.
+const sent = await client.RequestVerification({ AgentSessionID: agentSessionId, Name: 'Pat', Email: 'pat@acme.com' });
+if (!sent.Success) show(sent.Message);            // sent.ErrorCode is e.g. 'consumer_domain' | 'rate_limited'
+
+// 3. The person types the code (or opens the link on any device).
+const done = await client.SubmitVerificationCode({ AgentSessionID: agentSessionId, Code: typed });
+
+// 4. After a reconnect, events are NOT replayed: read the durable state.
+const status = await client.GetVerificationStatus(agentSessionId);
+```
+
+| Method | GraphQL | Notes |
+|---|---|---|
+| `RequestVerification({AgentSessionID, Name, Email})` | mutation `RequestRealtimeSessionVerification` | Policy and limits are enforced server-side. |
+| `SubmitVerificationCode({AgentSessionID, Code})` | mutation `SubmitRealtimeSessionVerificationCode` | Single use; wrong codes are counted. |
+| `GetVerificationStatus(agentSessionId)` | query `RealtimeSessionVerificationStatus` | The recovery path for a missed event. |
+| `SubscribeToSessionEvents(agentSessionId)` | subscription `RealtimeSessionEvents` | Reuses `GraphQLDataProvider.Subscribe` (the same WebSocket client as the other subscriptions). |
+| `SubscribeToSessionEventsOfType(agentSessionId, type)` | same | Narrowed to one event type with a typed payload. |
+
+Contracts worth knowing:
+
+- **The three request/response methods never throw.** A transport fault comes back as `Success: false` with
+  `ErrorCode: 'transport_error'` (a client-only code). Use `IsKnownRealtimeSessionVerificationErrorCode` to narrow
+  `ErrorCode`; the server may add codes, so the field is typed `string`.
+- **The email address and the typed code are never logged.**
+- **Events are validated.** `PayloadJson` is parsed with `ParseRealtimeSessionEvent`; malformed events are dropped and
+  logged, and a type this client does not know arrives as an `UnknownRealtimeSessionEvent` (ignore it) instead of
+  breaking an older client.
+- **Authorization is the session's own principal.** A subscription for someone else's session fails as an error on the
+  observable ("Realtime session not found."); the socket and other subscriptions are unaffected.
+- **Reconnects.** When the provider recycles an expired-token socket the observable *completes*. Re-subscribe, then call
+  `GetVerificationStatus` once.
+- **Multi-provider.** Construct it with the provider you mean (in Angular, `this.ProviderToUse`), never a hidden global.
+
 ## Key Classes and Types
 
 | Class/Type | Description |
@@ -689,6 +751,7 @@ For comprehensive information about IS-A relationships in MemberJunction:
 | `GraphQLProviderConfigData` | Configuration class for setting up the GraphQL provider with authentication and connection details |
 | `GraphQLActionClient` | Client for executing actions and entity actions through GraphQL |
 | `GraphQLAIClient` | Client for AI operations including prompts, agents, and embeddings |
+| `GraphQLRealtimeSessionClient` | Typed client for realtime session identity verification and the `RealtimeSessionEvents` subscription |
 | `GraphQLSystemUserClient` | Specialized client for server-to-server communication using API keys |
 | `GraphQLTransactionGroup` | Manages complex multi-entity transactions with variable support |
 | `FieldMapper` | Handles automatic field name mapping between client and server |

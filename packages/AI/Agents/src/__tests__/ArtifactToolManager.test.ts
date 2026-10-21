@@ -123,8 +123,62 @@ describe('ArtifactToolManager', () => {
             expect(manifest).toContain('**B** — JSON: "Config File"');
         });
 
+        it('includes versionNumber, artifactId, description, title, and table summaries when present', () => {
+            manager.Initialize([
+                {
+                    name: 'Executive Dashboard',
+                    typeName: 'Data',
+                    artifactId: 'd11ec65b-65c6-464b-91d6-d98ed6c491db',
+                    versionNumber: 2,
+                    description: 'Quarterly executive overview',
+                    content: JSON.stringify({
+                        title: 'Executive Revenue Overview',
+                        tables: [
+                            { name: 'revenue_by_tier', rows: [{ a: 1 }, { a: 2 }] },
+                            { name: 'top_accounts', rows: [{ b: 1 }] },
+                        ],
+                    }),
+                },
+                {
+                    name: 'Customer Spend',
+                    typeName: 'Data',
+                    artifactId: '22222222-3333-4444-5555-666677778888',
+                    versionNumber: 1,
+                    content: JSON.stringify({
+                        title: 'Top 10 Customers by Spend',
+                        columns: [{ field: 'Customer' }, { field: 'TotalSpend' }],
+                        rows: [{ Customer: 'Acme', TotalSpend: 1000 }],
+                    }),
+                },
+            ]);
+            const manifest = manager.ToManifestString();
+
+            expect(manifest).toContain('**A** — Data: "Executive Dashboard" (v2) [artifactId: d11ec65b-65c6-464b-91d6-d98ed6c491db]');
+            expect(manifest).toContain('Description: Quarterly executive overview');
+            expect(manifest).toContain('Title: "Executive Revenue Overview"');
+            expect(manifest).toContain('Tables (2): "revenue_by_tier" (2 rows), "top_accounts" (1 rows)');
+            expect(manifest).toContain('**B** — Data: "Customer Spend" (v1) [artifactId: 22222222-3333-4444-5555-666677778888]');
+            expect(manifest).toContain('Single table (1 rows, 2 columns)');
+        });
+
         it('returns empty string when no artifacts', () => {
             expect(manager.ToManifestString()).toBe('');
+        });
+    });
+
+    describe('ResolveArtifactUuid', () => {
+        it('resolves alpha IDs (case-insensitive and prefixed) to artifactId UUIDs', () => {
+            manager.Initialize([
+                { name: 'First', typeName: 'Data', content: '{}', artifactId: '11111111-1111-4111-8111-111111111111' },
+                { name: 'Second', typeName: 'Data', content: '{}', artifactId: '22222222-2222-4222-8222-222222222222' },
+            ]);
+
+            expect(manager.ResolveArtifactUuid('A')).toBe('11111111-1111-4111-8111-111111111111');
+            expect(manager.ResolveArtifactUuid('b')).toBe('22222222-2222-4222-8222-222222222222');
+            expect(manager.ResolveArtifactUuid('Artifact B')).toBe('22222222-2222-4222-8222-222222222222');
+            expect(manager.ResolveArtifactUuid('99999999-9999-4999-8999-999999999999')).toBe('99999999-9999-4999-8999-999999999999');
+            expect(manager.ResolveArtifactUuid('')).toBeUndefined();
+            expect(manager.ResolveArtifactUuid(undefined)).toBeUndefined();
         });
     });
 

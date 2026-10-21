@@ -14,8 +14,13 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     };
 });
 
+// The engine proxies AIEngineBase's Vector Indexes cache through BaseEngineRegistry; tests control
+// what the registry hands back (null = no loaded engine caches Vector Indexes).
+const registry = vi.hoisted(() => ({ VectorIndexes: null as MockVectorIndex[] | null, TryGetCachedRecords: vi.fn() }));
+
 vi.mock('@memberjunction/core', () => {
     return {
+        BaseEngineRegistry: { Instance: { TryGetCachedRecords: registry.TryGetCachedRecords } },
         BaseEngine: class MockBaseEngine {
             // Minimal stand-in for BaseEngine.DataChange$ so the engine constructor's
             // invalidation subscription is satisfied. Tests reset the index cache directly
@@ -121,10 +126,12 @@ describe('KnowledgeHubMetadataEngine', () => {
             createMockEntityDocument({ ID: 'ED-CCC', Entity: 'Accounts', Status: 'Active' }),
             createMockEntityDocument({ ID: 'ED-DDD', Entity: 'Leads', Status: 'Active' }),
         ];
-        (engine as unknown as Record<string, unknown[]>)['_vectorIndexes'] = [
+        registry.VectorIndexes = [
             createMockVectorIndex({ ID: 'VI-AAA', Name: 'contacts-idx' }),
             createMockVectorIndex({ ID: 'VI-BBB', Name: 'accounts-idx' }),
         ];
+        registry.TryGetCachedRecords.mockReset();
+        registry.TryGetCachedRecords.mockImplementation(() => registry.VectorIndexes);
         (engine as unknown as Record<string, MockContentSource[]>)['_contentSources'] = [
             createMockContentSource({ ID: 'CS-AAA', Name: 'RSS Feed' }),
             createMockContentSource({ ID: 'CS-BBB', Name: 'Website' }),
@@ -290,7 +297,13 @@ describe('KnowledgeHubMetadataEngine', () => {
             const result = engine.GetVectorIndexByID('');
             expect(result).toBeUndefined();
         });
+
+        it('should return undefined when no engine has loaded Vector Indexes', () => {
+            registry.VectorIndexes = null;
+            expect(engine.GetVectorIndexByID('VI-AAA')).toBeUndefined();
+        });
     });
+
 
     // ================================================================
     // O(1) by-id finders (content sources / types / source types)
@@ -381,8 +394,14 @@ describe('KnowledgeHubMetadataEngine', () => {
             expect(engine.EntityDocuments).toHaveLength(4);
         });
 
-        it('VectorIndexes should return all vector indexes', () => {
+        it('VectorIndexes should proxy the Vector Indexes cache owned by AIEngineBase', () => {
             expect(engine.VectorIndexes).toHaveLength(2);
+            expect(registry.TryGetCachedRecords).toHaveBeenCalledWith('MJ: Vector Indexes', { unfilteredOnly: true });
+        });
+
+        it('VectorIndexes should be empty, not throw, until an engine has loaded Vector Indexes', () => {
+            registry.VectorIndexes = null;
+            expect(engine.VectorIndexes).toEqual([]);
         });
     });
 

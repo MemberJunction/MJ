@@ -24,6 +24,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env'), quiet: true });
 
 let isInitialized = false;
 let connectionPool: sql.ConnectionPool | null = null;
+let activeProvider: IMetadataProvider | null = null;
 /** Set only on the PostgreSQL path; there is no mssql pool to close in that case. */
 let pgProvider: { Close?: () => Promise<void> } | null = null;
 
@@ -35,6 +36,7 @@ export async function InitializeMJProvider(): Promise<void> {
   // Check if MJ provider is already initialized
   if (Metadata.Provider) { // global-provider-ok: CLI tool, single-provider context
     console.log('MJ Provider already initialized');
+    activeProvider = Metadata.Provider; // global-provider-ok: CLI tool, single-provider context
     isInitialized = true;
     return;
   }
@@ -148,6 +150,7 @@ For security, use environment variables:
       );
 
       await setupSQLServerClient(providerConfig);
+      activeProvider = Metadata.Provider; // global-provider-ok: CLI just installed this single provider
     }
 
     // Debug: Log entity counts
@@ -245,7 +248,8 @@ async function initializePostgresProvider(cfg: ResolvedDbConfig): Promise<void> 
     coreSchema,
     1, // must be > 0 or PostgreSQLDataProvider skips the initial metadata load
   ));
-  SetProvider(provider as unknown as IMetadataProvider);
+  activeProvider = provider as unknown as IMetadataProvider;
+  SetProvider(activeProvider);
   pgProvider = provider as unknown as { Close?: () => Promise<void> };
 
   await refreshUserCacheFromPG(provider, coreSchema);
@@ -274,6 +278,12 @@ async function refreshUserCacheFromPG(provider: { ExecuteSQL: <T>(sql: string) =
     { ...u, UserRoles: (roles ?? []).filter(r => UUIDsEqual(r.UserID as string, u.ID as string)) }
   ));
   UserCache.Instance.SetUsers(userInfos);
+}
+
+/** The provider InitializeMJProvider just installed. CLI commands use this instead of the global. */
+export function GetMJProvider(): IMetadataProvider {
+  if (!activeProvider) throw new Error('MJ Provider not initialized. Call InitializeMJProvider() first.');
+  return activeProvider;
 }
 
 export function GetConnectionPool(): sql.ConnectionPool {

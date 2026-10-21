@@ -328,6 +328,7 @@
                                                 </span>
                                             </ng-template>
                                             <div class="sub-panel-content">
+                                                <mj-prompt-run-data-capture-note [DataCapture]="DataCapture" [DataShape]="DataShape" [DataCaptureNote]="DataCaptureNote" />
                                                 @if (inputData && formattedData) {
                                                     <div class="json-editor-container">
                                                         <div class="json-toolbar">
@@ -355,7 +356,7 @@
                                                             style="height: 300px; width: 100%;">
                                                         </mj-code-editor>
                                                     </div>
-                                                } @else {
+                                                } @else if (DataCapture !== 'None') {
                                                     <mj-empty-state
                                                         Size="compact"
                                                         Icon="fa-solid fa-database"
