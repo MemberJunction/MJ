@@ -50,6 +50,13 @@ const clearCaches = () => {
     cls.recentRuns.clear();
 };
 
+// CatalogScope asks the integration engine for its provider, and the engine resolves it through its
+// own (unmocked) Metadata import — so point it at this file's mocked one.
+const { Metadata: MockedMetadata } = await import('@memberjunction/core');
+beforeEach(() => {
+    vi.spyOn(IntegrationEngineBase.Instance, 'ProviderToUse', 'get').mockImplementation(() => MockedMetadata.Provider as never);
+});
+
 describe('a discovery loads its connection\'s catalog inside the run', () => {
     let rootDir: string;
     let seenInConnectionTest: string[] | undefined;

@@ -733,13 +733,22 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         let byOwner = this._edgesByOwner.get(edges);
         if (!byOwner) {
             const built = new Map<string, string[]>();
+            const seenByOwner = new Map<string, Set<string>>();
             for (const edge of edges) {
                 const related = edge.RelatedCompanyIntegrationObjectID;
                 if (!related) continue;
                 const owner = NormalizeUUID(edge.CompanyIntegrationObjectID);
-                const list = built.get(owner);
-                if (!list) built.set(owner, [related]);
-                else if (!list.some(r => UUIDsEqual(r, related))) list.push(related);
+                let seen = seenByOwner.get(owner);
+                if (!seen) {
+                    seen = new Set<string>();
+                    seenByOwner.set(owner, seen);
+                    built.set(owner, []);
+                }
+                const key = NormalizeUUID(related);
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    built.get(owner)?.push(related);
+                }
             }
             byOwner = built;
             this._edgesByOwner.set(edges, byOwner);
@@ -763,9 +772,13 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
             return this.edgesByOwner(edges).get(NormalizeUUID(objectID))?.slice() ?? [];
         }
         const related: string[] = [];
+        const seen = new Set<string>();
         for (const field of this.GetIntegrationObjectFields(objectID)) {
             const id = field.RelatedIntegrationObjectID;
-            if (id && !related.some(r => UUIDsEqual(r, id))) related.push(id);
+            if (id && !seen.has(NormalizeUUID(id))) {
+                seen.add(NormalizeUUID(id));
+                related.push(id);
+            }
         }
         return related;
     }
