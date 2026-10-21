@@ -59,7 +59,7 @@ const PRELOAD_BASE_THEME_KEY = 'mj-theme';
  * persisted beside it under {@link PRELOAD_OVERLAY_CSS_KEY} so
  * {@link ThemeService.RestorePersistedBrandOverlay} can put it back before first paint.
  */
-const PRELOAD_OVERLAY_KEY = 'mj-theme-overlay';
+export const PRELOAD_OVERLAY_KEY = 'mj-theme-overlay';
 
 /**
  * localStorage key: the active org brand overlay's emitted CSS, as JSON `{ id, css }`.
@@ -68,10 +68,10 @@ const PRELOAD_OVERLAY_KEY = 'mj-theme-overlay';
  * re-emitted the overlay at the end of workspace init. Only honored when `id` matches
  * {@link PRELOAD_OVERLAY_KEY}; bootstrap's real `<link>` replaces the preloaded `<style>`.
  */
-const PRELOAD_OVERLAY_CSS_KEY = 'mj-theme-overlay-css';
+export const PRELOAD_OVERLAY_CSS_KEY = 'mj-theme-overlay-css';
 
 /** Attribute on the `<style>` that carries a restored overlay until bootstrap loads the real one. */
-const PRELOAD_STYLE_ATTR = 'data-mj-brand-overlay-preload';
+export const PRELOAD_STYLE_ATTR = 'data-mj-brand-overlay-preload';
 
 /** User-settings key: JSON array of the user's starred (favorited) brand theme ids. */
 const STARRED_THEMES_KEY = 'Explorer.StarredThemes';
@@ -387,7 +387,13 @@ export class ThemeService {
             }
             return false;
         }
-        if (!this.hasPreloadStyle(id)) {
+        const existing = document.head.querySelector<HTMLStyleElement>(`style[${PRELOAD_STYLE_ATTR}="${id}"]`);
+        if (existing) {
+            // A host's inline snippet already injected it. Re-append so it follows every
+            // stylesheet that arrived after it (the app's own, above all): the overlay's
+            // selectors tie the compiled :root tokens on specificity, so order decides.
+            document.head.appendChild(existing);
+        } else {
             const style = document.createElement('style');
             style.setAttribute(PRELOAD_STYLE_ATTR, id);
             style.textContent = entry.css;

@@ -78,6 +78,30 @@
   </script>
 </head>
 <body>
+  <!--
+    Org brand overlay pre-paint — re-injects the overlay CSS that ThemeService persisted so the
+    frame before Angular boots is branded too. It sits at the top of <body> on purpose: the
+    injected <style> must follow the app stylesheet link in <head> to win the cascade (the
+    overlay's selectors tie MJ's :root tokens on specificity). This is BRAND_OVERLAY_PREPAINT_SCRIPT from
+    @memberjunction/ng-shared-generic, verbatim; a spec there pins this copy to the export.
+  -->
+  <script>
+    (function () {
+      try {
+        var id = localStorage.getItem('mj-theme-overlay');
+        var raw = id && localStorage.getItem('mj-theme-overlay-css');
+        if (!id || !raw) return;
+        var entry = JSON.parse(raw);
+        if (!entry || entry.id !== id || typeof entry.css !== 'string') return;
+        if (document.querySelector('style[data-mj-brand-overlay-preload]')) return;
+        var style = document.createElement('style');
+        style.setAttribute('data-mj-brand-overlay-preload', id);
+        style.textContent = entry.css;
+        document.head.appendChild(style);
+        document.documentElement.setAttribute('data-theme-overlay', id);
+      } catch (e) { /* fail open: the stock frame paints, bootstrap brands it later */ }
+    })();
+  </script>
 <app-root></app-root> 
 <app-redirect></app-redirect>
 </body>
