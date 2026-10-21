@@ -4994,7 +4994,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (!this.TrustLocalCacheCompletely && !hardRefresh && !this._localMetadata?.AllEntities?.length) {
             await Promise.all([localCacheInitPromise, this.LoadLocalMetadataFromStorage()]);
             if (this._localMetadata?.AllEntities?.length) {
-                LogStatusEx({ message: `⚡ [Metadata Cache] Loaded ${this._localMetadata.AllEntities.length} entities from local cache — pre-validating before engine startup`, verboseOnly: true });
+                LogStatus(`⚡ [Metadata Cache] Loaded ${this._localMetadata.AllEntities.length} entities from local cache — pre-validating before engine startup`);
 
                 // Do NOT kick off background validation here — it writes to IndexedDB
                 // which contends with engine RunView cache reads during StartupManager.
@@ -5089,7 +5089,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     const start = new Date().getTime();
                     const res = await this.GetAllMetadata(providerToUse, effectiveHardRefresh);
                     const end = new Date().getTime();
-                    LogStatusEx({ message: `GetAllMetadata() took ${end - start} ms`, verboseOnly: true });
+                    LogStatus(`GetAllMetadata() took ${end - start} ms`);
                     if (res) {
                         await this.adoptServerMetadata(res);
                         this._configLoadedFromServer = true;
@@ -5314,16 +5314,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 this.RefreshCurrentUser(),
             ]);
             if (needsRefresh) {
-                LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata is stale — refreshing before engine startup`, verboseOnly: true });
+                LogStatus(`⚡ [Metadata Cache] Pre-validation: metadata is stale — refreshing before engine startup`);
                 const start = Date.now();
                 const res = await this.GetAllMetadata(providerToUse, false);
                 const elapsed = Date.now() - start;
                 if (res) {
                     await this.adoptServerMetadata(res);
-                    LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation refresh complete (${elapsed}ms)`, verboseOnly: true });
+                    LogStatus(`⚡ [Metadata Cache] Pre-validation refresh complete (${elapsed}ms)`);
                 }
             } else {
-                LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata is current`, verboseOnly: true });
+                LogStatus(`⚡ [Metadata Cache] Pre-validation: metadata is current`);
             }
         } catch (e) {
             LogError(`[Metadata Cache] Pre-validation failed: ${e instanceof Error ? e.message : String(e)} — engines will smart-cache-check`);

@@ -80,13 +80,13 @@ export class WorkspaceInitializerService {
 
       await setupGraphQLClient(config);
       const end = Date.now();
-      LogStatusEx({ message: `[Workspace] GraphQL client setup complete: ${end - start}ms`, verboseOnly: true });
+      LogStatus(`[Workspace] GraphQL client setup complete: ${end - start}ms`);
 
       // Subscribe to cross-server cache invalidation events via GraphQL WebSocket
       // This enables real-time data refresh when other servers modify entities
       if (GraphQLDataProvider.Instance) {
           GraphQLDataProvider.Instance.SubscribeToCacheInvalidation();
-          LogStatusEx({ message: '✓ Cache invalidation subscription active', verboseOnly: true });
+          LogStatus('✓ Cache invalidation subscription active');
       }
 
       // 2. Load metadata and validate user
