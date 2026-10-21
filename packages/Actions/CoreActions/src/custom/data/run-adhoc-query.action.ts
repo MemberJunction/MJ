@@ -461,7 +461,7 @@ export class RunAdhocQueryAction extends BaseAction {
                     strVal = strVal.substring(0, columnMaxLength) + '[...truncated]';
                     wasColumnTruncated = true;
                 }
-                return strVal.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+                return strVal.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
             });
             return `| ${values.join(' | ')} |`;
         });

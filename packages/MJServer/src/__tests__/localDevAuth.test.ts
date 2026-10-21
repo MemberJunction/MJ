@@ -90,30 +90,41 @@ describe('localDevAuth security invariants', () => {
       VerifyLocalhostRequest(
         createMockRequest({ remoteAddress: '127.0.0.1', host: 'localhost:4000', origin: 'http://localhost:4202' }),
         { NODE_ENV: 'development' }
-      ).allowed
+      ).Allowed
     ).toBe(true);
 
     expect(
       VerifyLocalhostRequest(
         createMockRequest({ remoteAddress: '::1', host: '127.0.0.1:4000', origin: 'http://127.0.0.1:4202' }),
         { NODE_ENV: 'development' }
-      ).allowed
+      ).Allowed
     ).toBe(true);
 
-    // 2. Docker Desktop host-gateway when Host is localhost and no XFF is present
+    // 2. Docker Desktop host-gateway when Host is localhost, inside container, and no XFF is present
     expect(
       VerifyLocalhostRequest(
         createMockRequest({ remoteAddress: '::ffff:192.168.65.1', host: 'localhost:4000' }),
-        { NODE_ENV: 'development' }
-      ).allowed
+        { NODE_ENV: 'development', MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE: 'true' }
+      ).Allowed
     ).toBe(true);
+
+    // 2b. Rejects Docker bridge IPs when NOT running inside a container
+    expect(
+      VerifyLocalhostRequest(
+        createMockRequest({ remoteAddress: '172.18.0.1', host: 'localhost:4000' }),
+        { NODE_ENV: 'development', MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE: 'false' }
+      ).Allowed
+    ).toBe(false);
+
+    // 2c. Rejects non-gateway RFC1918 172.16.0.0/12 addresses even inside a container
+    expect(IsLoopbackAddress('172.20.10.5', true)).toBe(false);
 
     // 3. Rejects in production even from 127.0.0.1
     expect(
       VerifyLocalhostRequest(
         createMockRequest({ remoteAddress: '127.0.0.1', host: 'localhost:4000' }),
         { NODE_ENV: 'production' }
-      ).allowed
+      ).Allowed
     ).toBe(false);
 
     // 4. Rejects LAN IP on socket
@@ -121,7 +132,7 @@ describe('localDevAuth security invariants', () => {
       VerifyLocalhostRequest(
         createMockRequest({ remoteAddress: '192.168.1.50', host: 'localhost:4000' }),
         { NODE_ENV: 'development' }
-      ).allowed
+      ).Allowed
     ).toBe(false);
 
     // 5. Rejects non-localhost Host header
@@ -129,7 +140,7 @@ describe('localDevAuth security invariants', () => {
       VerifyLocalhostRequest(
         createMockRequest({ remoteAddress: '127.0.0.1', host: '192.168.1.50:4000' }),
         { NODE_ENV: 'development' }
-      ).allowed
+      ).Allowed
     ).toBe(false);
 
     // 6. Rejects external X-Forwarded-For
@@ -137,7 +148,7 @@ describe('localDevAuth security invariants', () => {
       VerifyLocalhostRequest(
         createMockRequest({ remoteAddress: '127.0.0.1', host: 'localhost:4000', xff: '203.0.113.5' }),
         { NODE_ENV: 'development' }
-      ).allowed
+      ).Allowed
     ).toBe(false);
 
     // 7. Rejects external Origin
@@ -149,7 +160,7 @@ describe('localDevAuth security invariants', () => {
           origin: 'https://attacker.example.com',
         }),
         { NODE_ENV: 'development' }
-      ).allowed
+      ).Allowed
     ).toBe(false);
   });
 

@@ -2029,7 +2029,11 @@ async function DownloadAppMigrations(
   const isPG = context.DatabaseProvider.Dialect.PlatformKey === 'postgresql';
 
   if (isPG) {
-    const pgDir = `${baseDir.replace(/\/+$/, '')}-pg`;
+    let end = baseDir.length;
+    while (end > 0 && baseDir.charCodeAt(end - 1) === 47) {
+      end--;
+    }
+    const pgDir = `${baseDir.slice(0, end)}-pg`;
     const pgResult = await DownloadMigrations(manifest.repository, manifest.version, pgDir, tempDir, context.GitHubOptions, subpath);
     // Use the PG-specific set only if it exists AND has files; otherwise fall
     // back to the declared directory (a 404 yields Success:false, an empty dir

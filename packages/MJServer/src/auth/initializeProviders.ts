@@ -2,7 +2,33 @@ import { configInfo } from '../config.js';
 import { AuthProviderConfig, LogError, LogStatus, LogStatusEx, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { AuthProviderFactory, LocalDevProvider } from '@memberjunction/auth-providers';
 import { AuthProviderEngine } from './AuthProviderEngine.js';
-import { AssertLocalDevAuthAllowed, IsLocalDevAuthEnabled } from './localDevAuth.js';
+
+/**
+ * Returns true when local development auth is enabled via `MJ_DEV_AUTH_ENABLED=true`
+ * or `configInfo.devAuth?.enabled === true`.
+ */
+export function IsLocalDevAuthEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const rawEnv = env.MJ_DEV_AUTH_ENABLED?.trim().toLowerCase();
+  if (rawEnv === 'true' || rawEnv === '1') {
+    return true;
+  }
+  if (rawEnv === 'false' || rawEnv === '0') {
+    return false;
+  }
+  return configInfo?.devAuth?.enabled === true;
+}
+
+/**
+ * Enforces the production safety invariant: throws a fatal error if local dev auth
+ * is enabled while `NODE_ENV === 'production'`.
+ */
+export function AssertLocalDevAuthAllowed(env: NodeJS.ProcessEnv = process.env): void {
+  if (IsLocalDevAuthEnabled(env) && env.NODE_ENV?.trim().toLowerCase() === 'production') {
+    throw new Error(
+      '[SECURITY] Local dev auth (MJ_DEV_AUTH_ENABLED) is strictly forbidden when NODE_ENV=production. Refusing to start.'
+    );
+  }
+}
 
 /**
  * Initialize authentication providers from configuration.

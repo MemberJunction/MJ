@@ -488,6 +488,11 @@ export class FlowAgentType extends BaseAgentType {
                     errorMessage: `Destination step not found: ${paths[0].DestinationStepID}`
                 });
             }
+
+            const deferredStartStep = await this.deferJoinStepIfPendingStarts(nextStep, flowState, params, payload);
+            if (deferredStartStep) {
+                return deferredStartStep;
+            }
             
             // Check if the step is active
             if (nextStep.Status !== 'Active') {
@@ -1841,6 +1846,50 @@ export class FlowAgentType extends BaseAgentType {
     }
 
     /**
+     * When `nextStep` is a join step with uncompleted incoming prerequisites and additional
+     * starting steps are still queued in `flowState.pendingStartStepIds`, defers `nextStep`
+     * by re-queuing its ID after the remaining starting steps and advancing to the next
+     * pending start step first.
+     */
+    private async deferJoinStepIfPendingStarts<P = unknown>(
+        nextStep: MJAIAgentStepEntity,
+        flowState: FlowExecutionState,
+        params: ExecuteAgentParams<P>,
+        payload: P
+    ): Promise<BaseAgentNextStep<P> | null> {
+        if (!flowState.pendingStartStepIds || flowState.pendingStartStepIds.length === 0) {
+            return null;
+        }
+        const completedStepIds = new UUIDSet(flowState.completedStepIds);
+        const hasOtherPendingStep = flowState.pendingStartStepIds.some(
+            (id) => !UUIDsEqual(id, nextStep.ID) && !completedStepIds.Has(id)
+        );
+        if (!hasOtherPendingStep) {
+            return null;
+        }
+
+        const repo = new AIEngineGraphRepository(flowState.agentId);
+        const incomingOrigins = repo.GetIncomingEdges(nextStep.ID).map((e) => e.originNodeId);
+        if (incomingOrigins.length <= 1) {
+            return null;
+        }
+        const hasIncompleteJoinOrigin = incomingOrigins.some((originId) => !completedStepIds.Has(originId));
+        if (!hasIncompleteJoinOrigin) {
+            return null;
+        }
+
+        const pendingStart = await this.popNextPendingStartStep(flowState);
+        if (!pendingStart) {
+            return null;
+        }
+
+        if (!flowState.pendingStartStepIds.some((id) => UUIDsEqual(id, nextStep.ID))) {
+            flowState.pendingStartStepIds.push(nextStep.ID);
+        }
+        return await this.createStepForFlowNode(params, pendingStart, payload, flowState);
+    }
+
+    /**
      * Pre-processes steps for flow agent types.
      * 
      * For Flow agents, 'Retry' after actions means evaluate paths from the current step
@@ -1994,20 +2043,9 @@ export class FlowAgentType extends BaseAgentType {
             });
         }
 
-        // If nextStep is a join step waiting on another uncompleted prerequisite while additional
-        // starting steps are still queued, execute the next pending starting step first so the
-        // join receives all upstream inputs before running.
-        if (flowState.pendingStartStepIds && flowState.pendingStartStepIds.length > 0) {
-            const repo = new AIEngineGraphRepository(flowState.agentId);
-            const incomingOrigins = repo.GetIncomingEdges(nextStep.ID).map((e) => e.originNodeId);
-            const completedStepIds = new UUIDSet(flowState.completedStepIds);
-            const hasIncompleteJoinOrigin = incomingOrigins.some((originId) => !completedStepIds.Has(originId));
-            if (hasIncompleteJoinOrigin) {
-                const pendingStart = await this.popNextPendingStartStep(flowState);
-                if (pendingStart) {
-                    return await this.createStepForFlowNode(params, pendingStart, currentPayload, flowState);
-                }
-            }
+        const deferredStartStep = await this.deferJoinStepIfPendingStarts(nextStep, flowState, params, currentPayload);
+        if (deferredStartStep) {
+            return deferredStartStep;
         }
 
         // Log when we're navigating to a recovery path after a failure

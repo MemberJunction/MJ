@@ -58,35 +58,37 @@ if [ ! -f "$STATE_DIR/provisioned" ]; then
   echo "========================================================================"
 
   if [ ! -f "$STATE_DIR/core-installed" ]; then
-    # Generate install configuration
-    cat << EOF > /tmp/install.config.json
-{
-  "PackageManager": "pnpm",
-  "DatabaseHost": "$DB_HOST",
-  "DatabasePort": $DB_PORT,
-  "DatabaseName": "$DB_DATABASE",
-  "DatabaseTrustCert": true,
-  "DatabaseAdminUser": "sa",
-  "DatabaseAdminPassword": "$DB_PASSWORD",
-  "CodeGenUser": "sa",
-  "CodeGenPassword": "$DB_PASSWORD",
-  "APIUser": "sa",
-  "APIPassword": "$DB_PASSWORD",
-  "APIPort": 4000,
-  "AuthProvider": "local",
-  "BaseEncryptionKey": "${MJ_BASE_ENCRYPTION_KEY:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}",
-  "CreateNewUser": {
-    "Username": "admin",
-    "Email": "admin@memberjunction.org",
-    "FirstName": "Admin",
-    "LastName": "User"
-  },
-  "OpenAIKey": "${AI_VENDOR_API_KEY__OpenAILLM:-}",
-  "AnthropicKey": "${AI_VENDOR_API_KEY__AnthropicLLM:-}",
-  "GeminiKey": "${AI_VENDOR_API_KEY__GeminiLLM:-}",
-  "MistralKey": "${AI_VENDOR_API_KEY__MistralLLM:-}"
-}
-EOF
+    # Generate install configuration safely via JSON.stringify so special characters in passwords/keys are escaped
+    node -e "
+      const fs = require('fs');
+      const cfg = {
+        PackageManager: 'pnpm',
+        DatabaseHost: process.env.DB_HOST || 'sqlserver',
+        DatabasePort: Number(process.env.DB_PORT || 1433),
+        DatabaseName: process.env.DB_DATABASE || 'MemberJunction',
+        DatabaseTrustCert: true,
+        DatabaseAdminUser: 'sa',
+        DatabaseAdminPassword: process.env.DB_PASSWORD || '',
+        CodeGenUser: 'sa',
+        CodeGenPassword: process.env.DB_PASSWORD || '',
+        APIUser: 'sa',
+        APIPassword: process.env.DB_PASSWORD || '',
+        APIPort: 4000,
+        AuthProvider: 'local',
+        BaseEncryptionKey: process.env.MJ_BASE_ENCRYPTION_KEY || 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=',
+        CreateNewUser: {
+          Username: 'admin',
+          Email: 'admin@memberjunction.org',
+          FirstName: 'Admin',
+          LastName: 'User'
+        },
+        OpenAIKey: process.env.AI_VENDOR_API_KEY__OpenAILLM || '',
+        AnthropicKey: process.env.AI_VENDOR_API_KEY__AnthropicLLM || '',
+        GeminiKey: process.env.AI_VENDOR_API_KEY__GeminiLLM || '',
+        MistralKey: process.env.AI_VENDOR_API_KEY__MistralLLM || ''
+      };
+      fs.writeFileSync('/tmp/install.config.json', JSON.stringify(cfg, null, 2), { mode: 0o600 });
+    "
 
     # Install the release this workspace is pinned to (MJ_VERSION, the same release as the CLI
     # in this container). Without a tag, `mj install --yes` takes the newest stable GitHub
@@ -100,6 +102,7 @@ EOF
 
     # Execute headless install. Safe to retry: the installer checkpoints completed phases.
     mj install --yes --fast --config /tmp/install.config.json --dir /workspace "${INSTALL_TAG_ARGS[@]}"
+    rm -f /tmp/install.config.json
     touch "$STATE_DIR/core-installed"
     pnpm add -w @angular/compiler@21.2.22 2>/dev/null || true
   fi
@@ -186,7 +189,7 @@ node -e "
   const fs = require('fs');
   const upsertVar = (content, key, val) => {
     const re = new RegExp('^' + key + '=.*$', 'm');
-    const line = key + \"='\" + val + \"'\";
+    const line = key + '=' + JSON.stringify(String(val));
     if (re.test(content)) return content.replace(re, () => line);
     return content + (content.endsWith('\n') ? '' : '\n') + line + '\n';
   };

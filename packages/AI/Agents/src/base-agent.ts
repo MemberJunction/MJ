@@ -26,7 +26,7 @@ import { BaseAgentType } from './agent-types/base-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID, IndexByUUID } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, UUIDSet, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID, IndexByUUID } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -17186,8 +17186,9 @@ The context is now within limits. Please retry your request with the recovered c
                 let actionEntity = effectiveActions.find(a => a.Name === aa.name);
                 if (!actionEntity && Array.isArray(actionEngine?.Actions)) {
                     const agentSteps = AIEngine.Instance.GetAgentSteps?.(params.agent.ID) || [];
+                    const stepActionIds = new UUIDSet(agentSteps.map(s => s.ActionID));
                     actionEntity = actionEngine.Actions.find(
-                        a => a.Name === aa.name && agentSteps.some(s => Boolean(s.ActionID) && UUIDsEqual(s.ActionID, a.ID))
+                        a => a.Name === aa.name && stepActionIds.Has(a.ID)
                     );
                 }
                 if (!actionEntity) {

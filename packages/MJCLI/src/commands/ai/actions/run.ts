@@ -89,11 +89,10 @@ export default class ActionsRun extends Command {
         spinner.stop();
         this.log(formatter.formatActionResult(result));
 
-        await CloseMJProvider().catch(() => {});
         if (!result.success) {
           this.exit(1);
         }
-        process.exit(0);
+        setImmediate(() => process.exit(0));
       }
     } catch (error) {
       this.error(error as Error);

@@ -21,24 +21,31 @@
  * @module @memberjunction/server/auth/localDevAuth
  */
 
+import * as fs from 'node:fs';
 import { Router, json, type Request, type Response } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import {
   AuthProviderConfig,
   DatabaseProviderBase,
+  IMetadataProvider,
   LogError,
   LogStatusEx,
   Metadata,
   UserInfo,
 } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { AuthProviderFactory, LocalDevProvider } from '@memberjunction/auth-providers';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { configInfo } from '../config.js';
-import { ConfiguredPublicUrl } from '../apiRoot.js';
+import { ApiRoute } from '../apiRoot.js';
 import { MagicLinkKeyManager } from './magicLink/MagicLinkKeys.js';
 import { MAGIC_LINK_JWKS_PATH } from './magicLink/MagicLinkRouter.js';
+import { AssertLocalDevAuthAllowed, IsLocalDevAuthEnabled } from './initializeProviders.js';
+
+export { AssertLocalDevAuthAllowed, IsLocalDevAuthEnabled };
 
 /** Claims embedded in a local development JWT. */
-export interface LocalDevJWTClaims extends Record<string, unknown> {
+interface LocalDevJWTClaims extends Record<string, unknown> {
   iss: string;
   aud: string;
   sub: string;
@@ -53,34 +60,18 @@ export interface LocalDevJWTClaims extends Record<string, unknown> {
 
 /** Result of the localhost-only request guard. */
 export interface LocalhostGuardResult {
-  allowed: boolean;
-  reason?: string;
+  Allowed: boolean;
+  Reason?: string;
 }
 
 const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
-/**
- * Returns true when local development auth is enabled via `MJ_DEV_AUTH_ENABLED=true`
- * or `configInfo.devAuth?.enabled === true`.
- */
-export function IsLocalDevAuthEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  const rawEnv = env.MJ_DEV_AUTH_ENABLED?.trim().toLowerCase();
-  if (rawEnv === 'true' || rawEnv === '1') {
-    return true;
+function TrimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end--;
   }
-  return configInfo?.devAuth?.enabled === true;
-}
-
-/**
- * Enforces the production safety invariant: throws a fatal error if local dev auth
- * is enabled while `NODE_ENV === 'production'`.
- */
-export function AssertLocalDevAuthAllowed(env: NodeJS.ProcessEnv = process.env): void {
-  if (IsLocalDevAuthEnabled(env) && env.NODE_ENV?.trim().toLowerCase() === 'production') {
-    throw new Error(
-      '[SECURITY] Local dev auth (MJ_DEV_AUTH_ENABLED) is strictly forbidden when NODE_ENV=production. Refusing to start.'
-    );
-  }
+  return value.slice(0, end);
 }
 
 /**
@@ -99,13 +90,13 @@ export function IsLoopbackAddress(rawIp: string | undefined, allowDockerBridge: 
     return true;
   }
   if (allowDockerBridge) {
-    // Docker Desktop macOS/Windows host-gateway IPs (192.168.65.0/24) and standard
-    // local Docker bridge networks (172.16.0.0/12) when a host browser connects to a
-    // port-forwarded container on localhost.
+    // Docker Desktop macOS/Windows host-gateway IPs (192.168.65.0/24) and local
+    // Docker bridge gateway (.1) addresses when a host browser connects to a
+    // port-forwarded container bound to 127.0.0.1 on the host.
     if (/^192\.168\.65\.\d{1,3}$/.test(normalized)) {
       return true;
     }
-    if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(normalized)) {
+    if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.1$/.test(normalized)) {
       return true;
     }
     if (normalized === '10.0.2.2') {
@@ -113,6 +104,16 @@ export function IsLoopbackAddress(rawIp: string | undefined, allowDockerBridge: 
     }
   }
   return false;
+}
+
+function isRunningInsideContainer(env: NodeJS.ProcessEnv): boolean {
+  if (env.MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE === 'true') {
+    return true;
+  }
+  if (env.MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE === 'false') {
+    return false;
+  }
+  return fs.existsSync('/.dockerenv') || fs.existsSync('/run/.containerenv');
 }
 
 /** Extracts the hostname (without port) from a raw HTTP `Host` header value. */
@@ -149,12 +150,12 @@ export function VerifyLocalhostRequest(
 ): LocalhostGuardResult {
   if (env.NODE_ENV?.trim().toLowerCase() === 'production') {
     return {
-      allowed: false,
-      reason: 'Local dev auth is strictly forbidden when NODE_ENV=production.',
+      Allowed: false,
+      Reason: 'Local dev auth is strictly forbidden when NODE_ENV=production.',
     };
   }
 
-  // 1. Inspect X-Forwarded-For if present — every hop must be pure loopback
+  // 1. Inspect X-Forwarded-For / Forwarded / X-Real-IP / CF-Connecting-IP if present — every hop must be pure loopback
   const xffRaw = req.headers['x-forwarded-for'];
   const xffValue = Array.isArray(xffRaw) ? xffRaw.join(',') : xffRaw;
   if (xffValue && xffValue.trim().length > 0) {
@@ -162,11 +163,46 @@ export function VerifyLocalhostRequest(
     for (const hop of hops) {
       if (!IsLoopbackAddress(hop, false)) {
         return {
-          allowed: false,
-          reason: `Non-loopback X-Forwarded-For address '${hop}' rejected.`,
+          Allowed: false,
+          Reason: `Non-loopback X-Forwarded-For address '${hop}' rejected.`,
         };
       }
     }
+  }
+
+  for (const proxyHeader of ['x-real-ip', 'cf-connecting-ip'] as const) {
+    const rawHeader = req.headers[proxyHeader];
+    const headerVal = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
+    if (headerVal && headerVal.trim().length > 0 && !IsLoopbackAddress(headerVal, false)) {
+      return {
+        Allowed: false,
+        Reason: `Non-loopback ${proxyHeader} address '${headerVal}' rejected.`,
+      };
+    }
+  }
+
+  const forwardedHeader = req.headers['forwarded'];
+  const forwardedVal = Array.isArray(forwardedHeader) ? forwardedHeader.join(',') : forwardedHeader;
+  if (forwardedVal && forwardedVal.trim().length > 0) {
+    const forMatches = forwardedVal.matchAll(/for=\s*"?\[?([^;,"\]]+)\]?"?/gi);
+    for (const match of forMatches) {
+      const candidateIp = match[1]?.split(':')[0]?.trim();
+      if (candidateIp && !IsLoopbackAddress(candidateIp, false)) {
+        return {
+          Allowed: false,
+          Reason: `Non-loopback Forwarded address '${candidateIp}' rejected.`,
+        };
+      }
+    }
+  }
+
+  // 1b. Reject browser cross-site requests via Sec-Fetch-Site
+  const secFetchSite = typeof req.headers['sec-fetch-site'] === 'string' ? req.headers['sec-fetch-site'].trim().toLowerCase() : undefined;
+  if (secFetchSite === 'cross-site') {
+    return {
+      Allowed: false,
+      Reason: `Cross-site request (Sec-Fetch-Site: ${secFetchSite}) rejected.`,
+    };
   }
 
   // 2. Inspect Host header — must be localhost, 127.0.0.1, or ::1
@@ -174,8 +210,8 @@ export function VerifyLocalhostRequest(
   const hostName = extractHostnameFromHostHeader(hostHeader);
   if (!hostName || !LOCALHOST_HOSTNAMES.has(hostName)) {
     return {
-      allowed: false,
-      reason: `Non-localhost Host header '${hostHeader ?? 'missing'}' rejected.`,
+      Allowed: false,
+      Reason: `Non-localhost Host header '${hostHeader ?? 'missing'}' rejected.`,
     };
   }
 
@@ -185,8 +221,8 @@ export function VerifyLocalhostRequest(
     const originHost = extractHostnameFromUrlHeader(originHeader);
     if (!originHost || !LOCALHOST_HOSTNAMES.has(originHost)) {
       return {
-        allowed: false,
-        reason: `Non-localhost Origin header '${originHeader}' rejected.`,
+        Allowed: false,
+        Reason: `Non-localhost Origin header '${originHeader}' rejected.`,
       };
     }
   }
@@ -197,43 +233,57 @@ export function VerifyLocalhostRequest(
     const refererHost = extractHostnameFromUrlHeader(refererHeader);
     if (!refererHost || !LOCALHOST_HOSTNAMES.has(refererHost)) {
       return {
-        allowed: false,
-        reason: `Non-localhost Referer header '${refererHeader}' rejected.`,
+        Allowed: false,
+        Reason: `Non-localhost Referer header '${refererHeader}' rejected.`,
       };
     }
   }
 
-  // 5. Inspect socket remote address (allow Docker local bridge ONLY when no XFF is present)
-  const hasXff = Boolean(xffValue && xffValue.trim().length > 0);
+  // 5. Inspect socket remote address (allow Docker local bridge ONLY when running in a container and no proxy header is present)
+  const hasProxyHeader = Boolean(
+    (xffValue && xffValue.trim().length > 0) ||
+    (forwardedVal && forwardedVal.trim().length > 0) ||
+    req.headers['x-real-ip'] ||
+    req.headers['cf-connecting-ip']
+  );
+  const allowDockerBridge = !hasProxyHeader && isRunningInsideContainer(env);
   const remoteAddress = req.socket?.remoteAddress || req.ip;
-  if (!IsLoopbackAddress(remoteAddress, !hasXff)) {
+  if (!IsLoopbackAddress(remoteAddress, allowDockerBridge)) {
     return {
-      allowed: false,
-      reason: `Non-loopback socket remote address '${remoteAddress ?? 'unknown'}' rejected.`,
+      Allowed: false,
+      Reason: `Non-loopback socket remote address '${remoteAddress ?? 'unknown'}' rejected.`,
     };
   }
 
-  return { allowed: true };
+  return { Allowed: true };
 }
 
 /**
  * Registers the `local` auth provider in `AuthProviderFactory` and `configInfo.authProviders`
  * using the server's configured public URL and the shared `MagicLinkKeyManager` JWKS endpoint.
  */
-export function RegisterLocalDevAuthProvider(publicUrl: string): void {
+export function RegisterLocalDevAuthProvider(publicUrl?: string): void {
   AssertLocalDevAuthAllowed();
   MagicLinkKeyManager.Instance.Initialize(configInfo.magicLink?.rsaPrivateKey);
 
-  const base = publicUrl.replace(/\/+$/, '');
+  const base = publicUrl ? TrimTrailingSlashes(publicUrl) : undefined;
+  const issuer = base ? `${base}/local-dev` : ApiRoute('/local-dev', { absolute: true });
+  const jwksUri = base ? `${base}${MAGIC_LINK_JWKS_PATH}` : ApiRoute(MAGIC_LINK_JWKS_PATH, { absolute: true });
   const providerConfig: AuthProviderConfig = {
     name: 'local',
     type: 'local',
-    issuer: `${base}/local-dev`,
+    issuer,
     audience: LocalDevProvider.DEFAULT_AUDIENCE,
-    jwksUri: `${base}${MAGIC_LINK_JWKS_PATH}`,
+    jwksUri,
   };
 
   try {
+    const factory = AuthProviderFactory.Instance;
+    const existingProvider = factory.getByName('local');
+    if (existingProvider && existingProvider.issuer === issuer && existingProvider.jwksUri === jwksUri) {
+      return;
+    }
+
     configInfo.authProviders = configInfo.authProviders ?? [];
     const existingIdx = configInfo.authProviders.findIndex((p) => p.type === 'local' || p.name === 'local');
     if (existingIdx >= 0) {
@@ -241,7 +291,6 @@ export function RegisterLocalDevAuthProvider(publicUrl: string): void {
     } else {
       configInfo.authProviders.push(providerConfig);
     }
-    const factory = AuthProviderFactory.Instance;
     factory.register(AuthProviderFactory.createProvider(providerConfig));
     LogStatusEx({
       message: `[LocalDevAuth] Registered local dev auth provider (issuer: ${providerConfig.issuer}, jwks: ${providerConfig.jwksUri})`,
@@ -255,10 +304,14 @@ export function RegisterLocalDevAuthProvider(publicUrl: string): void {
 /**
  * Resolves the active local MJ user to sign in as for local development.
  */
-export async function ResolveLocalDevUser(requestedEmail?: string): Promise<UserInfo | null> {
-  if ((!UserCache.Instance.Users || UserCache.Instance.Users.length === 0) && Metadata.Provider) {
+export async function ResolveLocalDevUser(
+  requestedEmail?: string,
+  provider?: IMetadataProvider
+): Promise<UserInfo | null> {
+  const effectiveProvider = provider ?? Metadata.Provider;
+  if ((!UserCache.Instance.Users || UserCache.Instance.Users.length === 0) && effectiveProvider) {
     try {
-      await UserCache.Instance.Refresh(Metadata.Provider as DatabaseProviderBase);
+      await UserCache.Instance.Refresh(effectiveProvider as DatabaseProviderBase);
     } catch (err) {
       LogError(`[LocalDevAuth] Failed to refresh UserCache: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -268,11 +321,14 @@ export async function ResolveLocalDevUser(requestedEmail?: string): Promise<User
   const activeUsers = allUsers.filter(
     (u) =>
       u.IsActive &&
-      u.ID !== UserCache.Instance.SYSTEM_USER_ID &&
+      !UUIDsEqual(u.ID, UserCache.Instance.SYSTEM_USER_ID) &&
       u.Name?.trim().toLowerCase() !== 'system'
   );
 
-  const targetEmail = requestedEmail?.trim() || process.env.MJ_DEV_AUTH_DEFAULT_EMAIL?.trim();
+  const targetEmail =
+    requestedEmail?.trim() ||
+    process.env.MJ_DEV_AUTH_DEFAULT_EMAIL?.trim() ||
+    configInfo?.devAuth?.defaultEmail?.trim();
   if (targetEmail) {
     const matched = activeUsers.find((u) => u.Email?.trim().toLowerCase() === targetEmail.toLowerCase());
     if (matched) {
@@ -318,13 +374,14 @@ export async function ResolveLocalDevUser(requestedEmail?: string): Promise<User
  */
 export function MintLocalDevJwt(
   user: UserInfo,
-  publicUrl: string,
+  publicUrl?: string,
   ttlSeconds = 8 * 3600
 ): { token: string; expiresAt: string; claims: LocalDevJWTClaims } {
   AssertLocalDevAuthAllowed();
   MagicLinkKeyManager.Instance.Initialize(configInfo.magicLink?.rsaPrivateKey);
 
-  const base = publicUrl.replace(/\/+$/, '');
+  const base = publicUrl ? TrimTrailingSlashes(publicUrl) : undefined;
+  const issuer = base ? `${base}/local-dev` : ApiRoute('/local-dev', { absolute: true });
   const nowSeconds = Math.floor(Date.now() / 1000);
   const expSeconds = nowSeconds + ttlSeconds;
   const firstName = user.FirstName?.trim() || 'Admin';
@@ -335,7 +392,7 @@ export function MintLocalDevJwt(
     user.Email;
 
   const claims: LocalDevJWTClaims = {
-    iss: `${base}/local-dev`,
+    iss: issuer,
     aud: LocalDevProvider.DEFAULT_AUDIENCE,
     sub: `local-dev|${user.ID}`,
     email: user.Email,
@@ -362,7 +419,14 @@ export function MintLocalDevJwt(
  * When enabled, every request is gated by {@link VerifyLocalhostRequest}.
  */
 export function AttachLocalDevAuthRoutes(router: Router): void {
-  router.post('/dev-login', json(), async (req: Request, res: Response) => {
+  const devAuthLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: 60,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+  });
+
+  router.post('/dev-login', devAuthLimiter, json(), async (req: Request, res: Response) => {
     if (!IsLocalDevAuthEnabled()) {
       res.status(404).json({
         success: false,
@@ -372,8 +436,8 @@ export function AttachLocalDevAuthRoutes(router: Router): void {
     }
 
     const guard = VerifyLocalhostRequest(req);
-    if (!guard.allowed) {
-      LogError(`[SECURITY] Blocked /auth/dev-login request: ${guard.reason}`);
+    if (!guard.Allowed) {
+      LogError(`[SECURITY] Blocked /auth/dev-login request: ${guard.Reason}`);
       res.status(403).json({
         success: false,
         error: 'Forbidden: /auth/dev-login is restricted to localhost only.',
@@ -382,8 +446,7 @@ export function AttachLocalDevAuthRoutes(router: Router): void {
     }
 
     try {
-      const publicUrl = ConfiguredPublicUrl();
-      RegisterLocalDevAuthProvider(publicUrl);
+      RegisterLocalDevAuthProvider();
 
       const body = (req.body ?? {}) as { email?: string };
       const requestedEmail = typeof body.email === 'string' ? body.email.trim() : undefined;
@@ -391,7 +454,7 @@ export function AttachLocalDevAuthRoutes(router: Router): void {
 
       if (!user) {
         const availableEmails = (UserCache.Instance.Users ?? [])
-          .filter((u) => u.IsActive && u.ID !== UserCache.Instance.SYSTEM_USER_ID)
+          .filter((u) => u.IsActive && !UUIDsEqual(u.ID, UserCache.Instance.SYSTEM_USER_ID))
           .map((u) => u.Email);
         res.status(404).json({
           success: false,
@@ -403,7 +466,7 @@ export function AttachLocalDevAuthRoutes(router: Router): void {
         return;
       }
 
-      const { token, expiresAt, claims } = MintLocalDevJwt(user, publicUrl);
+      const { token, expiresAt, claims } = MintLocalDevJwt(user);
       res.set('Cache-Control', 'no-store');
       res.status(200).json({
         success: true,
@@ -428,7 +491,7 @@ export function AttachLocalDevAuthRoutes(router: Router): void {
     }
   });
 
-  router.get('/dev-users', async (req: Request, res: Response) => {
+  router.get('/dev-users', devAuthLimiter, async (req: Request, res: Response) => {
     if (!IsLocalDevAuthEnabled()) {
       res.status(404).json({
         success: false,
@@ -438,8 +501,8 @@ export function AttachLocalDevAuthRoutes(router: Router): void {
     }
 
     const guard = VerifyLocalhostRequest(req);
-    if (!guard.allowed) {
-      LogError(`[SECURITY] Blocked /auth/dev-users request: ${guard.reason}`);
+    if (!guard.Allowed) {
+      LogError(`[SECURITY] Blocked /auth/dev-users request: ${guard.Reason}`);
       res.status(403).json({
         success: false,
         error: 'Forbidden: /auth/dev-users is restricted to localhost only.',
@@ -448,7 +511,7 @@ export function AttachLocalDevAuthRoutes(router: Router): void {
     }
 
     const users = (UserCache.Instance.Users ?? [])
-      .filter((u) => u.IsActive && u.ID !== UserCache.Instance.SYSTEM_USER_ID && u.Name?.trim().toLowerCase() !== 'system')
+      .filter((u) => u.IsActive && !UUIDsEqual(u.ID, UserCache.Instance.SYSTEM_USER_ID) && u.Name?.trim().toLowerCase() !== 'system')
       .map((u) => ({
         id: u.ID,
         email: u.Email,

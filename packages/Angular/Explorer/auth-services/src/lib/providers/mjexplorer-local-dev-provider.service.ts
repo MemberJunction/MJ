@@ -61,27 +61,28 @@ export class MJLocalDevProvider extends MJAuthBase {
   }
 
   async initialize(): Promise<void> {
-    const existing = this.readValidStoredToken();
-    if (existing) {
-      this.applyToken(existing.token, existing.claims);
-      return;
-    }
-
+    // Always attempt to mint/refresh from /auth/dev-login on initialize so server restarts
+    // (which rotate the ephemeral in-memory RS256 keypair) never leave a stale token in sessionStorage.
     const acquired = await this.acquireDevToken();
     if (acquired) {
       this.applyToken(acquired.token, acquired.claims);
-    } else {
-      this.updateUserInfo(null);
-      this.updateAuthState(false);
+      return;
     }
-  }
 
-  protected async loginInternal(_options?: Record<string, unknown>): Promise<void> {
     const existing = this.readValidStoredToken();
     if (existing) {
       this.applyToken(existing.token, existing.claims);
       return;
     }
+
+    this.updateUserInfo(null);
+    this.updateAuthState(false);
+  }
+
+  protected async loginInternal(_options?: Record<string, unknown>): Promise<void> {
+    this.clearToken();
+    this.token = null;
+    this.claims = null;
     const acquired = await this.acquireDevToken();
     if (acquired) {
       this.applyToken(acquired.token, acquired.claims);
@@ -188,7 +189,7 @@ export class MJLocalDevProvider extends MJAuthBase {
     return true;
   }
 
-  static angularProviderFactory = (environment: Record<string, unknown>): Provider[] => {
+  static AngularProviderFactory = (environment: Record<string, unknown>): Provider[] => {
     const graphqlUri = (environment['GRAPHQL_URI'] as string | undefined) || 'http://localhost:4000/';
     const email = environment['LOCAL_DEV_EMAIL'] as string | undefined;
     return [
@@ -199,13 +200,32 @@ export class MJLocalDevProvider extends MJAuthBase {
     ];
   };
 
-  static AngularProviderFactory = MJLocalDevProvider.angularProviderFactory;
+  /** @deprecated Use {@link AngularProviderFactory}. */
+  static get angularProviderFactory() {
+    return this.AngularProviderFactory;
+  }
+  /** @deprecated Use {@link AngularProviderFactory}. */
+  static set angularProviderFactory(value) {
+    this.AngularProviderFactory = value;
+  }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   private resolveDevLoginUrl(): string {
     const rawUri = this.localConfig.graphqlUri || 'http://localhost:4000/';
-    const trimmed = rawUri.replace(/\/+$/, '').replace(/\/graphql$/i, '');
+    let end = rawUri.length;
+    while (end > 0 && rawUri.charCodeAt(end - 1) === 47) {
+      end--;
+    }
+    let trimmed = rawUri.slice(0, end);
+    if (trimmed.toLowerCase().endsWith('/graphql')) {
+      trimmed = trimmed.slice(0, -8);
+      let nextEnd = trimmed.length;
+      while (nextEnd > 0 && trimmed.charCodeAt(nextEnd - 1) === 47) {
+        nextEnd--;
+      }
+      trimmed = trimmed.slice(0, nextEnd);
+    }
     return `${trimmed}/auth/dev-login`;
   }
 

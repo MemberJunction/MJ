@@ -1,6 +1,7 @@
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { ExecutionLogger } from '../lib/execution-logger';
 import { InitializeMJProvider } from '../lib/mj-provider';
 import { AgentInfo, ExecutionResult } from '../lib/output-formatter';
@@ -440,8 +441,6 @@ Log file: ${logger.getLogFilePath()}${stackInfo}`);
   }
 
   private async getContextUser(): Promise<UserInfo> {
-    const { UserCache } = await import('@memberjunction/generic-database-provider');
-    
     if (!UserCache.Users || UserCache.Users.length === 0) {
       throw new Error(`❌ No users found in UserCache
 
@@ -456,10 +455,18 @@ Next steps:
 This is typically a configuration or database setup issue.`);
     }
 
-    // For CLI usage, we'll use the first available user
-    // In a real application, you might want to configure which user to use
-    const user = UserCache.Users[0];
-    
+    const activeUsers = UserCache.Users.filter(
+      (u) => u.IsActive && u.Name?.trim().toLowerCase() !== 'system'
+    );
+    const defaultAdmin = activeUsers.find(
+      (u) => u.Email?.trim().toLowerCase() === 'admin@memberjunction.org'
+    );
+    const developerUser = activeUsers.find((u) =>
+      u.UserRoles?.some((r) => r.Role?.trim().toLowerCase() === 'developer')
+    );
+    const ownerUser = activeUsers.find((u) => u.Type?.trim().toLowerCase() === 'owner');
+    const user = defaultAdmin ?? developerUser ?? ownerUser ?? activeUsers[0] ?? UserCache.Users[0];
+
     if (!user) {
       throw new Error('No valid user found for execution context');
     }

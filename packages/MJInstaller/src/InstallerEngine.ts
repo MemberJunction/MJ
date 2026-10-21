@@ -994,6 +994,16 @@ export class InstallerEngine {
       return;
     }
 
+    // Local Dev auth checks
+    if (authType === 'local') {
+      diagnostics.AddCheck({
+        Name: 'Local Dev Auth',
+        Status: 'pass',
+        Message: 'AUTH_TYPE is "local" (local development mock JWT provider).',
+      });
+      this.emitDiagnostic('Local Dev Auth', 'pass', 'AUTH_TYPE is "local".');
+    }
+
     // MSAL auth checks
     if (authType === 'msal') {
       if (!clientId) {
@@ -1075,6 +1085,26 @@ export class InstallerEngine {
       if (!(await fs.FileExists(envPath))) continue;
 
       const content = await fs.ReadText(envPath);
+
+      if (explorerAuthType === 'local') {
+        const hasLocalDevAuth = /^MJ_DEV_AUTH_ENABLED\s*=\s*['"]?(true|1)['"]?/im.test(content);
+        if (!hasLocalDevAuth) {
+          diagnostics.AddCheck({
+            Name: 'MJAPI auth consistency',
+            Status: 'warn',
+            Message: `Explorer uses local dev auth ("local") but MJAPI .env is missing MJ_DEV_AUTH_ENABLED=true.`,
+            SuggestedFix: 'Add MJ_DEV_AUTH_ENABLED=true to the MJAPI .env file for local development.',
+          });
+          this.emitDiagnostic('MJAPI auth consistency', 'warn', 'MJAPI .env missing MJ_DEV_AUTH_ENABLED=true.');
+        } else {
+          diagnostics.AddCheck({
+            Name: 'MJAPI auth consistency',
+            Status: 'pass',
+            Message: 'MJAPI .env has MJ_DEV_AUTH_ENABLED=true matching Explorer local auth type.',
+          });
+          this.emitDiagnostic('MJAPI auth consistency', 'pass', 'MJAPI .env MJ_DEV_AUTH_ENABLED=true present.');
+        }
+      }
 
       if (explorerAuthType === 'msal') {
         const hasTenantId = /^TENANT_ID\s*=\s*\S+/m.test(content);

@@ -112,11 +112,10 @@ export default class AgentsRun extends Command {
         spinner.stop();
         this.log(formatter.formatAgentResult(result));
 
-        await CloseMJProvider().catch(() => {});
         if (!result.success) {
           this.exit(1);
         }
-        process.exit(0);
+        setImmediate(() => process.exit(0));
       }
     } catch (error) {
       this.error(error as Error);

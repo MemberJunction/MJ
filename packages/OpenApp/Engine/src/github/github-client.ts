@@ -87,16 +87,56 @@ export interface MigrationDownloadResult {
  * @param repoUrl - GitHub URL, optionally with a trailing in-repo path
  * @returns Parsed owner, repo, and optional subpath, or null if invalid
  */
+function TrimLeadingSlashes(value: string): string {
+    let start = 0;
+    while (start < value.length && value.charCodeAt(start) === 47) {
+        start++;
+    }
+    return value.slice(start);
+}
+
+function TrimSlashes(value: string): string {
+    let start = 0;
+    let end = value.length;
+    while (start < end && value.charCodeAt(start) === 47) {
+        start++;
+    }
+    while (end > start && value.charCodeAt(end - 1) === 47) {
+        end--;
+    }
+    return value.slice(start, end);
+}
+
 export function ParseGitHubUrl(repoUrl: string): { Owner: string; Repo: string; Subpath?: string } | null {
     // Capture owner, repo (stopping at the next slash / query / fragment), then any
     // remaining path segments as the subpath. No `$` anchor so query/fragment are tolerated.
-    const match = repoUrl.match(/github\.com\/([^/?#]+)\/([^/?#]+)((?:\/[^?#]+)*)/);
-    if (!match) {
+    const hostIdx = repoUrl.indexOf('github.com/');
+    if (hostIdx < 0) {
         return null;
     }
-    const owner = match[1];
-    const repo = match[2].replace(/\.git$/, '');
-    const rawSubpath = (match[3] ?? '').replace(/^\/+|\/+$/g, '');
+    const afterHost = repoUrl.slice(hostIdx + 'github.com/'.length);
+    let endIdx = afterHost.length;
+    const qIdx = afterHost.indexOf('?');
+    if (qIdx >= 0 && qIdx < endIdx) endIdx = qIdx;
+    const hIdx = afterHost.indexOf('#');
+    if (hIdx >= 0 && hIdx < endIdx) endIdx = hIdx;
+    const pathPart = TrimSlashes(afterHost.slice(0, endIdx));
+    const firstSlash = pathPart.indexOf('/');
+    if (firstSlash <= 0) {
+        return null;
+    }
+    const owner = pathPart.slice(0, firstSlash);
+    const remainder = pathPart.slice(firstSlash + 1);
+    const secondSlash = remainder.indexOf('/');
+    const rawRepo = secondSlash >= 0 ? remainder.slice(0, secondSlash) : remainder;
+    if (!rawRepo) {
+        return null;
+    }
+    const repo = rawRepo.endsWith('.git') ? rawRepo.slice(0, -4) : rawRepo;
+    if (!repo) {
+        return null;
+    }
+    const rawSubpath = secondSlash >= 0 ? TrimSlashes(remainder.slice(secondSlash + 1)) : '';
     const subpath = rawSubpath.length > 0 ? rawSubpath : undefined;
     return { Owner: owner, Repo: repo, Subpath: subpath };
 }
@@ -415,7 +455,7 @@ async function ListDirectory(octokit: Octokit, owner: string, repo: string, path
  * own independent tag line (`CRM-HubSpot@1.2.0`). undefined for single-app repos (repo-wide `vX.Y.Z`).
  */
 function ScopedTagPrefix(subpath: string | undefined): string | undefined {
-    const s = subpath?.replace(/^\/+|\/+$/g, '');
+    const s = subpath ? TrimSlashes(subpath) : undefined;
     return s ? s.replace(/\//g, '-') : undefined;
 }
 
@@ -435,7 +475,7 @@ function ResolveRef(version: string | undefined, subpath?: string): string {
  * path, trimming stray slashes.
  */
 function ComposeRepoPath(effectiveSubpath: string | undefined, relativePath: string): string {
-    return [effectiveSubpath, relativePath.replace(/^\/|\/$/g, '')].filter(Boolean).join('/');
+    return [effectiveSubpath, TrimSlashes(relativePath)].filter(Boolean).join('/');
 }
 
 /**
@@ -459,7 +499,8 @@ export async function FetchManifestFromGitHub(
         return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
+    const rawEffectiveSubpath = subpath ?? parsed.Subpath;
+    const effectiveSubpath = rawEffectiveSubpath ? TrimSlashes(rawEffectiveSubpath) : undefined;
     const ref = ResolveRef(version, effectiveSubpath);
     const manifestPath = ComposeRepoPath(effectiveSubpath, 'mj-app.json');
 
@@ -567,7 +608,7 @@ async function listSqlFilesRecursive(
             // Relative to the ORIGINAL root, however deep — this is the on-disk path, so nested
             // structure survives and two same-named migrations in different subdirectories land in
             // different places instead of silently overwriting each other.
-            out.push({ path: item.path, relativePath: item.path.slice(root.length).replace(/^\/+/, '') });
+            out.push({ path: item.path, relativePath: TrimLeadingSlashes(item.path.slice(root.length)) });
         } else if (item.type === 'dir') {
             out.push(...await listSqlFilesRecursive(octokit, owner, repo, root, ref, item.path, depth + 1));
         }
@@ -612,10 +653,21 @@ function ParseTarSize(sizeField: Buffer): number {
         for (let i = 1; i < sizeField.length; i++) {
             value = value * 256 + sizeField[i];
         }
+        if (!Number.isSafeInteger(value) || value < 0) {
+            throw new Error(`Corrupt tar archive: invalid binary entry size ${value}`);
+        }
         return value;
     }
     const octal = ReadNullTerminatedString(sizeField).trim();
-    return octal ? parseInt(octal, 8) : 0;
+    if (!octal) return 0;
+    if (!/^[0-7]+$/.test(octal)) {
+        throw new Error(`Corrupt tar archive: invalid octal size '${octal}'`);
+    }
+    const parsed = parseInt(octal, 8);
+    if (!Number.isSafeInteger(parsed) || parsed < 0) {
+        throw new Error(`Corrupt tar archive: invalid entry size ${parsed}`);
+    }
+    return parsed;
 }
 
 /**
@@ -637,8 +689,15 @@ function ParsePaxHeader(paxBuf: Buffer): { Path?: string; Size?: number } {
             if (key === 'path') {
                 result.Path = val;
             } else if (key === 'size') {
-                const parsedSize = parseInt(val, 10);
-                if (Number.isFinite(parsedSize)) result.Size = parsedSize;
+                const trimmedVal = val.trim();
+                if (!/^\d+$/.test(trimmedVal)) {
+                    throw new Error(`Corrupt tar archive: invalid PAX size '${val}'`);
+                }
+                const parsedSize = parseInt(trimmedVal, 10);
+                if (!Number.isSafeInteger(parsedSize) || parsedSize < 0) {
+                    throw new Error(`Corrupt tar archive: invalid PAX size ${parsedSize}`);
+                }
+                result.Size = parsedSize;
             }
         }
         pos += recordLen;
@@ -669,8 +728,8 @@ export function ExtractSqlFilesFromTarGz(
     cleanPath: string,
     localDir: string,
 ): string[] {
-    const tarBuffer = gunzipSync(tarGzBuffer);
-    const normalizedRoot = cleanPath.replace(/^\/+|\/+$/g, '');
+    const tarBuffer = gunzipSync(tarGzBuffer, { maxOutputLength: 512 * 1024 * 1024 });
+    const normalizedRoot = TrimSlashes(cleanPath);
     const rootPrefix = normalizedRoot ? `${normalizedRoot}/` : '';
     const extractedFiles: string[] = [];
 
@@ -690,6 +749,9 @@ export function ExtractSqlFilesFromTarGz(
         const typeFlagByte = header[156];
         const typeFlag = typeFlagByte === 0 ? '0' : String.fromCharCode(typeFlagByte);
         const entrySize = paxSizeOverride ?? ParseTarSize(header.subarray(124, 136));
+        if (!Number.isSafeInteger(entrySize) || entrySize < 0) {
+            throw new Error(`Corrupt tar archive: invalid entry size ${entrySize}`);
+        }
         const dataOffset = offset;
         const paddedSize = Math.ceil(entrySize / 512) * 512;
         offset += paddedSize;
@@ -712,8 +774,8 @@ export function ExtractSqlFilesFromTarGz(
             continue;
         }
 
-        // Global PAX header ('g') — applies to commit metadata, not file paths
-        if (typeFlag === 'g') {
+        // Global PAX header ('g') or GNU long linkname ('K') — skip without clearing next-entry path overrides
+        if (typeFlag === 'g' || typeFlag === 'K') {
             continue;
         }
 
@@ -735,9 +797,12 @@ export function ExtractSqlFilesFromTarGz(
             continue;
         }
 
-        const relativePath = repoRelativePath.slice(rootPrefix.length).replace(/^\/+/, '');
+        const relativePath = TrimLeadingSlashes(repoRelativePath.slice(rootPrefix.length));
         if (!relativePath) {
             continue;
+        }
+        if (relativePath.includes('\\')) {
+            throw new Error(`Refusing to extract migration path with backslash separator: '${relativePath}'`);
         }
 
         const segments = relativePath.split('/').filter(Boolean);
@@ -778,7 +843,8 @@ export async function DownloadMigrations(
         return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
+    const rawEffectiveSubpath = subpath ?? parsed.Subpath;
+    const effectiveSubpath = rawEffectiveSubpath ? TrimSlashes(rawEffectiveSubpath) : undefined;
     const ref = ResolveRef(version, effectiveSubpath);
     const cleanPath = ComposeRepoPath(effectiveSubpath, migrationsPath);
     const octokit = CreateOctokit(repoUrl, options);

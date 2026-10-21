@@ -3,6 +3,26 @@ import { RegisterClass } from '@memberjunction/global';
 import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/core';
 import { BaseAuthProvider } from '../BaseAuthProvider.js';
 
+function TrimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end--;
+  }
+  return value.slice(0, end);
+}
+
+function TrimSlashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) === 47) {
+    start++;
+  }
+  while (end > start && value.charCodeAt(end - 1) === 47) {
+    end--;
+  }
+  return value.slice(start, end);
+}
+
 /**
  * Local development authentication provider (`local`).
  *
@@ -43,11 +63,11 @@ export class LocalDevProvider extends BaseAuthProvider {
       );
     }
 
-    const rawPublicUrl = env.MJAPI_PUBLIC_URL?.trim().replace(/\/+$/, '');
-    const rawBaseUrl = (env.GRAPHQL_BASE_URL ?? 'http://localhost').trim().replace(/\/+$/, '');
+    const rawPublicUrl = env.MJAPI_PUBLIC_URL ? TrimTrailingSlashes(env.MJAPI_PUBLIC_URL.trim()) : undefined;
+    const rawBaseUrl = TrimTrailingSlashes((env.GRAPHQL_BASE_URL ?? 'http://localhost').trim());
     const port = env.GRAPHQL_PORT?.trim() || '4000';
     const base = rawPublicUrl || `${rawBaseUrl}:${port}`;
-    const rawBasePath = (env.MJAPI_BASE_PATH ?? '').trim().replace(/^\/+|\/+$/g, '');
+    const rawBasePath = TrimSlashes((env.MJAPI_BASE_PATH ?? '').trim());
     const pathPrefix = rawBasePath ? `/${rawBasePath}` : '';
 
     return {
