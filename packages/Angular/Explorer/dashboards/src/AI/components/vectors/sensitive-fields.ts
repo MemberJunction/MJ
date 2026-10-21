@@ -197,20 +197,47 @@ export function WithoutSensitiveFields<T extends { Name: string }>(fields: Reado
 }
 
 /**
- * Sensitive field names referenced by a template's `{{Placeholder}}` tokens.
+ * Sensitive field names a template reads.
  *
  * This is the second layer. The template is hand-editable after the model returns, so a
- * user can type a field the picker never offered. Returns the offending names so the
- * refusal can say which ones, rather than only that something was wrong.
+ * user can type a field the picker never offered. Every identifier inside a `{{ … }}` or
+ * `{% … %}` tag is checked, not only the leading name of a placeholder, so a field read
+ * inside an expression (`{{ Name ~ PasswordHash }}`) or through an alias
+ * (`{% set p = PasswordHash %}`) is caught too. Returns the offending names so the refusal
+ * can say which ones, rather than only that something was wrong.
  */
 export function SensitiveFieldsInTemplate(templateText: string | null | undefined): string[] {
     const found = new Set<string>();
-    for (const token of TemplatePlaceholderNames(templateText)) {
+    const names = [...TemplatePlaceholderNames(templateText), ...templateTagIdentifiers(templateText)];
+    for (const token of names) {
         if (IsSensitiveFieldName(token)) {
             found.add(token);
         }
     }
     return [...found].sort();
+}
+
+/**
+ * Every identifier inside a template's `{{ … }}` and `{% … %}` tags, dotted paths kept whole.
+ *
+ * Deliberately broad: tag keywords, filter names and words inside string literals are
+ * returned too. None of the keywords or filters is a sensitive name, and a sensitive word in
+ * a literal is refused rather than parsed around — the same trade the name patterns make.
+ * Only for the sensitive-field check; the field cap counts placeholders, not identifiers.
+ */
+function templateTagIdentifiers(templateText: string | null | undefined): string[] {
+    if (!templateText) {
+        return [];
+    }
+    const tag = /\{\{([\s\S]*?)\}\}|\{%([\s\S]*?)%\}/g;
+    const identifier = /[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/g;
+    const names: string[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = tag.exec(templateText)) !== null) {
+        const body = match[1] ?? match[2] ?? '';
+        names.push(...(body.match(identifier) ?? []));
+    }
+    return names;
 }
 
 /**

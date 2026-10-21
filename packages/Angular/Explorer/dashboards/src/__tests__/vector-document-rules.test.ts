@@ -154,6 +154,7 @@ function makeRow(store: Store, entityName: string, seed?: Record<string, unknown
         return true;
     };
     api['LatestResult'] = { CompleteMessage: 'simulated failure' };
+    api['Load'] = async (id: string): Promise<boolean> => String(fields['ID'] ?? '') === id;
     return proxy;
 }
 
@@ -798,5 +799,134 @@ describe('the template offers what the rules support', () => {
     it('the edit panel shows the type read-only, not as an input', () => {
         expect(HTML).toMatch(/<span class="edit-readonly-value">\{\{\s*EditDocType\s*\}\}<\/span>/);
         expect(HTML).not.toMatch(/\[\(ngModel\)\]="EditDocType"/);
+    });
+});
+
+describe("the edit panel's save checks the template it writes (#5633)", () => {
+    const CLEAN = '{{FirstName}} {{LastName}} works at {{Company}}.';
+
+    /** One document with one template content row, opened in the edit panel. */
+    async function openDocument(opts: { templateText?: string; withContentRow?: boolean } = {}): Promise<{
+        component: VectorManagementResourceComponent;
+        doc: FakeRow;
+        content: FakeRow | null;
+    }> {
+        activeStore = newStore();
+        const store = activeStore;
+        const doc = seedRow(store, 'MJ: Entity Documents', {
+            ID: 'doc-1', Name: 'Members - search', Entity: 'Members', Type: 'Search',
+            TemplateID: 'tpl-1', VectorDatabaseID: null, AIModelID: null, VectorIndexID: null, Status: 'Active',
+        });
+        const content = opts.withContentRow === false
+            ? null
+            : seedRow(store, 'MJ: Template Contents', {
+                ID: 'tc-1', TemplateID: 'tpl-1', Priority: 1, TemplateText: opts.templateText ?? CLEAN,
+            });
+
+        const component = new VectorManagementResourceComponent();
+        component.Provider = {
+            CurrentUser: { ID: 'user-1' },
+            Entities: [],
+            GetEntityObject: async (entityName: string): Promise<FakeRow> =>
+                entityName === 'MJ: Entity Documents' ? doc : makeRow(store, entityName),
+        } as unknown as typeof component.Provider;
+        component['entityDocuments'] = [doc] as unknown as typeof component['entityDocuments'];
+        component['LoadData'] = async (): Promise<void> => {};
+        await component.OpenEditPanel('doc-1');
+        vi.mocked(MJNotificationService.Instance.CreateSimpleNotification).mockClear();
+        return { component, doc, content };
+    }
+
+    function notifications(): { message: string; style: string }[] {
+        return vi.mocked(MJNotificationService.Instance.CreateSimpleNotification).mock.calls
+            .map((call) => ({ message: String(call[0]), style: String(call[1]) }));
+    }
+
+    it('refuses a sensitive field typed into the template, and writes nothing', async () => {
+        const { component, content } = await openDocument();
+        component.EditDocName = 'Renamed';
+        component.EditDocTemplate = CLEAN + ' {{PasswordHash}}';
+        await component.SaveEditedDocument();
+
+        expect(activeStore.saves).toEqual([]);
+        expect(content?.['TemplateText']).toBe(CLEAN);
+        expect(component.ShowEditPanel).toBe(true);
+        const [only] = notifications();
+        expect(notifications()).toHaveLength(1);
+        expect(only.style).toBe('error');
+        expect(only.message).toContain('PasswordHash');
+    });
+
+    it('refuses a template over the field cap, and writes nothing', async () => {
+        const { component } = await openDocument();
+        component.EditDocTemplate = Array.from({ length: MAX_TEMPLATE_FIELDS + 1 }, (_, i) => `{{Field${i}}}`).join(' ');
+        await component.SaveEditedDocument();
+
+        expect(activeStore.saves).toEqual([]);
+        const [only] = notifications();
+        expect(only.style).toBe('error');
+        expect(only.message).toContain(`at most ${MAX_TEMPLATE_FIELDS}`);
+    });
+
+    it('still saves a document whose stored template already breaks a rule, when the template is not touched', async () => {
+        // Checking only changed text keeps documents made before the check editable.
+        const legacy = '{{FirstName}} {{PasswordHash}}';
+        const { component, doc, content } = await openDocument({ templateText: legacy });
+        component.EditDocName = 'Renamed';
+        await component.SaveEditedDocument();
+
+        expect(doc['Name']).toBe('Renamed');
+        expect(activeStore.saves.map((s) => s.entityName)).toEqual(['MJ: Entity Documents']);
+        expect(content?.['TemplateText']).toBe(legacy);
+        expect(notifications().map((n) => n.style)).toEqual(['success']);
+    });
+
+    it('saves a clean edited template and reports success', async () => {
+        const { component, content } = await openDocument();
+        component.EditDocTemplate = '{{FirstName}} {{LastName}}.';
+        await component.SaveEditedDocument();
+
+        expect(content?.['TemplateText']).toBe('{{FirstName}} {{LastName}}.');
+        expect(activeStore.saves.map((s) => s.entityName)).toEqual(['MJ: Entity Documents', 'MJ: Template Contents']);
+        expect(notifications().map((n) => n.style)).toEqual(['success']);
+        expect(component.ShowEditPanel).toBe(false);
+    });
+
+    it('refuses to save an emptied template, and writes nothing', async () => {
+        const { component, content } = await openDocument();
+        component.EditDocTemplate = '   ';
+        await component.SaveEditedDocument();
+
+        expect(activeStore.saves).toEqual([]);
+        expect(content?.['TemplateText']).toBe(CLEAN);
+        const [only] = notifications();
+        expect(only.style).toBe('error');
+        expect(only.message).toContain('empty');
+    });
+
+    it('reports an error, not success, when the template has no content row to write to', async () => {
+        const { component } = await openDocument({ withContentRow: false });
+        component.EditDocTemplate = CLEAN;
+        await component.SaveEditedDocument();
+
+        const styles = notifications().map((n) => n.style);
+        expect(styles).not.toContain('success');
+        expect(styles).toContain('error');
+        expect(component.ShowEditPanel).toBe(true);
+        expect(component.EditDocTemplate).toBe(CLEAN);
+    });
+
+    it('reports an error, not success, when the template content save fails', async () => {
+        const { component } = await openDocument();
+        activeStore.failSavesFor.add('MJ: Template Contents');
+        component.EditDocTemplate = '{{FirstName}} {{LastName}}.';
+        await component.SaveEditedDocument();
+
+        expect(activeStore.saves.map((s) => s.entityName)).toEqual(['MJ: Entity Documents']);
+        const errors = notifications().filter((n) => n.style === 'error');
+        expect(notifications().map((n) => n.style)).not.toContain('success');
+        expect(errors).toHaveLength(1);
+        expect(errors[0].message).toContain('simulated failure');
+        expect(component.ShowEditPanel).toBe(true);
     });
 });
