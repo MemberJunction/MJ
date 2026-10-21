@@ -58,9 +58,11 @@ function findVerificationForColumn(
  * }
  */
 
+import { IsUniquelyIndexed } from '../utils/index-hints.js';
 import { DatabaseDocumentation, SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
 import { PKCandidate, FKCandidate, KeyVerificationStamp } from '../types/discovery.js';
 import { DetectedOrganicKeysOutput, OrganicKeyConfig } from '../discovery/OrganicKeyTranslator.js';
+import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
 
 export interface AdditionalSchemaInfoOptions {
   /** Only include AI-discovered keys, not keys already present in the database schema */
@@ -140,6 +142,8 @@ interface AdditionalSchemaInfoOutput {
 }
 
 export class AdditionalSchemaInfoGenerator {
+  private readonly enumCandidateGate = new EnumCandidateGate();
+
   /**
    * Generate additionalSchemaInfo JSON from analysis state.
    *
@@ -176,6 +180,7 @@ export class AdditionalSchemaInfoGenerator {
         }
 
         const tableInfo = this.buildTableInfo(
+          state,
           schema,
           table,
           discoveredPKs,
@@ -314,6 +319,7 @@ export class AdditionalSchemaInfoGenerator {
    * introspected and discovered keys, plus value-list fields.
    */
   private buildTableInfo(
+    state: DatabaseDocumentation,
     schema: SchemaDefinition,
     table: TableDefinition,
     discoveredPKs: PKCandidate[],
@@ -335,6 +341,10 @@ export class AdditionalSchemaInfoGenerator {
     // Source 2: AI-discovered keys
     this.collectDiscoveredPKs(schema.name, table.name, discoveredPKs, pks);
     this.collectDiscoveredFKs(schema.name, table.name, discoveredFKs, fks);
+
+    // A composite FK's column pairs whose target is not unique on its own are dropped whichever
+    // source proposed them: introspection, a discovery pass, or the LLM confirming the constraint.
+    this.dropNonUniqueCompositePairs(state, schema, table, fks);
 
     // Source 3: Value-list fields from enum detection
     const fields = excludeValueLists
@@ -363,6 +373,15 @@ export class AdditionalSchemaInfoGenerator {
    * Collect value-list field entries from columns with enum verdicts.
    * Only includes columns where the LLM marked isEnum=true and confidence
    * meets the threshold.
+   *
+   * Unless a user approved the column, the verdict must also pass the enum candidate gate against
+   * the column's statistics, and only values observed in the column are kept. That way, a state
+   * file written before the gate existed does not export `__mj_*`, audit, year or GUID lists, or
+   * invented values. A list is closed (`List`) only when a user approved it; a list inferred from
+   * data is `ListOrUserEntry`, since the data cannot show that no other value is allowed. That holds
+   * for a column with a CHECK constraint too: CodeGen builds the closed list from a value-list
+   * CHECK itself, and a CHECK that is not a value list (e.g. `Status <> ''`) allows values the
+   * data does not hold.
    */
   private collectValueListFields(
     table: TableDefinition,
@@ -377,12 +396,17 @@ export class AdditionalSchemaInfoGenerator {
       if (verdict.confidence * 100 < threshold) continue;
       if (confirmedOnly && !col.userApproved) continue;
 
+      const values = col.userApproved
+        ? verdict.values
+        : this.enumCandidateGate.FilterVerdictValues(col, table.rowCount, verdict.values);
+      if (!values) continue;
+
       // Sort values alphabetically — matches CHECK-constraint pass behavior
-      const sortedValues = [...verdict.values].sort();
+      const sortedValues = [...values].sort();
 
       fields.push({
         FieldName: col.name,
-        ValueListType: verdict.type,
+        ValueListType: col.userApproved ? verdict.type : 'ListOrUserEntry',
         PossibleValues: sortedValues,
         Description: col.description ?? undefined,
         Confidence: Math.round(verdict.confidence * 100),
@@ -457,6 +481,69 @@ export class AdditionalSchemaInfoGenerator {
         });
       }
     }
+  }
+
+  /**
+   * MJ models a foreign key as one column, so a composite key is written as one entry per column
+   * pair. Only a pair whose target is unique on its own is kept: the other columns of a composite
+   * key usually point at columns that repeat in the target table (a join on them alone multiplies
+   * rows), so they are left out rather than guessed. A column of the constraint that points
+   * somewhere else (a different, real target) is kept; single-column keys are unchanged.
+   * A constraint read as a cross product (see {@link isCrossProduct}) keeps none of its pairs.
+   */
+  private dropNonUniqueCompositePairs(state: DatabaseDocumentation, schema: SchemaDefinition, table: TableDefinition, fks: SoftFKEntry[]): void {
+    const drop = new Set<string>();
+    for (const pairs of this.compositeConstraints(table).values()) {
+      const crossProduct = this.isCrossProduct(pairs);
+      for (const dep of pairs) {
+        if (crossProduct || !this.isUniqueOnItsOwn(state, dep.schema || schema.name, dep.table, dep.referencedColumn)) {
+          drop.add(`${dep.column}->${dep.table}.${dep.referencedColumn}`);
+        }
+      }
+    }
+    if (drop.size === 0) {
+      return;
+    }
+    const kept = fks.filter(f => !drop.has(`${f.FieldName}->${f.RelatedTable}.${f.RelatedField}`));
+    fks.splice(0, fks.length, ...kept);
+  }
+
+  /** The introspected column pairs of each multi-column foreign key constraint, by constraint name. */
+  private compositeConstraints(table: TableDefinition): Map<string, TableDefinition['dependsOn']> {
+    const byConstraint = new Map<string, TableDefinition['dependsOn']>();
+    for (const dep of table.dependsOn) {
+      if (dep.constraintName) {
+        byConstraint.set(dep.constraintName, [...(byConstraint.get(dep.constraintName) ?? []), dep]);
+      }
+    }
+    return new Map([...byConstraint].filter(([, pairs]) => pairs.length > 1));
+  }
+
+  /**
+   * True when a constraint's pairs repeat a source column. A foreign key pairs each source column
+   * with exactly one referenced column, so a repeat can only be the N x N cross product the
+   * PostgreSQL driver produced before it read pg_constraint. Which pairing is right is unknown, so
+   * a state file written then must be re-introspected rather than exported as it is.
+   */
+  private isCrossProduct(pairs: TableDefinition['dependsOn']): boolean {
+    return new Set(pairs.map(p => p.column.toLowerCase())).size < pairs.length;
+  }
+
+  /**
+   * Whether a column identifies one row of its table by itself: it is the table's only primary
+   * key column, or it has a unique, unfiltered single-column index. A target table that is not in
+   * the analysed state cannot be checked, so it counts as not unique.
+   */
+  private isUniqueOnItsOwn(state: DatabaseDocumentation, schemaName: string, tableName: string, columnName: string): boolean {
+    const target = state.schemas.find(s => s.name === schemaName)?.tables.find(t => t.name === tableName);
+    if (!target) {
+      return false;
+    }
+    const pkColumns = target.columns.filter(c => c.isPrimaryKey);
+    if (pkColumns.length === 1 && pkColumns[0].name.toLowerCase() === columnName.toLowerCase()) {
+      return true;
+    }
+    return IsUniquelyIndexed(target, columnName) === true;
   }
 
   /**
