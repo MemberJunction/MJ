@@ -34,6 +34,17 @@ describe('FieldSecuritySQLGate.RelationEntities', () => {
         expect(names("SELECT p.Payroll, 'FROM vwPayroll' AS s FROM vwPeople p /* JOIN vwProjects */")).toEqual(['People']);
     });
 
+    it('finds the relations of a parenthesized join', () => {
+        expect(names('SELECT y.Amount FROM (__mj.vwPayroll y CROSS JOIN __mj.vwProjects q)')).toEqual(['Payroll', 'Projects']);
+        expect(names('SELECT 1 FROM ((vwPayroll y JOIN vwPeople p ON p.ID = y.ID) CROSS JOIN vwProjects q)')).toEqual(['Payroll', 'People', 'Projects']);
+        expect(names('SELECT 1 FROM vwPeople p, (vwPayroll y CROSS JOIN vwProjects q)')).toEqual(['Payroll', 'People', 'Projects']);
+        expect(names('SELECT 1 FROM (vwPayroll y, vwProjects q)')).toEqual(['Payroll', 'Projects']);
+    });
+
+    it('finds a PostgreSQL FROM ONLY relation', () => {
+        expect(FieldSecuritySQLGate.RelationEntities('SELECT y."Amount" FROM ONLY __mj."vwPayroll" y', catalog, 'postgresql')?.map(e => e.Name)).toEqual(['Payroll']);
+    });
+
     it('returns null for text it cannot read', () => {
         expect(names("SELECT 'unterminated FROM vwPeople")).toBeNull();
     });

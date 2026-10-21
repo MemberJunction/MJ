@@ -1,10 +1,10 @@
 import { ScanSQLForScreening, SQLScreeningDialect, SQLScreeningToken } from '@memberjunction/global';
-import { GetDialect, IdentifierMatches } from '@memberjunction/sql-dialect';
+import { AutoQuoteLeavesWordBare, GetDialect, IdentifierMatches } from '@memberjunction/sql-dialect';
 import { EntityInfo, FieldSecurityError } from './entityInfo';
 import { UserInfo } from './securityInfo';
 
 /** Why {@link FieldSecuritySQLGate} refuses a piece of SQL. */
-export type FieldSecurityViolationKind = 'DeniedField' | 'WholeRow' | 'Unresolvable';
+export type FieldSecurityViolationKind = 'DeniedField' | 'WholeRow' | 'Unresolvable' | 'UnknownRelation';
 
 /** One reason {@link FieldSecuritySQLGate.FindViolation} refuses a piece of SQL. */
 export interface FieldSecurityViolation {
@@ -12,7 +12,8 @@ export interface FieldSecurityViolation {
     /**
      * `DeniedField`: the reference as the database reads it (a quoted identifier's bare name; on
      * PostgreSQL an unquoted name in lower case). `WholeRow`: the construct, such as `FOR JSON`.
-     * `Unresolvable`: why the text could not be read.
+     * `Unresolvable`: why the text could not be read. `UnknownRelation`: the relation the catalog
+     * does not know.
      */
     Reference: string;
     /** The entity whose denial the reference reaches; null when the text could not be read. */
@@ -34,6 +35,13 @@ export interface FieldSecuritySQLContext {
     TargetEntity?: EntityInfo | null;
     /** Entities the SQL is known to read beyond those its text names, such as a query's declared entities. */
     ReadEntities?: readonly EntityInfo[];
+    /**
+     * For a whole statement, such as a saved query's SQL: refuse, for a user carrying any field
+     * denial, a relation that is not a CTE and not the base view or base table of a catalog entity
+     * (a custom view, synonym, table-valued function, temp table, or a name in another schema or
+     * database), and `EXEC`/`CALL`. What such a relation reads cannot be checked.
+     */
+    RefuseUnknownRelations?: boolean;
 }
 
 /** A catalog name, folded, mapped to the entities whose base view or base table carries it. */
@@ -47,6 +55,8 @@ interface DeniedName {
 
 /** The per-call state of one analysis. */
 interface SQLReadAnalysis {
+    /** The text the tokens were read from. */
+    SQL: string;
     Tokens: SQLScreeningToken[];
     Context: FieldSecuritySQLContext;
     /** Folded qualifier (relation name or alias) → the entities it may stand for. */
@@ -67,6 +77,24 @@ const ROW_COUNT_FUNCTIONS = new Set(['count', 'count_big']);
 
 /** Words after which a relation name declares a relation (`FROM x`, `JOIN x`, `APPLY x`). */
 const RELATION_KEYWORDS = new Set(['from', 'join', 'apply']);
+
+/** Words that may stand between a relation keyword and the relation (`FROM ONLY x`, `JOIN LATERAL f(…)`). */
+const RELATION_MODIFIERS = new Set(['only', 'lateral']);
+
+/** Words in a relation position that are not a relation's name (`FROM (SELECT …)`, `FROM (VALUES …)`). */
+const NOT_RELATION_NAMES = new Set(['select', 'values', 'with', 'table', 'only', 'lateral']);
+
+/** Words that run a stored procedure, whose reads cannot be checked. */
+const PROCEDURE_CALL_WORDS = new Set(['exec', 'execute', 'call']);
+
+/**
+ * Words directly inside `EXISTS (…)` that make its `SELECT *` read column values: a set operation
+ * compares whole rows, and an ordinal ORDER BY with OFFSET/FETCH/LIMIT picks rows by a column.
+ */
+const EXISTS_ROW_READING_WORDS = new Set(['union', 'intersect', 'except', 'order', 'offset', 'fetch', 'limit']);
+
+/** Control, format and default-ignorable characters, which a database collation may give no weight to. */
+const INVISIBLE_CHARACTER = /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]/u;
 
 /** Words that start a clause, so they never follow `*` as a multiplication operand. */
 const CLAUSE_WORDS = new Set([
@@ -120,16 +148,19 @@ const relationIndexCache = new WeakMap<readonly EntityInfo[], { Length: number; 
  * ## Whole-row constructs
  *
  * For a user denied something on an entity the SQL reads, constructs that read a whole row without
- * naming its columns are refused: `SELECT *` and `alias.*` (except directly inside `EXISTS (…)`),
- * `FOR JSON`, `FOR XML`, any function of `*` other than `COUNT(*)`/`COUNT_BIG(*)` (for example
- * `CHECKSUM(*)`), `NATURAL JOIN`, a column alias list on such a relation, and a relation or its
- * alias used as a value (PostgreSQL's whole-row reference, as in `row_to_json(e)` or `TABLE vw`).
- * A user with no denials on the entities read is not affected; ordinary subqueries keep working.
+ * naming its columns are refused: `SELECT *` and `alias.*` (except directly inside `EXISTS (…)`
+ * whose body has no set operation or row-picking ORDER BY), `FOR JSON`, `FOR XML`, any function of
+ * `*` other than `COUNT(*)`/`COUNT_BIG(*)` (for example `CHECKSUM(*)`), `NATURAL JOIN`, a column
+ * alias list on such a relation, and a relation or its alias used as a value (PostgreSQL's
+ * whole-row reference, as in `row_to_json(e)` or `TABLE vw`). A user with no denials on the
+ * entities read is not affected; ordinary subqueries keep working.
  *
  * ## Failing closed
  *
  * Text the scanner cannot read the way the database does is refused for any user who carries a
- * denial on an entity the SQL could read.
+ * denial on an entity the SQL could read. So is a name holding a control, format or
+ * default-ignorable character (a zero-width joiner, a direction mark), which a collation may give
+ * no weight to.
  *
  * ## Unknown columns
  *
@@ -159,7 +190,14 @@ export class FieldSecuritySQLGate {
         if (dynamicSQL) {
             return { Kind: 'Unresolvable', Reference: `${dynamicSQL}()`, Entity: null };
         }
-        const analysis = FieldSecuritySQLGate.analyze(scan.Tokens, context);
+        if (scan.Tokens.some((t) => t.Kind !== 'string' && INVISIBLE_CHARACTER.test(t.Text))) {
+            return { Kind: 'Unresolvable', Reference: 'a name contains an invisible character', Entity: null };
+        }
+        const unknownRelation = context.RefuseUnknownRelations ? FieldSecuritySQLGate.findUnknownRelation(scan.Tokens, context.Catalog) : null;
+        if (unknownRelation) {
+            return { Kind: 'UnknownRelation', Reference: unknownRelation, Entity: null };
+        }
+        const analysis = FieldSecuritySQLGate.analyze(sql, scan.Tokens, context);
         if (analysis.Restricted.size === 0) {
             return null;
         }
@@ -182,8 +220,10 @@ export class FieldSecuritySQLGate {
      * Checks a whole statement, such as a saved query's rendered SQL, against the denied fields of
      * every entity it reads. The entities come from the base views and tables the text names, plus
      * `readEntities`. References are checked wherever they appear: the select list, WHERE, JOIN,
-     * GROUP BY, ORDER BY and HAVING. Throws a {@link FieldSecurityError} on the first violation,
-     * naming the entity whose denial it reached (or `fallbackEntityName` when none).
+     * GROUP BY, ORDER BY and HAVING. For a user carrying any field denial, a relation the catalog
+     * does not know is refused too ({@link FieldSecuritySQLContext.RefuseUnknownRelations}).
+     * Throws a {@link FieldSecurityError} on the first violation, naming the entity whose denial
+     * it reached (or `fallbackEntityName` when none).
      */
     public static AssertStatementAllowed(
         sql: string,
@@ -193,7 +233,9 @@ export class FieldSecuritySQLGate {
         readEntities?: readonly EntityInfo[],
         fallbackEntityName = 'query',
     ): void {
-        const violation = FieldSecuritySQLGate.FindViolation(sql, { User: user, Dialect: dialect, Catalog: catalog, ReadEntities: readEntities });
+        const violation = FieldSecuritySQLGate.FindViolation(sql, {
+            User: user, Dialect: dialect, Catalog: catalog, ReadEntities: readEntities, RefuseUnknownRelations: true,
+        });
         if (violation) {
             throw FieldSecuritySQLGate.ErrorForViolation(violation, violation.Entity?.Name ?? fallbackEntityName);
         }
@@ -207,6 +249,7 @@ export class FieldSecuritySQLGate {
         if (violation.Kind === 'WholeRow') {
             return new FieldSecurityError('*', entityName, FieldSecurityWholeRowMessage(violation.Reference, entityName));
         }
+        // Unresolvable and UnknownRelation share one message, which says nothing about what the text names.
         return new FieldSecurityError('', entityName, FieldSecurityUnresolvableSQLMessage(entityName));
     }
 
@@ -233,7 +276,8 @@ export class FieldSecuritySQLGate {
      * or APPLY, or in a FROM list, wherever it appears (subqueries and CTE bodies included), with
      * schema qualifiers skipped. A name in a literal or a comment is not a relation. A bare name
      * shared by entities in several schemas yields each of them, so the set never misses a read.
-     * Null when the text cannot be read the way the database reads it.
+     * A relation inside a parenthesized join and PostgreSQL's `FROM ONLY x` count too. Null when
+     * the text cannot be read the way the database reads it.
      */
     public static RelationEntities(sql: string | null | undefined, catalog: readonly EntityInfo[], dialect: SQLScreeningDialect): EntityInfo[] | null {
         if (typeof sql !== 'string' || sql.trim().length === 0) {
@@ -364,8 +408,9 @@ export class FieldSecuritySQLGate {
     }
 
     /** Builds the relation bindings, the restricted set and its denied names. */
-    private static analyze(tokens: SQLScreeningToken[], context: FieldSecuritySQLContext): SQLReadAnalysis {
+    private static analyze(sql: string, tokens: SQLScreeningToken[], context: FieldSecuritySQLContext): SQLReadAnalysis {
         const analysis: SQLReadAnalysis = {
+            SQL: sql,
             Tokens: tokens,
             Context: context,
             Bindings: new Map(),
@@ -434,22 +479,38 @@ export class FieldSecuritySQLGate {
 
     /**
      * Whether the relation name at `i` declares a relation: it follows FROM, JOIN or APPLY, or a
-     * comma in a FROM list, with any `schema .` / `database . schema .` qualifiers skipped.
+     * comma in a FROM list, with any `schema .` / `database . schema .` qualifiers, a PostgreSQL
+     * `ONLY`, and the parentheses of a parenthesized join skipped.
      */
     private static isRelationDeclaration(tokens: SQLScreeningToken[], i: number): boolean {
-        let j = i - 1;
-        while (j >= 1 && FieldSecuritySQLGate.isSymbol(tokens[j], '.') && FieldSecuritySQLGate.isName(tokens[j - 1])) {
+        let j = FieldSecuritySQLGate.qualifierStart(tokens, i) - 1;
+        while (j >= 0 && (FieldSecuritySQLGate.isWord(tokens[j], 'only') || FieldSecuritySQLGate.isSymbol(tokens[j], '('))) {
+            j--;
+        }
+        return FieldSecuritySQLGate.introducesRelation(tokens, j);
+    }
+
+    /** Whether the token at `j` is a FROM, JOIN or APPLY keyword, or a comma in a FROM list. */
+    private static introducesRelation(tokens: SQLScreeningToken[], j: number): boolean {
+        const token = tokens[j];
+        if (!token) return false;
+        if (token.Kind === 'word' && RELATION_KEYWORDS.has(token.Text.toLowerCase())) return true;
+        return FieldSecuritySQLGate.isSymbol(token, ',') && FieldSecuritySQLGate.clauseAt(tokens, j) === 'from';
+    }
+
+    /** The index of the first part of the dotted name that ends at `i` (`db . schema . name`). */
+    private static qualifierStart(tokens: SQLScreeningToken[], i: number): number {
+        let j = i;
+        while (j >= 2 && FieldSecuritySQLGate.isSymbol(tokens[j - 1], '.') && FieldSecuritySQLGate.isName(tokens[j - 2])) {
             j -= 2;
         }
-        const before = tokens[j];
-        if (!before) return false;
-        if (before.Kind === 'word' && RELATION_KEYWORDS.has(before.Text.toLowerCase())) return true;
-        return FieldSecuritySQLGate.isSymbol(before, ',') && FieldSecuritySQLGate.clauseAt(tokens, j) === 'from';
+        return j;
     }
 
     /**
      * The clause keyword that governs the token at `i` at its own parenthesis depth: the nearest
-     * preceding SELECT, FROM, JOIN, WHERE, ON, GROUP, ORDER or HAVING at that depth.
+     * preceding SELECT, FROM, JOIN, WHERE, ON, GROUP, ORDER or HAVING at that depth. Inside the
+     * parentheses of a parenthesized join (`FROM (a x, b y)`) with no such keyword, `from`.
      */
     private static clauseAt(tokens: SQLScreeningToken[], i: number): string | null {
         let depth = 0;
@@ -457,7 +518,7 @@ export class FieldSecuritySQLGate {
             const token = tokens[j];
             if (FieldSecuritySQLGate.isSymbol(token, ')')) depth++;
             else if (FieldSecuritySQLGate.isSymbol(token, '(')) {
-                if (depth === 0) return null;
+                if (depth === 0) return FieldSecuritySQLGate.opensJoinGroup(tokens, j) ? 'from' : null;
                 depth--;
             } else if (depth === 0 && token.Kind === 'word') {
                 const word = token.Text.toLowerCase();
@@ -466,6 +527,139 @@ export class FieldSecuritySQLGate {
             }
         }
         return null;
+    }
+
+    /** Whether the `(` at `j` opens a parenthesized join: it stands where a relation is declared. */
+    private static opensJoinGroup(tokens: SQLScreeningToken[], j: number): boolean {
+        let k = j - 1;
+        while (k >= 0 && FieldSecuritySQLGate.isSymbol(tokens[k], '(')) k--;
+        return FieldSecuritySQLGate.introducesRelation(tokens, k);
+    }
+
+    /**
+     * The first relation the statement reads that is not a CTE and not the base view or base table
+     * of a catalog entity, or a stored-procedure call; null when there is none. A name qualified by
+     * a schema no entity of that name lives in, or by a database, is unknown; so is a function in
+     * a relation position (`FROM f(…)`).
+     */
+    private static findUnknownRelation(tokens: SQLScreeningToken[], catalog: readonly EntityInfo[]): string | null {
+        const procedure = tokens.find(
+            (t, i) => t.Kind === 'word' && PROCEDURE_CALL_WORDS.has(t.Text.toLowerCase()) && !FieldSecuritySQLGate.isSymbol(tokens[i - 1], '.'),
+        );
+        if (procedure) return procedure.Text;
+        const index = FieldSecuritySQLGate.relationIndex(catalog);
+        const cteNames = FieldSecuritySQLGate.cteNames(tokens);
+        for (let i = 0; i < tokens.length; i++) {
+            if (!FieldSecuritySQLGate.isRelationTarget(tokens, i)) continue;
+            if (!FieldSecuritySQLGate.isKnownRelation(tokens, i, index, cteNames)) return tokens[i].Text;
+        }
+        return null;
+    }
+
+    /**
+     * Whether the name at `i` is the last part of a relation the statement reads: after FROM (of a
+     * SELECT, not `EXTRACT(… FROM x)` or `IS DISTINCT FROM x`), JOIN, APPLY, a FROM-list comma or
+     * PostgreSQL's `TABLE`, past qualifiers, `ONLY`, `LATERAL` and join-group parentheses.
+     */
+    private static isRelationTarget(tokens: SQLScreeningToken[], i: number): boolean {
+        const token = tokens[i];
+        if (!FieldSecuritySQLGate.isName(token) || FieldSecuritySQLGate.isSymbol(tokens[i + 1], '.')) return false;
+        if (token.Kind === 'word' && NOT_RELATION_NAMES.has(token.Text.toLowerCase())) return false;
+        let j = FieldSecuritySQLGate.qualifierStart(tokens, i) - 1;
+        while (j >= 0 && (FieldSecuritySQLGate.isSymbol(tokens[j], '(') || FieldSecuritySQLGate.isRelationModifier(tokens[j]))) {
+            j--;
+        }
+        if (FieldSecuritySQLGate.isWord(tokens[j], 'table')) return true;
+        if (!FieldSecuritySQLGate.introducesRelation(tokens, j)) return false;
+        return !FieldSecuritySQLGate.isWord(tokens[j], 'from') || FieldSecuritySQLGate.isSelectFrom(tokens, j);
+    }
+
+    /** Whether a token is `ONLY` or `LATERAL`. */
+    private static isRelationModifier(token: SQLScreeningToken | undefined): boolean {
+        return !!token && token.Kind === 'word' && RELATION_MODIFIERS.has(token.Text.toLowerCase());
+    }
+
+    /** Whether the FROM at `j` is a SELECT's FROM clause. */
+    private static isSelectFrom(tokens: SQLScreeningToken[], j: number): boolean {
+        const isDistinctFrom = FieldSecuritySQLGate.isWord(tokens[j - 1], 'distinct')
+            && (FieldSecuritySQLGate.isWord(tokens[j - 2], 'is') || FieldSecuritySQLGate.isWord(tokens[j - 2], 'not'));
+        return !isDistinctFrom && FieldSecuritySQLGate.clauseAt(tokens, j) === 'select';
+    }
+
+    /**
+     * Whether the relation whose last name part is at `i` is a CTE or a catalog entity's base view
+     * or base table, in that entity's schema when qualified.
+     */
+    private static isKnownRelation(tokens: SQLScreeningToken[], i: number, index: RelationIndex, cteNames: Set<string>): boolean {
+        if (FieldSecuritySQLGate.isSymbol(tokens[i + 1], '(')) return false; // a table-valued function
+        const name = FoldIdentifier(tokens[i].Text);
+        const qualifierCount = (i - FieldSecuritySQLGate.qualifierStart(tokens, i)) / 2;
+        if (qualifierCount === 0 && cteNames.has(name)) return true;
+        const entities = index.get(name);
+        if (!entities || qualifierCount > 1) return false;
+        if (qualifierCount === 0) return true;
+        const schema = FoldIdentifier(tokens[i - 2].Text);
+        return entities.some((e) => typeof e.SchemaName === 'string' && FoldIdentifier(e.SchemaName) === schema);
+    }
+
+    /**
+     * The folded names of the CTEs a statement defines: a name after WITH, RECURSIVE or a comma
+     * that is followed by an optional column list, AS, an optional `[NOT] MATERIALIZED`, and `(`.
+     */
+    private static cteNames(tokens: SQLScreeningToken[]): Set<string> {
+        const names = new Set<string>();
+        tokens.forEach((token, i) => {
+            const before = tokens[i - 1];
+            const introduced = FieldSecuritySQLGate.isWord(before, 'with') || FieldSecuritySQLGate.isWord(before, 'recursive')
+                || FieldSecuritySQLGate.isSymbol(before, ',');
+            if (introduced && FieldSecuritySQLGate.isName(token) && FieldSecuritySQLGate.opensCTEBody(tokens, i + 1)) {
+                names.add(FoldIdentifier(token.Text));
+            }
+        });
+        return names;
+    }
+
+    /** Whether the tokens from `j` are `[(columns)] AS [NOT] [MATERIALIZED] (`. */
+    private static opensCTEBody(tokens: SQLScreeningToken[], j: number): boolean {
+        let k = j;
+        if (FieldSecuritySQLGate.isSymbol(tokens[k], '(')) {
+            const close = FieldSecuritySQLGate.closingParen(tokens, k);
+            if (close === -1) return false;
+            k = close + 1;
+        }
+        if (!FieldSecuritySQLGate.isWord(tokens[k], 'as')) return false;
+        k++;
+        if (FieldSecuritySQLGate.isWord(tokens[k], 'not')) k++;
+        if (FieldSecuritySQLGate.isWord(tokens[k], 'materialized')) k++;
+        return FieldSecuritySQLGate.isSymbol(tokens[k], '(');
+    }
+
+    /** The index of the `)` that closes the `(` at `open`, or -1. */
+    private static closingParen(tokens: SQLScreeningToken[], open: number): number {
+        let depth = 0;
+        for (let k = open; k < tokens.length; k++) {
+            if (FieldSecuritySQLGate.isSymbol(tokens[k], '(')) depth++;
+            else if (FieldSecuritySQLGate.isSymbol(tokens[k], ')') && --depth === 0) return k;
+        }
+        return -1;
+    }
+
+    /**
+     * Whether the body of the `EXISTS (` whose parenthesis is at `open` has, at its own depth, a
+     * word that makes a `SELECT *` there read column values ({@link EXISTS_ROW_READING_WORDS}).
+     * An unclosed body counts as one that does.
+     */
+    private static existsBodyReadsRows(tokens: SQLScreeningToken[], open: number): boolean {
+        const close = FieldSecuritySQLGate.closingParen(tokens, open);
+        if (close === -1) return true;
+        let depth = 0;
+        for (let k = open + 1; k < close; k++) {
+            const token = tokens[k];
+            if (FieldSecuritySQLGate.isSymbol(token, '(')) depth++;
+            else if (FieldSecuritySQLGate.isSymbol(token, ')')) depth--;
+            else if (depth === 0 && token.Kind === 'word' && EXISTS_ROW_READING_WORDS.has(token.Text.toLowerCase())) return true;
+        }
+        return false;
     }
 
     /** The index of the alias after the relation at `i` (`x a`, `x AS a`), or null. */
@@ -486,7 +680,7 @@ export class FieldSecuritySQLGate {
             const candidates = FieldSecuritySQLGate.candidatesFor(analysis, i);
             const hit = candidates.find((d) => ReferenceMayNameField(token.Text, d.Name));
             if (hit) {
-                return { Kind: 'DeniedField', Reference: FieldSecuritySQLGate.reportedName(token, analysis.Context.Dialect), Entity: hit.Entity };
+                return { Kind: 'DeniedField', Reference: FieldSecuritySQLGate.reportedName(analysis.SQL, token, analysis.Context.Dialect), Entity: hit.Entity };
             }
         }
         return null;
@@ -535,8 +729,9 @@ export class FieldSecuritySQLGate {
     }
 
     /**
-     * What a `*` at `i` reads: null for a multiplication, `COUNT(*)`, `EXISTS (SELECT *`, or
-     * `alias.*` whose alias binds only to entities the user is denied nothing on.
+     * What a `*` at `i` reads: null for a multiplication, `COUNT(*)`, `EXISTS (SELECT *` whose body
+     * has no set operation or row-picking ORDER BY at its own depth, or `alias.*` whose alias binds
+     * only to entities the user is denied nothing on.
      */
     private static starConstruct(analysis: SQLReadAnalysis, i: number): string | null {
         const tokens = analysis.Tokens;
@@ -552,7 +747,7 @@ export class FieldSecuritySQLGate {
             return fn?.Kind === 'word' && ROW_COUNT_FUNCTIONS.has(fn.Text.toLowerCase()) ? null : `${fn?.Text?.toUpperCase() ?? ''}(*)`;
         }
         if (FieldSecuritySQLGate.isWord(prev, 'select') && FieldSecuritySQLGate.isSymbol(tokens[i - 2], '(') && FieldSecuritySQLGate.isWord(tokens[i - 3], 'exists')) {
-            return null;
+            return FieldSecuritySQLGate.existsBodyReadsRows(tokens, i - 2) ? 'SELECT * compared or ordered inside EXISTS' : null;
         }
         return FieldSecuritySQLGate.endsOperand(prev) && FieldSecuritySQLGate.startsOperand(tokens[i + 1]) ? null : 'SELECT *';
     }
@@ -590,9 +785,28 @@ export class FieldSecuritySQLGate {
         return token.Kind !== 'symbol' || ['(', '-', '+', '~'].includes(token.Text);
     }
 
-    /** A reference's name as the database reports it: PostgreSQL folds an unquoted name to lower case. */
-    private static reportedName(token: SQLScreeningToken, dialect: SQLScreeningDialect): string {
-        return dialect === 'postgresql' && token.Kind === 'word' ? token.Text.replace(/[A-Z]/g, (c) => c.toLowerCase()) : token.Text;
+    /**
+     * The name a "no such column" error would give for `name` as `sql` writes it, so a denied
+     * column is reported exactly as an unknown one. On PostgreSQL, MJ quotes a capitalized or
+     * dot-qualified word before the database sees it (`AutoQuoteLeavesWordBare`), so the error
+     * names such a word as written; a word left bare is folded to lower case. A quoted name, and
+     * every name on SQL Server, is reported as written. The first token spelled `name` decides.
+     *
+     * @param sql The caller's SQL
+     * @param name The reference as the database reads it
+     * @param dialect The dialect the SQL runs under
+     */
+    public static ReportedColumnName(sql: string, name: string, dialect: SQLScreeningDialect): string {
+        const token = ScanSQLForScreening(sql, dialect).Tokens.find((t) => t.Text === name);
+        return token ? FieldSecuritySQLGate.reportedName(sql, token, dialect) : name;
+    }
+
+    /** A reference's name as {@link ReportedColumnName} gives it. */
+    private static reportedName(sql: string, token: SQLScreeningToken, dialect: SQLScreeningDialect): string {
+        if (dialect !== 'postgresql' || token.Kind !== 'word' || !AutoQuoteLeavesWordBare(sql, token.Start, token.End)) {
+            return token.Text;
+        }
+        return token.Text.replace(/[A-Z]/g, (c) => c.toLowerCase());
     }
 
     private static isName(token: SQLScreeningToken | undefined): token is SQLScreeningToken {
@@ -628,11 +842,12 @@ export class FieldSecuritySQLGate {
 /**
  * An identifier reduced to the form a database collation may compare it in: Unicode compatibility
  * decomposition (a KELVIN SIGN reads as `K`, a full-width letter as its ASCII form), accents and
- * other combining marks removed, case folded through upper case (`ß` and `ẞ` both read `ss`, a
+ * other combining marks removed, control, format and default-ignorable characters (zero-width
+ * joiners, direction marks, a soft hyphen) removed, case folded through upper case (`ß` and `ẞ` both read `ss`, a
  * final `ς` reads `σ`), and surrounding spaces trimmed.
  */
 export function FoldIdentifier(name: string): string {
-    return name.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().toUpperCase().toLowerCase().trim();
+    return name.normalize('NFKD').replace(/[\p{M}\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]/gu, '').toLowerCase().toUpperCase().toLowerCase().trim();
 }
 
 /**

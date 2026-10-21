@@ -31,6 +31,8 @@ const PEOPLE_ID = 'E0000000-0000-0000-0000-0000000000B1';
 const PAYROLL_ID = 'E0000000-0000-0000-0000-0000000000B2';
 const HR = 'R0000000-0000-0000-0000-0000000000B1';
 const STAFF = 'R0000000-0000-0000-0000-0000000000B2';
+/** Reads People, Salary included, but not Payroll: denied no field anywhere. */
+const CLERK = 'R0000000-0000-0000-0000-0000000000B3';
 
 function field(entityId: string, id: string, name: string, sequence: number, roles: string[] | null): Record<string, unknown> {
     const rules = (roles ?? []).map((roleId, i) => ({
@@ -49,10 +51,10 @@ function entity(id: string, name: string, view: string, readers: string[], fls: 
 }
 
 const catalog = [
-    entity(PEOPLE_ID, 'People', 'vwPeople', [HR, STAFF], true, [
+    entity(PEOPLE_ID, 'People', 'vwPeople', [HR, STAFF, CLERK], true, [
         field(PEOPLE_ID, 'b-id', 'ID', 1, null),
-        field(PEOPLE_ID, 'b-name', 'Name', 2, [HR, STAFF]),
-        field(PEOPLE_ID, 'b-salary', 'Salary', 3, [HR]),
+        field(PEOPLE_ID, 'b-name', 'Name', 2, [HR, STAFF, CLERK]),
+        field(PEOPLE_ID, 'b-salary', 'Salary', 3, [HR, CLERK]),
     ]),
     entity(PAYROLL_ID, 'Payroll', 'vwPayroll', [HR], false, [field(PAYROLL_ID, 'c-id', 'ID', 1, null)]),
 ];
@@ -62,6 +64,7 @@ function user(id: string, roleId: string): UserInfo {
 }
 const hr = user('U0000000-0000-0000-0000-0000000000B1', HR);
 const staff = user('U0000000-0000-0000-0000-0000000000B2', STAFF);
+const clerk = user('U0000000-0000-0000-0000-0000000000B3', CLERK);
 
 /**
  * A zero-arg alias: `vi.mock` swaps the generated base class at runtime, but the typecheck pass
@@ -104,5 +107,44 @@ describe('MJQueryEntityExtended.UserCanRunRenderedSQL', () => {
         expect(query('q-d').UserCanRunRenderedSQL(staff, sql, catalog, 'sqlserver').canRun).toBe(true);
         expect(query('q-d').UserCanRunRenderedSQL(hr, sql, catalog, 'sqlserver').canRun).toBe(false);
         engineState.permissions = [];
+    });
+
+    it('refuses, for a user carrying a field denial, a relation the catalog does not know', () => {
+        for (const sql of [
+            'SELECT Salary FROM __mj.vwPeopleSummary',
+            'SELECT * FROM __mj.vwPeopleSummary',
+            'SELECT p.Name FROM __mj.fnPeople(1) p',
+            'SELECT t.Name FROM #people t',
+            'SELECT p.Name FROM OtherDb.__mj.vwPeople p',
+        ]) {
+            const result = query('q-e').UserCanRunRenderedSQL(staff, sql, catalog, 'sqlserver');
+            expect(result, sql).toMatchObject({ canRun: false, deniedEntities: [] });
+            expect(result.fieldSecurityViolation?.Kind, sql).toBe('UnknownRelation');
+        }
+    });
+
+    it('allows such a relation for a user denied no field, and for a holder of the role list', () => {
+        expect(query('q-e').UserCanRunRenderedSQL(hr, 'SELECT Salary FROM __mj.vwPeopleSummary', catalog, 'sqlserver').canRun).toBe(true);
+        engineState.permissions = [{ QueryID: 'q-f', Role: `Role-${STAFF}` }];
+        expect(query('q-f').UserCanRunRenderedSQL(staff, 'SELECT Salary FROM __mj.vwPeopleSummary', catalog, 'sqlserver').canRun).toBe(true);
+        engineState.permissions = [];
+    });
+
+    it('allows a CTE and the entity views for a user carrying a field denial', () => {
+        const sql = 'WITH p AS (SELECT ID, Name FROM __mj.vwPeople) SELECT p.Name FROM p';
+        expect(query('q-g').UserCanRunRenderedSQL(staff, sql, catalog, 'sqlserver').canRun).toBe(true);
+    });
+
+    it('derives the entities a parenthesized join or FROM ONLY reads', () => {
+        const joined = 'SELECT y.ID FROM (__mj.vwPayroll y CROSS JOIN __mj.vwPeople q)';
+        expect(query('q-h').UserCanRunRenderedSQL(clerk, joined, catalog, 'sqlserver')).toMatchObject({ canRun: false, deniedEntities: ['Payroll'] });
+        const only = 'SELECT y."ID" FROM ONLY __mj."vwPayroll" y';
+        expect(query('q-h').UserCanRunRenderedSQL(clerk, only, catalog, 'postgresql')).toMatchObject({ canRun: false, deniedEntities: ['Payroll'] });
+    });
+
+    it('refuses SQL it cannot read for a user who cannot read some entity, and allows it for one who reads every entity', () => {
+        const unreadable = "SELECT ID FROM vwPayroll WHERE Name = 'unterminated";
+        expect(query('q-i').UserCanRunRenderedSQL(clerk, unreadable, catalog, 'sqlserver').canRun).toBe(false);
+        expect(query('q-i').UserCanRunRenderedSQL(hr, unreadable, catalog, 'sqlserver').canRun).toBe(true);
     });
 });

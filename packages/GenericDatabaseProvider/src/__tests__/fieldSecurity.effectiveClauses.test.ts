@@ -241,14 +241,22 @@ describe('a denied column and a missing column give a restricted caller the same
     });
 
     it('PostgreSQL: turns "column … does not exist" into the error a denied column gets, in the same case', async () => {
+        // The PostgreSQL provider quotes a capitalized word before the database sees it, so an
+        // unknown `BankAcount` comes back as "BankAcount"; a lower-case word stays lower case.
         const provider = new ClauseTestProvider('postgresql', [widgetsEntity(['BankAccount'])]);
-        provider.FailWith = new Error('column "bankacount" does not exist');
+        provider.FailWith = new Error('column "BankAcount" does not exist');
 
         const missing = await rejection(() => provider.RunViewAs({ EntityName: ENTITY_NAME, ExtraFilter: "BankAcount LIKE '1%'" }, user));
         const denied = await rejection(() => provider.RunViewAs({ EntityName: ENTITY_NAME, ExtraFilter: "BankAccount LIKE '1%'" }, user));
 
-        expect(missing?.message).toBe(FieldSecurityDenialMessage('bankacount', ENTITY_NAME));
-        expect(denied?.message).toBe(FieldSecurityDenialMessage('bankaccount', ENTITY_NAME));
+        expect(missing?.message).toBe(FieldSecurityDenialMessage('BankAcount', ENTITY_NAME));
+        expect(denied?.message).toBe(FieldSecurityDenialMessage('BankAccount', ENTITY_NAME));
+
+        provider.FailWith = new Error('column "bankacount" does not exist');
+        const missingLower = await rejection(() => provider.RunViewAs({ EntityName: ENTITY_NAME, ExtraFilter: "bankacount LIKE '1%'" }, user));
+        const deniedLower = await rejection(() => provider.RunViewAs({ EntityName: ENTITY_NAME, ExtraFilter: "bankaccount LIKE '1%'" }, user));
+        expect(missingLower?.message).toBe(FieldSecurityDenialMessage('bankacount', ENTITY_NAME));
+        expect(deniedLower?.message).toBe(FieldSecurityDenialMessage('bankaccount', ENTITY_NAME));
     });
 
     it('an aggregate over an unknown column is refused with the same error as one over a denied column', async () => {
