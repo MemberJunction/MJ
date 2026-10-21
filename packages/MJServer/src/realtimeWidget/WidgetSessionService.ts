@@ -491,7 +491,7 @@ export class WidgetSessionService {
       if (!jwk) {
         return null;
       }
-      const publicKey = createPublicKey({ key: jwk as JsonWebKey, format: 'jwk' });
+      const publicKey = createPublicKey({ key: { kty: jwk.kty, n: jwk.n, e: jwk.e }, format: 'jwk' });
       const decoded = jwt.verify(trimmed, publicKey, {
         algorithms: ['RS256'],
         issuer: this.publicUrl,
