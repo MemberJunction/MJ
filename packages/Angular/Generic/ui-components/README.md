@@ -356,6 +356,20 @@ Config-driven filter stack: `Fields: FilterFieldConfig[]` with `type: 'text' | '
 ### `mj-applied-filters` — MJAppliedFiltersComponent
 "Filtered by …" removable chip row. Renders nothing when `Filters` is empty, so it's safe to place unconditionally. `(Remove)`, `(ClearAll)`.
 
+### `mj-ai-confidence-badge` / `mj-ai-explanation-panel` — MJAIConfidenceBadgeComponent, MJAIExplanationPanelComponent
+Disclosure primitives for AI confidence and rationale. Both take a `Signal: MJAIConfidenceSignalData | null`, which matches `AIConfidenceSignal` from `@memberjunction/ai-core-plus` structurally, so this package takes no dependency on the AI packages. Build one with that package's adapters (`FromDuplicateVerdict`, `FromContentItemTag`, `FromTrustVerdict`).
+
+- **`mj-ai-confidence-badge`**: pill showing the signal's plain-language `bandLabel` (`High confidence`, `Moderate confidence — review recommended`, `Low confidence — manual check required`, `Confidence unavailable — review recommended`), coloured by `band`. A `scale: 'probability'` signal also shows its percentage; a `scale: 'grade'` signal shows its `gradeDots` instead and never a percentage. Inputs: `Signal`, `ShowNumeric` (default `true`), `Compact` (default `false`).
+- **`mj-ai-explanation-panel`**: collapsible card with the badge in its header, the `recommendation` as a chip, and, when expanded, the `headline`, the `reasoning`, a lock banner when `canAct` is `false`, and Agent Run / Prompt Run buttons for the source run IDs. Inputs: `Signal`, `Title` (default `'Why this AI recommendation?'`), `Expanded` + `(ExpandedChange)`. Output: `(OpenSourceRun)` emitting `{ runType: 'agentRun' | 'promptRun', runID }`; the host does the navigation.
+- Import the standalone components directly or via `MJAIConfidenceModule`.
+
+```html
+<mj-ai-explanation-panel
+  [Signal]="confidenceSignal"
+  [(Expanded)]="showExplanation"
+  (OpenSourceRun)="openRun($event)" />
+```
+
 ---
 
 ## Contributing

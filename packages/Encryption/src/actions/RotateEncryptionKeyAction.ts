@@ -115,12 +115,18 @@ export class RotateEncryptionKeyAction {
             if (recordsParam) recordsParam.Value = result.recordsProcessed;
             const fieldsParam = outputParams.find(p => p.Name === 'FieldsProcessed');
             if (fieldsParam) fieldsParam.Value = result.fieldsProcessed;
+            const skippedStoresParam = outputParams.find(p => p.Name === 'SkippedStores');
+            if (skippedStoresParam && result.skippedStores) skippedStoresParam.Value = result.skippedStores;
 
             if (result.success) {
+                const skippedSuffix =
+                    result.skippedStores && result.skippedStores.length > 0
+                        ? ` Skipped ${result.skippedStores.length} registered store(s) without rotation handlers (${result.skippedStores.join(', ')}); historical key version material remains required to decrypt those values.`
+                        : '';
                 return {
                     Success: true,
                     ResultCode: 'SUCCESS',
-                    Message: `Key rotation completed successfully. Processed ${result.recordsProcessed} records across ${result.fieldsProcessed.length} fields.`,
+                    Message: `Key rotation completed successfully. Processed ${result.recordsProcessed} records across ${result.fieldsProcessed.length} fields.${skippedSuffix}`,
                     Params: outputParams
                 };
             } else {
@@ -162,15 +168,11 @@ export class RotateEncryptionKeyAction {
 
         // Track progress
         const fieldsProcessed: string[] = [];
+        const skippedStores: string[] = [];
         let totalRecordsProcessed = 0;
 
         try {
-            // Step 1: Validate the new key is accessible
-            LogStatus(`Validating new key material at lookup value: ${newKeyLookupValue}`);
-            await engine.ValidateKeyMaterial(newKeyLookupValue, encryptionKeyId, contextUser);
-            LogStatus('New key material validated successfully');
-
-            // Step 2: Load the encryption key record
+            // Step 1: Load the encryption key record
             const keyResult = await rv.RunView({
                 EntityName: 'MJ: Encryption Keys',
                 ExtraFilter: `ID = '${encryptionKeyId}'`,
@@ -188,6 +190,15 @@ export class RotateEncryptionKeyAction {
 
             const encryptionKey = keyResult.Results[0];
             const originalVersion = encryptionKey.KeyVersion || '1';
+            const parsedOriginalVersion = parseInt(originalVersion, 10);
+            const newVersion = String(Number.isNaN(parsedOriginalVersion) ? 2 : parsedOriginalVersion + 1);
+
+            // Step 2: Validate the new key at the version it becomes. Re-encryption resolves the
+            // material at (newKeyLookupValue, newVersion), so validating the bare lookup value would
+            // pass a key that every re-encryption below then fails to find.
+            LogStatus(`Validating new key material at lookup value: ${newKeyLookupValue} (version ${newVersion})`);
+            await engine.ValidateKeyMaterial(newKeyLookupValue, encryptionKeyId, contextUser, newVersion);
+            LogStatus('New key material validated successfully');
 
             // Step 3: Set key status to 'Rotating'
             encryptionKey.Status = 'Rotating';
@@ -252,6 +263,7 @@ export class RotateEncryptionKeyAction {
                             ExtraFilter: `${fieldName} IS NOT NULL AND ${fieldName} LIKE '$ENC$%'`,
                             OrderBy: entityInfo.PrimaryKeys.map(pk => pk.Name).join(', '),
                             MaxRows: batchSize,
+                            StartRow: offset,
                             ResultType: 'entity_object'
                         }, contextUser);
 
@@ -276,13 +288,14 @@ export class RotateEncryptionKeyAction {
                                     continue;
                                 }
 
-                                // Decrypt with old key and re-encrypt with new key using the new lookup value
+                                // Decrypt with old key and re-encrypt with new key using the new lookup value and target version
                                 const decrypted = await engine.Decrypt(encryptedValue, contextUser);
                                 const reEncrypted = await engine.EncryptWithLookup(
                                     decrypted,
                                     encryptionKeyId,
                                     newKeyLookupValue,
-                                    contextUser
+                                    contextUser,
+                                    newVersion
                                 );
 
                                 record.Set(fieldName, reEncrypted);
@@ -313,9 +326,49 @@ export class RotateEncryptionKeyAction {
                 }
             }
 
+            // Step 5b: Process registered out-of-band encrypted secret stores (e.g. CredentialEngine)
+            const registeredStores = engine.GetRegisteredEncryptedStores(encryptionKeyId);
+
+            for (const store of registeredStores) {
+                if (!store.rotate) {
+                    skippedStores.push(store.storeName);
+                    LogStatus(
+                        `Skipping registered encrypted store "${store.storeName}" (no rotation callback registered). ` +
+                        `Retain historical key version ${originalVersion} material to decrypt existing values.`
+                    );
+                    continue;
+                }
+
+                LogStatus(`Processing registered encrypted store: ${store.storeName}`);
+                const rotatedInStore = await store.rotate({
+                    encryptionKeyId,
+                    newKeyLookupValue,
+                    newKeyVersion: newVersion,
+                    batchSize,
+                    contextUser,
+                    provider: md,
+                    reEncrypt: async (ciphertext: string): Promise<string> => {
+                        if (!ciphertext || !engine.IsEncrypted(ciphertext)) {
+                            return ciphertext;
+                        }
+                        const decrypted = await engine.Decrypt(ciphertext, contextUser);
+                        return engine.EncryptWithLookup(
+                            decrypted,
+                            encryptionKeyId,
+                            newKeyLookupValue,
+                            contextUser,
+                            newVersion
+                        );
+                    },
+                });
+                totalRecordsProcessed += rotatedInStore;
+                fieldsProcessed.push(store.storeName);
+                LogStatus(`Completed registered encrypted store: ${store.storeName} (${rotatedInStore} record(s))`);
+            }
+
             // Step 6: Update key metadata to point to new key
             encryptionKey.KeyLookupValue = newKeyLookupValue;
-            encryptionKey.KeyVersion = String(parseInt(originalVersion) + 1);
+            encryptionKey.KeyVersion = newVersion;
             encryptionKey.Status = 'Active';
             const finalSaveResult = await encryptionKey.Save();
 
@@ -324,19 +377,29 @@ export class RotateEncryptionKeyAction {
                     success: false,
                     recordsProcessed: totalRecordsProcessed,
                     fieldsProcessed,
+                    ...(skippedStores.length > 0 ? { skippedStores } : {}),
                     error: 'Failed to update key metadata after rotation. Data has been re-encrypted but key metadata update failed.'
                 };
             }
 
-            // Step 7: Clear encryption engine caches to use new key
-            engine.ClearCaches();
+            // Step 7: Clear cached key material and reload key metadata so this process uses the
+            // new version at once. The rotation is already committed here, so a failed reload is
+            // logged rather than reported as a failed rotation; the key's save event refreshes the
+            // metadata cache anyway.
+            try {
+                await engine.ClearAllCaches();
+            } catch (refreshError) {
+                const msg = refreshError instanceof Error ? refreshError.message : String(refreshError);
+                LogError(`Key rotation for ${encryptionKeyId} completed, but reloading encryption key metadata failed: ${msg}`);
+            }
 
             LogStatus(`Key rotation completed. Processed ${totalRecordsProcessed} records across ${fieldsProcessed.length} fields.`);
 
             return {
                 success: true,
                 recordsProcessed: totalRecordsProcessed,
-                fieldsProcessed
+                fieldsProcessed,
+                ...(skippedStores.length > 0 ? { skippedStores } : {})
             };
 
         } catch (error) {
@@ -364,6 +427,7 @@ export class RotateEncryptionKeyAction {
                 success: false,
                 recordsProcessed: totalRecordsProcessed,
                 fieldsProcessed,
+                ...(skippedStores.length > 0 ? { skippedStores } : {}),
                 error: message
             };
         }

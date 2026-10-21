@@ -214,23 +214,29 @@ The `EncryptionEngineBase` (defined in `@memberjunction/core-entities`) provides
 
 ### Encrypted Value Format
 
-Encrypted values are stored as self-describing strings that embed everything needed for decryption:
+Encrypted values are stored as self-describing strings that embed everything needed for decryption, including the key version (`<keyId>:<keyVersion>`):
 
 ```
-$ENC$<keyId>$<algorithm>$<iv>$<ciphertext>$<authTag>
+$ENC$<keyId>:<keyVersion>$<algorithm>$<iv>$<ciphertext>$<authTag>
 ```
 
 For example:
 
 ```
-$ENC$550e8400-e29b-41d4-a716-446655440000$AES-256-GCM$Base64IV$Base64Ciphertext$Base64AuthTag
+$ENC$550e8400-e29b-41d4-a716-446655440000:1$AES-256-GCM$Base64IV$Base64Ciphertext$Base64AuthTag
 ```
+
+Compatibility:
+- Unversioned envelopes written before 6.2 (`$ENC$<keyId>$<algorithm>$<iv>$<ciphertext>[$<authTag>]`) and explicit `$v<version>$` segments (`$ENC$<keyId>$v<keyVersion>$<algorithm>$...`) are still parsed and decrypted.
+- When the envelope names a version that is no longer the key's current one, `Decrypt()` resolves that older version's material through the key source (see [Values that rotation does not re-encrypt](#values-that-rotation-does-not-re-encrypt)), so a value that was never re-encrypted stays readable after the key is rotated.
+- An unversioned envelope says nothing about its version, so it is always decrypted with the key's current version. One that rotation does not re-encrypt becomes unreadable once the key is rotated.
+- **Versioned envelopes cannot be read by MJ releases before 6.2**, which reject `<keyId>:<keyVersion>` as an invalid key ID. Do not roll an instance back past 6.2, or run older and newer MJAPI instances against the same database, once the new version has written encrypted values.
 
 This format enables:
 - Quick detection of encrypted values via the `$ENC$` marker
-- Identification of which key was used (for multi-key environments)
+- Identification of which key and key version produced the ciphertext
 - Algorithm-agnostic decryption
-- Key rotation without format changes
+- Safe key rotation with historical version fallback
 
 ### Encryption and Decryption Flow
 
@@ -449,6 +455,30 @@ const result = await action.Run({
 // 3. After rotation completes, update environment to use new key
 ```
 
+The new lookup value is validated at the version rotation moves the key to, which is the
+material re-encryption will use. Name it with the version suffix (`MJ_ENCRYPTION_KEY_PII_V2` when
+rotating to version 2): `MJ_ENCRYPTION_KEY_PII` at version 2 resolves to
+`MJ_ENCRYPTION_KEY_PII_V2` instead, and a name that resolves to no key fails the rotation before
+any data or key metadata is touched.
+
+#### Values that rotation does not re-encrypt
+
+Rotation re-encrypts every field with `Encrypt = 1` on the key, plus every
+[registered store](#out-of-band-encrypted-store-registration) that supplies a `rotate` callback.
+Anything else keeps the version it was written under: a registered store without a callback, a
+value encrypted by calling `EncryptionEngine.Instance.Encrypt()` directly, and the remaining rows of
+a field whose rotation failed part-way.
+
+Those values stay readable only while their version's key material does. For environment-variable
+and config-file keys, `Decrypt()` finds an older version from the key's current lookup value by
+the suffix convention: with the key now at `MJ_ENCRYPTION_KEY_PII_V3`, version 2 is read from
+`MJ_ENCRYPTION_KEY_PII_V2` and version 1 from `MJ_ENCRYPTION_KEY_PII` (config-file names use a
+lowercase `_v`). Keep those variables set for as long as any value written under them remains.
+Azure Key Vault passes the version to the vault; AWS KMS does not version keys this way.
+
+Only values written by 6.2 or later carry their version. A value written before 6.2 and not
+re-encrypted by rotation has no version to look up, so it is unreadable after the key is rotated.
+
 The rotation process:
 
 ```mermaid
@@ -472,6 +502,31 @@ flowchart TD
     style K fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
 
+### Out-of-Band Encrypted Store Registration
+
+Packages that call `EncryptionEngine.Instance.Encrypt()` directly outside of `EntityField` metadata (`Encrypt = 1`) can register their store with `EncryptionEngine` so `RotateEncryptionKeyAction` includes them during key rotation:
+
+```typescript
+import { EncryptionEngine } from '@memberjunction/encryption';
+
+EncryptionEngine.Instance.RegisterEncryptedStore({
+    storeName: 'AuditArchivePayloads',
+    encryptionKeyId,             // omit to be offered every key's rotation
+    rotate: async (context) => {
+        // Load your rows, then for each encrypted value:
+        //   row.Payload = await context.reEncrypt(row.Payload);
+        // context also carries contextUser, provider, batchSize and newKeyVersion.
+        return rotatedRecordCount;
+    }
+});
+```
+
+The registry is in-memory and per process, so register at startup in every process that may run a
+rotation. A store registered without a `rotate` callback is listed in `RotateKeyResult.skippedStores`
+and in the action's result message; its values keep their old version and stay readable only while
+that version's key material does (see
+[Values that rotation does not re-encrypt](#values-that-rotation-does-not-re-encrypt)).
+
 ## API Reference
 
 ### EncryptionEngine
@@ -480,12 +535,16 @@ flowchart TD
 |--------|-------------|
 | `Instance` | Static property returning the singleton instance |
 | `Config(forceRefresh?, contextUser?, provider?)` | Loads encryption metadata from the database |
-| `Encrypt(plaintext, encryptionKeyId, contextUser?)` | Encrypts a value using the specified key |
-| `Decrypt(value, contextUser?)` | Decrypts an encrypted value; passes through non-encrypted values |
+| `Encrypt(plaintext, encryptionKeyId, contextUser?)` | Encrypts a value using the specified key and embeds `<keyId>:<keyVersion>` in the envelope |
+| `Decrypt(value, contextUser?)` | Decrypts an encrypted value using the envelope's key version; passes through non-encrypted values |
 | `IsEncrypted(value, marker?)` | Checks if a value is encrypted (synchronous) |
-| `ParseEncryptedValue(value)` | Parses an encrypted string into its component parts |
-| `ValidateKeyMaterial(lookupValue, keyId, contextUser?)` | Validates that key material is accessible and the correct length |
-| `EncryptWithLookup(plaintext, keyId, lookupValue, contextUser?)` | Encrypts using a specific key lookup value (used during rotation) |
+| `ParseEncryptedValue(value)` | Parses an encrypted string into its component parts (including optional `keyVersion`) |
+| `ValidateKeyMaterial(lookupValue, keyId, contextUser?, keyVersion?)` | Validates that key material is accessible and the correct length, optionally at a given key version |
+| `EncryptWithLookup(plaintext, keyId, lookupValue, contextUser?, targetKeyVersion?)` | Encrypts using a specific key lookup value and optional target key version (used during rotation) |
+| `RegisterEncryptedStore(registration)` | Registers an out-of-band encrypted store for visibility and key rotation |
+| `UnregisterEncryptedStore(name)` | Removes a previously registered out-of-band encrypted store |
+| `GetRegisteredEncryptedStores(keyId?)` | Returns registered out-of-band encrypted stores (optionally filtered by key ID) |
+| `ClearRegisteredEncryptedStores()` | Clears all registered out-of-band encrypted stores |
 | `ClearCaches()` | Clears the key material cache |
 | `ClearAllCaches()` | Clears all caches including base class metadata |
 
@@ -496,6 +555,7 @@ flowchart TD
 | `SourceName` | Abstract property returning the human-readable source name |
 | `ValidateConfiguration()` | Abstract method to validate source configuration |
 | `GetKey(lookupValue, keyVersion?)` | Abstract method to retrieve raw key bytes |
+| `GetHistoricalKey(currentLookupValue, keyVersion)` | Retrieves an older key version from the key's current lookup value; defaults to `GetKey(currentLookupValue, keyVersion)`, overridden by the environment-variable and config-file sources |
 | `KeyExists(lookupValue)` | Abstract method to check if a key exists |
 | `Initialize()` | Virtual async method for one-time setup (default: no-op) |
 | `Dispose()` | Virtual async method for cleanup (default: no-op) |
@@ -504,7 +564,9 @@ flowchart TD
 
 | Interface | Description |
 |-----------|-------------|
-| `EncryptedValueParts` | Parsed components of an encrypted value string (marker, keyId, algorithm, iv, ciphertext, authTag) |
+| `EncryptedValueParts` | Parsed components of an encrypted value string (marker, keyId, keyVersion, algorithm, iv, ciphertext, authTag) |
+| `EncryptedStoreRegistration` | Descriptor (`storeName`, optional `encryptionKeyId`) and optional `rotate` callback for out-of-band encrypted stores |
+| `EncryptedStoreRotationContext` | Context passed to `EncryptedStoreRegistration.rotate` during key rotation, including the `reEncrypt` helper |
 | `KeyConfiguration` | Complete runtime key configuration (key ID, version, marker, algorithm details, source details) |
 | `EncryptionKeySourceConfig` | Configuration passed to key source providers (lookupValue, additionalConfig) |
 | `RotateKeyParams` / `RotateKeyResult` | Parameters and results for key rotation operations |

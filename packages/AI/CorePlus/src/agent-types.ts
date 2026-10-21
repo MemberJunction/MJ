@@ -2053,6 +2053,27 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     maxTreeDurationMs?: number;
 
     /**
+     * Optional per-run ceiling (in UTF-8 bytes) for the serialized working payload.
+     *
+     * Checked every step alongside `MaxIterationsPerRun`, `MaxCostPerRun`, `MaxTokensPerRun`,
+     * and `MaxTimePerRun`. When the serialized payload reaches this ceiling, the single run
+     * terminates with `step: 'Failed'` and guardrail type `'payload'` before runaway payload
+     * growth can exhaust the Node V8 heap (#4539). Conversation messages are not measured.
+     *
+     * When omitted, `BaseAgent` enforces `BaseAgent.DEFAULT_ABSOLUTE_MAX_PAYLOAD_BYTES` (16 MiB).
+     */
+    maxPayloadBytes?: number;
+
+    /**
+     * Convenience top-level limit for the maximum serialized payload bytes allowed in any
+     * single run of the root-to-leaf agent execution tree.
+     *
+     * When `treeBudget` is not pre-initialized by the caller, `BaseAgent` copies this
+     * value into `treeBudget.maxTreePayloadBytes`.
+     */
+    maxTreePayloadBytes?: number;
+
+    /**
      * Optional post-run conversation compaction, memory extraction, and scratchpad pruning
      * configuration.
      *
@@ -2106,8 +2127,9 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
  * (or supplied by the caller on `ExecuteAgentParams.treeBudget`) and passed by
  * reference into every child, related, and parallel sub-agent invocation. Every
  * agent in the hierarchy increments the shared counters (`totalSteps`, `totalTokens`,
- * `totalCost`) and checks the shared ceilings (`maxTreeSteps`, `maxTreeTokens`,
- * `maxTreeCost`, `maxTreeDurationMs`) before and after executing steps.
+ * `totalCost`, `peakPayloadBytes`) and checks the shared ceilings (`maxTreeSteps`,
+ * `maxTreeTokens`, `maxTreeCost`, `maxTreeDurationMs`, `maxTreePayloadBytes`) before
+ * and after executing steps.
  */
 export interface AgentTreeBudget {
     /** Maximum total steps allowed across the entire root-to-leaf agent tree */
@@ -2118,12 +2140,16 @@ export interface AgentTreeBudget {
     maxTreeCost?: number;
     /** Maximum wall-clock duration (in milliseconds) allowed for the entire agent tree */
     maxTreeDurationMs?: number;
+    /** Maximum serialized payload size (in UTF-8 bytes) allowed for any run in the agent tree */
+    maxTreePayloadBytes?: number;
     /** Live cumulative step counter shared by reference across the agent tree (initialized to 0) */
     totalSteps: number;
     /** Live cumulative token counter shared by reference across the agent tree (initialized to 0) */
     totalTokens: number;
     /** Live cumulative cost accumulator shared by reference across the agent tree (initialized to 0) */
     totalCost: number;
+    /** Peak serialized payload size (in UTF-8 bytes) observed across the agent tree */
+    peakPayloadBytes?: number;
     /** Epoch timestamp (Date.now()) when the root agent run started */
     startedAtMs: number;
     /** Set to the breach reason once any tree limit is exceeded */

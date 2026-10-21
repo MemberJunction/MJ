@@ -53,13 +53,14 @@
  */
 
 import * as crypto from 'crypto';
-import { MJGlobal, ENCRYPTION_MARKER, IsValueEncrypted } from '@memberjunction/global';
+import { MJGlobal, ENCRYPTION_MARKER, IsValueEncrypted, UUIDsEqual } from '@memberjunction/global';
 import { BaseSingleton } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { EncryptionEngineBase, EncryptionKeyConfiguration } from '@memberjunction/core-entities';
 import { MJEncryptionKeyEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity } from '@memberjunction/core-entities';
 import { EncryptionKeySourceBase } from './EncryptionKeySourceBase';
 import {
+    EncryptedStoreRegistration,
     EncryptedValueParts,
     KeyConfiguration
 } from './interfaces';
@@ -124,6 +125,14 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
      * @private
      */
     private _keySourceCache: Map<string, EncryptionKeySourceBase> = new Map();
+
+    /**
+     * Registry of out-of-band encrypted secret stores (e.g. `CredentialEngine`)
+     * that store `$ENC$` ciphertexts outside standard `EntityField.Encrypt = 1` columns.
+     *
+     * @private
+     */
+    private _registeredStores: Map<string, EncryptedStoreRegistration> = new Map();
 
     /**
      * Cache TTL for key material in milliseconds.
@@ -379,8 +388,13 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         // Get key configuration from cached metadata
         const keyConfig = this.buildKeyConfiguration(parsed.keyId);
 
-        // Get key material
-        const keyMaterial = await this.getKeyMaterial(keyConfig);
+        // An envelope naming a version that is no longer current was written before the key was
+        // rotated and never re-encrypted. Its material is resolved from the current lookup value
+        // through the source's historical lookup. Unversioned (pre-6.2) envelopes have nothing to
+        // go on and use the current version.
+        const keyMaterial = parsed.keyVersion && parsed.keyVersion !== keyConfig.keyVersion
+            ? await this.getHistoricalKeyMaterial(keyConfig, parsed.keyVersion)
+            : await this.getKeyMaterial(keyConfig);
 
         // Perform decryption
         return this.performDecryption(parsed, keyConfig, keyMaterial);
@@ -404,10 +418,12 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
     /**
      * Parses an encrypted value string into its component parts.
      *
-     * Use this when you need to inspect the encrypted value without decrypting.
+     * Supports both versioned envelopes (`$ENC$<keyId>:<keyVersion>$<algorithm>$<iv>$<ciphertext>[$<authTag>]`
+     * and `$ENC$<keyId>$v<keyVersion>$<algorithm>$<iv>$<ciphertext>[$<authTag>]`) and legacy v1
+     * unversioned envelopes (`$ENC$<keyId>$<algorithm>$<iv>$<ciphertext>[$<authTag>]`).
      *
      * @param value - The encrypted value string
-     * @returns Parsed components (marker, keyId, algorithm, iv, ciphertext, authTag)
+     * @returns Parsed components (marker, keyId, keyVersion, algorithm, iv, ciphertext, authTag)
      *
      * @throws Error if the format is invalid
      */
@@ -417,7 +433,7 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         }
 
         // Split on $ and filter empty parts
-        // Format: $ENC$keyId$algorithm$iv$ciphertext[$authTag]
+        // Format: $ENC$<keyId>[:<keyVersion>]$<algorithm>$<iv>$<ciphertext>[$<authTag>]
         const parts = value.split('$').filter(p => p !== '');
 
         if (parts.length < 5) {
@@ -436,21 +452,43 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
             );
         }
 
+        // Extract optional inline version from <keyId>:<keyVersion>
+        const rawKeySegment = parts[1];
+        const colonIdx = rawKeySegment.indexOf(':');
+        const keyId = colonIdx >= 0 ? rawKeySegment.slice(0, colonIdx) : rawKeySegment;
+        const inlineVersion = colonIdx >= 0 ? rawKeySegment.slice(colonIdx + 1) : undefined;
+
         // Validate key ID looks like a UUID
-        if (!this.isValidUUID(parts[1])) {
+        if (!this.isValidUUID(keyId)) {
             throw new Error(
-                `Invalid key ID in encrypted value: "${parts[1]}". ` +
+                `Invalid key ID in encrypted value: "${rawKeySegment}". ` +
                 `Expected a valid UUID.`
             );
         }
 
+        if (inlineVersion !== undefined && inlineVersion.trim() === '') {
+            throw new Error(
+                `Invalid key version in encrypted value: "${rawKeySegment}". ` +
+                `Version suffix after ":" cannot be empty.`
+            );
+        }
+
+        // Also support explicit $v<version>$ segment if present
+        let keyVersion = inlineVersion;
+        let offset = 2;
+        if (keyVersion === undefined && parts.length >= 6 && /^v(\d+)$/i.test(parts[2])) {
+            keyVersion = parts[2].slice(1);
+            offset = 3;
+        }
+
         return {
             marker: ENCRYPTION_MARKER,
-            keyId: parts[1],
-            algorithm: parts[2],
-            iv: parts[3],
-            ciphertext: parts[4],
-            authTag: parts[5] // May be undefined for non-AEAD
+            keyId,
+            ...(keyVersion !== undefined ? { keyVersion } : {}),
+            algorithm: parts[offset],
+            iv: parts[offset + 1],
+            ciphertext: parts[offset + 2],
+            authTag: parts[offset + 3] // May be undefined for non-AEAD
         };
     }
 
@@ -462,13 +500,16 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
      * @param lookupValue - The key source lookup value to validate
      * @param encryptionKeyId - The key ID (to get source configuration)
      * @param contextUser - User context for database access
+     * @param keyVersion - Optional key version to resolve the lookup value at. Rotation passes
+     *   the version it is rotating into, so the material validated is the material it will use.
      *
      * @throws Error if the key material cannot be accessed or is invalid
      */
     async ValidateKeyMaterial(
         lookupValue: string,
         encryptionKeyId: string,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        keyVersion?: string
     ): Promise<void> {
         if (!lookupValue || typeof lookupValue !== 'string') {
             throw new Error(
@@ -487,7 +528,7 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         const source = await this.getOrCreateKeySource(keyConfig.source.driverClass);
 
         // Try to retrieve the key from the new lookup value
-        const keyMaterial = await source.GetKey(lookupValue);
+        const keyMaterial = await source.GetKey(lookupValue, keyVersion);
 
         // Validate key length matches algorithm requirements
         const expectedBytes = keyConfig.algorithm.keyLengthBits / 8;
@@ -505,19 +546,22 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
      *
      * During key rotation, we need to encrypt with the new key material
      * before updating the key metadata. This method allows specifying
-     * an alternate lookup value for the key material.
+     * an alternate lookup value and optional target key version for the
+     * serialized envelope.
      *
      * @param plaintext - The value to encrypt
      * @param encryptionKeyId - The key ID (for algorithm/marker config)
      * @param keyLookupValue - Alternate lookup value for key material
      * @param contextUser - User context for database access
+     * @param targetKeyVersion - Optional key version to stamp on the new envelope
      * @returns The encrypted value string
      */
     async EncryptWithLookup(
         plaintext: string | Buffer,
         encryptionKeyId: string,
         keyLookupValue: string,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        targetKeyVersion?: string
     ): Promise<string> {
         // Handle null/undefined
         if (plaintext === null || plaintext === undefined) {
@@ -529,15 +573,58 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
 
         // Get the base configuration
         const keyConfig = this.buildKeyConfiguration(encryptionKeyId);
+        const effectiveConfig: KeyConfiguration = targetKeyVersion
+            ? { ...keyConfig, keyVersion: targetKeyVersion }
+            : keyConfig;
 
         // Get key material using the overridden lookup value
         const keyMaterial = await this.getKeyMaterialWithLookup(
-            keyConfig,
+            effectiveConfig,
             keyLookupValue
         );
 
-        // Perform encryption with the overridden key
-        return this.performEncryption(plaintext, keyConfig, keyMaterial);
+        // Perform encryption with the overridden key and target version
+        return this.performEncryption(plaintext, effectiveConfig, keyMaterial);
+    }
+
+    /**
+     * Registers an out-of-band encrypted secret store (such as `CredentialEngine`
+     * or custom encrypted JSON columns) so `RotateEncryptionKeyAction` can rotate
+     * its ciphertexts or explicitly report it in `RotateKeyResult.skippedStores`.
+     */
+    public RegisterEncryptedStore(registration: EncryptedStoreRegistration): void {
+        if (!registration || !registration.storeName || registration.storeName.trim() === '') {
+            throw new Error('EncryptedStoreRegistration requires a non-empty storeName.');
+        }
+        this._registeredStores.set(registration.storeName, registration);
+    }
+
+    /**
+     * Unregisters a previously registered out-of-band encrypted store by name.
+     */
+    public UnregisterEncryptedStore(storeName: string): boolean {
+        return this._registeredStores.delete(storeName);
+    }
+
+    /**
+     * Returns all registered out-of-band encrypted stores, optionally filtered
+     * to those matching `encryptionKeyId` (plus stores that do not pin a single key ID).
+     */
+    public GetRegisteredEncryptedStores(encryptionKeyId?: string): EncryptedStoreRegistration[] {
+        const all = Array.from(this._registeredStores.values());
+        if (!encryptionKeyId) {
+            return all;
+        }
+        return all.filter(
+            s => !s.encryptionKeyId || UUIDsEqual(s.encryptionKeyId, encryptionKeyId)
+        );
+    }
+
+    /**
+     * Clears all registered out-of-band encrypted stores.
+     */
+    public ClearRegisteredEncryptedStores(): void {
+        this._registeredStores.clear();
     }
 
     /**
@@ -705,10 +792,13 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
             cipher.final()
         ] as unknown as Uint8Array[]);
 
-        // Build the serialized format
+        // Build the serialized format with versioned key identifier (<keyId>:<keyVersion>)
+        const versionedKeyId = keyConfig.keyVersion
+            ? `${keyConfig.keyId}:${keyConfig.keyVersion}`
+            : keyConfig.keyId;
         const parts: string[] = [
             keyConfig.marker,
-            keyConfig.keyId,
+            versionedKeyId,
             keyConfig.algorithm.name,
             iv.toString('base64'),
             ciphertext.toString('base64')
@@ -808,14 +898,9 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         const cacheKey = `${config.keyId}:${config.keyVersion}`;
 
         // Check cache
-        const cached = this._keyMaterialCache.get(cacheKey);
-        if (cached && cached.expiry > new Date()) {
-            return cached.value;
-        }
-
-        // Zero the stale buffer before replacing it
+        const cached = this.readCachedKeyMaterial(cacheKey);
         if (cached) {
-            this.zeroBuffer(cached.value);
+            return cached;
         }
 
         // Get or create the key source
@@ -846,12 +931,70 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         this.validateKeyLength(keyMaterial, config);
 
         // Cache it
+        this.cacheKeyMaterial(cacheKey, keyMaterial);
+
+        return keyMaterial;
+    }
+
+    /**
+     * Gets key material for a version older than the key's current one, from cache or source.
+     *
+     * Cached under its own key so it can never be served as a current-version lookup.
+     *
+     * @private
+     */
+    private async getHistoricalKeyMaterial(config: KeyConfiguration, keyVersion: string): Promise<Buffer> {
+        const cacheKey = `${config.keyId}:${keyVersion}:historical`;
+        const cached = this.readCachedKeyMaterial(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        const source = await this.getOrCreateKeySource(config.source.driverClass);
+        let keyMaterial: Buffer;
+        try {
+            keyMaterial = await source.GetHistoricalKey(config.source.lookupValue, keyVersion);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            throw new Error(
+                `Cannot decrypt a value written under version ${keyVersion} of encryption key ${config.keyId}; ` +
+                `the key is now at version ${config.keyVersion}. Key material for every version that stored ` +
+                `values still reference must stay available in the key source. ${message}`
+            );
+        }
+
+        this.validateKeyLength(keyMaterial, config);
+        this.cacheKeyMaterial(cacheKey, keyMaterial);
+        return keyMaterial;
+    }
+
+    /**
+     * Returns unexpired cached key material, zeroing an expired buffer before it is replaced.
+     *
+     * @private
+     */
+    private readCachedKeyMaterial(cacheKey: string): Buffer | null {
+        const cached = this._keyMaterialCache.get(cacheKey);
+        if (!cached) {
+            return null;
+        }
+        if (cached.expiry > new Date()) {
+            return cached.value;
+        }
+        this.zeroBuffer(cached.value);
+        return null;
+    }
+
+    /**
+     * Caches key material for the configured TTL.
+     *
+     * @private
+     */
+    private cacheKeyMaterial(cacheKey: string, keyMaterial: Buffer): void {
         this._keyMaterialCache.set(cacheKey, {
             value: keyMaterial,
             expiry: new Date(Date.now() + this._keyMaterialCacheTtlMs)
         });
-
-        return keyMaterial;
     }
 
     /**
