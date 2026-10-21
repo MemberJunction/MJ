@@ -62,6 +62,14 @@ export function recordsReplayScript(config: ComputerUseTestConfig): boolean {
  */
 const DEFAULT_ADVISORY_TYPES = new Set<string>(['step-count']);
 
+/**
+ * The inline criteria verdict is advisory unless the test opts in with
+ * `gateInlineVerdicts: true`.
+ */
+export function InlineVerdictIsAdvisory(config: ComputerUseTestConfig): boolean {
+    return config.gateInlineVerdicts !== true;
+}
+
 /** An explicit per-oracle `advisory` value wins; otherwise the type's default applies. */
 export function IsOracleAdvisory(type: string, explicitAdvisory?: boolean): boolean {
     return explicitAdvisory ?? DEFAULT_ADVISORY_TYPES.has(type);

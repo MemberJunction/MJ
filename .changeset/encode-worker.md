@@ -1,0 +1,5 @@
+---
+"@memberjunction/ai-bridge-livekit-native": patch
+---
+
+The agent's bot now encodes the camera and screen frames it reads on a worker thread of its own, so a shared screen no longer blocks the thread that hosts the room (MJAPI's main loop by default) for each sampled frame. One encode worker serves every watching room on a thread, and each media worker (`MJ_LIVEKIT_WORKER_MEDIA=on`) gets its own; it starts with the first frame and stops after 60 s without frames. Each sampled frame is copied once, since the SDK's frame buffers can't be transferred. Consent is checked before a frame is sent to the worker and again when its JPEG returns. If the worker fails 3 times within 60 s, or its script is missing, frames are encoded in-process again for the rest of the process. `MJ_LIVEKIT_VIDEO_ENCODE_WORKER=off` (or the `VideoEncodeWorker` option) turns it off. Room telemetry gains where frames are encoded, the encode round trip, frames skipped or dropped around an encode, failures and worker restarts.

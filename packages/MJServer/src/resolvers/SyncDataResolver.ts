@@ -3,6 +3,7 @@ import { AppContext, UserPayload } from '../types.js';
 import { BaseEntity, CompositeKey, DatabaseProviderBase, EntityDeleteOptions, EntitySaveOptions, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
+import { CreateIsolatedProvider } from '../isolatedProvider.js';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
 import { MJDatasetItemEntity } from '@memberjunction/core-entities';
 
@@ -216,7 +217,11 @@ export class SyncDataResolver {
         try {
             // Run the view to find matching records, then delete them all atomically —
             // any single failure rolls back the entire batch so the dataset stays consistent.
-            const rv = new RunView();
+            // The rows are loaded FROM the transaction's provider so each Delete() runs inside it;
+            // with no request provider, an isolated one, never the shared Metadata.Provider, whose
+            // transaction would swallow every concurrent caller's writes (see CreateIsolatedProvider).
+            const provider = (providerOverride as unknown as DatabaseProviderBase) ?? await CreateIsolatedProvider();
+            const rv = RunView.FromMetadataProvider(provider);
             const data = await rv.RunView<BaseEntity>({
                 EntityName: entityName,
                 ExtraFilter: filter,
@@ -234,7 +239,6 @@ export class SyncDataResolver {
                 return;
             }
 
-            const provider = (providerOverride ?? Metadata.Provider) as unknown as DatabaseProviderBase;
             await provider.BeginTransaction();
             try {
                 for (const entityObject of data.Results) {

@@ -1,7 +1,10 @@
-import { Component, EventEmitter, inject, Input, Output, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, inject, Input, OnDestroy, Output, ViewChild } from '@angular/core';
 import { CompositeKey, BaseEntity } from '@memberjunction/core';
 import { FormNavigationEvent, FormNotificationEvent, MJFormPresenterService, MjEntityFormHostComponent } from '@memberjunction/ng-base-forms';
-import { NavigationService, RecentAccessService, SharedService } from '@memberjunction/ng-shared';
+import type { BaseFormComponent, FormCompositionSnapshot } from '@memberjunction/ng-base-forms';
+import { Subscription } from 'rxjs';
+import { GetDeletedRecordFromEvent, NavigationService, RecentAccessService, RecordIdentityMatches, SafeDetectChanges, SharedService } from '@memberjunction/ng-shared';
+import { MJEvent, MJGlobal } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
@@ -24,7 +27,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
   templateUrl: './single-record.component.html',
   styleUrls: ['./single-record.component.css']
 })
-export class SingleRecordComponent extends BaseAngularComponent {
+export class SingleRecordComponent extends BaseAngularComponent implements OnDestroy {
   @Input() public PrimaryKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
   @Input() public NewRecordValues: string | Record<string, unknown> | null = '';
@@ -70,6 +73,22 @@ export class SingleRecordComponent extends BaseAngularComponent {
    */
   @Output() public recordDismissed = this.RecordDismissed;
 
+  /**
+   * Edit mode of the hosted form started (true) or ended (false). Relayed from
+   * `<mj-entity-form-host>` so the resource wrapper can tell the shell to
+   * promote this tab. {@link IsEditing} remains as the synchronous fallback.
+   */
+  @Output() public EditModeChanged: EventEmitter<boolean> = new EventEmitter<boolean>();
+
+  /**
+   * The live form's composition — sections, related grids, contributions, and the slots
+   * the form actually emits. Re-emitted on every chrome resolve.
+   *
+   * The form is created dynamically inside `<mj-entity-form-host>`, so this relay is the
+   * only route the snapshot has out to Explorer.
+   */
+  @Output() public CompositionChanged: EventEmitter<FormCompositionSnapshot> = new EventEmitter<FormCompositionSnapshot>();
+
   @ViewChild(MjEntityFormHostComponent) private formHost?: MjEntityFormHostComponent;
 
   /**
@@ -88,6 +107,37 @@ export class SingleRecordComponent extends BaseAngularComponent {
   private sharedService = inject(SharedService);
   private formPresenter = inject(MJFormPresenterService);
   private recentAccessService = new RecentAccessService();
+  private cdr = inject(ChangeDetectorRef);
+
+  /**
+   * True once another user (another session) has deleted the record shown here.
+   * The tab is NOT closed under the user — they may be reading it — so a banner
+   * says so and offers to close it. Deletes in this session are handled by the
+   * shell, which closes the tab outright.
+   */
+  public DeletedRemotely = false;
+
+  private remoteDeleteSub: Subscription | null = MJGlobal.Instance.GetEventListener()
+    .subscribe((event: MJEvent) => this.onGlobalEvent(event));
+
+  /** Close this record's tab (the remote-delete banner's Close button). */
+  OnCloseDeletedRecord(): void {
+    this.RecordDismissed.emit();
+  }
+
+  private onGlobalEvent(event: MJEvent): void {
+    if (this.DeletedRemotely) {
+      return;
+    }
+    const deleted = GetDeletedRecordFromEvent(event);
+    if (!deleted?.Remote || !this.PrimaryKey?.HasValue) {
+      return;
+    }
+    if (RecordIdentityMatches(this.entityName, this.PrimaryKey.ToURLSegment(), deleted)) {
+      this.DeletedRemotely = true;
+      SafeDetectChanges(this.cdr);
+    }
+  }
 
   /** Unblock the shell's first-resource-load gate (success or error). */
   OnLoadComplete(): void {
@@ -97,6 +147,32 @@ export class SingleRecordComponent extends BaseAngularComponent {
   /** @deprecated Use {@link OnLoadComplete}. */
   onLoadComplete(): void {
     return this.OnLoadComplete();
+  }
+
+  private compositionSub: Subscription | null = null;
+
+  /**
+   * Bind to the newly created form's composition stream.
+   *
+   * The previous subscription is dropped first: the host re-creates the form when the
+   * user switches variants, and a retained subscription would let the replaced form
+   * keep publishing over the live one.
+   */
+  onFormCreated(form: BaseFormComponent): void {
+    this.compositionSub?.unsubscribe();
+    this.compositionSub = form.CompositionChanged.subscribe((snapshot: FormCompositionSnapshot) =>
+      this.CompositionChanged.emit(snapshot),
+    );
+    if (form.CompositionSnapshot) {
+      this.CompositionChanged.emit(form.CompositionSnapshot);
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.compositionSub?.unsubscribe();
+    this.compositionSub = null;
+    this.remoteDeleteSub?.unsubscribe();
+    this.remoteDeleteSub = null;
   }
 
   /** Log access for existing records once the form's record is ready. */
@@ -118,6 +194,10 @@ export class SingleRecordComponent extends BaseAngularComponent {
   /** @deprecated Use {@link OnSaved}. */
   onSaved(record: BaseEntity): void {
     return this.OnSaved(record);
+  }
+
+  OnEditModeChanged(editing: boolean): void {
+    this.EditModeChanged.emit(editing);
   }
 
   OnNotification(event: FormNotificationEvent): void {

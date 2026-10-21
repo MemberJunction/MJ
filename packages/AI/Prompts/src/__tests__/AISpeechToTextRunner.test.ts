@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
-import { AudioModel, BaseSpeechToText, ErrorAnalyzer, ModelUsage, SpeechResult, SpeechToTextParams } from '@memberjunction/ai';
+import { AudioModel, BaseSpeechToText, BuildCancellationErrorInfo, ErrorAnalyzer, ModelUsage, SpeechResult, SpeechToTextParams } from '@memberjunction/ai';
 import { VENDOR } from '@memberjunction/unit-testing';
 import { MediaHarness } from './__fixtures__/media-runner.harness';
 import { AnLLMModelID, LoadMediaCatalog, USAGE_TYPE } from './__fixtures__/media-runner.catalog';
@@ -64,7 +64,7 @@ interface TranscriptionCall {
 }
 
 const calls: TranscriptionCall[] = [];
-let respond: (driver: string, params: SpeechToTextParams) => SpeechResult;
+let respond: (driver: string, params: SpeechToTextParams) => SpeechResult | Promise<SpeechResult>;
 
 /** A transcript, with the duration the provider reported when it reported one. */
 function transcribed(durationSeconds?: number): SpeechResult {
@@ -91,6 +91,25 @@ function rejected(message: string, status: number): SpeechResult {
   const result = failed(message);
   result.errorInfo = ErrorAnalyzer.AnalyzeError(Object.assign(new Error(message), { status }), 'Test vendor');
   return result;
+}
+
+/** A driver call that never answers. */
+function hangs(): Promise<SpeechResult> {
+  return new Promise<SpeechResult>(() => undefined);
+}
+
+/**
+ * A driver call that honors its params' `CancellationToken` as the shipped drivers do: it answers
+ * only when the signal aborts, with the failure classified as the abort's cause.
+ */
+function answersOnAbort(params: SpeechToTextParams): Promise<SpeechResult> {
+  return new Promise<SpeechResult>(resolve => {
+    params.CancellationToken?.addEventListener('abort', () => {
+      const result = failed('The request was aborted');
+      result.errorInfo = BuildCancellationErrorInfo({ signal: params.CancellationToken, provider: 'Test vendor' });
+      resolve(result);
+    }, { once: true });
+  });
 }
 
 /** What OpenAI's Whisper endpoint returns for audio it cannot read. */
@@ -307,6 +326,49 @@ describe('AISpeechToTextRunner', () => {
       expect(result.Success).toBe(true);
       expect(calls).toHaveLength(1);
       expect(calls[0].Params.model).toBe('');
+    });
+  });
+
+  describe('timeout and cancellation', () => {
+    it("hands the driver the bound's signal, which aborts when the caller cancels, and does not fail over", async () => {
+      const controller = new AbortController();
+      respond = (_driver, params) => {
+        setTimeout(() => controller.abort(), 10);
+        return answersOnAbort(params);
+      };
+
+      const result = await runner.RunSpeechToText(transcriptionParams({ CancellationToken: controller.signal, TimeoutMS: 5000 }));
+      await runner.WaitForPendingPromptRunSaves();
+      const run = MediaHarness.LastRun;
+
+      const signal = calls[0].Params.CancellationToken;
+      expect(signal).toBeInstanceOf(AbortSignal);
+      expect(signal?.aborted).toBe(true);
+      expect(Object.keys(calls[0].Params)).not.toContain('TimeoutMS');
+      expect(calls).toHaveLength(1);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe('The Speech to Text call was cancelled');
+      expect(run?.Status).toBe('Cancelled');
+      expect(run?.Cancelled).toBe(true);
+      expect(run?.FailoverAttempts).toBe(0);
+    });
+
+    it('passes the caller token to the driver when there is no TimeoutMS', async () => {
+      const controller = new AbortController();
+
+      await runner.RunSpeechToText(transcriptionParams({ CancellationToken: controller.signal }));
+
+      expect(calls[0].Params.CancellationToken).toBe(controller.signal);
+    });
+
+    it('tears down a call that exceeds TimeoutMS, and fails it over', async () => {
+      respond = driver => (driver === DRIVER_A ? hangs() : transcribed(5));
+
+      const result = await runner.RunSpeechToText(transcriptionParams({ ModelID: PRIMARY_ID, TimeoutMS: 25 }));
+
+      expect(calls.map(c => c.Driver)).toEqual([DRIVER_A, DRIVER_B]);
+      expect(calls[0].Params.CancellationToken?.aborted).toBe(true);
+      expect(result.Success).toBe(true);
     });
   });
 

@@ -93,6 +93,8 @@ vi.mock('@memberjunction/core-entities', () => ({
 }));
 
 import { RexRecommendationsProvider } from '../provider';
+import { RunView, RunViewParams } from '@memberjunction/core';
+import type { MJRecommendationEntity } from '@memberjunction/core-entities';
 
 /* ------------------------------------------------------------------ */
 /*  Tests                                                              */
@@ -206,6 +208,34 @@ describe('RexRecommendationsProvider', () => {
 
       const result = await provider.Recommend(request as never);
       expect(result.Success).toBe(false);
+    });
+  });
+
+  /* ---- Entity Record Documents lookup ---- */
+  describe('getEntityRecordDocuments', () => {
+    // A cached server RunView widens Fields to every column (DocumentText, VectorJSON), and each batch's
+    // RecordID filter is unique, so a cached copy would only hold memory.
+    it('reads only RecordID and VectorID for the batch, bypassing the RunView cache', async () => {
+      const captured: RunViewParams[] = [];
+      const runView = vi.fn(async (params: RunViewParams) => {
+        captured.push(params);
+        return { Success: true, Results: [{ RecordID: 'rec-1', VectorID: 'vec-1' }] };
+      });
+      vi.mocked(RunView).mockImplementationOnce(function () { return { RunView: runView }; } as never);
+      const recommendations = [
+        { SourceEntityID: 'ent-1', SourceEntityRecordID: 'rec-1' },
+        { SourceEntityID: 'ent-1', SourceEntityRecordID: 'rec-2' },
+      ] as MJRecommendationEntity[];
+
+      const docs = await provider['getEntityRecordDocuments'](recommendations, 'doc-1');
+
+      expect(docs).toEqual([{ RecordID: 'rec-1', VectorID: 'vec-1' }]);
+      expect(captured).toHaveLength(1);
+      expect(captured[0].EntityName).toBe('MJ: Entity Record Documents');
+      expect(captured[0].ExtraFilter).toContain("RecordID IN ('rec-1','rec-2')");
+      expect(captured[0].Fields).toEqual(['RecordID', 'VectorID']);
+      expect(captured[0].ResultType).toBe('simple');
+      expect(captured[0].BypassCache).toBe(true);
     });
   });
 });

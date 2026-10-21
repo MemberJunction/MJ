@@ -88,7 +88,11 @@ export class WorkflowAgentWriter extends WorkflowAgentWriterBase {
         // consumed by MCP tools, so it is left alone rather than renamed under this change.
         const saved = await sync.SaveToDatabase();
         if (!saved?.success) {
-            throw new Error(`Could not save the workflow's agent "${spec.name}".`);
+            throw new Error(
+                saved?.errorMessage
+                    ? `Could not save the workflow's agent "${spec.name}": ${saved.errorMessage}`
+                    : `Could not save the workflow's agent "${spec.name}".`,
+            );
         }
         return saved.agentId;
     }
@@ -105,8 +109,8 @@ export class WorkflowAgentWriter extends WorkflowAgentWriterBase {
     }
 
     /**
-     * Name → ID for every agent, action and prompt, in one batch, lowercased so a spec's
-     * human-entered name still resolves.
+     * Name (and ID) → ID for every agent, action and prompt, in one batch, lowercased so a spec's
+     * human-entered name or projected ID fallback still resolves.
      *
      * A failed load throws rather than leaving an index empty: an empty index resolves nothing, and
      * every agent, action and prompt in the workflow would then be reported lost — or, for an action,
@@ -130,8 +134,14 @@ export class WorkflowAgentWriter extends WorkflowAgentWriterBase {
             throw new Error(`Could not load the names a workflow's steps refer to (${reasons.join('; ')}).`);
         }
         const [agents, actions, prompts] = results;
-        const index = (rows: Array<{ ID: string; Name: string }>): Map<string, string> =>
-            new Map(rows.map((r) => [r.Name.trim().toLowerCase(), r.ID]));
+        const index = (rows: Array<{ ID: string; Name: string }>): Map<string, string> => {
+            const map = new Map<string, string>();
+            for (const r of rows) {
+                if (r.Name?.trim()) map.set(r.Name.trim().toLowerCase(), r.ID);
+                if (r.ID?.trim()) map.set(r.ID.trim().toLowerCase(), r.ID);
+            }
+            return map;
+        };
         return { Agents: index(agents.Results), Actions: index(actions.Results), Prompts: index(prompts.Results) };
     }
 }

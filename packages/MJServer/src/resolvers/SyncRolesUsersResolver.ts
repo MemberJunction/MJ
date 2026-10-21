@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, EntityDeleteOptions, EntitySaveOptions, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { GroupByUUID, IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { MJRoleEntity, MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -430,14 +430,23 @@ export class SyncRolesAndUsersResolver {
         const dbRoles = rResult.Results;
         const dbUserRoles = urResult.Results;
 
+        // Index everything once: looking each user, role and assignment up by scanning the full lists
+        // made this O(users x user roles).
+        const dbUsersByEmail = this.indexByTrimmedLowerCase(dbUsers, u => u.Email);
+        const dbRolesByName = this.indexByTrimmedLowerCase(dbRoles, r => r.Name);
+        const dbRolesByID = IndexByUUID(dbRoles);
+        const dbUserRolesByUser = GroupByUUID(dbUserRoles, ur => ur.UserID);
+
         // Saves/Deletes below run inside the outer SyncUsers/SyncRolesAndUsers transaction.
         for (const user of users) {
-            const dbUser = dbUsers.find(u => u.Email.trim().toLowerCase() === user.Email.trim().toLowerCase());
+            const dbUser = dbUsersByEmail.get(user.Email.trim().toLowerCase());
             if (!dbUser) continue;
 
+            // Read before any save below; the saves never add to dbUserRoles, so this matches the full-list scans it replaces.
+            const thisUserDBRoles = dbUserRolesByUser.Get(dbUser.ID) ?? [];
             for (const role of user.Roles) {
-                const dbRole = dbRoles.find(r => r.Name.trim().toLowerCase() === role.Name.trim().toLowerCase());
-                if (dbRole && !dbUserRoles.find(ur => UUIDsEqual(ur.UserID, dbUser.ID) && UUIDsEqual(ur.RoleID, dbRole.ID))) {
+                const dbRole = dbRolesByName.get(role.Name.trim().toLowerCase());
+                if (dbRole && !thisUserDBRoles.some(ur => UUIDsEqual(ur.RoleID, dbRole.ID))) {
                     const ur = await md.GetEntityObject<MJUserRoleEntity>("MJ: User Roles", u);
                     ur.UserID = dbUser.ID;
                     ur.RoleID = dbRole.ID;
@@ -448,9 +457,8 @@ export class SyncRolesAndUsersResolver {
             }
 
             // Check for DB user roles that are NOT in the user.Roles input — those need to be removed
-            const thisUserDBRoles = dbUserRoles.filter(ur => UUIDsEqual(ur.UserID, dbUser.ID));
             for (const dbUserRole of thisUserDBRoles) {
-                const role = user.Roles.find(r => r.Name.trim().toLowerCase() === dbRoles.find(rr => UUIDsEqual(rr.ID, dbUserRole.RoleID))?.Name.trim().toLowerCase());
+                const role = user.Roles.find(r => r.Name.trim().toLowerCase() === dbRolesByID.Get(dbUserRole.RoleID)?.Name.trim().toLowerCase());
                 if (!role && !this.IsStandardRole(dbUserRole.Role)) {
                     if (!await dbUserRole.Delete()) {
                         throw new Error(`Failed to remove role from user '${dbUser.Email}': ${dbUserRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -458,6 +466,16 @@ export class SyncRolesAndUsersResolver {
                 }
             }
         }
+    }
+
+    /** Keys rows by a trimmed, lower-cased name; the first row wins, as `find` would return. */
+    private indexByTrimmedLowerCase<T>(rows: T[], keyOf: (row: T) => string | null | undefined): Map<string, T> {
+        const index = new Map<string, T>();
+        for (const row of rows) {
+            const key = keyOf(row)?.trim().toLowerCase();
+            if (key != null && !index.has(key)) index.set(key, row);
+        }
+        return index;
     }
 }
  

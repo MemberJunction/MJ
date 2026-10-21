@@ -24,7 +24,7 @@ npm install @memberjunction/ng-livekit-room @memberjunction/livekit-room-core li
 <mj-livekit-room
     [ServerUrl]="'wss://livekit.myorg.com'"
     [Token]="accessToken"
-    [DisplayName]="'Amith'"
+    [DisplayName]="'Jordan'"
     [Layout]="'spotlight'"
     [ShowChat]="true"
     [ShowAgentState]="true"
@@ -44,8 +44,8 @@ co-agent panel — without forking the component. Public members are PascalCase 
 | Area | Inputs |
 |---|---|
 | Connection | `ServerUrl`, `Token`, `DisplayName`, `AutoConnect`, `StartWithMicrophone`, `StartWithCamera` |
-| Layout | `Layout` (`grid` / `spotlight` / `split` / `audio-only`), `EnableLayoutSwitcher`, `EnablePinning` |
-| Chrome | `ShowHeader`, `Title`, `ShowParticipantCount`, `ShowSelfView`, `ShowConnectionOverlay` |
+| Layout | `Layout` (`grid` / `spotlight` / `split` / `audio-only`), `EnableLayoutSwitcher`, `EnablePinning`, `TileMoves`, `PipRects` |
+| Chrome | `ShowHeader`, `Title`, `ShowParticipantCount`, `ShowSelfView`, `SelfViewHidden`, `ShowConnectionOverlay` |
 | Tiles | `ShowAudioMeters`, `ShowActiveSpeakerHighlight`, `ShowConnectionQuality`, `ShowNameBadges`, `AgentAvatarUrl` |
 | Controls | `ShowControlBar`, `EnableMicrophoneControl`, `EnableCameraControl`, `EnableScreenShareControl`, `EnableDeviceSettings`, `EnableLeaveControl`, `ShowRecordingControl` |
 | Panels | `ShowChat`, `ShowParticipantsPanel`, `ChatOpenByDefault` |
@@ -70,7 +70,8 @@ handler can set `$event.Cancel = true` to veto (or mutate the payload):
 Cancelable: `BeforeConnect`, `BeforeDisconnect`, `BeforeMediaToggle`, `BeforeSendData`, `BeforeDeviceSwitch`.
 Notifications: `Connected`, `Disconnected`, `Reconnecting`, `Reconnected`, `ParticipantJoined`,
 `ParticipantLeft`, `ActiveSpeakersChanged`, `DataReceived`, `LocalMediaChanged`, `StateChanged`,
-`ChatMessage`, `ToggleRecording`, `LayoutChange`, `ErrorOccurred`.
+`ChatMessage`, `ToggleRecording`, `LayoutChange`, `ErrorOccurred`, `TileMovesChange`, `PipRectsChange`,
+`SelfViewHiddenChange`.
 
 ## Layouts
 
@@ -80,6 +81,52 @@ Notifications: `Connected`, `Disconnected`, `Reconnecting`, `Reconnected`, `Part
 - **Audio only** — compact avatar tiles.
 
 A built-in layout switcher (gated by `EnableLayoutSwitcher`) lets users change live.
+
+## The layout a host saves
+
+Users can rearrange the room. Each participant's tile has a "Move to…" menu (the spotlight, back among the others, or a
+picture-in-picture box), and boxes can be moved and resized. Hide on the user's own tile hides their self-view: their
+camera stays on, so others still see them, and a "Self-view hidden" chip offers Show.
+
+The room hands this layout to its host as three two-way pairs, so the host can save it and give it back:
+
+| Input | Output | Holds |
+|---|---|---|
+| `TileMoves` | `TileMovesChange` | Where the user moved participants' tiles |
+| `PipRects` | `PipRectsChange` | Where the picture-in-picture boxes are, by participant identity |
+| `SelfViewHidden` | `SelfViewHiddenChange` | Whether the user hid their self-view (`ShowSelfView` is the host's own switch) |
+
+Bind them two-way (`[(TileMoves)]`, `[(PipRects)]`, `[(SelfViewHidden)]`); setting an input doesn't fire its output.
+"Reset layout", in the "Move to…" menu, clears all three: the moves and boxes go, the self-view shows again, and the
+host hears each. Without a host that saves them, they last for the session.
+[`@memberjunction/ng-mj-livekit-room`](../mj-livekit-room) saves them per user.
+
+## Sharing one panel
+
+The Share button's menu asks the browser's picker for a screen, a window or a tab first, and lists "This panel": panels
+of the page the user can share on their own. The room lists the panels marked with `mjSharePanel` (from
+`@memberjunction/ng-realtime-media`) that are on screen, in page order, and leaves out any panel that contains the room.
+It marks its own whiteboard, so the whiteboard is listed while it shows.
+
+Picking a panel shares only that panel: the picker offers this tab, and the share is narrowed to the panel, with Element
+Capture in Chrome and Edge 132+ or Region Capture in 104 to 131. Other browsers don't offer "This panel". While the user
+shares a panel, their own tile (the share preview) says "Sharing a panel: Whiteboard". When the shared panel goes away,
+for example when the whiteboard closes, the share stops; a panel that is only out of sight keeps its share.
+
+`LiveKitControlBarComponent` takes the panels as `SharePanels`, listed when `EnableShareMenu` is on, and emits the
+picked panel's key as `PanelShareRequested`.
+
+## The agent's avatar
+
+When an agent's bot publishes the agent's avatar (see
+[`@memberjunction/livekit-room-core`](../../../LiveKitRoomCore)), the agent's tile shows the whole avatar, with black
+bars where its shape differs from the tile's, and the "AI-generated video" chip. This holds in every layout and
+picture-in-picture box; people's cameras still fill their tiles. It is the default of `mj-media-tile`'s `AvatarVideoFit`
+(`'contain'`, in `@memberjunction/ng-realtime-media`); the room has no input for it.
+
+When the bot says the avatar can't be shown, the room shows nothing itself. The agent's view in the room state
+(`StateChanged`) carries `AvatarAudioOnly`, and [`@memberjunction/ng-mj-livekit-room`](../mj-livekit-room) shows a
+notice from it.
 
 ## Components exported
 

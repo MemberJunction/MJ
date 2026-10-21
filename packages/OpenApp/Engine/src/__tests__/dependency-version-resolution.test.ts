@@ -8,6 +8,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // install-orchestrator imports @memberjunction/core at module load — mock it minimally.
+// The template-user step loads the record-cloning engine, which this file's mocks don't provide for.
+vi.mock('../install/template-user.js', () => ({
+    OfferTemplateUser: vi.fn(),
+    NamesFromEmail: vi.fn(),
+    TEMPLATE_USER_ENV: {},
+}));
 vi.mock('@memberjunction/core', () => ({
     Metadata: class {},
     RunView: class {},

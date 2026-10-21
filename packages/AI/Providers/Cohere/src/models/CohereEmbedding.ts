@@ -83,9 +83,11 @@ export class CohereEmbedding extends BaseEmbeddings {
                 embeddingTypes: ['float'],
                 texts: [params.text],
                 ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
-            });
+            }, { abortSignal: params.CancellationToken });
             return { object: 'object', model, ModelUsage: new ModelUsage(0, 0), vector: response.embeddings.float?.[0] ?? [] };
         } catch (error) {
+            // An aborted request is reported as cancelled, not as an empty (failed) result.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             console.error('Cohere embedding error:', ErrorAnalyzer.analyzeError(error, 'Cohere'));
             return { object: 'object', model, ModelUsage: new ModelUsage(0, 0), vector: [] };
         }
@@ -100,9 +102,11 @@ export class CohereEmbedding extends BaseEmbeddings {
                 embeddingTypes: ['float'],
                 texts: params.texts,
                 ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
-            });
+            }, { abortSignal: params.CancellationToken });
             return { object: 'list', model, ModelUsage: new ModelUsage(0, 0), vectors: response.embeddings.float ?? [] };
         } catch (error) {
+            // An aborted request is reported as cancelled, not as an empty (failed) result.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             console.error('Cohere embedding error:', ErrorAnalyzer.analyzeError(error, 'Cohere'));
             return { object: 'list', model, ModelUsage: new ModelUsage(0, 0), vectors: [] };
         }
@@ -124,9 +128,10 @@ export class CohereEmbedding extends BaseEmbeddings {
                 embeddingTypes: ['float'],
                 inputs: [this.mapContentToEmbedInput(params.content)],
                 ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
-            });
+            }, { abortSignal: params.CancellationToken });
             return { object: 'object', model, ModelUsage: new ModelUsage(0, 0), vector: response.embeddings.float?.[0] ?? [] };
         } catch (error) {
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             console.error('Cohere embedding (content) error:', ErrorAnalyzer.analyzeError(error, 'Cohere'));
             return { object: 'object', model, ModelUsage: new ModelUsage(0, 0), vector: [] };
         }

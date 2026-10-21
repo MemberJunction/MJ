@@ -1,0 +1,164 @@
+:host {
+  display: block;
+  box-sizing: border-box;
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--mj-space-4, 16px);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+}
+
+.idv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-4, 16px);
+  max-width: 28rem;
+  margin: 0 auto;
+}
+
+.idv__title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.idv__lead,
+.idv__hint {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--mj-text-secondary);
+}
+
+.idv__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-1, 4px);
+}
+
+.idv__label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+}
+
+/* 16px keeps iOS from zooming the page on focus; 44px is the minimum comfortable tap target. */
+.idv__input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  font-size: 1rem;
+}
+
+.idv__input:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 1px;
+}
+
+.idv__code-input {
+  letter-spacing: 0.2em;
+  font-variant-numeric: tabular-nums;
+}
+
+.idv__suggested {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mj-space-2, 8px);
+  margin: 0;
+  padding: var(--mj-space-2, 8px) var(--mj-space-3, 12px);
+  font-size: 0.8125rem;
+  color: var(--mj-text-secondary);
+  background: color-mix(in srgb, var(--mj-status-info) 10%, var(--mj-bg-surface));
+  border: 1px dashed var(--mj-status-info-border);
+  border-radius: var(--mj-radius-md, 8px);
+}
+
+.idv__suggested i {
+  color: var(--mj-status-info);
+}
+
+.idv__confirm {
+  min-height: 44px;
+}
+
+.idv__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-2, 8px);
+}
+
+.idv__actions > button {
+  flex: 1 1 8rem;
+  min-height: 44px;
+}
+
+.idv__code {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-3, 12px);
+}
+
+.idv__sent {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--mj-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.idv__sent i {
+  margin-right: var(--mj-space-1, 4px);
+  color: var(--mj-status-success);
+}
+
+.idv__problem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mj-space-2, 8px);
+  margin: 0;
+  padding: var(--mj-space-2, 8px) var(--mj-space-3, 12px);
+  font-size: 0.875rem;
+  color: var(--mj-status-error-text);
+  background: var(--mj-status-error-bg);
+  border: 1px solid var(--mj-status-error-border);
+  border-radius: var(--mj-radius-md, 8px);
+}
+
+.idv__done {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3, 12px);
+  padding: var(--mj-space-4, 16px);
+  background: var(--mj-status-success-bg);
+  border: 1px solid var(--mj-status-success-border);
+  border-radius: var(--mj-radius-md, 8px);
+}
+
+.idv__done-icon {
+  font-size: 1.75rem;
+  color: var(--mj-status-success);
+}
+
+.idv__done-heading {
+  margin: 0;
+  font-weight: 600;
+  color: var(--mj-status-success-text);
+}
+
+.idv__done-detail {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--mj-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .idv__done {
+    animation: idv-in 180ms ease-out;
+  }
+}
+
+@keyframes idv-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}

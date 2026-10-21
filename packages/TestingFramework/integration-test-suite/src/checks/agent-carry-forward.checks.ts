@@ -79,10 +79,14 @@ async function createConversationTurn(ctx: IntegrationCheckContext, text: string
 }
 
 /** Fabricate a settled prior ROOT run for (conversation, agent) — the §3.4 prior turn. */
-async function fabricatePriorRun(ctx: IntegrationCheckContext, conversationId: string, agentId: string, status: MJAIAgentRunEntityExtended['Status']): Promise<MJAIAgentRunEntityExtended> {
+async function fabricatePriorRun(ctx: IntegrationCheckContext, turn: { conversationId: string; detailId: string }, agentId: string, status: MJAIAgentRunEntityExtended['Status']): Promise<MJAIAgentRunEntityExtended> {
     const run = await ctx.Provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', ctx.User);
     run.AgentID = agentId;
-    run.ConversationID = conversationId;
+    run.ConversationID = turn.conversationId;
+    // Carry-forward only reads a prior run whose reply row is a live row on the turn's branch
+    // path (BaseAgent.BuildPriorTurnRunFilter), as every real conversation run has. The turn's
+    // own trunk row stands in for that reply.
+    run.ConversationDetailID = turn.detailId;
     run.Status = status;              // settled (AwaitingFeedback|Completed) or Failed depending on the scenario
     run.StartedAt = new Date();
     run.CompletedAt = new Date();
@@ -140,7 +144,7 @@ export const AgentCarryForwardChecks: NamedCheck[] = [
             const echo = await agentByName('IT: Echo Agent', ctx.User);
             const turn = await createConversationTurn(ctx, `CF1 ${fixture(ctx).Marker}`);
             const marker = `CF1-DATA-${fixture(ctx).Marker}`;
-            const prior = await fabricatePriorRun(ctx, turn.conversationId, echo.ID, 'AwaitingFeedback');
+            const prior = await fabricatePriorRun(ctx, turn, echo.ID, 'AwaitingFeedback');
             await fabricateToolStep(ctx, prior.ID, 1, eligibleOutputData(marker));
 
             const messages = await observeTurn(ctx, echo, turn.detailId, turn.conversationId);
@@ -158,7 +162,7 @@ export const AgentCarryForwardChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const echo = await agentByName('IT: Echo Agent', ctx.User);
             const turn = await createConversationTurn(ctx, `CF2 ${fixture(ctx).Marker}`);
-            const prior = await fabricatePriorRun(ctx, turn.conversationId, echo.ID, 'AwaitingFeedback');
+            const prior = await fabricatePriorRun(ctx, turn, echo.ID, 'AwaitingFeedback');
             // Two ~60k results → ~120k combined > 100k cap: first fits, second is dropped-with-note.
             const keep = `CF2-KEEP-${fixture(ctx).Marker}`;
             const drop = `CF2-DROP-${fixture(ctx).Marker}`;
@@ -189,7 +193,7 @@ export const AgentCarryForwardChecks: NamedCheck[] = [
             const contents: string[] = [];
             for (const tag of ['A', 'B']) {
                 const turn = await createConversationTurn(ctx, `CF3-${tag} ${fixture(ctx).Marker}`);
-                const prior = await fabricatePriorRun(ctx, turn.conversationId, echo.ID, 'AwaitingFeedback');
+                const prior = await fabricatePriorRun(ctx, turn, echo.ID, 'AwaitingFeedback');
                 await fabricateToolStep(ctx, prior.ID, 1, eligibleOutputData(marker));
                 const injected = carryForwardMessages(await observeTurn(ctx, echo, turn.detailId, turn.conversationId));
                 AssertEqual(injected.length, 1, `CF3-${tag}: one injected carry-forward message`);
@@ -209,14 +213,14 @@ export const AgentCarryForwardChecks: NamedCheck[] = [
 
             // (a) same conversation, DIFFERENT agent observing → AgentID filter blocks injection.
             const turnA = await createConversationTurn(ctx, `CF4a ${fixture(ctx).Marker}`);
-            const priorA = await fabricatePriorRun(ctx, turnA.conversationId, echo.ID, 'AwaitingFeedback');
+            const priorA = await fabricatePriorRun(ctx, turnA, echo.ID, 'AwaitingFeedback');
             await fabricateToolStep(ctx, priorA.ID, 1, eligibleOutputData(marker));
             const crossAgent = carryForwardMessages(await observeTurn(ctx, other, turnA.detailId, turnA.conversationId));
             AssertEqual(crossAgent.length, 0, 'CF4: a different agent in the same conversation gets NO injection (cross-agent isolation)');
 
             // (b) same agent, DIFFERENT conversation observing → ConversationID filter blocks injection.
             const turnB = await createConversationTurn(ctx, `CF4b-prior ${fixture(ctx).Marker}`);
-            const priorB = await fabricatePriorRun(ctx, turnB.conversationId, echo.ID, 'AwaitingFeedback');
+            const priorB = await fabricatePriorRun(ctx, turnB, echo.ID, 'AwaitingFeedback');
             await fabricateToolStep(ctx, priorB.ID, 1, eligibleOutputData(marker));
             const turnC = await createConversationTurn(ctx, `CF4b-observe ${fixture(ctx).Marker}`); // fresh conversation, no prior run
             const crossConv = carryForwardMessages(await observeTurn(ctx, echo, turnC.detailId, turnC.conversationId));
@@ -231,7 +235,7 @@ export const AgentCarryForwardChecks: NamedCheck[] = [
             const echo = await agentByName('IT: Echo Agent', ctx.User);
             const turn = await createConversationTurn(ctx, `CF5 ${fixture(ctx).Marker}`);
             const marker = `CF5-DATA-${fixture(ctx).Marker}`;
-            const prior = await fabricatePriorRun(ctx, turn.conversationId, echo.ID, 'Failed'); // NOT a settled status
+            const prior = await fabricatePriorRun(ctx, turn, echo.ID, 'Failed'); // NOT a settled status
             await fabricateToolStep(ctx, prior.ID, 1, eligibleOutputData(marker));
 
             const injected = carryForwardMessages(await observeTurn(ctx, echo, turn.detailId, turn.conversationId));
@@ -250,7 +254,7 @@ export const AgentCarryForwardChecks: NamedCheck[] = [
             const echo = await agentByName('IT: Echo Agent', ctx.User);
             const turn = await createConversationTurn(ctx, `CF6 ${fixture(ctx).Marker}`);
             const marker = `CF6-DATA-${fixture(ctx).Marker}`;
-            const prior = await fabricatePriorRun(ctx, turn.conversationId, echo.ID, 'AwaitingFeedback');
+            const prior = await fabricatePriorRun(ctx, turn, echo.ID, 'AwaitingFeedback');
             // A Tool step with NO carry-forward toolFamily (shaped like a non-replayable memory-write result).
             const ineligible = JSON.stringify({ tool: 'writeMemory', input: { note: marker }, result: { success: true, data: marker } });
             await fabricateToolStep(ctx, prior.ID, 1, ineligible);

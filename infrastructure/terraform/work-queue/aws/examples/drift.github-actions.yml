@@ -1,0 +1,51 @@
+name: Work Queue Drift
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, staging, prod]
+    environment: ${{ matrix.environment }}-plan
+    defaults:
+      run:
+        working-directory: work-queue/${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TERRAFORM_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+      - run: terraform init -input=false
+      - name: Detect drift
+        id: plan
+        run: |
+          set +e
+          terraform plan -input=false -lock=false -detailed-exitcode -no-color > drift.txt
+          CODE=$?
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          tail -c 60000 drift.txt >> "$GITHUB_STEP_SUMMARY"
+          if [ "$CODE" -eq 1 ]; then exit 1; fi   # plan itself failed
+      - name: Report drift
+        if: steps.plan.outputs.code == '2'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --title "Work queue drift: ${{ matrix.environment }}" --label work-queue-drift \
+            --body "terraform plan found differences between the committed manifest and AWS in **${{ matrix.environment }}**. See run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. Either someone changed AWS by hand, or topology changed in MJ without a re-export (then also run mj queue validate-bindings)."
+          exit 1

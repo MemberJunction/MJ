@@ -595,7 +595,7 @@
                                         ParentFieldName="SearchScopeID"
                                         [Columns]="ScopePermissionColumns"
                                         AddButtonLabel="+ Grant access"
-                                        EmptyMessage="No explicit grants. Access falls back to agent SearchScopeAccess only.">
+                                        EmptyMessage="No explicit grants. Agents with SearchScopeAccess Assigned need a Search grant for the user or one of their roles; only All agents can search without one.">
                                     </mj-search-scope-child-grid>
                                 }
                             } @else {
