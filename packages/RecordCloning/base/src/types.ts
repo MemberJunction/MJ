@@ -107,7 +107,9 @@ export type CloneWarningCode =
     /** A Deep IS-A subtype or embedded edge: those rows need a save recipe this release doesn't have; the plan is blocked. */
     | 'EDGE_KIND_UNSUPPORTED'
     /** Rows of an edge the clone copies couldn't be read (no read permission, a failed query); the copy leaves them out. */
-    | 'CHILD_ROWS_UNREADABLE';
+    | 'CHILD_ROWS_UNREADABLE'
+    /** A template preset was requested but the source record isn't flagged as a template (its TemplateSourceField is not set); the plan is blocked. */
+    | 'TEMPLATE_SOURCE_REQUIRED';
 
 /**
  * Warning or notification emitted by the planning or execution engine.

@@ -74,15 +74,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Minimum relevance score threshold (0-1). Results below this score are excluded after RRF fusion. Overridden by AIAgentSearchScope.MinScore if set and greater.",
+            "Description": "Minimum semantic similarity (0-1), applied to the semantic (vector) lane before RRF fusion: semantic-only matches below it are dropped. Keyword, full-text, tag and storage matches are never filtered by it. Similarity scales differ by embedding model, so choose the value for the model in use. Overridden by AIAgentSearchScope.MinScore if set and greater.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "7D890D74-EEDD-4F27-BD2C-953FB9D9CEC6"
           },
           "sync": {
-            "lastModified": "2026-05-14T02:08:24.399Z",
-            "checksum": "0c18481d2bdabcb6b4b261add73654f4e396ad44f6d99947586ef9075fa52350"
+            "lastModified": "2026-10-13T19:00:04.322Z",
+            "checksum": "35ef6ffd501ba97d9073faedd59ca9f8d778123c08826655628b1847ee799ac8"
           }
         },
         {

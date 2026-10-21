@@ -1,0 +1,80 @@
+@if (Dashboard; as dashboard) {
+  <header class="dashboard-editor-header" [class.is-editing]="IsEditing">
+    @if (IsEditing) {
+      <mj-stat-badge class="dashboard-editor-badge" Variant="info" Icon="fa-solid fa-pen" Label="Editing"></mj-stat-badge>
+    }
+
+    <div class="dashboard-editor-namewrap">
+      @if (!IsEditing) {
+        @if (TitleTemplate) {
+          <ng-container [ngTemplateOutlet]="TitleTemplate" [ngTemplateOutletContext]="{ $implicit: dashboard, Dashboard: dashboard }"></ng-container>
+        } @else {
+          <h1 class="dashboard-editor-title">
+            {{ dashboard.Name }}
+            @if (IsSharedWithUser) {
+              <i class="fa-solid fa-share-nodes dashboard-editor-shared" role="img" title="Shared with you" aria-label="Shared with you"></i>
+            }
+          </h1>
+        }
+        @if (dashboard.Description) {
+          <p class="dashboard-editor-desc">{{ dashboard.Description }}</p>
+        } @else if (CanEdit) {
+          <p class="dashboard-editor-desc is-placeholder">Add a description</p>
+        }
+      } @else {
+        <input type="text" class="mj-input dashboard-editor-name" aria-label="Dashboard name" placeholder="Name this dashboard"
+               [(ngModel)]="EditingName" (blur)="OnNameBlur()">
+        <input type="text" class="dashboard-editor-desc is-editable" aria-label="Dashboard description" placeholder="Add a description"
+               [(ngModel)]="EditingDescription">
+      }
+    </div>
+
+    <div class="dashboard-editor-actions">
+      <ng-content select="[headerTools]"></ng-content>
+      @if (!IsEditing) {
+        @if (ShowFavorite) {
+          <button type="button" mjButton Variant="icon" Size="sm" class="dashboard-editor-favorite" [class.is-favorite]="IsFavorite"
+                  [title]="IsFavorite ? 'Remove from favorites' : 'Add to favorites'"
+                  [attr.aria-label]="IsFavorite ? 'Remove from favorites' : 'Add to favorites'" (click)="ToggleFavorite()">
+            <i [class]="IsFavorite ? 'fa-solid fa-star' : 'fa-regular fa-star'" aria-hidden="true"></i>
+          </button>
+        }
+        <ng-content select="[viewActions]"></ng-content>
+        @if (ShowOpenInDashboards) {
+          <button type="button" mjButton Variant="secondary" Size="sm" class="dashboard-editor-open-in" (click)="OpenInDashboardsRequested.emit(dashboard)">
+            <i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i> Open in Dashboards
+          </button>
+        }
+        @if (CanEdit) {
+          <span class="dashboard-editor-divider" aria-hidden="true"></span>
+          <button type="button" mjButton Variant="primary" Size="sm" class="dashboard-editor-edit" [disabled]="IsSaving" (click)="EnterEditMode()">
+            <i class="fa-solid fa-pen" aria-hidden="true"></i> Edit
+          </button>
+        }
+      } @else {
+        <button type="button" mjButton Variant="secondary" Size="sm" class="dashboard-editor-add-part" [disabled]="IsSaving" (click)="OpenAddPartDialog()">
+          <i class="fa-solid fa-plus" aria-hidden="true"></i> Add part
+        </button>
+        <span class="dashboard-editor-divider" aria-hidden="true"></span>
+        <button type="button" mjButton Variant="primary" Size="sm" class="dashboard-editor-save" [disabled]="IsSaving" (click)="SaveDashboard()">
+          <i [class]="IsSaving ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-check'" aria-hidden="true"></i>
+          {{ IsSaving ? 'Saving...' : 'Save' }}
+        </button>
+        <button type="button" mjButton Variant="flat" Size="sm" class="dashboard-editor-cancel" [disabled]="IsSaving" (click)="CancelEdit()">Cancel</button>
+      }
+    </div>
+  </header>
+}
+
+<div class="dashboard-editor-main" [class.is-card]="BodyStyle === 'card'">
+  <div #body class="dashboard-editor-body">
+    <ng-container #viewerHost></ng-container>
+  </div>
+</div>
+
+<!-- The part dialog belongs to one edit session -->
+@if (Dashboard && IsEditing && PartDialogMode) {
+  <mj-dashboard-part-dialog [Visible]="true" [Mode]="PartDialogMode" [PartTypes]="PartTypes"
+      [Panel]="EditPartPanel" [Provider]="Provider"
+      (Saved)="OnPartDialogSaved($event)" (Cancelled)="ClosePartDialog()"></mj-dashboard-part-dialog>
+}

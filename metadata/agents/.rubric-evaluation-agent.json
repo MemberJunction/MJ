@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "Name": "Rubric Evaluation Agent",
+    "CategoryID": "@lookup:MJ: AI Agent Categories.Name=System",
+    "Description": "Default agent for AgentRubricEvaluator. Scores one criterion at a time. It reads the rubric and the subject record. It does not publish and it does not create drafts.",
+    "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+    "Status": "Active",
+    "InvocationMode": "Sub-Agent",
+    "ExposeAsAction": false
+  },
+  "primaryKey": {
+    "ID": "60A0951C-2F9D-4304-864C-4892ED1BF008"
+  },
+  "relatedEntities": {
+    "MJ: AI Agent Prompts": [
+      {
+        "fields": {
+          "AgentID": "@parent:ID",
+          "PromptID": "@lookup:MJ: AI Prompts.Name=Rubric Evaluation Agent",
+          "ExecutionOrder": 0,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "3F3302AE-1B8F-4CD6-9DA7-94330474DBD0"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:25.525Z",
+          "checksum": "b80c07b5c1b060b9454d10d1db47fa0bc063dca30c392da67f7108a182de7615"
+        }
+      }
+    ],
+    "MJ: AI Agent Actions": [
+      {
+        "fields": {
+          "AgentID": "@parent:ID",
+          "ActionID": "@lookup:MJ: Actions.Name=Get Rubric",
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "894BADE5-8AF3-4B6E-B42C-83C1579B4EA0"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:25.543Z",
+          "checksum": "bb3a4c3d41d4aaf72170740e6d0d0fe14c23df0370c96717417d8b6d8c6d56b6"
+        }
+      },
+      {
+        "fields": {
+          "AgentID": "@parent:ID",
+          "ActionID": "@lookup:MJ: Actions.Name=Get Rubric Consensus",
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F2BE0462-B8C6-44ED-B041-0C6512F60DCD"
+        },
+        "deleteRecord": {
+          "delete": true,
+          "deletedAt": "2026-10-02T04:09:00.000Z"
+        }
+      },
+      {
+        "fields": {
+          "AgentID": "@parent:ID",
+          "ActionID": "@lookup:MJ: Actions.Name=Get Rubric Subject",
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F9358EB8-F631-4C8F-B86D-CEFBE814CC6B"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:25.579Z",
+          "checksum": "600007304d3e1ac491757ad28aac196d0ed0664e734bfefb0fafc7c78f4a06be"
+        }
+      }
+    ]
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:25.485Z",
+    "checksum": "1de81675ba0a69748f3b0a7e25f42fa3c246536224bf051a0ae439b87011aac7"
+  }
+}

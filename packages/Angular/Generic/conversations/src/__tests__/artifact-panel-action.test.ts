@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import '@angular/compiler';
+import { describe, it, expect, vi } from 'vitest';
+import { Subject } from 'rxjs';
 import { DecideArtifactPanelAction, SnapshotArtifactVersions } from '../lib/utils/artifact-panel-action';
+import { ConversationChatAreaComponent } from '../lib/components/conversation/conversation-chat-area.component';
+import { MAIN_OPEN_VIEW } from '../lib/utils/conversation-forks';
+import { LazyArtifactInfo } from '../lib/models/lazy-artifact-info';
+import { UserInfo } from '@memberjunction/core';
 
 /**
  * #529: with the panel open on artifact A, a NEW artifact B must open (build), a bumped version
@@ -167,3 +173,232 @@ describe('decideArtifactPanelAction', () => {
     });
   });
 });
+
+describe('ConversationChatAreaComponent artifact auto-open across resetComponentState', () => {
+  function createChatAreaHarness(conversationId: string): {
+    component: ConversationChatAreaComponent;
+    open: Record<string, unknown>;
+  } {
+    const component = Object.create(ConversationChatAreaComponent.prototype) as ConversationChatAreaComponent;
+    const open = component as unknown as Record<string, unknown>;
+
+    open['_conversationId'] = conversationId;
+    open['openView'] = MAIN_OPEN_VIEW;
+    open['windowView'] = MAIN_OPEN_VIEW;
+    open['conversationLoadToken'] = 1;
+    open['lastLoadedConversationId'] = null;
+    open['artifactMapConversationId'] = null;
+    open['artifactMapGeneration'] = 0;
+    open['artifactSelectionEpoch'] = 0;
+    open['ShowArtifactPanel'] = false;
+    open['SelectedArtifactId'] = null;
+    open['SelectedVersionNumber'] = undefined;
+    open['ShowSystemArtifacts'] = false;
+    open['AgentRunsByDetailId'] = new Map();
+    open['ArtifactsByDetailId'] = new Map();
+    open['SystemArtifactsByDetailId'] = new Map();
+    open['RatingsByDetailId'] = new Map();
+    open['AttachmentsByDetailId'] = new Map();
+    open['ArtifactViewerRefresh$'] = new Subject();
+    open['messages'] = [];
+    open['cdr'] = { detectChanges: vi.fn(), markForCheck: vi.fn() };
+    open['attachmentService'] = {
+      loadAttachmentsForMessages: vi.fn(async () => new Map()),
+    };
+    open['loadRealtimeSessionMeta'] = vi.fn(async () => undefined);
+    open['loadArtifactPermissions'] = vi.fn(async () => undefined);
+    open['followTranscript'] = vi.fn();
+    open['windowStore'] = {
+      ApplyLocalDetail: vi.fn(),
+      GetSnapshot: vi.fn(() => ({
+        Details: [],
+        AgentRunsByDetailId: new Map(),
+        ArtifactsByDetailId: new Map(),
+        RatingsByDetailId: new Map(),
+      })),
+    };
+
+    return { component, open };
+  }
+
+  function makeLazyArtifact(params: {
+    conversationDetailId: string;
+    artifactId: string;
+    versionId: string;
+    versionNumber: number;
+    name: string;
+    type: string;
+    visibility: string;
+    direction: string;
+    versionCreatedAt?: string;
+  }): LazyArtifactInfo {
+    return new LazyArtifactInfo(
+      {
+        ConversationDetailID: params.conversationDetailId,
+        ArtifactID: params.artifactId,
+        ArtifactVersionID: params.versionId,
+        VersionNumber: params.versionNumber,
+        ArtifactName: params.name,
+        ArtifactType: params.type,
+        Visibility: params.visibility,
+        Direction: params.direction,
+        VersionCreatedAt: params.versionCreatedAt ?? '2026-10-18T12:00:00Z',
+      },
+      new UserInfo()
+    );
+  }
+
+  it('auto-opens a newly created artifact on OnAgentResponse even after resetComponentState zeroes lastLoadedConversationId', async () => {
+    const { component, open } = createChatAreaHarness('CONV-1');
+
+    // 1. Initial peripheral load populates CONV-1 with 0 artifacts
+    await (open['loadPeripheralData'] as (id: string, snap: unknown) => Promise<void>).call(
+      component,
+      'CONV-1',
+      {
+        Details: [],
+        AgentRunsByDetailId: new Map(),
+        ArtifactsByDetailId: new Map(),
+        RatingsByDetailId: new Map(),
+      }
+    );
+    expect(open['lastLoadedConversationId']).toBe('CONV-1');
+    expect(open['artifactMapConversationId']).toBe('CONV-1');
+
+    // 2. Sending a user message calls resetComponentState('CONV-1'), which zeroes lastLoadedConversationId
+    (open['resetComponentState'] as (id: string) => void).call(component, 'CONV-1');
+    expect(open['lastLoadedConversationId']).toBeNull();
+    expect(open['artifactMapConversationId']).toBe('CONV-1');
+
+    // 3. Agent responds and reloadArtifactsForMessage populates the new artifact
+    open['reloadArtifactsForMessage'] = vi.fn(async () => {
+      component.ArtifactsByDetailId.set('DETAIL-2', [
+        makeLazyArtifact({
+          conversationDetailId: 'DETAIL-2',
+          artifactId: 'ART-NEW-1',
+          versionId: 'VER-1',
+          versionNumber: 1,
+          name: 'Generated Report',
+          type: 'Markdown',
+          visibility: 'Always',
+          direction: 'Output',
+          versionCreatedAt: '2026-10-18T12:00:00Z',
+        }),
+      ]);
+    });
+
+    await component.OnAgentResponse({
+      message: {
+        ID: 'DETAIL-2',
+        ConversationID: 'CONV-1',
+        BranchID: null,
+        ReplacedAt: null,
+      } as never,
+      agentResult: {},
+    });
+
+    expect(component.ShowArtifactPanel).toBe(true);
+    expect(component.SelectedArtifactId).toBe('ART-NEW-1');
+    expect(component.SelectedVersionNumber).toBe(1);
+  });
+
+  it('auto-opens a newly created artifact on OnArtifactCreated after OnMessageSent invalidated lastLoadedConversationId', async () => {
+    const { component, open } = createChatAreaHarness('CONV-1');
+
+    // Initial load of CONV-1
+    await (open['loadPeripheralData'] as (id: string, snap: unknown) => Promise<void>).call(
+      component,
+      'CONV-1',
+      {
+        Details: [],
+        AgentRunsByDetailId: new Map(),
+        ArtifactsByDetailId: new Map(),
+        RatingsByDetailId: new Map(),
+      }
+    );
+
+    // User sends message -> resetComponentState zeroes lastLoadedConversationId
+    (open['resetComponentState'] as (id: string) => void).call(component, 'CONV-1');
+    expect(open['lastLoadedConversationId']).toBeNull();
+
+    // Agent finishes and emits ArtifactCreated
+    open['reloadArtifactsForMessage'] = vi.fn(async () => {
+      component.ArtifactsByDetailId.set('DETAIL-3', [
+        makeLazyArtifact({
+          conversationDetailId: 'DETAIL-3',
+          artifactId: 'ART-NEW-2',
+          versionId: 'VER-1',
+          versionNumber: 1,
+          name: 'Quarterly Chart',
+          type: 'Component',
+          visibility: 'Always',
+          direction: 'Output',
+          versionCreatedAt: '2026-10-18T12:05:00Z',
+        }),
+      ]);
+    });
+
+    await component.OnArtifactCreated({
+      conversationId: 'CONV-1',
+      conversationDetailId: 'DETAIL-3',
+      artifactId: '',
+      versionId: '',
+      versionNumber: 0,
+      name: '',
+    });
+
+    expect(component.ShowArtifactPanel).toBe(true);
+    expect(component.SelectedArtifactId).toBe('ART-NEW-2');
+    expect(component.SelectedVersionNumber).toBe(1);
+  });
+
+  it('still treats baseline as non-comparable when switching to CONV-2 while ArtifactsByDetailId still holds CONV-1', async () => {
+    const { component, open } = createChatAreaHarness('CONV-1');
+
+    // Load CONV-1 with an artifact
+    component.ArtifactsByDetailId.set('DETAIL-1', [
+      makeLazyArtifact({
+        conversationDetailId: 'DETAIL-1',
+        artifactId: 'ART-CONV-1',
+        versionId: 'VER-1',
+        versionNumber: 1,
+        name: 'Conv 1 Doc',
+        type: 'Markdown',
+        visibility: 'Always',
+        direction: 'Output',
+      }),
+    ]);
+    open['artifactMapConversationId'] = 'CONV-1';
+
+    // Switch active conversation ID to CONV-2 before CONV-2's loadPeripheralData runs
+    open['_conversationId'] = 'CONV-2';
+    const baseline = (open['snapshotArtifactPanelBaseline'] as () => unknown).call(component);
+
+    // Now CONV-2's historical artifact arrives in the map
+    component.ArtifactsByDetailId.clear();
+    component.ArtifactsByDetailId.set('DETAIL-99', [
+      makeLazyArtifact({
+        conversationDetailId: 'DETAIL-99',
+        artifactId: 'ART-CONV-2-HISTORICAL',
+        versionId: 'VER-99',
+        versionNumber: 3,
+        name: 'Old Conv 2 Doc',
+        type: 'Markdown',
+        visibility: 'Always',
+        direction: 'Output',
+      }),
+    ]);
+    open['artifactMapConversationId'] = 'CONV-2';
+
+    await (open['decideAndApplyArtifactPanel'] as (b: unknown, c: string) => Promise<void>).call(
+      component,
+      baseline,
+      'CONV-2'
+    );
+
+    // Must NOT open CONV-2's historical artifact because baseline.MapConversationId was 'CONV-1'
+    expect(component.ShowArtifactPanel).toBe(false);
+    expect(component.SelectedArtifactId).toBeNull();
+  });
+});
+

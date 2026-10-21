@@ -1,6 +1,21 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
-import { UUIDsEqual } from "@memberjunction/global";
+import { NormalizeUUID } from "@memberjunction/global";
+
+/** Rows grouped by their normalized TemplateID. */
+function groupByTemplate<T extends { TemplateID: string }>(rows: T[]): Map<string, T[]> {
+    const groups = new Map<string, T[]>();
+    for (const row of rows) {
+        const key = NormalizeUUID(row.TemplateID);
+        const bucket = groups.get(key);
+        if (bucket) {
+            bucket.push(row);
+        } else {
+            groups.set(key, [row]);
+        }
+    }
+    return groups;
+}
 
 /**
  * TemplateEngine is used for accessing template metadata/caching it, and rendering templates
@@ -35,11 +50,18 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
     }
 
     protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
-        // post-process the template content and params to associate them with a template
-        this.Templates.forEach((t) => {
-            t.Content = this.TemplateContents.filter((tc) => UUIDsEqual(tc.TemplateID, t.ID));
-            t.Params = this.TemplateParams.filter((tp) => UUIDsEqual(tp.TemplateID, t.ID));
-        });
+        // Associate content and params with their templates. Each template gets a new array on
+        // every run, so repeated rebuilds converge. Grouping first keeps this linear; filtering
+        // both child arrays once per template was O(templates x children).
+        // (The templates load as a dataset, which a cache-sourced related-record collection cannot
+        // read from, so these stay hand-associated.)
+        const contentByTemplate = groupByTemplate(this.TemplateContents);
+        const paramsByTemplate = groupByTemplate(this.TemplateParams);
+        for (const template of this.Templates) {
+            const key = NormalizeUUID(template.ID);
+            template.Content = contentByTemplate.get(key) ?? [];
+            template.Params = paramsByTemplate.get(key) ?? [];
+        }
     }
 
     public get Templates(): MJTemplateEntityExtended[] {
@@ -59,12 +81,56 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
         return this._metadata.TemplateParams;
     }
 
+    private _indexedTemplatesRef?: MJTemplateEntityExtended[];
+    private _templatesById = new Map<string, MJTemplateEntityExtended>();
+    private _templatesByName = new Map<string, MJTemplateEntityExtended>();
+
+    private ensureTemplateIndexes(): void {
+        const templates = this._metadata?.Templates;
+        if (!templates) {
+            return;
+        }
+        if (this._indexedTemplatesRef === templates && this._templatesById.size === templates.length) {
+            return;
+        }
+        this._templatesById.clear();
+        this._templatesByName.clear();
+        for (let i = 0; i < templates.length; i++) {
+            const t = templates[i];
+            if (t.ID) {
+                this._templatesById.set(NormalizeUUID(t.ID), t);
+            }
+            if (t.Name) {
+                const nameKey = t.Name.trim().toLowerCase();
+                if (!this._templatesByName.has(nameKey)) {
+                    this._templatesByName.set(nameKey, t);
+                }
+            }
+        }
+        this._indexedTemplatesRef = templates;
+    }
+
+    /**
+     * Convenience method to find a template by ID, case-insensitive.
+     */
+    public FindTemplateByID(templateId: string): MJTemplateEntityExtended | undefined {
+        if (!templateId) {
+            return undefined;
+        }
+        this.ensureTemplateIndexes();
+        return this._templatesById.get(NormalizeUUID(templateId));
+    }
+
     /**
      * Convenience method to find a template by name, case-insensitive
      * @param templateName 
      * @returns 
      */
     public FindTemplate(templateName: string): MJTemplateEntityExtended {
-        return this.Templates.find((t) => t.Name.trim().toLowerCase() === templateName.trim().toLowerCase())
+        if (!templateName) {
+            return undefined!;
+        }
+        this.ensureTemplateIndexes();
+        return this._templatesByName.get(templateName.trim().toLowerCase())!;
     }
 }

@@ -4,7 +4,7 @@ import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } 
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJApplicationEntity, MJApplicationEntityEntity, MJEntityEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface ApplicationDialogData {
@@ -278,8 +278,9 @@ export class ApplicationDialogComponent extends BaseAngularComponent implements 
         this.ApplicationEntities = [];
         const usedEntityIds = new Set<string>();
 
+        const entitiesByID = IndexByUUID(this.AllEntities);
         for (const appEntity of result.Results) {
-          const entity = this.AllEntities.find(e => UUIDsEqual(e.ID, appEntity.EntityID));
+          const entity = entitiesByID.Get(appEntity.EntityID);
           if (entity) {
             this.ApplicationEntities.push({
               entity,

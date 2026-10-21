@@ -10,8 +10,9 @@ The patterns assume `@memberjunction/core-entities-server`'s convention: one fil
 
 **Use when:** the entity participates in semantic search and needs an embedding refreshed whenever a text field changes.
 
-**Schema** — two columns on the entity's table (CodeGen picks them up from the migration):
+**Schema** — three columns on the entity's table (CodeGen picks them up from the migration):
 - `EmbeddingVector NVARCHAR(MAX) NULL` — JSON-encoded number array.
+- `EmbeddingVectorBinary VARBINARY(MAX) NULL` — the same vector as little-endian float32 bytes (a base64 string on the `BaseEntity`). Readers decode it ~14× faster than parsing the JSON. See the [Binary Fields Guide](BINARY_FIELDS_GUIDE.md).
 - `EmbeddingModelID UNIQUEIDENTIFIER NULL` — FK → `__mj.AIModel(ID)`. Lets you detect "global model changed → cached vectors are stale" and re-embed on cold start.
 
 **Server class** — three responsibilities, all routed through `Save()` so callers don't need to coordinate:
@@ -22,10 +23,12 @@ The patterns assume `@memberjunction/core-entities-server`'s convention: one fil
 
 There are two flavors:
 
-- **Single source field** → call `await this.GenerateEmbeddingByFieldName('Note', 'EmbeddingVector', 'EmbeddingModelID')` from BaseEntity. Cleanest. See [`MJAIAgentNoteEntityServer.server.ts`](../packages/MJCoreEntitiesServer/src/custom/MJAIAgentNoteEntityServer.server.ts).
-- **Combined source fields** (e.g., "Name + Description") → build the text manually, call `this.EmbedTextLocal(text)`, write `EmbeddingVector` / `EmbeddingModelID` directly. See [`MJTagEntityServer.server.ts`](../packages/MJCoreEntitiesServer/src/custom/MJTagEntityServer.server.ts) for the pattern.
+Writers always fill **both** vector columns and clear them together, so they never disagree:
 
-**Engine-side cache sync** — your singleton engine (e.g., `TagEngine`, `AIEngine`) should expose `AddOrUpdateSingle<X>EmbeddingFromPersisted(entity)` and `RemoveSingle<X>Embedding(id)` methods that mirror the persisted `EmbeddingVector` into the in-memory `SimpleVectorService` *without* re-running embedding. The `Save()` override calls these post-`super.Save()`. The engine's `refreshEmbeddings` method on cold start should also prefer the persisted vector when `EmbeddingModelID` matches the configured model — that's the whole point of persisting.
+- **Single source field** → call `await this.GenerateEmbeddingByFieldName('Note', 'EmbeddingVector', 'EmbeddingModelID', 'EmbeddingVectorBinary')` from BaseEntity; the optional fourth argument sets the binary companion. Cleanest. See [`MJAIAgentNoteEntityServer.server.ts`](../packages/MJCoreEntitiesServer/src/custom/MJAIAgentNoteEntityServer.server.ts).
+- **Combined source fields** (e.g., "Name + Description") → build the text manually, call `this.EmbedTextLocal(text)`, write `EmbeddingVector` (JSON), `EmbeddingVectorBinary` (`Float32VectorToBase64(vector)` from `@memberjunction/global`) and `EmbeddingModelID` directly. See [`MJTagEntityServer.server.ts`](../packages/MJCoreEntitiesServer/src/custom/MJTagEntityServer.server.ts) for the pattern.
+
+**Engine-side cache sync** — your singleton engine (e.g., `TagEngine`, `AIEngine`) should expose `AddOrUpdateSingle<X>EmbeddingFromPersisted(entity)` and `RemoveSingle<X>Embedding(id)` methods that mirror the persisted vector into the in-memory `SimpleVectorService` *without* re-running embedding. Read it with `ReadStoredVector(entity.EmbeddingVectorBinary, entity.EmbeddingVector)` from `@memberjunction/ai-vectors-memory` — binary first, JSON fallback. The `Save()` override calls these post-`super.Save()`. The engine's `refreshEmbeddings` method on cold start should also prefer the persisted vector when `EmbeddingModelID` matches the configured model — that's the whole point of persisting. Binary fields are omitted from `RunView` by default, so the engine config that loads the entity needs `IncludeBinaryFields: 'DatabaseProviderOnly'` (or `true`).
 
 **Backfill / model-change rebuild** — expose a `Rebuild<X>Embeddings(contextUser)` utility on the engine that walks all rows where `EmbeddingVector IS NULL OR EmbeddingModelID != configured`, computes embeddings, and saves. Run after a global embedding-model change.
 
@@ -126,11 +129,11 @@ public override async Delete(): Promise<boolean> {
 
 ## Quick recipe — adding a new vectorized entity
 
-1. Migration: add `EmbeddingVector NVARCHAR(MAX) NULL` and `EmbeddingModelID UNIQUEIDENTIFIER NULL FK→AIModel(ID)` to the table.
+1. Migration: add `EmbeddingVector NVARCHAR(MAX) NULL`, `EmbeddingVectorBinary VARBINARY(MAX) NULL` and `EmbeddingModelID UNIQUEIDENTIFIER NULL FK→AIModel(ID)` to the table.
 2. Run CodeGen.
 3. Create `MJ<Entity>EntityServer.server.ts` mirroring `MJTagEntityServer` (combined-field) or `MJAIAgentNoteEntityServer` (single-field).
-4. If a singleton engine exists for the entity (or you're adding one), expose `AddOrUpdateSingle<X>EmbeddingFromPersisted` and `RemoveSingle<X>Embedding`. Hydrate the cache from `EmbeddingVector` on `Config()`.
+4. If a singleton engine exists for the entity (or you're adding one), expose `AddOrUpdateSingle<X>EmbeddingFromPersisted` and `RemoveSingle<X>Embedding`. Hydrate the cache on `Config()` with `ReadStoredVector(EmbeddingVectorBinary, EmbeddingVector)`, setting `IncludeBinaryFields: 'DatabaseProviderOnly'` on the engine config.
 5. Export the server class from `packages/MJCoreEntitiesServer/src/index.ts`.
-6. Run the package's tests (`npm run test`) — add tests covering: first save embeds, dirty-text save re-embeds, save-with-empty-text clears, post-save engine cache reflects new vector.
+6. Run the package's tests (`npm run test`) — add tests covering: first save embeds (both columns), dirty-text save re-embeds, save-with-empty-text clears both, post-save engine cache reflects new vector.
 
 Took ~6 hours end-to-end for `MJTagEntityServer` from migration to green tests. Re-using the recipe should be substantially faster.

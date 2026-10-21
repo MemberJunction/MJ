@@ -9,6 +9,10 @@ on:
       - 'pnpm-lock.yaml'
       - 'packages/**'
 
+# Least-privilege token: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   build-only:
     name: Build new versions of NPM packages

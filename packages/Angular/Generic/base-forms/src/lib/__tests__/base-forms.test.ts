@@ -145,6 +145,23 @@ describe('FormStateService', () => {
     });
   });
 
+  describe('Persist', () => {
+    it('saves a change to User Settings by default', async () => {
+      const { UserInfoEngine } = await import('@memberjunction/core-entities');
+      service.SetSectionExpanded('MJTestEntity', 'details', false);
+      expect(UserInfoEngine.Instance.SetSettingDebounced).toHaveBeenCalledWith('Form.State.MJTestEntity', expect.any(String));
+    });
+
+    it('keeps every change in memory when off', async () => {
+      const { UserInfoEngine } = await import('@memberjunction/core-entities');
+      service.Persist = false;
+      service.SetSectionExpanded('MJTestEntity', 'details', false);
+      service.SetWidthMode('MJTestEntity', 'full-width');
+      expect(service.IsSectionExpanded('MJTestEntity', 'details')).toBe(false);
+      expect(UserInfoEngine.Instance.SetSettingDebounced).not.toHaveBeenCalled();
+    });
+  });
+
   describe('setSectionExpanded', () => {
     it('should update section expanded state', () => {
       service.setSectionExpanded('MJTestEntity', 'details', false);

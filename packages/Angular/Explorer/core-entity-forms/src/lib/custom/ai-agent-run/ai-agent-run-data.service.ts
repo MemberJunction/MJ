@@ -1,6 +1,7 @@
 import { BehaviorSubject, Observable } from 'rxjs';
-import { IMetadataProvider, Metadata, RunView } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView, RunViewParams } from '@memberjunction/core';
 import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import { ApplyResolvedPayloadAtStart, ApplyResolvedPayloadAtEnd } from '@memberjunction/ai-core-plus';
 import { SortAgentRunStepsByExecutionOrder } from './agent-run-step-order';
 
 export interface AgentRunData {
@@ -172,6 +173,9 @@ export class AIAgentRunDataHelper {
     }
     
     const steps = SortAgentRunStepsByExecutionOrder(stepsResult.Results as MJAIAgentRunStepEntity[] || []);
+    // Fill PayloadAtEnd and PayloadAtStart on steps that point at an earlier step's PayloadAtEnd.
+    ApplyResolvedPayloadAtEnd(steps);
+    ApplyResolvedPayloadAtStart(steps);
     
     // Build filters for batch loading
     const actionLogIds = steps
@@ -185,17 +189,12 @@ export class AIAgentRunDataHelper {
       .filter(id => id != null);
     
     // Build batch queries array
-    const batchQueries: any[] = [
+    const batchQueries: RunViewParams[] = [
       // Sub-runs query
       {
         EntityName: 'MJ: AI Agent Runs',
         ExtraFilter: `ParentRunID='${agentRunId}'`,
         OrderBy: 'StartedAt'
-      },
-      // Current run query
-      {
-        EntityName: 'MJ: AI Agent Runs',
-        ExtraFilter: `ID='${agentRunId}'`
       }
     ];
     
@@ -224,12 +223,9 @@ export class AIAgentRunDataHelper {
     let resultIndex = 0;
     
     // Sub-runs
-    const subRuns = batchResults[resultIndex].Success 
+    const subRuns = batchResults[resultIndex]?.Success 
       ? (batchResults[resultIndex].Results as MJAIAgentRunEntity[] || [])
       : [];
-    resultIndex++;
-    
-    // Skip current run result
     resultIndex++;
     
     // Action logs
@@ -283,6 +279,9 @@ export class AIAgentRunDataHelper {
     }
     
     const steps = SortAgentRunStepsByExecutionOrder(stepsResult.Results);
+    // Fill PayloadAtEnd and PayloadAtStart on steps that point at an earlier step's PayloadAtEnd.
+    ApplyResolvedPayloadAtEnd(steps);
+    ApplyResolvedPayloadAtStart(steps);
     
     // Get prompt run IDs
     const promptRunIds = steps

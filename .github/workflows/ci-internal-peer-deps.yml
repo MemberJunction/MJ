@@ -9,6 +9,10 @@ on:
       - '.github/scripts/check-internal-peer-deps.mjs'
       - '.github/workflows/ci-internal-peer-deps.yml'
 
+# Least-privilege token: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   check-internal-peer-deps:
     name: packages/** must not peer-depend on @memberjunction/*

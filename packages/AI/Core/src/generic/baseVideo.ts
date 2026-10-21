@@ -50,7 +50,13 @@ export class AvatarInfo {
 }
 
 export class VideoTranslationParams {
-    // to be done
+    /**
+     * Optional signal for cancelling the request. The driver is responsible for honoring it: it
+     * passes the signal to the provider's SDK or HTTP call, so an aborted request is torn down
+     * rather than left running. A driver that stops because the signal fired reports the failure
+     * classified as `Cancelled` (see `BuildCancellationErrorInfo`), which is never failed over.
+     */
+    CancellationToken?: AbortSignal;
 }
 
 export class AvatarVideoParams {
@@ -80,4 +86,12 @@ export class AvatarVideoParams {
     audioAssetId: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     imageAssetId: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     avatarStyle: string; // 'circle' etc. — case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+
+    /**
+     * Optional signal for cancelling the request. The driver is responsible for honoring it: it
+     * passes the signal to the provider's SDK or HTTP call, so an aborted request is torn down
+     * rather than left running. A driver that stops because the signal fired reports the failure
+     * classified as `Cancelled` (see `BuildCancellationErrorInfo`), which is never failed over.
+     */
+    CancellationToken?: AbortSignal;
 }

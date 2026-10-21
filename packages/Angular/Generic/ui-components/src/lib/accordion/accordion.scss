@@ -39,7 +39,20 @@
   font-family: var(--mj-font-family); font-size: var(--mj-text-sm);
   font-weight: var(--mj-font-semibold); color: var(--mj-text-primary);
   text-align: left;
-  &:focus-visible { outline: none; box-shadow: var(--mj-focus-ring); }
+  /* The ring sits inside the toggle's box: the panel's overflow:hidden clips anything
+     drawn outside it, and a Bare toggle touches the panel's edges. */
+  &:focus-visible {
+    outline: var(--mj-ring-width) solid var(--mj-focus-ring-color);
+    outline-offset: calc(-1 * var(--mj-ring-width));
+  }
+}
+
+/* HeadingLevel wrapper around the toggle. It takes the toggle's flex sizing, and the
+   toggle fills it, so the header row lays out the same with or without it. Every rule
+   below that reaches the toggle through ">" also has a "> .mj-accordion-heading >" path. */
+.mj-accordion-heading {
+  flex: 1 1 auto; min-width: 0;
+  display: flex;
 }
 
 /* Header actions — interactive controls (edit/copy/run/checkbox) that live in
@@ -132,7 +145,8 @@
 
 /* Muted title icons — opt in via [TitleIconMuted]="true" instead of per-consumer
    CSS. (Status/brand-colored icons are still set per-instance inline.) */
-.mj-accordion-panel--muted-icon > .mj-accordion-header-row > .mj-accordion-header .mj-accordion-title i {
+.mj-accordion-panel--muted-icon > .mj-accordion-header-row > .mj-accordion-header .mj-accordion-title i,
+.mj-accordion-panel--muted-icon > .mj-accordion-header-row > .mj-accordion-heading > .mj-accordion-header .mj-accordion-title i {
   color: var(--mj-text-muted);
 }
 
@@ -170,25 +184,59 @@
 
 .mj-accordion-panel--disabled > .mj-accordion-header-row { opacity: 0.5; }
 .mj-accordion-panel--disabled > .mj-accordion-header-row > .mj-accordion-header,
+.mj-accordion-panel--disabled > .mj-accordion-header-row > .mj-accordion-heading > .mj-accordion-header,
 .mj-accordion-panel--disabled > .mj-accordion-header-row > .mj-accordion-chevron { cursor: not-allowed; }
 
 /* ── Density (Size="sm") — tighter padding + smaller text for dense contexts.
    Child-combinator-scoped so a default panel nested inside a Size="sm" panel
    doesn't inherit the dense styling. ── */
 .mj-accordion-panel--sm {
-  > .mj-accordion-header-row > .mj-accordion-header { padding: 8px 12px; font-size: var(--mj-text-xs); }
+  > .mj-accordion-header-row > .mj-accordion-header,
+  > .mj-accordion-header-row > .mj-accordion-heading > .mj-accordion-header { padding: 8px 12px; font-size: var(--mj-text-xs); }
   > .mj-accordion-header-row > .mj-accordion-actions { padding-right: 4px; }
   > .mj-accordion-header-row > .mj-accordion-chevron { padding: 0 12px; }
   > .mj-accordion-body-outer > .mj-accordion-body-clip > .mj-accordion-body { padding: 10px 12px; }
 }
 
-/* ── Bare — drop the box (border + header background) so the panel sits cleanly
-   inside a host that already provides chrome (e.g. an expandable card). ── */
+/* ── Bare — drop the box (border, header background, body fill and row hover fill)
+   so the panel sits cleanly inside a host that already provides chrome (e.g. an
+   expandable card) or directly on a page as a section. On a device that can hover,
+   the toggle keeps a hover cue: pointing at the title or the chevron gives both the
+   brand color, and pointing at the header actions does not. A Variant keeps its own
+   colors. ── */
 .mj-accordion-panel--bare {
   border: none;
   border-radius: 0;
   > .mj-accordion-header-row { background: transparent; }
   &.mj-accordion-panel--expanded > .mj-accordion-header-row { border-bottom-color: var(--mj-border-subtle); }
+  > .mj-accordion-body-outer > .mj-accordion-body-clip > .mj-accordion-body { background: transparent; }
+  // No row hover fill on any device (not gated by hover media, so a tap on a touch screen never leaves one).
+  &:not([data-variant]):not(.mj-accordion-panel--disabled) > .mj-accordion-header-row:hover { background: transparent; }
+}
+
+// The Bare hover cue, only where a pointer can hover. The :has() rules are separate, so a
+// browser without :has() keeps the rules that do not need it.
+@media (hover: hover) {
+  .mj-accordion-panel--bare:not([data-variant]):not(.mj-accordion-panel--disabled) > .mj-accordion-header-row {
+    > .mj-accordion-header:hover,
+    > .mj-accordion-heading > .mj-accordion-header:hover { color: var(--mj-brand-primary); }
+    > .mj-accordion-header:hover ~ .mj-accordion-chevron .mj-accordion-icon,
+    > .mj-accordion-heading:hover ~ .mj-accordion-chevron .mj-accordion-icon,
+    > .mj-accordion-chevron:hover .mj-accordion-icon { color: var(--mj-brand-primary); }
+  }
+  .mj-accordion-panel--bare:not([data-variant]):not(.mj-accordion-panel--disabled) > .mj-accordion-header-row:has(> .mj-accordion-chevron:hover) {
+    > .mj-accordion-header,
+    > .mj-accordion-heading > .mj-accordion-header { color: var(--mj-brand-primary); }
+  }
+  // Muted title icons take the title's hover color too.
+  .mj-accordion-panel--bare.mj-accordion-panel--muted-icon:not([data-variant]):not(.mj-accordion-panel--disabled) > .mj-accordion-header-row {
+    > .mj-accordion-header:hover .mj-accordion-title i,
+    > .mj-accordion-heading > .mj-accordion-header:hover .mj-accordion-title i { color: inherit; }
+  }
+  .mj-accordion-panel--bare.mj-accordion-panel--muted-icon:not([data-variant]):not(.mj-accordion-panel--disabled) > .mj-accordion-header-row:has(> .mj-accordion-chevron:hover) {
+    > .mj-accordion-header .mj-accordion-title i,
+    > .mj-accordion-heading > .mj-accordion-header .mj-accordion-title i { color: inherit; }
+  }
 }
 
 /* ── Flush body — body manages its own padding (code editors, full-bleed grids) ── */
@@ -277,6 +325,7 @@
   > .mj-accordion-header-row { background: var(--mj-brand-primary); }
   &:not(.mj-accordion-panel--disabled) > .mj-accordion-header-row:hover { background: var(--mj-brand-primary-hover); }
   > .mj-accordion-header-row .mj-accordion-header { color: var(--mj-text-inverse); }
+  > .mj-accordion-header-row .mj-accordion-header:focus-visible { outline-color: var(--mj-text-inverse); }
   > .mj-accordion-header-row .mj-accordion-icon { color: var(--mj-text-inverse); }
   &.mj-accordion-panel--expanded > .mj-accordion-header-row { border-bottom-color: transparent; }
 }

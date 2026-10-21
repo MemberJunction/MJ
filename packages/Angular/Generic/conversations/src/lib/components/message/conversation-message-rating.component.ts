@@ -41,13 +41,14 @@ type LoadableEntity = BaseEntity<unknown> & {
             [disabled]="isSaving"
             (click)="OpenRatingDialog()"
             [title]="currentUserRating != null ? 'Edit your rating' : 'Rate this response'"
+            [attr.aria-label]="currentUserRating != null ? null : 'Rate response'"
             type="button">
             @if (currentUserRating != null) {
               <i class="fa-solid fa-pen-to-square"></i>
               <span class="my-rating">My rating: {{ currentUserRating }}/10</span>
             } @else {
-              <i class="fa-regular fa-comment-dots"></i>
-              <span>Rate response</span>
+              <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>
+              <span class="rate-label">Rate response</span>
             }
           </button>
         } @else if (currentUserRating != null) {
@@ -77,7 +78,7 @@ type LoadableEntity = BaseEntity<unknown> & {
     .rating-button {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: var(--mj-space-2);
       background: var(--mj-bg-surface);
       border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
@@ -107,6 +108,13 @@ type LoadableEntity = BaseEntity<unknown> & {
 
     .my-rating {
       font-weight: 500;
+    }
+
+    /* Phones: "Rate response" collapses to its icon */
+    @media (max-width: 768px) {
+      .rate-label {
+        display: none;
+      }
     }
 
     .rating-readonly {
