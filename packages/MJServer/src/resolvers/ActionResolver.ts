@@ -2,7 +2,7 @@ import { Resolver, Mutation, Arg, Ctx } from "type-graphql";
 import { ActionEngineServer } from "@memberjunction/actions";
 import { EntityActionEngineServer } from "@memberjunction/actions";
 import { Metadata, UserInfo, BaseEntity, CompositeKey, KeyValuePair, LogError, RunView, DatabaseProviderBase, EntityInfo, IMetadataProvider } from "@memberjunction/core";
-import { ActionParam, ActionResult, MJActionEntityExtended } from "@memberjunction/actions-base";
+import { ActionParam, ActionResult, MJActionEntityExtended, ProjectActionParamValuesForUser } from "@memberjunction/actions-base";
 import { UserCache } from "@memberjunction/generic-database-provider";
 import { Field, InputType, ObjectType } from "type-graphql";
 import { KeyValuePairInput } from "../generic/KeyValuePairInput.js";
@@ -215,8 +215,8 @@ export class ActionResolver extends ResolverBase {
       // params.Provider.SearchEntity) run against the caller's metadata layer.
       const result = await this.executeAction(action, user, params, ctx.providers);
 
-      // Return the result
-      return this.createActionResult(result);
+      // Return the result, its output parameters projected for the caller
+      return this.createActionResult(result, user, ctx.providers);
     } catch (e) {
       return this.handleActionError(e);
     }
@@ -359,20 +359,29 @@ export class ActionResolver extends ResolverBase {
   }
 
   /**
-   * Creates an action result from the execution result
+   * Creates an action result from the execution result. The output parameters are projected for
+   * the caller first (see {@link ProjectActionParamValuesForUser}): an action may return rows it
+   * did not load as the caller, such as engine-cached or system-user rows, so an entity object is
+   * sent as its field values projected for the caller and a plain row of a field-secured entity
+   * loses the keys the caller is denied. An entity object of an entity the caller cannot read is
+   * kept as it is, so `CopyScalarsAndArrays` drops it exactly as it always has.
    * @param result The execution result
+   * @param user The caller the result is sent to
+   * @param providers The request's providers, for the entity metadata the projection reads
    * @returns The formatted action result
    * @private
    */
-  private createActionResult(result: ActionResult): ActionResultOutput {
-    const x =(result.Params || result.RunParams.Params || [])
+  private createActionResult(result: ActionResult, user: UserInfo, providers: Array<ProviderInfo>): ActionResultOutput {
+    const outputs = (result.Params || result.RunParams.Params || [])
               .filter(p => p.Type.trim().toLowerCase() === 'output' ||
-                           p.Type.trim().toLowerCase() === 'both')     ;
+                           p.Type.trim().toLowerCase() === 'both');
+    const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }) ?? undefined;
+    const projected = ProjectActionParamValuesForUser(outputs, user, provider, { UnreadableEntityObjects: 'keep' }) ?? outputs;
     return {
       Success: result.Success,
       Message: result.Message,
       ResultCode: result.Result?.ResultCode,
-      ResultData: x && x.length > 0 ? JSON.stringify(CopyScalarsAndArrays(x)) : undefined
+      ResultData: projected.length > 0 ? JSON.stringify(CopyScalarsAndArrays(projected)) : undefined
     };
   }
 
@@ -531,7 +540,9 @@ export class ActionResolver extends ResolverBase {
    * The entity action result as it may be sent to `user`: its parameters, which the result echoes
    * (in `Params` and in `RunParams.Params`), projected for the caller wherever their entity is known.
    * That is any entity object among them, and the parameters bound to the record's field values
-   * (`'Entity Object Data'`), whose entity is the bound record's.
+   * (`'Entity Object Data'`), whose entity is the bound record's. Any other value then passes the
+   * general backstop ({@link ProjectActionParamValuesForUser}), which narrows plain objects shaped
+   * like a row of a field-secured entity.
    */
   private projectEntityActionResult(
     result: EntityActionResult,
@@ -542,9 +553,11 @@ export class ActionResolver extends ResolverBase {
   ): EntityActionResult {
     const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }) ?? undefined;
     const binding = this.entityObjectDataBinding(entityAction, entityObject, provider);
-    const projected: EntityActionResult = { ...result, Params: ProjectActionParamsForCaller(result.Params, user, provider, binding) };
+    const project = (params: ActionParam[]) =>
+      ProjectActionParamValuesForUser(ProjectActionParamsForCaller(params, user, provider, binding), user, provider, { UnreadableEntityObjects: 'keep' });
+    const projected: EntityActionResult = { ...result, Params: project(result.Params) };
     if (result.RunParams) {
-      projected.RunParams = { ...result.RunParams, Params: ProjectActionParamsForCaller(result.RunParams.Params, user, provider, binding) };
+      projected.RunParams = { ...result.RunParams, Params: project(result.RunParams.Params) };
     }
     return projected;
   }

@@ -4,6 +4,7 @@
 "@memberjunction/actions": patch
 "@memberjunction/actions-base": patch
 "@memberjunction/ai-agents": patch
+"@memberjunction/ai-mcp-client": patch
 "@memberjunction/ai-mcp-server": patch
 "@memberjunction/ai-vector-dupe": patch
 "@memberjunction/ai-vector-sync": patch
@@ -54,6 +55,12 @@ The rule is no longer "API output is the perimeter". A denied value may sit in s
 - **A field-security refusal throws a `FieldSecurityError` from the provider's RunView path** instead of returning `Success: false`; in `RunViews`, only the refused item fails.
 - **Data Context SQL and query items always re-run**, and entity items whose entity has field security (or for which the reader has a row filter) ignore saved `DataJSON` and re-run for the reader.
 - Non-canonical Access spellings (`'deny'`, `'ALLOW'`) are normalized on save.
+- **An entity communication skips a recipient whose address field the sender cannot read**, reporting `Recipient skipped: the sender cannot read the address field` for that recipient (new `Skipped` / `SkipReason` on each result item) and still sending to the others; the run reports `Success: false` when any recipient was skipped. `RunEntityCommunicationByViewID` refuses a view that does not belong to the requested entity.
+- **The A2A agent card is minimal when `a2aServerSettings.userEmail` is not set**: no entity or agent lists (it was previously built as the system user). Set `userEmail` to a service user to advertise what that user may see.
+- **MCP Create/Update entity tool schemas leave out fields the session user may not write or read**, shared per set of denials.
+- **External vector index results (`FetchEntityVectors`) are filtered by row-level security**: a match is returned only when the caller can read its record; a match without `RecordID` metadata is dropped.
+- The MCP client's OAuth token cache is keyed by connection and user.
+- **`RunAction` output and the action execution log (`Params`, `ResultParams`) are projected** with the new `ProjectActionParamValuesForUser` (`@memberjunction/actions-base`): for the caller on `RunAction`, for the user the action ran for in the log. An entity object in an output parameter is now sent as its projected field values when the user may read its entity (it was dropped from `RunAction` output, and serialized as internal state in the log); one of an entity the user cannot read stays dropped from `RunAction` output and is logged as `null`. A plain object shaped like a row of an entity the user is denied fields on (it carries the primary key and at least 80% of its keys are that entity's fields) loses the denied keys.
 
 **One parse-based gate on every clause a view runs.** New `FieldSecuritySQLGate` resolves identifiers from the dialect-aware SQL scanner, so names in strings and comments are ignored and quoted, bracketed or look-alike spellings are caught. The provider applies it to `ExtraFilter`, `OrderBy`, aggregates, `OverrideExcludeFilter`, search terms spliced into SQL, and a saved view's stored `WhereClause`/`OrderByClause` (including `CustomWhereClause` views and `ViewID`-only requests). Whole-row constructs (`SELECT *`, `alias.*`, `FOR JSON/XML`, `CHECKSUM(*)`, `NATURAL JOIN`) and unreadable SQL are refused only for callers denied something. For those callers a column that does not exist produces the same error as a denied one. This closes the saved-view filter residual.
 

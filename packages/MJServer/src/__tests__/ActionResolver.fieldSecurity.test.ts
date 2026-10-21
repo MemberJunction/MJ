@@ -10,6 +10,10 @@ import 'reflect-metadata';
  * - **Output.** `ResultData` echoes the run's parameters back to the caller. The record bound as
  *   `'Entity Object Data'` (a plain copy of its field values) and any entity object among the
  *   parameters are projected for the caller; values of unknown shape are left alone.
+ *
+ * `RunAction` output gets the same backstop: entity objects are sent as their values projected for
+ * the caller, and plain objects shaped like a row of a field-secured entity lose the caller's
+ * denied keys.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -28,12 +32,20 @@ vi.mock('type-graphql', () => {
 
 const hoisted = vi.hoisted(() => ({
     runEntityAction: vi.fn(),
+    runAction: vi.fn(),
     entityActions: [] as unknown[],
     actionParams: [] as unknown[],
 }));
 
 vi.mock('@memberjunction/actions', () => ({
-    ActionEngineServer: { Instance: { get ActionParams() { return hoisted.actionParams; }, Actions: [] } },
+    ActionEngineServer: {
+        Instance: {
+            get ActionParams() { return hoisted.actionParams; },
+            Actions: [{ ID: 'AC000000-0000-4000-8000-000000000001', Name: 'Return Rows' }],
+            Config: vi.fn(async () => undefined),
+            RunAction: hoisted.runAction,
+        },
+    },
     EntityActionEngineServer: {
         Instance: {
             Config: vi.fn(async () => undefined),
@@ -43,10 +55,10 @@ vi.mock('@memberjunction/actions', () => ({
     },
 }));
 
-import { BaseEntity, EntityInfo } from '@memberjunction/core';
-import { ActionResolver, type EntityActionInput } from '../resolvers/ActionResolver.js';
+import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
+import { ActionResolver, type EntityActionInput, type RunActionInput } from '../resolvers/ActionResolver.js';
 import type { AppContext } from '../types.js';
-import { EMPLOYEES_ENTITY_ID, EmployeeEntity, FullWidthEmployeeRow, Intern, SECRET_SALARY } from './fieldSecurityFixtures.js';
+import { EMPLOYEES_ENTITY_ID, EmployeeEntity, FullWidthEmployeeRow, HRUser, INTERN_ROLE_ID, Intern, SECRET_SALARY } from './fieldSecurityFixtures.js';
 
 const ENTITY_ACTION_ID = 'EA000000-0000-4000-8000-000000000001';
 const RECORD_PARAM_ID = 'AP000000-0000-4000-8000-000000000001';
@@ -137,5 +149,70 @@ describe('RunEntityAction: echoed parameters are projected for the caller', () =
         const result = await new ActionResolver().RunEntityAction(input(), context(entityInfo, getEntityObject));
 
         expect(JSON.parse(result.ResultData!).Params[0].Value).toEqual({ Salary: 1 });
+    });
+});
+
+// ─── RunAction: general action output ────────────────────────────────────────
+
+const ACTION_ID = 'AC000000-0000-4000-8000-000000000001';
+
+/** An Owner may run any action, so these tests reach the output without the authorization lookup. */
+function owner(user: UserInfo): UserInfo {
+    user.Type = 'Owner';
+    return user;
+}
+
+function runActionContext(entity: EntityInfo, user: UserInfo): AppContext {
+    const provider = { Entities: [entity], EntityByID: () => undefined };
+    return {
+        providers: [{ type: 'Read-Write', provider }],
+        userPayload: { userRecord: user, email: user.Email },
+    } as unknown as AppContext;
+}
+
+async function runActionReturning(value: unknown, user: UserInfo): Promise<unknown> {
+    hoisted.runAction.mockResolvedValue({ Success: true, Message: 'ok', Params: [{ Name: 'Rows', Type: 'Output', Value: value }] });
+    const result = await new ActionResolver().RunAction({ ActionID: ACTION_ID } as RunActionInput, runActionContext(entityInfo, user));
+    expect(result.Success).toBe(true);
+    return JSON.parse(result.ResultData!)[0].Value;
+}
+
+describe('RunAction: output parameters are projected for the caller', () => {
+    it('REGRESSION: a system-loaded entity object is sent as its projected values to a restricted caller', async () => {
+        const value: BaseEntity = await fullWidthEntityObject(entityInfo);
+        expect(await runActionReturning(value, owner(Intern()))).toEqual({ ID: 'emp-1', Name: 'Ada', Notes: 'n' });
+    });
+
+    it('REGRESSION: the same entity object keeps the field for a caller allowed to read it', async () => {
+        const value: BaseEntity = await fullWidthEntityObject(entityInfo);
+        expect(await runActionReturning(value, owner(HRUser()))).toMatchObject({ ID: 'emp-1', Salary: SECRET_SALARY });
+    });
+
+    it('REGRESSION: a GetAll()-shaped row of a field-secured entity loses the denied field', async () => {
+        const value = await runActionReturning([FullWidthEmployeeRow()], owner(Intern()));
+        expect(value).toEqual([{ ID: 'emp-1', Name: 'Ada', Notes: 'n' }]);
+        expect(JSON.stringify(value)).not.toContain(String(SECRET_SALARY));
+    });
+
+    it('leaves a non-entity-shaped object untouched', async () => {
+        expect(await runActionReturning({ Salary: 1, Total: 2 }, owner(Intern()))).toEqual({ Salary: 1, Total: 2 });
+    });
+
+    it("REGRESSION: an entity object of an entity the caller cannot read is not exposed", async () => {
+        const unreadable = EmployeeEntity();
+        unreadable.Permissions.splice(0, unreadable.Permissions.length, ...unreadable.Permissions.filter(p => p.RoleID !== INTERN_ROLE_ID));
+        const object = await fullWidthEntityObject(unreadable);
+        hoisted.runAction.mockResolvedValue({ Success: true, Message: 'ok', Params: [
+            { Name: 'One', Type: 'Output', Value: object },
+            { Name: 'Many', Type: 'Output', Value: [object] },
+        ] });
+        const result = await new ActionResolver().RunAction({ ActionID: ACTION_ID } as RunActionInput, runActionContext(unreadable, owner(Intern())));
+        // Exactly the shape this output had before entity objects were projected: the single object's
+        // Value dropped, the array's item nulled (and, as ever, the list serialized index-keyed).
+        expect(JSON.parse(result.ResultData!)).toEqual({ 0: { Name: 'One', Type: 'Output' }, 1: { Name: 'Many', Type: 'Output', Value: [null] } });
+    });
+
+    it('sends the full row to a caller denied nothing', async () => {
+        expect(await runActionReturning([FullWidthEmployeeRow()], owner(HRUser()))).toEqual([FullWidthEmployeeRow()]);
     });
 });
