@@ -228,6 +228,30 @@ export class FieldSecuritySQLGate {
         return column === null ? null : new FieldSecurityError(column, entity.Name);
     }
 
+    /**
+     * The entities whose base view or base table `sql` reads as a relation: a name after FROM, JOIN
+     * or APPLY, or in a FROM list, wherever it appears (subqueries and CTE bodies included), with
+     * schema qualifiers skipped. A name in a literal or a comment is not a relation. A bare name
+     * shared by entities in several schemas yields each of them, so the set never misses a read.
+     * Null when the text cannot be read the way the database reads it.
+     */
+    public static RelationEntities(sql: string | null | undefined, catalog: readonly EntityInfo[], dialect: SQLScreeningDialect): EntityInfo[] | null {
+        if (typeof sql !== 'string' || sql.trim().length === 0) {
+            return [];
+        }
+        const scan = ScanSQLForScreening(sql, dialect);
+        if (!scan.Classified) {
+            return null;
+        }
+        const index = FieldSecuritySQLGate.relationIndex(catalog);
+        const found = new Set<EntityInfo>();
+        scan.Tokens.forEach((token, i) => {
+            if (!FieldSecuritySQLGate.isName(token) || !FieldSecuritySQLGate.isRelationDeclaration(scan.Tokens, i)) return;
+            index.get(FoldIdentifier(token.Text))?.forEach((entity) => found.add(entity));
+        });
+        return [...found];
+    }
+
     /** True when `user` is denied at least one field on at least one of `entities`. */
     public static UserCarriesDenials(entities: Iterable<EntityInfo | null | undefined>, user: UserInfo): boolean {
         for (const entity of entities) {
