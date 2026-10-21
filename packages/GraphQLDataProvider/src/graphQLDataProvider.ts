@@ -1175,11 +1175,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 // Log aggregate request for debugging
                 if (innerParams.Aggregates?.length > 0) {
-                    console.log('[GraphQLDataProvider] Sending RunView with aggregates:', {
-                        entityName: entity,
-                        queryName: qName,
-                        aggregateCount: innerParams.Aggregates.length,
-                        aggregates: innerParams.Aggregates
+                    LogStatusEx({
+                        message: '[GraphQLDataProvider] Sending RunView with aggregates:',
+                        verboseOnly: true,
+                        additionalArgs: [{
+                            entityName: entity,
+                            queryName: qName,
+                            aggregateCount: innerParams.Aggregates.length,
+                            aggregates: innerParams.Aggregates
+                        }]
                     });
                 }
 
@@ -1188,11 +1192,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // Log aggregate response for debugging
                     const responseAggregates = viewData[qName].AggregateResults;
                     if (innerParams.Aggregates?.length > 0) {
-                        console.log('[GraphQLDataProvider] Received aggregate results:', {
-                            entityName: entity,
-                            aggregateResultCount: responseAggregates?.length || 0,
-                            aggregateResults: responseAggregates,
-                            aggregateExecutionTime: viewData[qName].AggregateExecutionTime
+                        LogStatusEx({
+                            message: '[GraphQLDataProvider] Received aggregate results:',
+                            verboseOnly: true,
+                            additionalArgs: [{
+                                entityName: entity,
+                                aggregateResultCount: responseAggregates?.length || 0,
+                                aggregateResults: responseAggregates,
+                                aggregateExecutionTime: viewData[qName].AggregateExecutionTime
+                            }]
                         });
                     }
 
@@ -2310,9 +2318,36 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const shouldMergeDeltaResponse = filterToDirtyOnly || effectiveReturnMode === 'datestamps_only';
             const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
             const isDeniedRead = (fieldName: string) => deniedReadFields.has(fieldName.trim().toLowerCase());
+            // Exclude non-Active (Deprecated / Disabled) fields from Save() unless the caller
+            // explicitly modified them, avoiding false-positive BaseEntity.Get / BaseEntity.SetMany
+            // deprecation warnings on Create or forced full saves.
+            const isNonActiveField = (f: EntityField) =>
+                Boolean(f.EntityFieldInfo.Status && f.EntityFieldInfo.Status !== 'Active');
+            const isFieldWrittenForSave = (f: EntityField): boolean => {
+                if (this.isFieldDirtyOnChain(entity, f)) {
+                    return true;
+                }
+                if (!isUpdate) {
+                    if (!f.NeverSet) {
+                        return true;
+                    }
+                    if (entity.ISAParent && entity.EntityInfo.ParentEntityFieldNames?.has(f.Name)) {
+                        const parentField = entity.ISAParent.Fields.find(pf => pf.Name === f.Name);
+                        if (parentField && !parentField.NeverSet) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            };
             const filteredFields = entity.Fields.filter(f =>
                 (!f.ReadOnly || (f.IsPrimaryKey && (entity.IsSaved || isaPromotionCreate))) &&
-                (f.IsPrimaryKey || (!f.NotLoaded && !isDeniedRead(f.Name) && (!filterToDirtyOnly || this.isFieldDirtyOnChain(entity, f)))));
+                (f.IsPrimaryKey || (
+                    !f.NotLoaded &&
+                    !isDeniedRead(f.Name) &&
+                    (!isNonActiveField(f) || isFieldWrittenForSave(f)) &&
+                    (!filterToDirtyOnly || this.isFieldDirtyOnChain(entity, f))
+                )));
             const returnFields = entity.Fields.filter(f => {
                 if (isDeniedRead(f.Name)) {
                     return false;
@@ -2903,7 +2938,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         // Batch: use GetMultipleDatasetStatusByName
         const names = queue.map(q => q.datasetName);
-        LogStatus(`⚡ [Coalesce] Batching ${names.length} dataset status checks into 1 request: [${names.join(', ')}]`);
+        LogStatusEx({
+            message: `⚡ [Coalesce] Batching ${names.length} dataset status checks into 1 request: [${names.join(', ')}]`,
+            verboseOnly: true
+        });
 
         try {
             const batchQuery = gql`query GetMultipleDatasetStatusByName($DatasetNames: [String!]!) {
@@ -3411,7 +3449,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
 
         // Start a new refresh
-        console.log('[GraphQL] Starting token refresh...');
+        LogStatusEx({ message: '[GraphQL] Starting token refresh...', verboseOnly: true });
         this._refreshPromise = this.performTokenRefresh();
 
         // Also store on singleton if in singleton mode
@@ -3421,7 +3459,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         try {
             await this._refreshPromise;
-            console.log('[GraphQL] Token refresh completed successfully');
+            LogStatusEx({ message: '[GraphQL] Token refresh completed successfully', verboseOnly: true });
         } finally {
             // Clear the promise when done
             this._refreshPromise = null;
@@ -3914,10 +3952,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     timeSinceEmission >= this.SUBSCRIPTION_IDLE_TIMEOUT_MS;
 
                 if (shouldCleanup) {
-                    console.log(`[GraphQLDataProvider] Marking session ${sessionId} for cleanup: ` +
-                        `activeSubscribers=${value.activeSubscribers}, ` +
-                        `timeSinceRequested=${Math.round(timeSinceRequested/1000)}s, ` +
-                        `timeSinceEmission=${Math.round(timeSinceEmission/1000)}s`);
+                    LogStatusEx({
+                        message: `[GraphQLDataProvider] Marking session ${sessionId} for cleanup: ` +
+                            `activeSubscribers=${value.activeSubscribers}, ` +
+                            `timeSinceRequested=${Math.round(timeSinceRequested/1000)}s, ` +
+                            `timeSinceEmission=${Math.round(timeSinceEmission/1000)}s`,
+                        verboseOnly: true
+                    });
                     toRemove.push(sessionId);
                 }
             });
@@ -3930,7 +3971,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         entry.subject.complete(); // Completes for ALL subscribers
                         entry.subscription.unsubscribe(); // Closes WebSocket subscription
                         this._pushStatusSubjects.delete(sessionId);
-                        console.log(`[GraphQLDataProvider] Cleaned up stale subscription for session: ${sessionId}`);
+                        LogStatusEx({ message: `[GraphQLDataProvider] Cleaned up stale subscription for session: ${sessionId}`, verboseOnly: true });
                     } catch (e) {
                         console.error(`[GraphQLDataProvider] Error cleaning up subscription for ${sessionId}:`, e);
                     }
@@ -3938,14 +3979,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             });
 
             if (toRemove.length > 0) {
-                console.log(`[GraphQLDataProvider] Cleaned up ${toRemove.length} stale subscription(s)`);
+                LogStatusEx({ message: `[GraphQLDataProvider] Cleaned up ${toRemove.length} stale subscription(s)`, verboseOnly: true });
             }
 
             // If no subscriptions remain and client is old, dispose of it
             if (this._pushStatusSubjects.size === 0 && this._wsClient && this._wsClientCreatedAt) {
                 const clientAge = now - this._wsClientCreatedAt;
                 if (clientAge > this.WS_CLIENT_MAX_AGE_MS) {
-                    console.log('[GraphQLDataProvider] Disposing of idle WebSocket client');
+                    LogStatusEx({ message: '[GraphQLDataProvider] Disposing of idle WebSocket client', verboseOnly: true });
                     this.disposeWSClient();
                 }
             }
@@ -3980,7 +4021,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             errorObj?.message?.includes('JWT_EXPIRED');
 
                         if (isTokenExpired) {
-                            console.log('[GraphQLDataProvider] WebSocket JWT token expired, refreshing and reconnecting...');
+                            LogStatusEx({ message: '[GraphQLDataProvider] WebSocket JWT token expired, refreshing and reconnecting...', verboseOnly: true });
                             try {
                                 // Refresh the token
                                 await this.RefreshToken();
@@ -4087,7 +4128,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                 errorObj?.message?.includes('JWT_EXPIRED');
 
                             if (isTokenExpired) {
-                                console.log('[GraphQLDataProvider] PushStatusUpdates JWT token expired, refreshing and reconnecting...');
+                                LogStatusEx({ message: '[GraphQLDataProvider] PushStatusUpdates JWT token expired, refreshing and reconnecting...', verboseOnly: true });
                                 try {
                                     // Refresh the token
                                     await this.RefreshToken();
@@ -4595,7 +4636,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 this._cacheInvalidationSubscription = null;
             },
             complete: () => {
-                console.log('[GraphQLDataProvider] Cache invalidation subscription completed, will re-establish on next WebSocket creation');
+                LogStatusEx({ message: '[GraphQLDataProvider] Cache invalidation subscription completed, will re-establish on next WebSocket creation', verboseOnly: true });
                 this._cacheInvalidationSubscription = null;
             },
         });
