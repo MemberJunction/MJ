@@ -109,7 +109,7 @@ cd packages/PackageName && pnpm run build   # single package — use this, NOT t
 ```
 After making code changes, **always compile the affected package** and fix all TypeScript errors before proceeding.
 
-**pnpm workspace**: add dependencies to the individual package's `package.json`, then run `pnpm install` **at the repository root**. Never run it inside a package directory. pnpm enforces declared dependencies strictly — a package that imports something it doesn't declare fails to resolve rather than falling through to a hoisted copy, so declare every import.
+**pnpm workspace**: add dependencies to the individual package's `package.json`, then run `pnpm install` **at the repository root**. Never run it inside a package directory. pnpm is strict: an undeclared import fails to resolve, so declare every one.
 
 **Multi-repo dev (MJ + Open App repos)**: `mj dev workspace` builds a pnpm workspace over a parent folder of sibling clones — never hand-link repos (`pnpm link`, `node_modules` symlinks, copying another worktree's `dist/`) or install inside a member. A hand link duplicates `type-graphql` (MJAPI: `CannotDetermineGraphQLTypeError`) — undo it and reinstall at the workspace root; never patch `dist/`. Setup, daily loop, recovery: [`guides/DEV_WORKSPACE_QUICKSTART.md`](guides/DEV_WORKSPACE_QUICKSTART.md).
 
@@ -124,8 +124,6 @@ After making code changes, **always compile the affected package** and fix all T
 **Never stage or commit local host artifacts** — `mj.config.cjs`, `mj.config.json`, or generated host folders (`packages/GeneratedEntities/**`, `packages/MJAPI/src/generated/**`, `packages/MJExplorer/src/app/generated/**`) — they are per-machine.
 
 **Migration layout**: hand-written DDL → at least 50 blank lines → CodeGen comment block → appended CodeGen output. No ad-hoc metadata inserts/updates in migrations — metadata lives in `metadata/*.json` (`mj sync push`). Details: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
-
-**Polymorphic foreign keys (`EntityField.EntityIDFieldName`)**: Whenever a table has a polymorphic FK column pair (e.g., `EntityID` + `RecordID`, `SourceEntityID` + `SourceRecordID`, `TargetEntityID` + `TargetRecordID`), always decorate the record-ID field's `EntityField` metadata with `EntityIDFieldName` pointing to its companion entity column in `metadata/entities/.polymorphic-fk-entity-fields.json` (never inline in SQL migrations, and never rely on column-name heuristics in code). Details: [`metadata/CLAUDE.md`](metadata/CLAUDE.md).
 
 ---
 
@@ -148,7 +146,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 | Path | Scope |
 |---|---|
 | [`migrations/CLAUDE.md`](migrations/CLAUDE.md) | Migration authoring — naming, hardcoded UUIDs, system columns CodeGen owns, CHECK constraints, CodeGen handoff |
-| [`metadata/CLAUDE.md`](metadata/CLAUDE.md) | Metadata authoring — `@lookup`/`@file`/`@parent` refs, `uuidgen` primary keys, metadata ships only as release migrations (no install-time metadata phase), seeding lookup tables, application metadata |
+| [`metadata/CLAUDE.md`](metadata/CLAUDE.md) | Metadata authoring — `@lookup`/`@file`/`@parent` refs, `uuidgen` primary keys, metadata ships only as release migrations (no install-time metadata phase), seeding lookup tables, application metadata, polymorphic-FK `EntityIDFieldName` |
 | [`metadata/components/CLAUDE.md`](metadata/components/CLAUDE.md) | Interactive component authoring — component architecture rules, the `ProductRevenueMatrix` reference implementation |
 | [`docker/CLAUDE.md`](docker/CLAUDE.md) | Docker workbench + MJAPI container configurations |
 | [`stats/CLAUDE.md`](stats/CLAUDE.md) | Repo LOC stats — generated files, do not hand-edit |
@@ -166,7 +164,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 
 ### Guides — the complete index is [`guides/README.md`](guides/README.md)
 
-41 cross-cutting "read this before you build that" guides, categorized. **Consult the index before working in an unfamiliar area** — they capture patterns already litigated. Frequently needed: [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
+Cross-cutting "read this before you build that" guides, categorized. **Consult the index before working in an unfamiliar area** — they capture patterns already litigated. Frequently needed: [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
 
 **UI work is layered — L0 runtime → L1 widget → L2 composite → L3 Explorer surface.** Nothing below L3 imports `@angular/router` or an Explorer package; nothing at L3 holds domain logic. Read [`guides/UI_LAYERING_GUIDE.md`](guides/UI_LAYERING_GUIDE.md) before building any UI, in this repo or any MJ app repo.
 
