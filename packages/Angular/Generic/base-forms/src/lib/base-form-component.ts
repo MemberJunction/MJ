@@ -758,18 +758,29 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       if (this._pendingRecords.length > 0) {
         const md = this.ProviderToUse;
         const tg = await md.CreateTransactionGroup();
-        this.record.TransactionGroup = tg;
-        await this.record.Save();
+        const members: BaseEntity[] = [this.record, ...this._pendingRecords.map(x => x.entityObject)];
+        try {
+          this.record.TransactionGroup = tg;
+          await this.record.Save();
 
-        for (const x of this._pendingRecords) {
-          x.entityObject.TransactionGroup = tg;
-          if (x.action === 'save') {
-            await x.entityObject.Save();
-          } else {
-            await x.entityObject.Delete();
+          for (const x of this._pendingRecords) {
+            x.entityObject.TransactionGroup = tg;
+            if (x.action === 'save') {
+              await x.entityObject.Save();
+            } else {
+              await x.entityObject.Delete();
+            }
+          }
+          return await tg.Submit();
+        } finally {
+          // A member that keeps this group after Submit would queue its next Save()/Delete() into a
+          // group that is already complete, and that call would report success without sending anything.
+          for (const member of members) {
+            if (member.TransactionGroup === tg) {
+              member.TransactionGroup = null;
+            }
           }
         }
-        return await tg.Submit();
       } else {
         return await this.record.Save();
       }

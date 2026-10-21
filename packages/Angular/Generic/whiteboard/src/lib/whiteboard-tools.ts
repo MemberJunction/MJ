@@ -81,6 +81,7 @@ export const WHITEBOARD_TOOL_NAMES = {
   MoveItem: 'Whiteboard_MoveItem',
   RemoveItem: 'Whiteboard_RemoveItem',
   StyleItem: 'Whiteboard_StyleItem',
+  SetTag: 'Whiteboard_SetTag',
   AddPage: 'Whiteboard_AddPage',
   SwitchPage: 'Whiteboard_SwitchPage',
   RenamePage: 'Whiteboard_RenamePage'
@@ -120,7 +121,8 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         text: { type: 'string', description: 'The note text. Keep it short — sticky-note sized.' },
         x: { type: 'number', description: 'Left position in board coordinates. Omit to auto-place near existing content.' },
         y: { type: 'number', description: 'Top position in board coordinates. Omit to auto-place near existing content.' },
-        fontSize: { type: 'number', enum: [...WHITEBOARD_FONT_SIZES], description: 'Optional note font size in px (curated steps).' }
+        fontSize: { type: 'number', enum: [...WHITEBOARD_FONT_SIZES], description: 'Optional note font size in px (curated steps).' },
+        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' }
       },
       required: ['text']
     }
@@ -137,7 +139,8 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         x: { type: 'number', description: 'Left position in board coordinates.' },
         y: { type: 'number', description: 'Top position in board coordinates.' },
         w: { type: 'number', description: 'Width in px. Defaults to 172.' },
-        h: { type: 'number', description: 'Height in px. Defaults to 56.' }
+        h: { type: 'number', description: 'Height in px. Defaults to 56.' },
+        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' }
       },
       required: ['label']
     }
@@ -154,7 +157,8 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         w: { type: 'number', description: 'Optional wrap width in px (60-800). Long text wraps at this width — use for sentences/paragraphs; omit for short labels.' },
         fontSize: { type: 'number', enum: [...WHITEBOARD_FONT_SIZES], description: 'Optional label font size in px (curated steps).' },
         fontFamily: { type: 'string', enum: ['sans', 'serif', 'mono'], description: 'Optional font family. Defaults to sans.' },
-        bold: { type: 'boolean', description: 'Optional bold weight. Labels render bold by default.' }
+        bold: { type: 'boolean', description: 'Optional bold weight. Labels render bold by default.' },
+        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' }
       },
       required: ['text']
     }
@@ -169,7 +173,8 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         x: { type: 'number', description: 'Left position in board coordinates. Omit to auto-place near existing content.' },
         y: { type: 'number', description: 'Top position in board coordinates.' },
         w: { type: 'number', description: 'Panel width in px (160-800). Defaults to 280.' },
-        h: { type: 'number', description: 'Optional max height in px (80-800); content beyond it is clipped. Omit for content-driven height.' }
+        h: { type: 'number', description: 'Optional max height in px (80-800); content beyond it is clipped. Omit for content-driven height.' },
+        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' }
       },
       required: ['markdown']
     }
@@ -185,7 +190,8 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         x: { type: 'number', description: 'Left position in board coordinates. Omit to auto-place near existing content.' },
         y: { type: 'number', description: 'Top position in board coordinates.' },
         w: { type: 'number', description: 'Widget width in px (200-960). Defaults to 360.' },
-        h: { type: 'number', description: 'Widget height in px (120-800). Defaults to 240.' }
+        h: { type: 'number', description: 'Widget height in px (120-800). Defaults to 240.' },
+        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' }
       },
       required: ['html']
     }
@@ -277,6 +283,18 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
     }
   },
   {
+    Name: WHITEBOARD_TOOL_NAMES.SetTag,
+    Description: 'Set or clear the role tag of an existing item (any kind). The tag carries no behavior: the host styles items by it (e.g. mark a sequence step "step-done" once the user completes it). Pass an empty tag to clear.',
+    ParametersSchema: {
+      type: 'object',
+      properties: {
+        itemId: { type: 'string', description: 'ID of the item to tag.' },
+        tag: { type: 'string', description: 'The new role tag (e.g. "slot", "heading", "step-done"); empty or omitted clears it.' }
+      },
+      required: ['itemId']
+    }
+  },
+  {
     Name: WHITEBOARD_TOOL_NAMES.AddPage,
     Description: 'Create a NEW PAGE on the whiteboard and switch to it. Start a new page for a new topic, exercise or diagram instead of crowding the current board — pages keep prior work intact and the user can flip back any time. All item tools (notes, shapes, widgets, …) always target the page that is currently active.',
     ParametersSchema: {
@@ -342,6 +360,12 @@ function ok(itemId: string | undefined, summary: string): string {
 function fail(error: string): string {
   const result: WhiteboardToolResult = { success: false, error };
   return JSON.stringify(result);
+}
+
+/** The optional `tag` arg of every Add* tool as an item patch fragment — `{}` when absent or blank. */
+function tagPatch(args: Record<string, unknown>): { Tag?: string } {
+  const tag = asString(args['tag'])?.trim();
+  return tag ? { Tag: tag } : {};
 }
 
 function asString(value: unknown): string | undefined {
@@ -445,6 +469,7 @@ export function ApplyWhiteboardAgentTool(state: WhiteboardState, toolName: strin
     case WHITEBOARD_TOOL_NAMES.MoveItem: return moveItem(state, args);
     case WHITEBOARD_TOOL_NAMES.RemoveItem: return removeItem(state, args);
     case WHITEBOARD_TOOL_NAMES.StyleItem: return styleItem(state, args);
+    case WHITEBOARD_TOOL_NAMES.SetTag: return setTag(state, args);
     case WHITEBOARD_TOOL_NAMES.AddPage: return addPage(state, args);
     case WHITEBOARD_TOOL_NAMES.SwitchPage: return switchPage(state, args);
     case WHITEBOARD_TOOL_NAMES.RenamePage: return renamePage(state, args);
@@ -462,6 +487,23 @@ function okPage(pageId: string, summary: string): string {
 /** The page list rendered into not-found errors so the model can self-correct. */
 function pageListText(state: WhiteboardState): string {
   return state.Pages.map((p) => `"${p.Name}"${p.Active ? ' (active)' : ''}`).join(', ');
+}
+
+function setTag(state: WhiteboardState, args: Record<string, unknown>): string {
+  const itemId = asString(args['itemId']);
+  if (!itemId) {
+    return fail('SetTag requires "itemId".');
+  }
+  if (!state.GetItem(itemId)) {
+    return fail(`SetTag: no item with id "${itemId}".`);
+  }
+  const tag = asString(args['tag'])?.trim() ?? '';
+  // ONE UpdateItem inside ONE batch — a single undo step and a single journal entry.
+  const applied = state.RunBatch(() => state.UpdateItem(itemId, { Tag: tag }, 'agent'));
+  if (!applied) {
+    return fail('The host application canceled this operation.');
+  }
+  return ok(itemId, tag ? `Tagged ${itemId} "${tag}".` : `Cleared the tag on ${itemId}.`);
 }
 
 function addPage(state: WhiteboardState, args: Record<string, unknown>): string {
@@ -519,7 +561,7 @@ function addNote(state: WhiteboardState, args: Record<string, unknown>): string 
   const x = asNumber(args['x']) ?? place.X;
   const y = asNumber(args['y']) ?? place.Y;
   const item = state.RunBatch(() =>
-    state.AddItem({ Kind: 'sticky', X: x, Y: y, Text: text, Rotation: 1.2, ...style.patch }, 'agent'));
+    state.AddItem({ Kind: 'sticky', X: x, Y: y, Text: text, Rotation: 1.2, ...style.patch, ...tagPatch(args) }, 'agent'));
   if (!item) {
     return fail('The host application canceled this operation.');
   }
@@ -542,7 +584,7 @@ function addShape(state: WhiteboardState, args: Record<string, unknown>): string
   const w = asNumber(args['w']) ?? 172;
   const h = asNumber(args['h']) ?? 56;
   const item = state.RunBatch(() =>
-    state.AddItem({ Kind: 'shape', Shape: shape, X: x, Y: y, W: w, H: h, Label: label, Sub: asString(args['sub']) }, 'agent'));
+    state.AddItem({ Kind: 'shape', Shape: shape, X: x, Y: y, W: w, H: h, Label: label, Sub: asString(args['sub']), ...tagPatch(args) }, 'agent'));
   if (!item) {
     return fail('The host application canceled this operation.');
   }
@@ -563,7 +605,7 @@ function addText(state: WhiteboardState, args: Record<string, unknown>): string 
   const y = asNumber(args['y']) ?? place.Y;
   const wRaw = asNumber(args['w']);
   const w = wRaw !== undefined ? Math.min(800, Math.max(60, Math.round(wRaw))) : undefined;
-  const item = state.RunBatch(() => state.AddItem({ Kind: 'text', X: x, Y: y, Text: text, ...(w !== undefined ? { W: w } : {}), ...style.patch }, 'agent'));
+  const item = state.RunBatch(() => state.AddItem({ Kind: 'text', X: x, Y: y, Text: text, ...(w !== undefined ? { W: w } : {}), ...style.patch, ...tagPatch(args) }, 'agent'));
   if (!item) {
     return fail('The host application canceled this operation.');
   }
@@ -593,7 +635,7 @@ function addMarkdown(state: WhiteboardState, args: Record<string, unknown>): str
   const w = clampedNumber(args['w'], 160, 800, 280) as number;
   const h = clampedNumber(args['h'], 80, 800, undefined);
   const item = state.RunBatch(() =>
-    state.AddItem({ Kind: 'markdown', X: x, Y: y, W: w, ...(h !== undefined ? { H: h } : {}), Markdown: markdown }, 'agent'));
+    state.AddItem({ Kind: 'markdown', X: x, Y: y, W: w, ...(h !== undefined ? { H: h } : {}), Markdown: markdown, ...tagPatch(args) }, 'agent'));
   if (!item) {
     return fail('The host application canceled this operation.');
   }
@@ -615,7 +657,7 @@ function addHtml(state: WhiteboardState, args: Record<string, unknown>): string 
   const w = clampedNumber(args['w'], 200, 960, 360) as number;
   const h = clampedNumber(args['h'], 120, 800, 240) as number;
   const item = state.RunBatch(() =>
-    state.AddItem({ Kind: 'html', X: x, Y: y, W: w, H: h, Html: html, Title: title }, 'agent'));
+    state.AddItem({ Kind: 'html', X: x, Y: y, W: w, H: h, Html: html, Title: title, ...tagPatch(args) }, 'agent'));
   if (!item) {
     return fail('The host application canceled this operation.');
   }
