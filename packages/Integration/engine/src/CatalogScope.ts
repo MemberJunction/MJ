@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { BaseEntity, Metadata, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
+import { BaseEntity, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import {
     CATALOG_EDGE_COLUMNS,
@@ -123,7 +123,8 @@ function engineUser(): UserInfo {
 /** A workspace with this code but not the migration has nothing to load — and must not try. */
 function catalogEntitiesRegistered(): boolean {
     try {
-        const md = Metadata.Provider;
+        // The provider the integration engine was configured with, not the process-global one.
+        const md = IntegrationEngineBase.Instance.ProviderToUse;
         return !!md?.EntityByName(ENTITY_COMPANY_INTEGRATION_OBJECTS) && !!md?.EntityByName(ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS);
     } catch {
         return false;
