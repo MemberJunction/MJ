@@ -33,6 +33,25 @@ export interface SQLScreeningSpan {
     End: number;
 }
 
+/** Kinds of token {@link ScanSQLForScreening} reports. Comments are not tokens. */
+export type SQLScreeningTokenKind = 'word' | 'identifier' | 'number' | 'string' | 'symbol';
+
+/**
+ * One token the database reads as code, or one literal. Whitespace and comments are not tokens.
+ */
+export interface SQLScreeningToken {
+    Kind: SQLScreeningTokenKind;
+    /**
+     * The text as the database reads it: a quoted identifier's bare name with its doubled quote
+     * characters undone (`[a]]b]` reads `a]b`); every other kind exactly as written.
+     */
+    Text: string;
+    /** Offset of the first character, including a quote or prefix. */
+    Start: number;
+    /** Offset just past the last character. */
+    End: number;
+}
+
 /** Result of {@link ScanSQLForScreening}. */
 export interface SQLScreeningScan {
     /** The dialect whose rules were applied. */
@@ -66,6 +85,12 @@ export interface SQLScreeningScan {
      * statement's opening keyword read this.
      */
     LeadingWord: string | null;
+    /**
+     * Every token in order: unquoted words, quoted identifiers, numbers, string literals and
+     * single-character symbols. When {@link Classified} is false, the list stops where the scan
+     * stopped.
+     */
+    Tokens: SQLScreeningToken[];
 }
 
 /** Lexical rules that differ between dialects. */
@@ -158,6 +183,7 @@ class SQLScreeningScanner {
     private readonly spans: SQLScreeningSpan[] = [];
     private readonly code: string[] = [];
     private readonly codeWithIdentifiers: string[] = [];
+    private readonly tokens: SQLScreeningToken[] = [];
     private commentCount = 0;
     private pos = 0;
     /** Offset of the first token that is not whitespace or a comment, once one is reached. */
@@ -199,6 +225,7 @@ class SQLScreeningScanner {
         if (this.rules.BracketIdentifiers && c === '[') return this.readQuotedIdentifier(']');
         if (DIGIT.test(c) || (c === '.' && DIGIT.test(next))) return this.readNumber();
         if (this.rules.WordStart.test(c)) return this.readWord();
+        if (!WHITESPACE.test(c)) this.pushToken('symbol', c, this.pos, this.pos + 1);
         this.emitCode(this.pos + 1);
         return null;
     }
@@ -287,6 +314,7 @@ class SQLScreeningScanner {
         if (this.rules.BareExponent && (following === 'e' || following === 'E') && this.rules.WordStart.test(afterThat)) {
             return 'a number is followed by a word that starts with E, which the server can read as part of the number';
         }
+        this.pushToken('number', this.sql.slice(this.pos, end), this.pos, end);
         this.emitCode(end);
         if (following !== '' && this.rules.WordStart.test(following)) this.emitBoundary();
         return null;
@@ -299,6 +327,7 @@ class SQLScreeningScanner {
         if (this.pos === this.leadingTokenStart && !NON_ASCII.test(this.sql[j] ?? '')) {
             this.leadingWord = this.sql.slice(this.pos, j);
         }
+        this.pushToken('word', this.sql.slice(this.pos, j), this.pos, j);
         this.emitCode(j);
         return null;
     }
@@ -366,9 +395,16 @@ class SQLScreeningScanner {
     /** Records a span up to `end` and writes a space for it, or an identifier's bare name. */
     private emitSpan(kind: SQLScreeningSpanKind, end: number, identifierName?: string): void {
         this.spans.push({ Kind: kind, Start: this.pos, End: end });
+        if (kind === 'string') this.pushToken('string', this.sql.slice(this.pos, end), this.pos, end);
+        if (kind === 'identifier') this.pushToken('identifier', identifierName ?? '', this.pos, end);
         this.code.push(' ');
         this.codeWithIdentifiers.push(identifierName === undefined ? ' ' : ` ${identifierName} `);
         this.pos = end;
+    }
+
+    /** Records one token. */
+    private pushToken(kind: SQLScreeningTokenKind, text: string, start: number, end: number): void {
+        this.tokens.push({ Kind: kind, Text: text, Start: start, End: end });
     }
 
     /** Writes a token boundary that the input leaves implicit. */
@@ -393,6 +429,7 @@ class SQLScreeningScanner {
             Code: this.code.join(''),
             CodeWithIdentifiers: this.codeWithIdentifiers.join(''),
             LeadingWord: this.leadingWord,
+            Tokens: this.tokens,
         };
     }
 }
