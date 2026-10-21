@@ -36,6 +36,7 @@ function fakeEntity(name: string, fieldNames: string[]) {
         ID: name === 'Customers' ? 'customers-id' : 'orders-id',
         Name: name,
         EnableFieldLevelSecurity: true,
+        FieldLevelSecurityApplies: true,
         Fields: fieldNames.map(n => ({ Name: n })),
         FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
         PreferredCommunicationField: '',
