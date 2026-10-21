@@ -311,6 +311,21 @@ describe('the refusal for a denied column and for a nonexistent one is the same'
             .toBe(FieldSecurityDenialMessage('salry', 'Employees'));
     });
 
+    it('reads a quoted, dotted PostgreSQL path and ignores a message with no column', () => {
+        const e = employees();
+        expect(FieldSecuritySQLGate.ErrorForInvalidColumn(new Error('column "E"."Salry" does not exist'), e, intern)?.message)
+            .toBe(FieldSecurityDenialMessage('Salry', 'Employees'));
+        expect(FieldSecuritySQLGate.ErrorForInvalidColumn(new Error('relation "x" does not exist'), e, intern)).toBeNull();
+    });
+
+    it('parses a crafted error message in linear time (no catastrophic backtracking)', () => {
+        const e = employees();
+        const crafted = 'column !' + '.!'.repeat(50_000) + ' x';
+        const started = performance.now();
+        expect(FieldSecuritySQLGate.ErrorForInvalidColumn(new Error(crafted), e, intern)).toBeNull();
+        expect(performance.now() - started).toBeLessThan(250);
+    });
+
     it('reports a PostgreSQL unquoted denied name in lower case, as PostgreSQL reports an unknown one', () => {
         expect(refusal({ ExtraFilter: 'Salary > 1' }, intern, 'postgresql')).toBe(FieldSecurityDenialMessage('salary', 'Employees'));
     });

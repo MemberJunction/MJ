@@ -267,20 +267,77 @@ export class FieldSecuritySQLGate {
      * last part, which is what the gate reports for the same reference.
      */
     private static invalidColumnName(message: string): string | null {
+        // Database messages are short; bounding the input keeps every scan below cheap even if an
+        // error echoes a long caller-supplied string.
+        const text = message.length > FieldSecuritySQLGate.maxErrorMessageScanLength
+            ? message.slice(0, FieldSecuritySQLGate.maxErrorMessageScanLength)
+            : message;
         const patterns = [
             /Invalid column name '((?:[^']|'')+)'/i,
             /multi-part identifier "((?:[^"]|"")+)" could not be bound/i,
             /column "((?:[^"]|"")+)" does not exist/i,
-            /column ((?:[^\s"]+|"(?:[^"]|"")+")(?:\.(?:[^\s"]+|"(?:[^"]|"")+"))*) does not exist/i,
         ];
         for (const pattern of patterns) {
-            const match = pattern.exec(message);
+            const match = pattern.exec(text);
             if (match) {
-                const parts = match[1].split('.');
-                return parts[parts.length - 1].replace(/^"|"$/g, '').replace(/''/g, "'").replace(/""/g, '"');
+                return FieldSecuritySQLGate.lastIdentifierPart(match[1]);
             }
         }
+        const path = FieldSecuritySQLGate.postgresColumnPath(text);
+        return path === null ? null : FieldSecuritySQLGate.lastIdentifierPart(path);
+    }
+
+    /** Longest prefix of a database error message scanned for a column name. */
+    private static readonly maxErrorMessageScanLength = 2000;
+
+    /** The last dot-separated part of an identifier path, unquoted and unescaped. */
+    private static lastIdentifierPart(path: string): string {
+        const parts = path.split('.');
+        return parts[parts.length - 1].replace(/^"|"$/g, '').replace(/''/g, "'").replace(/""/g, '"');
+    }
+
+    /**
+     * The identifier path in a PostgreSQL `column <path> does not exist` message (for example
+     * `e.salry` or `"E"."Salry"`), or null. Scanned by hand rather than with a regular expression:
+     * the path's parts may themselves contain dots, and a pattern that allows that backtracks
+     * exponentially on crafted input.
+     */
+    private static postgresColumnPath(message: string): string | null {
+        const lower = message.toLowerCase();
+        const prefix = 'column ';
+        const suffix = ' does not exist';
+        let from = 0;
+        for (let at = lower.indexOf(prefix, from); at !== -1; at = lower.indexOf(prefix, from)) {
+            const start = at + prefix.length;
+            const end = FieldSecuritySQLGate.identifierPathEnd(message, start);
+            if (end > start && lower.startsWith(suffix, end)) {
+                return message.slice(start, end);
+            }
+            from = at + 1;
+        }
         return null;
+    }
+
+    /**
+     * Index just past an identifier path starting at `start`: a run of non-space characters in
+     * which double-quoted segments (with `""` escapes) may contain spaces. Returns `start` when no
+     * path starts there, and -1 for an unterminated quote.
+     */
+    private static identifierPathEnd(message: string, start: number): number {
+        let i = start;
+        while (i < message.length && !/\s/.test(message[i])) {
+            if (message[i] !== '"') {
+                i++;
+                continue;
+            }
+            i++; // opening quote
+            while (i < message.length && !(message[i] === '"' && message[i + 1] !== '"')) {
+                i += message[i] === '"' ? 2 : 1; // an escaped "" counts as one character
+            }
+            if (i >= message.length) return -1;
+            i++; // closing quote
+        }
+        return i;
     }
 
     /**
