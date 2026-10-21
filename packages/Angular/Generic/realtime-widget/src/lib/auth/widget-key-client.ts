@@ -51,6 +51,7 @@ const FIFTEEN_MINUTES_MS = 15 * 60_000;
 
 export class WidgetKeyClient {
   private readonly baseUrl: string;
+  private lastToken: string | null = null;
 
   constructor(
     apiUrl: string,
@@ -65,17 +66,21 @@ export class WidgetKeyClient {
     return this.call('/widget/session');
   }
 
-  /** Re-mints by the same key (the server's refresh path). Throws {@link WidgetKeyError}. */
-  public Refresh(): Promise<WidgetGuestSession> {
-    return this.call('/widget/session/refresh');
+  /** Re-mints by the same key (the server's refresh path), sending the current token as Bearer so `mj_sid` is preserved. Throws {@link WidgetKeyError}. */
+  public Refresh(currentToken?: string): Promise<WidgetGuestSession> {
+    return this.call('/widget/session/refresh', currentToken ?? this.lastToken ?? undefined);
   }
 
-  private async call(path: string): Promise<WidgetGuestSession> {
+  private async call(path: string, bearerToken?: string): Promise<WidgetGuestSession> {
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (bearerToken) {
+      headers['authorization'] = `Bearer ${bearerToken}`;
+    }
     let response: Awaited<ReturnType<FetchLike>>;
     try {
       response = await this.fetchImpl(`${this.baseUrl}${path}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers,
         body: JSON.stringify({ widgetKey: this.widgetKey })
       });
     } catch (error) {
@@ -106,6 +111,7 @@ export class WidgetKeyClient {
     const expires = typeof rec['expiresAt'] === 'string' ? Date.parse(rec['expiresAt']) : Number.NaN;
     const minutes = rec['voiceMaxSessionMinutes'];
     const modality = rec['modality'];
+    this.lastToken = rec['token'];
     return {
       token: rec['token'],
       expiresAtMs: Number.isFinite(expires) ? expires : Date.now() + FIFTEEN_MINUTES_MS,

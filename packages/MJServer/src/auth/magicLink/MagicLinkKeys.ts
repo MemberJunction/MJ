@@ -98,6 +98,34 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
   }
 
   /**
+   * Verifies a magic-link / widget JWT signed by this key manager, allowing an optional post-expiry
+   * grace window (in seconds) for session refresh. Returns the verified claims, or `null` when the
+   * token is malformed, signed by a different key, or expired beyond `graceSeconds`.
+   */
+  public Verify(token: string, graceSeconds = 0, nowSeconds = Math.floor(Date.now() / 1000)): MagicLinkJWTClaims | null {
+    this.ensureInitialized();
+    try {
+      const decoded = jwt.verify(token, this.publicKey!, {
+        algorithms: ['RS256'],
+        ignoreExpiration: true,
+      });
+      if (!decoded || typeof decoded !== 'object') {
+        return null;
+      }
+      const claims = decoded as MagicLinkJWTClaims;
+      if (typeof claims.exp !== 'number' || !Number.isFinite(claims.exp)) {
+        return null;
+      }
+      if (nowSeconds > claims.exp + Math.max(0, graceSeconds)) {
+        return null;
+      }
+      return claims;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Returns the JWKS document (public key set) for the JWKS endpoint.
    */
   public GetJWKS(): { keys: PublishedJWK[] } {

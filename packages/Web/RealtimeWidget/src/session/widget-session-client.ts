@@ -24,6 +24,7 @@ const REFRESH_LEAD_MS = 60_000;
  */
 export class WidgetSessionClient {
     private readonly fetchImpl: FetchLike;
+    private lastToken: string | null = null;
 
     constructor(
         private readonly apiUrl: string,
@@ -44,10 +45,10 @@ export class WidgetSessionClient {
         return this.call('/widget/session', visitorKey);
     }
 
-    /** Refreshes the guest session (server re-mints by the same key). Carries the visitor anchor so the
-     *  refreshed session keeps the same returning-visitor identity. */
-    public async Refresh(visitorKey?: string): Promise<WidgetSession> {
-        return this.call('/widget/session/refresh', visitorKey);
+    /** Refreshes the guest session (server re-mints by the same key, preserving `mj_sid` from the Bearer token).
+     *  Carries the visitor anchor so the refreshed session keeps the same returning-visitor identity. */
+    public async Refresh(visitorKey?: string, currentToken?: string): Promise<WidgetSession> {
+        return this.call('/widget/session/refresh', visitorKey, currentToken ?? this.lastToken ?? undefined);
     }
 
     /**
@@ -127,10 +128,14 @@ export class WidgetSessionClient {
         return Math.max(0, session.expiresAtMs - nowMs - REFRESH_LEAD_MS);
     }
 
-    private async call(path: string, visitorKey?: string): Promise<WidgetSession> {
+    private async call(path: string, visitorKey?: string, bearerToken?: string): Promise<WidgetSession> {
+        const headers: Record<string, string> = { 'content-type': 'application/json' };
+        if (bearerToken) {
+            headers['authorization'] = `Bearer ${bearerToken}`;
+        }
         const res = await this.fetchImpl(`${this.trimmedApiUrl()}${path}`, {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers,
             body: JSON.stringify(visitorKey ? { widgetKey: this.widgetKey, visitorKey } : { widgetKey: this.widgetKey }),
         });
         const body = (await res.json()) as WidgetSessionResponse;
@@ -146,6 +151,7 @@ export class WidgetSessionClient {
             throw new Error('Widget session response missing required fields (widgetId/applicationId/pinnedAgentId).');
         }
         const expiresAtMs = body.expiresAt ? Date.parse(body.expiresAt) : Number.NaN;
+        this.lastToken = body.token!;
         return {
             token: body.token!,
             expiresAtMs: Number.isFinite(expiresAtMs) ? expiresAtMs : Date.now() + 15 * 60_000,

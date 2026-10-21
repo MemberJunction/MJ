@@ -119,11 +119,13 @@ describe('WidgetSessionClient.ResolveIdentity (RV4)', () => {
 });
 
 describe('WidgetSessionClient.Refresh', () => {
-    it('hits the refresh endpoint', async () => {
+    it('hits the refresh endpoint and sends Authorization: Bearer <currentToken>', async () => {
         const { fn, calls } = fakeFetch(200, goodBody);
         const client = new WidgetSessionClient('https://api.test', 'pk_test_1', fn);
+        await client.Mint();
         await client.Refresh();
-        expect(calls[0].url).toBe('https://api.test/widget/session/refresh');
+        expect(calls[1].url).toBe('https://api.test/widget/session/refresh');
+        expect((calls[1].init?.headers as Record<string, string>).authorization).toBe('Bearer jwt.token.here');
     });
 });
 

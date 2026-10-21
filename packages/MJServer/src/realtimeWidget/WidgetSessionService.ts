@@ -30,6 +30,12 @@ import { ResolveIdentityByEmail, MergeVisitorIdentity, ForgetVisitor, type Resol
 const WIDGET_ENTITY = 'MJ: Conversation Widget Instances';
 const CONVERSATIONS_ENTITY = 'MJ: Conversations';
 
+/**
+ * Post-expiry grace window (in seconds) within which a widget guest session JWT may still be
+ * presented to `/widget/session/refresh` to renew the token while preserving its `mj_sid`.
+ */
+export const REFRESH_GRACE_SECONDS = 300;
+
 /** Shape of the durable visitor anchor key (opaque base64url, same alphabet as generateSessionId). */
 const VISITOR_KEY_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 
@@ -67,6 +73,12 @@ export interface MintGuestSessionInput {
    * server mints a fresh one. Ignored entirely when remembering is off.
    */
   visitorKey?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  /**
+   * The caller's current (or recently expired within {@link REFRESH_GRACE_SECONDS}) widget JWT,
+   * presented as `Authorization: Bearer <token>` on `/widget/session/refresh`. Required for refresh
+   * so the renewed token preserves the visitor's `sessionId` (`mj_sid`).
+   */
+  bearerToken?: string;  // case-violation-ok-legacy-back-compat: matches MintGuestSessionInput's existing camelCase property style
   audit?: WidgetMintAuditContext;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
@@ -217,6 +229,23 @@ export class WidgetSessionService {
    * Never throws for business failures — returns `{ success: false, errorCode }`.
    */
   public async MintGuestSession(input: MintGuestSessionInput): Promise<MintGuestSessionResult> {
+    return this.issueGuestSession(input, false);
+  }
+
+  /**
+   * Refreshes a live guest session. Requires the caller's current (or recently expired within
+   * {@link REFRESH_GRACE_SECONDS}) widget JWT in `input.bearerToken`, verifies its signature and
+   * `mj_widget_id`, and re-mints with the same `sessionId` (`mj_sid`) so the visitor retains
+   * ownership of conversations and agent sessions created before the refresh.
+   */
+  public async RefreshGuestSession(input: MintGuestSessionInput): Promise<MintGuestSessionResult> {
+    return this.issueGuestSession(input, true);
+  }
+
+  private async issueGuestSession(
+    input: MintGuestSessionInput,
+    requireExistingToken: boolean,
+  ): Promise<MintGuestSessionResult> {
     try {
       const contextUser = this.resolveLookupUser();
       if (!contextUser) {
@@ -235,6 +264,19 @@ export class WidgetSessionService {
       );
       if (!eligibility.ok) {
         return this.audited({ success: false, errorCode: eligibility.errorCode, error: 'Widget mint rejected.' }, input, widget);
+      }
+
+      let existingSessionId: string | undefined;
+      if (requireExistingToken) {
+        const verifiedSid = this.verifyRefreshBearerToken(input.bearerToken, widget.ID);
+        if (!verifiedSid) {
+          return this.audited(
+            { success: false, errorCode: 'origin_not_allowed', error: 'Widget refresh rejected.' },
+            input,
+            widget,
+          );
+        }
+        existingSessionId = verifiedSid;
       }
 
       const guestRoleName = this.resolveGuestRoleName(widget.GuestRoleID);
@@ -267,7 +309,11 @@ export class WidgetSessionService {
       // anonymous trail to that record and surface the pair so the client stamps the new conversation.
       const resolvedIdentity = await this.resolveHostIdentityIfApplicable(widget, hostIdentity, returningVisitor, contextUser);
 
-      return this.audited(this.mintToken(widget, guestRoleName, hostIdentity, returningVisitor, resolvedIdentity), input, widget);
+      return this.audited(
+        this.mintToken(widget, guestRoleName, hostIdentity, returningVisitor, resolvedIdentity, existingSessionId),
+        input,
+        widget,
+      );
     } catch (e) {
       LogError(e);
       return { success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) };
@@ -275,12 +321,24 @@ export class WidgetSessionService {
   }
 
   /**
-   * Refreshes a live guest session. The widget always holds its public key, so a
-   * refresh is a fresh mint by the same key + origin — short-TTL tokens with no
-   * refresh-token machinery (mirrors magic-link's no-refresh-token stance).
+   * Verifies the bearer token presented on `/widget/session/refresh` and returns its `mj_sid` when
+   * the signature is valid, the token is within {@link REFRESH_GRACE_SECONDS} of expiry, and
+   * `mj_widget_id` matches the resolved widget instance. Returns `null` on any failure.
    */
-  public async RefreshGuestSession(input: MintGuestSessionInput): Promise<MintGuestSessionResult> {
-    return this.MintGuestSession(input);
+  private verifyRefreshBearerToken(bearerToken: string | undefined, widgetId: string): string | null {
+    const raw = (bearerToken ?? '').trim().replace(/^Bearer\s+/i, '').trim();
+    if (!raw) {
+      return null;
+    }
+    const claims = MagicLinkKeyManager.Instance.Verify(raw, REFRESH_GRACE_SECONDS);
+    if (!claims || claims.mj_anon !== true) {
+      return null;
+    }
+    if (typeof claims.mj_widget_id !== 'string' || !UUIDsEqual(claims.mj_widget_id, widgetId)) {
+      return null;
+    }
+    const sid = typeof claims.mj_sid === 'string' ? claims.mj_sid.trim() : '';
+    return sid.length > 0 ? sid : null;
   }
 
   /**
@@ -412,12 +470,14 @@ export class WidgetSessionService {
     hostIdentity?: HostAssertedIdentity,
     returningVisitor?: ReturningVisitorResolution,
     resolvedIdentity?: ResolvedVisitorIdentity,
+    existingSessionId?: string,
   ): MintGuestSessionResult {
     const nowSeconds = Math.floor(Date.now() / 1000);
     const ttlMinutes = widget.SessionTTLMinutes || this.config.defaultSessionTtlMinutes;
-    // Generated once and returned to the client: the widget stamps Conversation.ExternalID with
-    // this id so the Widget Guest RLS filters ({{ScopeResourceID}}) isolate this guest's rows.
-    const sessionId = GenerateSessionId();
+    // Generated once on initial mint and preserved across refreshes: the widget (and server-side
+    // voice SessionManager) stamps Conversation.ExternalID with this id so AuthorizeSessionAccess
+    // and Widget Guest RLS filters isolate this guest's rows for the full lifetime of the visit.
+    const sessionId = existingSessionId ?? GenerateSessionId();
     const claims = BuildWidgetGuestClaims({
       issuer: this.publicUrl,
       audience: this.config.audience,
