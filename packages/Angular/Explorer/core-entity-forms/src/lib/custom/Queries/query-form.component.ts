@@ -316,6 +316,9 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     /** Custom-layout Query form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
 
+    /** Custom-layout form owns its entire body; suppress auto-filled relationship sections. */
+    public override get OwnsEntireFormBody(): boolean { return true; }
+
     @ViewChild('sqlEditor') SqlEditor: CodeEditorComponent | null = null;
 
     /** @deprecated Use {@link SqlEditor}. */

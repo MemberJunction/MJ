@@ -32,6 +32,14 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
 
     /** Custom-layout Template form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
+
+    /** Custom-layout form owns its entire body; suppress auto-filled relationship sections. */
+    public override get OwnsEntireFormBody(): boolean { return true; }
+
+    /**
+     * Read-only mirror of the editor's rows (fed only by {@link OnSharedTemplateContentChange}),
+     * kept for the count badges and unsaved-changes flag. Never load or save through it.
+     */
     public TemplateContents: MJTemplateContentEntity[] = [];
 
     /** @deprecated Use {@link TemplateContents}. */
@@ -146,7 +154,12 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
     set codeEditor(value: CodeEditorComponent | null) {
       this.CodeEditor = value;
     }
-    /** The embedded content editor; its dirty contents ride along in this form's save transaction. */
+    /**
+     * The embedded editor OWNS the template content rows: it loads them and the user edits its
+     * instances. This form never loads a second copy (a second, separately loaded copy is what
+     * silently discarded edits in MJ#4754); on Save it folds the editor's dirty rows into its own
+     * transaction (see PopulatePendingRecords).
+     */
     @ViewChild('templateEditor') TemplateEditor: TemplateEditorComponent | undefined;
     private isUpdatingEditorValue = false;
     public IsRunningTemplate = false;
@@ -212,9 +225,17 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
 
     async ngOnInit() {
         await super.ngOnInit();
-        await this.LoadTemplateContents();
+        // Template contents are loaded by the embedded editor (see TemplateEditor), not here.
         await this.LoadCategories();
         this.LoadContentTypes();
+    }
+
+    /** Also discards the content edits held by the editor, so a later Save cannot persist them. */
+    public override CancelEdit(): void {
+        super.CancelEdit();
+        this.TemplateEditor?.RefreshAndDiscardChanges().catch((error: unknown) => {
+            console.error(`Failed to discard template content changes for template ${this.record?.ID}:`, error);
+        });
     }
 
     ngOnDestroy() {
@@ -232,37 +253,13 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         this.syncEditorValue();
     }
 
+    /**
+     * Reloads the template contents in the embedded editor (discarding unsaved content edits); the
+     * editor's ContentChange then refreshes {@link TemplateContents}. No-op while the editor is not
+     * rendered, since it loads the contents itself when it is.
+     */
     async LoadTemplateContents() {
-        if (this.record && this.record.ID) {
-            try {
-                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-                const results = await rv.RunView<MJTemplateContentEntity>({
-                    EntityName: 'MJ: Template Contents',
-                    ExtraFilter: `TemplateID='${this.record.ID}'`,
-                    OrderBy: 'Priority ASC, __mj_CreatedAt ASC',
-                    ResultType: 'entity_object'
-                });
-                
-                this.TemplateContents = results.Results;
-                
-                // If we have contents but no selection, select the first one
-                if (this.TemplateContents.length > 0 && this.SelectedContentIndex === 0) {
-                    this.SelectedContentIndex = 0;
-                }
-                
-                // If no template contents exist, create a default one for single-content optimization
-                if (this.TemplateContents.length === 0) {
-                    await this.CreateDefaultTemplateContent();
-                }
-
-                // Entity change tracking is handled automatically by BaseEntity
-                
-                // Sync editor value after loading content
-                this.syncEditorValue();
-            } catch (error) {
-                console.error('Error loading template contents:', error);
-            }
-        }
+        await this.TemplateEditor?.RefreshAndDiscardChanges();
     }
 
     /** @deprecated Use {@link LoadTemplateContents}. */
