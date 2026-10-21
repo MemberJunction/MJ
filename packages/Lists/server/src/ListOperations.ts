@@ -428,7 +428,8 @@ export class ListOperations {
     runtimeParams: Record<string, unknown> | undefined,
   ): Promise<ResolvedRecordSet> {
     const rv = this.runView();
-    const entityName = await RunView.GetEntityNameFromRunViewParams({ ViewID: viewId }, this.provider ?? null);
+    // As the acting user: the server-side User Views lookup fails unscoped.
+    const entityName = await RunView.GetEntityNameFromRunViewParams({ ViewID: viewId }, this.provider ?? null, this.contextUser);
     if (!entityName) {
       throw new Error(`Could not determine entity for view '${viewId}'`);
     }
@@ -448,6 +449,8 @@ export class ListOperations {
       ViewID: viewId,
       Fields: pkFields,
       ResultType: 'simple',
+      // A list source is every match, not the entity's UserViewMaxRows page.
+      IgnoreMaxRows: true,
     }, this.contextUser);
 
     if (!result.Success) {
@@ -475,6 +478,8 @@ export class ListOperations {
       ExtraFilter: extraFilter,
       Fields: pkFields,
       ResultType: 'simple',
+      // A list source is every match, not the entity's UserViewMaxRows page.
+      IgnoreMaxRows: true,
     }, this.contextUser);
 
     if (!result.Success) {
