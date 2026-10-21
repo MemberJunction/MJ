@@ -66,6 +66,11 @@ interface AnthropicFormatterInternals {
     formatMessagesWithCaching(messages: ChatMessage[], enableCaching?: boolean): Array<{ role: string; content: Array<{ type: string; text?: string; cache_control?: { type: string } }> }>;
 }
 
+/** Bedrock driver keyhole: the protected formatter whose cachePoint placement TRS6 asserts. */
+interface BedrockFormatterInternals {
+    formatMessagesWithCaching(messages: ChatMessage[], enableCaching?: boolean): Array<{ role: string; content: Array<{ type?: string; text?: string; cachePoint?: { type: string } }> }>;
+}
+
 function skipNote(checkId: string, reason: string): void {
     console.warn(`  ⚠ trailing-runtime-state.${checkId} SKIPPED — ${reason}`);
 }
@@ -93,6 +98,19 @@ function loopAgentType(engine: AIEngine, checkId: string): { agentType: MJAIAgen
     const systemPrompt = engine.Prompts.find(p => UUIDsEqual(p.ID, agentType.SystemPromptID));
     if (!systemPrompt) {
         skipNote(checkId, `the Loop agent type's system prompt ${agentType.SystemPromptID} is not in the prompt catalog`);
+        return undefined;
+    }
+    return { agentType, systemPrompt };
+}
+
+/** The Flow agent type and its system prompt from this database, or undefined when absent. */
+function flowAgentType(engine: AIEngine): { agentType: MJAIAgentTypeEntity; systemPrompt: MJAIPromptEntityExtended } | undefined {
+    const agentType = engine.AgentTypes.find(t => t.Name === 'Flow');
+    if (!agentType?.SystemPromptID) {
+        return undefined;
+    }
+    const systemPrompt = engine.Prompts.find(p => UUIDsEqual(p.ID, agentType.SystemPromptID));
+    if (!systemPrompt) {
         return undefined;
     }
     return { agentType, systemPrompt };
@@ -141,17 +159,27 @@ function modelServedBy(engine: AIEngine, driverClass: string): { model: MJAIMode
 export const TrailingRuntimeStateChecks: NamedCheck[] = [
     {
         Id: 'trailing-runtime-state.TRS1',
-        Name: 'TRS1: the synced Loop system-prompt template (read by TemplateID) carries the runtime-state pointer and none of the volatile blocks',
+        Name: 'TRS1: the synced Loop and Flow system-prompt templates (read by TemplateID) carry the runtime-state pointer and none of the volatile blocks',
         Fn: async (ctx): Promise<void> => {
             const engine = await configuredEngine(ctx);
             const loop = loopAgentType(engine, 'TRS1');
             if (!loop) { return; }
-            const text = await agentInternals(ctx).loadPromptTemplateText(loop.systemPrompt, ctx.User);
+            const internals = agentInternals(ctx);
+            const text = await internals.loadPromptTemplateText(loop.systemPrompt, ctx.User);
             Assert(!!text, `the Loop system prompt's template ${loop.systemPrompt.TemplateID} resolved to no text — the by-ID template lookup is broken or the template is missing`);
-            Assert(text!.includes(`<${RUNTIME_STATE_TAG}>`), `the database template lacks the <${RUNTIME_STATE_TAG}> pointer — metadata/prompts has not been pushed to this database`);
+            Assert(text!.includes(`<${RUNTIME_STATE_TAG}>`), `the database Loop template lacks the <${RUNTIME_STATE_TAG}> pointer — metadata/prompts has not been pushed to this database`);
             const embedded = VOLATILE_TEMPLATE_MARKERS.filter(marker => text!.includes(marker));
-            AssertEqual(embedded.length, 0, `the database template still embeds volatile state (${embedded.join(', ')}) — the legacy layout; the trailing fragment would be suppressed`);
-            console.log(`      → template ${loop.systemPrompt.TemplateID} (${text!.length} chars): pointer present, 0/${VOLATILE_TEMPLATE_MARKERS.length} volatile markers`);
+            AssertEqual(embedded.length, 0, `the database Loop template still embeds volatile state (${embedded.join(', ')}) — the legacy layout; the trailing fragment would be suppressed`);
+
+            const flow = flowAgentType(engine);
+            if (flow) {
+                const flowText = await internals.loadPromptTemplateText(flow.systemPrompt, ctx.User);
+                Assert(!!flowText, `the Flow system prompt's template ${flow.systemPrompt.TemplateID} resolved to no text`);
+                Assert(flowText!.includes(`<${RUNTIME_STATE_TAG}>`), `the database Flow template lacks the <${RUNTIME_STATE_TAG}> pointer`);
+                const flowEmbedded = VOLATILE_TEMPLATE_MARKERS.filter(marker => flowText!.includes(marker));
+                AssertEqual(flowEmbedded.length, 0, `the database Flow template still embeds volatile state (${flowEmbedded.join(', ')})`);
+            }
+            console.log(`      → Loop template ${loop.systemPrompt.TemplateID} (${text!.length} chars)${flow ? ` + Flow template ${flow.systemPrompt.TemplateID}` : ''}: pointer present, 0/${VOLATILE_TEMPLATE_MARKERS.length} volatile markers`);
         }
     },
     {
@@ -241,8 +269,22 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
             }
             if (sweep.length === 0) { skipNote('TRS4', `no Active Loop agents with a child prompt template (${loopAgents.length} Loop agents)`); return; }
             AssertEqual(unresolved.length, 0, `${unresolved.length} child prompt template(s) did not resolve by TemplateID (the name-vs-ID lookup regression): ${unresolved.slice(0, 5).join('; ')}`);
-            const volatileAgents = sweep.filter(s => s.volatile).map(s => s.agent);
-            console.log(`      → ${sweep.length} Loop agents resolved by TemplateID; ${volatileAgents.length} volatile (relocated): ${volatileAgents.slice(0, 6).join(', ')}${volatileAgents.length > 6 ? ', …' : ''}`);
+            const coreMjLoopAgents = new Set([
+                'Sage',
+                'Query Builder',
+                'Research Agent',
+                'Codesmith',
+                'Agent Manager',
+                'Database Designer',
+                'Model Development Agent',
+                'Data Scout',
+                'Experiment Designer',
+                'Goal Analyst',
+            ]);
+            const volatileCoreAgents = sweep.filter(s => s.volatile && coreMjLoopAgents.has(s.agent)).map(s => s.agent);
+            AssertEqual(volatileCoreAgents.length, 0, `expected 0 core MJ Loop agents to have volatile child templates after KV-cache alignment, but found: ${volatileCoreAgents.join(', ')}`);
+            const volatileCount = sweep.filter(s => s.volatile).length;
+            console.log(`      → ${sweep.length} Loop agents resolved by TemplateID; 0 volatile core MJ agents (${volatileCount} total volatile OpenApp agent(s) relocated to trailingMessage)`);
         }
     },
     {
@@ -287,7 +329,7 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
     },
     {
         Id: 'trailing-runtime-state.TRS6',
-        Name: 'TRS6: the Anthropic driver puts its cache breakpoint on the last real history message and sends the fragment uncached',
+        Name: 'TRS6: the Anthropic and Bedrock drivers put their cache breakpoint on the last real history message and send the fragment uncached',
         Fn: async (ctx): Promise<void> => {
             void ctx;
             if (!MJGlobal.Instance.ClassFactory.GetRegistration(BaseLLM, 'AnthropicLLM')) {
@@ -311,7 +353,26 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
             AssertEqual(out[out.length - 1].content.some(b => !!b.cache_control), false, 'the fragment is sent uncached');
             AssertEqual(out[3]?.role, 'assistant', 'an alternation filler separates the cached user turn from the user-role fragment');
             AssertEqual(out.length, 5, 'history(3) + filler + fragment');
-            console.log('      → breakpoint at index 2, filler at 3, fragment uncached at 4');
+
+            if (MJGlobal.Instance.ClassFactory.GetRegistration(BaseLLM, 'BedrockLLM')) {
+                const bedrockDriver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, 'BedrockLLM', 'access-key:secret-key');
+                Assert(!!bedrockDriver, 'BedrockLLM instantiates without contacting the API');
+                const bedrockFormatter = bedrockDriver as unknown as BedrockFormatterInternals;
+                const bedrockOut = bedrockFormatter.formatMessagesWithCaching([
+                    { role: 'user', content: 'history turn 1' },
+                    { role: 'assistant', content: 'reply 1' },
+                    { role: 'user', content: 'action results' },
+                    fragment,
+                ], true);
+                const bedrockFlagged = bedrockOut.map((m, i) => ({ i, role: m.role, cached: m.content.some(b => !!b.cachePoint) }));
+                const bedrockCachedIdx = bedrockFlagged.filter(f => f.cached).map(f => f.i);
+                AssertEqual(bedrockCachedIdx.length, 1, `BedrockLLM: exactly one cachePoint expected, got ${JSON.stringify(bedrockFlagged)}`);
+                AssertEqual(bedrockCachedIdx[0], 2, 'BedrockLLM: the cachePoint sits on the last REAL history message (index 2), not on the fragment');
+                AssertEqual(bedrockOut[bedrockOut.length - 1].content.some(b => !!b.cachePoint), false, 'BedrockLLM: the fragment is sent uncached');
+                AssertEqual(bedrockOut[3]?.role, 'assistant', 'BedrockLLM: an alternation filler separates the cached user turn from the user-role fragment');
+                AssertEqual(bedrockOut.length, 5, 'BedrockLLM: history(3) + filler + fragment');
+            }
+            console.log('      → breakpoint at index 2, filler at 3, fragment uncached at 4 (AnthropicLLM + BedrockLLM)');
         }
     }
 ];

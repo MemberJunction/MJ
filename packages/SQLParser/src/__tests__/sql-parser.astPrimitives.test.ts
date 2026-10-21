@@ -290,6 +290,14 @@ describe('SQLParser.ClearOrderBy', () => {
 // Preprocessing fallback (bracket-identifier aliasing + trailing OPTION)
 // ════════════════════════════════════════════════════════════════════
 
+describe('SQLParser.SQL', () => {
+    it('returns the SQL supplied at construction, whether or not it parsed', () => {
+        const sql = 'WITH [Active People] AS (SELECT 1 AS a) SELECT * FROM [Active People]';
+        expect(new SQLParser(sql, tsql).SQL).toBe(sql);
+        expect(new SQLParser('SELECT FROM WHERE', tsql).SQL).toBe('SELECT FROM WHERE');
+    });
+});
+
 describe('SQLParser preprocessing fallback', () => {
 
     it('parses a CTE whose name has a space, restoring it on ToSQL', () => {
@@ -377,6 +385,24 @@ describe('SQLParser.HasStackedStatements', () => {
     it('does not flag a semicolon inside a double-quoted identifier (PostgreSQL)', () => {
         expect(SQLParser.HasStackedStatements('SELECT "a; b" FROM users', pg)).toBe(false);
     });
+
+    it('is true when the separator follows a PostgreSQL E-string with an escaped quote', () => {
+        // E'\'' is one string holding a quote, so the semicolon after it separates two statements.
+        expect(SQLParser.HasStackedStatements("SELECT E'\\'' ; SELECT 1", pg)).toBe(true);
+    });
+
+    it('does not flag a semicolon inside a PostgreSQL E-string or dollar-quoted string', () => {
+        expect(SQLParser.HasStackedStatements("SELECT E'a\\';b' AS s", pg)).toBe(false);
+        expect(SQLParser.HasStackedStatements('SELECT $$a;b$$ AS s', pg)).toBe(false);
+    });
+
+    it('is true when the separator follows a PostgreSQL dollar quote whose tag has a non-ASCII letter', () => {
+        expect(SQLParser.HasStackedStatements("SELECT $\u00e9$'$\u00e9$ ; SELECT 1 --'", pg)).toBe(true);
+    });
+
+    it('does not flag a semicolon inside a nested block comment, which both databases nest', () => {
+        expect(SQLParser.HasStackedStatements('SELECT 1 /* a /* b */ ; SELECT 2 */', tsql)).toBe(false);
+    });
 });
 
 describe('SQLParser.HasUnwrappableTrailingClause', () => {
@@ -447,3 +473,58 @@ describe('SQLParser.HasUnwrappableTrailingClause', () => {
         )).toBe(true);
     });
 });
+
+// ════════════════════════════════════════════════════════════════════
+// Niladic user functions (CURRENT_USER, SESSION_USER, SYSTEM_USER)
+// ════════════════════════════════════════════════════════════════════
+
+describe('SQLParser niladic user functions', () => {
+
+    it.each(['CURRENT_USER', 'SESSION_USER', 'SYSTEM_USER', 'current_user'])(
+        'parses bare %s in SQL Server and round-trips without parentheses',
+        (fnName) => {
+            const parser = new SQLParser(`SELECT ${fnName} AS UserName`, tsql);
+            expect(parser.IsValid).toBe(true);
+            expect(parser.StatementKind).toBe('select');
+            expect(parser.HasWriteStatement).toBe(false);
+            expect(parser.ToSQL()).not.toContain('()');
+            expect(parser.ToSQL().toUpperCase()).toContain(fnName.toUpperCase());
+        },
+    );
+
+    it.each(['CURRENT_USER', 'SESSION_USER', 'SYSTEM_USER', 'current_user'])(
+        'parses bare %s in PostgreSQL and round-trips without parentheses',
+        (fnName) => {
+            const parser = new SQLParser(`SELECT ${fnName} AS UserName`, pg);
+            expect(parser.IsValid).toBe(true);
+            expect(parser.StatementKind).toBe('select');
+            expect(parser.HasWriteStatement).toBe(false);
+            expect(parser.ToSQL()).not.toContain('()');
+            expect(parser.ToSQL().toUpperCase()).toContain(fnName.toUpperCase());
+        },
+    );
+
+    it('parses bare niladic user functions inside WHERE and function arguments', () => {
+        const parser = new SQLParser(
+            "SELECT COALESCE(CURRENT_USER, SESSION_USER, SYSTEM_USER) AS Who FROM Users WHERE CreatedBy = CURRENT_USER",
+            tsql,
+        );
+        expect(parser.IsValid).toBe(true);
+        expect(parser.StatementKind).toBe('select');
+        expect(parser.ToSQL()).not.toContain('CURRENT_USER()');
+        expect(parser.ToSQL()).not.toContain('SESSION_USER()');
+        expect(parser.ToSQL()).not.toContain('SYSTEM_USER()');
+    });
+
+    it('composes with bracket-identifier preprocessing and trailing OPTION', () => {
+        const parser = new SQLParser(
+            'SELECT CURRENT_USER AS [Current User] FROM [Active People] OPTION (RECOMPILE)',
+            tsql,
+        );
+        expect(parser.IsValid).toBe(true);
+        expect(parser.ToSQL()).toBe(
+            'SELECT CURRENT_USER AS [Current User] FROM [Active People] OPTION (RECOMPILE)',
+        );
+    });
+});
+

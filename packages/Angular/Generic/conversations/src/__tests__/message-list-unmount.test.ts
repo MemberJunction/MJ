@@ -74,6 +74,7 @@ function createHarness(messages: Array<Record<string, unknown>>): Harness {
   open['agentRunMap'] = new Map();
   open['ratingsMap'] = new Map();
   open['attachmentsMap'] = new Map();
+  open['_branchSwitcherMap'] = new Map();
   open['userAvatarMap'] = new Map();
   open['conversation'] = null;
   open['currentUser'] = { Name: 'Tester' };

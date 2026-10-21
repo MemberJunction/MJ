@@ -52,7 +52,9 @@ export abstract class BaseAudioGenerator extends BaseModel implements BaseTextTo
      * @param splitTargetBytes Target piece size, below the ceiling to leave room for multipart framing
      * @param splitter Splitter to use for oversized audio; may be null, in which case oversized audio fails
      * @param providerLabel Provider name, used in the size-limit error messages
-     * @param transcribeOne Transcribes a single piece already known to be within the ceiling
+     * @param transcribeOne Transcribes a single piece already known to be within the ceiling, and is
+     * handed `cancellationToken` to forward to its request
+     * @param cancellationToken Cancels the transcription: no further piece is sent once it aborts
      */
     protected async TranscribeWithSplitting(
         audio: Buffer,
@@ -60,9 +62,10 @@ export abstract class BaseAudioGenerator extends BaseModel implements BaseTextTo
         splitTargetBytes: number,
         splitter: AudioSplitter | null,
         providerLabel: string,
-        transcribeOne: (piece: Buffer) => Promise<TranscriptionPiece>
+        transcribeOne: (piece: Buffer, cancellationToken?: AbortSignal) => Promise<TranscriptionPiece>,
+        cancellationToken?: AbortSignal
     ): Promise<TranscriptionPiece> {
-        return TranscribeAudioWithSplitting(audio, maxUploadBytes, splitTargetBytes, splitter, providerLabel, transcribeOne);
+        return TranscribeAudioWithSplitting(audio, maxUploadBytes, splitTargetBytes, splitter, providerLabel, transcribeOne, cancellationToken);
     }
 }
 
@@ -141,6 +144,14 @@ export class SpeechToTextParams extends BaseParams {
      * would otherwise mis-transcribe. Should be in the same language as the audio.
      */
     prompt?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Optional signal for cancelling the request. The driver is responsible for honoring it: it
+     * passes the signal to the provider's SDK or HTTP call, so an aborted request is torn down
+     * rather than left running. A driver that stops because the signal fired reports the failure
+     * classified as `Cancelled` (see `BuildCancellationErrorInfo`), which is never failed over.
+     */
+    CancellationToken?: AbortSignal;
 }
 
 /**
@@ -212,6 +223,14 @@ export interface TextToSpeechParams {
     pronunciation_dictionary_locators?: any[];
     /** Special instructions for the voice generation */
     instructions?: string;
+
+    /**
+     * Optional signal for cancelling the request. The driver is responsible for honoring it: it
+     * passes the signal to the provider's SDK or HTTP call, so an aborted request is torn down
+     * rather than left running. A driver that stops because the signal fired reports the failure
+     * classified as `Cancelled` (see `BuildCancellationErrorInfo`), which is never failed over.
+     */
+    CancellationToken?: AbortSignal;
 }
 
 /**

@@ -1,0 +1,111 @@
+/*
+  The widget's own CSS. Everything is prefixed `mjw-` and uses only `var(--mj-*)` tokens — no colour is
+  hardcoded, so a page repaints the widget (and the overlay it hosts) by overriding tokens on the element.
+  Light DOM + ViewEncapsulation.None: the prefix is what keeps these rules from touching the host page.
+*/
+.mjw-host {
+  display: block;
+  box-sizing: border-box;
+  position: relative;
+  min-height: 20rem;
+  background: var(--mj-bg-page);
+  color: var(--mj-text-primary);
+  font-family: inherit;
+}
+
+.mjw-host *,
+.mjw-host *::before,
+.mjw-host *::after {
+  box-sizing: border-box;
+}
+
+.mjw-overlay {
+  display: block;
+  position: absolute;
+  inset: 0;
+}
+
+.mjw-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: inherit;
+  height: 100%;
+  padding: var(--mj-space-4, 16px);
+}
+
+.mjw-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-4, 16px);
+  width: 100%;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: var(--mj-space-6, 24px);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg, 12px);
+}
+
+.mjw-card:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 2px;
+}
+
+.mjw-logo {
+  max-height: 3rem;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.mjw-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.mjw-message,
+.mjw-consent__lead,
+.mjw-consent__foot {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--mj-text-secondary);
+}
+
+.mjw-consent__list {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.9375rem;
+  color: var(--mj-text-secondary);
+}
+
+.mjw-consent__list li + li {
+  margin-top: var(--mj-space-2, 8px);
+}
+
+.mjw-icon {
+  font-size: 2rem;
+  color: var(--mj-status-success);
+}
+
+.mjw-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-2, 8px);
+}
+
+/* 44px is the minimum comfortable tap target on a phone. */
+.mjw-actions > button,
+.mjw-start {
+  min-height: 44px;
+}
+
+.mjw-actions > button {
+  flex: 1 1 8rem;
+}
+
+.mjw-start {
+  padding-inline: var(--mj-space-6, 24px);
+  font-size: 1rem;
+}

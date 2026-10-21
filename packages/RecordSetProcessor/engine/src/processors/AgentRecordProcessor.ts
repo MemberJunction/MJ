@@ -40,7 +40,7 @@ export class AgentRecordProcessor implements IRecordProcessor {
     }
 
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
-        await AIEngine.Instance.Config(false, context.contextUser);
+        await AIEngine.Instance.Config(false, context.ContextUser);
         const agent = AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, this.agentID));
         if (!agent) {
             return { Status: 'Failed', ErrorMessage: `Agent '${this.agentID}' not found` };
@@ -50,8 +50,11 @@ export class AgentRecordProcessor implements IRecordProcessor {
         const result = await runner.RunAgent({
             agent,
             conversationMessages: [],
-            contextUser: context.contextUser,
+            contextUser: context.ContextUser,
             data: AgentRecordProcessor.buildData(this.inputMapping, record),
+            // `data` is built on the server from the Record Process's admin-configured input mapping, so its reserved
+            // keys (a per-record tenant mapped into PrimaryScopeRecordID, say) are honoured rather than stripped.
+            TrustReservedRunData: true,
         });
 
         return {

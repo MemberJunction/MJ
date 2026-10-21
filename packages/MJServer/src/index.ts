@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ResolveStartupMode } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
@@ -19,9 +19,10 @@ import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { Session as InspectorSession } from 'node:inspector';
-import { sep } from 'node:path';
+import { join, sep } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
 import { BuildSchemaOptions, buildSchemaSync, getMetadataStorage, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
@@ -31,8 +32,10 @@ import { WebSocketServer } from 'ws';
 import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
+import { TranslateBracketsToPG } from './postgresqlCompat.js';
+import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig } from './postgresqlPoolSettings.js';
 import { default as jwt } from 'jsonwebtoken';
-import { contextFunction, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
+import { contextFunction, CreateReadOnlyProvider, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import { variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
@@ -41,13 +44,15 @@ import { StartupLogger } from './logging/StartupLogger.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
-import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
-import { createSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
-import { createMediaStreamRouter } from './rest/MediaStreamHandler.js';
-import { createRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.js';
-import { REALTIME_SDP_EXCHANGE_PATH } from '@memberjunction/ai';
-import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
-import { createWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
+import { CreateRealtimeRecordingRouter, REALTIME_RECORDING_MOUNT_PATH } from './rest/RealtimeRecordingHandler.js';
+import { LoadOwnedRealtimeSession } from './realtimeSessions/ownedRealtimeSession.js';
+import { LoadSessionConversationExternalID } from './realtimeSessions/sessionAccess.js';
+import { RecordingAssemblyScheduler } from './realtimeSessions/RecordingAssemblyScheduler.js';
+import {
+  RealtimeSessionEventService,
+  ParseReplicatedRealtimeSessionEvent,
+  type RealtimeSessionEventTopicPayload,
+} from './realtimeSessions/index.js';
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
 
@@ -56,23 +61,29 @@ import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { IntegrationSyncWorkerService } from './services/IntegrationSyncWorkerService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
 import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
-import { createAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
-import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
-import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
+import { ActionEngineServer } from '@memberjunction/actions';
+import { CreateAdhocSQLAuthorizer } from './resolvers/AdhocQueryResolver.js';
+import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WirePushStatusFanOut, WireSharedCacheEvents } from './sharedCache.js';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { ReconcileOrphanedConversationDetails } from './generic/OrphanedConversationDetailReconciler.js';
 import {
-  PUSH_STATUS_UPDATES_TOPIC,
-  SetPushStatusPublishHook,
-  ParseReplicatedStatusUpdate,
-} from './generic/PushStatusResolver.js';
+  HANDOFF_OFFER_FANOUT_CHANNEL,
+  HANDOFF_OFFER_TOPIC,
+  SetHandoffOfferPublishHook,
+  ParseReplicatedHandoffOfferUpdate,
+} from './resolvers/HumanHandoffResolver.js';
+import { RoomHandoffEngine } from '@memberjunction/livekit-room-server';
+// Type-only: the provider is built in ./sharedCache.ts. Still needed here because the handoff-offer
+// fan-out below stays in this file — see the note at its call site.
+import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
-import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
-import { SessionJanitor } from './agentSessions/index.js';
+import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
+import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
+import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
@@ -85,8 +96,11 @@ import {
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
-import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath } from '@memberjunction/server-extensions-core';
-import { coreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
+import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath, GetCorsOwningServerExtensionRoots } from '@memberjunction/server-extensions-core';
+import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from './globalCors.js';
+import { CoreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
+import { ApiRoute, ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
+import { MountHealthcheckRoute, MountPublicCoreRoutes, MountExtensionHealthRoute, MountAuthCatalogRoute, MountAuthenticatedCoreRoutes } from './coreRoutes.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 import { CreateMetadataRefreshSignalHandler, METADATA_REFRESH_SIGNAL } from './metadataRefreshSignal.js';
 
@@ -122,7 +136,9 @@ export * from 'type-graphql';
 // later importers, which makes schema build fail on ViewResult.RowCount.
 export { Int, Float, ID } from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
+export { CreateIsolatedProvider } from './isolatedProvider.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
+export { ApiRoute, ApiRootPath, ConfiguredPublicUrl, JoinApiRoute, NormalizeApiRootPath, type ApiRouteOptions } from './apiRoot.js';
 export { ServerExtensionLoader, BaseServerExtension, DefaultServerExtensionServiceRegistry } from '@memberjunction/server-extensions-core';
 export type {
     ServerExtensionConfig,
@@ -186,6 +202,8 @@ export * from './resolvers/GenerateSeedTaxonomyResolver.js';
 export * from './resolvers/PipelineProgressResolver.js';
 export * from './resolvers/IntegrationProgressResolver.js';
 export * from './resolvers/IdentityClaimRedemptionResolver.js';
+export * from './resolvers/UserAvatarResolver.js';
+export * from './resolvers/avatarInputValidation.js';
 export * from './resolvers/ClientToolRequestResolver.js';
 export * from './resolvers/AutotagPipelineResolver.js';
 export * from './resolvers/TagGovernanceResolver.js';
@@ -230,6 +248,7 @@ export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './rest/MediaAccessKeys.js';
 export * from './rest/MediaStreamHandler.js';
+export * from './rest/RealtimeRecordingHandler.js';
 export * from './resolvers/InfoResolver.js';
 export * from './resolvers/PotentialDuplicateRecordResolver.js';
 export * from './resolvers/DuplicateEntryCheckResolver.js';
@@ -243,6 +262,10 @@ export * from './resolvers/CurrentUserContextResolver.js';
 export * from './resolvers/RSUResolver.js';
 export * from './resolvers/AgentSessionResolver.js';
 export * from './resolvers/RealtimeClientSessionResolver.js';
+export * from './resolvers/RealtimeSessionEventsResolver.js';
+export * from './resolvers/RealtimeSessionVerificationResolver.js';
+export * from './realtimeSessions/index.js';
+export * from './resolvers/MeetingResolver.js';
 export * from './resolvers/RemoteBrowserActionResolver.js';
 export * from './agentSessions/index.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
@@ -278,7 +301,15 @@ const localPath = (p: string) => {
   return resolvedPath;
 };
 
-export const CreateApp = (): Application => express();
+/**
+ * Creates the Express application MJServer serves on. `X-Powered-By` is disabled: it only
+ * advertises the framework to scanners. {@link Serve} disables it again on a host-supplied app.
+ */
+export const CreateApp = (): Application => {
+  const app = express();
+  app.disable('x-powered-by');
+  return app;
+};
 
 /** @deprecated Use {@link CreateApp}. */
 export const createApp = CreateApp;
@@ -296,7 +327,8 @@ function resolveServerVersion(): string | undefined {
     const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string };
     return pkg.version;
-  } catch {
+  } catch (err) {
+    LogError('Failed to resolve server version from package.json', undefined, err);
     return undefined;
   }
 }
@@ -304,55 +336,80 @@ function resolveServerVersion(): string | undefined {
 /** How often to re-check for conversation details left behind by finished runs. */
 const ORPHAN_DETAIL_SWEEP_INTERVAL_MS = 5 * 60_000;
 
-/** Redis channel carrying replicated push-status updates between server instances. */
-const PUSH_STATUS_FANOUT_CHANNEL = 'push-status-updates';
-
 /**
- * Replicate push-status updates across server instances over Redis (MJ #4222).
+ * Replicate handoff-offer updates across server instances over Redis.
  *
- * Outbound: every locally-published update is forwarded on a shared channel. Inbound: a message
- * from another instance is republished onto THIS instance's local topic, where the normal
- * subscription filter decides who receives it — so the identity gate (`ownerUserId` vs. the
- * connection's authenticated user) still applies to a replicated message exactly as it does to a
- * local one. The replica has no say in who sees what.
- *
- * Republishing goes straight to `PubSubManager`, never back through `publishStatusUpdate`, so an
- * inbound message cannot be re-broadcast and loop. `SourceServerId` guards the remaining case: a
- * publisher also receives its own message from Redis.
+ * Outbound: every locally-published offer change is forwarded on a shared Redis channel.
+ * Inbound: a message from another instance is republished onto THIS instance's local GraphQL
+ * topic (where the subscription filter scopes to the target user) and delivered to RoomHandoffEngine
+ * so the call-hosting instance can transition its local flow (e.g. wait for the user to join the room).
  */
-async function wirePushStatusFanOut(redisProvider: RedisLocalStorageProvider, startupLog: StartupLogger): Promise<void> {
+async function wireHandoffOfferFanOut(redisProvider: RedisLocalStorageProvider, startupLog: StartupLogger): Promise<void> {
   try {
-    await redisProvider.SubscribeToChannel(PUSH_STATUS_FANOUT_CHANNEL, (raw: string) => {
+    await redisProvider.SubscribeToChannel(HANDOFF_OFFER_FANOUT_CHANNEL, (raw: string) => {
       try {
-        const payload = ParseReplicatedStatusUpdate(raw, MJGlobal.Instance.ProcessUUID);
+        const payload = ParseReplicatedHandoffOfferUpdate(raw, MJGlobal.Instance.ProcessUUID);
         if (!payload) {
           return;
         }
-        // Rebuilt as a plain record: the topic's publish signature takes an index-signature type,
-        // and listing the fields keeps the wire shape explicit at the one place it crosses hosts.
-        PubSubManager.Instance.Publish(PUSH_STATUS_UPDATES_TOPIC, {
-          sessionId: payload.sessionId,
-          ownerUserId: payload.ownerUserId,
-          message: payload.message,
-          SourceServerId: payload.SourceServerId,
+        PubSubManager.Instance.Publish(HANDOFF_OFFER_TOPIC, {
+          UserID: payload.UserID,
+          Kind: payload.Kind,
+          Offer: payload.Offer,
         });
-      } catch {
+        RoomHandoffEngine.Instance.OnRemoteOfferChange(payload);
+      } catch (err) {
         // A malformed message on a shared channel must not take down the subscriber.
+        LogError('Error processing handoff-offer fan-out message', undefined, err);
       }
     });
 
-    SetPushStatusPublishHook((payload) => {
-      redisProvider.PublishMessage(PUSH_STATUS_FANOUT_CHANNEL, JSON.stringify(payload));
+    SetHandoffOfferPublishHook((payload) => {
+      redisProvider.PublishMessage(HANDOFF_OFFER_FANOUT_CHANNEL, JSON.stringify(payload));
     });
 
-    // Printed unconditionally, not verbose-gated. "Is fan-out actually on?" is the first question
-    // anyone debugging a hung conversation behind a load balancer asks, and a silent default left
-    // no way to answer it.
-    console.log('[MJAPI] Push-status updates: cross-instance fan-out enabled via Redis');
+    console.log('[MJAPI] Handoff-offer updates: cross-instance fan-out enabled via Redis');
+    startupLog.LogIf('verbose', 'Handoff-offer updates: cross-instance fan-out enabled via Redis');
   } catch (err) {
-    // Single-instance delivery still works, and the durable tail query covers the rest. Degraded,
-    // not broken — so this must not stop the server from starting.
-    console.warn(`Push-status fan-out unavailable: ${(err as Error).message}`);
+    console.warn(`Handoff-offer fan-out unavailable: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/** Redis channel carrying replicated realtime session events between server instances. */
+const REALTIME_SESSION_EVENTS_FANOUT_CHANNEL = 'realtime-session-events';
+
+/**
+ * Replicate realtime session events across server instances over Redis.
+ *
+ * Behind a load balancer the browser's WebSocket (the `RealtimeSessionEvents` subscription) lives on one
+ * replica while the request that raises the event — typically the public verify-link redemption — can be
+ * handled by another. The session-events topic is an in-process PubSub, so without this an
+ * `identity.verified` published on replica B never reaches the subscriber on replica A.
+ *
+ * Inbound messages are republished onto THIS instance's local topic only (never back through the
+ * replication hook, so there is no loop) and are still judged by the subscription filter against the
+ * connection's identity — a replica has no say in who sees what. The durable
+ * `RealtimeSessionVerificationStatus` query remains the backstop if Redis is down.
+ */
+async function wireRealtimeSessionEventFanOut(redisProvider: RedisLocalStorageProvider): Promise<void> {
+  try {
+    await redisProvider.SubscribeToChannel(REALTIME_SESSION_EVENTS_FANOUT_CHANNEL, (raw: string) => {
+      try {
+        const payload = ParseReplicatedRealtimeSessionEvent(raw, MJGlobal.Instance.ProcessUUID);
+        if (payload) {
+          RealtimeSessionEventService.Instance.PublishReplicated(payload);
+        }
+      } catch (err) {
+        LogError(`Realtime session event fan-out: dropping a malformed replicated event: ${(err as Error).message}`);
+      }
+    });
+    RealtimeSessionEventService.Instance.SetReplicationHook((payload: RealtimeSessionEventTopicPayload) => {
+      redisProvider.PublishMessage(REALTIME_SESSION_EVENTS_FANOUT_CHANNEL, JSON.stringify(payload));
+    });
+    console.log('[MJAPI] Realtime session events: cross-instance fan-out enabled via Redis');
+  } catch (err) {
+    // Single-instance delivery still works and the status query covers the rest: degraded, not broken.
+    console.warn(`Realtime session event fan-out unavailable: ${(err as Error).message}`);
   }
 }
 
@@ -369,6 +426,12 @@ GetAttachmentService().BlobStore = new MJStorageBlobStore();
 
 export const Serve = async (resolverPaths: Array<string>, app: Application = CreateApp(), options?: MJServerOptions): Promise<void> => {
   const t0 = performance.now();
+  // Name this MJAPI instance by its port before anything stamps a session row with its identity, so the janitor's
+  // startup recovery closes only the sessions an earlier boot of this instance left, never those of another MJAPI on
+  // the same host (#5309).
+  SetHostInstancePort(graphqlPort);
+  // The realtime bridge engine stamps its bridge rows with the same identity and reconciles orphans by it (#5310).
+  BindBridgeEngineHostInstance();
   // Level-gated startup logger. Resolves verbosity from telemetry.level (single
   // operator knob). At `standard` (default), per-phase timings are collapsed into
   // the one-line summary; at `verbose`+ each phase prints inline as before.
@@ -397,36 +460,65 @@ const setupComplete$ = new ReplaySubject(1);
   const dbType = GetDbType();
   const dataSources: DataSourceInfo[] = [];
 
+  // Shared cache first: the database provider loads metadata and startup engines through
+  // it, so the first server to start fills it and later servers read it instead of each querying
+  // the database and broadcasting what they loaded. Subscribed before engines load so they hear
+  // other servers while they start.
+  const sharedCache = CreateSharedCacheFromEnvironment(configInfo.cacheSettings);
+  if (sharedCache) {
+    await WireSharedCacheEvents(sharedCache, () => (Metadata.Provider instanceof ProviderBase ? Metadata.Provider : undefined)); // global-provider-ok: bootstrap
+    // The cross-instance fan-outs ride this connection. Push-status moved into sharedCache.ts
+    // with the rest of the Redis wiring; the handoff and realtime-session ones stay here deliberately —
+    // they reach into RoomHandoffEngine and RealtimeSessionEventService, and the cache module should not
+    // acquire a dependency on either.
+    await WirePushStatusFanOut(sharedCache);
+    await wireHandoffOfferFanOut(sharedCache, startupLog);
+    await wireRealtimeSessionEventFanOut(sharedCache);
+    startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
+  }
+  const cacheManagerConfig = CacheManagerConfigFromSettings(configInfo.cacheSettings);
+  const warmupLeaseMs = WarmupLeaseMsFromSettings(configInfo.cacheSettings);
+
   if (dbType === 'postgresql') {
     // ─── PostgreSQL Path ───────────────────────────────────────────
     startupLog.BeginPhase('Connecting to database');
     startupLog.LogIf('verbose', 'Database type: PostgreSQL');
     const pg = await import('pg');
-    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes } = await import('@memberjunction/postgresql-dataprovider');
 
-    const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
-    const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
-    const pgUser = process.env.PG_USERNAME || process.env.DB_USERNAME || 'postgres';
-    const pgPass = process.env.PG_PASSWORD || process.env.DB_PASSWORD || '';
-    const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
-
-    const pgPool = new pg.default.Pool({
-      host: pgHost,
-      port: pgPort,
-      user: pgUser,
-      password: pgPass,
-      database: pgDatabase,
-      max: configInfo.databaseSettings.connectionPool?.max ?? 50,
-      min: configInfo.databaseSettings.connectionPool?.min ?? 5,
-      idleTimeoutMillis: configInfo.databaseSettings.connectionPool?.idleTimeoutMillis ?? 30000,
-      connectionTimeoutMillis: configInfo.databaseSettings.connectionPool?.acquireTimeoutMillis ?? 30000,
-    });
+    const pgEndpoint = ResolvePostgreSQLEndpoint();
+    const { Host: pgHost, Port: pgPort, User: pgUser, Database: pgDatabase } = pgEndpoint;
+    // Every API pool carries the statement and idle-in-transaction timeouts from connection #1.
+    const pgConnectionConfig = BuildPostgreSQLConnectionConfig(pgEndpoint, configInfo.databaseSettings, 'api');
+    const pgPool = new pg.default.Pool(ToPGPoolConfig(pgConnectionConfig));
 
     // Verify connection
     const testClient = await pgPool.connect();
     await testClient.query('SELECT 1');
     testClient.release();
     startupLog.LogIf('verbose', `PostgreSQL pool connected to ${pgHost}:${pgPort}/${pgDatabase}`);
+
+    // A read-only pool opened with the read-only login, as SQL Server has. Read-only per-request
+    // providers (TestQuerySQL and other caller-supplied SQL) share it instead of the primary pool.
+    const pgReadOnlyCredentials = ResolvePostgreSQLReadOnlyCredentials(configInfo);
+    if (pgReadOnlyCredentials) {
+      // A pool a provider runs on must carry the provider's type parsers, so BIGINT and NUMERIC
+      // come back as numbers here as they do on the provider's own pool.
+      const readOnlyPgPool = new pg.default.Pool({
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'read-only')),
+        types: MJPostgresTypes,
+      });
+      const readOnlyTestClient = await readOnlyPgPool.connect();
+      try {
+        for (const warning of await DescribeReadOnlyLoginOverreach(readOnlyTestClient, mj_core_schema)) {
+          LogStatus(`WARNING: ${warning}`);
+        }
+      } finally {
+        readOnlyTestClient.release();
+      }
+      PostgreSQLReadOnlyPool.Instance.Pool = readOnlyPgPool;
+      startupLog.LogIf('verbose', 'Read-only PostgreSQL pool has been initialized.');
+    }
 
     // Create a DataSourceInfo with a MSSQL-compatible wrapper around pg.Pool
     // This allows existing code (types, util, context) to work without changes
@@ -441,20 +533,12 @@ const setupComplete$ = new ReplaySubject(1);
     }));
 
     // Set up the PostgreSQL provider
-    const pgConnectionConfig = {
-      Host: pgHost,
-      Port: pgPort,
-      Database: pgDatabase,
-      User: pgUser,
-      Password: pgPass,
-      MaxConnections: configInfo.databaseSettings.connectionPool?.max ?? 50,
-      MinConnections: configInfo.databaseSettings.connectionPool?.min ?? 5,
-    };
     const pgConfigData = new PostgreSQLProviderConfigData(
       pgConnectionConfig,
       mj_core_schema,
       cacheRefreshInterval / 1000, // convert ms to seconds
     );
+    pgConfigData.LocalStorageProvider = sharedCache ?? undefined;
     const provider = new PostgreSQLDataProvider();
     await provider.Config(pgConfigData);
     SetProvider(provider);
@@ -466,7 +550,7 @@ const setupComplete$ = new ReplaySubject(1);
     const sysUser = UserCache.Instance.GetSystemUser();
     const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
     const pgStartupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
-    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode });
+    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode, cacheManagerConfig, warmupLeaseMs });
 
     // Both provider sources have now had their turn — config/env at module load, metadata via
     // AuthProviderEngine's startup hook — so "no providers at all" is finally a meaningful check.
@@ -483,7 +567,7 @@ const setupComplete$ = new ReplaySubject(1);
       if (poolAny._pgPool) {
         const thePgPool = poolAny._pgPool as import('pg').Pool;
         // Translate SQL Server bracket syntax to PostgreSQL double-quote syntax
-        const pgQuery = translateBracketsToPG(query);
+        const pgQuery = TranslateBracketsToPG(query);
         const result = await thePgPool.query(pgQuery);
         return result.rows;
       }
@@ -502,21 +586,21 @@ const setupComplete$ = new ReplaySubject(1);
     const pgCodegenPass = process.env.CODEGEN_DB_PASSWORD;
     if (pgCodegenUser && pgCodegenPass) {
       try {
-        const codegenPgPool = new pg.default.Pool({
-          host: pgHost,
-          port: pgPort,
-          user: pgCodegenUser,
-          password: pgCodegenPass,
-          database: pgDatabase,
-          max: 10,
-        });
+        // CodeGen and DDL work runs long statements across every entity, so this pool gets the
+        // long CodeGen timeout rather than the API one, as the SQL Server CodeGen pool does.
+        const codegenPgConnectionConfig = BuildPostgreSQLConnectionConfig(
+          { ...pgEndpoint, User: pgCodegenUser, Password: pgCodegenPass },
+          configInfo.databaseSettings,
+          'codegen',
+        );
+        const codegenPgPool = new pg.default.Pool(ToPGPoolConfig(codegenPgConnectionConfig));
         const codegenTestClient = await codegenPgPool.connect();
         await codegenTestClient.query('SELECT 1');
         codegenTestClient.release();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
         const codegenPgConfigData = new PostgreSQLProviderConfigData(
-          { Host: pgHost, Port: pgPort, Database: pgDatabase, User: pgCodegenUser, Password: pgCodegenPass },
+          codegenPgConnectionConfig,
           mj_core_schema,
           cacheRefreshInterval / 1000, // ms → seconds
         );
@@ -624,10 +708,11 @@ const setupComplete$ = new ReplaySubject(1);
 
     // cacheRefreshInterval is configured in ms; checkRefreshIntervalSeconds declares seconds — see providerConfigUnits.ts
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
+    config.LocalStorageProvider = sharedCache ?? undefined;
     // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
     // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
     const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
-    await setupSQLServerClient(config, { mode: startupMode.mode });
+    await setupSQLServerClient(config, { mode: startupMode.mode, cacheManagerConfig, warmupLeaseMs });
 
     // See the note on the PostgreSQL path above: this is the first point at which both the
     // config/env providers and the metadata catalog have been registered.
@@ -752,82 +837,32 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.LogIf('verbose', 'Server telemetry disabled');
   }
 
-  // Optionally inject Redis as the shared storage provider for cross-server cache invalidation
-  if (process.env.REDIS_URL) {
-    const redisProvider = new RedisLocalStorageProvider({
-      url: process.env.REDIS_URL,
-      keyPrefix: process.env.REDIS_KEY_PREFIX || 'mj',
-      enablePubSub: true,
-      enableLogging: configInfo.cacheSettings?.verboseLogging ?? false,
-    });
-    (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider); // global-provider-ok: bootstrap (Redis cache wiring)
-    await redisProvider.StartListening();
-
-    // Connect Redis pub/sub events to LocalCacheManager callback dispatch
-    // so cross-server cache invalidation messages are routed to registered callbacks
-    redisProvider.OnCacheChanged((event) => {
-        const sourceShort = event.SourceServerId ? event.SourceServerId.substring(0, 8) : 'unknown';
-        console.log(`[MJAPI] Redis pub/sub → DispatchCacheChange: ${event.Action} for "${event.CacheKey}" from server ${sourceShort}`);
-        LocalCacheManager.Instance.DispatchCacheChange(event);
-
-        // Also broadcast to connected browser clients via GraphQL subscription
-        // Extract entity name from the cache key (format: EntityName|Filter|OrderBy|...)
-        const entityName = event.CacheKey ? event.CacheKey.split('|')[0] : '';
-        if (entityName) {
-            PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
-                entityName,
-                primaryKeyValues: null, // entity-level invalidation
-                action: event.Action || 'save',
-                sourceServerId: event.SourceServerId || 'unknown',
-                timestamp: new Date(),
-            });
-        }
-    });
-
-    // Fan push-status updates across server instances (MJ #4222).
-    //
-    // Behind a load balancer the browser's WebSocket lives on one replica while the mutation that
-    // drives the agent can be handled by another. The push topic is an in-process PubSub, so a
-    // completion published on replica B never reaches a subscriber on replica A — the browser waits
-    // forever for an event that was delivered to nobody. Replicating progress and completion over
-    // Redis closes that, and the durable tail query remains the backstop if Redis is down.
-    await wirePushStatusFanOut(redisProvider, startupLog);
-
-    startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
+  // The database provider already initialized LocalCacheManager from inside its own Config(), with
+  // no settings — this call is what makes `cacheSettings` take effect (Initialize merges a config
+  // handed to it later). Unconditional on purpose: the guard that used to sit here
+  // skipped exactly the case that needed it.
+  await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheManagerConfig); // global-provider-ok: bootstrap
+  if (sharedCache) {
+    await LocalCacheManager.Instance.SetStorageProvider(sharedCache);
   }
-
-  // If Redis is available, swap LocalCacheManager's storage provider to Redis.
-  // LocalCacheManager may have already been initialized (with in-memory provider)
-  // during engine loading. SetStorageProvider migrates cached data to Redis.
-  if (process.env.REDIS_URL) {
-    await LocalCacheManager.Instance.SetStorageProvider(Metadata.Provider.LocalStorageProvider); // global-provider-ok: bootstrap
-    startupLog.LogIf('verbose', 'LocalCacheManager: storage provider swapped to Redis');
-  }
-  // Ensure LocalCacheManager is initialized (no-op if already done during engine loading)
-  if (!LocalCacheManager.Instance.IsInitialized) {
-    // Build cache config from mj.config.cjs cacheSettings
-    const cs = configInfo.cacheSettings;
-    const cacheConfig = {
-      maxSizeBytes: (cs.maxMemoryMB ?? 150) * 1024 * 1024,
-      maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
-      defaultTTLMs: (cs.defaultTTLSeconds ?? 0) * 1000,
-      evictionSweepIntervalMs: (cs.evictionSweepIntervalSeconds ?? 300) * 1000,
-      verboseLogging: cs.verboseLogging ?? false,
-    };
-    await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheConfig); // global-provider-ok: bootstrap
-    if (startupLog.IsAtLeast('verbose')) {
-      // eslint-disable-next-line no-console
-      console.log('LocalCacheManager initialized with cache config:', JSON.stringify({
-        maxMemoryMB: cs.maxMemoryMB ?? 150,
-        maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
-        evictionSweepIntervalSeconds: cs.evictionSweepIntervalSeconds ?? 300,
-      }));
-    }
-  }
+  // The derived per-entry ceiling, so the boot log says what the largest cacheable entry actually is.
+  startupLog.LogIf('verbose', `LocalCacheManager: largest cacheable entry ${Math.floor(LocalCacheManager.Instance.MaxEntrySizeBytes / 1024 / 1024)} MB (maxEntryPercentOfCache: ${configInfo.cacheSettings?.maxEntryPercentOfCache ?? 'auto'})`);
+  const engineSweepMs = StartEngineSweeper(configInfo.cacheSettings);
+  startupLog.LogIf('verbose', engineSweepMs > 0 ? `Engine/database sweep every ${engineSweepMs / 1000}s` : 'Engine/database sweep disabled');
+  const userCacheCheckMs = StartUserCacheChecks(configInfo.cacheSettings);
+  startupLog.LogIf('verbose', userCacheCheckMs > 0 ? `User cache staleness check every ${userCacheCheckMs / 1000}s` : 'User cache staleness check disabled');
+  // Costs nothing unless a metadata entity declares TrustServerCacheCompletely = false.
+  const metadataSweepMs = StartMetadataSweep(configInfo.cacheSettings, () => (Metadata.Provider instanceof ProviderBase ? Metadata.Provider : undefined)); // global-provider-ok: bootstrap (this process's one provider)
+  startupLog.LogIf('verbose', metadataSweepMs > 0 ? `Metadata/database sweep every ${metadataSweepMs / 1000}s (only for entities declaring drift)` : 'Metadata/database sweep disabled');
 
   // Initialize APIKeyEngine singleton — reads apiKeyGeneration from mj.config.cjs automatically
   // This must happen before any request handler calls GetAPIKeyEngine()
   GetAPIKeyEngine();
+
+  // Actions that run caller-supplied SQL (Run Ad-hoc Query) run only on the read-only login, with
+  // ExecuteAdhocQuery's table check and timeout limit.
+  ActionEngineServer.Instance.SetReadOnlyProviderFactory(() => CreateReadOnlyProvider(dataSources));
+  ActionEngineServer.Instance.SetAdhocSQLAuthorizer(CreateAdhocSQLAuthorizer(configInfo.databaseSettings.requestTimeout));
 
   setupComplete$.next(true);
   raiseEvent('setupComplete', dataSources, null,  this);
@@ -1076,7 +1111,7 @@ const setupComplete$ = new ReplaySubject(1);
     const profile = await new Promise<unknown>((res, rej) =>
       profSession!.post('Profiler.stop', (e, r) => (e ? rej(e) : res((r as { profile: unknown }).profile)))
     );
-    const outPath = `/tmp/mjapi_schema_build_${process.pid}.cpuprofile`;
+    const outPath = join(mkdtempSync(join(tmpdir(), 'mjapi-schema-')), `mjapi_schema_build_${process.pid}.cpuprofile`);
     writeFileSync(outPath, JSON.stringify(profile));
     profSession.disconnect();
     // eslint-disable-next-line no-console
@@ -1243,6 +1278,9 @@ const setupComplete$ = new ReplaySubject(1);
   await apolloServer.start();
   
   // Fix #8: Add compression for better throughput performance
+  // Never advertise the framework (`X-Powered-By: Express`) — the host may have passed its own app.
+  app.disable('x-powered-by');
+
   app.use(compression({
     // Don't compress responses smaller than 1KB
     threshold: 1024,
@@ -1263,101 +1301,23 @@ const setupComplete$ = new ReplaySubject(1);
     level: 6
   }));
 
-  // Health check endpoint - registered before auth middleware so cloud
-  // platform probes (Azure App Service, AWS ALB, k8s, etc.) don't
-  // generate noisy auth errors in the logs. CORS is enabled so browser-based
-  // clients (e.g. MJExplorer's connectivity poller) can read the response.
-  app.get('/healthcheck', cors<cors.CorsRequest>(), (_req, res) => {
-    res.status(200).json({ status: 'ok' });
-  });
+  // Health check — before every middleware contribution and the auth middleware, so cloud platform
+  // probes never generate auth noise. Every core route mounts under MJAPI_BASE_PATH (see apiRoot.ts).
+  MountHealthcheckRoute(app);
 
   // Apply middleware-contributed pre-auth handlers (after compression, before routes)
   for (const mw of mwPreAuth) {
     app.use(mw);
   }
 
-  // ─── OAuth callback routes (unauthenticated, registered BEFORE auth) ─────
-  const oauthPublicUrl = configInfo.publicUrl || `${configInfo.baseUrl}:${configInfo.graphqlPort}${configInfo.graphqlRootPath || ''}`;
+  // ─── Public core routes (unauthenticated, registered BEFORE auth) ─────
+  // OAuth callback, eSignature, media, realtime SDP broker, magic-link, widget, realtime verify — see
+  // coreRoutes.ts. New custom routes belong in Server Extensions, never in serve().
+  // oauthPublicUrl is the configured public URL, derived as it always was; it is also the magic-link JWT
+  // issuer, so it stays untrimmed. Outward links use ApiRoute(…, { absolute: true }) instead.
+  const oauthPublicUrl = ConfiguredPublicUrl();
   startupLog.LogIf('verbose', `[OAuth] publicUrl: ${oauthPublicUrl}`);
-
-  let oauthAuthenticatedRouter: ReturnType<typeof createOAuthCallbackHandler>['authenticatedRouter'] | undefined;
-  if (oauthPublicUrl) {
-    const { callbackRouter, authenticatedRouter } = createOAuthCallbackHandler({
-      publicUrl: oauthPublicUrl,
-      successRedirectUrl: `${oauthPublicUrl}/oauth/success`,
-      errorRedirectUrl: `${oauthPublicUrl}/oauth/error`,
-      // Constrains where a caller-supplied frontendReturnUrl may point (open-redirect guard).
-      allowedFrontendOrigins: configInfo.cors?.allowedOrigins ?? ['*']
-    });
-    oauthAuthenticatedRouter = authenticatedRouter;
-
-    const oauthCors = cors<cors.CorsRequest>();
-
-    // OAuth callback is unauthenticated (called by external auth server)
-    app.use('/oauth', oauthCors, callbackRouter);
-    startupLog.LogIf('verbose', '[OAuth] Callback route registered at /oauth/callback');
-  }
-
-  // ─── Core HTTP Routes (Static Core Infrastructure) ─────────────────────────
-  // IMPORTANT ARCHITECTURAL NOTE:
-  // The route mounts below are strictly reserved for core framework infrastructure (OAuth, eSignature,
-  // media streaming, realtime WebRTC broker, magic-link, widgets).
-  // ALL new custom routes, external webhooks, vendor adapters, and application integrations MUST be
-  // implemented as Server Extensions (subclasses of BaseServerExtension in @memberjunction/server-extensions-core)
-  // mounted via ServerExtensionLoader — NEVER hardcoded as ad-hoc app.use() in serve().
-  // See guides/SERVER_EXTENSIONS_GUIDE.md for complete patterns and best practices.
-
-  // ─── eSignature webhook (unauthenticated, registered BEFORE auth) ─────
-  // Called by external signature providers (DocuSign Connect, etc.) without an MJ bearer token.
-  // The provider DRIVER verifies the payload signature/HMAC; MJ auth does not apply here.
-  app.use('/esignature', cors<cors.CorsRequest>(), createSignatureWebhookHandler());
-  startupLog.LogIf('verbose', '[eSignature] Webhook route registered at /esignature/webhook/:driverKey');
-
-  // ─── Authenticated media streaming (token-gated, registered BEFORE auth) ─────
-  // The `?token=` query param (minted by CreateMediaAccessToken after a per-user permission
-  // check) is the capability — the route verifies it itself, so it does NOT use the MJ bearer
-  // auth middleware (an <audio>/<video> element can't send Authorization headers).
-  app.use('/media', cors<cors.CorsRequest>(), createMediaStreamRouter());
-  startupLog.LogIf('verbose', '[Media] Streaming route registered at /media/:fileId');
-
-  // ─── Realtime WebRTC SDP broker (ticket-gated, registered BEFORE auth) ───────
-  if (configInfo.realtime?.enabled) {
-    app.use(REALTIME_SDP_EXCHANGE_PATH, cors<cors.CorsRequest>(), createRealtimeSdpBrokerRouter());
-    startupLog.LogIf('verbose', `[Realtime] WebRTC SDP broker registered at ${REALTIME_SDP_EXCHANGE_PATH}`);
-  }
-
-  // ─── Magic-link routes (MJ-issued, app-scoped external access) ───────────
-  // Public router (JWKS + redeem) mounts BEFORE the auth middleware; the
-  // authenticated invite-creation router mounts AFTER it (see below).
-  let widgetAuthenticatedRouter: ReturnType<typeof createWidgetHandler>['authenticatedRouter'] | undefined;
-  let magicLinkAuthenticatedRouter: ReturnType<typeof createMagicLinkHandler>['authenticatedRouter'] | undefined;
-  if (configInfo.magicLink?.enabled) {
-    const { publicRouter, authenticatedRouter } = createMagicLinkHandler(oauthPublicUrl, configInfo.magicLink);
-    magicLinkAuthenticatedRouter = authenticatedRouter;
-    registerMagicLinkAuthProvider(oauthPublicUrl, configInfo.magicLink);
-    app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), publicRouter);
-    startupLog.LogIf('verbose', `[MagicLink] Public routes registered at ${MAGIC_LINK_MOUNT_PATH}/redeem and ${MAGIC_LINK_MOUNT_PATH}/jwks.json`);
-  }
-
-  // ─── Public web widget: guest-session mint (PUBLIC, before auth mw) ───────
-  // Visitors hold no MJ JWT yet, so POST /widget/session is public. It reuses the
-  // magic-link RS256 key + `magic-link` auth provider (ensured idempotently inside
-  // createWidgetHandler), so it stands on its own even if magicLink.enabled is false.
-  if (configInfo.widget?.enabled) {
-    const { publicRouter: widgetRouter, authenticatedRouter: widgetAuthRouter } = createWidgetHandler(oauthPublicUrl, configInfo.widget);
-    widgetAuthenticatedRouter = widgetAuthRouter;
-    app.use(WIDGET_MOUNT_PATH, cors<cors.CorsRequest>(), widgetRouter);
-    // The widget reuses the magic-link RS256 key + auth provider to validate guest
-    // tokens, which validates by fetching the JWKS at MAGIC_LINK_MOUNT_PATH/jwks.json.
-    // When magic-link itself is disabled its public router (which serves JWKS) never
-    // mounts, so publish the key here — otherwise every guest token fails validation
-    // (the auth middleware can't fetch the public key) and the widget 401s.
-    if (!configInfo.magicLink?.enabled) {
-      app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), createMagicLinkJwksRouter());
-      startupLog.LogIf('verbose', `[Widget] Published reused signing key at ${MAGIC_LINK_MOUNT_PATH}/jwks.json (magic-link flow disabled)`);
-    }
-    startupLog.LogIf('verbose', `[Widget] Public routes registered at ${WIDGET_MOUNT_PATH}/session and ${WIDGET_MOUNT_PATH}/session/refresh`);
-  }
+  const coreAuthenticatedRouters = MountPublicCoreRoutes(app, oauthPublicUrl, startupLog);
 
   // ─── Server extensions loader & shared service registry ───────────────────
   const extensionLoader = new ServerExtensionLoader();
@@ -1367,13 +1327,22 @@ const setupComplete$ = new ReplaySubject(1);
   // Backwards-compatibility shim: synthesize ServerExtensionConfig entries from legacy configInfo.telephony
   const telephonyExtensionConfigs: ServerExtensionConfig[] = [];
   if (configInfo.telephony?.enabled) {
+    // Settings every carrier shares (inbound run-as user, call cap, outbound policy). Each carrier's own block is
+    // spread AFTER them, so a carrier can override one explicitly.
+    const sharedTelephonySettings: Record<string, unknown> = {
+      inboundRunAsUserEmail: configInfo.telephony.inboundRunAsUserEmail,
+      maxCallSeconds: configInfo.telephony.maxCallSeconds,
+      maxConcurrentCalls: configInfo.telephony.maxConcurrentCalls,
+      transferTargets: configInfo.telephony.transferTargets,
+      outbound: configInfo.telephony.outbound,
+    };
     if (configInfo.telephony.twilio) {
       telephonyExtensionConfigs.push({
         Enabled: true,
         DriverClass: 'TwilioTelephonyExtension',
         RootPath: '/telephony/twilio',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.twilio as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.twilio },
       });
     }
     if (configInfo.telephony.vonage) {
@@ -1382,7 +1351,7 @@ const setupComplete$ = new ReplaySubject(1);
         DriverClass: 'VonageTelephonyExtension',
         RootPath: '/telephony/vonage',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.vonage as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.vonage },
       });
     }
     if (configInfo.telephony.ringcentral) {
@@ -1391,7 +1360,16 @@ const setupComplete$ = new ReplaySubject(1);
         DriverClass: 'RingCentralTelephonyExtension',
         RootPath: '/telephony/ringcentral',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.ringcentral as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.ringcentral },
+      });
+    }
+    if (configInfo.telephony.livekitSip) {
+      telephonyExtensionConfigs.push({
+        Enabled: true,
+        DriverClass: 'LiveKitSipExtension',
+        RootPath: '/telephony/livekit-sip',
+        Phase: 'pre-auth',
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.livekitSip },
       });
     }
     if (configInfo.telephony.teams?.enabled) {
@@ -1410,9 +1388,9 @@ const setupComplete$ = new ReplaySubject(1);
 
   // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
   // (and remains the only source for host-only extensions such as Slack/Teams).
-  // extraReservedRoots is derived from the mounts registered above plus graphqlRootPath
-  // so a new pre-auth app.use(...) in serve() must also be added to
-  // coreReservedServerExtensionRoots() — otherwise an Open App can claim it.
+  // Every RootPath is relative to MJAPI_BASE_PATH: apiRootPath composes the real mount path, and
+  // extraReservedRoots (also relative) must list every core mount in coreRoutes.ts, otherwise an
+  // Open App can claim it.
   const extensionConfigs = prepareServerExtensionConfigs(
     mergeServerExtensionConfigs(
       options?.serverExtensions ?? [],
@@ -1421,7 +1399,8 @@ const setupComplete$ = new ReplaySubject(1);
     {
       onInvalid: (message) => LogError(message),
       onOverlap: (message) => LogStatus(message),
-      extraReservedRoots: coreReservedServerExtensionRoots(graphqlRootPath),
+      extraReservedRoots: CoreReservedServerExtensionRoots(),
+      apiRootPath: ApiRootPath(),
     },
   );
   for (const cfg of extensionConfigs) {
@@ -1432,27 +1411,14 @@ const setupComplete$ = new ReplaySubject(1);
   // Without this, the browser blocks 401 responses from the auth middleware
   // because they lack Access-Control-Allow-Origin headers, preventing the
   // client from reading the error code and triggering token refresh.
-  const corsAllowed = configInfo.cors?.allowedOrigins ?? ['*'];
-  const corsWildcard = corsAllowed.includes('*');
-  // SECURITY: never combine credentials with a wildcard/reflect-any-origin policy. When
-  // allowedOrigins is ['*'] the origin callback reflects the caller's Origin, and pairing that
-  // with Access-Control-Allow-Credentials: true lets any site a signed-in user visits make
-  // credentialed cross-origin reads. MJ's primary auth is a Bearer token (not auto-sent
-  // cross-origin), so dropping credentials under the wildcard default is safe; deployments that
-  // genuinely need credentialed CORS must configure an explicit allowedOrigins list.
-  app.use(cors<cors.CorsRequest>({
-    origin: (origin, callback) => {
-      // Allow all origins when ['*'] (default/backward-compatible),
-      // or when no Origin header (server-to-server calls).
-      if (corsWildcard || !origin || corsAllowed.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`Origin ${origin} not allowed by CORS`));
-      }
-    },
-    credentials: corsWildcard ? false : (configInfo.cors?.allowCredentials ?? true),
-    maxAge: configInfo.cors?.maxAge ?? 86400,
-  }));
+  // Extensions that declare `OwnsCORS: true` (ServerExtensionConfig) are exempt: the global
+  // middleware skips their RootPaths so it neither reflects an origin onto their responses nor
+  // answers their preflights — the extension's own OPTIONS handling and origin policy run instead.
+  const corsOwnedExtensionRoots = GetCorsOwningServerExtensionRoots(extensionConfigs);
+  if (corsOwnedExtensionRoots.length > 0) {
+    LogStatus(`Global CORS skips extension-owned roots: ${corsOwnedExtensionRoots.join(', ')}`);
+  }
+  app.use(CreateGlobalCorsMiddleware(configInfo.cors, corsOwnedExtensionRoots));
 
   // ─── Pre-auth server extensions (before auth — extensions handle their own auth) ─────
   // Slack uses HMAC signature verification, Teams uses Bot Framework JWT validation.
@@ -1463,23 +1429,12 @@ const setupComplete$ = new ReplaySubject(1);
       phase: 'pre-auth',
       httpServer,
       publicUrl: oauthPublicUrl,
+      apiRootPath: ApiRootPath(),
     });
   }
 
-  // Extension health endpoint (always available, returns empty array if no extensions)
-  app.get('/health/extensions', async (_req, res) => {
-    const results = await extensionLoader.HealthCheckAll();
-    const allHealthy = results.length === 0 || results.every(r => r.Healthy);
-    res.status(allHealthy ? 200 : 503).json({ extensions: results });
-  });
-
-  // ─── Public authentication-provider catalog (PUBLIC, before auth mw) ──────
-  // The browser needs the provider list BEFORE it holds a token, so this is necessarily
-  // unauthenticated and must mount ahead of the auth middleware. It publishes only the
-  // non-secret allow-list (see AuthProviderEngine.GetPublicCatalog) — the same values a
-  // single-provider SPA already compiled into its bundle.
-  app.use(AUTH_CATALOG_MOUNT_PATH, cors<cors.CorsRequest>(), createAuthProviderCatalogRouter());
-  startupLog.LogIf('verbose', `[Auth] Public provider catalog registered at ${AUTH_CATALOG_MOUNT_PATH}/providers`);
+  MountExtensionHealthRoute(app, extensionLoader);
+  MountAuthCatalogRoute(app, startupLog);
 
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
   app.use(CreateUnifiedAuthMiddleware(dataSources));
@@ -1492,25 +1447,16 @@ const setupComplete$ = new ReplaySubject(1);
     app.use(mw);
   }
 
-  // ─── OAuth authenticated routes (auth already handled by unified middleware) ─────
-  if (oauthAuthenticatedRouter) {
-    const oauthCors = cors<cors.CorsRequest>();
-    app.use('/oauth', oauthCors, BodyParser.json(), oauthAuthenticatedRouter);
-    startupLog.LogIf('verbose', '[OAuth] Authenticated routes registered at /oauth/status, /oauth/initiate, and /oauth/exchange');
-  }
+  // ─── Authenticated core routes: OAuth status/initiate/exchange, magic-link create, widget resolve-identity ─────
+  MountAuthenticatedCoreRoutes(app, coreAuthenticatedRouters, startupLog);
 
-  // ─── Magic-link authenticated route (invite creation) ─────────────────────
-  if (magicLinkAuthenticatedRouter) {
-    app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), magicLinkAuthenticatedRouter);
-    startupLog.LogIf('verbose', `[MagicLink] Authenticated route registered at ${MAGIC_LINK_MOUNT_PATH}/create`);
-  }
-
-  // ─── Widget authenticated route (RV4 resolve-identity) ────────────────────
-  // Mounts after the unified auth middleware so a verified visitor (post magic-link upgrade) can
-  // promote their anonymous returning-visitor trail to the verified record.
-  if (widgetAuthenticatedRouter) {
-    app.use(WIDGET_MOUNT_PATH, cors<cors.CorsRequest>(), widgetAuthenticatedRouter);
-    startupLog.LogIf('verbose', `[Widget] Authenticated route registered at ${WIDGET_MOUNT_PATH}/resolve-identity`);
+  // ─── Realtime recording shards + terminal signal (authenticated, owner-gated) ─────
+  // The browser uploads a client-direct call's recording as Opus shards and a keepalive terminal request;
+  // assembly runs off the request path on the scheduler. Needs a SQL provider: the ledger calls procs.
+  if (configInfo.realtime?.enabled) {
+    if (mountRealtimeRecordingRoutes(app)) {
+      startupLog.LogIf('verbose', `[Realtime] Recording routes registered at ${ApiRoute(REALTIME_RECORDING_MOUNT_PATH)}/:agentSessionId/shard/:index and /end`);
+    }
   }
 
   // ─── Post-auth server extensions ──────────────────────────────────────────
@@ -1521,7 +1467,15 @@ const setupComplete$ = new ReplaySubject(1);
       phase: 'post-auth',
       httpServer,
       publicUrl: oauthPublicUrl,
+      apiRootPath: ApiRootPath(),
     });
+  }
+
+  // Every extension has now had its chance at the request: a preflight under an extension-owned
+  // root that none of them answered is refused here, instead of falling through to the GraphQL
+  // mount's cors(), which would approve it for every origin.
+  if (corsOwnedExtensionRoots.length > 0) {
+    app.use(CreateExtensionOwnedPreflightFallback(corsOwnedExtensionRoots));
   }
 
   // ─── Cross-extension lifecycle hook: OnAllExtensionsMounted ───────────────
@@ -1530,6 +1484,7 @@ const setupComplete$ = new ReplaySubject(1);
   await extensionLoader.NotifyAllExtensionsMounted({
     httpServer,
     publicUrl: oauthPublicUrl,
+    apiRootPath: ApiRootPath(),
   });
 
   // Install the single path-routing WebSocket-upgrade dispatcher AFTER all extensions across both
@@ -1684,12 +1639,16 @@ const setupComplete$ = new ReplaySubject(1);
     });
   }
 
-  // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then keep a
-  // periodic staleness sweep running. Self-registers with ShutdownRegistry, so its timer is cleared
-  // by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
+  // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then a periodic tick
+  // that closes stale and over-deadline sessions and rebuilds lost realtime recordings from their
+  // crash-recovery shards (storage reads and writes). Self-registers with ShutdownRegistry, so its timer
+  // is cleared by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
   if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
     SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
       .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
+    // The bridge engine's orphan reconcile likewise starts only now that this process holds its port, so it can't
+    // take the live bridges of another MJAPI still serving that port for its own orphans (#5310).
+    StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
   }
 
   // Launch the durable task-graph dispatcher: claim Pending tasks, execute them with a fresh
@@ -1721,6 +1680,18 @@ const setupComplete$ = new ReplaySubject(1);
   } else if (resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
     StartTaskGraphDispatcher(taskGraphPool, resumeUser)
       .catch(err => console.warn(`[TaskGraphDispatcher] Startup failed: ${err}`));
+  }
+
+  // Start the durable work-queue host where enabled. It plans which subscriptions this instance runs,
+  // re-plans on a timer, and self-registers with ShutdownRegistry, so gracefulShutdown's awaited
+  // ShutdownAll() drains it (up to 2 × shutdownDrainMs) before the HTTP server closes.
+  // Not awaited: a slow engine load must not delay readiness, and a failure never stops the API.
+  const workQueueProvider = Metadata.Provider; // global-provider-ok: server startup — the work-queue host runs on the server's own provider
+  if (configInfo.workQueue?.enabled && workQueueProvider instanceof DatabaseProviderBase) {
+    const workQueuePool = dataSources[0]?.dataSource;
+    const providerSource = new MJServerWorkQueueProviderSource(workQueuePool instanceof sql.ConnectionPool ? workQueuePool : null, workQueueProvider);
+    StartWorkQueueHost(configInfo.workQueue, workQueueProvider, providerSource)
+      .catch(error => console.error('❌ Failed to start the work queue host:', error));
   }
 
 
@@ -2206,11 +2177,48 @@ function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
   return wrapper as unknown as sql.ConnectionPool;
 }
 
+// Defined below serve() on purpose: serverExtensionReservedRoots.test.ts treats every app.use() that appears
+// textually before the unified auth middleware as a pre-auth mount, and these routes are mounted post-auth.
 /**
- * Translates SQL Server bracket-quoted identifiers to PostgreSQL double-quoted identifiers.
- * Converts [schema].[table] to "schema"."table" and handles common T-SQL patterns.
+ * Mounts the realtime recording shard/terminal routes (post-auth) and starts the assembly scheduler they
+ * hand work to. Skipped, with a warning, when the server's provider is not a SQL provider (the ledger calls
+ * stored procedures). Without a system user the routes still store shards, and the janitor assembles them.
+ * Returns whether the routes were mounted.
  */
-function translateBracketsToPG(sql: string): string {
-  // Replace [identifier] with "identifier"
-  return sql.replace(/\[([^\]]+)\]/g, '"$1"');
+function mountRealtimeRecordingRoutes(app: Application): boolean {
+  const provider = Metadata.Provider; // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet; the ledger's procs run as the server's SQL login either way
+  if (!(provider instanceof DatabaseProviderBase)) {
+    console.warn('[Realtime] Recording routes not mounted: the server provider is not a DatabaseProviderBase');
+    return false;
+  }
+  const graceMs = (): number => configInfo.realtime.recordingAssemblyGraceSeconds * 1000;
+  const systemUser = UserCache.Instance.GetSystemUser();
+  if (systemUser) {
+    RecordingAssemblyScheduler.Instance.Start({ Provider: provider, SystemUser: systemUser, GraceMs: graceMs });
+  } else {
+    LogError('[Realtime] Recording assembly scheduler not started: no system user; the session janitor assembles recordings instead');
+  }
+  app.use(ApiRoute(REALTIME_RECORDING_MOUNT_PATH), cors<cors.CorsRequest>(), CreateRealtimeRecordingRouter({
+    ResolveCaller: req => {
+      const user: UserInfo | undefined = req.userPayload?.userRecord;
+      return user ? { ContextUser: user, Provider: provider } : null;
+    },
+    LoadOwnedSession: LoadOwnedRealtimeSession,
+    LoadConversationExternalID: LoadSessionConversationExternalID,
+    CreateLedger: (ledgerProvider, contextUser) => new SqlRealtimeRecordingLedger(ledgerProvider, contextUser),
+    Scheduler: RecordingAssemblyScheduler.Instance,
+    GraceMs: graceMs,
+    SystemUser: () => UserCache.Instance.GetSystemUser() ?? null,
+  }));
+  return true;
 }
+
+// Public-edge building blocks for Open Apps that run their own pre-auth edge and mint
+// scope-limited guest sessions (e.g. a ballot edge: verify a credential, then mint a short-lived
+// session scoped to one resource). They are the same pieces WidgetSessionService uses; a generic
+// public-widget session mint remains the long-term replacement.
+export { BuildSessionClaims, MagicLinkKeyManager, MagicLinkService, HashToken, GenerateRawToken } from './auth/magicLink/index.js';
+export type { MagicLinkJWTClaims } from './auth/magicLink/index.js';
+export { VerifyHostAssertion } from './realtimeWidget/host-identity.js';
+export type { HostAssertedIdentity, HostAssertionResult } from './realtimeWidget/host-identity.js';
+export { IsScopeLimitedPrincipal } from './auth/scopeLimitedPrincipal.js';

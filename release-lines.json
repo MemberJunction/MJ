@@ -1,7 +1,7 @@
 {
   "$schema": "./ci/release-lines.schema.json",
   "edge": {
-    "newest": "6.2.0-edge.1",
+    "newest": "6.2.0-edge.4",
     "releases": {
       "6.1.0-edge.0": {
         "dbImpact": "schema"
@@ -31,6 +31,15 @@
         "dbImpact": "schema"
       },
       "6.2.0-edge.1": {
+        "dbImpact": "schema"
+      },
+      "6.2.0-edge.2": {
+        "dbImpact": "schema"
+      },
+      "6.2.0-edge.3": {
+        "dbImpact": "schema"
+      },
+      "6.2.0-edge.4": {
         "dbImpact": "schema"
       }
     }
@@ -63,7 +72,7 @@
     "5.51": {
       "status": "maintenance",
       "certifiedBuild": "5.51.0",
-      "newest": "5.51.3",
+      "newest": "5.51.4",
       "candidateDate": "2026-07-31",
       "certifiedDate": "2026-08-14",
       "supportEnds": "2027-02-14",
@@ -77,6 +86,9 @@
         },
         "5.51.3": {
           "dbImpact": "none"
+        },
+        "5.51.4": {
+          "dbImpact": "none"
         }
       },
       "scorecard": "certifications/5.51.0.md"
@@ -84,7 +96,7 @@
     "6.1": {
       "status": "certified",
       "certifiedBuild": "6.1.4",
-      "newest": "6.1.4",
+      "newest": "6.1.6",
       "candidateDate": "2026-09-11",
       "certifiedDate": "2026-09-28",
       "supportEnds": "2027-01-28",
@@ -103,6 +115,12 @@
           "dbImpact": "schema"
         },
         "6.1.4": {
+          "dbImpact": "none"
+        },
+        "6.1.5": {
+          "dbImpact": "schema"
+        },
+        "6.1.6": {
           "dbImpact": "none"
         }
       },

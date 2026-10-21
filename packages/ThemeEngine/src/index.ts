@@ -11,3 +11,4 @@ export * from './ramps.js';
 export * from './contrast.js';
 export * from './derive.js';
 export * from './logo.js';
+export * from './login-design.js';

@@ -9,6 +9,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import {
   AIErrorType,
   BaseImageGenerator,
+  BuildCancellationErrorInfo,
   ErrorAnalyzer,
   ImageEditParams,
   ImageGenerationParams,
@@ -23,6 +24,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import {
   BaseModelRunner,
+  ExecutionBound,
   FailoverAttempt,
   ModelVendorCandidate,
 } from '../BaseModelRunner';
@@ -41,8 +43,11 @@ interface ImageOperation {
   Name: 'Generate' | 'Edit';
   /** Why the params cannot run this operation, beyond the checks every operation shares. */
   Invalid?: string;
-  /** Calls the driver, with `model` set to the candidate's API name. */
-  Invoke: (driver: BaseImageGenerator, model: string) => Promise<ImageGenerationResult>;
+  /**
+   * Calls the driver, with `model` set to the candidate's API name and `CancellationToken` to the
+   * call's bound signal.
+   */
+  Invoke: (driver: BaseImageGenerator, model: string, signal: AbortSignal | undefined) => Promise<ImageGenerationResult>;
 }
 
 /** The driver's result, and the candidate that produced it (after any failover). */
@@ -66,6 +71,11 @@ interface ImageSelection {
  * `Result` the count and sizes of the images. Usage is the driver's when it reports a quantity;
  * otherwise the images returned are counted in the `Images` measure, so the model's `Per Image`
  * cost row prices the run when the row saves. The runner never sets a cost itself.
+ *
+ * Each driver call is bounded by the caller's `TimeoutMS` and `CancellationToken`, composed as for a
+ * chat call, and the driver is handed the bound's signal so an abort tears its request down. A call
+ * that times out fails over; a call the caller cancelled does not, and its run row is recorded as
+ * `Cancelled`.
  */
 export class AIImageGenerationRunner extends BaseModelRunner {
   /** The carrier prompt used when the caller names none. */
@@ -87,7 +97,7 @@ export class AIImageGenerationRunner extends BaseModelRunner {
   public async RunImageGeneration(params: AIImageGenerationRunParams): Promise<AIImageRunResult> {
     return this.runOperation(params, {
       Name: 'Generate',
-      Invoke: (driver, model) => driver.GenerateImage({ ...this.driverParams<ImageGenerationParams>(params), model }),
+      Invoke: (driver, model, signal) => driver.GenerateImage({ ...this.driverParams<ImageGenerationParams>(params), model, CancellationToken: signal }),
     });
   }
 
@@ -99,7 +109,7 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     return this.runOperation(params, {
       Name: 'Edit',
       Invalid: params?.image ? undefined : 'A source image is required (params.image)',
-      Invoke: (driver, model) => driver.EditImage({ ...this.driverParams<ImageEditParams>(params), model }),
+      Invoke: (driver, model, signal) => driver.EditImage({ ...this.driverParams<ImageEditParams>(params), model, CancellationToken: signal }),
     });
   }
 
@@ -158,7 +168,10 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     if (!params.prompt || params.prompt.trim().length === 0) {
       return 'Image prompt text is required (params.prompt)';
     }
-    return operation.Invalid;
+    if (operation.Invalid) {
+      return operation.Invalid;
+    }
+    return params.CancellationToken?.aborted ? 'The Image Generator call was cancelled before it started' : undefined;
   }
 
   /** The carrier prompt named by `PromptID`, or the default one by name; otherwise why it is missing. */
@@ -174,17 +187,20 @@ export class AIImageGenerationRunner extends BaseModelRunner {
 
   /**
    * The base runner reads its settings from `AIPromptParams`, so the image params are mapped onto
-   * one: the carrier prompt, the context user, the keys, the parent run, the agent and its
-   * run-created hook, and the runner's provider.
+   * one: the carrier prompt, the context user, the keys and credential scope, the parent run, the agent and its
+   * run-created hook, the timeout and cancellation token, and the runner's provider.
    */
   private buildPromptParams(params: ImageRunParams, prompt: MJAIPromptEntityExtended): AIPromptParams {
     const promptParams = new AIPromptParams();
     promptParams.prompt = prompt;
     promptParams.contextUser = params.ContextUser;
     promptParams.apiKeys = params.APIKeys;
+    promptParams.CredentialScope = params.CredentialScope;
     promptParams.parentPromptRunId = params.ParentRunID;
     promptParams.agentId = params.AgentID;
     promptParams.onPromptRunCreated = params.OnPromptRunCreated;
+    promptParams.timeoutMS = params.TimeoutMS;
+    promptParams.cancellationToken = params.CancellationToken;
     if (this._provider) {
       promptParams.provider = this._provider;
     }
@@ -262,13 +278,19 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     return { Result: result, AnsweredBy: answeredBy };
   }
 
-  /** Makes the call on one candidate: resolves its credential, builds its driver, and calls it. */
+  /**
+   * Makes the call on one candidate: resolves its credential, builds its driver, and calls it. A
+   * caller that cancelled while an earlier candidate ran gets no further calls.
+   */
   private async executeOnCandidate(
     candidate: ModelVendorCandidate,
     prompt: MJAIPromptEntityExtended,
     promptParams: AIPromptParams,
     operation: ImageOperation
   ): Promise<ImageGenerationResult> {
+    if (promptParams.cancellationToken?.aborted) {
+      return this.cancelledImage();
+    }
     let apiKey: string;
     try {
       apiKey = await this.ResolveCredentialForExecution(candidate.driverClass, prompt.ID, candidate.model.ID, candidate.vendorId, promptParams);
@@ -279,7 +301,7 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     if (typeof driver === 'string') {
       return this.failedImage(driver, 'ModelError');
     }
-    return this.callDriver(driver, candidate, operation);
+    return this.callDriver(driver, candidate, prompt, promptParams, operation);
   }
 
   /** Builds the candidate's driver through the ClassFactory, or returns why it cannot be built. */
@@ -291,20 +313,53 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     return driver;
   }
 
-  /** Calls the driver. A driver that throws gets the vendor's own error classification. */
+  /**
+   * Calls the driver within the call's bound: the caller's timeout and cancellation token, composed
+   * as for a chat call. The driver is handed the bound's signal, so an abort tears its request down.
+   * A driver that throws gets the vendor's own error classification; a timeout reads as a network
+   * error, so it fails over. A call the caller cancelled is never failed over.
+   */
   private async callDriver(
     driver: BaseImageGenerator,
     candidate: ModelVendorCandidate,
+    prompt: MJAIPromptEntityExtended,
+    promptParams: AIPromptParams,
     operation: ImageOperation
   ): Promise<ImageGenerationResult> {
+    const bound = this.createExecutionBound(prompt, promptParams, promptParams.cancellationToken);
     try {
-      const result = await operation.Invoke(driver, this.apiNameFor(candidate));
-      return result ?? this.failedImage(`The image generator '${candidate.driverClass}' returned no result`, 'ModelError');
+      const result = await this.RaceWithinBound(operation.Invoke(driver, this.apiNameFor(candidate), bound.Signal), bound, prompt);
+      if (!result) {
+        return this.failedImage(`The image generator '${candidate.driverClass}' returned no result`, 'ModelError');
+      }
+      return !result.success && this.callerCancelled(bound) ? this.cancelledImage() : result;
     } catch (err: unknown) {
+      if (this.callerCancelled(bound)) {
+        return this.cancelledImage();
+      }
       const failed = this.failedImage(err instanceof Error ? err.message : String(err), 'Unknown');
       failed.errorInfo = ErrorAnalyzer.AnalyzeError(err, candidate.vendorName);
       return failed;
+    } finally {
+      bound.Dispose();
     }
+  }
+
+  /** Whether the bound's signal was aborted by the caller rather than by its timeout. */
+  private callerCancelled(bound: ExecutionBound): boolean {
+    return bound.Signal?.aborted === true && !bound.TimedOut();
+  }
+
+  /**
+   * A call the caller cancelled. It is classified `Cancelled`, so the failover loop returns it as it
+   * is, and the run row records it as cancelled.
+   */
+  private cancelledImage(): ImageGenerationResult {
+    const now = new Date();
+    const cancelled = new ImageGenerationResult(false, now, now);
+    cancelled.errorMessage = 'The Image Generator call was cancelled';
+    cancelled.errorInfo = BuildCancellationErrorInfo({ provider: 'AIImageGenerationRunner' });
+    return cancelled;
   }
 
   /** The model name the driver is given: the vendor's API name, else the model's, else its name. */
@@ -323,6 +378,8 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     delete driverParams.AgentID;
     delete driverParams.OnPromptRunCreated;
     delete driverParams.AgentRunID;
+    delete driverParams.TimeoutMS;
+    delete driverParams.CancellationToken;
     return driverParams;
   }
 
@@ -338,8 +395,14 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     return failed;
   }
 
-  /** The result returned when every failover candidate has failed. */
+  /**
+   * The result returned when every failover candidate has failed, or when the caller cancelled and
+   * the failover loop stopped, which the run row records as cancelled.
+   */
   protected createFailoverErrorResult(lastError: Error | null, failoverAttempts: FailoverAttempt[]): ImageGenerationResult {
+    if (lastError && this.IsCallerCancellation(ErrorAnalyzer.AnalyzeError(lastError))) {
+      return this.cancelledImage();
+    }
     const now = new Date();
     const result = new ImageGenerationResult(false, now, now);
     result.errorMessage = lastError?.message || `Failover failed after ${failoverAttempts.length} attempts`;
@@ -371,7 +434,10 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     });
   }
 
-  /** Finalizes the run row with the image summary, the usage to record, and any error. */
+  /**
+   * Finalizes the run row with the image summary, the usage to record, and any error. A call the
+   * caller cancelled is recorded as `Cancelled`.
+   */
   private async finalizeImageRun(
     promptRun: MJAIPromptRunEntityExtended,
     imageResult: ImageGenerationResult,
@@ -383,6 +449,11 @@ export class AIImageGenerationRunner extends BaseModelRunner {
       this.ApplyUsageToRunRecord(run, this.usageToRecord(imageResult));
       if (!imageResult.success && imageResult.errorMessage) {
         run.ErrorMessage = imageResult.errorMessage;
+      }
+      if (!imageResult.success && this.IsCallerCancellation(imageResult.errorInfo)) {
+        run.Status = 'Cancelled';
+        run.Cancelled = true;
+        run.CancellationReason = 'user_requested';
       }
     });
   }
