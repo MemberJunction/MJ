@@ -10,7 +10,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
          ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError, LogStatus, LogStatusEx,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameCache,
-         EntityRecordNameResult, RecordDependency, RecordMergeRequest, RecordMergeResult,
+         EntityRecordNameResult, RecordDependency, GetRecordDependenciesOptions, RecordMergeRequest, RecordMergeResult,
          RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
          RunQueryParams, RunQueryEnrichment, BaseEntityResult, QueryExecutionSpec,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
@@ -1730,14 +1730,28 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param entityName the name of the entity to check
      * @param KeyValuePairs the KeyValuePairs of the record to check
      */
-    public async GetRecordDependencies(entityName: string, primaryKey: CompositeKey): Promise<RecordDependency[]> {
+    public async GetRecordDependencies(
+        entityName: string,
+        primaryKey: CompositeKey,
+        _contextUser?: UserInfo | GetRecordDependenciesOptions,
+        options?: GetRecordDependenciesOptions
+    ): Promise<RecordDependency[]> {
         try {
+            const resolvedOptions =
+                options !== undefined
+                    ? options
+                    : _contextUser && !(_contextUser instanceof UserInfo) && !('UserRoles' in _contextUser) && !('Email' in _contextUser)
+                      ? (_contextUser as GetRecordDependenciesOptions)
+                      : undefined;
+
             // execute the gql query to get the dependencies
-            const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $CompositeKey: CompositeKeyInputType!) {
-                GetRecordDependencies(entityName: $entityName, CompositeKey: $CompositeKey) {
+            const query = resolvedOptions
+                ? gql`query GetRecordDependenciesQuery ($entityName: String!, $CompositeKey: CompositeKeyInputType!, $options: RecordDependencyOptionsInput) {
+                GetRecordDependencies(entityName: $entityName, CompositeKey: $CompositeKey, options: $options) {
                     EntityName
                     RelatedEntityName
                     FieldName
+                    FieldDisplayName
                     PrimaryKey {
                         KeyValuePairs {
                             FieldName
@@ -1748,11 +1762,32 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     EntityIDFieldName
                 }
             }`
+                : gql`query GetRecordDependenciesQuery ($entityName: String!, $CompositeKey: CompositeKeyInputType!) {
+                GetRecordDependencies(entityName: $entityName, CompositeKey: $CompositeKey) {
+                    EntityName
+                    RelatedEntityName
+                    FieldName
+                    FieldDisplayName
+                    PrimaryKey {
+                        KeyValuePairs {
+                            FieldName
+                            Value
+                        }
+                    }
+                    IsSoftLink
+                    EntityIDFieldName
+                }
+            }`;
 
             // now we have our query built, execute it
-            const vars = {
+            const vars: {
+                entityName: string;
+                CompositeKey: { KeyValuePairs: KeyValuePair[] };
+                options?: GetRecordDependenciesOptions;
+            } = {
                 entityName: entityName,
-                CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)}
+                CompositeKey: { KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs) },
+                ...(resolvedOptions ? { options: resolvedOptions } : {}),
             };
             const data = await this.ExecuteGQL(query, vars);
 
@@ -1761,6 +1796,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     EntityName: string;
                     RelatedEntityName: string;
                     FieldName: string;
+                    FieldDisplayName?: string | null;
                     PrimaryKey?: { KeyValuePairs?: KeyValuePair[] };
                     IsSoftLink?: boolean | null;
                     EntityIDFieldName?: string | null;
@@ -1769,6 +1805,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     dep.EntityName = raw.EntityName;
                     dep.RelatedEntityName = raw.RelatedEntityName;
                     dep.FieldName = raw.FieldName;
+                    dep.FieldDisplayName = raw.FieldDisplayName ?? undefined;
                     const kvps = (raw.PrimaryKey?.KeyValuePairs ?? []).map(kv => new KeyValuePair(kv.FieldName, kv.Value));
                     const pk = new CompositeKey(kvps);
                     if (pk.KeyValuePairs.length === 0 && kvps.length > 0) {

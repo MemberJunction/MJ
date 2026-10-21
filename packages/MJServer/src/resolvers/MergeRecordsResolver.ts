@@ -38,6 +38,18 @@ export class EntityDependencyResolver {
   }
 }
 
+@InputType()
+export class RecordDependencyOptionsInput {
+  @Field(() => String, { nullable: true })
+  LinkType?: 'both' | 'hard' | 'soft';
+
+  @Field(() => Boolean, { nullable: true })
+  IncludeSystemEntities?: boolean;
+
+  @Field(() => [String], { nullable: true })
+  EntityNames?: string[];
+}
+
 @ObjectType()
 export class RecordDependencyResult {
   @Field(() => String)
@@ -48,6 +60,9 @@ export class RecordDependencyResult {
 
   @Field(() => String)
   FieldName: string; // required
+
+  @Field(() => String, { nullable: true })
+  FieldDisplayName?: string;
 
   @Field(() => CompositeKeyOutputType)
   PrimaryKey: CompositeKey;
@@ -70,17 +85,23 @@ export class RecordDependencyResolver {
     @Arg('entityName', () => String) entityName: string,
     @Arg('CompositeKey', () => CompositeKeyInputType) ckInput: CompositeKeyInputType,
     @Ctx() { dataSource, userPayload, providers }: AppContext,
-    @PubSub() pubSub: PubSubEngine
+    @PubSub() pubSub: PubSubEngine,
+    @Arg('options', () => RecordDependencyOptionsInput, { nullable: true }) options?: RecordDependencyOptionsInput
   ) {
     try {
       const md = GetReadOnlyProvider(providers);
       const ck = new CompositeKey(ckInput.KeyValuePairs);
-      const result = await md.GetRecordDependencies(entityName, ck);
+      const contextUser = userPayload?.userRecord;
+      const result =
+        options !== undefined || contextUser !== undefined
+          ? await md.GetRecordDependencies(entityName, ck, contextUser, options)
+          : await md.GetRecordDependencies(entityName, ck);
       
       return result.map(dep => ({
         EntityName: dep.EntityName,
         RelatedEntityName: dep.RelatedEntityName,
         FieldName: dep.FieldName,
+        FieldDisplayName: dep.FieldDisplayName,
         PrimaryKey: dep.PrimaryKey,
         CompositeKey: dep.PrimaryKey,
         IsSoftLink: dep.IsSoftLink,
