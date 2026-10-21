@@ -3148,6 +3148,52 @@ describe('BaseAgent.Execute — replayed reasoning behind an unchanged history',
     });
 });
 
+describe('BaseAgent.Execute — replayed reasoning after an earlier message is rewritten', () => {
+    type Selection = AIPromptRunResult['modelSelectionInfo'];
+    /** A run on a prefix-bound driver whose first tool result is stubbed before the third request, as expiry would. */
+    class RewritingAgent extends HarnessAgent {
+        protected override resolveAppendOnlyState(): boolean {
+            return true;
+        }
+        protected override replayedReasoningRequiresStablePrefix(): boolean {
+            return true;
+        }
+        protected override async pruneAndCompactExpiredMessages(params: ExecuteAgentParams): Promise<void> {
+            const firstResults = params.conversationMessages.findIndex((m) => m.role === 'tool');
+            // Before the third request: both call turns are answered.
+            if (params.conversationMessages.filter((m) => m.role === 'tool').length === 2) {
+                params.conversationMessages[firstResults] = { ...params.conversationMessages[firstResults], content: [{ type: 'tool_result', toolCallId: 'c1', toolName: 'x', content: '[result expired]' }] } as ChatMessage;
+            }
+        }
+    }
+
+    function thinkingCall(id: string): AIPromptRunResult {
+        const result = llmNativeActionCall(id, true);
+        const message = (result.chatResult as unknown as { data: { choices: Array<{ message: Record<string, unknown> }> } }).data.choices[0].message;
+        message.reasoning = [{ provider: 'anthropic', kind: 'thinking', text: `Think ${id}.`, signature: `sig-${id}` }];
+        return { ...result, modelSelectionInfo: { ModelSelected: { ID: 'm' }, vendorSelected: { ID: 'v' } } as unknown as Selection };
+    }
+
+    it('keeps the reasoning made before the change and drops the reasoning after it, in the request and the history', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new RewritingAgent();
+        const runner = new ScriptedPromptRunner([() => thinkingCall('c1'), () => thinkingCall('c2'), () => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(3);
+        const third = runner.Calls[2].conversationMessages as AgentChatMessage[];
+        const turnOf = (messages: AgentChatMessage[], id: string) => messages.find((m) => m.toolCalls?.some((c) => c.id === id));
+        expect(turnOf(third, 'c1')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c1' });
+        expect(turnOf(third, 'c2')).not.toHaveProperty('reasoning');
+        expect(turnOf(params.conversationMessages as AgentChatMessage[], 'c2')).not.toHaveProperty('reasoning');
+        // The second request, sent before the rewrite, still carried the turn-1 reasoning unchanged.
+        expect(turnOf(runner.Calls[1].conversationMessages as AgentChatMessage[], 'c1')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c1' });
+    });
+});
+
 describe('BaseAgent — a native complete_task refused by validation', () => {
     class Probe extends HarnessAgent {
         public async Process(step: BaseAgentNextStep, params: ExecuteAgentParams): Promise<BaseAgentNextStep> {

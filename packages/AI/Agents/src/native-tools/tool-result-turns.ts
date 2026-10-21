@@ -77,6 +77,21 @@ export function CompactToolResultContent(message: AgentChatMessage, compact: (te
     };
 }
 
+/**
+ * {@link CompactToolResultContent} with an asynchronous compactor — for one that calls a model,
+ * such as an AI summary. Blocks are compacted one at a time, in order.
+ */
+export async function CompactToolResultContentAsync(message: AgentChatMessage, compact: (text: string) => Promise<string>): Promise<AgentChatMessage> {
+    if (!Array.isArray(message.content)) {
+        return { ...message, content: await compact(String(message.content)) };
+    }
+    const content: typeof message.content = [];
+    for (const block of message.content) {
+        content.push(block.type === 'tool_result' ? { ...block, content: await compact(block.content) } : block);
+    }
+    return { ...message, content };
+}
+
 /** How {@link CompactAnsweredToolCallArguments} decides what to shorten. */
 export interface ToolCallArgumentCompaction {
     /** The most recent call turns left untouched — the model may still be working from them. */

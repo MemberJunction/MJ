@@ -19,7 +19,7 @@ import { TurnToolCallingMode } from './native-tools/turn-mode';
 import { NATIVE_CONTROL_TEMPLATE_DATA, NATIVE_ONLY_TEMPLATE_FLAG, ResolveNativeControlConfig, type NativeControlConfig } from './native-tools/native-control-config';
 import type { AgentToolContext, AgentToolDefinition, AgentToolResult } from './native-tools/agent-tools';
 import { BuildFrameworkTools, type FrameworkToolAvailability, type FrameworkToolHost } from './native-tools/framework-tools';
-import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactAnsweredToolCallArguments, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
+import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactAnsweredToolCallArguments, CompactToolResultContent, CompactToolResultContentAsync, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID, ResolvePayloadAtEnd } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
@@ -731,6 +731,8 @@ export class BaseAgent {
      * @private
      */
     private _lastVolatileStateMessage: AgentChatMessage | undefined;
+    /** The previous request's outgoing messages, as {@link messageFingerprint}s. */
+    private _lastSentFingerprints: string[] | undefined;
 
     /**
      * The trailing-state retention mode once it has been decided for this run, frozen at the first
@@ -2357,6 +2359,7 @@ export class BaseAgent {
             this._lastModelSelectionInfo = undefined;
             this._lastVolatileStateMessage = undefined;
             this._resolvedTrailingStateMode = undefined;
+            this._lastSentFingerprints = undefined;
             this._turn1InsertionIndex = -1;
             this._runScope = undefined; // set again by initializeAgentRun, in Phase 1
             this.resetActionCircuitBreaker();
@@ -6088,8 +6091,60 @@ export class BaseAgent {
             }
             this._lastVolatileStateMessage = volatileStateMessage;
         }
+        if (promptParams.conversationMessages) {
+            promptParams.conversationMessages = this.dropReasoningBehindChangedHistory(params, promptParams.conversationMessages);
+        }
 
         return promptParams;
+    }
+
+    /**
+     * Drops replayed reasoning that the history before it no longer matches.
+     *
+     * A driver with `ReplayedReasoningRequiresStablePrefix` accepts a replayed reasoning block
+     * only while every message before it is exactly what was sent when the block was produced.
+     * Expiry, compaction, message expansion and context recovery all rewrite earlier messages,
+     * and each would make the request fail. So the outgoing messages are compared with the
+     * previous request's: from the first message that was changed or removed, every call turn's
+     * reasoning is dropped — in this request and in the history, so later requests stay
+     * consistent. Messages the previous request did not have (the model's reply, new results)
+     * are not a change.
+     */
+    private dropReasoningBehindChangedHistory(params: ExecuteAgentParams, outgoing: ChatMessage[]): ChatMessage[] {
+        const fingerprints = outgoing.map(BaseAgent.messageFingerprint);
+        const previous = this._lastSentFingerprints;
+        this._lastSentFingerprints = fingerprints;
+        const selection = this._lastModelSelectionInfo;
+        if (!previous || this._nativeToolBindings === undefined
+            || !this.replayedReasoningRequiresStablePrefix(selection?.ModelSelected, selection?.vendorSelected)) {
+            return outgoing;
+        }
+        const changedAt = previous.findIndex((fingerprint, i) => fingerprints[i] !== fingerprint);
+        if (changedAt < 0) {
+            return outgoing;
+        }
+        const stale = new Set(outgoing.slice(changedAt).flatMap((m) => (m as AgentChatMessage).reasoning?.length ? ((m as AgentChatMessage).toolCalls ?? []).map((c) => c.id) : []));
+        if (stale.size === 0) {
+            return outgoing;
+        }
+        const withoutReasoning = (m: ChatMessage): ChatMessage => {
+            const { reasoning: _dropped, ...rest } = m as AgentChatMessage;
+            return rest;
+        };
+        const callsStale = (m: ChatMessage) => !!(m as AgentChatMessage).reasoning && ((m as AgentChatMessage).toolCalls ?? []).some((c) => stale.has(c.id));
+        // In place: the caller holds this array.
+        params.conversationMessages.forEach((m, i) => {
+            if (callsStale(m)) {
+                params.conversationMessages[i] = withoutReasoning(m);
+            }
+        });
+        this.logStatus(`Dropped replayed reasoning from ${stale.size} tool call(s): an earlier message changed since it was produced`, true, params);
+        return outgoing.map((m, i) => (i >= changedAt && callsStale(m) ? withoutReasoning(m) : m));
+    }
+
+    /** What makes a message the same message to a provider — reasoning aside, which only this check removes. */
+    private static messageFingerprint(m: ChatMessage): string {
+        return JSON.stringify([m.role, m.content, (m as AgentChatMessage).toolCalls?.map((c) => [c.id, c.name, c.arguments])]);
     }
 
     /**
@@ -20794,9 +20849,10 @@ The context is now within limits. Please retry your request with the recovered c
         for (const item of messagesToCompact) {
             const originalContent = item.message.content;
             if (item.message.role === 'tool') {
-                // compact per block so the tool turn keeps answering its call.
-                const limit = item.metadata.compactLength || 500;
-                const compactedTurn = CompactToolResultContent(item.message, (t) => (t.length > limit ? `${t.slice(0, limit)}… [compacted from ${t.length} chars]` : t));
+                // Compact per block, in the action's own mode (first N chars or an AI summary), so
+                // the tool turn keeps answering its call.
+                const compactedTurn = await CompactToolResultContentAsync(item.message, (text) =>
+                    this.compactMessage({ ...item.message, content: text }, { ...item.metadata, originalLength: text.length }, params));
                 const saved = this.estimateTokens(originalContent) - this.estimateTokens(compactedTurn.content);
                 params.conversationMessages[item.index] = {
                     ...compactedTurn,
