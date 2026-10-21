@@ -176,6 +176,7 @@ function makeQueryInfo(overrides: Partial<{
         CacheEnabled: overrides.CacheEnabled ?? false,
         AuditQueryRuns: overrides.AuditQueryRuns ?? false,
         UserCanRun: vi.fn().mockReturnValue({ canRun: true, deniedEntities: [] }),
+        UserCanRunRenderedSQL: vi.fn().mockReturnValue({ canRun: true, deniedEntities: [] }),
         UserHasRunPermissions: vi.fn().mockReturnValue(true),
         GetPlatformSQL: vi.fn().mockReturnValue(overrides.SQL ?? 'SELECT 1'),
         QueryParameters: [],

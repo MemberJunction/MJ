@@ -931,16 +931,25 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * error carries them, and its message otherwise.
      */
     private static isUnsupportedDefinitionHashError(e: unknown): boolean {
-        const errors = (e as { response?: { errors?: Array<{ message?: string; extensions?: { code?: string } }> } } | null)?.response?.errors;
-        if (errors && errors.length > 0) {
-            return errors.some(error => GraphQLDataProvider.isDefinitionHashSchemaRejection(error.message, error.extensions?.code));
-        }
-        return e instanceof Error && GraphQLDataProvider.isDefinitionHashSchemaRejection(e.message, undefined);
+        return GraphQLDataProvider.isSchemaRejection(e, GraphQLDataProvider.UNSUPPORTED_DEFINITION_HASH_ERRORS);
     }
 
-    /** True when `message` is one of the schema rejections and `code`, if given, is its code. */
-    private static isDefinitionHashSchemaRejection(message: string | undefined, code: string | undefined): boolean {
-        return GraphQLDataProvider.UNSUPPORTED_DEFINITION_HASH_ERRORS.some(rejection =>
+    /**
+     * True when one of the GraphQL errors `e` carries is one of `rejections`, with that rejection's
+     * code when the server sends one. Reads the structured GraphQL errors when the thrown error
+     * carries them, and its message otherwise.
+     */
+    private static isSchemaRejection(e: unknown, rejections: ReadonlyArray<{ Code: string; Message: string }>): boolean {
+        const errors = (e as { response?: { errors?: Array<{ message?: string; extensions?: { code?: string } }> } } | null)?.response?.errors;
+        if (errors && errors.length > 0) {
+            return errors.some(error => GraphQLDataProvider.matchesSchemaRejection(rejections, error.message, error.extensions?.code));
+        }
+        return e instanceof Error && GraphQLDataProvider.matchesSchemaRejection(rejections, e.message, undefined);
+    }
+
+    /** True when `message` is one of `rejections` and `code`, if given, is its code. */
+    private static matchesSchemaRejection(rejections: ReadonlyArray<{ Code: string; Message: string }>, message: string | undefined, code: string | undefined): boolean {
+        return rejections.some(rejection =>
             !!message && message.includes(rejection.Message) && (code === undefined || code === rejection.Code));
     }
 
@@ -1417,7 +1426,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     ): Promise<RunViewsWithCacheCheckResponse<T>> {
         try {
             // Build the GraphQL input
-            const input = params.map(item => ({
+            const buildInput = (includeFieldSecurityKey: boolean) => params.map(item => ({
                 params: {
                     EntityName: item.params.EntityName || '',
                     // ExtraFilter/OrderBy are resolved to strings by ProviderBase
@@ -1456,6 +1465,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
                     rowCount: item.cacheStatus.rowCount,
+                    // Lets the server answer "stale" when this user's columns changed but no row did.
+                    // Left out for a server that predates it (see executeRunViewsCacheCheckGQL).
+                    ...(includeFieldSecurityKey && item.cacheStatus.fieldSecurityKey != null
+                        ? { fieldSecurityKey: item.cacheStatus.fieldSecurityKey } : {}),
                 } : null,
             }));
 
@@ -1500,7 +1513,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
             `;
 
-            const responseData = await this.ExecuteGQL(query, { input });
+            const responseData = await this.executeRunViewsCacheCheckGQL(query, buildInput);
             const response = responseData?.['RunViewsWithCacheCheck'] as {
                 success: boolean;
                 errorMessage?: string;
@@ -1606,6 +1619,42 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             };
         }
     }
+
+    /**
+     * Runs the RunViewsWithCacheCheck query, sending each cache status's `fieldSecurityKey`.
+     *
+     * A server older than the field-security key rejects the field. The call is then retried once
+     * without it (the server falls back to row-only validation), and the field is left out of later
+     * calls for {@link DEFINITION_HASH_RETRY_MS} before it is tried again, the same pattern as the
+     * query definition hash.
+     *
+     * @param query - The RunViewsWithCacheCheck document
+     * @param buildInput - Builds the `input` variable, with or without the key
+     */
+    private async executeRunViewsCacheCheckGQL<TInput>(query: string, buildInput: (includeFieldSecurityKey: boolean) => TInput): Promise<Record<string, unknown> | null | undefined> {
+        const sendKey = this._fieldSecurityKeyUnsupportedUntil == null || Date.now() >= this._fieldSecurityKeyUnsupportedUntil;
+        try {
+            return await this.ExecuteGQL(query, { input: buildInput(sendKey) });
+        } catch (e) {
+            if (!sendKey || !GraphQLDataProvider.isSchemaRejection(e, GraphQLDataProvider.UNSUPPORTED_FIELD_SECURITY_KEY_ERRORS)) {
+                throw e;
+            }
+            this._fieldSecurityKeyUnsupportedUntil = Date.now() + GraphQLDataProvider.DEFINITION_HASH_RETRY_MS;
+            LogStatusEx({ message: 'RunViewsWithCacheCheck: the server does not support field-security cache keys — validating cached views by rows only', verboseOnly: true });
+            return await this.ExecuteGQL(query, { input: buildInput(false) });
+        }
+    }
+
+    /**
+     * When a server last rejected `fieldSecurityKey`, the time (ms) until which it is left out of
+     * RunViewsWithCacheCheck calls. Null while the server is assumed to support it.
+     */
+    private _fieldSecurityKeyUnsupportedUntil: number | null = null;
+
+    /** The error a server whose schema predates `fieldSecurityKey` returns: the input field fails variable coercion. */
+    private static readonly UNSUPPORTED_FIELD_SECURITY_KEY_ERRORS: ReadonlyArray<{ Code: string; Message: string }> = [
+        { Code: 'BAD_USER_INPUT', Message: 'Field "fieldSecurityKey" is not defined by type "RunViewCacheStatusInput"' },
+    ];
 
     protected async getEntityNameAndUserView(params: RunViewParams, contextUser?: UserInfo): Promise<{entityName: string, v: MJUserViewEntityExtended}> {
         let entityName: string;
