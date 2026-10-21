@@ -245,6 +245,7 @@ export class ExecuteAgentAction extends BaseAction {
 
     /** Field values of `entities` (all of one entity type), without the fields `user` may not read. */
     private rowsForCaller(entities: BaseEntity[], provider: RecordChangeMetadataSource, user: UserInfo | undefined): Record<string, unknown>[] {
+        // fls-guard: projected by ProjectEntityValueRowsForUser below
         const rows: Record<string, unknown>[] = entities.map((entity) => entity.GetAll());
         return ProjectEntityValueRowsForUser(provider, entities[0]?.EntityInfo, rows, user) ?? rows;
     }

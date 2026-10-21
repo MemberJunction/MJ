@@ -377,6 +377,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             Success: true,
             // Mapped for the caller, so the field-security projection applies: the record was just
             // saved, and a save re-reads the whole row.
+            // fls-guard: projected for contextUser by MapFieldNamesToCodeNames
             Query: await this.MapFieldNamesToCodeNames('MJ: Queries', entity.GetAll(), contextUser, provider) as MJQuery_,
             Fields: this.mapFields(entity.QueryFields),
             Parameters: this.mapParameters(entity.QueryParameters),

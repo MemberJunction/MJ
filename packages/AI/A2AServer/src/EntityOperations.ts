@@ -103,6 +103,7 @@ export class EntityOperations {
      * @returns JSON representation of the entity
      */
     public async ConvertEntityObjectToJSON(record: BaseEntity): Promise<string> {
+        // fls-guard: projected by ProjectEntityValuesForUser below
         const values: Record<string, unknown> = await record.GetDataObject({
             includeRelatedEntityData: false,
             oldValues: false,

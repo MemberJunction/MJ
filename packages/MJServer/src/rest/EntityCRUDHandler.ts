@@ -74,7 +74,7 @@ export class EntityCRUDHandler {
             }
             
             // Get entity data for response
-            const entityData = await this.ResponseData(entity, user, md);
+            const entityData = await this.responseData(entity, user, md);
             return { success: true, entity: entityData };
         } catch (error: any) {
             LogError(error);
@@ -118,7 +118,7 @@ export class EntityCRUDHandler {
             }
             
             // Get entity data for response
-            const entityData = await this.ResponseData(entity, user, md);
+            const entityData = await this.responseData(entity, user, md);
             return { success: true, entity: entityData };
         } catch (error: any) {
             LogError(error);
@@ -186,7 +186,7 @@ export class EntityCRUDHandler {
             // Check if entity is dirty
             if (!entity.Dirty && !options.IgnoreDirtyState) {
                 // Nothing changed, return success
-                const entityData = await this.ResponseData(entity, user, md);
+                const entityData = await this.responseData(entity, user, md);
                 return { success: true, entity: entityData };
             }
             
@@ -213,7 +213,7 @@ export class EntityCRUDHandler {
             }
             
             // Get entity data for response
-            const entityData = await this.ResponseData(entity, user, md);
+            const entityData = await this.responseData(entity, user, md);
             return { success: true, entity: entityData };
         } catch (error: any) {
             LogError(error);
@@ -285,7 +285,8 @@ export class EntityCRUDHandler {
      * object built for a restricted user holds no denied value already; this is the backstop for
      * one that does.
      */
-    private static async ResponseData(entity: BaseEntity, user: UserInfo, md: Metadata): Promise<Record<string, unknown>> {
+    private static async responseData(entity: BaseEntity, user: UserInfo, md: Metadata): Promise<Record<string, unknown>> {
+        // fls-guard: projected by ProjectValuesForCaller
         return ProjectValuesForCaller(entity.EntityInfo, await entity.GetDataObject() as Record<string, unknown>, user, md);
     }
 

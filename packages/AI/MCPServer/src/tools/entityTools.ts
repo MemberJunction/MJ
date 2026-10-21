@@ -201,6 +201,7 @@ export function AddEntityDeleteTool(addToolWithFilter: AddToolFn, entity: Entity
  * @returns JSON string representation of the entity data
  */
 async function convertEntityObjectToJSON(record: BaseEntity, user: UserInfo, md: Metadata): Promise<string> {
+    // fls-guard: projected by ProjectEntityValuesForUser below
     const values: Record<string, unknown> = await record.GetDataObject({
         includeRelatedEntityData: false,
         oldValues: false,
