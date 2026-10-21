@@ -132,6 +132,7 @@ import { TransactionFrameTracker } from './TransactionFrameTracker';
 import { TransactionAffinity, type TransactionMembership } from './TransactionAffinity.js';
 import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
 import { ClientClauseScreen, type ClientClauseScreeningProvider } from './clientClauseScreen.js';
+import { IsSystemUser } from './systemUser.js';
 import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -2627,7 +2628,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // in a literal: it is what keeps the text inside the quotes, where no keyword it
             // contains can mean anything to the parser.
             if (userSearchString.length > 0) {
-                const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, userSearchString, user);
+                const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, userSearchString, user, this.ResolveRequestDeniedReadFields(params, entityInfo, user));
                 if (sUserSearchSQL.length > 0) {
                     whereSQL = bHasWhere ? `${whereSQL} AND (${sUserSearchSQL})` : `(${sUserSearchSQL})`;
                     bHasWhere = true;
@@ -3254,9 +3255,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // Binary columns are omitted from every implicit field list (saved-view columns and
             // the no-Fields wildcard) unless requested; an explicit params.Fields entry is honoured.
             const includeBinary = params.IncludeBinaryFields === true;
+            // The request's own denied set, shared with its cache key (ResolveRequestDeniedReadFields),
+            // so the slot this fill lands in is keyed for the columns it actually selects.
             const flsUser = contextUser ?? this.CurrentUser;
-            const denied: Set<string> = params.ResultType !== 'entity_object' && flsUser && entityInfo.FieldLevelSecurityApplies
-                ? entityInfo.GetDeniedReadFields(flsUser)
+            const denied: Set<string> = params.ResultType !== 'entity_object'
+                ? this.ResolveRequestDeniedReadFields(params, entityInfo, flsUser)
                 : new Set<string>();
 
             if (params.Fields) {
@@ -3311,8 +3314,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      *   - escapes LIKE metacharacters (%, _, [, ]) in user input with ESCAPE '\\',
      *   - skips fields that are not sensible text-search targets (non-text types,
      *     unbounded text columns when FTX is off).
+     *
+     * @param deniedFields - The request's denied set (see ResolveRequestDeniedReadFields), so the
+     *   searched columns match the ones its cache key and SELECT list were built from. Read from
+     *   the entity for `contextUser` when omitted.
      */
-    protected createViewUserSearchSQL(entityInfo: EntityInfo, userSearchString: string, contextUser?: UserInfo): string {
+    protected createViewUserSearchSQL(entityInfo: EntityInfo, userSearchString: string, contextUser?: UserInfo, deniedFields?: Set<string>): string {
         let sUserSearchSQL = '';
         const safeUserSearchString = userSearchString.replace(/'/g, "''");
 
@@ -3323,9 +3330,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // fields are simply excluded from the searched set. Computed once per call, never per
         // field (the per-request precompute contract).
         const user = contextUser ?? this.CurrentUser;
-        const deniedSearchFields: Set<string> = entityInfo.FieldLevelSecurityApplies && user
-            ? entityInfo.GetDeniedReadFields(user)
-            : new Set<string>();
+        const deniedSearchFields: Set<string> = deniedFields
+            ?? (entityInfo.FieldLevelSecurityApplies && user ? entityInfo.GetDeniedReadFields(user) : new Set<string>());
 
         // The full-text index spans its indexed columns as one unit — a denied FTS-indexed
         // column cannot be excluded from the index function. When (and only when) a denied
@@ -3865,6 +3871,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         callerFieldsByIndex.set(i, ProviderBase.UnionFieldsWithPrimaryKeys(requested, widenEntity));
                     }
                 }
+                // A status the browser computed for other columns than this user may read now
+                // describes a slot with the wrong columns, even if no row changed. Dropping it sends
+                // the item down the "nothing cached" path, which answers with fresh rows.
+                if (this.cacheStatusFieldSecurityDiffers(params[i].cacheStatus, p, user)) {
+                    params[i].cacheStatus = undefined;
+                }
             }
             /** Projects rows down to the caller's requested shape for a given item index. */
             const projectForCaller = (index: number, rows: unknown[]): unknown[] => {
@@ -4064,9 +4076,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     continue;
                 }
                 if (LocalCacheManager.Instance.IsInitialized) {
-                    const rlsWhereClause = this.ComputeRunViewRLSWhereClause(entry.item.params, contextUser);
-                    const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(entry.item.params);
-                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(entry.item.params, this.InstanceConnectionString, rlsWhereClause, undefined, flsFieldsKey);
+                    const fingerprint = this.ComputeRunViewCacheFingerprint(entry.item.params, user);
                     const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                     if (cached) {
                         const entityLabel = entry.item.params.EntityName || 'unknown';
@@ -4221,7 +4231,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // Free text, not a SQL fragment — deliberately NOT run through
         // ValidateUserProvidedSQLClause. See the equivalent note on the view path above (#4392).
         if (params.UserSearchString && params.UserSearchString.length > 0) {
-            const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, params.UserSearchString, user);
+            const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, params.UserSearchString, user, this.ResolveRequestDeniedReadFields(params, entityInfo, user));
             if (sUserSearchSQL.length > 0) {
                 whereSQL = bHasWhere ? `${whereSQL} AND (${sUserSearchSQL})` : `(${sUserSearchSQL})`;
                 bHasWhere = true;
@@ -4352,9 +4362,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // external source has caching disabled — skip the write to avoid stale data.
                 const ttlMs = await this.resolveExternalCacheTTLMs(params, contextUser);
                 if (ttlMs !== 0) {
-                    const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
-                    const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(params);
-                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause, undefined, flsFieldsKey);
+                    const fingerprint = this.ComputeRunViewCacheFingerprint(params, contextUser);
                     const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
                     // Pass the aggregates (B38-family omission #4). This slot is ALSO written by
                     // InternalRunView's normal PostRunView path WITH aggregates — two writers,
@@ -4512,6 +4520,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * 'needs_verification' when the server slot's freshness window has elapsed),
      * or null if the server cache doesn't have this data (or was evicted due to client monotonicity).
      */
+    /**
+     * True when a browser's cache status carries a field-security key (see
+     * `ProviderBase.ComputeFieldSecurityCacheStatusKey`) other than the one this server computes
+     * for `user` and `params`: the browser's slot was filled for a different set of columns, so
+     * its row count and newest timestamp say nothing about whether it is current. False when the
+     * status carries no key.
+     */
+    private cacheStatusFieldSecurityDiffers(status: RunViewWithCacheCheckParams['cacheStatus'], params: RunViewParams, user: UserInfo): boolean {
+        if (status?.fieldSecurityKey == null) {
+            return false; // an older client: no key, no check
+        }
+        return status.fieldSecurityKey !== this.ComputeFieldSecurityCacheStatusKey(params, user);
+    }
+
     private async resolveFromServerCache(
         item: RunViewWithCacheCheckParams,
         index: number,
@@ -4528,9 +4550,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             return null;
         }
 
-        const rlsWhereClause = this.ComputeRunViewRLSWhereClause(item.params, contextUser);
-        const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(item.params);
-        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(item.params, this.InstanceConnectionString, rlsWhereClause, undefined, flsFieldsKey);
+        const fingerprint = this.ComputeRunViewCacheFingerprint(item.params, contextUser);
         const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
         if (!cached) return null;
 
@@ -4805,12 +4825,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     continue;
                 }
 
-                const runCheck = query.UserCanRun(user);
+                const runCheck = this.authorizeQueryRun(query, item.params.Parameters, user);
                 if (!runCheck.canRun) {
                     const deniedMsg = runCheck.deniedEntities.length > 0
                         ? ` Denied entities: ${runCheck.deniedEntities.join(', ')}.`
                         : '';
-                    errorResults.push({ queryIndex: i, queryId: query.ID, status: 'error', errorMessage: `User does not have permission to run query: ${query.Name}.${deniedMsg}` });
+                    const errorMessage = runCheck.renderError ?? `User does not have permission to run query: ${query.Name}.${deniedMsg}`;
+                    errorResults.push({ queryIndex: i, queryId: query.ID, status: 'error', errorMessage });
                     continue;
                 }
 
@@ -4904,6 +4925,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * applies before a real execution. The base's roles-only check would let a user read cached
      * rows of a query whose underlying entities they cannot read.
      *
+     * The run-time checks (`UserCanRunRenderedSQL`: entities read by the SQL itself, and field-level
+     * security) run against the query rendered with the request's own parameters: the SQL the miss
+     * path would check and execute for this slot, since the slot's fingerprint carries those
+     * parameters and its definition hash the query's SQL. A user the miss path would refuse is never
+     * served the slot; a rendering that fails is treated as not authorized, so the request falls
+     * through to execution and gets that path's error.
+     *
      * Non-throwing by contract: any resolution error degrades to `resolvable: false`, which the
      * gate treats as "fall through to authorized execution" — one extra query run, never an
      * unauthorized serve and never a crashed cache path.
@@ -4916,7 +4944,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
             return {
                 resolvable: true,
-                authorized: !user || query.UserCanRun(user).canRun,
+                authorized: !user || this.authorizeQueryRun(query, params.Parameters, user).canRun,
                 categoryPath: query.CategoryPath,
                 queryName: query.Name,
                 contextTokens: this.queryContextTokens(query),
@@ -5012,12 +5040,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (user) {
             const result = query.UserCanRun(user);
             if (!result.canRun) {
-                const deniedMsg = result.deniedEntities.length > 0
-                    ? ` Denied entities: ${result.deniedEntities.join(', ')}.`
-                    : '';
-                throw new Error(
-                    `User does not have permission to run query '${query.Name}' (ID: ${query.ID}).${deniedMsg}`
-                );
+                throw new Error(this.queryRunRefusalMessage(query, result.deniedEntities));
             }
         }
 
@@ -5085,6 +5108,66 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             id => [engine.Queries.find(q => UUIDsEqual(q.ID, id))?.SQL, ...engine.QuerySQLs.filter(s => UUIDsEqual(s.QueryID, id)).map(s => s.SQL)],
             id => engine.Dependencies.filter(d => UUIDsEqual(d.QueryID, id)).map(d => d.DependsOnQueryID)
         );
+    }
+
+    /**
+     * SECURITY — authorizes a saved query against the SQL the run will execute (fully composed and
+     * rendered), after {@link ValidateQueryForExecution} has passed: the entities that SQL reads,
+     * and field-level security on every column it references. A template that injects an
+     * identifier, a `{% if %}` branch and a `{{query:"..."}}` composition are all checked as they
+     * render. A query carrying `MJ: Query Permissions` rows is authorized by its role list alone.
+     * The refusal does not say which field or clause caused it.
+     *
+     * @throws Error when the user may not run this rendering of the query
+     */
+    protected ValidateRenderedQueryForExecution(query: MJQueryEntityExtended, renderedSQL: string, contextUser?: UserInfo): void {
+        const user = contextUser || this.CurrentUser;
+        if (!user) {
+            return;
+        }
+        const result = this.checkRenderedQuery(query, renderedSQL, user);
+        if (!result.canRun) {
+            throw new Error(this.queryRunRefusalMessage(query, result.deniedEntities));
+        }
+    }
+
+    /** The refusal for a user who may not run `query`; names entities the user cannot read, never a field. */
+    private queryRunRefusalMessage(query: MJQueryEntityExtended, deniedEntities: string[]): string {
+        const deniedMsg = deniedEntities.length > 0 ? ` Denied entities: ${deniedEntities.join(', ')}.` : '';
+        return `User does not have permission to run query '${query.Name}' (ID: ${query.ID}).${deniedMsg}`;
+    }
+
+    /** The run-time checks of `query` for `user` on this provider's entities and dialect; logs a field-security refusal. */
+    private checkRenderedQuery(query: MJQueryEntityExtended, renderedSQL: string, user: UserInfo): { canRun: boolean; deniedEntities: string[] } {
+        const result = query.UserCanRunRenderedSQL(user, renderedSQL, this.Entities, this.PlatformKey);
+        if (result.fieldSecurityViolation) {
+            const v = result.fieldSecurityViolation;
+            LogStatusEx({ message: `RunQuery: query '${query.Name}' refused for user '${user.Email}' by field-level security (${v.Kind}: ${v.Reference}${v.Entity ? ` on ${v.Entity.Name}` : ''}).`, verboseOnly: true });
+        }
+        return result;
+    }
+
+    /**
+     * The full authorization of a saved query for one request: {@link MJQueryEntityExtended.UserCanRun}
+     * and the run-time checks on the query rendered with `parameters`. A rendering that fails
+     * refuses, carrying the rendering's error.
+     */
+    private authorizeQueryRun(
+        query: MJQueryEntityExtended,
+        parameters: Record<string, string> | undefined,
+        user: UserInfo,
+    ): { canRun: boolean; deniedEntities: string[]; renderError?: string } {
+        const base = query.UserCanRun(user);
+        if (!base.canRun) {
+            return base;
+        }
+        let renderedSQL: string;
+        try {
+            renderedSQL = this.processQueryParameters(query, parameters, user).finalSQL;
+        } catch (e) {
+            return { canRun: false, deniedEntities: [], renderError: e instanceof Error ? e.message : String(e) };
+        }
+        return this.checkRenderedQuery(query, renderedSQL, user);
     }
 
     /**
@@ -5525,6 +5608,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             if (params.RequireApproved) {
                 await this.ValidateQueryApprovalAsync(query, resolved.renderResult);
             }
+            // Authorize what will actually run, before any cache, materialized or external read.
+            this.ValidateRenderedQueryForExecution(query, finalSQL, contextUser);
 
             // ── Phase 2: materialized read redirect (plan §5) ──
             // If the caller opted into DataSource:'Materialized' and this query has a fresh, Active
@@ -5803,6 +5888,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             RequireReadStatement: true,
             ...(usePaging ? { Paging: { StartRow: startRow, MaxRows: params.MaxRows! } } : {}),
         });
+        this.AssertAdhocReadAllowed(rendered.Trace.AfterTemplates, contextUser);
         const options = this.adhocSQLOptions(params);
         if (!usePaging) {
             const { result, executionTime } = await this.executeQueryWithTiming(rendered.FinalSQL, contextUser, undefined, options);
@@ -5816,6 +5902,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         ]);
         const rows = dataResult ?? [];
         return { rows, totalRowCount: total ?? startRow + rows.length, executionTime: Date.now() - start };
+    }
+
+    /**
+     * SECURITY — what ad-hoc SQL may read, checked in the provider so that every in-process caller
+     * (agents, data contexts, actions) is covered, not only the API's resolvers. `sql` is the
+     * rendered statement, before the server's own paging wrap. Every table it reads must be an
+     * entity base view the caller can read unscoped: CanRead with no row-level filter and no denied
+     * field, because raw SQL applies neither ({@link ClientClauseScreen.AssertStatementReadsUnscopedEntityViews}).
+     * The system user runs the server's own SQL and is not checked. No user at all refuses.
+     *
+     * @throws Error when the caller may not run `sql`
+     */
+    protected AssertAdhocReadAllowed(sql: string, contextUser?: UserInfo): void {
+        const user = contextUser ?? this.CurrentUser;
+        if (!user) {
+            throw new Error('Invalid ad-hoc SQL: no acting user resolved — refusing');
+        }
+        if (IsSystemUser(user)) {
+            return;
+        }
+        ClientClauseScreen.AssertStatementReadsUnscopedEntityViews(sql, this.Entities, ClientClauseScreen.DialectFor(this), user, 'ad-hoc SQL');
     }
 
     /**

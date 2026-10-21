@@ -1832,20 +1832,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return;
         }
 
-        // Get the connection string from the provider for fingerprint generation
-        // The provider is needed because fingerprints include connection prefix
-        const provider = this.ProviderToUse;
-        let connectionString: string | undefined;
-        if (provider && 'InstanceConnectionString' in provider) {
-            connectionString = (provider as ProviderBase).InstanceConnectionString;
-        }
-
-        // Use the shared builder so the fingerprint matches what LoadSingleEntityConfig
-        // and RegisterCacheChangeCallbacks produce — prevents silent cache-slot mismatches
-        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
-            this.BuildRunViewParamsForConfig(config),
-            connectionString
-        );
+        // The same builder as LoadSingleEntityConfig and RegisterCacheChangeCallbacks, so the
+        // slot maintained here is the one this engine reads and listens on.
+        const fingerprint = this.configFingerprint(config);
 
         // Build CompositeKey from the entity's primary key fields
         const key = entity.PrimaryKey;
@@ -1873,6 +1862,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             );
         } else {
             const entityData = entity.GetAll();
+            // A row-filtered or field-secured slot, or a saved row missing columns, cannot take the
+            // saver's values in place: clear it and let the next read refill it.
+            if (!LocalCacheManager.Instance.CanUpsertRowIntoSlot(fingerprint, entity.EntityInfo, entityData)) {
+                await LocalCacheManager.Instance.InvalidateRunViewResult(fingerprint);
+                return;
+            }
             await LocalCacheManager.Instance.UpsertSingleEntity(
                 fingerprint,
                 entityData,
@@ -2158,14 +2153,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * IgnoreMaxRows, IncludeBinaryFields) are always consistent — preventing cache key mismatches that break
      * cross-server invalidation via Redis pub/sub and local cache upsert/remove operations.
      *
-     * **Row-level security is not part of the fingerprints built from these params.** The engine
-     * builds them with `GenerateRunViewFingerprint(params, connection)`, without the RLS clause the
-     * provider adds for the reading user. On a server that is correct: engines load as the system
-     * user, whose RLS clause is empty, so the provider's fingerprint for the same read matches. An
-     * engine loaded by an RLS-scoped user (possible on a client) would compute an unscoped
-     * fingerprint for a slot the provider stored under a scoped one, so its cache callbacks and
-     * `syncLocalCacheForConfig` would target a different slot. Pass the RLS clause here if such an
-     * engine is ever needed.
+     * The slot fingerprint for these params also carries the engine user's row-level-security
+     * and field-security segments; see {@link configFingerprint}.
      */
     protected BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig, bypassCache: boolean = false): RunViewParams {
         return {
@@ -2953,11 +2942,26 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
     }
 
-    /** The cache fingerprint of a config's slot, as {@link RegisterCacheChangeCallbacks} computes it. */
+    /**
+     * The cache fingerprint of a config's slot: the one {@link RegisterCacheChangeCallbacks} listens
+     * on, {@link syncLocalCacheForConfig} maintains and {@link storeConfigRows} writes.
+     *
+     * Built by the provider for this engine's user, with that user's row-level-security and
+     * field-security segments, so it names the same slot the provider's own RunView read used. An
+     * engine running as a restricted user holds only what that user may see; without the segments
+     * its rows would be written into, and its callbacks registered on, the slot unrestricted
+     * readers share.
+     */
     protected configFingerprint(config: BaseEnginePropertyConfig): string {
+        const params = this.BuildRunViewParamsForConfig(config);
         const provider = this.RunViewProviderToUse;
-        const connectionPrefix = provider instanceof ProviderBase ? provider.InstanceConnectionString : undefined;
-        return LocalCacheManager.Instance.GenerateRunViewFingerprint(this.BuildRunViewParamsForConfig(config), connectionPrefix);
+        if (provider instanceof ProviderBase) {
+            return provider.ComputeRunViewCacheFingerprint(params, this._contextUser);
+        }
+        const connection = provider && 'InstanceConnectionString' in provider
+            ? (provider as { InstanceConnectionString?: string }).InstanceConnectionString
+            : undefined;
+        return LocalCacheManager.Instance.GenerateRunViewFingerprint(params, connection);
     }
 
     /**
