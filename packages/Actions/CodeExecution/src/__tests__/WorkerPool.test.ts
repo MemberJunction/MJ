@@ -12,6 +12,8 @@ vi.mock('@memberjunction/core', () => ({
 // Create a mock ChildProcess class that extends EventEmitter
 class MockChildProcess extends EventEmitter {
   killed = false;
+  exitCode: number | null = null;
+  signalCode: string | null = null;
   pid = Math.floor(Math.random() * 10000);
 
   send = vi.fn().mockReturnValue(true);
@@ -323,6 +325,7 @@ describe('WorkerPool', () => {
 
       // Pre-kill the worker
       mockProcesses[0].killed = true;
+      mockProcesses[0].exitCode = 0;
 
       // Should not throw
       await expect(pool.shutdown()).resolves.not.toThrow();
@@ -375,6 +378,33 @@ describe('WorkerPool', () => {
       }
 
       expect(proc.kill).toHaveBeenCalledTimes(1); // SIGTERM only — no SIGKILL follow-up
+    });
+  });
+
+  describe('worker startup failure', () => {
+    // Round 17 memory-leak fix: a worker that never reports ready used to stay alive as an
+    // orphaned process, because the crash handler is only attached after the ready-wait.
+    it('kills a worker that fails to report ready within the startup window', async () => {
+      mockedFork.mockImplementation(() => {
+        const proc = new MockChildProcess(); // never simulates ready
+        mockProcesses.push(proc);
+        return proc as unknown as ReturnType<typeof fork>;
+      });
+      pool = new WorkerPool({ poolSize: 1 });
+
+      vi.useFakeTimers();
+      let outcome: PromiseSettledResult<void>;
+      try {
+        const init = pool.initialize();
+        const settled = Promise.allSettled([init]).then(r => r[0]);
+        await vi.advanceTimersByTimeAsync(5000);
+        outcome = await settled;
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(outcome.status).toBe('rejected');
+      expect(mockProcesses[0].kill).toHaveBeenCalledWith('SIGKILL');
     });
   });
 

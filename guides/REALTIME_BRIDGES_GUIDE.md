@@ -775,7 +775,8 @@ are multi-party media transports — so LiveKit is "*another bridge, not a speci
 
 > **Running LiveKit: local dev vs production (Cloud).** The LiveKit SFU runs *alongside* MJAPI — MJAPI
 > only mints join tokens (`LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET`), it never proxies
-> media. For **local dev**, run a throwaway server — Docker for browser-only testing, or native
+> media. Optional: `MJ_LIVEKIT_WORKER_MEDIA=on` runs the native room I/O in a worker thread (experimental, off by default;
+> see the [LiveKitNative README](../packages/AI/RealtimeBridge/Providers/LiveKitNative/README.md)). For **local dev**, run a throwaway server — Docker for browser-only testing, or native
 > `livekit-server --config docker/livekit/livekit.yaml` for the agent-bot path on macOS (Docker NAT
 > breaks the bot's WebRTC media there). For **production / real-world deployments**, use
 > [**LiveKit Cloud**](https://cloud.livekit.io) — drop its `wss://…livekit.cloud` URL + key + secret into

@@ -1,9 +1,9 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { ResolverBase } from './ResolverBase.js';
+import { ResolverBase, type RunViewResultWithResolvedView } from './ResolverBase.js';
 import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey } from '@memberjunction/core';
 
-import { UUIDsEqual } from '@memberjunction/global';
+import { ReplaceByteArraysWithBase64, UUIDsEqual } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
@@ -200,6 +200,13 @@ export class RunViewByIDInput {
       "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
   })
   DataSource?: 'Live' | 'Materialized';
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
+  })
+  IncludeBinaryFields?: boolean;
 }
 
 @InputType()
@@ -321,6 +328,13 @@ export class RunViewByNameInput {
       "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
   })
   DataSource?: 'Live' | 'Materialized';
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
+  })
+  IncludeBinaryFields?: boolean;
 }
 
 @InputType()
@@ -428,6 +442,13 @@ export class RunDynamicViewInput {
       "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
   })
   DataSource?: 'Live' | 'Materialized';
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
+  })
+  IncludeBinaryFields?: boolean;
 }
 
 @InputType()
@@ -564,6 +585,13 @@ export class RunViewGenericInput {
       "Optional source-of-truth selector for a base-view materialization: 'Live' (default) reads the entity's live base view; 'Materialized' reads its materialized snapshot wrapper view (materialized_vw<CodeName>). Only request 'Materialized' for an entity that actually has a base-view materialization: it resolves to the wrapper view by naming convention with NO existence check or fallback, so requesting it for a non-materialized entity targets a view that does not exist and the query errors.",
   })
   DataSource?: 'Live' | 'Materialized';
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
+  })
+  IncludeBinaryFields?: boolean;
 }
 
 //****************************************************************************
@@ -768,7 +796,7 @@ export class RunViewResolver extends ResolverBase {
       await this.CheckAPIKeyScopeAuthorization('view:run', input.ViewName, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
-      if (rawData === null) {
+      if (!rawData) {
         return {
           Results: [],
           Success: false,
@@ -779,9 +807,10 @@ export class RunViewResolver extends ResolverBase {
         };
       }
 
-      const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { Name: input.ViewName }, userPayload.userRecord));
-      const entity = provider.EntityByID(viewInfo.EntityID);
-      const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
+      const viewInfo = (rawData as RunViewResultWithResolvedView)._resolvedViewEntity
+        ?? await this.resolveUserViewByName(input.ViewName, provider, userPayload.userRecord);
+      const entity = viewInfo ? provider.EntityByID(viewInfo.EntityID) : undefined;
+      const returnData = this.processRawData(rawData.Results, viewInfo?.EntityID ?? null, entity);
       return {
         Results: returnData,
         UserViewRunID: rawData?.UserViewRunID,
@@ -817,7 +846,7 @@ export class RunViewResolver extends ResolverBase {
       await this.CheckAPIKeyScopeAuthorization('view:run', input.ViewID, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
-      if (rawData === null) {
+      if (!rawData) {
         return {
           Results: [],
           Success: false,
@@ -828,9 +857,10 @@ export class RunViewResolver extends ResolverBase {
         };
       }
 
-      const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
-      const entity = provider.EntityByID(viewInfo.EntityID);
-      const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
+      const viewInfo = (rawData as RunViewResultWithResolvedView)._resolvedViewEntity
+        ?? await this.resolveUserViewByID(input.ViewID, provider, userPayload.userRecord);
+      const entity = viewInfo ? provider.EntityByID(viewInfo.EntityID) : undefined;
+      const returnData = this.processRawData(rawData.Results, viewInfo?.EntityID ?? null, entity);
       return {
         Results: returnData,
         UserViewRunID: rawData?.UserViewRunID,
@@ -983,8 +1013,9 @@ export class RunViewResolver extends ResolverBase {
         };
       }
 
-      const entity = provider.EntityByName(input.ViewName);
-      const entityId = entity ? entity.ID : null;
+      const viewInfo = (rawData as RunViewResultWithResolvedView)._resolvedViewEntity;
+      const entity = viewInfo ? provider.EntityByID(viewInfo.EntityID) : provider.EntityByName(input.ViewName);
+      const entityId = viewInfo?.EntityID ?? (entity ? entity.ID : null);
       const returnData = this.processRawData(rawData.Results, entityId, entity);
       return {
         Results: returnData,
@@ -1030,9 +1061,10 @@ export class RunViewResolver extends ResolverBase {
         };
       }
 
-      const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
-      const entity = provider.EntityByID(viewInfo.EntityID);
-      const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
+      const viewInfo = (rawData as RunViewResultWithResolvedView)._resolvedViewEntity
+        ?? await this.resolveUserViewByID(input.ViewID, provider, userPayload.userRecord);
+      const entity = viewInfo ? provider.EntityByID(viewInfo.EntityID) : undefined;
+      const returnData = this.processRawData(rawData.Results, viewInfo?.EntityID ?? null, entity);
       return {
         Results: returnData,
         UserViewRunID: rawData?.UserViewRunID,
@@ -1184,12 +1216,29 @@ export class RunViewResolver extends ResolverBase {
     @Ctx() { providers, userPayload }: AppContext
   ): Promise<RunViewsWithCacheCheckOutput> {
     try {
+      // Same scope as RunViews: this is the transport RunViews uses for a CacheLocal batch.
+      await this.CheckAPIKeyScopeAuthorization('view:batch', '*', userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
 
       // Cast provider to SQLServerDataProvider to access RunViewsWithCacheCheck method
       const sqlProvider = provider as unknown as SQLServerDataProvider;
       if (!sqlProvider.RunViewsWithCacheCheck) {
         throw new Error('Provider does not support RunViewsWithCacheCheck');
+      }
+
+      // SECURITY: same GraphQL-boundary clause screen as RunViews, before the provider runs.
+      const user = this.GetUserFromPayload(userPayload);
+      for (const item of input) {
+        this.screenClientViewClauses(
+          {
+            extraFilter: item.params.ExtraFilter,
+            orderBy: item.params.OrderBy,
+            userSearchString: item.params.UserSearchString,
+            overrideExcludeFilter: item.params.OverrideExcludeFilter,
+          },
+          provider,
+          user,
+        );
       }
 
       // Convert GraphQL input types to core types
@@ -1219,6 +1268,11 @@ export class RunViewResolver extends ResolverBase {
           // DataSource must be forwarded on this transport too (same as the InternalRunView/RunViews maps):
           // otherwise a CacheLocal batch's DataSource:'Materialized' request silently reads the live view.
           DataSource: item.params.DataSource,
+          IncludeBinaryFields: item.params.IncludeBinaryFields,
+          // BypassCache likewise — the input type (RunDynamicViewInput) has always declared it, and its
+          // own description promises "the pre-check cache lookup is skipped". Dropping it here left the
+          // provider free to answer a deliberate database read from the server cache.
+          BypassCache: item.params.BypassCache,
           AfterKey: item.params.AfterKey
             ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
             : undefined,
@@ -1322,7 +1376,9 @@ export class RunViewResolver extends ResolverBase {
       returnResult.push({
         PrimaryKey: primaryKey,
         EntityID: entityId,
-        Data: JSON.stringify(row),
+        // Binary columns arrive as base64 from the providers; this is the safety net for any
+        // row that still holds a byte array, which JSON.stringify would emit as {type,data}.
+        Data: JSON.stringify(ReplaceByteArraysWithBase64(row)),
       });
     }
     return returnResult;

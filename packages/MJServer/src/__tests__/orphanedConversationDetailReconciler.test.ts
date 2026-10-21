@@ -20,8 +20,10 @@ const { mockGetEntityObject, writableStore } = vi.hoisted(() => ({
     writableStore: { last: null as Record<string, unknown> | null },
 }));
 
-vi.mock('@memberjunction/global', () => ({
-    UUIDsEqual: (a: string, b: string) => String(a).toLowerCase() === String(b).toLowerCase(),
+// The real UUID helpers: the reconciler indexes users with IndexByUUID, so a stub that only
+// provides UUIDsEqual would make the owner lookup throw (and the pass silently do nothing).
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/global')>()),
 }));
 
 vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
@@ -221,6 +223,19 @@ describe('ReconcileOrphanedConversationDetails', () => {
         // every save was silently rejected while the reconciler reported success-shaped logs. The
         // system user this pass runs as owns nothing, which is exactly who that gate stops.
         script([detail()], [{ ConversationDetailID: DETAIL_ID, Status: 'Failed', CompletedAt: longAgo() }]);
+
+        await ReconcileOrphanedConversationDetails(PROVIDER, USER);
+
+        expect(mockGetEntityObject).toHaveBeenCalledWith(
+            'MJ: Conversation Details',
+            expect.objectContaining({ ID: 'OWNER-1' })
+        );
+    });
+
+    it('resolves the owner when the conversation spells the user ID in a different case', async () => {
+        // The cached user is 'OWNER-1'; SQL Server and PostgreSQL disagree on UUID case, so the
+        // conversation row may carry it lower-cased. The owner lookup must still find the user.
+        script([detail()], [{ ConversationDetailID: DETAIL_ID, Status: 'Failed', CompletedAt: longAgo() }], 'owner-1');
 
         await ReconcileOrphanedConversationDetails(PROVIDER, USER);
 

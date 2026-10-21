@@ -533,6 +533,23 @@ describe('OpenRouterDecision', () => {
     });
   });
 
+  describe('4b. Credentials', () => {
+    it("sends an AI Credential's apiKey as the bearer token, not the credential's JSON", async () => {
+      let capturedInit: RequestInit | undefined;
+      globalThis.fetch = vi.fn().mockImplementation(async (_url: unknown, init?: RequestInit) => {
+        capturedInit = init;
+        return new Response(JSON.stringify(sampleResponse), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      });
+
+      // What BaseModelRunner hands a driver when the key comes from an AI Credential binding.
+      const driver = new OpenRouterDecision(JSON.stringify({ apiKey: apiKey }));
+      const result = await driver.Decide({ Model: '', State: 'State', Questions: sampleQuestions });
+
+      expect(result.success).toBe(true);
+      expect(capturedInit?.headers).toEqual({ Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' });
+    });
+  });
+
   describe('5. Cancellation', () => {
     it('passes CancellationToken signal to fetch', async () => {
       let passedSignal: AbortSignal | undefined | null;

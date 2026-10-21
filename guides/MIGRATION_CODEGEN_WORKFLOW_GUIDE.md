@@ -274,9 +274,25 @@ If a column stores structured JSON (like a `Settings` or `Configuration` column)
 After this, the generated entity class will include a typed accessor like:
 ```typescript
 get SettingsObject(): IWidgetSettings | null {
-    return this.Settings ? JSON.parse(this.Settings) : null;
+    return this.GetJSONFieldObject<IWidgetSettings>('Settings');
+}
+set SettingsObject(value: IWidgetSettings | null) {
+    this.SetJSONFieldObject<IWidgetSettings>('Settings', value);
 }
 ```
+
+The accessor is a **live view** of the column: `rec.SettingsObject.Features.push(x)` or
+`rec.SettingsObject.MaxRetries = 5` dirties the field and `Save()` persists it (earlier versions
+parsed once and silently dropped in-place edits). Use `ToPlainJSON()` from `@memberjunction/core`
+before `structuredClone`/`postMessage` of such a value.
+
+**Optional validation.** Add a `@mjValidate` (or `@mjValidate warn`) JSDoc tag to the root interface
+in the `JSONTypeDefinition` file to have CodeGen emit a structural Zod schema and a generated
+`Validate()` check for the field; JSON-Schema-style tags (`@minimum`, `@pattern`, …) and
+`@CHECK ts:(…)` / `@CHECK (SQL)` rules refine it. SQL `@CHECK` rules are LLM-translated and cached in
+`__mj.GeneratedCode` (category `CodeGen: JSON Validators`) — run CodeGen with AI enabled once and
+commit the resulting migration output. Untagged types are unchanged. Full reference:
+[JSONType Guide](JSONTYPE_GUIDE.md).
 
 ---
 
@@ -362,5 +378,6 @@ For real-world examples of this pattern in the codebase:
 
 - [migrations/CLAUDE.md](../migrations/CLAUDE.md) — Migration content rules and checklist
 - [metadata/CLAUDE.md](../metadata/CLAUDE.md) — Metadata file authoring (`@lookup`, `@file`, JSONType)
+- [JSONType Guide](JSONTYPE_GUIDE.md) — live typed accessors and opt-in `@mjValidate` / `@CHECK` validation
 - [templates/claude-pack/core/06-codegen-contract.md](../templates/claude-pack/core/06-codegen-contract.md) — What CodeGen owns vs. what you own
 - [templates/claude-pack/core/07-migrations-basics.md](../templates/claude-pack/core/07-migrations-basics.md) — Migration formatting basics

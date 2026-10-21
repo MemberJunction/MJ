@@ -106,7 +106,7 @@ export default class Init extends Command {
         name: 'model',
         message: 'Model name:',
         default: (answers: any) => {
-          if (answers.provider === 'gemini') return 'gemini-3-flash-preview';
+          if (answers.provider === 'gemini') return 'gemini-3.8-flash';
           if (answers.provider === 'openai') return 'gpt-4-turbo-preview';
           if (answers.provider === 'anthropic') return 'claude-3-opus-20240229';
           if (answers.provider === 'groq') return 'mixtral-8x7b-32768';

@@ -1,0 +1,85 @@
+{
+  "_comments": [
+    "JSONType bridge records for the rubric structured columns. See plans/rubrics/RUBRICS_PLAN.md §4.1."
+  ],
+  "fields": {
+    "Name": "MJ: Entity Fields"
+  },
+  "relatedEntities": {
+    "MJ: Entity Fields": [
+      {
+        "fields": {
+          "JSONType": "IRubricCriterionEvaluatorConfig",
+          "JSONTypeIsArray": false,
+          "JSONTypeDefinition": "@file:JSONType-interfaces/IRubricJsonTypes.ts"
+        },
+        "primaryKey": {
+          "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Criteria&Name=EvaluatorConfig"
+        },
+        "sync": {
+          "lastModified": "2026-10-06T20:21:58.443Z",
+          "checksum": "9f8438b010a69ad2798afa8e94378ad5d1e008da1186c93b5f199045997b446a"
+        }
+      },
+      {
+        "fields": {
+          "JSONType": "IRubricEvidence",
+          "JSONTypeIsArray": true,
+          "JSONTypeDefinition": "@file:JSONType-interfaces/IRubricJsonTypes.ts"
+        },
+        "primaryKey": {
+          "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Evaluation Scores&Name=Evidence"
+        },
+        "sync": {
+          "lastModified": "2026-10-06T20:21:58.468Z",
+          "checksum": "f3c21ee77b388aa4d73ec84248c91269847aea3e88866f1028f8bd74cf3a5c9f"
+        }
+      },
+      {
+        "fields": {
+          "JSONType": "IRubricEvaluationMetadata",
+          "JSONTypeIsArray": false,
+          "JSONTypeDefinition": "@file:JSONType-interfaces/IRubricJsonTypes.ts"
+        },
+        "primaryKey": {
+          "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Evaluations&Name=Metadata"
+        },
+        "sync": {
+          "lastModified": "2026-10-06T20:21:58.494Z",
+          "checksum": "f4c9c205c3e99139096921b208a10d954c5891121464b124d0415442842badc6"
+        }
+      },
+      {
+        "fields": {
+          "JSONType": "IRubricVersionChangeDetails",
+          "JSONTypeIsArray": false,
+          "JSONTypeDefinition": "@file:JSONType-interfaces/IRubricJsonTypes.ts"
+        },
+        "primaryKey": {
+          "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Versions&Name=ChangeDetails"
+        },
+        "sync": {
+          "lastModified": "2026-10-06T20:21:58.517Z",
+          "checksum": "86cc8c90911f4cb485cc11bc547dc89d206024181fba293b72808ea60b8aea7b"
+        }
+      },
+      {
+        "fields": {
+          "JSONType": "IRubricEvaluatorSelection",
+          "JSONTypeIsArray": false,
+          "JSONTypeDefinition": "@file:JSONType-interfaces/IRubricJsonTypes.ts"
+        },
+        "primaryKey": {
+          "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Rubrics&Name=EvaluatorConfig"
+        },
+        "sync": {
+          "lastModified": "2026-10-06T20:21:58.541Z",
+          "checksum": "7b17bb8b2321a9dad0ef7d56aed17b6b731e4ae523fb17108fb23a762b6816da"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "@lookup:MJ: Entities.Name=MJ: Entity Fields"
+  }
+}

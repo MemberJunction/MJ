@@ -36,6 +36,8 @@ import { FileArtifactToolbarComponent } from './components/file-artifact-toolbar
 import { PdfArtifactViewerComponent } from './components/plugins/pdf-artifact-viewer.component';
 import { XlsxArtifactViewerComponent } from './components/plugins/xlsx-artifact-viewer.component';
 import { DocxArtifactViewerComponent } from './components/plugins/docx-artifact-viewer.component';
+import { DocxPreviewComponent } from './components/previews/docx-preview.component';
+import { XlsxPreviewComponent } from './components/previews/xlsx-preview.component';
 import { ImageArtifactViewerComponent } from './components/plugins/image-artifact-viewer.component';
 import { VideoArtifactViewerComponent } from './components/plugins/video-artifact-viewer.component';
 import { AudioArtifactViewerComponent } from './components/plugins/audio-artifact-viewer.component';
@@ -90,6 +92,8 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     PdfArtifactViewerComponent,
     XlsxArtifactViewerComponent,
     DocxArtifactViewerComponent,
+    DocxPreviewComponent,
+    XlsxPreviewComponent,
     ImageArtifactViewerComponent,
     VideoArtifactViewerComponent,
     AudioArtifactViewerComponent,
@@ -141,6 +145,8 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     PdfArtifactViewerComponent,
     XlsxArtifactViewerComponent,
     DocxArtifactViewerComponent,
+    DocxPreviewComponent,
+    XlsxPreviewComponent,
     ImageArtifactViewerComponent,
     VideoArtifactViewerComponent,
     AudioArtifactViewerComponent,

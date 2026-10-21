@@ -76,6 +76,16 @@ describe('derive() reproduces MJ defaults within tolerance', () => {
       hexToOKLCH(t.tokens.light['--mj-brand-primary']).l,
     );
   });
+
+  it('dark status text pins the 300 step, in lockstep with _tokens.scss (MJ#4564)', () => {
+    // These are Tailwind *-300 hexes copied into derive.ts STATUS.*Text300. _tokens.scss
+    // resolves --mj-status-*-text to --mj-color-*-300 in dark; ThemeStudio previews read
+    // derived.tokens.dark, so the two must not drift apart.
+    expect(t.tokens.dark['--mj-status-success-text']).toBe('#86efac');
+    expect(t.tokens.dark['--mj-status-warning-text']).toBe('#fcd34d');
+    expect(t.tokens.dark['--mj-status-error-text']).toBe('#fca5a5');
+    expect(t.tokens.dark['--mj-status-info-text']).toBe('#93c5fd');
+  });
 });
 
 describe('derived extras', () => {
