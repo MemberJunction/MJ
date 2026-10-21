@@ -15,9 +15,11 @@
 --      reproduced or traced. Most installs have no such rows.
 --   4. Add the foreign key and make the column NOT NULL, so every run names its document.
 --
--- An Entity Document with duplicate-run results cannot be deleted: Duplicate Runs and their
--- details do not cascade deletes, so the foreign keys refuse it and the run history stays as an
--- audit trail. A document that is no longer needed is set Inactive instead.
+-- An Entity Document with history (duplicate runs, synced vectors) cannot be deleted: nothing
+-- cascades from it (metadata/entities/.entity-cascade-deletes-entity-documents.json turns
+-- CascadeDeletes off for MJ: Entity Documents), so the foreign keys refuse the delete before
+-- anything is removed and the history stays as an audit trail. A document that is no longer
+-- needed is set Inactive instead.
 --
 -- DDL, the backfill the NOT NULL needs, and extended properties only. The FK index, base view,
 -- stored procedures and EntityField metadata are produced by CodeGen and appended below the
@@ -131,8 +133,8 @@ GO
  *
  * It contains the EntityField and EntityRelationship rows for DuplicateRun.EntityDocumentID,
  * the foreign-key index, the regenerated vwDuplicateRuns view, spCreate/spUpdate/spDelete for
- * MJ: Duplicate Runs, and spDeleteEntityDocument (MJ: Entity Documents cascades deletes, so it
- * now reaches MJ: Duplicate Runs through the new foreign key), with their permission grants.
+ * MJ: Duplicate Runs, and spDeleteEntityDocument without cascades (MJ: Entity Documents no
+ * longer cascades deletes), with their permission grants.
  *
  * DO NOT EDIT BY HAND. If the DDL above changes, re-run CodeGen and replace this entire
  * generated section.
@@ -681,123 +683,6 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteEntityDocument]
 AS
 BEGIN
     SET NOCOUNT ON;
-    -- Cascade update on ContentSource using cursor to call spUpdateContentSource
-    DECLARE @MJContentSources_EntityDocumentIDID uniqueidentifier
-    DECLARE @MJContentSources_EntityDocumentID_Name nvarchar(255)
-    DECLARE @MJContentSources_EntityDocumentID_ContentTypeID uniqueidentifier
-    DECLARE @MJContentSources_EntityDocumentID_ContentSourceTypeID uniqueidentifier
-    DECLARE @MJContentSources_EntityDocumentID_ContentFileTypeID uniqueidentifier
-    DECLARE @MJContentSources_EntityDocumentID_URL nvarchar(2000)
-    DECLARE @MJContentSources_EntityDocumentID_EmbeddingModelID uniqueidentifier
-    DECLARE @MJContentSources_EntityDocumentID_VectorIndexID uniqueidentifier
-    DECLARE @MJContentSources_EntityDocumentID_Configuration nvarchar(MAX)
-    DECLARE @MJContentSources_EntityDocumentID_EntityID uniqueidentifier
-    DECLARE @MJContentSources_EntityDocumentID_EntityDocumentID uniqueidentifier
-    DECLARE @MJContentSources_EntityDocumentID_SegmenterKey nvarchar(100)
-    DECLARE @MJContentSources_EntityDocumentID_CleanerKey nvarchar(100)
-    DECLARE @MJContentSources_EntityDocumentID_ScheduledJobID uniqueidentifier
-    DECLARE cascade_update_MJContentSources_EntityDocumentID_cursor CURSOR FOR
-        SELECT [ID], [Name], [ContentTypeID], [ContentSourceTypeID], [ContentFileTypeID], [URL], [EmbeddingModelID], [VectorIndexID], [Configuration], [EntityID], [EntityDocumentID], [SegmenterKey], [CleanerKey], [ScheduledJobID]
-        FROM [${flyway:defaultSchema}].[ContentSource]
-        WHERE [EntityDocumentID] = @ID
-
-    OPEN cascade_update_MJContentSources_EntityDocumentID_cursor
-    FETCH NEXT FROM cascade_update_MJContentSources_EntityDocumentID_cursor INTO @MJContentSources_EntityDocumentIDID, @MJContentSources_EntityDocumentID_Name, @MJContentSources_EntityDocumentID_ContentTypeID, @MJContentSources_EntityDocumentID_ContentSourceTypeID, @MJContentSources_EntityDocumentID_ContentFileTypeID, @MJContentSources_EntityDocumentID_URL, @MJContentSources_EntityDocumentID_EmbeddingModelID, @MJContentSources_EntityDocumentID_VectorIndexID, @MJContentSources_EntityDocumentID_Configuration, @MJContentSources_EntityDocumentID_EntityID, @MJContentSources_EntityDocumentID_EntityDocumentID, @MJContentSources_EntityDocumentID_SegmenterKey, @MJContentSources_EntityDocumentID_CleanerKey, @MJContentSources_EntityDocumentID_ScheduledJobID
-
-    WHILE @@FETCH_STATUS = 0
-    BEGIN
-        -- Set the FK field to NULL
-        SET @MJContentSources_EntityDocumentID_EntityDocumentID = NULL
-
-        -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateContentSource] @ID = @MJContentSources_EntityDocumentIDID, @Name = @MJContentSources_EntityDocumentID_Name, @ContentTypeID = @MJContentSources_EntityDocumentID_ContentTypeID, @ContentSourceTypeID = @MJContentSources_EntityDocumentID_ContentSourceTypeID, @ContentFileTypeID = @MJContentSources_EntityDocumentID_ContentFileTypeID, @URL = @MJContentSources_EntityDocumentID_URL, @EmbeddingModelID = @MJContentSources_EntityDocumentID_EmbeddingModelID, @VectorIndexID = @MJContentSources_EntityDocumentID_VectorIndexID, @Configuration = @MJContentSources_EntityDocumentID_Configuration, @EntityID = @MJContentSources_EntityDocumentID_EntityID, @EntityDocumentID_Clear = 1, @EntityDocumentID = @MJContentSources_EntityDocumentID_EntityDocumentID, @SegmenterKey = @MJContentSources_EntityDocumentID_SegmenterKey, @CleanerKey = @MJContentSources_EntityDocumentID_CleanerKey, @ScheduledJobID = @MJContentSources_EntityDocumentID_ScheduledJobID
-
-        FETCH NEXT FROM cascade_update_MJContentSources_EntityDocumentID_cursor INTO @MJContentSources_EntityDocumentIDID, @MJContentSources_EntityDocumentID_Name, @MJContentSources_EntityDocumentID_ContentTypeID, @MJContentSources_EntityDocumentID_ContentSourceTypeID, @MJContentSources_EntityDocumentID_ContentFileTypeID, @MJContentSources_EntityDocumentID_URL, @MJContentSources_EntityDocumentID_EmbeddingModelID, @MJContentSources_EntityDocumentID_VectorIndexID, @MJContentSources_EntityDocumentID_Configuration, @MJContentSources_EntityDocumentID_EntityID, @MJContentSources_EntityDocumentID_EntityDocumentID, @MJContentSources_EntityDocumentID_SegmenterKey, @MJContentSources_EntityDocumentID_CleanerKey, @MJContentSources_EntityDocumentID_ScheduledJobID
-    END
-
-    CLOSE cascade_update_MJContentSources_EntityDocumentID_cursor
-    DEALLOCATE cascade_update_MJContentSources_EntityDocumentID_cursor
-    
-    -- Cascade delete from DuplicateRun using cursor to call spDeleteDuplicateRun
-    DECLARE @MJDuplicateRuns_EntityDocumentIDID uniqueidentifier
-    DECLARE cascade_delete_MJDuplicateRuns_EntityDocumentID_cursor CURSOR FOR 
-        SELECT [ID]
-        FROM [${flyway:defaultSchema}].[DuplicateRun]
-        WHERE [EntityDocumentID] = @ID
-    
-    OPEN cascade_delete_MJDuplicateRuns_EntityDocumentID_cursor
-    FETCH NEXT FROM cascade_delete_MJDuplicateRuns_EntityDocumentID_cursor INTO @MJDuplicateRuns_EntityDocumentIDID
-    
-    WHILE @@FETCH_STATUS = 0
-    BEGIN
-        EXEC [${flyway:defaultSchema}].[spDeleteDuplicateRun] @ID = @MJDuplicateRuns_EntityDocumentIDID
-        
-        FETCH NEXT FROM cascade_delete_MJDuplicateRuns_EntityDocumentID_cursor INTO @MJDuplicateRuns_EntityDocumentIDID
-    END
-    
-    CLOSE cascade_delete_MJDuplicateRuns_EntityDocumentID_cursor
-    DEALLOCATE cascade_delete_MJDuplicateRuns_EntityDocumentID_cursor
-    
-    -- Cascade delete from EntityDocumentRun using cursor to call spDeleteEntityDocumentRun
-    DECLARE @MJEntityDocumentRuns_EntityDocumentIDID uniqueidentifier
-    DECLARE cascade_delete_MJEntityDocumentRuns_EntityDocumentID_cursor CURSOR FOR 
-        SELECT [ID]
-        FROM [${flyway:defaultSchema}].[EntityDocumentRun]
-        WHERE [EntityDocumentID] = @ID
-    
-    OPEN cascade_delete_MJEntityDocumentRuns_EntityDocumentID_cursor
-    FETCH NEXT FROM cascade_delete_MJEntityDocumentRuns_EntityDocumentID_cursor INTO @MJEntityDocumentRuns_EntityDocumentIDID
-    
-    WHILE @@FETCH_STATUS = 0
-    BEGIN
-        EXEC [${flyway:defaultSchema}].[spDeleteEntityDocumentRun] @ID = @MJEntityDocumentRuns_EntityDocumentIDID
-        
-        FETCH NEXT FROM cascade_delete_MJEntityDocumentRuns_EntityDocumentID_cursor INTO @MJEntityDocumentRuns_EntityDocumentIDID
-    END
-    
-    CLOSE cascade_delete_MJEntityDocumentRuns_EntityDocumentID_cursor
-    DEALLOCATE cascade_delete_MJEntityDocumentRuns_EntityDocumentID_cursor
-    
-    -- Cascade delete from EntityDocumentSetting using cursor to call spDeleteEntityDocumentSetting
-    DECLARE @MJEntityDocumentSettings_EntityDocumentIDID uniqueidentifier
-    DECLARE cascade_delete_MJEntityDocumentSettings_EntityDocumentID_cursor CURSOR FOR 
-        SELECT [ID]
-        FROM [${flyway:defaultSchema}].[EntityDocumentSetting]
-        WHERE [EntityDocumentID] = @ID
-    
-    OPEN cascade_delete_MJEntityDocumentSettings_EntityDocumentID_cursor
-    FETCH NEXT FROM cascade_delete_MJEntityDocumentSettings_EntityDocumentID_cursor INTO @MJEntityDocumentSettings_EntityDocumentIDID
-    
-    WHILE @@FETCH_STATUS = 0
-    BEGIN
-        EXEC [${flyway:defaultSchema}].[spDeleteEntityDocumentSetting] @ID = @MJEntityDocumentSettings_EntityDocumentIDID
-        
-        FETCH NEXT FROM cascade_delete_MJEntityDocumentSettings_EntityDocumentID_cursor INTO @MJEntityDocumentSettings_EntityDocumentIDID
-    END
-    
-    CLOSE cascade_delete_MJEntityDocumentSettings_EntityDocumentID_cursor
-    DEALLOCATE cascade_delete_MJEntityDocumentSettings_EntityDocumentID_cursor
-    
-    -- Cascade delete from EntityRecordDocument using cursor to call spDeleteEntityRecordDocument
-    DECLARE @MJEntityRecordDocuments_EntityDocumentIDID uniqueidentifier
-    DECLARE cascade_delete_MJEntityRecordDocuments_EntityDocumentID_cursor CURSOR FOR 
-        SELECT [ID]
-        FROM [${flyway:defaultSchema}].[EntityRecordDocument]
-        WHERE [EntityDocumentID] = @ID
-    
-    OPEN cascade_delete_MJEntityRecordDocuments_EntityDocumentID_cursor
-    FETCH NEXT FROM cascade_delete_MJEntityRecordDocuments_EntityDocumentID_cursor INTO @MJEntityRecordDocuments_EntityDocumentIDID
-    
-    WHILE @@FETCH_STATUS = 0
-    BEGIN
-        EXEC [${flyway:defaultSchema}].[spDeleteEntityRecordDocument] @ID = @MJEntityRecordDocuments_EntityDocumentIDID
-        
-        FETCH NEXT FROM cascade_delete_MJEntityRecordDocuments_EntityDocumentID_cursor INTO @MJEntityRecordDocuments_EntityDocumentIDID
-    END
-    
-    CLOSE cascade_delete_MJEntityRecordDocuments_EntityDocumentID_cursor
-    DEALLOCATE cascade_delete_MJEntityRecordDocuments_EntityDocumentID_cursor
-    
 
     DELETE FROM
         [${flyway:defaultSchema}].[EntityDocument]
@@ -821,6 +706,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityDocument] TO [cdp_Inte
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityDocument] FROM [cdp_Developer]
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityDocument] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityDocument] TO [cdp_Integration], [cdp_Developer];
+
+
 
 /* SQL text to insert 1 new entity field(s) */
 
