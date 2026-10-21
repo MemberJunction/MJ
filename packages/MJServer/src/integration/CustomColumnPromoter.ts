@@ -49,6 +49,7 @@ import {
     type InferredColumnType,
     BuildCatalogWriter,
 } from '@memberjunction/integration-engine';
+import { UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 
 /**
@@ -833,7 +834,7 @@ export class IntegrationCustomColumnPromoter {
         // Resolve the CONNECTION from the entity map rather than hopping connection → integration
         // and writing the shared rows. That hop is what let one tenant's promoted column appear in
         // the catalog every other tenant on the same connector reads.
-        const entityMap = IntegrationEngineBase.Instance.EntityMaps.find(m => m.ID === entityMapID);
+        const entityMap = IntegrationEngineBase.Instance.EntityMaps.find(m => UUIDsEqual(m.ID, entityMapID));
         const companyIntegration = entityMap
             ? IntegrationEngineBase.Instance.GetCompanyIntegrationByID(entityMap.CompanyIntegrationID)
             : undefined;
