@@ -121,7 +121,7 @@ export class EntityVectorSyncer extends VectorBase {
     // Parse configuration for pipeline tuning
     const docConfig = this.parseDocumentConfig(entityDocument);
     const pipelineConfig = docConfig.pipeline;
-    const delayTimeMS: number = pipelineConfig?.delayBetweenCallsMs ?? 250;
+    const delayTimeMS: number = pipelineConfig?.delayBetweenCallsMs ?? 0;
 
     const md = this.ProviderToUse;
     const entity: EntityInfo | undefined = md.Entities.find((e) => UUIDsEqual(e.ID, params.entityID));
@@ -422,7 +422,9 @@ export class EntityVectorSyncer extends VectorBase {
       return [];
     }
 
-    await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
+    if (delayTimeMS > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
+    }
 
     if (!embeddings || !embeddings.Success || !embeddings.Vectors || embeddings.Vectors.length === 0) {
       const msg = `Embedding model "${embeddingModelAPIName}" failed: ${embeddings?.ErrorMessage ?? 'Returned 0 vectors'}. Check credentials and check model availability.`;
@@ -941,7 +943,9 @@ export class EntityVectorSyncer extends VectorBase {
       }
     }
 
-    await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
+    if (delayTimeMS > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
+    }
     return batch;
   }
 
@@ -1589,8 +1593,14 @@ export class EntityVectorSyncer extends VectorBase {
         LogError('Error getting existing Entity Record Documents', undefined, result?.ErrorMessage);
       }
 
-      for (const item of items) {
-        await this.saveEntityRecordDocument(item, existingByRecordID.get(String(item.__mj_recordID)), md, contextUser);
+      const saveConcurrency = 10;
+      for (let i = 0; i < items.length; i += saveConcurrency) {
+        const chunk = items.slice(i, i + saveConcurrency);
+        await Promise.all(
+          chunk.map((item) =>
+            this.saveEntityRecordDocument(item, existingByRecordID.get(String(item.__mj_recordID)), md, contextUser)
+          )
+        );
       }
     }
   }
@@ -1637,7 +1647,7 @@ export class EntityVectorSyncer extends VectorBase {
     erdEntity.EntityDocumentID = entityDocumentID;
     erdEntity.ContextCurrentUser = contextUser;
 
-    const erdEntitySaveResult: boolean = await erdEntity.Save();
+    const erdEntitySaveResult: boolean = await erdEntity.Save({ SaveReturnMode: 'datestamps_only' });
     if (!erdEntitySaveResult) {
       LogError('Error saving Entity Record Document Entity', undefined, erdEntity.LatestResult);
     }

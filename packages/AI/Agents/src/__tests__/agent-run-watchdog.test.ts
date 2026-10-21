@@ -188,13 +188,51 @@ describe('AgentRunWatchdog', () => {
             expect(wd.IsStoppable(RUN_B)).toBe(false);
         });
 
-        it('Untrack removes a run from the guarded set', () => {
+        it('Untrack removes a run from the guarded set and suspends active-run timers when idle', () => {
             const p = makeProvider();
             const wd = AgentRunWatchdog.Instance;
-            wd.Track(RUN_A, asProvider(p), mockUser);
-            wd.Track(RUN_B, asProvider(p), mockUser);
+            wd.Track(RUN_A, asProvider(p), mockUser, new AbortController());
+            wd.Track(RUN_B, asProvider(p), mockUser, new AbortController());
+            expect(wd.HasActiveRunTimers).toBe(true);
             wd.Untrack(RUN_A);
             expect(wd.TrackedCount).toBe(1);
+            expect(wd.HasActiveRunTimers).toBe(true);
+            wd.Untrack(RUN_B);
+            expect(wd.TrackedCount).toBe(0);
+            expect(wd.HasActiveRunTimers).toBe(false);
+        });
+
+        it('isolates per-run provider and contextUser across multiple tenants during heartbeat and cancellation polling', async () => {
+            const providerTenantA = makeProvider();
+            const providerTenantB = makeProvider();
+            const userTenantA = { ID: 'user-tenant-a' } as UserInfo;
+            const userTenantB = { ID: 'user-tenant-b' } as UserInfo;
+            const controllerA = new AbortController();
+            const controllerB = new AbortController();
+
+            const wd = AgentRunWatchdog.Instance;
+            wd.Track(RUN_A, asProvider(providerTenantA), userTenantA, controllerA);
+            wd.Track(RUN_B, asProvider(providerTenantB), userTenantB, controllerB);
+
+            await vi.advanceTimersByTimeAsync(30_000);
+
+            // Each tenant's provider receives only its own run's heartbeat and poll with its own user
+            const hbA = providerTenantA.ExecuteSQL.mock.calls.find(c => /spStampAIAgentRunHeartbeat/.test(String(c[0])));
+            const hbB = providerTenantB.ExecuteSQL.mock.calls.find(c => /spStampAIAgentRunHeartbeat/.test(String(c[0])));
+            expect(hbA).toBeTruthy();
+            expect(String(hbA![0])).toContain(RUN_A);
+            expect(String(hbA![0])).not.toContain(RUN_B);
+            expect(hbA![3]).toBe(userTenantA);
+
+            expect(hbB).toBeTruthy();
+            expect(String(hbB![0])).toContain(RUN_B);
+            expect(String(hbB![0])).not.toContain(RUN_A);
+            expect(hbB![3]).toBe(userTenantB);
+
+            const pollA = providerTenantA.RunView.mock.calls.find(c => isPoll(c[0] as ReadParams));
+            const pollB = providerTenantB.RunView.mock.calls.find(c => isPoll(c[0] as ReadParams));
+            expect(pollA?.[1]).toBe(userTenantA);
+            expect(pollB?.[1]).toBe(userTenantB);
         });
     });
 });

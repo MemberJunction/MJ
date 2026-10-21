@@ -11,10 +11,12 @@ import {
     EventEmitter,
     Input,
     OnInit,
+    OnDestroy,
     Output,
     ChangeDetectorRef,
     inject
 } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { StartupManager } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { SearchResultItem, RecentRecordItem, PassesSemanticFloor } from './search-types';
@@ -33,8 +35,9 @@ const MIN_RELEVANCE_OPTIONS = [0, 15, 30, 50, 70];
     templateUrl: './search-suggest.component.html',
     styleUrls: ['./search-suggest.component.css']
 })
-export class SearchSuggestComponent implements OnInit {
+export class SearchSuggestComponent implements OnInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
+    private _mjGlobalSub: Subscription | null = null;
 
     // --- Configuration Inputs ---
 
@@ -128,6 +131,14 @@ export class SearchSuggestComponent implements OnInit {
 
     async ngOnInit(): Promise<void> {
         await this.loadMinRelevanceSetting();
+    }
+
+    /**
+     * Cleans up the `MJGlobal` login event listener when the suggest dropdown is destroyed.
+     */
+    ngOnDestroy(): void {
+        this._mjGlobalSub?.unsubscribe();
+        this._mjGlobalSub = null;
     }
 
     // --- Public Methods ---
@@ -377,7 +388,8 @@ export class SearchSuggestComponent implements OnInit {
     private async loadMinRelevanceSetting(): Promise<void> {
         try {
             // Wait for all startup engines (including UserInfoEngine) to finish loading
-            MJGlobal.Instance.GetEventListener(true).subscribe( async (event) => {
+            this._mjGlobalSub?.unsubscribe();
+            this._mjGlobalSub = MJGlobal.Instance.GetEventListener(true).subscribe( async (event) => {
                 switch (event.event) {
                     case MJEventType.LoggedIn:
                         // Wait for StartupManager to complete before refreshing 
