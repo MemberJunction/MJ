@@ -21,8 +21,10 @@
   },
   "dependencies": {
     "@memberjunction/ai": "6.2.0-edge.4",
+    "@memberjunction/ai-openai": "6.2.0-edge.4",
     "@memberjunction/global": "6.2.0-edge.4",
-    "@elevenlabs/elevenlabs-js": "^2.34.0"
+    "@elevenlabs/elevenlabs-js": "^2.34.0",
+    "openai": "6.18.0"
   },
   "repository": {
     "type": "git",
