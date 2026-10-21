@@ -1,4 +1,4 @@
-name: mj-citizen-builder
+name: ${COMPOSE_PROJECT_NAME:-mj-citizen-builder}
 
 services:
   sqlserver:
@@ -43,7 +43,8 @@ services:
       DB_DATABASE: "${DB_DATABASE:-MemberJunction}"
       # Tells the entrypoint which MemberJunction release `mj install` must fetch
       MJ_VERSION: "${MJ_VERSION}"
-      MJ_BASE_ENCRYPTION_KEY: "${MJ_BASE_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef}"
+      MJ_BASE_ENCRYPTION_KEY: "${MJ_BASE_ENCRYPTION_KEY:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}"
+      MJ_DEV_AUTH_ENABLED: "${MJ_DEV_AUTH_ENABLED:-true}"
       # LLM Provider API Keys
       AI_VENDOR_API_KEY__OpenAILLM: "${OPENAI_API_KEY:-}"
       AI_VENDOR_API_KEY__AnthropicLLM: "${ANTHROPIC_API_KEY:-}"

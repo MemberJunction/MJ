@@ -1332,6 +1332,7 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
         await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
         return BuildFailureResult('Remove', options.AppName, existingApp.Version, 'Schema', startTime, combined);
       }
+      await DeleteAppDependencies(context.ContextUser, existingApp.ID);
       await SetAppStep(context.ContextUser, existingApp.ID, 'DbCleanupDone');
     }
 

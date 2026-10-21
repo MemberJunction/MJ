@@ -1,5 +1,6 @@
 import { SetProvider, IMetadataProvider } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { ActionEngineServer } from '@memberjunction/actions';
 import sql from 'mssql';
 import { LoadAIConfig } from '../config';
 import { DiscoverMJConfig, EffectiveProcessId, LoadDynamicPackages, StderrDynamicPackagesLogger } from '@memberjunction/dynamic-packages';
@@ -17,6 +18,8 @@ import '@memberjunction/ai-agents';     // Register agent types
 import '@memberjunction/ai-openai';
 import '@memberjunction/ai-groq';
 import '@memberjunction/ai-anthropic';
+import '@memberjunction/ai-mistral';
+import '@memberjunction/ai-cerebras';
 
 let isInitialized = false;
 let connectionPool: sql.ConnectionPool | null = null;
@@ -121,7 +124,24 @@ For security, consider using environment variables:
     // setupSQLServerClient creates the SQLServerDataProvider and registers it as the
     // global default — the established CLI bootstrap pattern. Capture the same instance
     // here so callers receive it directly without reading Metadata.Provider later.
-    cliProvider = await setupSQLServerClient(providerConfig) as unknown as IMetadataProvider;
+    const sqlProvider = await setupSQLServerClient(providerConfig);
+    cliProvider = sqlProvider as unknown as IMetadataProvider;
+
+    const actionEngine = ActionEngineServer.Instance;
+    if (!actionEngine.AdhocSQLAuthorizer) {
+      actionEngine.SetAdhocSQLAuthorizer({
+        Authorize: () => null,
+        ClampTimeoutSeconds: (requestedSeconds?: number) => {
+          const maxSeconds = 180;
+          if (requestedSeconds == null || !Number.isFinite(requestedSeconds) || requestedSeconds <= 0) {
+            return maxSeconds;
+          }
+          return Math.min(Math.floor(requestedSeconds), maxSeconds);
+        },
+      });
+      actionEngine.SetReadOnlyProviderFactory(async () => sqlProvider);
+    }
+
     isInitialized = true;
     return cliProvider;
   } catch (error: any) {

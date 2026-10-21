@@ -389,31 +389,51 @@ export class FlowAgentType extends BaseAgentType {
             if (currentStep?.StepType === 'Prompt' && promptResult) {
 
                 // Parse the prompt result as JSON
-                const promptResponse = this.parseJSONResponse<any>(promptResult);
+                const promptResponse = this.parseJSONResponse<Record<string, unknown>>(promptResult);
+                let stepResultValue: unknown = promptResponse;
 
-                if (promptResponse) {
+                if (promptResponse && typeof promptResponse === 'object') {
+                    const nextStepCandidate = promptResponse.nextStep as { type?: string } | undefined;
                     // Check if the prompt response contains a Chat step request
                     // This handles the case where a Prompt step wants to return a message to the user
-                    if (promptResponse.nextStep?.type === 'Chat' ||
-                        (promptResponse.taskComplete && promptResponse.message)) {
+                    if (nextStepCandidate?.type === 'Chat' ||
+                        (promptResponse.taskComplete && typeof promptResponse.message === 'string')) {
                         // Return a Chat step to bubble the message back to the user
                         return this.createNextStep('Chat', {
-                            message: promptResponse.message || 'Response from flow prompt step',
-                            reasoning: promptResponse.reasoning,
-                            confidence: promptResponse.confidence,
+                            message: (promptResponse.message as string) || 'Response from flow prompt step',
+                            reasoning: promptResponse.reasoning as string | undefined,
+                            confidence: promptResponse.confidence as number | undefined,
                             terminate: true, // Always terminate for chat responses
                             newPayload: payload,
                             previousPayload: payload
                         });
                     }
 
+                    if (typeof promptResponse.message === 'string' && promptResponse.message.trim().length > 0) {
+                        flowState.specialFields = {
+                            ...flowState.specialFields,
+                            message: promptResponse.message
+                        };
+                    }
+
                     // Deep merge the prompt response into the current payload
                     // This preserves existing nested properties while adding/updating from the prompt
                     // Example: If payload has {decision: {Y: 4, Z: 2}} and prompt returns {decision: {x: "string"}},
                     // the result will be {decision: {x: "string", Y: 4, Z: 2}} instead of losing Y and Z
-                    const mergedPayload = this._payloadManager.deepMerge(payload, promptResponse);
+                    const mergedPayload = this._payloadManager.deepMerge(payload, promptResponse as Partial<P>);
                     // Copy merged result back to payload reference (modifying in place for consistency)
-                    Object.assign(payload, mergedPayload);
+                    Object.assign(payload as Record<string, unknown>, mergedPayload);
+                } else if (promptResult.success) {
+                    const textResult = typeof promptResult.result === 'string'
+                        ? promptResult.result
+                        : (typeof promptResult.rawResult === 'string' ? promptResult.rawResult : undefined);
+                    if (textResult && textResult.trim().length > 0) {
+                        stepResultValue = textResult;
+                        flowState.specialFields = {
+                            ...flowState.specialFields,
+                            message: textResult
+                        };
+                    }
                 }
 
                 // Store the prompt step result so path conditions can access it
@@ -421,7 +441,7 @@ export class FlowAgentType extends BaseAgentType {
                 const promptStepResult = {
                     Success: true,
                     step: 'Success',
-                    result: promptResponse,
+                    result: stepResultValue,
                     rawResult: promptResult
                 };
                 flowState.stepResults.set(flowState.currentStepId, promptStepResult);
@@ -444,9 +464,19 @@ export class FlowAgentType extends BaseAgentType {
             const paths = selection.Paths;
 
             if (paths.length === 0) {
+                // If this workflow has additional starting steps that have not run yet, advance to the next one
+                const pendingStart = await this.popNextPendingStartStep(flowState);
+                if (pendingStart) {
+                    return await this.createStepForFlowNode(params, pendingStart, payload, flowState);
+                }
+
                 // No valid paths - flow is complete
                 return this.createSuccessStep({
-                    message: 'Flow completed - no more paths to follow'
+                    message: flowState.specialFields?.message || 'Flow completed - no more paths to follow',
+                    reasoning: flowState.specialFields?.reasoning,
+                    confidence: flowState.specialFields?.confidence,
+                    newPayload: payload,
+                    previousPayload: payload
                 });
             }
             
@@ -508,6 +538,18 @@ export class FlowAgentType extends BaseAgentType {
         
         // Inject standard payload
         prompt.data[BaseAgentType.CURRENT_PAYLOAD_PLACEHOLDER] = payload || {};
+        if (prompt.data.payload === undefined) {
+            prompt.data.payload = payload || {};
+        }
+        if (prompt.data.userMessage === undefined && Array.isArray(prompt.conversationMessages)) {
+            const lastUserContent = ConversationMessageResolver.Resolve(
+                'conversation.user.last.content',
+                prompt.conversationMessages
+            );
+            if (lastUserContent !== undefined) {
+                prompt.data.userMessage = lastUserContent;
+            }
+        }
         
         // Add flow-specific context from our state tracking
         if (agentInfo.agentRunId) {
@@ -816,8 +858,12 @@ export class FlowAgentType extends BaseAgentType {
                         }
                     } else {
                         // Regular payload mapping
+                        // Strip optional leading "payload." prefix so both "customerData" and "payload.customerData" map to payload.customerData
+                        const normalizedPayloadPath = payloadPath.toLowerCase().startsWith('payload.')
+                            ? payloadPath.slice('payload.'.length)
+                            : payloadPath;
                         // Parse the path and build nested object
-                        const pathParts = payloadPath.split('.');
+                        const pathParts = normalizedPayloadPath.split('.');
                         let current = updateObj;
 
                         for (let i = 0; i < pathParts.length - 1; i++) {
@@ -1456,8 +1502,15 @@ export class FlowAgentType extends BaseAgentType {
         // Extract output parameters from the action result
         const actionResult = actionResults[0];
         const outputParams: Record<string, unknown> = {};
+
+        // Seed with properties from actionResult.Result (e.g., Message, ResultCode, Success)
+        if (actionResult.Result && typeof actionResult.Result === 'object') {
+            for (const [key, val] of Object.entries(actionResult.Result)) {
+                outputParams[key] = val;
+            }
+        }
         
-        // Filter for output parameters (Type === 'Output' or 'Both')
+        // Filter for output parameters (Type === 'Output' or 'Both'), overriding Result fields when present
         if (actionResult.Params) {
             for (const param of actionResult.Params) {
                 if (param.Type === 'Output' || param.Type === 'Both') {

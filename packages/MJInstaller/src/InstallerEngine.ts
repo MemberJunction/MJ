@@ -1258,6 +1258,62 @@ export class InstallerEngine {
         },
       });
     }
+
+    // 3. Turborepo AI Env Passthrough Check (Scope: 'ai')
+    const turboJsonPath = path.join(targetDir, 'turbo.json');
+    if (await fs.FileExists(turboJsonPath)) {
+      try {
+        const turboRaw = await fs.ReadText(turboJsonPath);
+        const turboParsed = JSON.parse(turboRaw) as {
+          envMode?: string;
+          globalPassThroughEnv?: string[];
+          globalEnv?: string[];
+        };
+        if (turboParsed.envMode !== 'loose') {
+          const allowed = [
+            ...(turboParsed.globalPassThroughEnv ?? []),
+            ...(turboParsed.globalEnv ?? []),
+          ];
+          const passesAiVendorKeys = allowed.some(
+            (pattern) => pattern === 'AI_VENDOR_API_KEY__*' || pattern === '*' || pattern.startsWith('AI_VENDOR_API_KEY__')
+          );
+          if (!passesAiVendorKeys && !turboRaw.includes('AI_VENDOR_API_KEY__')) {
+            this.emitDiagnostic(
+              'Turbo AI env passthrough',
+              'warn',
+              'turbo.json does not include AI_VENDOR_API_KEY__* in globalPassThroughEnv; Turborepo strict mode may strip AI vendor API keys from child processes.',
+              'Add "AI_VENDOR_API_KEY__*" to "globalPassThroughEnv" in turbo.json or pass --env-mode=loose to turbo.'
+            );
+            diagnostics.AddCheck({
+              Name: 'Turbo AI env passthrough',
+              Status: 'warn',
+              Message: 'turbo.json does not pass through AI_VENDOR_API_KEY__* environment variables.',
+              SuggestedFix: 'Add "AI_VENDOR_API_KEY__*" to "globalPassThroughEnv" in turbo.json.',
+              Code: 'TURBO_AI_ENV_STRIPPED',
+              Scope: 'ai',
+              Remediation: {
+                Type: 'manual',
+              },
+            });
+          } else {
+            this.emitDiagnostic(
+              'Turbo AI env passthrough',
+              'pass',
+              'turbo.json passes through AI_VENDOR_API_KEY__* environment variables.'
+            );
+            diagnostics.AddCheck({
+              Name: 'Turbo AI env passthrough',
+              Status: 'pass',
+              Message: 'turbo.json passes through AI_VENDOR_API_KEY__* environment variables.',
+              Code: 'TURBO_AI_ENV_OK',
+              Scope: 'ai',
+            });
+          }
+        }
+      } catch {
+        // Ignore malformed turbo.json
+      }
+    }
   }
 
   // -------------------------------------------------------------------------

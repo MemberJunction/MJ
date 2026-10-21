@@ -230,13 +230,15 @@ Next steps:
       };
 
       // Suppress console output during agent execution unless verbose
+      // CLI executions always run Flow agents in-process ('inRun') so the caller receives the final result synchronously
       let executionResult: ExecuteAgentResult;
       if (options.verbose) {
         executionResult = await agentRunner.RunAgent({
           agent: agent,
           conversationMessages,
           contextUser: this.contextUser!,
-          onProgress: callbacks.onProgress
+          onProgress: callbacks.onProgress,
+          agentTypeParams: { executionMode: 'inRun' }
         });
       } else {
         executionResult = await ConsoleManager.withSuppressedOutput(async () => {
@@ -244,7 +246,8 @@ Next steps:
             agent: agent,
             conversationMessages,
             contextUser: this.contextUser!,
-            onProgress: callbacks.onProgress
+            onProgress: callbacks.onProgress,
+            agentTypeParams: { executionMode: 'inRun' }
           });
         });
       }
@@ -257,14 +260,20 @@ Next steps:
       }
 
       if (executionResult && executionResult.success) {
-        // Get the result from Message field first, then FinalPayload if Message is empty
-        let resultContent: any = executionResult.agentRun.Message;
+        // Get the result from Message field first, then FinalPayload if Message is empty or generic Flow completion text
+        const defaultFlowMessage = 'Flow completed - no more paths to follow';
+        let resultContent: unknown =
+          executionResult.agentRun.Message && executionResult.agentRun.Message !== defaultFlowMessage
+            ? executionResult.agentRun.Message
+            : undefined;
         
         if (!resultContent && executionResult.agentRun.FinalPayload) {
           // Parse FinalPayload if Message is not available
           try {
             const finalPayload = JSON.parse(executionResult.agentRun.FinalPayload);
-            resultContent = finalPayload;
+            if (finalPayload && (typeof finalPayload !== 'object' || Object.keys(finalPayload).length > 0)) {
+              resultContent = finalPayload;
+            }
           } catch {
             resultContent = executionResult.agentRun.FinalPayload;
           }
@@ -272,7 +281,12 @@ Next steps:
         
         // Use payload if neither Message nor FinalPayload has content
         if (!resultContent && executionResult.payload) {
-          resultContent = executionResult.payload;
+          if (typeof executionResult.payload !== 'object' || Object.keys(executionResult.payload).length > 0) {
+            resultContent = executionResult.payload;
+          }
+        }
+        if (!resultContent && executionResult.agentRun.Message) {
+          resultContent = executionResult.agentRun.Message;
         }
 
         logger.logStep('SUCCESS', 'AGENT', 'Agent execution completed', {

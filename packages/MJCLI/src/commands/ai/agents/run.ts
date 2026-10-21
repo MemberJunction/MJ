@@ -1,4 +1,5 @@
 import { Command, Flags } from '@oclif/core';
+import * as fs from 'node:fs';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, ResolveLegacyFormat } from '../../../lib/format-compat.js';
@@ -9,6 +10,7 @@ export default class AgentsRun extends Command {
 
   static examples = [
     '<%= config.bin %> <%= command.id %> -a "Skip: Requirements Expert" -p "Create a dashboard for sales metrics"',
+    '<%= config.bin %> <%= command.id %> -a "Customer Insight Agent" -f ./prompt.txt',
     '<%= config.bin %> <%= command.id %> -a "Child Component Generator Sub-agent" --chat',
     '<%= config.bin %> <%= command.id %> -a "Skip: Technical Design Expert" -p "Build a React component" --verbose --timeout=600000',
   ];
@@ -22,12 +24,17 @@ export default class AgentsRun extends Command {
     prompt: Flags.string({
       char: 'p',
       description: 'Prompt to execute',
-      exclusive: ['chat'],
+      exclusive: ['chat', 'prompt-file'],
+    }),
+    'prompt-file': Flags.string({
+      char: 'f',
+      description: 'Path to a file containing the prompt to execute',
+      exclusive: ['chat', 'prompt'],
     }),
     chat: Flags.boolean({
       char: 'c',
       description: 'Start interactive chat mode',
-      exclusive: ['prompt'],
+      exclusive: ['prompt', 'prompt-file'],
     }),
     format: CANONICAL_FORMAT_FLAG,
     output: Flags.string({
@@ -50,9 +57,12 @@ export default class AgentsRun extends Command {
 
   async run(): Promise<void> {
     const { flags, metadata } = await this.parse(AgentsRun);
+    const resolvedPrompt = flags['prompt-file']
+      ? fs.readFileSync(flags['prompt-file'], 'utf-8').trim()
+      : flags.prompt;
 
-    if (!flags.prompt && !flags.chat) {
-      this.error('Either --prompt or --chat flag is required');
+    if (!resolvedPrompt && !flags.chat) {
+      this.error('Either --prompt, --prompt-file, or --chat flag is required');
     }
 
     // --chat is a REPL that reads stdin turn by turn: interactive by nature, with no
@@ -71,7 +81,7 @@ export default class AgentsRun extends Command {
       }
     }
 
-    const { AgentService, OutputFormatter, ConversationService } = await import('@memberjunction/ai-cli');
+    const { AgentService, OutputFormatter, ConversationService, CloseMJProvider } = await import('@memberjunction/ai-cli');
 
     const service = new AgentService();
     const formatter = new OutputFormatter(ResolveLegacyFormat({
@@ -94,7 +104,7 @@ export default class AgentsRun extends Command {
         const spinner = ora();
         spinner.start(`Executing agent: ${flags.agent}`);
 
-        const result = await service.executeAgent(flags.agent, flags.prompt!, {
+        const result = await service.executeAgent(flags.agent, resolvedPrompt!, {
           verbose: flags.verbose,
           timeout: flags.timeout,
         });
@@ -102,12 +112,16 @@ export default class AgentsRun extends Command {
         spinner.stop();
         this.log(formatter.formatAgentResult(result));
 
+        await CloseMJProvider().catch(() => {});
         if (!result.success) {
           this.exit(1);
         }
+        process.exit(0);
       }
     } catch (error) {
       this.error(error as Error);
+    } finally {
+      await CloseMJProvider().catch(() => {});
     }
   }
 }

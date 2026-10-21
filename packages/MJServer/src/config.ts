@@ -843,9 +843,17 @@ const realtimeSchema = z.object({
   recordingAssemblyGraceSeconds: z.coerce.number().positive().optional().default(90),
 }).passthrough();
 
+const devAuthSchema = z.object({
+  /** Master switch for local-only development JWT auth (`MJ_DEV_AUTH_ENABLED=true`). Forbidden when NODE_ENV=production. */
+  enabled: zodBooleanWithTransforms().default(false),
+  /** Optional default email for `/auth/dev-login` when no email is specified in the request body. */
+  defaultEmail: z.string().optional(),
+}).passthrough();
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   magicLink: magicLinkSchema.optional().default({}),
+  devAuth: devAuthSchema.optional().default({}),
   widget: widgetSchema.optional().default({}),
   telephony: telephonySchema.optional().default({}),
   realtime: realtimeSchema.optional().default({}),
@@ -1187,6 +1195,16 @@ export function LoadConfig() {
     LogError('Error parsing config file', null, JSON.stringify(configParsing.error.issues, null, 2));
     throw new Error('Configuration validation failed');
   }
+
+  const rawDevAuthEnv = process.env.MJ_DEV_AUTH_ENABLED?.trim().toLowerCase();
+  const isDevAuthEnabled =
+    rawDevAuthEnv === 'true' || rawDevAuthEnv === '1' || configParsing.data.devAuth?.enabled === true;
+  if (isDevAuthEnabled && process.env.NODE_ENV?.trim().toLowerCase() === 'production') {
+    throw new Error(
+      '[SECURITY] Local dev auth (MJ_DEV_AUTH_ENABLED) is strictly forbidden when NODE_ENV=production. Refusing to start.'
+    );
+  }
+
   return configParsing.data;
 }
 
