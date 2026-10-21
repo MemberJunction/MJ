@@ -32,9 +32,10 @@ export class MJAIAgentNoteEntityServer extends MJAIAgentNoteEntity {
             const shouldGenerateEmbedding = !this.IsSaved || noteField.Dirty;
 
             if (shouldGenerateEmbedding && this.Note && this.Note.trim().length > 0) {
-                await this.GenerateEmbeddingByFieldName("Note", "EmbeddingVector", "EmbeddingModelID");
+                await this.GenerateEmbeddingByFieldName("Note", "EmbeddingVector", "EmbeddingModelID", "EmbeddingVectorBinary");
             } else if (!this.Note || this.Note.trim().length === 0) {
                 this.EmbeddingVector = null;
+                this.EmbeddingVectorBinary = null;
                 this.EmbeddingModelID = null;
             }
 
@@ -53,7 +54,7 @@ export class MJAIAgentNoteEntityServer extends MJAIAgentNoteEntity {
             //    background load completes, the underlying vector service is null and the
             //    update would silently no-op. EnsureLoaded blocks until the engine is ready.
             await AIEngine.Instance.EnsureLoaded();
-            if (IsInjectableNoteStatus(this.Status) && this.EmbeddingVector) {
+            if (IsInjectableNoteStatus(this.Status) && (this.EmbeddingVectorBinary || this.EmbeddingVector)) {
                 AIEngine.Instance.AddOrUpdateSingleNoteEmbedding(this);
             } else {
                 AIEngine.Instance.RemoveSingleNoteEmbedding(this.ID);

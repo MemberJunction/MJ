@@ -24,8 +24,17 @@
  *   - EW8 (CD10) ClassFactory server-subclass resolution: a save that passes CLIENT validation is
  *                rejected by the server-only `*EntityServer` invariant — proof the resolver
  *                instantiated the higher-priority server subclass.
+ *   - EW10       Record Change text keeps characters outside the database code page: emoji, CJK and
+ *                Greek survive in ChangesJSON, FullRecordJSON and ChangesDescription.
+ *   - EW11       SaveReturnMode='datestamps_only' preserves in-memory fields while refreshing PK +
+ *                __mj_CreatedAt / __mj_UpdatedAt.
+ *   - EW12       Delta-only Save() preserves untouched fields, merges non-overlapping concurrent
+ *                edits, and detects overlapping field edits.
+ *   - EW13       Typed save parameters: decimal, bigint, datetime, int, bit and Unicode text round-trip
+ *                with the conversions the literal batch always applied (a decimal is rounded by
+ *                the database from its exact text, never through a double).
  *
- * MUTATION TIER: EW1/EW2/EW3/EW5/EW6/EW7 write to the database and therefore carry
+ * MUTATION TIER: EW1/EW2/EW3/EW5/EW6/EW7/EW9/EW10/EW11/EW12/EW13 write to the database and therefore carry
  * `RequiresMutation: true` (they run only under RUN_MUTATION_TESTS=1). EW4 and EW8 are read-only —
  * EW8's saves are rejected during validation, before any INSERT is attempted.
  *
@@ -35,7 +44,15 @@
 import { RunView, CompositeKey, ProviderBase, EntitySaveOptions } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, RunViewParams } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJActionCategoryEntity, MJConversationEntity, MJConversationDetailEntity, MJListEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
+import {
+    MJActionCategoryEntity,
+    MJConversationEntity,
+    MJConversationDetailEntity,
+    MJKnowledgeHubSavedSearchEntity,
+    MJListEntity,
+    MJListInvitationEntity,
+    MJTagScopeEntity,
+} from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, EntityWritesFixture } from '@memberjunction/testing-integration';
@@ -534,6 +551,303 @@ export const EntityWritesChecks: NamedCheck[] = [
             } finally {
                 await conversation.Delete();
             }
+        }
+    },
+    {
+        Id: 'entity-writes.EW10',
+        Name: 'EW10: Record Change text keeps characters outside the database code page (emoji, CJK, Greek)',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // spCreateRecordChange_Internal takes NVARCHAR text, but the SQL Server provider used to
+            // send it as plain '…' literals. SQL Server reads those in the database's code page first,
+            // so on a SQL_Latin1_General_CP1 database every character outside code page 1252 was
+            // stored in the audit row as '?' while the record itself saved correctly.
+            const f = fx(ctx);
+            const text = 'EW10 Zoë 😀 日本 Ωμέγα';
+            const cat = await createCategory(ctx, 'unicode');
+            cat.Description = text;
+            Assert(await cat.Save(), `EW10 update failed: ${cat.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+
+            // Control: the record's own column keeps the text, so any loss below is in the audit row.
+            const reloaded = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
+            Assert(await reloaded.Load(cat.ID), 'EW10 reload failed');
+            AssertEqual(reloaded.Description, text, 'ActionCategory.Description (control)');
+
+            // Record Changes land through the server's fire-and-forget queue (see EW1): poll, then assert.
+            const findUpdate = async () => (await fetchRecordChanges(ctx, f.ActionCategoryEntityID, cat.ID))
+                .find(c => c.Type === 'Update' && parseChanges(c, 'EW10 update').Description != null);
+            let update = await findUpdate();
+            const deadline = Date.now() + 15000;
+            while (update == null && Date.now() < deadline) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                update = await findUpdate();
+            }
+            Assert(update != null, 'no Update Record Change captured the Description change');
+
+            AssertEqual(parseChanges(update!, 'EW10 update').Description.newValue, text, 'ChangesJSON Description newValue');
+            const full: unknown = JSON.parse(update!.FullRecordJSON ?? '{}');
+            AssertEqual((full as { Description?: string }).Description, text, 'FullRecordJSON.Description');
+            Assert((update!.ChangesDescription ?? '').includes('😀 日本 Ωμέγα'),
+                `ChangesDescription lost the text: ${update!.ChangesDescription}`);
+
+            console.log('      → emoji, CJK and Greek survive in ChangesJSON, FullRecordJSON and ChangesDescription');
+        }
+    },
+    {
+        Id: 'entity-writes.EW11',
+        Name: 'EW11: SaveReturnMode datestamps_only preserves in-memory fields while refreshing PK + __mj_CreatedAt / __mj_UpdatedAt for concurrency checking',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const f = fx(ctx);
+            const cat = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
+            cat.NewRecord();
+            const expectedName = `${f.Prefix}-datestamps-only ${FIXTURE_TAG}`;
+            const initialDesc = 'EW11 initial description';
+            cat.Name = expectedName;
+            cat.Description = initialDesc;
+            cat.Status = 'Active';
+
+            const saveOpts = new EntitySaveOptions();
+            saveOpts.SaveReturnMode = 'datestamps_only';
+
+            const created = await cat.Save(saveOpts);
+            if (cat.ID) {
+                f.CategoryIds.push(cat.ID);
+            }
+            Assert(created, `EW11 create with SaveReturnMode='datestamps_only' failed: ${cat.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            Assert(!!cat.ID && cat.ID.length > 0, 'EW11: PK ID must be populated after datestamps_only create');
+            AssertEqual(cat.Name, expectedName, 'EW11: in-memory Name must not be clobbered by narrow datestamps_only return');
+            AssertEqual(cat.Description, initialDesc, 'EW11: in-memory Description must not be clobbered by narrow datestamps_only return');
+            AssertEqual(cat.Status, 'Active', 'EW11: in-memory Status must not be clobbered by narrow datestamps_only return');
+            Assert(cat.__mj_CreatedAt instanceof Date, 'EW11: __mj_CreatedAt must be populated as a Date after datestamps_only create');
+            Assert(cat.__mj_UpdatedAt instanceof Date, 'EW11: __mj_UpdatedAt must be populated as a Date after datestamps_only create');
+            Assert(!cat.Dirty, 'EW11: entity must not be Dirty after datestamps_only create');
+
+            const createdUpdatedAtMs = cat.__mj_UpdatedAt.getTime();
+
+            // Subsequent update on the same entity instance: verifies that __mj_UpdatedAt was accurately
+            // captured from the database on Create so checkRecordSavingInconsistency passes on Update.
+            const updatedDesc = 'EW11 updated description';
+            cat.Description = updatedDesc;
+            const updated = await cat.Save(saveOpts);
+            Assert(updated, `EW11 update with SaveReturnMode='datestamps_only' failed: ${cat.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            AssertEqual(cat.Name, expectedName, 'EW11: in-memory Name preserved across datestamps_only update');
+            AssertEqual(cat.Description, updatedDesc, 'EW11: in-memory Description reflects updated value after datestamps_only update');
+            Assert(cat.__mj_UpdatedAt instanceof Date && cat.__mj_UpdatedAt.getTime() >= createdUpdatedAtMs,
+                'EW11: __mj_UpdatedAt must be refreshed (>= create timestamp) after datestamps_only update');
+            Assert(!cat.Dirty, 'EW11: entity must not be Dirty after datestamps_only update');
+
+            // Verify persisted database state via fresh Load()
+            const reloaded = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
+            Assert(await reloaded.Load(cat.ID), 'EW11 reload failed');
+            AssertEqual(reloaded.Name, expectedName, 'EW11 reloaded Name');
+            AssertEqual(reloaded.Description, updatedDesc, 'EW11 reloaded Description');
+            AssertEqual(reloaded.Status, 'Active', 'EW11 reloaded Status');
+
+            console.log('      → SaveReturnMode datestamps_only preserved in-memory fields and refreshed __mj_CreatedAt/__mj_UpdatedAt on Create + Update');
+        }
+    },
+    {
+        Id: 'entity-writes.EW12',
+        Name: 'EW12: delta-only Save() preserves untouched fields, merges non-overlapping concurrent edits, and detects overlapping field edits',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const f = fx(ctx);
+            const parent = await createCategory(ctx, 'delta-parent');
+            const catA = await createCategory(ctx, 'delta-child', parent.ID);
+            const initialName = catA.Name;
+            const isGraphQLTransport = typeof (ctx.Provider as { ExecuteGQL?: unknown }).ExecuteGQL === 'function';
+
+            // Helper that runs entity.Save() directly over GraphQLDataProvider when on client transport,
+            // or executes the identical delta extraction + DB-truth merge in-process when on server transport.
+            const saveDelta = async (clientEntity: MJActionCategoryEntity): Promise<boolean> => {
+                if (isGraphQLTransport) {
+                    return clientEntity.Save();
+                }
+                const deltaInput: Record<string, unknown> = {};
+                for (const field of clientEntity.Fields) {
+                    if (field.IsPrimaryKey || (!field.ReadOnly && field.Dirty && !field.NotLoaded)) {
+                        deltaInput[field.Name] = field.Value;
+                    }
+                }
+                const serverEntity = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
+                Assert(await serverEntity.Load(clientEntity.ID), 'EW12 server truth Load failed');
+                serverEntity.SetMany(deltaInput);
+                const ok = await serverEntity.Save();
+                if (ok) {
+                    await clientEntity.LoadFromData(serverEntity.GetAll());
+                }
+                return ok;
+            };
+
+            // Load a second concurrent client instance BEFORE catA's update
+            const catB = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
+            Assert(await catB.Load(catA.ID), 'EW12 catB Load failed');
+
+            // 1) Single-field update on catA (Description only): untouched fields (Name, Status, ParentID,
+            //    and virtual Parent/RootParentID) must be preserved in memory and in the database.
+            catA.Description = 'EW12 Initial Description';
+            Assert(await saveDelta(catA), `EW12 catA update 1 failed: ${catA.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            AssertEqual(catA.Name, initialName, 'EW12 catA.Name preserved in memory after Description-only Save()');
+            AssertEqual(catA.Status, 'Active', 'EW12 catA.Status preserved in memory after Description-only Save()');
+            Assert(UUIDsEqual(catA.ParentID ?? '', parent.ID), 'EW12 catA.ParentID preserved in memory');
+            AssertEqual(catA.Parent, parent.Name, 'EW12 catA.Parent virtual column refreshed in memory');
+            AssertEqual(catA.Description, 'EW12 Initial Description', 'EW12 catA.Description updated in memory');
+
+            // 2) Non-overlapping concurrent update on catB (Status only): catB was loaded when Description
+            //    was still null. Because delta-only Save() sends ONLY primary keys + dirty fields (ID, Status),
+            //    saving catB must NOT clobber catA's Description in the DB, and catB's post-save refresh
+            //    must receive catA's Description from the server!
+            catB.Status = 'Pending';
+            Assert(await saveDelta(catB), `EW12 catB non-overlapping update failed: ${catB.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            AssertEqual(catB.Status, 'Pending', 'EW12 catB.Status updated');
+            AssertEqual(catB.Description, 'EW12 Initial Description', 'EW12 catB received catA Description instead of clobbering it with null');
+
+            const verifyMerged = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
+            Assert(await verifyMerged.Load(catA.ID), 'EW12 verifyMerged Load failed');
+            AssertEqual(verifyMerged.Name, initialName, 'EW12 DB Name preserved after non-overlapping concurrent saves');
+            AssertEqual(verifyMerged.Description, 'EW12 Initial Description', 'EW12 DB Description preserved after catB Status-only save');
+            AssertEqual(verifyMerged.Status, 'Pending', 'EW12 DB Status reflects catB update');
+
+            // 3) Overlapping concurrent update on the SAME field (Description): load catC while Description
+            //    is 'EW12 Initial Description', update Description via catA first, then update Description
+            //    via stale catC. Server loads DB truth, detects the OldValues___ overlap on Description,
+            //    and records the true DB oldValue ('EW12 Writer 1') in Record Changes.
+            const catC = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
+            Assert(await catC.Load(catA.ID), 'EW12 catC Load failed');
+
+            catA.Description = 'EW12 Writer 1';
+            Assert(await saveDelta(catA), `EW12 catA Writer 1 save failed: ${catA.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+
+            catC.Description = 'EW12 Writer 2 (Overlapping)';
+            Assert(await saveDelta(catC), `EW12 catC Writer 2 save failed: ${catC.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            AssertEqual(catC.Description, 'EW12 Writer 2 (Overlapping)', 'EW12 catC Description updated (last-write-wins on overlapping field)');
+            AssertEqual(catC.Status, 'Pending', 'EW12 catC untouched Status preserved');
+
+            // Poll Record Changes until all 5 rows (1 Create + 4 Updates) land
+            let changes = await fetchRecordChanges(ctx, f.ActionCategoryEntityID, catA.ID);
+            const deadline = Date.now() + 15000;
+            while (changes.length < 5 && Date.now() < deadline) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                changes = await fetchRecordChanges(ctx, f.ActionCategoryEntityID, catA.ID);
+            }
+            AssertEqual(changes.length, 5, `EW12 Record Change count for ${catA.ID}`);
+
+            const writer2Change = changes.find(
+                c => c.Type === 'Update' && parseChanges(c, 'EW12 writer2').Description?.newValue === 'EW12 Writer 2 (Overlapping)'
+            );
+            Assert(writer2Change != null, 'EW12 no Record Change captured Writer 2 update');
+            const descChange = parseChanges(writer2Change!, 'EW12 writer2').Description;
+            // Because ResolverBase loaded truth from DB on partial-delta OldValues___, the audit row's
+            // oldValue is 'EW12 Writer 1' (true DB state), never catC's stale 'EW12 Initial Description'.
+            AssertEqual(descChange.oldValue, 'EW12 Writer 1', 'EW12 overlapping save Record Change oldValue reflects true DB state');
+
+            console.log('      → delta-only Save() preserved untouched fields, merged non-overlapping concurrent edits, and tracked true DB oldValue on overlapping edit');
+        }
+    },
+    {
+        Id: 'entity-writes.EW13',
+        Name: 'EW13: typed save parameters keep the literal batch\'s conversions (decimal, bigint, datetime, int, bit, Unicode)',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // Saves bind each value as a typed parameter (SQLServerDataProvider saveParameters.ts).
+            // The driver encodes a decimal parameter through a double: 1.005 * 100 = 100.4999…, so
+            // decimal(3,2) would store 1.00. MJ sends decimals as their exact text instead, and
+            // SQL Server rounds that to 1.01, the value the literal batch always stored.
+            const f = fx(ctx);
+            const text = "Zoë's 😀 日本 Ωμέγα (mj-integration-test — safe to delete)";
+            const search = await ctx.Provider.GetEntityObject<MJKnowledgeHubSavedSearchEntity>('MJ: Knowledge Hub Saved Searches', ctx.User);
+            search.NewRecord();
+            search.UserID = ctx.User.ID;
+            search.Name = `${f.Prefix}-typed ${FIXTURE_TAG}`;
+            search.Query = text;
+            search.MinScore = 1.005;
+            search.MaxResults = 7;
+            search.NotifyOnNewResults = true;
+            Assert(await search.Save(), `EW13 saved-search save failed: ${search.LatestResult?.CompleteMessage}`);
+            try {
+                const reloaded = await ctx.Provider.GetEntityObject<MJKnowledgeHubSavedSearchEntity>('MJ: Knowledge Hub Saved Searches', ctx.User);
+                Assert(await reloaded.Load(search.ID), `EW13 reloading saved search ${search.ID} failed`);
+                AssertEqual(reloaded.MinScore, 1.01, 'decimal(3,2) 1.005 stored as SQL Server rounds its exact text (a double would give 1.00)');
+                AssertEqual(reloaded.MaxResults, 7, 'int round trip');
+                AssertEqual(reloaded.NotifyOnNewResults, true, 'bit round trip');
+                AssertEqual(reloaded.Query, text, 'Unicode text with a quote round-trips exactly');
+            } finally {
+                await search.Delete();
+            }
+
+            // SQL Server `datetime` keeps its 1/300 s rounding (.999 becomes the next second);
+            // PostgreSQL's `TIMESTAMPTZ` column preserves microsecond precision (.999 stays .999).
+            const entityRows = await runRows<{ ID: string }>({
+                EntityName: 'MJ: Entities', Fields: ['ID'], MaxRows: 1, ResultType: 'simple'
+            }, ctx.User, 'entity lookup for the List FK');
+            Assert(entityRows.length === 1, 'no entities available to satisfy MJ: Lists.EntityID');
+            const list = await ctx.Provider.GetEntityObject<MJListEntity>(LIST_ENTITY, ctx.User);
+            list.NewRecord();
+            list.Name = `${f.Prefix}-typed ${FIXTURE_TAG}`;
+            list.EntityID = entityRows[0].ID;
+            list.UserID = ctx.User.ID;
+            const listSaved = await list.Save();
+            if (list.ID) {
+                f.ListIds.push(list.ID);
+            }
+            Assert(listSaved, `EW13 list save failed: ${list.LatestResult?.CompleteMessage}`);
+            const invitation = await ctx.Provider.GetEntityObject<MJListInvitationEntity>('MJ: List Invitations', ctx.User);
+            invitation.NewRecord();
+            invitation.ListID = list.ID;
+            invitation.Email = 'ew13@mj-integration-test.invalid';
+            invitation.Role = 'Viewer';
+            invitation.Token = `${f.Prefix}-ew13-token`;
+            invitation.ExpiresAt = new Date('2030-06-15T12:00:00.999Z');
+            invitation.CreatedByUserID = ctx.User.ID;
+            invitation.Status = 'Pending';
+            Assert(await invitation.Save(), `EW13 invitation save failed: ${invitation.LatestResult?.CompleteMessage}`);
+            try {
+                const reloaded = await ctx.Provider.GetEntityObject<MJListInvitationEntity>('MJ: List Invitations', ctx.User);
+                Assert(await reloaded.Load(invitation.ID), `EW13 reloading invitation ${invitation.ID} failed`);
+                const isPostgres = ctx.Provider instanceof ProviderBase && ctx.Provider.PlatformKey === 'postgresql';
+                const expectedIso = isPostgres ? '2030-06-15T12:00:00.999Z' : '2030-06-15T12:00:01.000Z';
+                AssertEqual(
+                    reloaded.ExpiresAt?.toISOString(),
+                    expectedIso,
+                    isPostgres
+                        ? 'TIMESTAMPTZ preserves millisecond precision on PostgreSQL'
+                        : 'datetime rounds .999 to the next second, as SQL Server does',
+                );
+            } finally {
+                await invitation.Delete();
+            }
+
+            // bigint (GraphQL carries it as a 32-bit Int, so the value stays below 2^31).
+            const conversation = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);
+            conversation.NewRecord();
+            conversation.Name = 'EW13 typed probe (mj-integration-test — safe to delete)';
+            conversation.UserID = ctx.User.ID;
+            Assert(await conversation.Save(), `EW13 conversation save failed: ${conversation.LatestResult?.CompleteMessage}`);
+            (f.ConversationIds ??= []).push(conversation.ID);
+            try {
+                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+                detail.NewRecord();
+                detail.ConversationID = conversation.ID;
+                detail.Role = 'User';
+                detail.Message = text;
+                detail.Status = 'Complete';
+                detail.CompletionTime = 2_000_000_123;
+                Assert(await detail.Save(), `EW13 detail save failed: ${detail.LatestResult?.CompleteMessage}`);
+                (f.ConversationDetailIds ??= []).push(detail.ID);
+                try {
+                    const reloaded = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+                    Assert(await reloaded.Load(detail.ID), `EW13 reloading detail ${detail.ID} failed`);
+                    AssertEqual(reloaded.CompletionTime, 2_000_000_123, 'bigint round trip');
+                    AssertEqual(reloaded.Message, text, 'nvarchar(MAX) Unicode round trip');
+                } finally {
+                    await detail.Delete();
+                }
+            } finally {
+                await conversation.Delete();
+            }
+
+            console.log('      → decimal 1.005→1.01, datetime .999→next second, bigint, int, bit and Unicode text all round-tripped');
         }
     }
 ];

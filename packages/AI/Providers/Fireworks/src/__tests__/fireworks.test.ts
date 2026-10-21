@@ -1,5 +1,5 @@
 import { FireworksLLM } from '../models/fireworks';
-import { ChatParams, ChatMessage, ChatMessageRole } from '@memberjunction/ai';
+import { ChatParams, ChatMessage, ChatMessageRole, ChatResult } from '@memberjunction/ai';
 
 describe('FireworksLLM', () => {
   let fireworks: FireworksLLM;
@@ -176,19 +176,37 @@ describe('FireworksLLM', () => {
       return params;
     };
 
-    it('should return a cancelled result (non-streaming) when the token is already aborted', async () => {
+    /** Asserts the shared cancelled-result contract BaseLLM builds for every driver. */
+    const expectCancelled = (result: ChatResult): void => {
+      expect(result.success).toBe(false);
+      expect(result.statusText).toBe('cancelled');
+      expect(result.errorMessage).toMatch(/^Request was cancelled/);
+      expect(result.errorInfo?.errorType).toBe('Cancelled');
+      expect(result.errorInfo?.severity).toBe('Fatal');
+      expect(result.errorInfo?.canFailover).toBe(false);
+      expect(result.errorInfo?.providerErrorCode).toBe('request_cancelled');
+    };
+
+    /** An SDK-shaped abort, as the OpenAI client raises when the request's signal fires. */
+    const sdkAbortError = (): Error => {
+      const error = new Error('Request was aborted.');
+      error.name = 'APIUserAbortError';
+      return error;
+    };
+
+    it('should return a cancelled result (non-streaming) when the token is already aborted, without calling the SDK', async () => {
+      const create = vi.spyOn(fireworks.Client.chat.completions, 'create');
       const controller = new AbortController();
       controller.abort();
 
       const result = await fireworks.ChatCompletion(buildParams(controller.signal));
 
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('cancelled');
-      expect(result.errorInfo?.canFailover).toBe(false);
-      expect(result.errorInfo?.severity).toBe('Fatal');
+      expectCancelled(result);
+      expect(create).not.toHaveBeenCalled();
     });
 
-    it('should return a cancelled result (streaming) when the token is already aborted', async () => {
+    it('should return a cancelled result (streaming) when the token is already aborted, without calling the SDK', async () => {
+      const create = vi.spyOn(fireworks.Client.chat.completions, 'create');
       const controller = new AbortController();
       controller.abort();
 
@@ -198,9 +216,42 @@ describe('FireworksLLM', () => {
 
       const result = await fireworks.ChatCompletion(params);
 
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('cancelled');
-      expect(result.errorInfo?.canFailover).toBe(false);
+      expectCancelled(result);
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it('should forward the signal to the SDK and report an abort mid-request as cancelled (non-streaming)', async () => {
+      const controller = new AbortController();
+      const create = vi.spyOn(fireworks.Client.chat.completions, 'create').mockImplementation(() => {
+        controller.abort();
+        throw sdkAbortError();
+      });
+
+      const result = await fireworks.ChatCompletion(buildParams(controller.signal));
+
+      expectCancelled(result);
+      expect(create).toHaveBeenCalledWith(expect.anything(), { signal: controller.signal });
+    });
+
+    it('should forward the signal to the SDK and resolve a stream aborted mid-flight as cancelled', async () => {
+      const controller = new AbortController();
+      async function* abortedStream(): AsyncGenerator<{ choices: Array<{ delta: { content: string }; index: number }> }> {
+        yield { choices: [{ delta: { content: 'partial ' }, index: 0 }] };
+        controller.abort();
+        throw sdkAbortError();
+      }
+      const create = vi.spyOn(fireworks.Client.chat.completions, 'create')
+        .mockReturnValue(abortedStream() as unknown as ReturnType<typeof fireworks.Client.chat.completions.create>);
+      const params = buildParams(controller.signal);
+      params.streaming = true;
+      const onComplete = vi.fn();
+      params.streamingCallbacks = { OnContent: () => { /* no-op */ }, OnComplete: onComplete };
+
+      const result = await fireworks.ChatCompletion(params);
+
+      expectCancelled(result);
+      expect(onComplete).toHaveBeenCalledWith(result);
+      expect(create).toHaveBeenCalledWith(expect.anything(), { signal: controller.signal });
     });
   });
 });

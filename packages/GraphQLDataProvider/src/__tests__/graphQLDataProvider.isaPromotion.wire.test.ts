@@ -296,4 +296,41 @@ describe('GraphQLDataProvider Save — IS-A promotion carries the shared primary
         expect(GraphQLWire.LastRequest.document).toContain('UpdateShelterDog(input: $input)');
         expect(lastInputRecord()['ID']).toBe(EXISTING_ANIMAL_ID);
     });
+
+    it('IS-A child update of a parent-chain field sends only PK + dirty parent field in input and OldValues___', async () => {
+        const animal = existingAnimal();
+        const dog = new TestIsaEntity(dogInfo, provider);
+        dog.WireParent(animal);
+        dog.LoadFromData({
+            ID: EXISTING_ANIMAL_ID,
+            Name: 'Biscuit',
+            MicrochipNumber: '985112000000001',
+            IsHouseTrained: false,
+            __mj_CreatedAt: new Date('2026-01-01T00:00:00Z'),
+            __mj_UpdatedAt: new Date('2026-01-01T00:00:00Z'),
+        });
+        expect(dog.IsSaved).toBe(true);
+
+        // Mutate a parent-owned field ('Name') through the child while leaving 'MicrochipNumber'
+        // (parent) and 'IsHouseTrained' (child) untouched.
+        dog.Set('Name', 'Biscuit II');
+        GraphQLWire.EnqueueResponse({
+            UpdateShelterDog: { ID: EXISTING_ANIMAL_ID, Name: 'Biscuit II', MicrochipNumber: '985112000000001', IsHouseTrained: false },
+        });
+
+        await provider.Save(dog, user, new EntitySaveOptions());
+
+        const input = lastInputRecord();
+        expect(input['ID']).toBe(EXISTING_ANIMAL_ID);
+        expect(input['Name']).toBe('Biscuit II');
+        expect(input).not.toHaveProperty('MicrochipNumber');
+        expect(input).not.toHaveProperty('IsHouseTrained');
+
+        const oldValues = input['OldValues___'] as Array<{ Key: string; Value: unknown }>;
+        expect(oldValues).toEqual([
+            { Key: 'ID', Value: EXISTING_ANIMAL_ID },
+            { Key: 'Name', Value: 'Biscuit' },
+        ]);
+    });
 });
+

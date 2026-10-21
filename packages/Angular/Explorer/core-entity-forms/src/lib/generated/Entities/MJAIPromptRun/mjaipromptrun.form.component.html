@@ -1100,6 +1100,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Rubric Evaluations Section -->
+    <mj-collapsible-panel
+        SectionKey="mJRubricEvaluations"
+        SectionName="Rubric Evaluations"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJRubricEvaluations')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Evaluations','AIPromptRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Rubric Evaluations','AIPromptRunID')"
+                [AllowLoad]="IsSectionExpanded('mJRubricEvaluations')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJRubricEvaluations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

@@ -15,6 +15,12 @@ vi.mock('@memberjunction/communication-types', () => ({
 vi.mock('../config.js', () => ({
   configInfo: {},
 }));
+// Provisioning is stubbed in this suite; keep the real provider stack out of the module graph.
+vi.mock('../isolatedProvider.js', () => ({
+  CreateIsolatedProvider: async () => {
+    throw new Error('provisioning is stubbed in this suite');
+  },
+}));
 
 import { Metadata, RunView, type DatabaseProviderBase, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJMagicLinkInviteEntity } from '@memberjunction/core-entities';

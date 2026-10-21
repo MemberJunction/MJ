@@ -104,6 +104,9 @@
 
   --mj-color-info-50: #eff6ff;
   --mj-color-info-100: #dbeafe;
+  --mj-color-info-200: #bfdbfe;
+  --mj-color-info-300: #93c5fd;
+  --mj-color-info-400: #60a5fa;
   --mj-color-info-500: #3b82f6;
   --mj-color-info-600: #2563eb;
   --mj-color-info-700: #1d4ed8;
@@ -457,7 +460,36 @@
 
   /* ========================================
      Z-INDEX SCALE
-     ======================================== */
+     ========================================
+     The stacking contract hosts build against. Two layers:
+
+     Legacy rungs (0–800) — in-flow layering inside a page: dropdowns,
+     sticky headers, tooltips. A handful of consumers use them; their
+     values predate the overlay band below and are NOT comparable to it.
+
+     Overlay rungs (1000+) — the surfaces the shell actually stacks, in
+     the order they must win. These numbers are the de-facto ladder the
+     components ship on, published here so a host composing its own
+     surfaces (a board room, a dock, a capsule) knows where to land:
+
+       shell header .......... 500     (shell.component.css)
+       --mj-z-drawer ......... 1000    mj-slide-panel backdrop; the panel
+                                       itself is calc(drawer + 1)
+       --mj-z-dialog ......... 1200    mj-dialog backdrop — ABOVE the
+                                       drawer, so a modal opened from a
+                                       drawer is reachable (bespoke panels
+                                       up to ~1101 also stay under it)
+       mobile chrome band .... 9998/9999 (left-nav drawer, bottom sheet)
+       mj-window ............. 10000
+       MJDialogService ....... 10001   service-rendered dialog (dialog.service.ts);
+                                       above windows on purpose, unlike <mj-dialog>
+       MJConfirmService ...... 20000
+       search bar ............ 99999
+       toasts ................ 100000
+
+     Only the two named rungs are tokens today; the rest are listed so the
+     ladder is one picture. New overlay surfaces take a token, not a number.
+     */
 
   --mj-z-base: 0;
   --mj-z-dropdown: 100;
@@ -468,6 +500,10 @@
   --mj-z-popover: 600;
   --mj-z-tooltip: 700;
   --mj-z-toast: 800;
+
+  /* Overlay band */
+  --mj-z-drawer: 1000;
+  --mj-z-dialog: 1200;
 }
 
 /* ========================================
@@ -531,13 +567,23 @@
   --mj-highlight-hover: var(--mj-color-accent-200);
   --mj-highlight-subtle: var(--mj-brand-accent-subtle);
 
-  /* Status Colors (adjusted for dark backgrounds) */
+  /* Status Colors (adjusted for dark backgrounds)
+     -text uses the 300 step: the 100 step is a near-white tint that is
+     indistinguishable from --mj-text-primary (1.00-1.12:1), so it carries no
+     status signal. 300 reads as its hue and clears WCAG AA on every RESTING
+     dark surface (page, surface, card, elevated, sunken) and on the matching
+     -bg tint; 400 fails AA for error/info on --mj-bg-surface-elevated.
+     Known limitation: on --mj-bg-surface-hover and --mj-bg-surface-active the
+     300 step drops below AA for error/info (and warning on its tint). Those
+     two surfaces sit 2-3 ramp steps off the base and no saturated text color
+     survives them; that is a surface-token problem, not a status-text one.
+     See MJ#4564. Keep ThemeEngine derive.ts STATUS.*Text300 in lockstep. */
   --mj-status-success-bg: rgba(34, 197, 94, 0.15);
-  --mj-status-success-text: var(--mj-color-success-100);
+  --mj-status-success-text: var(--mj-color-success-300);
   --mj-status-success-border: var(--mj-color-success-600);
 
   --mj-status-warning-bg: rgba(245, 158, 11, 0.15);
-  --mj-status-warning-text: var(--mj-color-warning-100);
+  --mj-status-warning-text: var(--mj-color-warning-300);
   --mj-status-warning-border: var(--mj-color-warning-600);
 
   /* Slightly stronger search highlight on dark surfaces so it stays visible. */
@@ -545,11 +591,11 @@
   --mj-search-highlight-text: var(--mj-text-primary);
 
   --mj-status-error-bg: rgba(239, 68, 68, 0.15);
-  --mj-status-error-text: var(--mj-color-error-100);
+  --mj-status-error-text: var(--mj-color-error-300);
   --mj-status-error-border: var(--mj-color-error-600);
 
   --mj-status-info-bg: rgba(59, 130, 246, 0.15);
-  --mj-status-info-text: var(--mj-color-info-100);
+  --mj-status-info-text: var(--mj-color-info-300);
   --mj-status-info-border: var(--mj-color-info-600);
 
   /* Application Accent (dark mode adjustment) */

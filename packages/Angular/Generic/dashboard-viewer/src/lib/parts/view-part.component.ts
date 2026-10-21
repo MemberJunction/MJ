@@ -40,7 +40,7 @@ import { RecordSelectedEvent, RecordOpenedEvent, ViewRelatedRecordNavigation } f
               class="part-placeholder"
               Icon="fa-solid fa-table"
               Title="No View Selected"
-              Message="Click the configure button to select a view for this part."
+              Message="Use Edit part to choose a view."
               Size="compact" />
           }
         

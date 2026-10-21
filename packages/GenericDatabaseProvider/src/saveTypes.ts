@@ -43,7 +43,7 @@ export type SaveCallBinding =
           kind: 'mssql-declare-exec';
           /** `DECLARE @x_<suffix> type, @y_<suffix> type` — empty if no params. Suffix: GenericDatabaseProvider.allocateSaveCallSuffix. */
           preambleSQL: string;
-          /** `SET @x_<suffix> = N'value'\nSET @y_<suffix> = 1` — empty if no params. */
+          /** `SET @x_<suffix> = N'value'\nSET @y_<suffix> = 1` — empty if no params. SQL Server's executed form sets `@x$ = @p$0` (see its saveParameters.ts). */
           setSQL: string;
           /** Comma-joined `@CodeName=@x_<suffix>, ...` for the EXEC line. */
           callArgsSQL: string;
@@ -81,13 +81,51 @@ export type SaveCallBinding =
  * and `WrapSaveCallWithRecordChange`. Returned by `GenericDatabaseProvider`
  * via `SaveSQLResult`.
  *
- * For SQL Server, `parameters` is typically omitted — the binding inlines
- * everything via DECLARE/SET. For PostgreSQL, `parameters` carries the
- * positional or JSON-arg values that bind to the `$N` placeholders.
+ * For SQL Server, `parameters` carries the statement's typed inputs (the
+ * `SET @x = @p$n` references) and `literalSQL` the same statement with the
+ * values written in; a transaction-group save carries only the literal form.
+ * For PostgreSQL, `parameters` carries the positional or JSON-arg values that
+ * bind to the `$N` placeholders.
  */
 export interface SaveSQLFragment {
     sql: string;
     parameters?: unknown[];
+    /** `sql` with its parameter values written in as literals (see `SaveSQLResult.literalSQL`). */
+    literalSQL?: string;
+}
+
+/**
+ * Resolved return-shape context computed by `GenericDatabaseProvider.ResolveSaveReturnContext`
+ * and passed to dialect-specific save-wrapping hooks (`WrapSaveCallForResult`,
+ * `ProjectSaveCallToDatestamps`, and `WrapSaveCallWithRecordChange`).
+ *
+ * Centralizes the `SaveReturnMode` decision logic and quoted column-list construction in
+ * `GenericDatabaseProvider` so dialect subclasses only supply dialect-specific SQL grammar.
+ */
+export interface SaveReturnContext {
+    /** The return mode compiled into the entity's generated SP/function (`EntityInfo.SaveReturnMode`). */
+    spReturnMode: 'full' | 'datestamps_only';
+    /** The effective return mode requested for this save call (`options?.SaveReturnMode ?? spReturnMode`). */
+    effectiveReturnMode: 'full' | 'datestamps_only';
+    /** True when the compiled SP/function already returns only PK + datestamps (`spReturnMode === 'datestamps_only'`). */
+    spReturnsDatestampsOnly: boolean;
+    /**
+     * True when runtime options requested `'datestamps_only'` on an entity whose compiled
+     * SP/function returns the full row (`!spReturnsDatestampsOnly && effectiveReturnMode === 'datestamps_only'`).
+     */
+    needsDatestampProjection: boolean;
+    /** Comma-separated, dialect-quoted column list for `EntityInfo.DatestampReturnFields` (built via `QuoteIdentifier`). */
+    datestampSelectColumnsSQL: string;
+    /**
+     * Column list to select directly from the routine call when the dialect selects from the routine
+     * (`datestampSelectColumnsSQL` when `needsDatestampProjection` is true, otherwise `'*'`).
+     */
+    routineSelectColumnsSQL: string;
+    /**
+     * Column list to select from an intermediate result capture table or CTE
+     * (`datestampSelectColumnsSQL` when `effectiveReturnMode === 'datestamps_only'`, otherwise `'*'`).
+     */
+    finalSelectColumnsSQL: string;
 }
 
 // Re-export `RecordChangePayload` from `@memberjunction/core` for convenience.
