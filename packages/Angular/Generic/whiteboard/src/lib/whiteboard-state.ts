@@ -88,6 +88,72 @@ export interface WhiteboardItemBase {
   Author: WhiteboardAuthor;
   /** Render order (higher renders on top). Assigned by the engine. */
   Z: number;
+  /**
+   * Optional free-form role tag (`'slot'`, `'heading'`, `'step-done'`). It carries no behavior:
+   * the board lands it on the item's wrapper as a `wb-tag-<slug>` class (see
+   * {@link WhiteboardTagClass}) so a host restyling the board from outside can tell two ROLES of
+   * one kind apart — a shape used as a section head vs an empty "fill this in" slot — which the
+   * DOM could not distinguish before (CSS cannot select on label text). Persisted with the item;
+   * the agent's scene view carries it as `tag`.
+   */
+  Tag?: string;
+}
+
+/** Longest tag the slug keeps — anything past it is noise in a class name. */
+export const WHITEBOARD_TAG_MAX_CHARS = 32;
+
+/**
+ * A tag as stored on an item: trimmed, and `undefined` when blank — so clearing a tag drops the
+ * key instead of persisting `"Tag": ""`, and the scene view / class hook see one "unset" shape.
+ */
+export function NormalizeWhiteboardTag(tag: string | undefined | null): string | undefined {
+  const trimmed = tag?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+/**
+ * The wrapper class for an item's {@link WhiteboardItemBase.Tag}: `wb-tag-<slug>`, where the slug
+ * is lower-cased, every run of characters outside `a-z0-9` becomes one dash, leading/trailing
+ * dashes are dropped and the result is capped at {@link WHITEBOARD_TAG_MAX_CHARS}. An empty or
+ * whitespace-only tag yields `''` (no class), so templates can append the result unconditionally.
+ */
+export function WhiteboardTagClass(tag: string | undefined | null): string {
+  if (!tag) {
+    return '';
+  }
+  // Memoized: the board calls this from its template for every item on every change-detection
+  // pass, and a board has few distinct tags. Bounded so a stream of unique tags cannot grow it
+  // without limit; past the bound the map is simply dropped and rebuilt.
+  const hit = tagClassMemo.get(tag);
+  if (hit !== undefined) {
+    return hit;
+  }
+  const cls = computeTagClass(tag);
+  if (tagClassMemo.size >= TAG_CLASS_MEMO_MAX) {
+    tagClassMemo.clear();
+  }
+  tagClassMemo.set(tag, cls);
+  return cls;
+}
+
+const TAG_CLASS_MEMO_MAX = 512;
+const tagClassMemo = new Map<string, string>();
+
+function computeTagClass(tag: string): string {
+  // The collapse is linear (the class excludes '-', so no run can backtrack). The edge trims
+  // are index walks rather than `^-+|-+$` regexes: those backtrack polynomially on a long run of
+  // dashes, and a tag is library input (agent tool arguments) — CodeQL js/polynomial-redos.
+  const collapsed = tag.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  let start = 0;
+  while (start < collapsed.length && collapsed[start] === '-') {
+    start++;
+  }
+  let end = Math.min(collapsed.length, start + WHITEBOARD_TAG_MAX_CHARS);
+  while (end > start && collapsed[end - 1] === '-') {
+    end--;
+  }
+  const slug = collapsed.slice(start, end);
+  return slug ? `wb-tag-${slug}` : '';
 }
 
 /** A sticky note. */
@@ -243,6 +309,8 @@ export type WhiteboardItemInput = DistributiveOmit<WhiteboardItem, 'ID' | 'Z' | 
 
 /** Patchable fields for {@link WhiteboardState.UpdateItem} (kind/identity fields excluded). */
 export interface WhiteboardItemPatch {
+  /** Re-tag the item (see {@link WhiteboardItemBase.Tag}); `''` clears it. */
+  Tag?: string;
   X?: number;
   Y?: number;
   W?: number;
@@ -595,6 +663,8 @@ export interface WhiteboardCompactItem {
   fontFamily?: WhiteboardFontFamily;
   bold?: boolean;
   color?: string;
+  /** The item's role tag, when set (see {@link WhiteboardItemBase.Tag}). */
+  tag?: string;
 }
 
 /**
@@ -1201,6 +1271,7 @@ export class WhiteboardState {
     }
     this.beforeMutate();
     const item = { ...adding.Input, ID: this.nextId(adding.Input.Kind), Z: ++this.zCounter, Author: author } as WhiteboardItem;
+    WhiteboardState.normalizeTag(item);
     this.items.set(item.ID, item);
     this.record('add', item.ID, author, `added ${WhiteboardState.describe(item)}`);
     this.itemAdded.next({ Item: item, Author: author });
@@ -1240,12 +1311,25 @@ export class WhiteboardState {
         (target as Record<string, typeof value>)[key] = value;
       }
     }
+    if (effective.Tag !== undefined) {
+      WhiteboardState.normalizeTag(item);
+    }
     this.record('update', id, author, `updated ${WhiteboardState.describe(item)}`);
     this.itemUpdated.next({ Item: item, Operation: 'update', Author: author });
     if (isContent) {
       this.contentChanged.next({ Item: item, Patch: effective, Author: author });
     }
     return true;
+  }
+
+  /** Store a blank tag as "no tag" (see {@link NormalizeWhiteboardTag}). */
+  private static normalizeTag(item: WhiteboardItemBase): void {
+    const tag = NormalizeWhiteboardTag(item.Tag);
+    if (tag === undefined) {
+      delete item.Tag;
+    } else {
+      item.Tag = tag;
+    }
   }
 
   /** Whether a patch touches CONTENT fields (drives the ContentChanging/Changed pair). */
@@ -2112,6 +2196,9 @@ export class WhiteboardState {
         }
         c.text = clip(item.Html, 200);
         break;
+    }
+    if (item.Tag) {
+      c.tag = item.Tag;
     }
     return c;
   }
