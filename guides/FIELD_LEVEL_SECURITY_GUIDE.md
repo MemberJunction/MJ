@@ -565,6 +565,26 @@ column itself is readable and it is the *contents* that were narrowed. Nothing i
 any point: what a reader receives is either the stored value or a strict subset of it, and only the
 stored value is ever persisted.
 
+**Every save and delete stores a full-width payload, whoever makes it.** A restricted user's entity object
+never holds the fields they cannot read (§2.3), so a payload built from that object alone would
+leave those columns out. When an update's saving object is narrower than the entity, the provider
+reads the stored row once, full width, on the save's own connection (inside an open transaction,
+it reads that transaction's state), and builds both snapshots from it: `FullRecordJSON` is the
+stored row overlaid with the save's values, and the old-values side is the stored row for every
+field the object never held. `ChangesJSON` still lists only what the save changed — a field the
+object never held has the same value on both sides. A field the saver wrote blind (write allowed,
+read denied) records its true stored value as the old value. A full-width object, which is every
+unrestricted or system-user save of a record loaded whole, costs no extra query. A save queued in a
+transaction group is generated when `Save()` is called, so its snapshot describes the row as of
+then.
+
+A delete is handled the same way: a restricted user's delete records the full stored row, so a
+record restored from the recycle bin comes back with the columns its deleter could not read.
+
+A create has no stored row yet. A field the insert omits because the user may not supply it is
+left out of that create's `FullRecordJSON`, rather than recorded with a value the record never
+received; the column holds its database default, and the record's next change snapshots it.
+
 Payload columns outside this set are not projected. `Comments` is user-authored, and `ErrorLog`
 belongs to replay machinery; neither is derived from the target entity's field values.
 
@@ -633,8 +653,8 @@ What holds full-width data, and why that is safe:
   as a backstop, and a save event that arrives with fields missing clears the slot rather than
   patching a row in place.
 - **The audit trail** (`MJ: Record Changes`) stores its payloads unprojected and projects them
-  for each reader (§3.2). A restricted user's own save records only the fields their object held
-  (§5).
+  for each reader (§3.2). That includes a restricted user's own saves: the provider reads the
+  stored row to complete the snapshot, so the payload never narrows to what the saver could see.
 
 For server code acting for a user, the rule is simple: create entity objects and run views with
 that user as `contextUser`, and they will never hold a value the user is denied.
@@ -842,11 +862,6 @@ restriction should know them before relying on it.
   persisted, whatever the data-capture setting. Prompt runs are filtered to their own runs for the
   UI role, but the Developer and Integration roles can read every user's. Grant those roles
   accordingly.
-
-- **A restricted user's own saves produce Record Change payloads only as wide as what they could
-  load.** The audit record of a change is built from the values the saving user's object held, so
-  fields that user could not read are not in the payload of that change. The stored values are not
-  affected; only the audit detail is narrower.
 
 - **Embeddings created before re-indexing still encode restricted text** (§3.6). Read-time
   projection removes the values from metadata and snippets, but similarity on old vectors can still

@@ -118,6 +118,7 @@ import { TransactionAffinity, type TransactionMembership } from './TransactionAf
 import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
 import { ClientClauseScreen, type ClientClauseScreeningProvider } from './clientClauseScreen.js';
 import { IsSystemUser } from './systemUser.js';
+import { CreateSnapshots, FieldsLackingStoredValue, RecordChangeSnapshots, WidenDeleteSnapshot, WidenUpdateSnapshots } from './recordChangeSnapshot.js';
 import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -1657,8 +1658,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // Per-save suppression: a high-volume machine writer (integration sync) opts out of the
         // audit row for ITS writes only — the entity keeps TrackRecordChanges for everyone else.
         if (this.ShouldTrackRecordChanges(entity.EntityInfo) && options?.SkipRecordChanges !== true) {
-            const newData = entity.GetAll(false);
-            const oldData = isUpdate ? entity.GetAll(true) : null;
+            const { NewData: newData, OldData: oldData } = await this.BuildRecordChangeSnapshots(entity, isUpdate, user);
 
             const payload = this.BuildRecordChangePayload(
                 newData,
@@ -1704,6 +1704,108 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             (result as unknown as { extraData: Record<string, unknown> }).extraData = { overlappingChangeData };
         }
         return result;
+    }
+
+    /**
+     * The old and new snapshots a save's Record Change is built from. The audit trail stores
+     * whole payloads and projects them per reader, so both snapshots describe the whole record
+     * whoever saves it.
+     *
+     * - **Full-width object** (every field loaded — the normal case for unrestricted and
+     *   system-user saves): the object's own values. No query.
+     * - **Narrower object on an update** (a restricted user's object never holds the fields they
+     *   cannot read): the stored row is read once, full width, and the snapshots are widened
+     *   from it. The diff is unchanged, because a field the object never held has the same
+     *   stored value on both sides.
+     * - **Create**: there is no stored row yet. A field the INSERT omits because the user may
+     *   not supply it is left out rather than recorded with a value the record never got.
+     *
+     * The read runs on the save's connection: inside an open transaction it reads that
+     * transaction's state. A save queued in a transaction group is generated when `Save()` is
+     * called, so its snapshot reflects the row as of then — the same moment the object's own
+     * old values describe.
+     */
+    protected async BuildRecordChangeSnapshots(entity: BaseEntity, isUpdate: boolean, user: UserInfo): Promise<RecordChangeSnapshots> {
+        if (!isUpdate) {
+            return CreateSnapshots(entity);
+        }
+        const narrow: RecordChangeSnapshots = { NewData: entity.GetAll(false), OldData: entity.GetAll(true) };
+        const lacking = FieldsLackingStoredValue(entity);
+        if (lacking.size === 0) {
+            return narrow;
+        }
+        const storedRow = await this.ReadStoredRowForRecordChange(entity, user);
+        return storedRow ? WidenUpdateSnapshots(entity, narrow, storedRow, lacking) : narrow;
+    }
+
+    /** Full-width delete snapshots captured by {@link Delete}, consumed by `GenerateDeleteSQL`. */
+    private readonly _deleteSnapshots = new WeakMap<BaseEntity, Record<string, unknown>>();
+
+    /**
+     * Deletes a record. Before the shared orchestration runs, a delete whose Record Change would
+     * be built from a narrower-than-entity object (a restricted user's) reads the stored row so the
+     * delete's `FullRecordJSON` — the snapshot a deleted record is restored from — is full width.
+     * `GenerateDeleteSQL` is synchronous, so the snapshot is captured here and handed to it through
+     * {@link RecordChangeDeleteSnapshot}. A full-width object costs no extra query.
+     */
+    public override async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo): Promise<boolean> {
+        const captured = await this.captureDeleteSnapshot(entity, options, user);
+        try {
+            return await super.Delete(entity, options, user);
+        } finally {
+            if (captured) this._deleteSnapshots.delete(entity);
+        }
+    }
+
+    /** Reads and stores the full-width delete snapshot when one is needed; true when it stored one. */
+    private async captureDeleteSnapshot(entity: BaseEntity, options: EntityDeleteOptions | undefined, user: UserInfo): Promise<boolean> {
+        if (!this.ShouldTrackRecordChanges(entity.EntityInfo) || options?.SkipRecordChanges === true || options?.ReplayOnly === true) {
+            return false;
+        }
+        if (!entity.IsSaved || entity.EntityInfo.ExternalDataSourceID) {
+            return false; // the orchestration refuses these; nothing to snapshot
+        }
+        const lacking = FieldsLackingStoredValue(entity);
+        if (lacking.size === 0) {
+            return false;
+        }
+        const storedRow = await this.ReadStoredRowForRecordChange(entity, user);
+        if (!storedRow) {
+            return false;
+        }
+        this._deleteSnapshots.set(entity, WidenDeleteSnapshot(entity, entity.GetAll(true), storedRow, lacking));
+        return true;
+    }
+
+    /**
+     * The record snapshot a delete's Record Change carries: the full-width snapshot {@link Delete}
+     * captured, else `narrow` (the object's own values, which are already full width whenever no
+     * snapshot was needed).
+     */
+    protected RecordChangeDeleteSnapshot(entity: BaseEntity, narrow: Record<string, unknown>): Record<string, unknown> {
+        // Optional chaining: a provider built without running its constructor (a test host made
+        // with Object.create) has no snapshot map, and then there is nothing captured.
+        return this._deleteSnapshots?.get(entity) ?? narrow;
+    }
+
+    /**
+     * Reads the record's stored row, full width, for a Record Change snapshot. Provider-internal:
+     * no row-level filter and no field-security column list, because the payload is stored
+     * unprojected and projected for each reader. The rows get the same post-processing as a
+     * `Load` (binary to base64, datetime adjustment, decryption, fixed-width trimming). Kept out
+     * of the SQL log, which records the save itself.
+     */
+    protected async ReadStoredRowForRecordChange(entity: BaseEntity, user: UserInfo): Promise<Record<string, unknown> | null> {
+        const entityInfo = entity.EntityInfo;
+        const where = this.BuildPrimaryKeyWhereClause(entityInfo, entity.PrimaryKey);
+        const sql = `SELECT * FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${where}`;
+        const options: ExecuteSQLOptions = { description: `Record Change snapshot of ${entityInfo.Name}`, ignoreLogging: true };
+        const rawRows = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, options, user);
+        const rows = await this.PostProcessRows(rawRows, entityInfo, user);
+        if (!rows || rows.length === 0) {
+            return null;
+        }
+        return this.TrimFixedWidthValues(entityInfo, rows[0]);
     }
 
     /**
@@ -6082,6 +6184,37 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     /**************************************************************************/
 
     /**
+     * The `WHERE` predicate that selects one record by its composite key, using dialect-neutral
+     * quoting. Quoted key values have embedded single quotes escaped: a key value can contain
+     * apostrophes (an object-valued soft key whose JSON carries free text), and an unescaped quote
+     * both breaks the statement and is an injection vector.
+     */
+    protected BuildPrimaryKeyWhereClause(entityInfo: EntityInfo, compositeKey: CompositeKey): string {
+        return compositeKey.KeyValuePairs.map(val => {
+            const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
+            if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
+            const quotes = pk.NeedsQuotes ? "'" : '';
+            const safeVal = quotes ? String(val.Value).replace(/'/g, "''") : val.Value;
+            return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${safeVal}${quotes}`;
+        }).join(' AND ');
+    }
+
+    /**
+     * Trims the trailing pad from fixed-width char fields (char/nchar pad with spaces on both SQL
+     * Server and PostgreSQL), in place, and returns the row.
+     */
+    protected TrimFixedWidthValues(entityInfo: EntityInfo, row: Record<string, unknown>): Record<string, unknown> {
+        for (const field of entityInfo.Fields) {
+            const isFixedWidth = field.FixedWidthColumn ?? (field.TSType === EntityFieldTSType.String && (field.Type.trim().toLowerCase() === 'char' || field.Type.trim().toLowerCase() === 'nchar'));
+            if (isFixedWidth) {
+                const val = row[field.Name];
+                if (typeof val === 'string') row[field.Name] = val.trimEnd();
+            }
+        }
+        return row;
+    }
+
+    /**
      * Loads a single entity record by composite key, with optional relationship loading.
      * Uses dialect-neutral quoting for all SQL construction.
      */
@@ -6123,16 +6256,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
 
         // Build WHERE from composite key
-        const where = compositeKey.KeyValuePairs.map(val => {
-            const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
-            if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
-            const quotes = pk.NeedsQuotes ? "'" : '';
-            // Escape embedded single quotes when the value is wrapped in quotes. A PK value can
-            // legitimately contain apostrophes (e.g. an object-valued soft key whose JSON carries
-            // free-text), and an unescaped quote both breaks the SQL string and is an injection vector.
-            const safeVal = quotes ? String(val.Value).replace(/'/g, "''") : val.Value;
-            return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${safeVal}${quotes}`;
-        }).join(' AND ');
+        const where = this.BuildPrimaryKeyWhereClause(entityInfo, compositeKey);
 
         // Append Read row filters — role RLS AND API-key filters (GetEffectiveRowFilterWhereClause)
         let fullWhere = where;
@@ -6158,16 +6282,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const d = await this.PostProcessRows(rawData, entityInfo, user);
 
         if (d && d.length > 0) {
-            const ret = d[0];
-
-            // Trim trailing spaces for fixed-width char fields (char/nchar pad with spaces on both SQL Server and PG)
-            for (const field of entityInfo.Fields) {
-                const isFixedWidth = field.FixedWidthColumn ?? (field.TSType === EntityFieldTSType.String && (field.Type.trim().toLowerCase() === 'char' || field.Type.trim().toLowerCase() === 'nchar'));
-                if (isFixedWidth) {
-                    const val = ret[field.Name];
-                    if (typeof val === 'string') ret[field.Name] = val.trimEnd();
-                }
-            }
+            const ret = this.TrimFixedWidthValues(entityInfo, d[0]);
 
             // Load entity relationships if requested
             if (entityRelationshipsToLoad && entityRelationshipsToLoad.length > 0) {

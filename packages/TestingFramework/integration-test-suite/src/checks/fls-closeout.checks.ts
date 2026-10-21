@@ -21,6 +21,7 @@
  *     CO11 an ItemFilter on a denied field, or on an unknown one, is refused with the same wording
  *   Record Changes
  *     CO12 a ViewID-only read of the audit trail projects each row's payload for the reader
+ *     CO19 a restricted user's own save stores a full-width payload; the saver's read of it is projected
  *   Configuration guards
  *     CO13 a lowercase 'deny' is stored as 'Deny' and enforced
  *     CO14 a lowercase 'deny' aimed at a role the system user holds is refused (mutation tier)
@@ -575,6 +576,60 @@ export async function CheckCo12RecordChangesViewIDProjected(ctx: IntegrationChec
     }
 }
 
+/** The newest Update audit row on the fixture employee whose ChangesJSON carries `marker`, read as `user`. */
+async function auditRowCarrying(ctx: IntegrationCheckContext, fx: FlsFixture, marker: string, user: UserInfo): Promise<AuditRow | undefined> {
+    const res = await new RunView().RunView<AuditRow>({
+        EntityName: RECORD_CHANGES_ENTITY,
+        ExtraFilter: `EntityID = '${FlsEntity(ctx).ID}' AND RecordID LIKE '%${fx.FixtureEmployeeID}%' AND Type = 'Update' AND ChangesJSON LIKE '%${marker}%'`,
+        // EntityID is selected so the projection can resolve the row's subject; without it the payload fails closed.
+        Fields: [...AUDIT_PAYLOAD_FIELDS, 'EntityID'], OrderBy: 'ChangedAt DESC', ResultType: 'simple', BypassCache: true,
+    }, user);
+    Assert(res.Success, `CO19: reading the audit trail as ${user.Email} failed: ${res.ErrorMessage}`);
+    return res.Results[0];
+}
+
+/**
+ * CO19 — a restricted user's own save stores a full-width Record Change: the unrestricted writer
+ * reads the denied column's stored value in FullRecordJSON, ChangesJSON names only the edited field,
+ * and the restricted saver's read of the same row is projected.
+ */
+export async function CheckCo19RestrictedSaveStoresFullSnapshot(ctx: IntegrationCheckContext): Promise<void> {
+    const r = ready(ctx, 'CO19');
+    if (!r) return;
+    if (!FlsEntity(ctx).TrackRecordChanges) return skip('CO19', `'${SEEDED_FLS_ENTITY}' has TrackRecordChanges off, so no audit row exists`);
+    for (const user of [r.Fx.Multi!, r.Fx.Writer!]) {
+        if (!canRead(ctx, RECORD_CHANGES_ENTITY, user)) {
+            return skip('CO19', `${user.Email} lacks read on '${RECORD_CHANGES_ENTITY}'. Re-seed with \`${SEED_FIXTURES_COMMAND}\`.`);
+        }
+    }
+    const marker = `CO19-${Date.now()}`;
+    const emp = await ctx.Provider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY, r.Fx.Multi!);
+    Assert(await emp.Load(r.Fx.FixtureEmployeeID!), 'CO19: the multi user must be able to load the fixture employee');
+    Assert(emp.GetFieldByName(FLS_DENY_READ_FIELD)?.NotLoaded === true, `CO19: precondition — the multi user's object must not hold ${FLS_DENY_READ_FIELD}`);
+    emp.FirstName = marker;
+    Assert(await emp.Save(), `CO19: the multi user's edit of an allowed field must save: ${emp.LatestResult?.CompleteMessage ?? ''}`);
+    try {
+        const asWriter = await auditRowCarrying(ctx, r.Fx, marker, r.Fx.Writer!);
+        Assert(!!asWriter, 'CO19: the restricted save must write an audit row the writer can read');
+        const full = JSON.parse(asWriter!.FullRecordJSON ?? '{}') as Record<string, unknown>;
+        AssertEqual(full[FLS_DENY_READ_FIELD], r.Markers.Title,
+            `CO19: the audit snapshot of a restricted user's save must carry the stored ${FLS_DENY_READ_FIELD} (the payload is stored full width)`);
+        AssertEqual(full.FirstName, marker, 'CO19: the snapshot must carry the saved change');
+        const changed = Object.keys(JSON.parse(asWriter!.ChangesJSON ?? '{}') as Record<string, unknown>);
+        AssertEqual(changed.join(','), 'FirstName', 'CO19: ChangesJSON must list only the field the save changed');
+
+        const asSaver = await auditRowCarrying(ctx, r.Fx, marker, r.Fx.Multi!);
+        Assert(!!asSaver, 'CO19: the saver must still see the audit row (payloads are narrowed, rows are not hidden)');
+        Assert(UUIDsEqual(asSaver!.ID, asWriter!.ID), 'CO19: both reads must reach the same audit row');
+        const saverPayload = `${asSaver!.ChangesJSON ?? ''}${asSaver!.FullRecordJSON ?? ''}${asSaver!.ChangesDescription ?? ''}`;
+        Assert(!saverPayload.includes(r.Markers.Title), `LEAK: CO19: the denied ${FLS_DENY_READ_FIELD} reached the restricted saver through audit row ${asSaver!.ID}`);
+        Assert(saverPayload.includes(marker), 'CO19: the saver must still see the fields they may read in the audit row');
+    } finally {
+        emp.FirstName = 'Fixture';
+        await emp.Save().catch(() => false);
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────── configuration guards
 
 /** Saves `efp` with client-supplied verb spellings, as a transport would apply them; returns [saved, message]. */
@@ -844,6 +899,7 @@ export const FlsCloseoutChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.CO16`, Name: 'CO16: re-pointing a system-user role assignment to another user is refused when the role carries the system user\'s last Allow', Fn: CheckCo16UserRoleRePointRefused, RequiresMutation: true },
     { Id: `${BUNDLE}.CO17`, Name: 'CO17: an agent data source cached PerAgent is cached per user (the restricted user never gets the unrestricted user\'s rows), and an entity_object source hands the agent no denied value', Fn: CheckCo17AgentDataSourcePerUser },
     { Id: `${BUNDLE}.CO18`, Name: 'CO18: search results the restricted user may see have the denied field projected out of RawMetadata and the snippet; the unrestricted user\'s are untouched', Fn: CheckCo18SearchResultsProjected },
+    { Id: `${BUNDLE}.CO19`, Name: 'CO19: a restricted user\'s own save stores a full-width Record Change — the unrestricted writer sees the denied field\'s stored value and only the edited field as changed, while the saver\'s read of the same row is projected', Fn: CheckCo19RestrictedSaveStoresFullSnapshot },
 ];
 
 for (const check of FlsCloseoutChecks) {
