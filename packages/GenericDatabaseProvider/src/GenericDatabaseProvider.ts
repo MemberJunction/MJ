@@ -3077,22 +3077,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
     }
 
-    /** `error` as a failed view result when it is a field-security refusal; otherwise rethrows it. */
-    private static fieldSecurityRefusalAsResult<T>(error: unknown): RunViewResult<T> {
-        if (!(error instanceof Error) || (!(error instanceof FieldSecurityError) && error.name !== FieldSecurityError.ErrorName)) {
-            throw error;
-        }
-        return {
-            RowCount: 0,
-            TotalRowCount: 0,
-            Results: [],
-            UserViewRunID: '',
-            ExecutionTime: 0,
-            Success: false,
-            ErrorMessage: error.message,
-        } as RunViewResult<T>;
-    }
-
     /**************************************************************************/
     // InternalRunView Helpers
     /**************************************************************************/
