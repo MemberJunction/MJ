@@ -39,6 +39,9 @@ vi.mock('@memberjunction/ai', async () => {
     class BaseTextToSpeech extends BaseModel {}
     class BaseSpeechToText extends BaseModel {}
     class BaseImageGenerator extends BaseModel {}
+    // The OpenAI Decisions driver extends BaseSystemOneDecision and registers against BaseDecision.
+    class BaseDecision extends BaseModel {}
+    class BaseSystemOneDecision extends BaseDecision {}
     // Static-method error helper referenced by those modules' method bodies.
     class ErrorAnalyzer {
         public static analyzeError(): Record<string, never> {
@@ -57,7 +60,9 @@ vi.mock('@memberjunction/ai', async () => {
     // and drift from reality, which is how the xAI top-level-usage bug survived here in the first
     // place — so the real implementation is the thing under test.
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
-    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage };
+    // Same for RealtimeDroppedInputReporter, which the shared OpenAI-protocol session uses to report the input it drops.
+    const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
+    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, BaseDecision, BaseSystemOneDecision, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -331,11 +336,32 @@ describe('xAIRealtime', () => {
         it('SendInput appends base64 PCM16 audio', async () => {
             const session = await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
             const bytes = new Uint8Array([1, 2, 3, 4]);
-            session.SendInput(bytes.buffer);
+            session.SendInput({ Data: bytes.buffer, Kind: 'audio' });
             const append = driver.Fake.Sent.find((e) => e.type === 'input_audio_buffer.append');
             expect(append).toBeDefined();
             if (append?.type === 'input_audio_buffer.append') {
                 expect(append.audio).toBe(Buffer.from(bytes).toString('base64'));
+            }
+        });
+
+        it('SendInput drops a video frame instead of appending it as audio, reports it once, and still appends audio (#5091)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const session = await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
+                driver.Fake.Sent = [];
+                const jpeg = new Uint8Array([0xff, 0xd8, 0xff]);
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+
+                expect(driver.Fake.Sent).toEqual([]);
+                const drops = warn.mock.calls.filter((call) => String(call[0]).startsWith('[xaiRealtime] Dropped video input of type image/jpeg'));
+                expect(drops).toHaveLength(1);
+
+                const audio = new Uint8Array([1, 2, 3, 4]);
+                session.SendInput({ Data: audio.buffer, Kind: 'audio' });
+                expect(driver.Fake.Sent).toEqual([{ type: 'input_audio_buffer.append', audio: Buffer.from(audio).toString('base64') }]);
+            } finally {
+                warn.mockRestore();
             }
         });
 
@@ -413,7 +439,11 @@ describe('xAIRealtime', () => {
             const respond = driver.Fake.Sent[0];
             expect(respond.type).toBe('response.create');
             if (respond.type === 'response.create') {
-                expect(respond.response?.instructions).toBe('Briefly say the report agent is drafting.');
+                // The session prompt rides AHEAD of the direction: `response.instructions` is a full
+                // override of the session prompt, so sending the direction alone would leave the model
+                // with no identity for exactly this one turn (#4591). The session was started with
+                // SystemPrompt 'sys', which xAIRealtimeSession inherits from OpenAIRealtimeSession.
+                expect(respond.response?.instructions).toBe('sys\n\nBriefly say the report agent is drafting.');
             }
         });
 

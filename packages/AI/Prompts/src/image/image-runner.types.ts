@@ -7,6 +7,7 @@
 import type { UserInfo } from '@memberjunction/core';
 import type {
   AIAPIKey,
+  AICredentialScope,
   ImageEditParams,
   ImageGenerationParams,
   ImageGenerationResult,
@@ -45,6 +46,13 @@ export interface AIImageRunOptions {
    */
   APIKeys?: AIAPIKey[];
 
+  /**
+   * Passed through as the base runner's `CredentialScope`. `'RuntimeOnly'` restricts the run to
+   * {@link APIKeys}: a candidate whose driver class has no key there is skipped, never run on the
+   * platform's credentials.
+   */
+  CredentialScope?: AICredentialScope;
+
   /** A parent `MJ: AI Prompt Runs` row, recorded as this run's `ParentID`. */
   ParentRunID?: string;
 
@@ -64,6 +72,22 @@ export interface AIImageRunOptions {
    * {@link OnPromptRunCreated}.
    */
   AgentRunID?: string;
+
+  /**
+   * A bound, in milliseconds, on each driver call, as `AIPromptParams.timeoutMS` bounds each chat
+   * call: every failover candidate gets its own. A call that runs longer is aborted through the
+   * signal the driver is handed and fails with an `AIPromptTimeoutError`, which reads as a network
+   * error and so fails over. Unset or not positive means no bound.
+   */
+  TimeoutMS?: number;
+
+  /**
+   * Cancels the call, as `AIPromptParams.cancellationToken` cancels a chat call. A token already
+   * aborted refuses the call before a run row exists. Aborted during the call, it ends the call at
+   * once, tears the driver's request down, tries no further failover candidate, and the run row is
+   * recorded as `Cancelled`. The driver is handed the runner's bound signal, never this token itself.
+   */
+  CancellationToken?: AbortSignal;
 }
 
 /**

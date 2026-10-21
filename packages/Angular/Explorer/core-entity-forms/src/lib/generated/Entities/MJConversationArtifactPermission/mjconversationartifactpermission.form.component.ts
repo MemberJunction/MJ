@@ -16,7 +16,6 @@ export class MJConversationArtifactPermissionFormComponent extends BaseFormCompo
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'permissionSettings', sectionName: 'Permission Settings', isExpanded: true },
-            { sectionKey: 'artifactDetails', sectionName: 'Artifact Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

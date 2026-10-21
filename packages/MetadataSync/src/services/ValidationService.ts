@@ -1,8 +1,12 @@
 import { EntityFieldInfo, EntityInfo, EntityRelationshipInfo, Metadata, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import * as fs from 'fs';
+import fse from 'fs-extra';
 import * as path from 'path';
 import { minimatch } from 'minimatch';
+import fastGlob from 'fast-glob';
+import { RecordFieldNames } from '../lib/entity-field-names';
+import { RECORD_FILE_GLOB_OPTIONS } from '../lib/record-file-glob';
 import {
   ValidationResult,
   ValidationError,
@@ -14,18 +18,32 @@ import {
 } from '../types/validation';
 import { RecordData } from '../lib/sync-engine';
 import { GetSystemUser } from '../lib/provider-utils';
+import { IsIgnoredDirectoryName } from '../lib/ignore-directories';
+import { MapJsonStartLines } from '../lib/json-record-lines';
 import { ParseMetadataReference } from '../lib/reference-parser';
+import { ParseEnvReference } from '../lib/env-reference';
+import { LOOKUP_OPTIONAL_MESSAGE } from '../lib/lookup-reference';
+import { EvaluatePushWhen, PushWhenError } from '../lib/push-when';
 import {
   METADATA_KEYWORDS,
   IsMetadataKeyword,
   ExtractKeywordValue
 } from '../constants/metadata-keywords';
-import { EntityConfig } from '../config';
+import { EntityConfig, SyncConfig } from '../config';
 import { ResolveCollectionRelationship } from '@memberjunction/record-graph';
 
 // Type aliases for clarity
 type EntityData = RecordData;
 type EntitySyncConfig = EntityConfig;
+/** The `.mj-sync.json` given to ValidateDirectory: a metadata root or one entity folder. */
+type DirectoryConfig = Partial<EntityConfig> & Pick<SyncConfig, 'directoryOrder' | 'userRoleValidation'>;
+
+/** One record entry for an entity and primary key: where it starts and the raw field values it sets. */
+interface RecordClaim {
+  Path: string;
+  Line: number | undefined;
+  Fields: Record<string, unknown>;
+}
 
 export class ValidationService {
   private metadata: Metadata;
@@ -33,7 +51,11 @@ export class ValidationService {
   private warnings: ValidationWarning[] = [];
   private entityDependencies: Map<string, EntityDependency> = new Map();
   private processedEntities: Set<string> = new Set();
-  private claimedPrimaryKeys: Map<string, string> = new Map();
+  private claimedPrimaryKeys: Map<string, RecordClaim[]> = new Map();
+  /** 1-based start line of each record object read from a record file. */
+  private recordStartLines = new WeakMap<object, number>();
+  /** The entity folder being validated. Push resolves record `@file:` references from it. */
+  private entityDir = '';
   private options: ValidationOptions;
   private userRoleCache: Map<string, string[]> = new Map();
 
@@ -70,14 +92,27 @@ export class ValidationService {
       return this.getResult();
     }
 
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const config: DirectoryConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
     // Load user role configuration and cache if enabled
     if (config.userRoleValidation?.enabled) {
       await this.loadUserRoles();
     }
 
-    const directories = await this.getDirectoriesInOrder(dir, config);
+    if (!config.entity && config.pushWhen !== undefined) {
+      this.addError({
+        type: 'entity',
+        severity: 'error',
+        file: configPath,
+        message: 'pushWhen is only allowed in an entity folder .mj-sync.json',
+        suggestion: 'Move pushWhen into the .mj-sync.json of each folder it should gate',
+      });
+    }
+
+    // A config with an entity means `dir` is one entity folder, unless the caller treats it as a root
+    const isEntityFolder = !!config.entity && !this.options.ValidateChildFoldersOnly;
+    const candidates = isEntityFolder ? [''] : await this.getDirectoriesInOrder(dir, config);
+    const directories = candidates.filter((subDir) => this.pushWhenAllows(path.join(dir, subDir)));
 
     let totalFiles = 0;
     let totalEntities = 0;
@@ -86,6 +121,7 @@ export class ValidationService {
     for (const subDir of directories) {
       const subDirPath = path.join(dir, subDir);
       const result = await this.validateEntityDirectory(subDirPath);
+      this.warnNestedPushWhen(subDirPath);
       if (result) {
         totalFiles += result.files;
         totalEntities += result.entities;
@@ -95,7 +131,6 @@ export class ValidationService {
       }
     }
 
-    // Validate dependency order
     await this.validateDependencyOrder(directories);
 
     return {
@@ -112,6 +147,35 @@ export class ValidationService {
     };
   }
 
+  /** Warns about each `.mj-sync.json` below `dir` that has `pushWhen`; push over a parent folder ignores it. */
+  private warnNestedPushWhen(dir: string): void {
+    const configPaths = fastGlob.sync('*/**/.mj-sync.json', {
+      cwd: dir,
+      absolute: true,
+      dot: true,
+      ignore: ['**/node_modules/**'],
+      suppressErrors: true,
+    });
+    for (const configPath of configPaths) {
+      let config: unknown;
+      try {
+        config = fse.readJsonSync(configPath);
+      } catch {
+        continue;
+      }
+      if (config === null || typeof config !== 'object' || Array.isArray(config) || !('pushWhen' in config)) {
+        continue;
+      }
+      this.addWarning({
+        type: 'validation',
+        severity: 'warning',
+        file: configPath,
+        message: 'pushWhen in a nested folder has no effect when push runs over a parent folder',
+        suggestion: 'Move the folder directly under the metadata root, or push it with --dir',
+      });
+    }
+  }
+
   /** @deprecated Use {@link ValidateDirectory}. */
   public async validateDirectory(dir: string): Promise<ValidationResult> {
     return this.ValidateDirectory(dir);
@@ -121,31 +185,12 @@ export class ValidationService {
    * Validates a single entity directory
    */
   private async validateEntityDirectory(dir: string): Promise<{ files: number; entities: number; fileResults: Map<string, FileValidationResult> } | null> {
-    // Check for .mj-folder.json first (new format)
-    let configPath = path.join(dir, '.mj-folder.json');
-    let config: any;
-    
-    if (fs.existsSync(configPath)) {
-      config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      // .mj-folder.json uses entityName field
-      if (!config.entityName) {
-        this.addError({
-          type: 'validation',
-          severity: 'error',
-          file: configPath,
-          message: 'Missing entityName field in .mj-folder.json',
-        });
-        return null;
-      }
-      config.entity = config.entityName; // Normalize to entity field
-    } else {
-      // Fall back to .mj-sync.json (legacy format)
-      configPath = path.join(dir, '.mj-sync.json');
-      if (!fs.existsSync(configPath)) {
-        return null;
-      }
-      config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    // The folder's entity comes from .mj-sync.json; .mj-folder.json holds only defaults
+    const configPath = path.join(dir, '.mj-sync.json');
+    if (!fs.existsSync(configPath)) {
+      return null;
     }
+    const config: DirectoryConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
     // Validate entity name exists
     if (!config.entity || config.entity.trim() === '') {
@@ -157,8 +202,9 @@ export class ValidationService {
       });
       return null;
     }
+    const entityConfig: EntitySyncConfig = { ...config, entity: config.entity };
 
-    const entityInfo = this.metadata.EntityByName(config.entity);
+    const entityInfo = this.metadata.EntityByName(entityConfig.entity);
 
     if (!entityInfo) {
       this.addError({
@@ -185,12 +231,13 @@ export class ValidationService {
       }
     }
 
+    this.entityDir = path.resolve(dir);
     const files = await this.getMatchingFiles(dir, config.filePattern);
     let totalEntities = 0;
     const fileResults = new Map<string, FileValidationResult>();
 
     for (const file of files) {
-      const result = await this.validateFile(file, entityInfo, config);
+      const result = await this.validateFile(file, entityInfo, entityConfig);
       if (result) {
         totalEntities += result.entityCount;
         fileResults.set(file, result);
@@ -204,12 +251,12 @@ export class ValidationService {
    * Validates a single metadata file
    */
   private async validateFile(filePath: string, entityInfo: EntityInfo, config: EntitySyncConfig): Promise<FileValidationResult> {
-    const fileErrors: ValidationError[] = [];
     let entityCount = 0;
 
     try {
-      const content = fs.readFileSync(filePath, 'utf8');
+      const content = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
       const data = JSON.parse(content);
+      this.recordStartLines = MapJsonStartLines(content, data);
       const entities = Array.isArray(data) ? data : [data];
       entityCount = entities.length;
 
@@ -217,7 +264,7 @@ export class ValidationService {
         await this.validateEntityData(entityData, entityInfo, filePath, config);
       }
     } catch (error) {
-      fileErrors.push({
+      this.addError({
         type: 'entity',
         severity: 'error',
         file: filePath,
@@ -278,23 +325,9 @@ export class ValidationService {
       }
     }
 
-    // Check for double ownership across metadata files (§6)
-    if (entityData.primaryKey && Object.keys(entityData.primaryKey).length > 0) {
-      const claimKey = `${entityInfo.Name}:${JSON.stringify(entityData.primaryKey)}`;
-      const existingFile = this.claimedPrimaryKeys.get(claimKey);
-      if (existingFile && existingFile !== filePath) {
-        this.addError({
-          type: 'field',
-          severity: 'error',
-          entity: entityInfo.Name,
-          file: filePath,
-          message: `Record with primaryKey ${JSON.stringify(entityData.primaryKey)} on entity "${entityInfo.Name}" is already claimed by "${existingFile}". Double ownership is not allowed.`,
-          suggestion: 'Ensure records are owned by only one sync file or collection',
-        });
-      } else {
-        this.claimedPrimaryKeys.set(claimKey, filePath);
-      }
-    }
+    this.validatePrimaryKeyEnvReferences(entityData.primaryKey, entityInfo.Name, filePath);
+
+    this.checkRecordClaim(entityData, entityInfo.Name, filePath);
 
     // Skip validation for deletion records - they don't need field validation or reference checks
     if ((entityData as any).deleteRecord?.delete === true) {
@@ -344,6 +377,7 @@ export class ValidationService {
     // block) so the required-field best-practice check can be limited to NEW
     // records — an existing record already holds the value in the DB, so a
     // missing NOT-NULL field in the file is not a problem and would only be noise.
+    this.reportTemplateValues(entityData.fields, entityData, entityInfo.Name, filePath);
     await this.validateFields(entityData.fields, entityInfo, filePath, parentContext, !!entityData.primaryKey, ownerContext);
 
     // Track dependencies
@@ -434,10 +468,11 @@ export class ValidationService {
     ownerContext?: { entity: string },
   ): Promise<void> {
     const entityFields = entityInfo.Fields;
-    const fieldMap = new Map(entityFields.map((f) => [f.Name, f]));
+    // Field names match the entity's fields without regard to case, as push matches them
+    const fieldMap = new Map(entityFields.map((f) => [f.Name.toLowerCase(), f]));
 
     for (const [fieldName, fieldValue] of Object.entries(fields)) {
-      const fieldInfo = fieldMap.get(fieldName);
+      const fieldInfo = fieldMap.get(fieldName.toLowerCase());
 
       if (!fieldInfo) {
         // Check if this might be a virtual property (getter/setter)
@@ -477,8 +512,26 @@ export class ValidationService {
         }
       }
 
-      // Check if field is settable (not system field)
-      if (fieldInfo.ReadOnly || fieldName.startsWith('__mj_')) {
+      const isSystemField = fieldInfo.Name.startsWith('__mj_');
+
+      // A read-only field that push ignores (such as a joined display field that pull writes) is a warning
+      if (fieldInfo.ReadOnly && !fieldInfo.IsPrimaryKey && !isSystemField) {
+        const pullAdvice = fieldInfo.IsVirtual
+          ? 'set pull.ignoreVirtualFields: true to stop pull writing it'
+          : 'add it to pull.excludeFields to stop pull writing it';
+        this.addWarning({
+          type: 'validation',
+          severity: 'warning',
+          entity: entityInfo.Name,
+          field: fieldName,
+          file: filePath,
+          message: `Field "${fieldName}" is read-only: push ignores it; ${pullAdvice}`,
+        });
+        continue;
+      }
+
+      // A system field or the primary key cannot be set in fields
+      if (fieldInfo.ReadOnly || isSystemField) {
         this.addError({
           type: 'field',
           severity: 'error',
@@ -502,9 +555,10 @@ export class ValidationService {
     // pure noise that masks genuine warnings. New records (no primaryKey) still
     // get the full check since their required fields must be supplied to insert.
     if (this.options.checkBestPractices && !isExistingRecord) {
+      const recordFields = new RecordFieldNames(fields);
       for (const field of entityFields) {
         // Skip if field allows null or has a value already (use 'in' to handle falsy values like 0, false, "")
-        if (field.AllowsNull || field.Name in fields) {
+        if (field.AllowsNull || recordFields.Has(field.Name)) {
           continue;
         }
 
@@ -695,6 +749,135 @@ export class ValidationService {
     }
   }
 
+  /** Reports each `@template:` value in a record's fields. Push saves that text unchanged instead of loading a file. */
+  private reportTemplateValues(fields: Record<string, unknown>, record: object, entityName: string, filePath: string): void {
+    const line = this.recordStartLines.get(record);
+    for (const [fieldName, value] of Object.entries(fields)) {
+      if (typeof value === 'string' && value.startsWith(METADATA_KEYWORDS.TEMPLATE)) {
+        this.addTemplateError(value, entityName, fieldName, filePath, line);
+      }
+    }
+  }
+
+  private addTemplateError(value: string, entityName: string, fieldName: string, filePath: string, line?: number): void {
+    const location = line === undefined ? filePath : `${filePath}:${line}`;
+    this.addError({
+      type: 'reference',
+      severity: 'error',
+      entity: entityName,
+      field: fieldName,
+      file: filePath,
+      message:
+        `@template: is not supported by mj sync push; push would save the literal text "${value}" to ${entityName}.${fieldName} ` +
+        `at ${location}. Use @file: instead.`,
+    });
+  }
+
+  /**
+   * Records an entry for its entity and primary key. Several entries may describe the same record,
+   * but two entries that set the same field to different raw values give an error.
+   * A key that holds an `@parent:`, `@owner:` or `@root:` reference anywhere, or an object value, is not
+   * recorded.
+   */
+  private checkRecordClaim(entityData: EntityData, entityName: string, filePath: string): void {
+    if (!entityData.primaryKey || Object.keys(entityData.primaryKey).length === 0 || this.hasRelativeKeyValue(entityData.primaryKey)) {
+      return;
+    }
+    const fields = entityData.fields;
+    const claim: RecordClaim = {
+      Path: filePath,
+      Line: this.recordStartLines.get(entityData),
+      Fields: fields && typeof fields === 'object' && !Array.isArray(fields) ? fields : {},
+    };
+    const claimKey = `${entityName}:${JSON.stringify(entityData.primaryKey)}`;
+    const claims = this.claimedPrimaryKeys.get(claimKey) ?? [];
+    for (const earlier of claims) {
+      const conflictingFields = Object.keys(claim.Fields).filter(
+        (field) => Object.prototype.hasOwnProperty.call(earlier.Fields, field) && !this.jsonValuesEqual(earlier.Fields[field], claim.Fields[field]),
+      );
+      if (conflictingFields.length > 0) {
+        this.addClaimConflictError(entityName, entityData.primaryKey, conflictingFields, earlier, claim);
+      }
+    }
+    claims.push(claim);
+    this.claimedPrimaryKeys.set(claimKey, claims);
+  }
+
+  /**
+   * True when a key value can depend on the parent, owner or root record, so equal key text can name
+   * different records: it holds one of these references (also inside a `@lookup:`), or it is an object.
+   */
+  private hasRelativeKeyValue(primaryKey: Record<string, unknown>): boolean {
+    const relativePrefixes = [METADATA_KEYWORDS.PARENT, METADATA_KEYWORDS.OWNER, METADATA_KEYWORDS.ROOT];
+    return Object.values(primaryKey).some(
+      (value) =>
+        (typeof value === 'object' && value !== null) ||
+        (typeof value === 'string' && relativePrefixes.some((prefix) => value.includes(prefix))),
+    );
+  }
+
+  /** Adds the error for two entries of one record that set fields to different values. */
+  private addClaimConflictError(
+    entityName: string,
+    primaryKey: Record<string, unknown>,
+    conflictingFields: string[],
+    earlier: RecordClaim,
+    later: RecordClaim,
+  ): void {
+    const earlierLocation = this.formatClaimLocation(earlier);
+    const laterLocation = this.formatClaimLocation(later);
+    const fieldText = conflictingFields
+      .map(
+        (field) =>
+          `field "${field}" is ${this.formatClaimValue(earlier.Fields[field])} at ${earlierLocation} and ${this.formatClaimValue(later.Fields[field])} at ${laterLocation}`,
+      )
+      .join('; ');
+    this.addError({
+      type: 'field',
+      severity: 'error',
+      entity: entityName,
+      field: conflictingFields.length === 1 ? conflictingFields[0] : undefined,
+      file: later.Path,
+      message:
+        `Conflicting values for ${entityName} record ${JSON.stringify(primaryKey)}: ${fieldText}. ` +
+        'Make both entries set the same value, or set the field in one entry only.',
+    });
+  }
+
+  private formatClaimLocation(claim: RecordClaim): string {
+    return claim.Line === undefined ? claim.Path : `${claim.Path}:${claim.Line}`;
+  }
+
+  /** A raw field value as JSON text, cut to 80 characters. */
+  private formatClaimValue(value: unknown): string {
+    const text = JSON.stringify(value) ?? String(value);
+    return text.length > 80 ? `${text.slice(0, 77)}...` : text;
+  }
+
+  /** Deep equality of two parsed JSON values. Object key order does not matter. */
+  private jsonValuesEqual(left: unknown, right: unknown): boolean {
+    if (left === right) {
+      return true;
+    }
+    if (Array.isArray(left) || Array.isArray(right)) {
+      return (
+        Array.isArray(left) &&
+        Array.isArray(right) &&
+        left.length === right.length &&
+        left.every((item, index) => this.jsonValuesEqual(item, right[index]))
+      );
+    }
+    if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') {
+      return false;
+    }
+    const leftEntries = Object.entries(left);
+    const rightValues = new Map(Object.entries(right));
+    return (
+      leftEntries.length === rightValues.size &&
+      leftEntries.every(([key, value]) => rightValues.has(key) && this.jsonValuesEqual(value, rightValues.get(key)))
+    );
+  }
+
   /**
    * Check if a string is actually a MetadataSync reference (not just any @ string)
    */
@@ -728,13 +911,13 @@ export class ValidationService {
 
     switch (parsed.type) {
       case METADATA_KEYWORDS.FILE:
-        await this.validateFileReference(parsed.value, filePath, entityInfo.Name, fieldInfo.Name);
+        await this.validateFileReference(parsed.value, filePath, this.entityDir, entityInfo.Name, fieldInfo.Name);
         break;
       case METADATA_KEYWORDS.LOOKUP:
         await this.validateLookupReference(parsed, filePath, entityInfo.Name, fieldInfo.Name);
         break;
       case METADATA_KEYWORDS.TEMPLATE:
-        await this.validateTemplateReference(parsed.value, filePath, entityInfo.Name, fieldInfo.Name);
+        // Reported by reportTemplateValues: push does not load @template: files
         break;
       case METADATA_KEYWORDS.OWNER:
         this.validateOwnerReference(parsed.value, ownerContext, filePath, entityInfo.Name, fieldInfo.Name);
@@ -759,11 +942,18 @@ export class ValidationService {
   }
 
   /**
-   * Validates @file: references
+   * Validates @file: references. `baseDir` is the folder push resolves the path from: the entity
+   * folder for a record field, or the folder of the JSON file that holds the reference.
    */
-  private async validateFileReference(filePath: string, sourceFile: string, entityName: string, fieldName: string, visitedFiles?: Set<string>): Promise<void> {
-    const dir = path.dirname(sourceFile);
-    const resolvedPath = path.resolve(dir, filePath);
+  private async validateFileReference(
+    filePath: string,
+    sourceFile: string,
+    baseDir: string,
+    entityName: string,
+    fieldName: string,
+    visitedFiles?: Set<string>
+  ): Promise<void> {
+    const resolvedPath = path.resolve(baseDir, filePath);
 
     // Initialize visited files set if not provided (for circular reference detection)
     const visited = visitedFiles || new Set<string>();
@@ -845,6 +1035,18 @@ export class ValidationService {
    * Validates @lookup: references
    */
   private async validateLookupReference(parsed: ParsedReference, sourceFile: string, entityName: string, fieldName: string): Promise<void> {
+    if (parsed.UnknownFlags?.includes('optional')) {
+      this.addError({
+        type: 'reference',
+        severity: 'error',
+        entity: entityName,
+        field: fieldName,
+        file: sourceFile,
+        message: LOOKUP_OPTIONAL_MESSAGE,
+        suggestion: 'Remove ?optional. Use @env:VAR?optional only as a whole field value.',
+      });
+    }
+
     const lookupEntity = this.metadata.EntityByName(parsed.entity!);
 
     if (!lookupEntity) {
@@ -894,42 +1096,6 @@ export class ValidationService {
 
     // Track dependency
     this.addEntityDependency(entityName, parsed.entity!);
-  }
-
-  /**
-   * Validates @template: references
-   */
-  private async validateTemplateReference(templatePath: string, sourceFile: string, entityName: string, fieldName: string): Promise<void> {
-    const dir = path.dirname(sourceFile);
-    const resolvedPath = path.resolve(dir, templatePath);
-
-    if (!fs.existsSync(resolvedPath)) {
-      this.addError({
-        type: 'reference',
-        severity: 'error',
-        entity: entityName,
-        field: fieldName,
-        file: sourceFile,
-        message: `Template file not found: "${templatePath}"`,
-        suggestion: `Create template at: ${resolvedPath}`,
-      });
-      return;
-    }
-
-    // Validate template is valid JSON
-    try {
-      JSON.parse(fs.readFileSync(resolvedPath, 'utf8'));
-    } catch (error) {
-      this.addError({
-        type: 'reference',
-        severity: 'error',
-        entity: entityName,
-        field: fieldName,
-        file: sourceFile,
-        message: `Template file is not valid JSON: "${templatePath}"`,
-        details: error instanceof Error ? error.message : String(error),
-      });
-    }
   }
 
   /**
@@ -1105,15 +1271,20 @@ export class ValidationService {
   /**
    * Get directories in order based on config
    */
-  private async getDirectoriesInOrder(rootDir: string, config: any): Promise<string[]> {
+  private async getDirectoriesInOrder(
+    rootDir: string,
+    config: Pick<DirectoryConfig, 'directoryOrder' | 'ignoreDirectories'>
+  ): Promise<string[]> {
+    // The folders push visits: no dot folders, none that match ignoreDirectories
     const allDirs = fs
       .readdirSync(rootDir)
       .filter((f) => fs.statSync(path.join(rootDir, f)).isDirectory())
-      .filter((d) => !d.startsWith('.'));
+      .filter((d) => !d.startsWith('.'))
+      .filter((d) => !IsIgnoredDirectoryName(d, config.ignoreDirectories));
 
     let orderedDirs: string[];
     if (config.directoryOrder && Array.isArray(config.directoryOrder)) {
-      const ordered = config.directoryOrder.filter((d: string) => allDirs.includes(d));
+      const ordered = config.directoryOrder.filter((d) => allDirs.includes(d));
       const remaining = allDirs.filter((d) => !ordered.includes(d)).sort();
       orderedDirs = [...ordered, ...remaining];
     } else {
@@ -1122,6 +1293,62 @@ export class ValidationService {
 
     // Apply include/exclude filters if specified
     return this.applyDirectoryFilters(orderedDirs);
+  }
+
+  /**
+   * Checks a folder's pushWhen and reports a malformed value or an unreadable
+   * .mj-sync.json as an error. Returns false when the config cannot be read, or when
+   * HonorPushWhen is set and push would skip the folder.
+   */
+  private pushWhenAllows(dirPath: string): boolean {
+    const configPath = path.join(dirPath, '.mj-sync.json');
+    if (!fs.existsSync(configPath)) {
+      return true;
+    }
+    let config: unknown;
+    try {
+      config = fse.readJsonSync(configPath);
+    } catch (error) {
+      this.addError({
+        type: 'entity',
+        severity: 'error',
+        file: configPath,
+        message: `Cannot read .mj-sync.json: ${this.readErrorReason(error, configPath)}`,
+      });
+      return false;
+    }
+    if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+      this.addError({
+        type: 'entity',
+        severity: 'error',
+        file: configPath,
+        message: '.mj-sync.json must contain a JSON object',
+      });
+      return false;
+    }
+    const pushWhen = 'pushWhen' in config ? config.pushWhen : undefined;
+    if (pushWhen === undefined) {
+      return true;
+    }
+    const problem = PushWhenError(pushWhen);
+    if (problem) {
+      this.addError({
+        type: 'entity',
+        severity: 'error',
+        file: configPath,
+        message: problem,
+        suggestion: 'Use "pushWhen": "@env:VARIABLE"',
+      });
+      return true;
+    }
+    return !this.options.HonorPushWhen || EvaluatePushWhen(pushWhen).Push;
+  }
+
+  /** The reason from a read error, without the leading `<path>: ` that fs-extra adds. */
+  private readErrorReason(error: unknown, filePath: string): string {
+    const message = error instanceof Error ? error.message : String(error);
+    const prefix = `${filePath}: `;
+    return message.startsWith(prefix) ? message.slice(prefix.length) : message;
   }
 
   /**
@@ -1151,23 +1378,10 @@ export class ValidationService {
     return filteredDirs;
   }
 
-  /**
-   * Get files matching pattern
-   */
-  private async getMatchingFiles(dir: string, pattern: string): Promise<string[]> {
-    const files = fs.readdirSync(dir).filter((f) => fs.statSync(path.join(dir, f)).isFile());
-
-    // Strip leading **/ from glob patterns (we only match in current directory)
-    const normalizedPattern = pattern.replace(/^\*\*\//, '');
-
-    // Simple glob pattern matching
-    if (normalizedPattern === '*.json') {
-      return files.filter((f) => f.endsWith('.json') && !f.startsWith('.mj-'));
-    } else if (normalizedPattern === '.*.json') {
-      return files.filter((f) => f.startsWith('.') && f.endsWith('.json') && !f.startsWith('.mj-'));
-    }
-
-    return files;
+  /** The record files of an entity folder, found the way push finds them, as sorted absolute paths. */
+  private async getMatchingFiles(dir: string, pattern: string | undefined): Promise<string[]> {
+    const files = await fastGlob(pattern || '*.json', { ...RECORD_FILE_GLOB_OPTIONS, cwd: dir });
+    return files.sort();
   }
 
   /**
@@ -1269,6 +1483,7 @@ export class ValidationService {
     this.entityDependencies.clear();
     this.processedEntities.clear();
     this.claimedPrimaryKeys.clear();
+    this.recordStartLines = new WeakMap<object, number>();
     this.userRoleCache.clear();
   }
 
@@ -1519,6 +1734,68 @@ export class ValidationService {
     }
   }
 
+  /** Checks an `@env:` reference inside a JSON file: its syntax, and whether a required variable is set. */
+  private validateNestedEnvReference(value: string, sourceFile: string, entityName: string, key: string): void {
+    const reference = ParseEnvReference(value);
+    if (!reference) {
+      this.addError({
+        type: 'reference',
+        severity: 'error',
+        entity: entityName,
+        field: key,
+        file: sourceFile,
+        message: `Invalid reference format: "${value}"`,
+      });
+      return;
+    }
+    if (!reference.Optional && !process.env[reference.VariableName]) {
+      this.addWarning({
+        type: 'validation',
+        severity: 'warning',
+        entity: entityName,
+        field: key,
+        file: sourceFile,
+        message: `Environment variable "${reference.VariableName}" is not currently set`,
+        suggestion: `Ensure this variable is set before running push operations`,
+      });
+    }
+  }
+
+  /** Reports a primary key `@env:` reference that is malformed or uses `?optional`; push needs the value to find the record. */
+  private validatePrimaryKeyEnvReferences(
+    primaryKey: Record<string, unknown> | undefined,
+    entityName: string,
+    filePath: string
+  ): void {
+    for (const [field, value] of Object.entries(primaryKey ?? {})) {
+      if (typeof value !== 'string' || !value.startsWith(METADATA_KEYWORDS.ENV)) {
+        continue;
+      }
+      const reference = ParseEnvReference(value);
+      if (!reference) {
+        this.addError({
+          type: 'reference',
+          severity: 'error',
+          entity: entityName,
+          field,
+          file: filePath,
+          message: `Invalid reference format: "${value}"`,
+          suggestion: 'Use @env:VARIABLE',
+        });
+      } else if (reference.Optional) {
+        this.addError({
+          type: 'reference',
+          severity: 'error',
+          entity: entityName,
+          field,
+          file: filePath,
+          message: `Primary key field "${field}" cannot use ?optional: ${value}`,
+          suggestion: 'Remove ?optional from the primary key reference',
+        });
+      }
+    }
+  }
+
   /**
    * Recursively validates all @ references in a JSON structure
    */
@@ -1545,7 +1822,7 @@ export class ValidationService {
           if (value.startsWith(METADATA_KEYWORDS.FILE)) {
             const filePath = ExtractKeywordValue(value) as string;
             // Recursively validate the file reference (with circular detection)
-            await this.validateFileReference(filePath, sourceFile, entityName, key, visitedFiles);
+            await this.validateFileReference(filePath, sourceFile, path.dirname(sourceFile), entityName, key, visitedFiles);
           } else if (value.startsWith(METADATA_KEYWORDS.LOOKUP)) {
             // Parse and validate lookup reference
             const parsed = this.parseReference(value);
@@ -1553,8 +1830,7 @@ export class ValidationService {
               await this.validateLookupReference(parsed, sourceFile, entityName, key);
             }
           } else if (value.startsWith(METADATA_KEYWORDS.TEMPLATE)) {
-            const templatePath = ExtractKeywordValue(value) as string;
-            await this.validateTemplateReference(templatePath, sourceFile, entityName, key);
+            this.addTemplateError(value, entityName, key, sourceFile);
           } else if (value.startsWith(METADATA_KEYWORDS.PARENT)) {
             const parsed = this.parseReference(value);
             if (parsed) {
@@ -1571,18 +1847,7 @@ export class ValidationService {
               this.validateRootReference(parsed.value, parentContext, sourceFile, entityName, key);
             }
           } else if (value.startsWith(METADATA_KEYWORDS.ENV)) {
-            const envVar = ExtractKeywordValue(value) as string;
-            if (!process.env[envVar]) {
-              this.addWarning({
-                type: 'validation',
-                severity: 'warning',
-                entity: entityName,
-                field: key,
-                file: sourceFile,
-                message: `Environment variable "${envVar}" is not currently set`,
-                suggestion: `Ensure this variable is set before running push operations`,
-              });
-            }
+            this.validateNestedEnvReference(value, sourceFile, entityName, key);
           }
         } else if (value && typeof value === 'object') {
           // Recursively process nested objects
@@ -1763,6 +2028,7 @@ export class ValidationService {
 
       await this.validateExtensionFields(
         extObj.fields as Record<string, unknown>,
+        extObj,
         parentEntityInfo,
         childEntityInfo,
         filePath,
@@ -1816,6 +2082,7 @@ export class ValidationService {
       if ('fields' in subRecord && typeof subRecord.fields === 'object' && subRecord.fields !== null) {
         await this.validateExtensionFields(
           subRecord.fields as Record<string, unknown>,
+          subRecord,
           parentEntityInfo,
           childEntityInfo,
           filePath,
@@ -1831,6 +2098,7 @@ export class ValidationService {
    */
   private async validateExtensionFields(
     fields: Record<string, unknown>,
+    extensionRecord: object,
     parentEntityInfo: EntityInfo,
     childEntityInfo: EntityInfo,
     filePath: string,
@@ -1854,6 +2122,7 @@ export class ValidationService {
       }
     }
 
+    this.reportTemplateValues(fields, extensionRecord, childEntityInfo.Name, filePath);
     await this.validateFields(
       fields,
       childEntityInfo,

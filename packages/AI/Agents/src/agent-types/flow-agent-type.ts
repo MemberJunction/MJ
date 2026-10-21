@@ -11,7 +11,7 @@
  * @since 2.76.0
  */
 
-import { RegisterClass, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, SafeExpressionEvaluator, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import {
     CollectDecisionStepKeys,
     DecisionHoldReason,
@@ -122,6 +122,9 @@ export class FlowExecutionState {
 
     /** Ordered list of step IDs in execution order */
     executionPath: string[] = [];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+
+    /** Remaining starting step IDs queued for execution in inRun mode when a flow has multiple starting steps */
+    pendingStartStepIds?: string[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Where this run's steps execute. Decided once by `DetermineInitialStep` and read by every
@@ -371,9 +374,11 @@ export class FlowAgentType extends BaseAgentType {
                         errorMessage: 'No starting steps defined for flow agent'
                     });
                 }
+
+                if (startingSteps.length > 1) {
+                    flowState.pendingStartStepIds = startingSteps.slice(1).map((s) => s.ID);
+                }
                 
-                // For now, execute the first starting step
-                // Future enhancement: support parallel starting steps
                 return await this.createStepForFlowNode(params, startingSteps[0], payload, flowState);
             }
             
@@ -1745,7 +1750,7 @@ export class FlowAgentType extends BaseAgentType {
             return await this.createStepForFlowNode(params, validStep, payloadToUse, flowState);
         }
 
-        // Default behavior: start at the configured entry point
+        // Default behavior: start at the configured entry point(s)
         const startingSteps = await this.getStartingSteps(flowState.agentId);
 
         if (startingSteps.length === 0) {
@@ -1754,9 +1759,32 @@ export class FlowAgentType extends BaseAgentType {
             });
         }
 
-        // Execute the first starting step
-        // Future enhancement: support parallel starting steps
+        if (startingSteps.length > 1) {
+            flowState.pendingStartStepIds = startingSteps.slice(1).map((s) => s.ID);
+        }
+
         return await this.createStepForFlowNode(params, startingSteps[0], payloadToUse, flowState);
+    }
+
+    /**
+     * Dequeues the next active uncompleted starting step when a workflow has multiple starting steps.
+     *
+     * @private
+     */
+    private async popNextPendingStartStep(flowState: FlowExecutionState): Promise<MJAIAgentStepEntity | null> {
+        // Built once: nothing in this loop completes a step. A UUIDSet matches IDs case-insensitively.
+        const completedStepIds = new UUIDSet(flowState.completedStepIds);
+        while (flowState.pendingStartStepIds && flowState.pendingStartStepIds.length > 0) {
+            const nextStartId = flowState.pendingStartStepIds.shift()!;
+            if (completedStepIds.Has(nextStartId)) {
+                continue;
+            }
+            const nextStartStep = await this.getStepById(nextStartId);
+            if (nextStartStep && nextStartStep.Status === 'Active') {
+                return nextStartStep;
+            }
+        }
+        return null;
     }
 
     /**
@@ -1880,6 +1908,12 @@ export class FlowAgentType extends BaseAgentType {
                 });
             }
 
+            // If this workflow has additional starting steps that have not run yet, advance to the next one
+            const pendingStart = await this.popNextPendingStartStep(flowState);
+            if (pendingStart) {
+                return await this.createStepForFlowNode(params, pendingStart, currentPayload, flowState);
+            }
+
             // Otherwise, flow completed successfully
             LogStatusEx({
                 message: '✅ Flow Agent: Flow completed successfully - no more paths to follow',
@@ -1905,6 +1939,22 @@ export class FlowAgentType extends BaseAgentType {
             return this.createNextStep('Failed', {
                 errorMessage: `Destination step not found: ${paths[0].DestinationStepID}`
             });
+        }
+
+        // If nextStep is a join step waiting on another uncompleted prerequisite while additional
+        // starting steps are still queued, execute the next pending starting step first so the
+        // join receives all upstream inputs before running.
+        if (flowState.pendingStartStepIds && flowState.pendingStartStepIds.length > 0) {
+            const repo = new AIEngineGraphRepository(flowState.agentId);
+            const incomingOrigins = repo.GetIncomingEdges(nextStep.ID).map((e) => e.originNodeId);
+            const completedStepIds = new UUIDSet(flowState.completedStepIds);
+            const hasIncompleteJoinOrigin = incomingOrigins.some((originId) => !completedStepIds.Has(originId));
+            if (hasIncompleteJoinOrigin) {
+                const pendingStart = await this.popNextPendingStartStep(flowState);
+                if (pendingStart) {
+                    return await this.createStepForFlowNode(params, pendingStart, currentPayload, flowState);
+                }
+            }
         }
 
         // Log when we're navigating to a recovery path after a failure

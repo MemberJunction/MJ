@@ -159,5 +159,21 @@ describe('ComputeRRF (canonical)', () => {
                 expect(result[i - 1].Score).toBeGreaterThanOrEqual(result[i].Score);
             }
         });
+
+        it('deduplicates repeated candidate IDs within the same ranked list so duplicates cannot double-count RRF score', () => {
+            const lexical: ScoredCandidate[] = [];
+            const semantic: ScoredCandidate[] = [
+                { ID: 'query-builder', Score: 0.91 },
+                { ID: 'committee-importer', Score: 0.90 },
+                { ID: 'committee-importer', Score: 0.90 },
+            ];
+
+            const result = ComputeRRF([lexical, semantic], 60);
+            expect(result).toHaveLength(2);
+            expect(result[0].ID).toBe('query-builder');
+            expect(result[0].Score).toBeCloseTo(1 / 61, 10);
+            expect(result[1].ID).toBe('committee-importer');
+            expect(result[1].Score).toBeCloseTo(1 / 62, 10);
+        });
     });
 });

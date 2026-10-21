@@ -77,21 +77,23 @@
   }
 
   <!-- Title (Optional) -->
-  <div class="form-group">
-    <label for="partTitle">
-      <i class="fa-solid fa-heading"></i>
-      Part Title
-      <span class="optional-tag">(optional)</span>
-    </label>
-    <input
-      type="text"
-      id="partTitle"
-      [(ngModel)]="title"
-      (input)="onTitleChange()"
-      [placeholder]="artifactName ? 'Default: ' + artifactName : 'Enter a custom title'"
-      class="form-input">
-    <span class="form-hint">Leave empty to use artifact name as title</span>
-  </div>
+  @if (ShowCommonFields) {
+    <div class="form-group">
+      <label for="partTitle">
+        <i class="fa-solid fa-heading"></i>
+        Part Title
+        <span class="optional-tag">(optional)</span>
+      </label>
+      <input
+        type="text"
+        id="partTitle"
+        [(ngModel)]="title"
+        (input)="onTitleChange()"
+        [placeholder]="artifactName ? 'Default: ' + artifactName : 'Enter a custom title'"
+        class="form-input">
+      <span class="form-hint">Leave empty to use artifact name as title</span>
+    </div>
+  }
 
   <!-- Display Options -->
   <mj-accordion-panel [(Expanded)]="showOptions" Size="sm">

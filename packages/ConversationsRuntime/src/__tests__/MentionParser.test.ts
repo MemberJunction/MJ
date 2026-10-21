@@ -222,4 +222,56 @@ describe('MentionParser', () => {
             expect(result).toBeDefined();
         });
     });
+
+    /**
+     * Inputs that made the two mention regexes backtrack quadratically (CodeQL js/polynomial-redos,
+     * alerts #228 and #231). A chat message is user input, so each must parse in linear time. The
+     * budget is generous so a slow runner can't flake: before the fix these took about 2.5 s each.
+     */
+    describe('pathological input', () => {
+        const BUDGET_MS = 500;
+
+        function timeMs(work: () => void): number {
+            const started = performance.now();
+            work();
+            return performance.now() - started;
+        }
+
+        it('parses a long run of unclosed @{ quickly (#228)', () => {
+            const text = '@{'.repeat(60_000) + 'x';
+            let mentionCount = -1;
+            const elapsed = timeMs(() => {
+                mentionCount = parser.ParseMentions(text, []).mentions.length;
+            });
+
+            expect(mentionCount).toBe(0);
+            expect(elapsed).toBeLessThan(BUDGET_MS);
+        });
+
+        it('strips a mention name with a long punctuation run quickly (#231)', () => {
+            const agents = [createMockAgent('agent-1', 'Sage')];
+            const text = '@a' + '!'.repeat(80_000) + 'a';
+            const elapsed = timeMs(() => {
+                parser.ParseMentions(text, agents as never);
+            });
+
+            expect(elapsed).toBeLessThan(BUDGET_MS);
+        });
+
+        it('still strips trailing punctuation from a mention name', () => {
+            const agents = [createMockAgent('agent-1', 'Sage')];
+
+            const result = parser.ParseMentions('Thanks @Sage?!.', agents as never);
+
+            expect(result.agentMention?.id).toBe('agent-1');
+        });
+
+        it('still parses JSON mentions next to unclosed ones', () => {
+            const text = '@{ broken @{"type":"agent","id":"agent-1","name":"Sage"} done';
+
+            const result = parser.ParseMentions(text, []);
+
+            expect(result.mentions.map((m) => m.id)).toEqual(['agent-1']);
+        });
+    });
 });

@@ -8,6 +8,7 @@
  */
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { Canonicalize } from '@memberjunction/global';
 
 interface TestCase {
     Name: string;
@@ -131,6 +132,15 @@ export const settle = Settle;
 export function AssertEqual<T>(actual: T, expected: T, message: string): void {
     if (actual !== expected) {
         throw new Error(`${message} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    }
+}
+
+/** Structural equality for objects and arrays: the two values' canonical JSON must match (object keys in any order). */
+export function AssertDeepEqual<T>(actual: T, expected: T, message: string): void {
+    const a = Canonicalize(actual);
+    const e = Canonicalize(expected);
+    if (a !== e) {
+        throw new Error(`${message} — expected ${e}, got ${a}`);
     }
 }
 

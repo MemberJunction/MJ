@@ -19,6 +19,12 @@ fork, without a routing dependency, and without copy-and-paste.
 > `mj standards check` ([`@memberjunction/standards`](../packages/Standards/README.md)), not with
 > good intentions.
 
+> **New to MJ UI, or deciding how to build something?** Start with
+> [Building UI on MemberJunction](BUILDING_UI_ON_MJ.md) ([illustrated edition](https://docs.memberjunction.org/v6/building-ui/)).
+> It explains *why* these layers exist, adds the two foundation floors beneath L0, and walks
+> through choosing between Explorer, your own Angular app, and an Angular Element. This guide
+> remains the source of truth for the layer rules themselves.
+
 ---
 
 ## 1. Why this exists
@@ -50,6 +56,8 @@ MJ app and every app built **on** MJ can follow it.
 ```
 ┌─ L3  MJ Explorer surface                    ← the ONLY layer that may navigate
 │      ├── Entity form:      BaseFormComponent + @RegisterClass('<Entity Name>')
+│      │   (the forms framework itself, ng-base-forms, is L2 and runs in any Angular app;
+│      │    see FORMS_ARCHITECTURE_GUIDE.md)
 │      └── Resource/dashboard: BaseResourceComponent / BaseDashboard
 │      Owns: NavigationService, NotifyLoadComplete(), query-param round-trip,
 │            toasts, tab/deep-link decisions.
