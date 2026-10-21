@@ -34,7 +34,7 @@ import type { EntitySavePlan } from './entitySavePlan';
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from './entityInfo';
 import type { EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunViewProvider } from './interfaces';
 import { LogError } from './logging';
-import { AssertClientInputWritableForUser } from './entityValueFieldSecurity';
+import { AssertClientInputWritableForUser, OmitFieldsUnreadableByActiveUser } from './entityValueFieldSecurity';
 
 /**
  * When a child collection populates itself from the database.
@@ -1152,7 +1152,9 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
             const companions = i.HasCompanions ? await i.SerializeCompanions(mode) : [];
             items.push({
                 EntityName: i.EntityInfo?.Name ?? this.RelatedEntityName,
-                Fields: i.GetAll(),
+                // Without the fields the child's user may not read: the receiving tier refuses a
+                // restricted caller's input that names one.
+                Fields: OmitFieldsUnreadableByActiveUser(i, i.GetAll()),
                 IsNew: !i.IsSaved,
                 Companions: companions.length > 0 ? companions : null,
             });
