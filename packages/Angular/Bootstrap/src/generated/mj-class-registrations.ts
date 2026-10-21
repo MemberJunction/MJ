@@ -35,7 +35,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (453 classes)
+// @memberjunction/core-entities (456 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -79,10 +79,12 @@ import {
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSessionRecordingShardEntity,
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -282,6 +284,7 @@ import {
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
     MJFeaturePipelineTypeEntity,
+    MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -532,8 +535,9 @@ import {
     MJEntityCommunicationMessageTypeEntityExtended,
 } from '@memberjunction/entity-communications-base';
 
-// @memberjunction/feature-pipelines (1 classes)
+// @memberjunction/feature-pipelines (2 classes)
 import {
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
 } from '@memberjunction/feature-pipelines';
 
@@ -911,10 +915,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSessionRecordingShardEntity,
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -1055,12 +1061,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCredentialTypeEntity,
     MJDashboardCategoryEntity,
     MJDashboardCategoryLinkEntity,
-    MJDashboardCategoryPermissionEntity,
-    MJDashboardEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardCategoryPermissionEntity,
+    MJDashboardEntity,
     MJDashboardEntityExtended,
     MJDashboardPartTypeEntity,
     MJDashboardPermissionEntity,
@@ -1118,6 +1124,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
     MJFeaturePipelineTypeEntity,
+    MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -1258,13 +1265,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSignatureProviderEntity,
     MJSignatureRequestDocumentEntity,
     MJSignatureRequestEntity,
-    MJSignatureRequestLogEntity,
-    MJSignatureRequestRecipientEntity,
-    MJSkillEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSignatureRequestLogEntity,
+    MJSignatureRequestRecipientEntity,
+    MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
@@ -1350,6 +1357,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     TimePerMinutePriceUnitType,
     MJCommunicationProviderEntityExtended,
     MJEntityCommunicationMessageTypeEntityExtended,
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
     AudioArtifactViewerComponent,
     CodeArtifactViewerComponent,
@@ -1461,14 +1469,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     QueryCategoryHierarchyPanel,
     RecordProcessCategoryHierarchyPanel,
     RecordProcessFormComponentExtended,
-    RecordProcessFormPolicy,
-    RubricAuthorPanel,
-    RubricDiffPanel,
-    RubricEvaluationComparePanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RecordProcessFormPolicy,
+    RubricAuthorPanel,
+    RubricDiffPanel,
+    RubricEvaluationComparePanel,
     RubricEvaluationFormPolicy,
     RubricEvaluationResultPanel,
     RubricFormPolicy,
@@ -1624,7 +1632,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 741;
+export const CLASS_REGISTRATIONS_COUNT = 745;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

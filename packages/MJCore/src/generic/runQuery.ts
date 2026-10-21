@@ -185,7 +185,7 @@ export type RunQueryParams = {
  * client's request body removes these before running the query, so a client cannot choose them.
  * GraphQL run inputs never carry them in the first place.
  */
-export const SERVER_ONLY_RUN_QUERY_PARAMS: ReadonlyArray<keyof RunQueryParams> = ['TimeZone', 'ServerParameters'];
+export const SERVER_ONLY_RUN_QUERY_PARAMS: ReadonlyArray<keyof RunQueryParams> = ['TimeZone', 'ServerParameters', 'RequireApproved'];
 
 /** A copy of client-supplied run params without the {@link SERVER_ONLY_RUN_QUERY_PARAMS} fields. */
 export function StripServerOnlyRunQueryParams(params: RunQueryParams): RunQueryParams {

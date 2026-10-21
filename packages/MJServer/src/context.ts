@@ -486,7 +486,11 @@ export const GetUserPayload = async (
       throw new AuthenticationError('Missing token');
     }
 
-    const payload = jwt.decode(token);
+    const cachedAuth = AuthCache.get(token);
+    const payload =
+      cachedAuth && typeof cachedAuth === 'object'
+        ? cachedAuth
+        : jwt.decode(token);
     if (!payload || typeof payload === 'string') {
       throw new AuthenticationError('Invalid token payload');
     }
@@ -498,7 +502,7 @@ export const GetUserPayload = async (
       throw new TokenExpiredError(expiryDate);
     }
 
-    if (!AuthCache.has(token)) {
+    if (!cachedAuth) {
       const issuer = payload.iss;
       if (!issuer) {
         console.warn('No issuer claim on token');
@@ -513,7 +517,7 @@ export const GetUserPayload = async (
       }
 
       await verifyAsync(issuer, token);
-      AuthCache.set(token, true);
+      AuthCache.set(token, payload);
     }
 
     // Use provider to extract user information

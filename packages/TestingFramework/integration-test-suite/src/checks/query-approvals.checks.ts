@@ -199,6 +199,50 @@ export const QueryApprovalsChecks: NamedCheck[] = [
             const forged = await new RunQuery().RunQuery({ QueryID: query.ID, Parameters: { Context: { UserID: 'someone-else' } } }, ctx.User);
             AssertEqual(forged.Success, false, 'a caller value for Context must be refused');
         }
+    },
+    {
+        Id: 'query-approvals.QA5',
+        Name: 'QA5: Composed query dependency approval (Qparent -> Qchild): mutating Qchild while Qparent is untouched refuses both direct and composed runs under RequireApproved',
+        Fn: async (ctx) => {
+            const chapter = requireQuery(CHAPTER_QUERY);
+            chapter.Reusable = true;
+            await saveOrThrow(chapter, 'marking chapter query reusable');
+            await RefreshRenderQueries(ctx.User);
+
+            const catPath = QueryEngine.Instance.Queries.find(q => UUIDsEqual(q.ID, chapter.ID))?.CategoryPath?.replace(/^\/|\/$/g, '') ?? fixtures!.Category.Name;
+            const parentSQL = `SELECT c.N FROM {{query:"${catPath}/${CHAPTER_QUERY}"}} c`;
+            const parent = await createQuery('IT120 Composed Parent', parentSQL, ctx.User);
+            parent.Status = 'Approved';
+            await saveOrThrow(parent, 'approving composed parent');
+            await RefreshRenderQueries(ctx.User);
+            const parentApprovedFingerprint = parent.ApprovedFingerprint;
+            Assert(!!parentApprovedFingerprint, 'parent must have an approved fingerprint');
+
+            // 1. Both Qchild (D1) and Qparent (P1) approved -> composed Qparent runs under RequireApproved
+            const bothApproved = await new RunQuery().RunQuery({ QueryID: parent.ID, ServerParameters: { ChapterID: 2 }, RequireApproved: true }, ctx.User);
+            Assert(bothApproved.Success, `composed parent must run when both parent and child are approved: ${bothApproved.ErrorMessage}`);
+            AssertEqual(JSON.stringify(rowNumbers(bothApproved)), JSON.stringify([2]), 'composed parent returns D1 rows');
+
+            // 2. Mutate Qchild to D2 without re-approving, leaving Qparent byte-identical at P1
+            await editChapterSQL(ctx, D2);
+            AssertEqual(parent.ApprovedFingerprint, parentApprovedFingerprint, 'Qparent approval fingerprint is untouched');
+
+            const directChildRefused = await runChapter(ctx, { ServerParameters: { ChapterID: 2 }, RequireApproved: true });
+            AssertEqual(directChildRefused.Success, false, 'direct Qchild at D2 must be refused under RequireApproved');
+
+            const composedParentRefused = await new RunQuery().RunQuery({ QueryID: parent.ID, ServerParameters: { ChapterID: 2 }, RequireApproved: true }, ctx.User);
+            AssertEqual(composedParentRefused.Success, false, 'composed Qparent must be refused when Qchild is at unapproved D2');
+            Assert(
+                composedParentRefused.ErrorMessage.includes(CHAPTER_QUERY) && composedParentRefused.ErrorMessage.includes('not approved in its current form'),
+                `composed refusal must name the unapproved child query — got: ${composedParentRefused.ErrorMessage}`
+            );
+
+            // 3. Restore Qchild to D1 -> both pass again
+            await editChapterSQL(ctx, D1);
+            const restoredParent = await new RunQuery().RunQuery({ QueryID: parent.ID, ServerParameters: { ChapterID: 2 }, RequireApproved: true }, ctx.User);
+            Assert(restoredParent.Success, `composed parent must run again after restoring Qchild to D1: ${restoredParent.ErrorMessage}`);
+            AssertEqual(JSON.stringify(rowNumbers(restoredParent)), JSON.stringify([2]), 'restored composed parent returns D1 rows');
+        }
     }
 ];
 

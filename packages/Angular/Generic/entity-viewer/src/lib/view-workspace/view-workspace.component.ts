@@ -367,6 +367,15 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Reference to the config panel (for building summaries + canEdit checks). */
   @ViewChild(ViewConfigPanelComponent) protected viewConfigPanelRef?: ViewConfigPanelComponent;
 
+  /**
+   * Reload the grid's rows without moving the user off their page or sort — for a
+   * host that learns its data changed elsewhere (e.g. a row was deleted from a form).
+   * See `EntityViewerComponent.RefreshInPlace`.
+   */
+  public RefreshInPlace(): void {
+    this.entityViewerRef?.RefreshInPlace();
+  }
+
   // ========================================
   // INTERNAL STATE (plain fields — no state service)
   // ========================================

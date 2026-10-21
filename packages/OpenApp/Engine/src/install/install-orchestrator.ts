@@ -4,9 +4,8 @@
  * Sequences the install flow, upgrade flow, and remove flow.
  * Each step is delegated to a specialized handler.
  */
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
@@ -15,12 +14,13 @@ import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/versi
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, DescribeUnresolvedVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
 import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation } from './schema-manager.js';
 import { RunFkGraphTeardown, BuildRootDoomedPredicate } from './entity-teardown.js';
 import { OfferTemplateUser } from './template-user.js';
 import { ExtractApplicationIds } from './migration-application-ids.js';
+import { CreateAppTempDir } from './temp-dir.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { BuildHookResolutionBases, ResolveHookModule } from './hook-module-resolver.js';
@@ -730,7 +730,9 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     const explicitUpgradeVersion = options.Version;
     const targetVersion = explicitUpgradeVersion ?? (await GetLatestVersion(existingApp.RepositoryURL, context.GitHubOptions, existingApp.Subpath ?? undefined));
     if (!targetVersion) {
-      return BuildFailureResult('Upgrade', options.AppName, '', 'Schema', startTime, 'Could not determine target version');
+      // An empty listing may be a repo this credential cannot see (GitHub 404s it) — say which.
+      const reason = await DescribeUnresolvedVersion(existingApp.RepositoryURL, context.GitHubOptions, existingApp.Subpath ?? undefined);
+      return BuildFailureResult('Upgrade', options.AppName, '', 'Schema', startTime, reason);
     }
 
     // If an explicit version was requested, validate the tag exists on GitHub
@@ -1898,8 +1900,7 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   }
 
   context.Callbacks?.OnProgress?.('Migration', 'Downloading migration files...');
-  const tempDir = join(tmpdir(), `mj-app-${manifest.name}-${Date.now()}`);
-  mkdirSync(tempDir, { recursive: true });
+  const tempDir = CreateAppTempDir(manifest.name);
 
   try {
     // Live DB platform — selects the Skyway provider for RunAppMigrations below.
@@ -1965,8 +1966,7 @@ async function HandleTeardown(manifest: MJAppManifest, context: OrchestratorCont
 
   const platform = context.DatabaseProvider.Dialect.PlatformKey;
   const dir = platform === 'postgresql' ? `${teardownDir}-pg` : teardownDir;
-  const tempDir = join(tmpdir(), `mj-app-${manifest.name}-teardown-${Date.now()}`);
-  mkdirSync(tempDir, { recursive: true });
+  const tempDir = CreateAppTempDir(manifest.name, 'teardown');
 
   try {
     context.Callbacks?.OnProgress?.('Metadata', 'Downloading teardown scripts...');
@@ -2533,8 +2533,7 @@ async function ExtractDeclaredApplicationIds(
   }
   let tempDir: string | undefined;
   try {
-    tempDir = join(tmpdir(), `mj-app-${manifest.name}-appids-${Date.now()}`);
-    mkdirSync(tempDir, { recursive: true });
+    tempDir = CreateAppTempDir(manifest.name, 'appids');
     const download = await DownloadAppMigrations(manifest, context, tempDir, subpath);
     if (!download.Success) {
       return [];

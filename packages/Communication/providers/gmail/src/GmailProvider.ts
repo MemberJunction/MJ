@@ -58,7 +58,23 @@ import {
   GetEventParams,
   SyncEventsParams,
   SyncEventsResult,
-  UpdateEventParams
+  UpdateEventParams,
+  GetEventsParams,
+  GetEventsResult,
+  GetEventsEvent,
+  GetFreeBusyParams,
+  GetFreeBusyResult,
+  FreeBusyScheduleSlot,
+  CreateCalendarEventParams,
+  CreateCalendarEventResult,
+  UpdateCalendarEventParams,
+  UpdateCalendarEventResult,
+  RespondToCalendarEventParams,
+  RespondToCalendarEventResult,
+  CancelCalendarEventParams,
+  CancelCalendarEventResult,
+  VerifyMailboxAccessParams,
+  VerifyMailboxAccessResult
 } from "@memberjunction/communication-types";
 import { RegisterClass, MJLruCache } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
@@ -857,7 +873,7 @@ export class GmailProvider extends BaseCommunicationProvider {
 
   /**
    * Returns the list of operations supported by the Gmail provider.
-   * Gmail supports all operations through its label-based system.
+   * Gmail supports all mailbox and Google Calendar v3 operations.
    */
   public override getSupportedOperations(): ProviderOperation[] {
     return [
@@ -883,8 +899,499 @@ export class GmailProvider extends BaseCommunicationProvider {
       'UpdateEvent',
       'CancelEvent',
       'GetEvent',
-      'SyncEvents'
+      'SyncEvents',
+      'GetEvents',
+      'GetFreeBusy',
+      'CreateCalendarEvent',
+      'UpdateCalendarEvent',
+      'RespondToCalendarEvent',
+      'CancelCalendarEvent',
+      'VerifyMailboxAccess'
     ];
+  }
+
+  /**
+   * Creates an authenticated Google Calendar v3 client using the same OAuth2 credentials.
+   */
+  private createCalendarClient(creds: ResolvedGmailCredentials): googleApis.calendar_v3.Calendar {
+    const oauth2Client = new googleApis.google.auth.OAuth2(
+      creds.clientId,
+      creds.clientSecret,
+      creds.redirectUri
+    );
+    oauth2Client.setCredentials({
+      refresh_token: creds.refreshToken
+    });
+    return googleApis.google.calendar({
+      version: 'v3',
+      auth: oauth2Client
+    });
+  }
+
+  /**
+   * Normalizes a Google Calendar v3 event into MJ's GetEventsEvent format.
+   */
+  private toGetEventsEvent(raw: googleApis.calendar_v3.Schema$Event): GetEventsEvent {
+    const startRaw = raw.start?.dateTime ?? raw.start?.date ?? null;
+    const endRaw = raw.end?.dateTime ?? raw.end?.date ?? null;
+    const startDate = startRaw ? new Date(startRaw) : null;
+    const endDate = endRaw ? new Date(endRaw) : null;
+    const organizer = raw.organizer?.email?.trim().toLowerCase() || undefined;
+    const attendees = (raw.attendees ?? [])
+      .map((a) => a.email?.trim().toLowerCase())
+      .filter((a): a is string => !!a && a !== organizer);
+
+    return {
+      ExternalSystemRecordID: raw.id ?? '',
+      SeriesID: raw.recurringEventId ?? null,
+      Subject: raw.summary ?? '',
+      Body: raw.description ?? '',
+      StartTime: startDate && !Number.isNaN(startDate.getTime()) ? startDate : null,
+      EndTime: endDate && !Number.isNaN(endDate.getTime()) ? endDate : null,
+      Location: raw.location ?? null,
+      Organizer: organizer,
+      Attendees: [...new Set(attendees)],
+      IsCancelled: raw.status === 'cancelled'
+    };
+  }
+
+  /**
+   * Lists calendar events from Google Calendar v3 (`calendar.events.list`).
+   */
+  public override async GetEvents(
+    params: GetEventsParams,
+    credentials?: GmailCredentials
+  ): Promise<GetEventsResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const calendar = this.createCalendarClient(creds);
+      const calendarId = params.Identifier || (params.ContextData?.Email as string | undefined) || 'primary';
+      const expand = Boolean(params.StartDateTime && params.EndDateTime);
+
+      const response = await calendar.events.list({
+        calendarId,
+        timeMin: params.StartDateTime?.toISOString(),
+        timeMax: params.EndDateTime?.toISOString(),
+        singleEvents: expand,
+        orderBy: expand ? 'startTime' : 'updated',
+        showDeleted: Boolean(params.IncludeCancelled),
+        maxResults: params.NumEvents
+      });
+
+      const items = response?.data?.items ?? [];
+      return {
+        Success: true,
+        Events: items.map((e) => this.toGetEventsEvent(e)),
+        RecurrenceExpanded: expand,
+        SourceData: items as Array<Record<string, unknown>>
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      LogError('Error getting calendar events via Google Calendar', undefined, error);
+      return {
+        Success: false,
+        Events: [],
+        ErrorMessage: `Google Calendar read failed: ${errorMessage}`
+      };
+    }
+  }
+
+  /**
+   * Queries free/busy schedule intervals across one or more Google Calendars
+   * via `calendar.freebusy.query`.
+   */
+  public override async GetFreeBusy(
+    params: GetFreeBusyParams,
+    credentials?: GmailCredentials
+  ): Promise<GetFreeBusyResult> {
+    if (!params.Schedules || params.Schedules.length === 0) {
+      return {
+        Success: false,
+        Schedules: [],
+        ErrorMessage: 'GetFreeBusy requires at least one email address in Schedules.'
+      };
+    }
+
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const calendar = this.createCalendarClient(creds);
+      const response = await calendar.freebusy.query({
+        requestBody: {
+          timeMin: params.StartDateTime.toISOString(),
+          timeMax: params.EndDateTime.toISOString(),
+          items: params.Schedules.map((id) => ({ id }))
+        }
+      });
+
+      const calendarsMap = response?.data?.calendars ?? {};
+      const schedules: GetFreeBusyResult['Schedules'] = params.Schedules.map((scheduleId) => {
+        const calEntry = calendarsMap[scheduleId];
+        const busyList = calEntry?.busy ?? [];
+        const errors = calEntry?.errors ?? [];
+        const slots: FreeBusyScheduleSlot[] = [];
+
+        for (const interval of busyList) {
+          if (!interval.start || !interval.end) continue;
+          slots.push({
+            StartTime: new Date(interval.start),
+            EndTime: new Date(interval.end),
+            Status: 'Busy'
+          });
+        }
+
+        return {
+          ScheduleID: scheduleId,
+          Slots: slots,
+          Error: errors.length > 0 ? errors.map((e) => e.reason ?? 'error').join(', ') : undefined
+        };
+      });
+
+      return {
+        Success: true,
+        Schedules: schedules,
+        SourceData: [response?.data as Record<string, unknown>]
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      LogError('Error getting free/busy via Google Calendar', undefined, error);
+      return {
+        Success: false,
+        Schedules: [],
+        ErrorMessage: `Error getting free/busy schedule: ${errorMessage}`
+      };
+    }
+  }
+
+  /**
+   * Creates a Google Calendar event via `calendar.events.insert`.
+   */
+  public override async CreateCalendarEvent(
+    params: CreateCalendarEventParams,
+    credentials?: GmailCredentials
+  ): Promise<CreateCalendarEventResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const calendarId = params.Identifier || (params.ContextData?.Email as string | undefined) || 'primary';
+
+      const requestBody: googleApis.calendar_v3.Schema$Event = {
+        summary: params.Subject,
+        description: params.Body,
+        location: params.Location,
+        start: {
+          dateTime: params.StartTime.toISOString(),
+          timeZone: params.TimeZone ?? 'UTC'
+        },
+        end: {
+          dateTime: params.EndTime.toISOString(),
+          timeZone: params.TimeZone ?? 'UTC'
+        },
+        attendees: params.Attendees?.map((a) => ({
+          email: a.Email,
+          displayName: a.Name,
+          optional: a.Required === false
+        }))
+      };
+
+      if (params.IsOnlineMeeting) {
+        requestBody.conferenceData = {
+          createRequest: {
+            requestId: `mj-${Date.now()}`
+          }
+        };
+      }
+
+      if (params.DryRun) {
+        LogStatus(`[DryRun] Google Calendar: CreateCalendarEvent '${params.Subject}' for ${calendarId} — external call skipped`);
+        return {
+          Success: true,
+          DryRun: true,
+          Event: {
+            ExternalSystemRecordID: 'DRY_RUN_EVENT_ID',
+            SeriesID: null,
+            Subject: params.Subject,
+            Body: params.Body ?? '',
+            StartTime: params.StartTime,
+            EndTime: params.EndTime,
+            Location: params.Location ?? null,
+            Organizer: calendarId.toLowerCase(),
+            Attendees: (params.Attendees ?? []).map((a) => a.Email.toLowerCase()),
+            IsCancelled: false
+          },
+          SourceData: requestBody as Record<string, unknown>
+        };
+      }
+
+      const calendar = this.createCalendarClient(creds);
+      const response = await calendar.events.insert({
+        calendarId,
+        conferenceDataVersion: params.IsOnlineMeeting ? 1 : 0,
+        requestBody
+      });
+
+      const created = response?.data;
+      return {
+        Success: true,
+        Event: created ? this.toGetEventsEvent(created) : undefined,
+        OnlineMeetingUrl: created?.hangoutLink ?? created?.conferenceData?.entryPoints?.[0]?.uri ?? null,
+        SourceData: created as Record<string, unknown>
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      LogError('Error creating calendar event via Google Calendar', undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: `Error creating calendar event: ${errorMessage}`
+      };
+    }
+  }
+
+  /**
+   * Updates an existing Google Calendar event via `calendar.events.patch`.
+   */
+  public override async UpdateCalendarEvent(
+    params: UpdateCalendarEventParams,
+    credentials?: GmailCredentials
+  ): Promise<UpdateCalendarEventResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const calendarId = params.Identifier || (params.ContextData?.Email as string | undefined) || 'primary';
+
+      const requestBody: googleApis.calendar_v3.Schema$Event = {};
+      if (params.Subject !== undefined) requestBody.summary = params.Subject;
+      if (params.Body !== undefined) requestBody.description = params.Body;
+      if (params.Location !== undefined) requestBody.location = params.Location;
+      if (params.StartTime) {
+        requestBody.start = {
+          dateTime: params.StartTime.toISOString(),
+          timeZone: params.TimeZone ?? 'UTC'
+        };
+      }
+      if (params.EndTime) {
+        requestBody.end = {
+          dateTime: params.EndTime.toISOString(),
+          timeZone: params.TimeZone ?? 'UTC'
+        };
+      }
+      if (params.Attendees) {
+        requestBody.attendees = params.Attendees.map((a) => ({
+          email: a.Email,
+          displayName: a.Name,
+          optional: a.Required === false
+        }));
+      }
+
+      if (params.DryRun) {
+        LogStatus(`[DryRun] Google Calendar: UpdateCalendarEvent '${params.EventID}' for ${calendarId} — external call skipped`);
+        return {
+          Success: true,
+          DryRun: true,
+          SourceData: requestBody as Record<string, unknown>
+        };
+      }
+
+      const calendar = this.createCalendarClient(creds);
+      const response = await calendar.events.patch({
+        calendarId,
+        eventId: params.EventID,
+        requestBody
+      });
+
+      return {
+        Success: true,
+        Event: response?.data ? this.toGetEventsEvent(response.data) : undefined,
+        SourceData: response?.data as Record<string, unknown>
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      LogError('Error updating calendar event via Google Calendar', undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: `Error updating calendar event: ${errorMessage}`
+      };
+    }
+  }
+
+  /**
+   * Responds to a Google Calendar event invitation by updating the attendee's responseStatus.
+   */
+  public override async RespondToCalendarEvent(
+    params: RespondToCalendarEventParams,
+    credentials?: GmailCredentials
+  ): Promise<RespondToCalendarEventResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const calendarId = params.Identifier || (params.ContextData?.Email as string | undefined) || 'primary';
+
+      if (params.DryRun) {
+        LogStatus(`[DryRun] Google Calendar: RespondToCalendarEvent (${params.Response}) '${params.EventID}' for ${calendarId} — external call skipped`);
+        return { Success: true, DryRun: true };
+      }
+
+      const responseStatus =
+        params.Response === 'Accept'
+          ? 'accepted'
+          : params.Response === 'TentativelyAccept'
+          ? 'tentative'
+          : 'declined';
+
+      const calendar = this.createCalendarClient(creds);
+      const existing = await calendar.events.get({
+        calendarId,
+        eventId: params.EventID
+      });
+
+      const attendees = [...(existing?.data?.attendees ?? [])];
+      const targetEmail = calendarId.toLowerCase();
+      let matched = false;
+      for (const att of attendees) {
+        if (att.self || (att.email && att.email.toLowerCase() === targetEmail)) {
+          att.responseStatus = responseStatus;
+          if (params.Comment) {
+            att.comment = params.Comment;
+          }
+          matched = true;
+        }
+      }
+      if (!matched && targetEmail.includes('@')) {
+        attendees.push({
+          email: calendarId,
+          responseStatus,
+          comment: params.Comment
+        });
+      }
+
+      await calendar.events.patch({
+        calendarId,
+        eventId: params.EventID,
+        sendUpdates: params.SendResponse === false ? 'none' : 'all',
+        requestBody: { attendees }
+      });
+
+      return { Success: true };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      LogError('Error responding to calendar event via Google Calendar', undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: `Error responding to calendar event: ${errorMessage}`
+      };
+    }
+  }
+
+  /**
+   * Cancels (deletes) a Google Calendar event via `calendar.events.delete`.
+   */
+  public override async CancelCalendarEvent(
+    params: CancelCalendarEventParams,
+    credentials?: GmailCredentials
+  ): Promise<CancelCalendarEventResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const calendarId = params.Identifier || (params.ContextData?.Email as string | undefined) || 'primary';
+
+      if (params.DryRun) {
+        LogStatus(`[DryRun] Google Calendar: CancelCalendarEvent '${params.EventID}' for ${calendarId} — external call skipped`);
+        return { Success: true, DryRun: true };
+      }
+
+      const calendar = this.createCalendarClient(creds);
+      await calendar.events.delete({
+        calendarId,
+        eventId: params.EventID,
+        sendUpdates: 'all'
+      });
+
+      return { Success: true };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      LogError('Error cancelling calendar event via Google Calendar', undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: `Error cancelling calendar event: ${errorMessage}`
+      };
+    }
+  }
+
+  /**
+   * Verifies whether the active Gmail / Google Workspace credential has access to
+   * the specified mailbox and/or calendar.
+   */
+  public override async VerifyMailboxAccess(
+    params: VerifyMailboxAccessParams,
+    credentials?: GmailCredentials
+  ): Promise<VerifyMailboxAccessResult> {
+    const identifier = params.Identifier?.trim();
+    if (!identifier) {
+      return {
+        Success: false,
+        Identifier: '',
+        CanReadMail: false,
+        CanReadCalendar: false,
+        ErrorMessage: 'VerifyMailboxAccess requires a non-empty Identifier (mailbox email).'
+      };
+    }
+
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+      const checkMail = params.CheckMailRead ?? true;
+      const checkCalendar = params.CheckCalendarRead ?? true;
+
+      let canReadMail = false;
+      let canReadCalendar = false;
+      let mailErrorMessage: string | undefined;
+      let calendarErrorMessage: string | undefined;
+
+      if (checkMail) {
+        try {
+          const profile = await cached.client.users.getProfile({ userId: 'me' });
+          const profileEmail = profile?.data?.emailAddress?.trim().toLowerCase();
+          if (profileEmail && profileEmail !== identifier.toLowerCase()) {
+            canReadMail = false;
+            mailErrorMessage = `Authenticated Gmail profile (${profileEmail}) does not match target mailbox (${identifier}).`;
+          } else {
+            canReadMail = true;
+          }
+        } catch (mailEx) {
+          mailErrorMessage = mailEx instanceof Error ? mailEx.message : String(mailEx);
+        }
+      }
+
+      if (checkCalendar) {
+        try {
+          const calendar = this.createCalendarClient(creds);
+          await calendar.calendars.get({ calendarId: identifier });
+          canReadCalendar = true;
+        } catch (calEx) {
+          calendarErrorMessage = calEx instanceof Error ? calEx.message : String(calEx);
+        }
+      }
+
+      const overallSuccess =
+        (!checkMail || canReadMail) &&
+        (!checkCalendar || canReadCalendar);
+
+      return {
+        Success: overallSuccess,
+        Identifier: identifier,
+        CanReadMail: canReadMail,
+        CanReadCalendar: canReadCalendar,
+        MailErrorMessage: mailErrorMessage,
+        CalendarErrorMessage: calendarErrorMessage,
+        ErrorMessage: overallSuccess
+          ? undefined
+          : [mailErrorMessage, calendarErrorMessage].filter(Boolean).join('; ')
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        Success: false,
+        Identifier: identifier,
+        CanReadMail: false,
+        CanReadCalendar: false,
+        ErrorMessage: `Error verifying mailbox access for ${identifier}: ${errorMessage}`
+      };
+    }
   }
 
   // ========================================================================

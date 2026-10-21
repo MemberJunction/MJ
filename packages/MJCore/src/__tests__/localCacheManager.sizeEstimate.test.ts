@@ -142,4 +142,24 @@ describe('LocalCacheManager.estimateResultsSize', () => {
         expect(est).toBeGreaterThan(perRow * n * 2 * 0.8);
         expect(est).toBeLessThan(perRow * n * 2 * 1.2);
     });
+
+    it('estimates a 30,000-row table (e.g. MJ: Entity Fields across 21 repos) within 20% of true UTF-16 byte size without 50x sample inflation', () => {
+        const makeRow = (i: number) => ({
+            ID: `00000000-0000-0000-0000-${String(i).padStart(12, '0')}`,
+            EntityID: '00000000-0000-0000-0001-000000000001',
+            Name: `Field_${i}`,
+            Type: 'nvarchar',
+            Length: 255,
+            AllowsNull: true,
+            Status: 'Active',
+        });
+        const rowCount = 30_000;
+        const rows = Array.from({ length: rowCount }, (_, i) => makeRow(i));
+        const singleRowUtf16Bytes = JSON.stringify(rows[0]).length * 2;
+        const trueBytes = singleRowUtf16Bytes * rowCount;
+        const estimatedBytes = asInternal(cm).estimateResultsSize(rows);
+
+        expect(estimatedBytes).toBeGreaterThan(trueBytes * 0.85);
+        expect(estimatedBytes).toBeLessThan(trueBytes * 1.15);
+    });
 });

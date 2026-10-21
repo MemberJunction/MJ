@@ -33,6 +33,7 @@ export * from './checks/agent-decisions-switch.checks';
 export * from './checks/agent-prompt-cancellation.checks';
 export * from './checks/prompt-runner.checks';
 export * from './checks/ai-vendor-effort.checks';
+export * from './checks/native-tool-calling-live.checks';
 export * from './checks/record-process-facade.checks';
 export * from './checks/entity-actions.checks';
 export * from './checks/task-graph-execution.checks';
@@ -50,6 +51,7 @@ export * from './checks/self-avatar-client.checks';
 export * from './checks/view-properties-client.checks';
 export * from './checks/conversation-authorship-client.checks';
 export * from './checks/keyrowfilter.checks'; // KF1–KF6: registers into the 'rls-isolation' bundle AFTER RLS1–RLS10 (order matters for GetBundle parity)
+export * from './checks/rolerowfilter.checks'; // RF1–RF3: registers into the 'rls-isolation' bundle AFTER KF1–KF6
 export * from './checks/runquery-cache.checks';
 export * from './checks/scheduled-jobs.checks';
 export * from './checks/server-cache.checks';
@@ -81,6 +83,14 @@ export * from './checks/binary-fields.checks';
 export * from './checks/scheduling-concurrency.checks';
 export * from './checks/communication.checks';
 export * from './checks/ai-cost.checks';
+export * from './checks/fp-gate-c2-1.checks';
+export * from './checks/fp-gate-c2-2.checks';
+export * from './checks/fp-gate-c2-3.checks';
+export * from './checks/fp-gate-c2-5.checks';
+export * from './checks/feature-pipeline-core.checks';
+export * from './checks/feature-value-only.checks';
+export * from './checks/fp-live-jobtitle.checks';
+export * from './checks/fp-gates/feature-pipeline-gate-stub-driver'; // registers FeaturePipelineGateStubDriver (@RegisterClass)
 export * from './checks/ai-permissions.checks';
 export * from './checks/ai-embeddings.checks';
 export * from './checks/agent-loop-standin.checks';

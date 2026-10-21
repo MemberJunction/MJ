@@ -329,6 +329,86 @@ describe('BaseCommunicationProvider', () => {
             const result = await provider.GetSingleMessage({ MessageID: 'msg-1' });
             expect(result.ErrorMessage).toContain('credentials provided: false');
         });
+
+        it('GetFreeBusy should return not supported with empty Schedules', async () => {
+            const result = await provider.GetFreeBusy({
+                Schedules: ['alice@example.com', 'bob@example.com'],
+                StartDateTime: new Date('2026-10-18T09:00:00Z'),
+                EndDateTime: new Date('2026-10-18T17:00:00Z'),
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support GetFreeBusy');
+            expect(result.ErrorMessage).toContain('Schedules: 2');
+            expect(result.Schedules).toEqual([]);
+        });
+
+        it('FindMeetingTimes should return not supported with empty Suggestions', async () => {
+            const result = await provider.FindMeetingTimes({
+                Identifier: 'alice@example.com',
+                Attendees: [{ Email: 'bob@example.com', Required: true }],
+                StartDateTime: new Date('2026-10-18T09:00:00Z'),
+                EndDateTime: new Date('2026-10-18T17:00:00Z'),
+                DurationMinutes: 30,
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support FindMeetingTimes');
+            expect(result.ErrorMessage).toContain('alice@example.com');
+            expect(result.Suggestions).toEqual([]);
+        });
+
+        it('CreateCalendarEvent should return not supported', async () => {
+            const result = await provider.CreateCalendarEvent({
+                Identifier: 'alice@example.com',
+                Subject: 'Q4 Strategy Review',
+                StartTime: new Date('2026-10-18T14:00:00Z'),
+                EndTime: new Date('2026-10-18T15:00:00Z'),
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support CreateCalendarEvent');
+            expect(result.ErrorMessage).toContain('Q4 Strategy Review');
+        });
+
+        it('UpdateCalendarEvent should return not supported', async () => {
+            const result = await provider.UpdateCalendarEvent({
+                Identifier: 'alice@example.com',
+                EventID: 'evt-123',
+                Subject: 'Updated Title',
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support UpdateCalendarEvent');
+            expect(result.ErrorMessage).toContain('evt-123');
+        });
+
+        it('RespondToCalendarEvent should return not supported', async () => {
+            const result = await provider.RespondToCalendarEvent({
+                Identifier: 'alice@example.com',
+                EventID: 'evt-123',
+                Response: 'Accept',
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support RespondToCalendarEvent');
+            expect(result.ErrorMessage).toContain('Accept');
+        });
+
+        it('CancelCalendarEvent should return not supported', async () => {
+            const result = await provider.CancelCalendarEvent({
+                Identifier: 'alice@example.com',
+                EventID: 'evt-123',
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support CancelCalendarEvent');
+            expect(result.ErrorMessage).toContain('evt-123');
+        });
+
+        it('VerifyMailboxAccess should return not supported with false flags', async () => {
+            const result = await provider.VerifyMailboxAccess({
+                Identifier: 'alice@example.com',
+            });
+            expect(result.Success).toBe(false);
+            expect(result.CanReadMail).toBe(false);
+            expect(result.CanReadCalendar).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support VerifyMailboxAccess');
+        });
     });
 
     describe('subscription default implementations', () => {

@@ -779,6 +779,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.cdr.markForCheck();
     });
 
+    // A section that draws itself only once its data has loaded mounts inside a slot
+    // after `slots.changes` fired, so none of the triggers above see it. The rail is
+    // worked out from the sections on the page: file the newcomer (or drop the leaver).
+    this.chrome.SectionsChanged.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.scheduleChromeResolve();
+    });
+
     this.restoreChromePrefs();
     this.scheduleChromeResolve();
 

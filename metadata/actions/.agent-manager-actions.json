@@ -38,7 +38,10 @@
             "IsArray": false,
             "Description": "Maximum number of actions to return (default: 10)",
             "IsRequired": false,
-            "DefaultValue": "10"
+            "DefaultValue": "10",
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "882FAB67-CCD5-459C-AD58-B4E6FFB6C73F"
@@ -57,7 +60,10 @@
             "IsArray": false,
             "Description": "Minimum similarity score 0-1 (default: 0.5)",
             "IsRequired": false,
-            "DefaultValue": "0.5"
+            "DefaultValue": "0.5",
+            "ValueSchema": {
+              "type": "number"
+            }
           },
           "primaryKey": {
             "ID": "784BF34C-F075-4B51-A451-BF150F814512"
@@ -76,7 +82,10 @@
             "IsArray": false,
             "Description": "Exclude agent management actions from results (default: true)",
             "IsRequired": false,
-            "DefaultValue": "true"
+            "DefaultValue": "true",
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "F1A8EFF3-1B86-4313-B225-0A84A55144D2"

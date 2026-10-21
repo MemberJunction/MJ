@@ -34,7 +34,7 @@ import { WebUrlPartInterface } from '../models/dashboard-part-interfaces';
               [Message]="ErrorMessage"
               Size="compact">
               @if (rawUrl) {
-                <a actions [href]="rawUrl" target="_blank" class="open-link">
+                <a actions [href]="rawUrl" target="_blank" rel="noopener noreferrer" class="open-link">
                   <i class="fa-solid fa-up-right-from-square"></i>
                   Open in new window
                 </a>
@@ -135,7 +135,7 @@ import { WebUrlPartInterface } from '../models/dashboard-part-interfaces';
           @if (!IsLoading && !ErrorMessage && SafeUrl && showFallbackLink) {
             <div class="iframe-fallback">
               <span>If the content doesn't load:</span>
-              <a [href]="rawUrl" target="_blank">
+              <a [href]="rawUrl" target="_blank" rel="noopener noreferrer">
                 <i class="fa-solid fa-external-link-alt"></i>
                 Open in new window
               </a>
@@ -301,6 +301,14 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
         }
     }
 
+    protected override cleanup(): void {
+        if (this.loadCheckTimeout) {
+            clearTimeout(this.loadCheckTimeout);
+            this.loadCheckTimeout = null;
+        }
+        super.cleanup();
+    }
+
     public async loadContent(): Promise<void> {
         const config = this.getConfig<PanelConfig>();
         const url = this.fillPlaceholders(config?.['url'] as string | undefined);
@@ -315,11 +323,22 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
         // Reset state
         this.iframeLoaded = false;
         this.ShowFallbackLink = false;
+        this.ErrorMessage = null;
 
         if (!url) {
             this.SafeUrl = null;
             this.RawUrl = '';
             this.cdr.detectChanges();
+            return;
+        }
+
+        // SECURITY: only http(s) URLs may be embedded. bypassSecurityTrustResourceUrl disables
+        // Angular's sanitizer, so without this check a stored javascript: (or other scheme) URL
+        // in a shared dashboard panel would execute in every viewer's browser.
+        if (!this.isEmbeddableUrl(url)) {
+            this.SafeUrl = null;
+            this.RawUrl = '';
+            this.setError('Only http:// and https:// URLs can be embedded.');
             return;
         }
 
@@ -370,6 +389,19 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
             return null;
         }
         return FillUrlPlaceholders(url, resolution.Values);
+    }
+
+    /**
+     * True when the URL parses and uses a scheme that is safe to hand to
+     * bypassSecurityTrustResourceUrl for iframe embedding (http/https only).
+     */
+    private isEmbeddableUrl(url: string): boolean {
+        try {
+            const parsed = new URL(url);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+            return false;
+        }
     }
 
     /**

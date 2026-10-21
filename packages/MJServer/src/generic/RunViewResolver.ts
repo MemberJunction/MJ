@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { ResolverBase } from './ResolverBase.js';
+import { ResolverBase, type RunViewResultWithResolvedView } from './ResolverBase.js';
 import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey, ViewPropertyValues } from '@memberjunction/core';
 import { GraphQLJSONObject } from 'graphql-type-json';
 
@@ -818,7 +818,7 @@ export class RunViewResolver extends ResolverBase {
       await this.CheckAPIKeyScopeAuthorization('view:run', input.ViewName, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
-      if (rawData === null) {
+      if (!rawData) {
         return {
           Results: [],
           Success: false,
@@ -829,9 +829,10 @@ export class RunViewResolver extends ResolverBase {
         };
       }
 
-      const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { Name: input.ViewName }, userPayload.userRecord));
-      const entity = provider.EntityByID(viewInfo.EntityID);
-      const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
+      const viewInfo = (rawData as RunViewResultWithResolvedView)._resolvedViewEntity
+        ?? await this.resolveUserViewByName(input.ViewName, provider, userPayload.userRecord);
+      const entity = viewInfo ? provider.EntityByID(viewInfo.EntityID) : undefined;
+      const returnData = this.processRawData(rawData.Results, viewInfo?.EntityID ?? null, entity);
       return {
         Results: returnData,
         UserViewRunID: rawData?.UserViewRunID,
@@ -868,7 +869,7 @@ export class RunViewResolver extends ResolverBase {
       await this.CheckAPIKeyScopeAuthorization('view:run', input.ViewID, userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
-      if (rawData === null) {
+      if (!rawData) {
         return {
           Results: [],
           Success: false,
@@ -879,9 +880,10 @@ export class RunViewResolver extends ResolverBase {
         };
       }
 
-      const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
-      const entity = provider.EntityByID(viewInfo.EntityID);
-      const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
+      const viewInfo = (rawData as RunViewResultWithResolvedView)._resolvedViewEntity
+        ?? await this.resolveUserViewByID(input.ViewID, provider, userPayload.userRecord);
+      const entity = viewInfo ? provider.EntityByID(viewInfo.EntityID) : undefined;
+      const returnData = this.processRawData(rawData.Results, viewInfo?.EntityID ?? null, entity);
       return {
         Results: returnData,
         UserViewRunID: rawData?.UserViewRunID,
@@ -1035,8 +1037,9 @@ export class RunViewResolver extends ResolverBase {
         };
       }
 
-      const entity = provider.EntityByName(input.ViewName);
-      const entityId = entity ? entity.ID : null;
+      const viewInfo = (rawData as RunViewResultWithResolvedView)._resolvedViewEntity;
+      const entity = viewInfo ? provider.EntityByID(viewInfo.EntityID) : provider.EntityByName(input.ViewName);
+      const entityId = viewInfo?.EntityID ?? (entity ? entity.ID : null);
       const returnData = this.processRawData(rawData.Results, entityId, entity);
       return {
         Results: returnData,
@@ -1082,9 +1085,10 @@ export class RunViewResolver extends ResolverBase {
         };
       }
 
-      const viewInfo = super.safeFirstArrayElement<MJUserViewEntityExtended>(await super.findBy<MJUserViewEntityExtended>(provider, "MJ: User Views", { ID: input.ViewID }, userPayload.userRecord));
-      const entity = provider.EntityByID(viewInfo.EntityID);
-      const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
+      const viewInfo = (rawData as RunViewResultWithResolvedView)._resolvedViewEntity
+        ?? await this.resolveUserViewByID(input.ViewID, provider, userPayload.userRecord);
+      const entity = viewInfo ? provider.EntityByID(viewInfo.EntityID) : undefined;
+      const returnData = this.processRawData(rawData.Results, viewInfo?.EntityID ?? null, entity);
       return {
         Results: returnData,
         UserViewRunID: rawData?.UserViewRunID,

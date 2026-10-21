@@ -153,3 +153,25 @@ describe('EntityViewerComponent.NoRecordsTitle', () => {
     expect(f.componentInstance.NoRecordsTitle).toBe('No matching records');
   });
 });
+
+describe('EntityViewerComponent — view persistence target', () => {
+  type PersistenceAccessor = {
+    _viewEntity: { ID: string; UserCanEdit: boolean } | null;
+    persistenceTarget(): 'record' | 'user-settings' | 'none';
+  };
+
+  it('targets the UserView record when the loaded view has an ID and UserCanEdit is true', () => {
+    const f = render({ entity: ENTITY });
+    const c = f.componentInstance as unknown as PersistenceAccessor;
+    c._viewEntity = { ID: 'V-1', UserCanEdit: true };
+    expect(c.persistenceTarget()).toBe('record');
+  });
+
+  it('falls back to user-settings when the loaded view is read-only (UserCanEdit is false)', () => {
+    const f = render({ entity: ENTITY });
+    const c = f.componentInstance as unknown as PersistenceAccessor;
+    c._viewEntity = { ID: 'V-1', UserCanEdit: false };
+    expect(c.persistenceTarget()).toBe('user-settings');
+  });
+});
+

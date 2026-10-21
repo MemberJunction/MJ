@@ -13,7 +13,7 @@ import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
 import { filter, take, takeUntil } from 'rxjs/operators';
-import { CompositeKey, EntityInfo, LogError, Metadata, SetProductionStatus, type PublicAuthProviderInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, LogError, Metadata, ResolveMJAPIURL, SetProductionStatus, type PublicAuthProviderInfo } from '@memberjunction/core';
 import {
   MJAuthBase,
   StandardUserInfo,
@@ -26,7 +26,7 @@ import {
 import { LoginDesignTokens, LoginThemeTokens, type LoginBlock, type LoginDesign, type LoginRegion, type PublicLoginScreen, type ThemeLogos } from '@memberjunction/theme-engine';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
-import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent } from '@memberjunction/ng-explorer-core';
+import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent, ShellComponent } from '@memberjunction/ng-explorer-core';
 import { NavigationService, AgentContextUpdate, RecordSourceContext } from '@memberjunction/ng-shared';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
@@ -312,9 +312,21 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     return flags;
   }
 
-  /** Instance Config gate for the floating chat overlay bubble. */
+  /**
+   * Gate for the floating chat overlay bubble. With the shell rendered this is the shell's
+   * RESOLVED answer — Instance Config narrowed by the host's chrome policy (LXP P4: a learner
+   * portal that owns its own AI surface hides the bubble per audience, not with CSS). The shell
+   * marks for check when its policy changes, and that marks this parent dirty too, so the bubble
+   * follows.
+   *
+   * The Instance Config fallback is live in exactly one state: the shell is gone (`HasError`, or
+   * a pre-shell guard) while `IsChatOverlayReady` is already true — the error screen after a
+   * workspace that had loaded. There it keeps the pre-policy behaviour (the key alone decides),
+   * which is what shipped before the overlay followed the policy. On a normal load the overlay
+   * is gated on workspace init, which comes after the shell, so the shell always answers.
+   */
   public get ShowChatOverlay(): boolean {
-    return this.chromeFlags.chatOverlay;
+    return this.shellRef()?.ChromeFlags.chatOverlay ?? this.chromeFlags.chatOverlay;
   }
 
   /** Instance Config gate for the service-worker update toast. */
@@ -344,6 +356,8 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   /** The offline banner above the shell header; absent until the shell renders. */
   private readonly connectivityBanner = viewChild(ServerConnectivityBannerComponent);
+  /** The shell, when rendered — the source of the resolved chrome flags (see {@link ShowChatOverlay}). */
+  private readonly shellRef = viewChild(ShellComponent);
 
   /**
    * Top boundary (in px) the chat overlay bubble cannot be dragged past. The
@@ -503,6 +517,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       const result = await this.workspaceInit.initializeWorkspace(token, userInfo, {
         GRAPHQL_URI: this.environment.GRAPHQL_URI,
         GRAPHQL_WS_URI: this.environment.GRAPHQL_WS_URI,
+        MJAPI_URI: this.environment.MJAPI_URI,
         MJ_CORE_SCHEMA_NAME: this.environment.MJ_CORE_SCHEMA_NAME
       });
 
@@ -541,15 +556,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           }
         }
 
-        // Navigate to initial route
-        if (this.initialPath === '/') {
-          // use first nav item url instead
-          setTimeout(() => {
-            // Find the KendoDrawer element, and simulate a click for the first item
-            const drawerElement = this.Document.querySelector('li.k-drawer-item.k-level-0') as HTMLElement;
-            if (drawerElement) drawerElement.click();
-          }, 10); // wait for the drawer to finish rerender and then do this
-        } else {
+        // Navigate to the initial route. A deep link is replayed through the router;
+        // a bare '/' is left to the router's default route (the Home app).
+        if (this.initialPath !== '/') {
           this.router.navigateByUrl(this.initialPath, { replaceUrl: true });
         }
       } else if (result.error) {
@@ -799,6 +808,36 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     const md = this.ProviderToUse;
     const chatApp = md.Applications.find(a => a.Name === 'Chat');
     this.navigationService.OpenNavItemByName('Conversations', params, chatApp?.ID);
+  }
+
+  /** Handle app/nav-item navigation requests emitted from the floating chat overlay */
+  public async OnOverlayNavigationRequested(event: { navItemName: string; appName?: string; queryParams?: Record<string, string> }): Promise<void> {
+    const normalize = (v: string | null | undefined): string =>
+      String(v ?? '').toLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const apps = this.ProviderToUse?.Applications || [];
+    const targetApp = event.appName
+      ? apps.find(a =>
+          a.ID?.toLowerCase() === event.appName?.toLowerCase() ||
+          a.Name?.toLowerCase() === event.appName?.toLowerCase() ||
+          a.Path?.toLowerCase() === event.appName?.toLowerCase() ||
+          normalize(a.Name) === normalize(event.appName) ||
+          normalize(a.Path) === normalize(event.appName)
+        )
+      : undefined;
+
+    if (targetApp) {
+      const navHint = event.navItemName && normalize(event.navItemName) !== normalize(event.appName)
+        ? event.navItemName
+        : undefined;
+      await this.navigationService.SwitchToApp(targetApp.ID, navHint, event.queryParams);
+      return;
+    }
+
+    if (event.navItemName) {
+      await this.navigationService.OpenNavItemByName(event.navItemName, undefined, undefined, {
+        queryParams: event.queryParams
+      });
+    }
   }
 
   /** Build and update the application context snapshot for AI agent awareness */
@@ -1293,10 +1332,12 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   }
 
   /**
-   * Derive the health check URL from GRAPHQL_URI and start the connectivity polling service.
+   * Build the health check URL off the MJAPI URL and start the connectivity polling service.
    */
   private startConnectivityMonitoring(): void {
-    const healthUrl = new URL('/healthcheck', this.environment.GRAPHQL_URI).toString();
+    // MJAPI_URI when configured (MJ #5674); otherwise the pre-#5674 origin-relative URL.
+    const mjapiUrl = ResolveMJAPIURL(this.environment.MJAPI_URI);
+    const healthUrl = mjapiUrl ? `${mjapiUrl}/healthcheck` : new URL('/healthcheck', this.environment.GRAPHQL_URI).toString();
     this.connectivityService.Start(healthUrl);
   }
 
@@ -1410,7 +1451,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   /** Loads the published sign-in page (usually already fetched by the app's bootstrap preload). */
   private async loadPublishedLoginScreen(): Promise<void> {
     if (!this.UsePublishedLoginScreen) return;
-    const screen = await LoginScreenLoader.Load(this.environment.GRAPHQL_URI);
+    const screen = await LoginScreenLoader.Load(this.environment.GRAPHQL_URI, undefined, this.environment.MJAPI_URI);
     if (!screen) return;
     this.PublishedLoginScreen = screen;
     this.refreshLoginStyle();

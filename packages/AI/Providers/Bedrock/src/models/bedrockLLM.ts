@@ -10,7 +10,10 @@ import {
   SummarizeResult,
   ModelUsage,
   ChatMessage,
+  ChatMessageContent,
   ChatMessageContentBlock,
+  TrailingVolatileStateSplit,
+  VolatileStateMessageMetadata,
   ErrorAnalyzer,
   parseBase64DataUrl
 } from '@memberjunction/ai';
@@ -20,6 +23,61 @@ import {
   InvokeModelCommand, 
   InvokeModelWithResponseStreamCommand 
 } from '@aws-sdk/client-bedrock-runtime';
+
+/** Bedrock prompt-caching checkpoint block. */
+export interface BedrockCachePointBlock {
+  cachePoint: { type: 'default' };
+}
+
+export interface BedrockTextBlock {
+  type: 'text';
+  text: string;
+}
+
+export interface BedrockMediaSource {
+  type: 'base64';
+  media_type: string;
+  data: string;
+}
+
+export interface BedrockImageBlock {
+  type: 'image';
+  source: BedrockMediaSource;
+}
+
+export interface BedrockDocumentBlock {
+  type: 'document';
+  source: BedrockMediaSource;
+}
+
+export interface BedrockToolResultBlock {
+  type: 'tool_result';
+  tool_use_id?: string;
+  content: string;
+  is_error?: boolean;
+}
+
+export type BedrockContentBlock =
+  | BedrockTextBlock
+  | BedrockImageBlock
+  | BedrockDocumentBlock
+  | BedrockToolResultBlock
+  | BedrockCachePointBlock;
+
+export interface BedrockFormattedMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string | BedrockContentBlock[];
+}
+
+export interface BedrockAnthropicRequestBody {
+  anthropic_version: string;
+  max_tokens: number;
+  messages: BedrockFormattedMessage[];
+  system?: BedrockContentBlock[];
+  temperature: number;
+  top_p: number;
+  stop_sequences?: string[];
+}
 
 @RegisterClass(BaseLLM, "BedrockLLM")
 export class BedrockLLM extends BaseLLM {
@@ -68,6 +126,237 @@ export class BedrockLLM extends BaseLLM {
   }
 
   /**
+   * Returns true if the given Bedrock model ID is an Anthropic Claude model
+   * (either direct `anthropic.*` or cross-region inference profile `us.anthropic.*`, `eu.anthropic.*`, etc.).
+   */
+  protected isAnthropicModel(modelId: string): boolean {
+    return modelId.startsWith('anthropic.') || /^(?:us|eu|ap|global)\.anthropic\./.test(modelId);
+  }
+
+  /**
+   * Returns true if the given Bedrock model ID supports Bedrock prompt caching (`cachePoint`).
+   */
+  protected supportsPromptCaching(modelId: string): boolean {
+    return this.isAnthropicModel(modelId);
+  }
+
+  /**
+   * Detects whether a message is a trailing volatile state message (`<mj-runtime-state>` or
+   * `<mj-agent-specialization>`), either via `metadata.volatileState === true` (via `BaseLLM`)
+   * or via the XML tag prefix on string or block content.
+   */
+  protected override isVolatileStateMessage(message: ChatMessage | undefined): boolean {
+    if (typeof super.isVolatileStateMessage === 'function' && super.isVolatileStateMessage(message)) {
+      return true;
+    }
+    if (!message) {
+      return false;
+    }
+    const meta = (message as ChatMessage<VolatileStateMessageMetadata>).metadata;
+    if (meta && typeof meta === 'object' && meta.volatileState === true) {
+      return true;
+    }
+    if (typeof message.content === 'string') {
+      return /^<mj-(runtime-state|agent-specialization)>/.test(message.content.trimStart());
+    }
+    if (Array.isArray(message.content)) {
+      const first = message.content[0];
+      if (first && (first.type === 'text' || first.type === 'tool_result') && typeof first.content === 'string') {
+        return /^<mj-(runtime-state|agent-specialization)>/.test(first.content.trimStart());
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Splits trailing volatile state (and optional trailing assistant prefill) from the stable
+   * conversation history prefix so prompt cache breakpoints stay on the stable prefix.
+   */
+  protected override splitTrailingVolatileState(messages: ChatMessage[]): TrailingVolatileStateSplit | null {
+    if (typeof super.splitTrailingVolatileState === 'function') {
+      return super.splitTrailingVolatileState(messages);
+    }
+    if (messages.length < 2) {
+      return null;
+    }
+    const lastIdx = messages.length - 1;
+    if (this.isVolatileStateMessage(messages[lastIdx])) {
+      return {
+        head: messages.slice(0, lastIdx),
+        tail: messages.slice(lastIdx)
+      };
+    }
+    if (
+      messages.length >= 3 &&
+      messages[lastIdx].role === ChatMessageRole.assistant &&
+      this.isVolatileStateMessage(messages[lastIdx - 1])
+    ) {
+      return {
+        head: messages.slice(0, lastIdx - 1),
+        tail: messages.slice(lastIdx - 1)
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Formats a message content payload into Bedrock content blocks and appends a Bedrock
+   * `{ cachePoint: { type: 'default' } }` block when `enableCaching` is true.
+   */
+  protected formatContentWithCaching(
+    content: ChatMessageContent,
+    enableCaching: boolean = true
+  ): BedrockContentBlock[] {
+    const blocks: BedrockContentBlock[] = [];
+    if (typeof content === 'string') {
+      blocks.push({ type: 'text', text: content });
+    } else if (Array.isArray(content)) {
+      for (const block of content) {
+        if (block.type === 'text') {
+          blocks.push({ type: 'text', text: block.content });
+        } else if (block.type === 'tool_result') {
+          blocks.push({
+            type: 'tool_result',
+            tool_use_id: block.toolCallId,
+            content: block.content,
+            ...(block.isError ? { is_error: true } : {})
+          });
+        } else if (block.type === 'image_url') {
+          const imageBlock = this.formatImageForBedrock(block);
+          if (imageBlock) {
+            blocks.push(imageBlock);
+          }
+        } else if (block.type === 'file_url') {
+          const docBlock = this.formatDocumentForBedrock(block);
+          if (docBlock) {
+            blocks.push(docBlock);
+          }
+        }
+      }
+    }
+
+    if (enableCaching && blocks.length > 0) {
+      blocks.push({ cachePoint: { type: 'default' } });
+    }
+
+    return blocks;
+  }
+
+  /**
+   * Formats system messages into a flattened array of Bedrock content blocks and appends a
+   * trailing `{ cachePoint: { type: 'default' } }` checkpoint when `enableCaching` is true.
+   */
+  protected formatSystemMessagesWithCaching(
+    messages: ChatMessage[],
+    enableCaching: boolean = true
+  ): BedrockContentBlock[] {
+    const result: BedrockContentBlock[] = [];
+    for (let i = 0; i < messages.length; i++) {
+      const isLastMessage = i === messages.length - 1;
+      const contentBlocks = this.formatContentWithCaching(
+        messages[i].content,
+        enableCaching && isLastMessage
+      );
+      result.push(...contentBlocks);
+    }
+    return result;
+  }
+
+  /**
+   * Formats non-system conversation messages for Bedrock Claude models with prompt caching.
+   * When the conversation ends with a trailing `<mj-runtime-state>` message (optionally followed
+   * by an assistant prefill), `splitTrailingVolatileState` places the `{ cachePoint: { type: 'default' } }`
+   * on the last message of `split.head` (the stable history prefix) and leaves `split.tail` uncached,
+   * inserting an `{ role: 'assistant', content: [{ type: 'text', text: 'OK' }] }` bridge turn if needed
+   * to preserve strict user/assistant role alternation.
+   */
+  protected formatMessagesWithCaching(
+    messages: ChatMessage[],
+    enableCaching: boolean = true
+  ): BedrockFormattedMessage[] {
+    const split = enableCaching ? this.splitTrailingVolatileState(messages) : null;
+    if (split) {
+      const head = this.formatMessagesWithCaching(split.head, true);
+      const tail = this.formatMessagesWithCaching(split.tail, false);
+      if (head[head.length - 1]?.role === 'user' && tail[0]?.role === 'user') {
+        head.push({
+          role: 'assistant',
+          content: [{ type: 'text', text: 'OK' }]
+        });
+      }
+      return [...head, ...tail];
+    }
+
+    const result: BedrockFormattedMessage[] = [];
+    let lastRole: 'assistant' | 'user' = 'assistant';
+
+    for (let i = 0; i < messages.length; i++) {
+      const mappedRole = this.mapRole(messages[i].role);
+      const role: 'assistant' | 'user' = mappedRole === 'assistant' ? 'assistant' : 'user';
+
+      if (role === lastRole) {
+        result.push({
+          role: 'assistant',
+          content: [{ type: 'text', text: 'OK' }]
+        });
+      }
+
+      const isLastMessage = i === messages.length - 1;
+      const contentBlocks = this.formatContentWithCaching(
+        messages[i].content,
+        enableCaching && isLastMessage
+      );
+
+      result.push({
+        role,
+        content: contentBlocks
+      });
+      lastRole = role;
+    }
+
+    return result;
+  }
+
+  /**
+   * Builds the Bedrock Anthropic request body, separating system messages and placing
+   * `{ cachePoint: { type: 'default' } }` checkpoints on the system prompt and stable history prefix.
+   */
+  protected buildAnthropicRequestBody(params: ChatParams): BedrockAnthropicRequestBody {
+    const modelId = params.model;
+    const cachingEnabled = params.enableCaching !== false && this.supportsPromptCaching(modelId);
+    const systemMsgs = params.messages.filter(m => m.role === ChatMessageRole.system);
+    const nonSystemMsgs = params.messages.filter(m => m.role !== ChatMessageRole.system);
+
+    const claudeMessages: BedrockFormattedMessage[] = this.formatMessagesWithCaching(
+      nonSystemMsgs,
+      cachingEnabled
+    );
+
+    // Append assistant prefill if specified — Claude on Bedrock supports this natively
+    if (params.assistantPrefill) {
+      claudeMessages.push({ role: 'assistant', content: params.assistantPrefill });
+    }
+
+    const requestBody: BedrockAnthropicRequestBody = {
+      anthropic_version: "bedrock-2023-05-31",
+      max_tokens: params.maxOutputTokens || 1024,
+      messages: claudeMessages,
+      temperature: params.temperature ?? 0.7, // `??`, not `||`: a configured 0 is sent as 0 (F-FP-13)
+      top_p: 0.9
+    };
+
+    if (systemMsgs.length > 0) {
+      requestBody.system = this.formatSystemMessagesWithCaching(systemMsgs, cachingEnabled);
+    }
+
+    if (params.stopSequences != null && params.stopSequences.length > 0) {
+      requestBody.stop_sequences = params.stopSequences;
+    }
+
+    return requestBody;
+  }
+
+  /**
    * Implementation of non-streaming chat completion for Amazon Bedrock
    */
   protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
@@ -81,31 +370,17 @@ export class BedrockLLM extends BaseLLM {
       const modelId = params.model;
       
       // Create the request body - depends on the specific model provider in Bedrock
-      let requestBody: any;
+      let requestBody: BedrockAnthropicRequestBody | Record<string, unknown>;
       
-      if (modelId.startsWith('anthropic.')) {
-        // Anthropic Claude models
-        const claudeMessages = [...bedrockParams.messages];
-        // Append assistant prefill if specified — Claude on Bedrock supports this natively
-        if (params.assistantPrefill) {
-          claudeMessages.push({ role: 'assistant', content: params.assistantPrefill });
-        }
-        requestBody = {
-          anthropic_version: "bedrock-2023-05-31",
-          max_tokens: params.maxOutputTokens || 1024,
-          messages: claudeMessages,
-          temperature: params.temperature || 0.7,
-          top_p: 0.9
-        };
-        if (params.stopSequences != null && params.stopSequences.length > 0) {
-          requestBody.stop_sequences = params.stopSequences;
-        }
+      if (this.isAnthropicModel(modelId)) {
+        // Anthropic Claude models (with prompt caching and trailing volatile state split)
+        requestBody = this.buildAnthropicRequestBody(params);
       } else if (modelId.startsWith('ai21.')) {
         // AI21 models
         requestBody = {
           prompt: this.convertMessagesToPrompt(bedrockParams.messages),
           maxTokens: params.maxOutputTokens || 1024,
-          temperature: params.temperature || 0.7,
+          temperature: params.temperature ?? 0.7,
           topP: 0.9
         };
         if (params.stopSequences != null && params.stopSequences.length > 0) {
@@ -113,23 +388,24 @@ export class BedrockLLM extends BaseLLM {
         }
       } else if (modelId.startsWith('amazon.titan-')) {
         // Amazon Titan models
-        requestBody = {
-          inputText: this.convertMessagesToPrompt(bedrockParams.messages),
-          textGenerationConfig: {
-            maxTokenCount: params.maxOutputTokens || 1024,
-            temperature: params.temperature || 0.7,
-            topP: 0.9
-          }
+        const textGenerationConfig: Record<string, unknown> = {
+          maxTokenCount: params.maxOutputTokens || 1024,
+          temperature: params.temperature ?? 0.7, // `??`, not `||`: a configured 0 is sent as 0 (F-FP-13)
+          topP: 0.9
         };
         if (params.stopSequences != null && params.stopSequences.length > 0) {
-          requestBody.textGenerationConfig.stopSequences = params.stopSequences;
+          textGenerationConfig.stopSequences = params.stopSequences;
         }
+        requestBody = {
+          inputText: this.convertMessagesToPrompt(bedrockParams.messages),
+          textGenerationConfig
+        };
       } else if (modelId.startsWith('meta.')) {
         // Meta Llama models
         requestBody = {
           prompt: this.convertMessagesToPrompt(bedrockParams.messages),
           max_gen_len: params.maxOutputTokens || 1024,
-          temperature: params.temperature || 0.7,
+          temperature: params.temperature ?? 0.7,
           top_p: 0.9
         };
         // Note: Meta Llama models on Bedrock don't support stop sequences in the request body
@@ -154,7 +430,7 @@ export class BedrockLLM extends BaseLLM {
       let content = '';
       let tokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
 
-      if (modelId.startsWith('anthropic.')) {
+      if (this.isAnthropicModel(modelId)) {
         content = responseBody.content?.[0]?.text || '';
         // Anthropic-style usage: input_tokens EXCLUDES cached tokens, so it is already the net-new
         // (uncached) prompt count — assign through. Cache reads/writes are reported separately and
@@ -255,7 +531,7 @@ export class BedrockLLM extends BaseLLM {
   /**
    * Create a streaming request for Bedrock
    */
-  protected async createStreamingRequest(params: ChatParams): Promise<any> {
+  protected async createStreamingRequest(params: ChatParams): Promise<unknown> {
     // Map provider-agnostic params to Bedrock-specific format
     const bedrockParams = this.mapToBedrockParams(params);
     
@@ -263,31 +539,17 @@ export class BedrockLLM extends BaseLLM {
     const modelId = params.model;
     
     // Create the request body - depends on the specific model provider in Bedrock
-    let requestBody: any;
+    let requestBody: BedrockAnthropicRequestBody | Record<string, unknown>;
     
-    if (modelId.startsWith('anthropic.')) {
-      // Anthropic Claude models
-      const claudeMessages = [...bedrockParams.messages];
-      // Append assistant prefill if specified — Claude on Bedrock supports this natively
-      if (params.assistantPrefill) {
-        claudeMessages.push({ role: 'assistant', content: params.assistantPrefill });
-      }
-      requestBody = {
-        anthropic_version: "bedrock-2023-05-31",
-        max_tokens: params.maxOutputTokens || 1024,
-        messages: claudeMessages,
-        temperature: params.temperature || 0.7,
-        top_p: 0.9
-      };
-      if (params.stopSequences != null && params.stopSequences.length > 0) {
-        requestBody.stop_sequences = params.stopSequences;
-      }
+    if (this.isAnthropicModel(modelId)) {
+      // Anthropic Claude models (with prompt caching and trailing volatile state split)
+      requestBody = this.buildAnthropicRequestBody(params);
     } else if (modelId.startsWith('ai21.')) {
       // AI21 models
       requestBody = {
         prompt: this.convertMessagesToPrompt(bedrockParams.messages),
         maxTokens: params.maxOutputTokens || 1024,
-        temperature: params.temperature || 0.7,
+        temperature: params.temperature ?? 0.7,
         topP: 0.9
       };
       if (params.stopSequences != null && params.stopSequences.length > 0) {
@@ -295,23 +557,24 @@ export class BedrockLLM extends BaseLLM {
       }
     } else if (modelId.startsWith('amazon.titan-')) {
       // Amazon Titan models
-      requestBody = {
-        inputText: this.convertMessagesToPrompt(bedrockParams.messages),
-        textGenerationConfig: {
-          maxTokenCount: params.maxOutputTokens || 1024,
-          temperature: params.temperature || 0.7,
-          topP: 0.9
-        }
+      const textGenerationConfig: Record<string, unknown> = {
+        maxTokenCount: params.maxOutputTokens || 1024,
+        temperature: params.temperature ?? 0.7, // `??`, not `||`: a configured 0 is sent as 0 (F-FP-13)
+        topP: 0.9
       };
       if (params.stopSequences != null && params.stopSequences.length > 0) {
-        requestBody.textGenerationConfig.stopSequences = params.stopSequences;
+        textGenerationConfig.stopSequences = params.stopSequences;
       }
+      requestBody = {
+        inputText: this.convertMessagesToPrompt(bedrockParams.messages),
+        textGenerationConfig
+      };
     } else if (modelId.startsWith('meta.')) {
       // Meta Llama models
       requestBody = {
         prompt: this.convertMessagesToPrompt(bedrockParams.messages),
         max_gen_len: params.maxOutputTokens || 1024,
-        temperature: params.temperature || 0.7,
+        temperature: params.temperature ?? 0.7,
         top_p: 0.9
       };
       // Note: Meta Llama models on Bedrock don't support stop sequences in the request body
@@ -506,7 +769,7 @@ export class BedrockLLM extends BaseLLM {
    * Format an image content block for Bedrock Claude API
    * Claude expects: { type: "image", source: { type: "base64", media_type: "image/jpeg", data: "..." } }
    */
-  private formatImageForBedrock(block: ChatMessageContentBlock): any | null {
+  private formatImageForBedrock(block: ChatMessageContentBlock): BedrockImageBlock | null {
     const content = block.content;
 
     // Check if it's a data URL (data:image/png;base64,...)
@@ -559,7 +822,7 @@ export class BedrockLLM extends BaseLLM {
    *
    * Same format as direct Anthropic API — Bedrock mirrors the Claude content block types.
    */
-  private formatDocumentForBedrock(block: ChatMessageContentBlock): any | null {
+  private formatDocumentForBedrock(block: ChatMessageContentBlock): BedrockDocumentBlock | null {
     const content = block.content;
 
     // Determine the MIME type

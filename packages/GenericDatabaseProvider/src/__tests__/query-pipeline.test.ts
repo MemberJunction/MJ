@@ -1387,18 +1387,44 @@ describe('GenericDatabaseProvider — RequireApproved (#4789 A17)', () => {
         expect((await run(true)).ErrorMessage).toContain("its status is 'Pending'");
     });
 
-    it('refuses when a query it composes is no longer approved in its current form', async () => {
-        const dep = templatedQuery({ ID: 'q-dep', Name: 'Chapter Members Dep', CategoryPath: '/Reports/', SQL: 'SELECT ID FROM Members', UsesTemplate: false, Reusable: true }, []);
-        (dep as unknown as { ApprovedFingerprint: string }).ApprovedFingerprint = 'fingerprint-of-an-older-definition';
-        const outer = templatedQuery({ ID: 'q-outer', Name: 'Outer', SQL: 'SELECT COUNT(*) AS N FROM {{query:"Reports/Chapter Members Dep"}} m', UsesTemplate: false }, []);
-        (outer as unknown as { ApprovedFingerprint: string }).ApprovedFingerprint = await ComputeQueryFingerprintAsync(
-            { SQL: (outer as unknown as { SQL: string }).SQL, UsesTemplate: false, ExternalDataSourceID: null }, { SQLs: [], Parameters: [] });
-        provider.setMockQueries([outer]);
+    it('refuses when a query it composes is no longer approved in its current form, even when the parent SQL is unchanged', async () => {
+        const childD1 = 'SELECT ID FROM Members WHERE Active = 1';
+        const childD2 = 'SELECT ID FROM Members WHERE 1 = 1';
+        const dep = templatedQuery({ ID: 'q-dep', Name: 'Chapter Members Dep', CategoryPath: '/Reports/', SQL: childD1, UsesTemplate: false, Reusable: true }, []) as typeof query;
+        dep.ApprovedFingerprint = await ComputeQueryFingerprintAsync({ SQL: childD1, UsesTemplate: false, ExternalDataSourceID: null }, { SQLs: [], Parameters: [] });
+        const outer = templatedQuery({ ID: 'q-outer', Name: 'Outer', SQL: 'SELECT COUNT(*) AS N FROM {{query:"Reports/Chapter Members Dep"}} m', UsesTemplate: false }, []) as typeof query;
+        outer.ApprovedFingerprint = await ComputeQueryFingerprintAsync(
+            { SQL: outer.SQL, UsesTemplate: false, ExternalDataSourceID: null }, { SQLs: [], Parameters: [] });
+        provider.setMockQueries([dep, outer]);
         mockEngine([dep, outer]);
 
-        const result = await provider.testInternalRunQuery({ QueryID: 'q-outer', RequireApproved: true }, mockUser);
-        expect(result.Success).toBe(false);
-        expect(result.ErrorMessage).toContain("Query 'Chapter Members Dep' (ID: q-dep) is not approved in its current form");
+        // Both approved at D1/P1 -> composed parent runs
+        expect((await provider.testInternalRunQuery({ QueryID: 'q-outer', RequireApproved: true }, mockUser)).Success).toBe(true);
+
+        // Mutate child to D2 without re-approving, leaving outer byte-identical at P1
+        dep.SQL = childD2;
+        const directRefused = await provider.testInternalRunQuery({ QueryID: 'q-dep', RequireApproved: true }, mockUser);
+        expect(directRefused.Success).toBe(false);
+        expect(directRefused.ErrorMessage).toContain("Query 'Chapter Members Dep' (ID: q-dep) is not approved in its current form");
+
+        const composedRefused = await provider.testInternalRunQuery({ QueryID: 'q-outer', RequireApproved: true }, mockUser);
+        expect(composedRefused.Success).toBe(false);
+        expect(composedRefused.ErrorMessage).toContain("Query 'Chapter Members Dep' (ID: q-dep) is not approved in its current form");
+
+        // Restore child to D1 -> both run again
+        dep.SQL = childD1;
+        expect((await provider.testInternalRunQuery({ QueryID: 'q-outer', RequireApproved: true }, mockUser)).Success).toBe(true);
+
+        // Mutate child to D2 and re-approve child on D2 -> composed parent runs without touching parent
+        dep.SQL = childD2;
+        dep.ApprovedFingerprint = await ComputeQueryFingerprintAsync({ SQL: childD2, UsesTemplate: false, ExternalDataSourceID: null }, { SQLs: [], Parameters: [] });
+        expect((await provider.testInternalRunQuery({ QueryID: 'q-outer', RequireApproved: true }, mockUser)).Success).toBe(true);
+    });
+
+    it('refuses ad-hoc SQL when RequireApproved is set', async () => {
+        const res = await provider.testInternalRunQuery({ SQL: 'SELECT 1 AS N', RequireApproved: true }, mockUser);
+        expect(res.Success).toBe(false);
+        expect(res.ErrorMessage).toContain('Ad-hoc SQL has no approved query definition');
     });
 });
 

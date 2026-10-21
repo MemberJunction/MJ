@@ -430,4 +430,95 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
       expect(rwState.ElementCount).toBe(1);
     });
   });
+
+  // ── ShowFocusToggle: chrome a host can turn off (LXP P12) ─────────────────────────
+  describe('ShowFocusToggle', () => {
+    /** The header's "Move to stage" / "Back to tab" control, or null when it is not rendered. */
+    const focusButton = (f: Fix): HTMLButtonElement | null =>
+      (Array.from(f.nativeElement.querySelectorAll('button.head-btn')) as HTMLButtonElement[])
+        .find((b) => /Move to stage|Back to tab/.test(b.textContent ?? '')) ?? null;
+
+    it('renders the Focus toggle by default (MJ\'s own overlay services FocusModeChange)', () => {
+      expect(focusButton(render())).not.toBeNull();
+    });
+
+    it('a host that cannot service FocusModeChange hides the toggle instead of shipping a dead button', () => {
+      const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
+        inputs: { State: new WhiteboardState(), ShowFocusToggle: false },
+      });
+      expect(focusButton(f)).toBeNull();
+      // Only the Focus toggle goes: the rest of the header chrome is untouched.
+      expect(f.nativeElement.querySelector('button.head-btn--more')).not.toBeNull();
+    });
+
+    it('with the toggle hidden, the stage state the host reports still lands (no button is not no feature)', () => {
+      const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
+        inputs: { State: new WhiteboardState(), ShowFocusToggle: false },
+      });
+      f.componentInstance.SetOnStage(true);
+      expect(f.componentInstance.FocusMode).toBe(true);
+      expect(focusButton(f)).toBeNull();
+    });
+  });
+
+  // ── PenPalette: the host's palette reaches the toolbar; the pen never points off it (LXP P14.3) ──
+  describe('PenPalette', () => {
+    const DEFAULT_FIRST = '#cbd5e1';
+
+    it('defaults to the five MJ pen colors with the first selected', () => {
+      const f = render();
+      expect(f.componentInstance.PenPalette).toBeNull();
+      expect(f.componentInstance.PenColor).toBe(DEFAULT_FIRST);
+    });
+
+    it('a palette that excludes the current pen color moves the pen to its first entry', () => {
+      const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
+        inputs: { State: new WhiteboardState(), PenPalette: ['#1d4ed8', '#b91c1c'] },
+      });
+      expect(f.componentInstance.PenColor).toBe('#1d4ed8');
+    });
+
+    it('a palette that still contains the current pen color leaves the pen alone', () => {
+      const f = render();
+      f.componentInstance.PenColor = '#f87171';
+      f.componentInstance.PenPalette = ['#f87171', '#1d4ed8'];
+      expect(f.componentInstance.PenColor).toBe('#f87171');
+    });
+
+    it('membership is case-insensitive: an upper-case palette entry keeps a lower-case pen', () => {
+      const f = render();
+      f.componentInstance.PenColor = '#1d4ed8';
+      f.componentInstance.PenPalette = ['#1D4ED8', '#b91c1c'];
+      expect(f.componentInstance.PenColor).toBe('#1d4ed8');
+    });
+
+    it('blank and non-string entries are dropped; a palette with nothing usable reads as none', () => {
+      const f = render();
+      f.componentInstance.PenPalette = ['', ' #1d4ed8 ', 9] as unknown as string[];
+      expect(f.componentInstance.PenPalette).toEqual(['#1d4ed8']);
+      expect(f.componentInstance.PenColor).toBe('#1d4ed8');
+      f.componentInstance.PenPalette = ['', '  '] as unknown as string[];
+      expect(f.componentInstance.PenPalette).toBeNull();
+      expect(f.componentInstance.PenColor).toBe(DEFAULT_FIRST);
+    });
+
+    it('a non-array reads as no palette, and the default palette comes back', () => {
+      const f = render();
+      f.componentInstance.PenPalette = ['#1d4ed8'];
+      f.componentInstance.PenPalette = '#000' as unknown as string[];
+      expect(f.componentInstance.PenPalette).toBeNull();
+      expect(f.componentInstance.PenColor).toBe(DEFAULT_FIRST);
+    });
+
+    it('the toolbar renders the host palette', () => {
+      const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
+        inputs: { State: new WhiteboardState(), PenPalette: ['#1d4ed8', '#b91c1c'] },
+        // `setup` runs before the first change-detection pass; a post-render `Tool = 'pen'`
+        // trips dev-mode NG0100 on the board's [Tool] binding (a harness artifact — see renderRO).
+        setup: (c) => { c.Tool = 'pen'; },
+      });
+      const swatches = Array.from(f.nativeElement.querySelectorAll('.pen-flyout .pen-c')) as HTMLElement[];
+      expect(swatches.length).toBe(2);
+    });
+  });
 });

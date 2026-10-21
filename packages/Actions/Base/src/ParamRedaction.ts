@@ -108,8 +108,14 @@ export function RedactParams(
     actionParams?: MJActionParamEntity[] | null,
     entityActionParams?: MJEntityActionParamEntity[] | null
 ): LoggedParam[] {
-    if (!params) {
+    if (!params || params.length === 0) {
         return [];
+    }
+
+    const hasBindings = !!entityActionParams && entityActionParams.length > 0;
+    const hasOptOutDefs = !!actionParams && actionParams.some(ap => ap.LogValue === false);
+    if (!hasBindings && !hasOptOutDefs) {
+        return params.slice();
     }
 
     return params.map(p => {
@@ -133,6 +139,14 @@ export function RedactParamsToJSON(
     actionParams?: MJActionParamEntity[] | null,
     entityActionParams?: MJEntityActionParamEntity[] | null
 ): string {
+    if (!params || params.length === 0) {
+        return '[]';
+    }
+    const hasBindings = !!entityActionParams && entityActionParams.length > 0;
+    const hasOptOutDefs = !!actionParams && actionParams.some(ap => ap.LogValue === false);
+    if (!hasBindings && !hasOptOutDefs) {
+        return JSON.stringify(params);
+    }
     return JSON.stringify(RedactParams(params, actionParams, entityActionParams));
 }
 
@@ -266,12 +280,16 @@ function describeShape(value: unknown, record: RedactedParam): void {
  * misleading zero, and never a reason to throw out of a logging path.
  */
 function utf8ByteLength(value: unknown): number {
+    if (value === undefined) return 0;
+    if (value === null) return 4;
+    if (typeof value === 'boolean') return value ? 4 : 5;
+    if (typeof value === 'number') return Number.isFinite(value) ? String(value).length : 4;
     try {
         const json = JSON.stringify(value);
         if (json === undefined) {
             return 0;
         }
-        return new TextEncoder().encode(json).length;
+        return Buffer.byteLength(json, 'utf8');
     } catch {
         return -1;
     }

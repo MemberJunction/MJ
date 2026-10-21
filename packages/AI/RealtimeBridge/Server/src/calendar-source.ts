@@ -265,10 +265,12 @@ function extractJoinUrlFromText(content?: string): string | undefined {
     if (!content) {
         return undefined;
     }
-    const match = content.match(
-        /https?:\/\/[^\s"'<>]*(?:teams\.microsoft\.com\/l\/meetup-join|meet\.google\.com|zoom\.us\/j)[^\s"'<>]*/i,
-    );
-    return match ? match[0] : undefined;
+    for (const token of content.split(/[\s"'<>]+/)) {
+        if (/^https?:\/\/(?:teams\.microsoft\.com\/l\/meetup-join|meet\.google\.com|zoom\.us\/j|[a-z0-9.-]+\.(?:teams\.microsoft\.com\/l\/meetup-join|zoom\.us\/j))/i.test(token)) {
+            return token;
+        }
+    }
+    return undefined;
 }
 
 /** First-poll window default (days). */

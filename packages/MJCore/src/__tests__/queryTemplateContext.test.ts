@@ -102,10 +102,10 @@ describe('QueryContextCacheValues', () => {
 });
 
 describe('SERVER_ONLY_RUN_QUERY_PARAMS', () => {
-    it('lists TimeZone and ServerParameters, and the strip removes them and nothing else', () => {
-        expect([...SERVER_ONLY_RUN_QUERY_PARAMS]).toEqual(['TimeZone', 'ServerParameters']);
+    it('lists TimeZone, ServerParameters and RequireApproved, and the strip removes them and nothing else', () => {
+        expect([...SERVER_ONLY_RUN_QUERY_PARAMS]).toEqual(['TimeZone', 'ServerParameters', 'RequireApproved']);
         const stripped = StripServerOnlyRunQueryParams({
-            QueryName: 'Members', Parameters: { Region: 'West' }, TimeZone: 'Europe/Paris', ServerParameters: { ChapterID: 3 },
+            QueryName: 'Members', Parameters: { Region: 'West' }, TimeZone: 'Europe/Paris', ServerParameters: { ChapterID: 3 }, RequireApproved: true,
         });
         expect(stripped).toEqual({ QueryName: 'Members', Parameters: { Region: 'West' } });
     });

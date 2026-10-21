@@ -10,6 +10,22 @@ import {
     GetEventsParams,
     GetEventsResult,
     GetEventsEvent,
+    GetFreeBusyParams,
+    GetFreeBusyResult,
+    FreeBusyScheduleSlot,
+    FindMeetingTimesParams,
+    FindMeetingTimesResult,
+    MeetingTimeSuggestion,
+    CreateCalendarEventParams,
+    CreateCalendarEventResult,
+    UpdateCalendarEventParams,
+    UpdateCalendarEventResult,
+    RespondToCalendarEventParams,
+    RespondToCalendarEventResult,
+    CancelCalendarEventParams,
+    CancelCalendarEventResult,
+    VerifyMailboxAccessParams,
+    VerifyMailboxAccessResult,
     GetMessagesParams,
     GetMessagesResult,
     GetSingleMessageParams,
@@ -1059,8 +1075,560 @@ export class MSGraphProvider extends BaseCommunicationProvider {
     }
 
     /**
+     * Queries free/busy schedule intervals for one or more users via Microsoft Graph
+     * `POST /users/{id}/calendar/getSchedule`.
+     *
+     * @requires MS Graph Scope: Calendars.Read (Application or Delegated)
+     */
+    public override async GetFreeBusy(
+        params: GetFreeBusyParams,
+        credentials?: MSGraphCredentials
+    ): Promise<GetFreeBusyResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const mailbox = this.resolveMailbox(
+                'GetFreeBusy',
+                creds,
+                params.Identifier,
+                params.ContextData?.Email as string | undefined,
+                params.Schedules[0]
+            );
+
+            if (!params.Schedules || params.Schedules.length === 0) {
+                return {
+                    Success: false,
+                    Schedules: [],
+                    ErrorMessage: 'GetFreeBusy requires at least one email address in Schedules.'
+                };
+            }
+
+            const path = `${this.getApiUri()}/${encodeURIComponent(mailbox)}/calendar/getSchedule`;
+            const body = {
+                schedules: params.Schedules,
+                startTime: {
+                    dateTime: params.StartDateTime.toISOString(),
+                    timeZone: 'UTC'
+                },
+                endTime: {
+                    dateTime: params.EndDateTime.toISOString(),
+                    timeZone: 'UTC'
+                },
+                availabilityViewInterval: params.AvailabilityViewIntervalMinutes ?? 30
+            };
+
+            const response = await client
+                .api(path)
+                .header('Prefer', 'outlook.timezone="UTC"')
+                .post(body);
+
+            const rawSchedules: Array<Record<string, unknown>> = response?.value ?? [];
+            const schedules: GetFreeBusyResult['Schedules'] = rawSchedules.map((raw) => {
+                const scheduleId = String(raw.scheduleId ?? '');
+                const errorObj = raw.error as { message?: string } | undefined;
+                const rawItems = (raw.scheduleItems as Array<Record<string, unknown>> | undefined) ?? [];
+                const slots: FreeBusyScheduleSlot[] = [];
+
+                for (const item of rawItems) {
+                    const start = GraphInstant(
+                        item.start as { dateTime?: string; timeZone?: string } | undefined
+                    );
+                    const end = GraphInstant(
+                        item.end as { dateTime?: string; timeZone?: string } | undefined
+                    );
+                    if (!start || !end) continue;
+
+                    slots.push({
+                        StartTime: start,
+                        EndTime: end,
+                        Status: this.mapGraphFreeBusyStatus(String(item.status ?? 'busy')),
+                        Subject: typeof item.subject === 'string' ? item.subject : undefined
+                    });
+                }
+
+                return {
+                    ScheduleID: scheduleId,
+                    AvailabilityView: typeof raw.availabilityView === 'string' ? raw.availabilityView : undefined,
+                    Slots: slots,
+                    Error: errorObj?.message
+                };
+            });
+
+            return {
+                Success: true,
+                Schedules: schedules,
+                SourceData: rawSchedules
+            };
+        } catch (ex) {
+            LogError('Error getting free/busy schedule via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                Schedules: [],
+                ErrorMessage: `Error getting free/busy schedule: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    private mapGraphFreeBusyStatus(status: string): FreeBusyScheduleSlot['Status'] {
+        const normalized = status.trim().toLowerCase();
+        if (normalized === 'free') return 'Free';
+        if (normalized === 'tentative') return 'Tentative';
+        if (normalized === 'oof') return 'OutOfOffice';
+        if (normalized === 'workingelsewhere') return 'WorkingElsewhere';
+        if (normalized === 'busy') return 'Busy';
+        return 'Unknown';
+    }
+
+    /**
+     * Finds candidate meeting times across attendees via Microsoft Graph
+     * `POST /users/{id}/findMeetingTimes`.
+     *
+     * @requires MS Graph Scope: Calendars.Read.Shared (Delegated) or Calendars.Read (Application where supported)
+     */
+    public override async FindMeetingTimes(
+        params: FindMeetingTimesParams,
+        credentials?: MSGraphCredentials
+    ): Promise<FindMeetingTimesResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const mailbox = this.resolveMailbox(
+                'FindMeetingTimes',
+                creds,
+                params.Identifier,
+                params.ContextData?.Email as string | undefined
+            );
+
+            const path = `${this.getApiUri()}/${encodeURIComponent(mailbox)}/findMeetingTimes`;
+            const body: Record<string, unknown> = {
+                attendees: params.Attendees.map((a) => ({
+                    type: a.Required === false ? 'optional' : 'required',
+                    emailAddress: { address: a.Email }
+                })),
+                timeConstraint: {
+                    activityDomain: 'work',
+                    timeSlots: [
+                        {
+                            start: {
+                                dateTime: params.StartDateTime.toISOString(),
+                                timeZone: 'UTC'
+                            },
+                            end: {
+                                dateTime: params.EndDateTime.toISOString(),
+                                timeZone: 'UTC'
+                            }
+                        }
+                    ]
+                },
+                meetingDuration: `PT${Math.max(5, Math.round(params.DurationMinutes))}M`,
+                maxCandidates: params.MaxCandidates ?? 5,
+                minimumAttendeePercentage: params.MinimumAttendeePercentage ?? 100
+            };
+
+            const response = await client
+                .api(path)
+                .header('Prefer', 'outlook.timezone="UTC"')
+                .post(body);
+
+            const rawSuggestions: Array<Record<string, unknown>> = response?.meetingTimeSuggestions ?? [];
+            const suggestions: MeetingTimeSuggestion[] = [];
+
+            for (const raw of rawSuggestions) {
+                const slot = raw.meetingTimeSlot as {
+                    start?: { dateTime?: string; timeZone?: string };
+                    end?: { dateTime?: string; timeZone?: string };
+                } | undefined;
+                const start = GraphInstant(slot?.start);
+                const end = GraphInstant(slot?.end);
+                if (!start || !end) continue;
+
+                const rawAvailability = (raw.attendeeAvailability as Array<Record<string, unknown>> | undefined) ?? [];
+                suggestions.push({
+                    StartTime: start,
+                    EndTime: end,
+                    Confidence: typeof raw.confidence === 'number' ? raw.confidence : 0,
+                    OrganizerAvailability: typeof raw.organizerAvailability === 'string' ? raw.organizerAvailability : undefined,
+                    SuggestionReason: typeof raw.suggestionReason === 'string' ? raw.suggestionReason : undefined,
+                    AttendeeAvailability: rawAvailability.map((a) => {
+                        const att = a.attendee as { emailAddress?: { address?: string } } | undefined;
+                        return {
+                            Email: att?.emailAddress?.address ?? '',
+                            Availability: this.mapGraphFreeBusyStatus(String(a.availability ?? 'unknown'))
+                        };
+                    })
+                });
+            }
+
+            return {
+                Success: true,
+                Suggestions: suggestions,
+                EmptySuggestionsReason: typeof response?.emptySuggestionsReason === 'string'
+                    ? response.emptySuggestionsReason
+                    : undefined,
+                SourceData: response as Record<string, unknown>
+            };
+        } catch (ex) {
+            LogError('Error finding meeting times via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                Suggestions: [],
+                ErrorMessage: `Error finding meeting times: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Creates a calendar event (and optionally sends invitations / creates an online meeting)
+     * via Microsoft Graph `POST /users/{id}/events`.
+     *
+     * @requires MS Graph Scope: Calendars.ReadWrite (Application)
+     */
+    public override async CreateCalendarEvent(
+        params: CreateCalendarEventParams,
+        credentials?: MSGraphCredentials
+    ): Promise<CreateCalendarEventResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const mailbox = this.resolveMailbox(
+                'CreateCalendarEvent',
+                creds,
+                params.Identifier,
+                params.ContextData?.Email as string | undefined
+            );
+
+            const body: Record<string, unknown> = {
+                subject: params.Subject,
+                start: {
+                    dateTime: params.StartTime.toISOString(),
+                    timeZone: params.TimeZone ?? 'UTC'
+                },
+                end: {
+                    dateTime: params.EndTime.toISOString(),
+                    timeZone: params.TimeZone ?? 'UTC'
+                }
+            };
+
+            if (params.Body !== undefined) {
+                body.body = {
+                    contentType: params.IsHTML ? 'HTML' : 'Text',
+                    content: params.Body
+                };
+            }
+            if (params.Location) {
+                body.location = { displayName: params.Location };
+            }
+            if (params.Attendees && params.Attendees.length > 0) {
+                body.attendees = params.Attendees.map((a) => ({
+                    type: a.Required === false ? 'optional' : 'required',
+                    emailAddress: {
+                        address: a.Email,
+                        name: a.Name
+                    }
+                }));
+            }
+            if (params.IsOnlineMeeting) {
+                body.isOnlineMeeting = true;
+                body.onlineMeetingProvider = 'teamsForBusiness';
+            }
+
+            if (params.DryRun) {
+                LogStatus(`[DryRun] Microsoft Graph: CreateCalendarEvent '${params.Subject}' for ${mailbox} — external call skipped`);
+                return {
+                    Success: true,
+                    DryRun: true,
+                    Event: {
+                        ExternalSystemRecordID: 'DRY_RUN_EVENT_ID',
+                        SeriesID: null,
+                        Subject: params.Subject,
+                        Body: params.Body ?? '',
+                        StartTime: params.StartTime,
+                        EndTime: params.EndTime,
+                        Location: params.Location ?? null,
+                        Organizer: mailbox.toLowerCase(),
+                        Attendees: (params.Attendees ?? []).map((a) => a.Email.toLowerCase()),
+                        IsCancelled: false
+                    },
+                    SourceData: body
+                };
+            }
+
+            const path = `${this.getApiUri()}/${encodeURIComponent(mailbox)}/events`;
+            const response = await client
+                .api(path)
+                .header('Prefer', 'outlook.timezone="UTC"')
+                .post(body);
+
+            return {
+                Success: true,
+                Event: response ? this.toGetEventsEvent(response as Record<string, unknown>) : undefined,
+                OnlineMeetingUrl: response?.onlineMeeting?.joinUrl ?? response?.onlineMeetingUrl ?? null,
+                SourceData: response as Record<string, unknown>
+            };
+        } catch (ex) {
+            LogError('Error creating calendar event via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error creating calendar event: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Updates an existing calendar event via Microsoft Graph `PATCH /users/{id}/events/{eventId}`.
+     *
+     * @requires MS Graph Scope: Calendars.ReadWrite (Application)
+     */
+    public override async UpdateCalendarEvent(
+        params: UpdateCalendarEventParams,
+        credentials?: MSGraphCredentials
+    ): Promise<UpdateCalendarEventResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const mailbox = this.resolveMailbox(
+                'UpdateCalendarEvent',
+                creds,
+                params.Identifier,
+                params.ContextData?.Email as string | undefined
+            );
+
+            const body: Record<string, unknown> = {};
+            if (params.Subject !== undefined) {
+                body.subject = params.Subject;
+            }
+            if (params.Body !== undefined) {
+                body.body = {
+                    contentType: params.IsHTML ? 'HTML' : 'Text',
+                    content: params.Body
+                };
+            }
+            if (params.StartTime) {
+                body.start = {
+                    dateTime: params.StartTime.toISOString(),
+                    timeZone: params.TimeZone ?? 'UTC'
+                };
+            }
+            if (params.EndTime) {
+                body.end = {
+                    dateTime: params.EndTime.toISOString(),
+                    timeZone: params.TimeZone ?? 'UTC'
+                };
+            }
+            if (params.Location !== undefined) {
+                body.location = { displayName: params.Location };
+            }
+            if (params.Attendees) {
+                body.attendees = params.Attendees.map((a) => ({
+                    type: a.Required === false ? 'optional' : 'required',
+                    emailAddress: {
+                        address: a.Email,
+                        name: a.Name
+                    }
+                }));
+            }
+
+            if (params.DryRun) {
+                LogStatus(`[DryRun] Microsoft Graph: UpdateCalendarEvent '${params.EventID}' for ${mailbox} — external call skipped`);
+                return {
+                    Success: true,
+                    DryRun: true,
+                    SourceData: body
+                };
+            }
+
+            const path = `${this.getApiUri()}/${encodeURIComponent(mailbox)}/events/${encodeURIComponent(params.EventID)}`;
+            const response = await client
+                .api(path)
+                .header('Prefer', 'outlook.timezone="UTC"')
+                .patch(body);
+
+            return {
+                Success: true,
+                Event: response ? this.toGetEventsEvent(response as Record<string, unknown>) : undefined,
+                SourceData: response as Record<string, unknown>
+            };
+        } catch (ex) {
+            LogError('Error updating calendar event via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error updating calendar event: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Responds to a calendar event invitation (`accept`, `tentativelyAccept`, or `decline`)
+     * via Microsoft Graph `POST /users/{id}/events/{eventId}/{accept|tentativelyAccept|decline}`.
+     *
+     * @requires MS Graph Scope: Calendars.ReadWrite (Application)
+     */
+    public override async RespondToCalendarEvent(
+        params: RespondToCalendarEventParams,
+        credentials?: MSGraphCredentials
+    ): Promise<RespondToCalendarEventResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const mailbox = this.resolveMailbox(
+                'RespondToCalendarEvent',
+                creds,
+                params.Identifier,
+                params.ContextData?.Email as string | undefined
+            );
+
+            const actionSegment =
+                params.Response === 'Accept'
+                    ? 'accept'
+                    : params.Response === 'TentativelyAccept'
+                    ? 'tentativelyAccept'
+                    : 'decline';
+
+            const body = {
+                comment: params.Comment ?? '',
+                sendResponse: params.SendResponse ?? true
+            };
+
+            if (params.DryRun) {
+                LogStatus(`[DryRun] Microsoft Graph: RespondToCalendarEvent (${actionSegment}) '${params.EventID}' for ${mailbox} — external call skipped`);
+                return { Success: true, DryRun: true };
+            }
+
+            const path = `${this.getApiUri()}/${encodeURIComponent(mailbox)}/events/${encodeURIComponent(params.EventID)}/${actionSegment}`;
+            await client.api(path).post(body);
+            return { Success: true };
+        } catch (ex) {
+            LogError('Error responding to calendar event via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error responding to calendar event: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Cancels a calendar event organized by the mailbox owner via Microsoft Graph
+     * `POST /users/{id}/events/{eventId}/cancel`.
+     *
+     * @requires MS Graph Scope: Calendars.ReadWrite (Application)
+     */
+    public override async CancelCalendarEvent(
+        params: CancelCalendarEventParams,
+        credentials?: MSGraphCredentials
+    ): Promise<CancelCalendarEventResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const mailbox = this.resolveMailbox(
+                'CancelCalendarEvent',
+                creds,
+                params.Identifier,
+                params.ContextData?.Email as string | undefined
+            );
+
+            const body = {
+                comment: params.Comment ?? ''
+            };
+
+            if (params.DryRun) {
+                LogStatus(`[DryRun] Microsoft Graph: CancelCalendarEvent '${params.EventID}' for ${mailbox} — external call skipped`);
+                return { Success: true, DryRun: true };
+            }
+
+            const path = `${this.getApiUri()}/${encodeURIComponent(mailbox)}/events/${encodeURIComponent(params.EventID)}/cancel`;
+            await client.api(path).post(body);
+            return { Success: true };
+        } catch (ex) {
+            LogError('Error cancelling calendar event via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error cancelling calendar event: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Performs a lightweight preflight check to verify whether the active Microsoft Graph
+     * enterprise credential is authorized to read mail and/or calendar for the specified mailbox.
+     * Used by enterprise security gates to detect Exchange Application Access Policy restrictions
+     * (`ErrorAccessDenied` / 403) before offering personal mailbox or calendar operations.
+     */
+    public override async VerifyMailboxAccess(
+        params: VerifyMailboxAccessParams,
+        credentials?: MSGraphCredentials
+    ): Promise<VerifyMailboxAccessResult> {
+        const identifier = params.Identifier?.trim();
+        if (!identifier) {
+            return {
+                Success: false,
+                Identifier: '',
+                CanReadMail: false,
+                CanReadCalendar: false,
+                ErrorMessage: 'VerifyMailboxAccess requires a non-empty Identifier (mailbox email).'
+            };
+        }
+
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const checkMail = params.CheckMailRead ?? true;
+            const checkCalendar = params.CheckCalendarRead ?? true;
+
+            let canReadMail = false;
+            let canReadCalendar = false;
+            let mailErrorMessage: string | undefined;
+            let calendarErrorMessage: string | undefined;
+
+            if (checkMail) {
+                try {
+                    const mailPath = `${this.getApiUri()}/${encodeURIComponent(identifier)}/mailFolders/inbox`;
+                    await client.api(mailPath).select('id').get();
+                    canReadMail = true;
+                } catch (mailEx) {
+                    mailErrorMessage = mailEx instanceof Error ? mailEx.message : String(mailEx);
+                }
+            }
+
+            if (checkCalendar) {
+                try {
+                    const calPath = `${this.getApiUri()}/${encodeURIComponent(identifier)}/calendar`;
+                    await client.api(calPath).select('id').get();
+                    canReadCalendar = true;
+                } catch (calEx) {
+                    calendarErrorMessage = calEx instanceof Error ? calEx.message : String(calEx);
+                }
+            }
+
+            const overallSuccess =
+                (!checkMail || canReadMail) &&
+                (!checkCalendar || canReadCalendar);
+
+            return {
+                Success: overallSuccess,
+                Identifier: identifier,
+                CanReadMail: canReadMail,
+                CanReadCalendar: canReadCalendar,
+                MailErrorMessage: mailErrorMessage,
+                CalendarErrorMessage: calendarErrorMessage,
+                ErrorMessage: overallSuccess
+                    ? undefined
+                    : [mailErrorMessage, calendarErrorMessage].filter(Boolean).join('; ')
+            };
+        } catch (ex) {
+            const msg = ex instanceof Error ? ex.message : String(ex);
+            return {
+                Success: false,
+                Identifier: identifier,
+                CanReadMail: false,
+                CanReadCalendar: false,
+                ErrorMessage: `Error verifying mailbox access for ${identifier}: ${msg}`
+            };
+        }
+    }
+
+    /**
      * Returns the list of operations supported by MS Graph provider.
-     * MS Graph supports all mailbox operations.
+     * MS Graph supports all mailbox and calendar operations.
      */
     public override getSupportedOperations(): ProviderOperation[] {
         return [
@@ -1087,7 +1655,14 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             'UpdateEvent',
             'CancelEvent',
             'GetEvent',
-            'SyncEvents'
+            'SyncEvents',
+            'GetFreeBusy',
+            'FindMeetingTimes',
+            'CreateCalendarEvent',
+            'UpdateCalendarEvent',
+            'RespondToCalendarEvent',
+            'CancelCalendarEvent',
+            'VerifyMailboxAccess'
         ];
     }
 
