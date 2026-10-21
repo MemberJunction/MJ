@@ -3942,7 +3942,7 @@ export class ManageMetadataBase {
     */
    protected async manageParentEntityFields(pool: CodeGenConnection): Promise<{success: boolean, anyUpdates: boolean}> {
       let bSuccess = true;
-      let anyUpdates = false;
+      const updatedChildNames: string[] = [];
 
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const childEntities = md.Entities.filter(e => e.IsChildType);
@@ -3956,7 +3956,9 @@ export class ManageMetadataBase {
       for (const childEntity of childEntities) {
          try {
             const { success, updated } = await this.manageSingleEntityParentFields(pool, childEntity);
-            anyUpdates = anyUpdates || updated;
+            if (updated) {
+               updatedChildNames.push(childEntity.Name);
+            }
             if (!success) {
                logError(`   Error managing IS-A parent fields for ${childEntity.Name}`);
                bSuccess = false;
@@ -3967,7 +3969,16 @@ export class ManageMetadataBase {
          }
       }
 
-      return { success: bSuccess, anyUpdates };
+      // A child whose virtual EntityField set changed has a different TypeScript surface (entity
+      // subclass, zod schema, GraphQL types). The rows were written directly above, so nothing
+      // else marks the entity — and the file emit only rebuilds schemas holding a new or modified
+      // entity (fileEmit.dirtySchemaOnly). Mark it here or the run reports success and ships a
+      // class that lacks the field the metadata declares, until someone runs `--skipdb` (#5961).
+      if (updatedChildNames.length > 0) {
+         ManageMetadataBase.AddNewEntitiesToModifiedList(updatedChildNames);
+      }
+
+      return { success: bSuccess, anyUpdates: updatedChildNames.length > 0 };
    }
 
    /**
