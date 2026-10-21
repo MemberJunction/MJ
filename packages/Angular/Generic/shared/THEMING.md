@@ -508,6 +508,10 @@ interface ThemeDefinition {
 3. **Switching** — User selects a theme from the menu, which calls `SetTheme()`. The service applies the theme and persists the preference.
 4. **Reset** — On logout, the shell calls `Reset()` to remove theme attributes and clean up.
 
+### The org brand on a cold load
+
+The org brand overlay (Theme Studio's default, applied with `ApplyBrandOverlay()`) is a session Blob stylesheet, and workspace bootstrap re-emits it only after the metadata refresh. So that the shell's loading screen and the sign-in page paint branded from first paint anyway, `ApplyBrandOverlay()` persists the emitted CSS in localStorage beside the overlay id, and `RestorePersistedBrandOverlay()` re-injects it as a `<style>` before anything renders; explorer-app calls it from its constructor. Bootstrap's real `<link>` replaces the preloaded `<style>` for that id, a CSS entry whose id no longer matches the persisted overlay is dropped as stale, `ClearBrandOverlay()` removes both, and a session-only overlay (`persist: false`, the Theme Studio preview) never persists. What this does not cover is the pre-Angular frame itself, which is `index.html` and MJ's compiled tokens.
+
 ---
 
 ## Creating a Custom Theme
