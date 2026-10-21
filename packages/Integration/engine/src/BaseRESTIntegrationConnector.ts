@@ -1,5 +1,5 @@
 import { RunView, type UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import type { MJCompanyIntegrationEntity, MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { ComputeContentHash } from './ContentHash.js';
@@ -280,9 +280,10 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // DiscoveryIsAuthoritative itself.
         const result: SourceSchemaInfo = { Objects: [], IsAuthoritative: false };
 
+        const objectsByID = IndexByUUID(objects);
         for (const obj of objects) {
             const fields = this.GetCachedFields(obj.ID);
-            const sourceObject = this.buildSourceObjectInfo(obj, fields, objects);
+            const sourceObject = this.buildSourceObjectInfo(obj, fields, objectsByID);
             result.Objects.push(sourceObject);
         }
 
@@ -1658,9 +1659,9 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     private buildSourceObjectInfo(
         obj: MJIntegrationObjectEntity,
         fields: MJIntegrationObjectFieldEntity[],
-        allObjects: MJIntegrationObjectEntity[]
+        objectsByID: UUIDMap<MJIntegrationObjectEntity>
     ): SourceObjectInfo {
-        const relationships = this.buildRelationships(fields, allObjects);
+        const relationships = this.buildRelationships(fields, objectsByID);
 
         return {
             ExternalName: obj.Name,
@@ -1690,14 +1691,14 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      */
     private buildRelationships(
         fields: MJIntegrationObjectFieldEntity[],
-        allObjects: MJIntegrationObjectEntity[]
+        objectsByID: UUIDMap<MJIntegrationObjectEntity>
     ): SourceRelationshipInfo[] {
         const relationships: SourceRelationshipInfo[] = [];
 
         for (const field of fields) {
             if (!field.RelatedIntegrationObjectID) continue;
 
-            const targetObj = allObjects.find(o => UUIDsEqual(o.ID, field.RelatedIntegrationObjectID));
+            const targetObj = objectsByID.Get(field.RelatedIntegrationObjectID);
             if (!targetObj) continue;
 
             relationships.push({

@@ -3,7 +3,7 @@ import { BaseEngine, BaseEnginePropertyConfig } from '../generic/baseEngine';
 import { BaseEntity } from '../generic/baseEntity';
 import { UserInfo } from '../generic/securityInfo';
 import { IMetadataProvider } from '../generic/interfaces';
-import { CacheChangedEvent } from '../generic/localCacheManager';
+import { CacheChangedEvent, LocalCacheManager } from '../generic/localCacheManager';
 
 /**
  * Regression coverage for the cache-payload type-poisoning defect.
@@ -245,5 +245,52 @@ describe('BaseEngine.OnExternalCacheChange ordering guard', () => {
         await only;
 
         expect((engine._items as MockEntity[]).map((r) => r.data.ID)).toEqual(['only']);
+    });
+});
+
+describe('BaseEngine.OnExternalCacheChange payload written under another schema', () => {
+    function makeEventWithHash(rows: Array<Record<string, unknown>>, schemaHash: string | undefined): CacheChangedEvent {
+        return {
+            Action: 'set',
+            Data: JSON.stringify({ results: rows, totalRowCount: rows.length, ...(schemaHash ? { schemaHash } : {}) }),
+        } as unknown as CacheChangedEvent;
+    }
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('reloads instead of loading rows whose schema hash differs from this engine\'s', async () => {
+        const { engine, provider } = setup();
+        const config = makeConfig();
+        vi.spyOn(LocalCacheManager.Instance, 'ComputeSchemaHash').mockReturnValue('current-hash');
+
+        await engine.OnExternalCacheChangeForTest(config, makeEventWithHash(PAYLOAD_ROWS, 'other-hash'));
+
+        expect(provider.GetEntityObject).not.toHaveBeenCalled();
+        expect(engine._items).toEqual([]);
+        expect(engine.loadSingleConfigCalls).toBe(1);
+    });
+
+    it('loads rows whose schema hash matches', async () => {
+        const { engine } = setup();
+        const config = makeConfig();
+        vi.spyOn(LocalCacheManager.Instance, 'ComputeSchemaHash').mockReturnValue('current-hash');
+
+        await engine.OnExternalCacheChangeForTest(config, makeEventWithHash(PAYLOAD_ROWS, 'current-hash'));
+
+        expect(engine._items).toHaveLength(2);
+        expect(engine.loadSingleConfigCalls).toBe(0);
+    });
+
+    it('loads rows from a payload without a schema hash', async () => {
+        const { engine } = setup();
+        const config = makeConfig();
+        vi.spyOn(LocalCacheManager.Instance, 'ComputeSchemaHash').mockReturnValue('current-hash');
+
+        await engine.OnExternalCacheChangeForTest(config, makeEventWithHash(PAYLOAD_ROWS, undefined));
+
+        expect(engine._items).toHaveLength(2);
+        expect(engine.loadSingleConfigCalls).toBe(0);
     });
 });

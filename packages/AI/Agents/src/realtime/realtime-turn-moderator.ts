@@ -76,7 +76,13 @@ interface ModeratorDecision {
  * moderator config from the Realtime agent type's `DefaultConfiguration` and runs the configured prompt.
  */
 export class RealtimeTurnModerator {
-    private readonly runner = new AIPromptRunner();
+    private _runner: AIPromptRunner | null = null;
+    private get runner(): AIPromptRunner {
+        if (!this._runner) {
+            this._runner = new AIPromptRunner();
+        }
+        return this._runner;
+    }
     /** AgentSessionID → co-agent `AIAgentRun` id (stable per session) — avoids a query per turn. `null` = looked up, none found. */
     private readonly sessionRunIdCache = new Map<string, string | null>();
     /** AgentID → resolved { role, mode } (stable per agent) — avoids re-resolving the cascade per turn. */

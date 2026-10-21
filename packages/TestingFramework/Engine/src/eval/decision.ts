@@ -43,7 +43,7 @@ export type DecisionKind =
 export type DecisionEncoding = 'envelope' | 'native' | 'text' | 'none';
 
 /** What calling a control-flow tool decides. Sub-agent entries carry the agent's name. */
-export type ControlToolRole = { kind: 'subAgent'; name: string } | { kind: 'payloadChange' } | { kind: 'chat' };
+export type ControlToolRole = { kind: 'subAgent'; name: string } | { kind: 'payloadChange' } | { kind: 'chat' } | { kind: 'taskComplete' };
 
 /** One action invocation, normalized across both encodings. */
 export interface ObservedAction {
@@ -316,6 +316,15 @@ export function isPlaceholderCall(calls: NonNullable<RawTurn['toolCalls']>, text
     return IsPlaceholderCall(calls, text);
 }
 
+/** complete_task declares its payload change as a JSON string; an object is accepted too. */
+function decodeCompletePayload(change: unknown): Record<string, unknown> | undefined {
+    let value = change;
+    if (typeof value === 'string') {
+        try { value = JSON.parse(value); } catch { return undefined; }
+    }
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
 /** Native-turn classification: control tools first (spec §8.1), then Actions, then payload-only. */
 function normalizeNativeTurn(turn: RawTurn, calls: NonNullable<RawTurn['toolCalls']>, text: string | undefined): ObservedDecision {
     const toActionName = (toolName: string): string => turn.toolNameMap?.[toolName] ?? toolName;
@@ -338,6 +347,13 @@ function normalizeNativeTurn(turn: RawTurn, calls: NonNullable<RawTurn['toolCall
     if (ask) {
         const message = typeof ask.arguments?.message === 'string' ? ask.arguments.message : undefined;
         return { ...base, kind: 'chat', actions: [], subAgents: [], message: message ?? text };
+    }
+    // complete_task is the native twin of the envelope's taskComplete (+ payloadChangeRequest).
+    const complete = calls.find((c) => role(c.name)?.kind === 'taskComplete');
+    if (complete) {
+        const message = typeof complete.arguments?.message === 'string' ? complete.arguments.message : undefined;
+        const payloadChange = decodeCompletePayload(complete.arguments?.payloadChangeRequest);
+        return { ...base, kind: 'taskComplete', taskComplete: true, actions: [], subAgents: [], message: message ?? text, payloadChange };
     }
     const payloadCall = calls.find((c) => role(c.name)?.kind === 'payloadChange');
     const payloadChange = payloadCall ? (payloadCall.arguments ?? {}) : undefined;

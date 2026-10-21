@@ -45,6 +45,11 @@
 // Type-only import from the pure @memberjunction/ai model layer — erased at runtime, so the
 // module keeps its framework-free / pure-transformation contract.
 import type { AIModelConfiguration, RealtimeTurnDetectionSettings } from '@memberjunction/ai';
+import {
+    AccumulateRealtimeChannelsConfig,
+    type RealtimeChannelDisplayPolicy,
+    type RealtimeChannelsConfig,
+} from '@memberjunction/ai-core-plus';
 
 /**
  * The MJ Authorization name that gates RUNTIME overrides on realtime session start:
@@ -129,33 +134,49 @@ export interface RealtimeNarrationConfig {
 }
 
 /**
- * Video configuration: whether the realtime session carries a synced VIDEO track (a talking-head /
- * avatar out, and the camera in) alongside audio. Absent / `enabled !== true` ⇒ audio-only (today's
- * behavior). The video track reuses the entire realtime contract — this just opts a co-agent into it
- * and names the avatar to use.
+ * Video configuration: whether the agent asks for a live avatar, which one, and whether it watches LiveKit meetings.
+ * Absent / `enabled !== true` ⇒ the agent asks for no avatar. The user's camera and screen share do not depend on it;
+ * they start only when the user turns them on.
  */
 export interface RealtimeVideoConfig {
     /**
-     * Whether the session should carry video. Default (absent / non-boolean): `false`. When `true`,
-     * resolution prefers a video-capable model and the client captures the camera + renders the
-     * model/avatar video; degrades to audio-only when no video-capable model resolves.
+     * Whether the agent asks for a live avatar. Default (absent / non-boolean): `false`. When `true`, and the call can
+     * show an avatar (a browser call, or a meeting whose host publishes it into the room), a session with no explicit
+     * model (no `preferredModelId` and no {@link RealtimeConfigSection.modelPreference}) takes the first realtime model
+     * that shows one; when none does, it keeps its default model, audio only. The avatar is the one {@link avatarId}
+     * names when it is set; otherwise the voiced agent's persona's, else the co-agent's.
+     *
+     * It does not turn on the camera: capture starts only when the user turns the camera or a screen share on.
      */
     enabled?: boolean;
     /**
-     * Preferred video model/avatar provider — an `MJ: AI Models` Name OR ID of a video-capable realtime
-     * model (e.g. a Runway avatar). Optional; absent ⇒ the default video-capable model is resolved.
+     * @deprecated Nothing reads it. Choose the model with {@link RealtimeConfigSection.modelPreference}; with
+     * {@link enabled} on and no model chosen, the session takes the first model that shows an avatar. A session whose
+     * configuration sets it logs one line naming the agent.
      */
     provider?: string;
     /**
-     * Provider-specific avatar/character identifier (e.g. a Runway preset or custom avatar id). OPAQUE
-     * — passed through to the matching video driver (its shape is a private pact with that driver).
+     * The avatar to show instead of the one the agents' personas give: the `APIName` of one of the model's Active Video
+     * persona bindings (`MJ: AI Persona Vendors`) on the session's vendor, matched without regard to case, such as
+     * Google's preset `Ben`. Read only when {@link enabled} is `true`, which the call's avatar picker (a runtime override)
+     * sets this key without and can't turn on: a picked avatar with the agent's setting off gives the call no avatar
+     * (reason `video-off`). A name with no such binding gives the call no avatar (reason `unknown-avatar`). The avatar's settings (`Kind`, `Resolution`,
+     * `Background`) are that binding's `VendorSettings.Avatar`.
      */
     avatarId?: string;
     /**
-     * Per-provider native video settings keyed by provider, merged into the matching driver's open
-     * config bag — an OPAQUE private pact with that driver (mirrors {@link RealtimeVoiceConfig.providers}).
+     * @deprecated Nothing reads it. An avatar's settings (`Kind`, `Resolution`, `Background`) are its persona binding's
+     * `VendorSettings.Avatar` (`MJ: AI Persona Vendors`, Video modality), which each driver maps onto its vendor. A
+     * session whose configuration sets it logs one line naming the agent.
      */
     providers?: Record<string, JSONObjectLike>;
+    /**
+     * Whether this agent watches LiveKit meetings: its bot reads the cameras and shared screens of the people who let
+     * agents see them, and the room offers everyone that choice. Default (absent / non-boolean): `false`. Set it on the
+     * VOICED agent (the Realtime type's schema does not allow `video` on the co-agent). Needs a model that takes video
+     * (Gemini 3.8 Live); on an audio-only model it does nothing.
+     */
+    watchMeetings?: boolean;  // case-violation-ok-legacy-back-compat: an authored JSON key, camelCase like the block's other keys
 }
 
 /**
@@ -327,6 +348,20 @@ export interface RealtimeConfigSection {
     directActionNames?: string[];
     /** Shorthand / flat alias: timeout for direct action execution in milliseconds. */
     directActionTimeoutMs?: number;
+    /**
+     * Which interactive channels the session gets, and how they are configured — the agent and app
+     * layers of channel scoping (the channel's code default sits beneath them; a host-declared channel
+     * is a default beneath them too). `include` turns a channel ON (the only way to get an `'opt-in'`
+     * one), `exclude` turns it OFF (a hard veto a host cannot lift), `config` is per-channel opaque
+     * configuration and `displayPolicy` a per-channel display override.
+     *
+     * Like `allowedAgents` this is ACCUMULATED across layers rather than array-replaced — a channel's
+     * on/off decision belongs to the most specific layer that mentions that channel, so an app's
+     * `exclude: ['Media']` must not erase the agent's `exclude: ['RemoteBrowser']`
+     * (see {@link AccumulateRealtimeChannelsConfig}). {@link ResolveEffectiveRealtimeConfig} populates
+     * this with the accumulated result.
+     */
+    channels?: RealtimeChannelsConfig;
 }
 
 /**
@@ -353,6 +388,13 @@ export interface RealtimeSessionTuningConfig {
     /** Per-session input-transcription model override (OpenAI-protocol providers). */
     inputTranscriptionModel?: string;
     /**
+     * The languages callers and the agent are expected to speak, as BCP-47 codes (e.g. `["en-US"]`).
+     * A hint for the live captions, not a lock. Without it, providers that caption by auto-detecting
+     * each utterance's language (Gemini Live) can caption English speech in another script. Gemini
+     * maps it to `languageCodes` on both caption streams; other providers scrub it.
+     */
+    transcriptionLanguages?: string[];
+    /**
      * Normalized turn-detection override (mode/eagerness/threshold/silence). Layers ABOVE the
      * model catalog's `ModelConfiguration.Realtime.TurnDetection` default and BELOW the runtime
      * bag — agents/apps refine what the catalog declares. Profiles translate the normalized
@@ -360,12 +402,26 @@ export interface RealtimeSessionTuningConfig {
      * so a shared config stays safe on every provider.
      */
     turnDetection?: RealtimeTurnDetectionSettings;
+    /**
+     * The longest an UNVERIFIED (anonymous or magic-link guest) realtime session may run, in seconds. A
+     * positive integer. This is an MJ session limit, not a provider knob: it is deliberately NOT projected
+     * onto the driver Config bag by {@link GetSessionTuningSettings}. It is read from the effective
+     * config by the server session service (the mid-session identity-verification work), which falls back
+     * to its own default when absent.
+     */
+    unverifiedMaxSeconds?: number;
+    /**
+     * The longest a VERIFIED realtime session may run, in seconds — the deadline a successful mid-session
+     * verification extends the session to. A positive integer; like {@link unverifiedMaxSeconds} it is an
+     * MJ session limit and never reaches the driver Config bag.
+     */
+    verifiedMaxSeconds?: number;
 }
 
 /**
  * Projects the effective config's `realtime.session` tuning section onto the FLAT Config-bag keys
  * the realtime drivers consume (`effortLevel`, `parallelToolCalls`, `mcpTools`,
- * `inputTranscriptionModel`). Returns `null` when the section is absent or contributes nothing —
+ * `inputTranscriptionModel`, `transcriptionLanguages`). Returns `null` when the section is absent or contributes nothing —
  * callers then skip the merge entirely, preserving the prior bag byte-for-byte.
  *
  * @param config The effective configuration.
@@ -388,6 +444,10 @@ export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | 
     }
     if (typeof tuning.inputTranscriptionModel === 'string' && tuning.inputTranscriptionModel.trim().length > 0) {
         bag['inputTranscriptionModel'] = tuning.inputTranscriptionModel.trim();
+    }
+    const languages = readLanguageCodes(tuning.transcriptionLanguages);
+    if (languages) {
+        bag['transcriptionLanguages'] = languages;
     }
     if (isPlainObject(tuning.turnDetection)) {
         bag['turnDetection'] = { ...tuning.turnDetection } as JSONObjectLike;
@@ -558,6 +618,10 @@ export function ParseRealtimeTypeConfiguration(json: string | null | undefined):
  * (Sage, Marketing Agent, …) carry its own persisted voice/model that the shared co-agent then speaks with;
  * it wins over the co-agent's defaults but yields to an explicit per-session runtime override.
  *
+ * One key is the agents' alone: the runtime override can't turn `realtime.video.enabled` on (it can turn it off), so a
+ * picked avatar (`realtime.video.avatarId`) shows only when the layers below it already have video on. A picked
+ * avatar's billed video is the agent's call, not the caller's.
+ *
  * @param typeDefaultJson The agent TYPE's `DefaultConfiguration` JSON (base layer).
  * @param agentJson The CO-AGENT's `TypeConfiguration` JSON (shared per-co-agent layer).
  * @param overridesJson Runtime overrides JSON (per-session layer; already authorization-gated by the caller).
@@ -584,7 +648,7 @@ export function ResolveEffectiveRealtimeConfig(
     const agentLayer = ParseRealtimeTypeConfiguration(agentJson);
     const targetLayer = ParseRealtimeTypeConfiguration(targetAgentJson);
     const appLayer = ParseRealtimeTypeConfiguration(appSettingsJson);
-    const overrideLayer = ParseRealtimeTypeConfiguration(overridesJson);
+    const overrideLayer = withoutVideoTurnedOn(ParseRealtimeTypeConfiguration(overridesJson));
 
     // Scalar fields: merge order = precedence (later wins):
     //   type-default < co-agent < target < app < runtime-override.
@@ -602,7 +666,37 @@ export function ResolveEffectiveRealtimeConfig(
         config.realtime.allowedAgents = allowed;
     }
 
+    // channels: accumulated per channel across all layers for the same reason — each layer's
+    // include/exclude is a decision about individual channels, not a replaceable list.
+    const channels = AccumulateRealtimeChannelsConfig(
+        [typeLayer, agentLayer, targetLayer, appLayer, overrideLayer].map(layer => realtimeSectionOf(layer)?.['channels'])
+    );
+    if (channels) {
+        config.realtime = config.realtime ?? {};
+        config.realtime.channels = channels;
+    }
+
     return config;
+}
+
+/**
+ * A runtime-override layer without a `realtime.video.enabled: true`, which only the layers below it may set (see
+ * {@link ResolveEffectiveRealtimeConfig}). The layer is copied, never changed; any other value of the key stays.
+ */
+function withoutVideoTurnedOn(layer: JSONObjectLike | null): JSONObjectLike | null {
+    const realtime = realtimeSectionOf(layer);
+    const video = realtime?.['video'];
+    if (!layer || !realtime || !isPlainObject(video) || video['enabled'] !== true) {
+        return layer;
+    }
+    const { enabled: _ignored, ...rest } = video;
+    return { ...layer, realtime: { ...realtime, video: rest } };
+}
+
+/** The raw `realtime` section of a parsed layer, or `undefined` when the layer has none. */
+function realtimeSectionOf(layer: JSONObjectLike | null | undefined): JSONObjectLike | undefined {
+    const section = layer?.['realtime'];
+    return isPlainObject(section) ? section : undefined;
 }
 
 /** Why something in an override payload will not survive {@link ResolveEffectiveRealtimeConfig}. */
@@ -645,6 +739,7 @@ const REALTIME_SECTION_KEY_ACCEPTS: { readonly [K in keyof Required<RealtimeConf
     turnTaking: isPlainObject,
     disclosure: (v) => v === 'silent' || v === 'mention' || v === 'hand-voice',
     allowedAgents: (v) => Array.isArray(v),
+    channels: isPlainObject,
     session: isPlainObject,
     directActions: isPlainObject,
     allowDirectActionInvocation: (v) => typeof v === 'boolean',
@@ -836,6 +931,14 @@ export function BuildAppRealtimeOverridesJson(
         Disclosure?: RealtimeDisclosurePolicy | null;
         Persona?: { Tone?: string | null; SpeakingStyle?: string | null } | null;
         ModelPreference?: string | null;
+        /** `AgentSettings.Realtime.Channels` — the app's channel scoping (see {@link RealtimeConfigSection.channels}). */
+        Channels?: {
+            Include?: string[] | null;
+            Exclude?: string[] | null;
+            Config?: Record<string, JSONObjectLike> | null;
+            DisplayPolicy?: Record<string, RealtimeChannelDisplayPolicy> | null;
+            RequireZeroDataRetentionFor?: Array<'state' | 'pixels'> | null;
+        } | null;
     } | null,
     relevantAgents?: RealtimeAllowedAgent[] | null
 ): string | null {
@@ -863,8 +966,34 @@ export function BuildAppRealtimeOverridesJson(
     if (relevantAgents && relevantAgents.length > 0) {
         realtime.allowedAgents = relevantAgents;
     }
+    const channels = mapAppChannels(appRealtime?.Channels);
+    if (channels) {
+        realtime.channels = channels;
+    }
 
     return Object.keys(realtime).length > 0 ? JSON.stringify({ realtime }) : null;
+}
+
+/**
+ * Maps the app's PascalCase `AgentSettings.Realtime.Channels` block onto the cascade's lower-case
+ * `channels` section. Wrong-typed members are dropped (the shared normalizer does the checking), and
+ * a block that contributes nothing yields `undefined` so the cascade is not given an empty section.
+ */
+function mapAppChannels(
+    channels: NonNullable<Parameters<typeof BuildAppRealtimeOverridesJson>[0]>['Channels']
+): RealtimeChannelsConfig | undefined {
+    if (!channels) {
+        return undefined;
+    }
+    return AccumulateRealtimeChannelsConfig([
+        {
+            include: channels.Include ?? undefined,
+            exclude: channels.Exclude ?? undefined,
+            config: channels.Config ?? undefined,
+            displayPolicy: channels.DisplayPolicy ?? undefined,
+            requireZeroDataRetentionFor: channels.RequireZeroDataRetentionFor ?? undefined,
+        },
+    ]);
 }
 
 /** Normalizes a merged raw config object into the typed, sanity-checked shape. */
@@ -996,12 +1125,40 @@ function normalizeSession(raw: unknown): RealtimeSessionTuningConfig | undefined
         tuning.inputTranscriptionModel = itModel.trim();
     }
 
+    const languages = readLanguageCodes(raw['transcriptionLanguages']);
+    if (languages) {
+        tuning.transcriptionLanguages = languages;
+    }
+
     const turnDetection = normalizeTurnDetection(raw['turnDetection']);
     if (turnDetection) {
         tuning.turnDetection = turnDetection;
     }
 
+    const unverifiedMaxSeconds = readPositiveInteger(raw['unverifiedMaxSeconds']);
+    if (unverifiedMaxSeconds !== undefined) {
+        tuning.unverifiedMaxSeconds = unverifiedMaxSeconds;
+    }
+    const verifiedMaxSeconds = readPositiveInteger(raw['verifiedMaxSeconds']);
+    if (verifiedMaxSeconds !== undefined) {
+        tuning.verifiedMaxSeconds = verifiedMaxSeconds;
+    }
+
     return Object.keys(tuning).length > 0 ? tuning : undefined;
+}
+
+/** The non-blank strings of an array, trimmed — or `undefined` when none remain (a lone string is not a list). */
+function readLanguageCodes(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+    const codes = value.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim());
+    return codes.length > 0 ? codes : undefined;
+}
+
+/** A finite, positive, whole number — or `undefined` for anything else (a limit of 0, -5 or 1.5 is a typo, not a limit). */
+function readPositiveInteger(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
 /**
@@ -1141,6 +1298,9 @@ function normalizeVideo(raw: unknown): RealtimeVideoConfig | null {
     }
     if (typeof raw['avatarId'] === 'string' && raw['avatarId'].trim().length > 0) {
         video.avatarId = raw['avatarId'].trim();
+    }
+    if (typeof raw['watchMeetings'] === 'boolean') {
+        video.watchMeetings = raw['watchMeetings'];
     }
 
     const rawProviders = raw['providers'];
@@ -1400,32 +1560,42 @@ export function BuildVoiceMannerSection(config: RealtimeCoAgentConfig | null | u
  * two are kept in lockstep by `realtime-convergence-drift.test.ts`); the
  * server-bridged hosts (LiveKit, Zoom/Teams) build it here so both funnel into the one override slot.
  *
- * Envelope: `{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}}}}`.
+ * Envelope: `{"realtime":{"modelPreference":"<id>","voice":{"default":{"voice":"<v>"}},"video":{"avatarId":"<a>"}}}`.
  *
  * The voice is filed PROVIDER-AGNOSTICALLY, which is what lets a host carry a voice at all: the vendor
  * is not known here (and on the default-model path is not known to the caller at any point before the
  * session is prepared), so naming one would be a guess. {@link GetProviderVoiceSettings} files this onto
  * whichever driver the framework resolves. See issue #3530.
  *
+ * A picked avatar leaves video to the agent: it shows only when the voiced agent's own video setting is on (a runtime
+ * override can't turn it on), and only when it names a Video binding on the resolved vendor. With the setting off the
+ * call says why (reason `video-off`).
+ *
  * @param modelId The `MJ: AI Models` Name or ID to prefer, or null/empty for none.
  * @param voice The provider-native voice id (e.g. `echo`), or null/empty for none.
+ * @param avatarId The avatar to ask for (a Video binding's `APIName`), or null/empty for none.
  * @returns The JSON string, or `null` when nothing was overridden (keeps the cascade at its lower layers).
  */
 export function BuildRealtimeOverridesJson(
     modelId?: string | null,
-    voice?: string | null
+    voice?: string | null,
+    avatarId?: string | null
 ): string | null {
     const m = modelId?.trim() ?? '';
     const v = voice?.trim() ?? '';
-    if (m.length === 0 && v.length === 0) {
+    const a = avatarId?.trim() ?? '';
+    if (m.length === 0 && v.length === 0 && a.length === 0) {
         return null;
     }
-    const realtime: { modelPreference?: string; voice?: { default: { voice: string } } } = {};
+    const realtime: { modelPreference?: string; voice?: { default: { voice: string } }; video?: { avatarId: string } } = {};
     if (m.length > 0) {
         realtime.modelPreference = m;
     }
     if (v.length > 0) {
         realtime.voice = { default: { voice: v } };
+    }
+    if (a.length > 0) {
+        realtime.video = { avatarId: a };
     }
     return JSON.stringify({ realtime });
 }
@@ -1439,6 +1609,36 @@ export function BuildRealtimeOverridesJson(
  */
 export function GetNarrationPaceMs(config: RealtimeCoAgentConfig | null | undefined): number | null {
     return config?.realtime?.narration?.paceMs ?? null;
+}
+
+/**
+ * Whether the effective configuration says the agent watches LiveKit meetings (`realtime.video.watchMeetings`). Only
+ * an explicit `true` counts; normalization already dropped any non-boolean value.
+ *
+ * @param config The effective configuration.
+ * @returns `true` only when the setting is on.
+ */
+export function GetWatchesMeetingVideo(config: RealtimeCoAgentConfig | null | undefined): boolean {
+    return config?.realtime?.video?.watchMeetings === true;
+}
+
+/** The deprecated `realtime.video` keys, which still parse but which nothing reads. */
+const DEPRECATED_VIDEO_KEYS: readonly ('provider' | 'providers')[] = ['provider', 'providers'];
+
+/**
+ * The deprecated `realtime.video` keys a resolved configuration sets ({@link RealtimeVideoConfig.provider},
+ * {@link RealtimeVideoConfig.providers}), as dotted paths, so a host can say they do nothing. The module stays pure:
+ * it reports them as data and the caller logs.
+ *
+ * @param config The normalized effective configuration.
+ * @returns The paths set, such as `realtime.video.provider`; empty when it sets neither.
+ */
+export function FindDeprecatedRealtimeVideoKeys(config: RealtimeCoAgentConfig | null | undefined): readonly string[] {
+    const video = config?.realtime?.video;
+    if (!video) {
+        return [];
+    }
+    return DEPRECATED_VIDEO_KEYS.filter((key) => video[key] !== undefined).map((key) => `realtime.video.${key}`);
 }
 
 /**

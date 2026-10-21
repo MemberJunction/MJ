@@ -1,5 +1,5 @@
 /**
- * search.checks.ts — the 'search' bundle (SR1–SR7), Domain 13 (Unified Search).
+ * search.checks.ts — the 'search' bundle (SR1–SR8), Domain 13 (Unified Search).
  *
  * Deterministic legs over the search decision-tree APIs from the Search Overview guide:
  *  - `EntityByName` (definition lookup — case/trim-insensitive, undefined-not-throw) vs
@@ -12,19 +12,21 @@
  *    active search providers) must return empty-success, never throw; sub-minimum-length
  *    queries short-circuit to empty success,
  *  - `SearchScopePermissionResolver` fail-closed semantics against REAL scope metadata,
- *  - the `GraphQLSearchClient` scope-list wire round-trip (Network transport only).
+ *  - the `GraphQLSearchClient` scope-list wire round-trip (Network transport only),
+ *  - `SearchParams.Audience` — a hydrated no-grant reader narrows the caller's results to a subset.
  *
  * The only DB rows this bundle can create are the `MJ: Search Execution Logs` audit rows the
  * SearchEngine writes per invocation — every query is prefixed with LOG_QUERY_PREFIX and the
  * bundle lifecycle Teardown sweeps those rows.
  */
-import { ProviderBase, Metadata, RunView } from '@memberjunction/core';
+import { ProviderBase, Metadata, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import type { EntitySearchResult, SearchEntityParams } from '@memberjunction/core';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import type { MJSearchExecutionLogEntity, MJSearchScopeEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLSearchClient } from '@memberjunction/graphql-dataprovider';
 import { SearchEngine, DefaultSearchScopePermissionResolver } from '@memberjunction/search-engine';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import type { SearchResultItem } from '@memberjunction/search-engine';
+import { Assert, AssertEqual, SEEDED_NOGRANT_EMAIL, SEED_FIXTURES_COMMAND } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -42,6 +44,38 @@ async function lexicalSearch(ctx: IntegrationCheckContext, entityName: string, s
         options: { mode: 'lexical', topK, contextUser: ctx.User }
     };
     return (ctx.Provider as unknown as ProviderBase).SearchEntity(params);
+}
+
+/**
+ * Load the seeded role-less user as a hydrated `UserInfo` (with its — empty — `UserRoles`) through the run's
+ * provider. This bundle runs on the client transport, where `UserCache` is not populated, so the principal is
+ * rebuilt from `MJ: Users` + `MJ: User Roles` the way permission-engine PE9 does. Undefined when not seeded.
+ */
+async function loadSeededNoGrantUser(ctx: IntegrationCheckContext): Promise<UserInfo | undefined> {
+    const rv = new RunView();
+    const users = await rv.RunView<{ ID: string; Name: string; Email: string; Type: string; IsActive: boolean }>({
+        EntityName: 'MJ: Users',
+        ExtraFilter: `Email='${SEEDED_NOGRANT_EMAIL}'`,
+        Fields: ['ID', 'Name', 'Email', 'Type', 'IsActive'],
+        ResultType: 'simple',
+    }, ctx.User);
+    Assert(users.Success, `MJ: Users lookup failed: ${users.ErrorMessage}`);
+    if (users.Results.length === 0) return undefined;
+    const row = users.Results[0];
+    const roles = await rv.RunView<{ UserID: string; RoleID: string }>({
+        EntityName: 'MJ: User Roles',
+        ExtraFilter: `UserID='${row.ID}'`,
+        Fields: ['UserID', 'RoleID'],
+        ResultType: 'simple',
+    }, ctx.User);
+    Assert(roles.Success, `MJ: User Roles lookup failed: ${roles.ErrorMessage}`);
+    const userRoles = roles.Results.map(r => new UserRoleInfo({ UserID: r.UserID, RoleID: r.RoleID }));
+    return new UserInfo(ctx.Provider, { ...row, UserRoles: userRoles });
+}
+
+/** The record a search result names, for comparing two result sets. */
+function resultKey(r: SearchResultItem): string {
+    return `${r.EntityName}|${NormalizeUUID(r.RecordID)}`;
 }
 
 export const SearchChecks: NamedCheck[] = [
@@ -223,6 +257,44 @@ export const SearchChecks: NamedCheck[] = [
             } else {
                 console.log(`      → ${wireScopes.length} scopes round-tripped with no phantoms`);
             }
+        }
+    },
+    {
+        Id: 'search.SR8',
+        Name: "SR8: SearchEngine.Search with an Audience — a no-grant reader leaves a subset of the caller's results and no storage hit",
+        Fn: async (ctx): Promise<void> => {
+            const noGrant = await loadSeededNoGrantUser(ctx);
+            if (!noGrant || UUIDsEqual(noGrant.ID, ctx.User.ID)) {
+                console.warn(`  ⚠ search.SR8 SKIPPED — seeded no-grant user '${SEEDED_NOGRANT_EMAIL}' not found (or is the context user); `
+                    + `seed with: ${SEED_FIXTURES_COMMAND}`);
+                return;
+            }
+            AssertEqual(noGrant.UserRoles.length, 0, `fixture invalid: '${SEEDED_NOGRANT_EMAIL}' has roles; it must have none`);
+            const engine = SearchEngine.Instance;
+            await engine.Config({}, ctx.User);
+
+            // The same query as the same caller, once alone and once with the no-grant user in the room. The
+            // prefix keeps both audit rows inside the teardown sweep; the audience gives the two a separate cache entry.
+            const query = `${LOG_QUERY_PREFIX} audience`;
+            const alone = await engine.Search({ Query: query, MaxResults: 20 }, ctx.User);
+            const room = await engine.Search({ Query: query, MaxResults: 20, Audience: { Readers: [noGrant] } }, ctx.User);
+            AssertEqual(alone.Success, true, `the caller-only search failed: ${alone.ErrorMessage ?? ''}`);
+            AssertEqual(room.Success, true, `the audience search failed: ${room.ErrorMessage ?? ''}`);
+
+            const aloneKeys = new Set(alone.Results.map(resultKey));
+            const widened = room.Results.filter(r => !aloneKeys.has(resultKey(r)));
+            Assert(widened.length === 0, `the audience WIDENED the result set by ${widened.length} result(s) (SECURITY)`);
+            Assert(!room.Results.some(r => r.ResultType === 'storage-file'),
+                'a storage-file result survived under an audience — storage permissions are caller-only and must be refused (SECURITY)');
+            if (alone.Results.length === 0) {
+                console.warn('  ⚠ search.SR8 NOTE — the caller-only search returned nothing in this deployment, so the subset and storage '
+                    + 'legs held trivially and the narrowing leg was not exercised (seed searchable data or providers to widen coverage)');
+                return;
+            }
+            // A reader with no roles has no entity read anywhere, so it removes every result, not just some.
+            AssertEqual(room.Results.length, 0,
+                `a reader with no roles must leave the room nothing: ${room.Results.length} of the caller's ${alone.Results.length} result(s) survived`);
+            console.log(`      → the no-grant reader narrowed ${alone.Results.length} caller result(s) to none`);
         }
     }
 ];

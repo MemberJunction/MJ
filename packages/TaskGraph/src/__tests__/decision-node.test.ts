@@ -1257,3 +1257,69 @@ describe('persisting a Decision step', () => {
         expect(DecisionPromptNameOf(TaskNode.Agent({ tempId: 'a', name: 'A', description: '', dependsOn: [] }, { agentName: 'X' }))).toBeNull();
     });
 });
+
+describe('multi-prerequisite conditional task gate evaluation', () => {
+    it('skips a task whose conditional edge evaluates to false even when it also has an unconditional prerequisite edge', async () => {
+        // Reproduces the Sales Demo with Conditional Image bug:
+        // Step 2 (Analyze) --[output.imageUrl != null]--> Step 5 (Add Chart Image)
+        // Step 3 (Create PDF) --[unconditional]--> Step 5 (Add Chart Image)
+        // Step 5 (Add Chart Image) --[unconditional]--> Step 6 (Finalize PDF)
+        // Step 3 (Create PDF) --[unconditional]--> Step 6 (Finalize PDF)
+        const rows = new Map<string, GraphRow>([
+            ['step-2', { ...workRow('step-2', 'Analyze Data'), Status: 'Complete', OutputPayload: JSON.stringify({ totalSales: 500000 }) }],
+            ['step-3', { ...workRow('step-3', 'Create PDF Document'), Status: 'Complete', OutputPayload: JSON.stringify({ handle: 'doc-1' }) }],
+            ['step-5', workRow('step-5', 'Add Chart Image (Conditional)')],
+            ['step-6', workRow('step-6', 'Finalize PDF')],
+        ]);
+        const edges: GraphEdgeRow[] = [
+            graphEdge('e-2-5', 'step-5', 'step-2', 'output.imageUrl != null'),
+            graphEdge('e-3-5', 'step-5', 'step-3', null),
+            graphEdge('e-5-6', 'step-6', 'step-5', null),
+            graphEdge('e-3-6', 'step-6', 'step-3', null),
+        ];
+        const provider: GraphProvider = {
+            GetEntityObject: async () => ({ InputPayload: null, AgentRunID: null, Load: async () => true }),
+            RunView: async (params: RunViewParams) => ({
+                Success: true,
+                Results: params.EntityName === 'MJ: Task Dependencies' ? edges : [...rows.values()],
+            }),
+        };
+        const graph: SupportGraph = { rows, provider, statusOf: (id) => rows.get(id)?.Status, triage: () => rows.get('step-2')! };
+        const dispatcher = dispatcherWith(decisionRunner({ Success: true }));
+
+        await runUntilSettled(dispatcher, graph, {});
+
+        expect(graph.statusOf('step-5')).toBe('Skipped');
+        expect(graph.statusOf('step-6')).toBe('Complete');
+    });
+
+    it('runs the multi-prerequisite conditional task when its conditional edge evaluates to true and its unconditional prerequisite completes', async () => {
+        const rows = new Map<string, GraphRow>([
+            ['step-2', { ...workRow('step-2', 'Analyze Data'), Status: 'Complete', OutputPayload: JSON.stringify({ totalSales: 2700000, imageUrl: 'https://example.com/chart.png' }) }],
+            ['step-3', { ...workRow('step-3', 'Create PDF Document'), Status: 'Complete', OutputPayload: JSON.stringify({ handle: 'doc-1' }) }],
+            ['step-5', workRow('step-5', 'Add Chart Image (Conditional)')],
+            ['step-6', workRow('step-6', 'Finalize PDF')],
+        ]);
+        const edges: GraphEdgeRow[] = [
+            graphEdge('e-2-5', 'step-5', 'step-2', 'output.imageUrl != null'),
+            graphEdge('e-3-5', 'step-5', 'step-3', null),
+            graphEdge('e-5-6', 'step-6', 'step-5', null),
+            graphEdge('e-3-6', 'step-6', 'step-3', null),
+        ];
+        const provider: GraphProvider = {
+            GetEntityObject: async () => ({ InputPayload: null, AgentRunID: null, Load: async () => true }),
+            RunView: async (params: RunViewParams) => ({
+                Success: true,
+                Results: params.EntityName === 'MJ: Task Dependencies' ? edges : [...rows.values()],
+            }),
+        };
+        const graph: SupportGraph = { rows, provider, statusOf: (id) => rows.get(id)?.Status, triage: () => rows.get('step-2')! };
+        const dispatcher = dispatcherWith(decisionRunner({ Success: true }));
+
+        await runUntilSettled(dispatcher, graph, {});
+
+        expect(graph.statusOf('step-5')).toBe('Complete');
+        expect(graph.statusOf('step-6')).toBe('Complete');
+    });
+});
+

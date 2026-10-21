@@ -17,6 +17,7 @@ import type { RingCentralTelephonyConfig } from '../types.js';
 import {
     RingCentralTelephonyService,
     SetRingCentralTelephonyService,
+    ReadSharedTelephonySettings,
 } from '../telephony/index.js';
 
 @RegisterClass(BaseServerExtension, 'RingCentralTelephonyExtension')
@@ -51,6 +52,7 @@ export class RingCentralTelephonyExtension extends BaseServerExtension {
             sipAuthorizationId: rawSettings.sipAuthorizationId ?? '',
             codec: rawSettings.codec,
             ignoreTlsCertErrors: rawSettings.ignoreTlsCertErrors,
+            ...ReadSharedTelephonySettings(rawSettings),
         };
         this.config = config;
 
@@ -83,12 +85,17 @@ export class RingCentralTelephonyExtension extends BaseServerExtension {
     }
 
     public async HealthCheck(): Promise<ExtensionHealthResult> {
+        // A registration that failed (or is stuck pending) leaves the service object in place but the line deaf, so
+        // "the service exists" is not health — the SIP registration is.
+        const registration = this.service?.GetRegistrationStatus();
         return {
             Name: 'RingCentralTelephonyExtension',
-            Healthy: !!this.service,
+            Healthy: !!this.service && registration?.Healthy === true,
             Details: {
                 configured: !!this.config,
                 sipUsername: this.config?.sipUsername,
+                registration: registration?.State ?? 'not-started',
+                ...(registration?.Reason ? { reason: registration.Reason } : {}),
             },
         };
     }

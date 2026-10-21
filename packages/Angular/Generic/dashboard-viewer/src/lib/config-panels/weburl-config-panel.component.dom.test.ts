@@ -29,6 +29,14 @@ describe('WebURLConfigPanelComponent (DOM)', () => {
     expect(queryAll(f, 'input[type="radio"][name="sandboxMode"]').length).toBe(3);
   });
 
+  it('leaves out the title field when the part dialog shows it', () => {
+    const f = renderComponentFixture(WebURLConfigPanelComponent, {
+      imports: [FormsModule], declarations: [WebURLConfigPanelComponent], inputs: { ShowCommonFields: false }, autoDetect: true,
+    });
+    expect(query(f, '#partTitle')).toBeNull();
+    expect(query(f, '#webUrl')).not.toBeNull();
+  });
+
   it('marks the standard radio option selected by default', () => {
     const f = render();
     const options = queryAll(f, '.radio-option');

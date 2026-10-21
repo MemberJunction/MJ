@@ -12,6 +12,7 @@
  * @module @memberjunction/record-set-processor-base
  */
 
+import type { IMetadataProvider } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 import { IRecordProcessor } from './interfaces';
 
@@ -39,6 +40,8 @@ export interface RecordProcessorBuildContext {
     RecordProcessName?: string;
     /** True when this is a dry-run (compute-only) pass — the factory should honor it when supported. */
     DryRun?: boolean;
+    /** The active metadata provider for building the processor. */
+    Provider?: IMetadataProvider;
     /**
      * The loaded Record Process record itself, as an opaque object. The engine passes the real
      * `MJRecordProcessEntity`; a factory that needs fields beyond those projected above can read them

@@ -11,6 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 import { DatabaseConnection, Introspector, DataSampler } from '../database/Database.js';
 import { AutoDocConnectionConfig } from '../types/driver.js';
+import type { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { TopologicalSorter } from '../database/TopologicalSorter.js';
 import { StateManager } from '../state/StateManager.js';
 import { IterationTracker } from '../state/IterationTracker.js';
@@ -21,11 +22,16 @@ import { MarkdownGenerator } from '../generators/MarkdownGenerator.js';
 import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
 import { SampleQueryGenerator } from '../generators/SampleQueryGenerator.js';
 import { DBAutoDocConfig } from '../types/config.js';
-import { DatabaseDocumentation, AnalysisRun } from '../types/state.js';
+import { DatabaseDocumentation, AnalysisRun, DataSamplingPhase, TableDefinition } from '../types/state.js';
 import { DiscoveryTriggerAnalyzer } from '../discovery/DiscoveryTriggerAnalyzer.js';
 import { DiscoveryEngine } from '../discovery/DiscoveryEngine.js';
 import { OrganicKeyDetector } from '../discovery/OrganicKeyDetector.js';
 import { DetectedOrganicKeysOutput } from '../discovery/OrganicKeyTranslator.js';
+import { PluginManager } from '../plugins/PluginManager.js';
+import type { AutoDocPluginHook } from '../plugins/types.js';
+
+/** Tables sampled between state saves; an interrupted run resumes from the last multiple. */
+const SAMPLING_CHECKPOINT_INTERVAL = 25;
 
 export interface AnalysisOptions {
   config: DBAutoDocConfig;
@@ -35,6 +41,8 @@ export interface AnalysisOptions {
   reanalyzeBelowConfidence?: number;
   /** Override max iterations from config for this run */
   maxIterations?: number;
+  /** Skip table data sampling pass */
+  skipSampling?: boolean;
 }
 
 export interface OrchestratorResult {
@@ -51,6 +59,7 @@ export class AnalysisOrchestrator {
   private onProgress: (message: string, data?: any) => void;
   private reanalyzeBelowConfidence?: number;
   private maxIterationsOverride?: number;
+  private skipSampling?: boolean;
 
   constructor(options: AnalysisOptions) {
     this.config = options.config;
@@ -58,6 +67,7 @@ export class AnalysisOrchestrator {
     this.onProgress = options.onProgress || (() => {});
     this.reanalyzeBelowConfidence = options.reanalyzeBelowConfidence;
     this.maxIterationsOverride = options.maxIterations;
+    this.skipSampling = options.skipSampling;
   }
 
   /**
@@ -107,6 +117,13 @@ export class AnalysisOrchestrator {
       stateManager.updateSummary(state);
       await stateManager.save(state);
 
+      // Load plugins (built-ins + config entries). An unknown plugin name fails the run here.
+      const plugins = new PluginManager();
+      await plugins.Load(this.config.plugins);
+      const runHook = (hook: AutoDocPluginHook): Promise<void> =>
+        this.runPluginHook(plugins, hook, state, stateManager, runFolder, db);
+      await runHook('PreRun');
+
       // Connect to database
       this.onProgress('Connecting to database');
       const driverConfig: AutoDocConnectionConfig = {
@@ -133,6 +150,7 @@ export class AnalysisOrchestrator {
         throw new Error(`Database connection failed: ${testResult.message}`);
       }
       this.onProgress('Connected to database', { database: this.config.database.database });
+      state.database.provider = driverConfig.provider;
 
       // Introspect database (unless resuming with existing schema data)
       if (!this.resumeFromState || state.schemas.length === 0) {
@@ -154,33 +172,11 @@ export class AnalysisOrchestrator {
         stateManager.updateSummary(state);
         await stateManager.save(state);
 
-        // Analyze data
-        this.onProgress('Analyzing table data');
-        const sampler = new DataSampler(driver, this.config.analysis);
-        let samplingErrors = 0;
-        for (const schema of schemas) {
-          for (const table of schema.tables) {
-            try {
-              await sampler.analyzeTable(schema.name, table.name, table.columns);
-            } catch (error) {
-              samplingErrors++;
-              const errorMsg = `Warning: Failed to analyze data for ${schema.name}.${table.name}: ${(error as Error).message}`;
-              console.error(errorMsg);
-              this.onProgress(errorMsg, { schema: schema.name, table: table.name, error: (error as Error).message });
-              // Continue with next table - partial data better than no data
-            }
-          }
-        }
-        this.onProgress('Data analysis complete', {
-          tablesAnalyzed: schemas.reduce((sum, s) => sum + s.tables.length, 0) - samplingErrors,
-          errors: samplingErrors
-        });
-
-        // Save state after sampling
-        stateManager.updateSummary(state);
-        await stateManager.save(state);
-
       }
+      await this.loadExistingIndexes(state, db.getDriver(), stateManager);
+      await runHook('AfterIntrospection');
+
+      await this.sampleTableData(state, db.getDriver(), stateManager);
 
       // Relationship Discovery Phase (if enabled)
       // Runs on both fresh and resumed runs; resumes from partial progress if interrupted
@@ -215,6 +211,7 @@ export class AnalysisOrchestrator {
             Config: this.config.analysis.relationshipDiscovery,
             AiConfig: this.config.ai,
             schemas: state.schemas,
+            SeedContext: state.seedContext ?? this.config.seedContext,
             OnProgress: this.onProgress,
             OnCheckpoint: async (phase) => {
               state.phases.keyDetection = phase;
@@ -266,6 +263,7 @@ export class AnalysisOrchestrator {
       } else if (discoveryComplete) {
         this.onProgress('Relationship discovery: using completed results from prior run');
       }
+      await runHook('AfterDiscovery');
 
       // Topological sort
       this.onProgress('Computing dependency graph');
@@ -279,7 +277,7 @@ export class AnalysisOrchestrator {
       await promptEngine.initialize();
 
       const iterationTracker = new IterationTracker();
-      const analysisEngine = new AnalysisEngine(this.config, promptEngine, stateManager, iterationTracker, this.onProgress);
+      const analysisEngine = new AnalysisEngine(this.config, promptEngine, stateManager, iterationTracker, this.onProgress, db.getDriver());
 
       // Create analysis run
       const run = stateManager.createAnalysisRun(
@@ -344,6 +342,7 @@ export class AnalysisOrchestrator {
           this.onProgress('Analysis converged');
         }
       }
+      await runHook('AfterDescriptions');
 
       // Sanity checks
       // FUTURE FEATURE: Schema/cross-schema sanity checks disabled.
@@ -381,6 +380,7 @@ export class AnalysisOrchestrator {
         stateManager.updateSummary(state);
         await stateManager.save(state);
       }
+      await runHook('AfterPruning');
 
       // Complete run
       if (!converged) {
@@ -406,7 +406,14 @@ export class AnalysisOrchestrator {
       // fed to the additionalSchemaInfo generator so CodeGen writes the
       // EntityOrganicKey / EntityOrganicKeyRelatedEntity metadata.
       let organicKeyOutput: DetectedOrganicKeysOutput | undefined;
-      if (this.config.analysis.organicKeyDetection?.enabled) {
+      const hasStatistics = state.schemas.some(schema => schema.tables.some(table => this.tableHasStatistics(table)));
+      if (this.config.analysis.organicKeyDetection?.enabled && !hasStatistics) {
+        // The semantic prefilter's cardinality gate only applies to columns that carry statistics;
+        // without any, every column would become a candidate and the normalizer fan-out is unbounded.
+        const warning = 'Organic-key detection skipped: it needs column statistics and no table has been sampled';
+        console.warn(warning);
+        this.onProgress(warning);
+      } else if (this.config.analysis.organicKeyDetection?.enabled) {
         this.onProgress('Running organic-key detection');
         try {
           const detector = new OrganicKeyDetector(
@@ -430,6 +437,9 @@ export class AnalysisOrchestrator {
           this.onProgress(`Organic-key detection failed (continuing): ${(err as Error).message}`);
         }
       }
+
+      // Last plugin hook, while the database connection is still open
+      await runHook('PostRun');
 
       // Final state update
       stateManager.updateSummary(state);
@@ -489,9 +499,68 @@ export class AnalysisOrchestrator {
   }
 
   /**
+   * Runs one plugin hook and persists whatever the plugins recorded. A no-op when no plugins
+   * are loaded, so runs without plugins write exactly the state files they did before.
+   */
+  private async runPluginHook(
+    plugins: PluginManager,
+    hook: AutoDocPluginHook,
+    state: DatabaseDocumentation,
+    stateManager: StateManager,
+    runFolder: string,
+    db: DatabaseConnection | undefined
+  ): Promise<void> {
+    if (plugins.Plugins.length === 0) {
+      return;
+    }
+    this.onProgress(`Running plugins: ${hook}`);
+    await plugins.RunHook(hook, {
+      State: state,
+      Config: this.config,
+      Driver: db?.getDriver(),
+      RunFolder: runFolder,
+      Log: (message: string) => this.onProgress(message)
+    });
+    stateManager.updateSummary(state);
+    await stateManager.save(state);
+  }
+
+  /**
+   * Stores each table's existing indexes in the state so the LLM passes can use them as key
+   * evidence. Runs on resumed runs too, for tables whose indexes were never read.
+   */
+  private async loadExistingIndexes(
+    state: DatabaseDocumentation,
+    driver: BaseAutoDocDriver,
+    stateManager: StateManager
+  ): Promise<void> {
+    if (this.config.analysis.useExistingIndexes === false) {
+      return;
+    }
+    const schemas = state.schemas.filter((s) => s.tables.some((t) => t.indexes === undefined));
+    if (schemas.length === 0) {
+      return;
+    }
+    this.onProgress('Reading existing indexes');
+    const failed = await new Introspector(driver).LoadIndexes(schemas);
+    for (const f of failed) {
+      this.onProgress(`Warning: could not read indexes for schema ${f.SchemaName}: ${f.Error}`, f);
+    }
+    // Totals cover every table in the state, so a resumed run also counts tables loaded earlier.
+    const allTables = state.schemas.flatMap((s) => s.tables);
+    this.onProgress('Existing indexes loaded', {
+      tables: allTables.filter((t) => t.indexes !== undefined).length,
+      indexes: allTables.reduce((sum, t) => sum + (t.indexes?.length ?? 0), 0),
+      newlyLoadedTables: schemas.flatMap((s) => s.tables).filter((t) => t.indexes !== undefined).length
+    });
+    stateManager.updateSummary(state);
+    await stateManager.save(state);
+  }
+
+  /**
    * Load existing state and prepare for resumption
    */
-  private async loadAndMergeState(
+  protected async loadAndMergeState(
     resumePath: string,
     stateManager: StateManager
   ): Promise<DatabaseDocumentation> {
@@ -502,6 +571,103 @@ export class AnalysisOrchestrator {
     existingState.resumedFromFile = resumePath;
 
     return existingState;
+  }
+
+  /**
+   * Sample table data (row counts, distinct counts, sample values) into the state.
+   *
+   * A fresh run samples every table. A resume samples only the tables whose columns carry no
+   * statistics, so an interrupted pass continues from its last checkpoint — unless the state records
+   * that its run skipped sampling, in which case the resume honours that choice.
+   */
+  private async sampleTableData(state: DatabaseDocumentation, driver: BaseAutoDocDriver, stateManager: StateManager): Promise<void> {
+    const totalTables = state.schemas.reduce((sum, s) => sum + s.tables.length, 0);
+    const previous = state.phases.dataSampling;
+    const skipRequested = this.skipSampling === true || this.config.analysis.skipSampling === true;
+    const skipInherited = this.resumeFromState != null && previous?.status === 'skipped';
+
+    if (skipRequested || skipInherited) {
+      this.onProgress(skipInherited && !skipRequested
+        ? 'Table data sampling skipped (the resumed run skipped it; pass no --resume, or run analyze without --skip-sampling on a fresh run, to sample)'
+        : 'Table data sampling skipped');
+      state.phases.dataSampling = {
+        status: 'skipped',
+        startedAt: previous?.startedAt ?? new Date().toISOString(),
+        sampledTables: previous?.sampledTables ?? 0,
+        totalTables,
+      };
+      return;
+    }
+
+    const pending = state.schemas
+      .flatMap(schema => schema.tables.map(table => ({ schema, table })))
+      .filter(({ table }) => !this.resumeFromState || !this.tableHasStatistics(table));
+
+    if (pending.length === 0) {
+      this.onProgress('Table data already sampled', { tables: totalTables });
+      state.phases.dataSampling = {
+        status: 'completed',
+        startedAt: previous?.startedAt ?? new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        sampledTables: totalTables,
+        totalTables,
+      };
+      return;
+    }
+    if (this.resumeFromState && pending.length < totalTables) {
+      this.onProgress(`Resuming table data sampling: ${pending.length} of ${totalTables} tables have no statistics yet`, {
+        pending: pending.length, total: totalTables
+      });
+    }
+
+    const phase: DataSamplingPhase = {
+      status: 'partial',
+      startedAt: previous?.startedAt ?? new Date().toISOString(),
+      sampledTables: totalTables - pending.length,
+      totalTables,
+    };
+    state.phases.dataSampling = phase;
+
+    this.onProgress('Analyzing table data');
+    const sampler = new DataSampler(driver, this.config.analysis);
+    let samplingErrors = 0;
+    let tableIndex = 0;
+    for (const { schema, table } of pending) {
+      tableIndex++;
+      this.onProgress(`Sampling table data [${tableIndex}/${pending.length}]: ${schema.name}.${table.name}`);
+      try {
+        await sampler.analyzeTable(schema.name, table.name, table.columns);
+        phase.sampledTables++;
+      } catch (error) {
+        samplingErrors++;
+        const errorMsg = `Warning: Failed to analyze data for ${schema.name}.${table.name}: ${(error as Error).message}`;
+        console.error(errorMsg);
+        this.onProgress(errorMsg, { schema: schema.name, table: table.name, error: (error as Error).message });
+        // Continue with next table - partial data better than no data
+      }
+
+      // Checkpoint so an interrupted run resumes from here instead of from the start
+      if (tableIndex % SAMPLING_CHECKPOINT_INTERVAL === 0) {
+        stateManager.updateSummary(state);
+        await stateManager.save(state);
+      }
+    }
+    this.onProgress('Data analysis complete', {
+      tablesAnalyzed: pending.length - samplingErrors,
+      errors: samplingErrors
+    });
+
+    // A table whose sampling failed carries no statistics, so a later --resume picks it up again;
+    // the phase stays 'partial' so the state file says so instead of claiming a full pass.
+    phase.status = samplingErrors === 0 ? 'completed' : 'partial';
+    phase.completedAt = new Date().toISOString();
+    stateManager.updateSummary(state);
+    await stateManager.save(state);
+  }
+
+  /** A table counts as sampled once any of its columns carries statistics. */
+  private tableHasStatistics(table: TableDefinition): boolean {
+    return table.columns.some(column => column.statistics !== undefined);
   }
 
   /**

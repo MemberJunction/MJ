@@ -132,18 +132,6 @@ export interface LLMConformanceSuiteConfig {
      */
     NonStreamingFailureMode: 'throws' | 'failedResult';
 
-    /**
-     * What happens when a STREAMING request is made with an already-aborted token. Required when
-     * `SupportsStreaming` is true.
-     *  - 'resolvesCancelled': the driver detects the pre-abort itself (empty stream + cancelled
-     *    finalize) and the promise resolves with the documented cancelled shape (Groq, Cerebras).
-     *  - 'rejectsErrorResult': createStreamingRequest throws (driver pre-check or SDK abort
-     *    error), and BaseLLM's outer catch — which does NOT special-case cancellation — rejects
-     *    with a generic statusText:'error' ChatResult instead of the cancelled shape (OpenAI
-     *    family, Mistral, Ollama, Azure). Pinned under a `[KNOWN DEVIATION]` test name.
-     */
-    PreAbortedStreamingBehavior?: 'resolvesCancelled' | 'rejectsErrorResult';
-
     /** Program the vendor mock: the next non-streaming call succeeds with this content + usage. */
     ScriptNonStreamingSuccess: (content: string, usage: ExpectedUsageCounts) => void;
 
@@ -253,12 +241,6 @@ function expectChatResultRejection(settled: SettledChat): ChatResult {
  * Registers a full `describe` block — call it at the top level of a provider test file.
  */
 export function RunLLMConformanceSuite(config: LLMConformanceSuiteConfig): void {
-    if (config.SupportsStreaming && !config.PreAbortedStreamingBehavior) {
-        throw new Error(
-            `LLM conformance suite for ${config.ProviderName}: PreAbortedStreamingBehavior is required when SupportsStreaming is true`
-        );
-    }
-
     const declaredDeviations = config.KnownDeviations ?? [];
     const queriedKinds = new Set<LLMConformanceDeviationKind>();
     const hasDeviation = (kind: LLMConformanceDeviationKind): boolean => {
@@ -512,8 +494,8 @@ export function RunLLMConformanceSuite(config: LLMConformanceSuiteConfig): void 
                 const result = await llm.ChatCompletion(buildChatParams(controller.signal));
 
                 expect(result.success).toBe(false);
-                expect(result.statusText.toLowerCase()).toBe('cancelled');
-                expect(result.errorInfo).toBeDefined();
+                expect(result.statusText).toBe('cancelled');
+                expect(result.errorInfo).toMatchObject({ errorType: 'Cancelled', severity: 'Fatal', canFailover: false });
                 expect(result.data.choices).toHaveLength(0);
             });
 
@@ -530,8 +512,8 @@ export function RunLLMConformanceSuite(config: LLMConformanceSuiteConfig): void 
 
                     expect(result).toBeInstanceOf(ChatResult);
                     expect(result.success).toBe(false);
-                    expect(result.statusText.toLowerCase()).toBe('cancelled');
-                    expect(result.errorInfo).toBeDefined();
+                    expect(result.statusText).toBe('cancelled');
+                    expect(result.errorInfo).toMatchObject({ errorType: 'Cancelled', severity: 'Fatal', canFailover: false });
                     expect(result.data.choices).toHaveLength(0);
                     // Prove the abort really happened mid-stream: the pre-abort chunk flowed.
                     expect(recorder.ContentCalls.some((c) => c.Chunk === CANCEL_CHUNK && !c.IsComplete)).toBe(true);
@@ -541,43 +523,22 @@ export function RunLLMConformanceSuite(config: LLMConformanceSuiteConfig): void 
                     expect(recorder.ErrorCalls).toHaveLength(0);
                 });
 
-                if (config.PreAbortedStreamingBehavior === 'resolvesCancelled') {
-                    it('resolves a cancelled ChatResult when the token is aborted before the stream starts', async () => {
-                        const controller = new AbortController();
-                        controller.abort();
-                        config.ScriptStreamingSuccess(STREAMING_CHUNKS, STREAMING_USAGE);
-                        const recorder = createStreamingRecorder();
-                        const params = buildChatParams(controller.signal);
-                        params.streaming = true;
-                        params.streamingCallbacks = recorder.Callbacks;
+                it('resolves a cancelled ChatResult when the token is aborted before the stream starts', async () => {
+                    const controller = new AbortController();
+                    controller.abort();
+                    config.ScriptStreamingSuccess(STREAMING_CHUNKS, STREAMING_USAGE);
+                    const recorder = createStreamingRecorder();
+                    const params = buildChatParams(controller.signal);
+                    params.streaming = true;
+                    params.streamingCallbacks = recorder.Callbacks;
 
-                        const result = await llm.ChatCompletion(params);
+                    const result = await llm.ChatCompletion(params);
 
-                        expect(result.success).toBe(false);
-                        expect(result.statusText.toLowerCase()).toBe('cancelled');
-                        expect(result.data.choices).toHaveLength(0);
-                    });
-                } else {
-                    it("[KNOWN DEVIATION] a pre-aborted streaming request rejects with a generic statusText='error' ChatResult instead of resolving the cancelled shape", async () => {
-                        // BaseLLM's outer streaming catch does not special-case cancellation, so a
-                        // createStreamingRequest that throws on a pre-aborted token surfaces as a
-                        // generic 'error' rejection rather than the documented cancelled result.
-                        const controller = new AbortController();
-                        controller.abort();
-                        config.ScriptStreamingSuccess(STREAMING_CHUNKS, STREAMING_USAGE);
-                        const recorder = createStreamingRecorder();
-                        const params = buildChatParams(controller.signal);
-                        params.streaming = true;
-                        params.streamingCallbacks = recorder.Callbacks;
-
-                        const settled = await settle(llm.ChatCompletion(params));
-
-                        const rejection = expectChatResultRejection(settled);
-                        expect(rejection.success).toBe(false);
-                        expect(rejection.statusText).toBe('error');
-                        expect(recorder.CompleteCalls).toHaveLength(0);
-                    });
-                }
+                    expect(result.success).toBe(false);
+                    expect(result.statusText).toBe('cancelled');
+                    expect(result.errorInfo?.errorType).toBe('Cancelled');
+                    expect(result.data.choices).toHaveLength(0);
+                });
             }
         });
 

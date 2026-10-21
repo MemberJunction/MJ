@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RecordProcessExecutor } from "@memberjunction/record-set-processor";
+import { Metadata } from "@memberjunction/core";
 import { type RecordProcessScopeOverride } from "@memberjunction/core-entities";
 
 /**
@@ -15,6 +16,8 @@ import { type RecordProcessScopeOverride } from "@memberjunction/core-entities";
  *     / `{Kind:'view',ViewID}` / `{Kind:'list',ListID}` / `{Kind:'filter',Filter}`). Omit to use the
  *     process's stored Scope.
  *  - `DryRun` (Input, optional) — when true, compute changes without writing (FieldRules work type).
+ *  - `OverwriteHumanValues` (Input, optional, default false) — when true, write-back overwrites values a person
+ *     entered and retires their Human Feature Values; by default they are kept.
  *  - `ProcessRunID` / `Processed` / `Succeeded` / `Errored` / `Skipped` (Output) — the run summary.
  *
  * @example
@@ -49,12 +52,15 @@ export class RunRecordProcessAction extends BaseAction {
             }
 
             const dryRun = this.getBooleanParam(params, 'dryrun', false);
+            const overwriteHumanValues = this.getBooleanParam(params, 'overwritehumanvalues', false);
 
             const result = await new RecordProcessExecutor().RunByID(recordProcessID, {
-                contextUser: params.ContextUser,
-                scope,
-                dryRun,
-                triggeredBy: 'OnDemand',
+                ContextUser: params.ContextUser,
+                Provider: params.Provider || Metadata.Provider, // global-provider-ok: the RunActionParams.Provider contract's documented fallback
+                Scope: scope,
+                DryRun: dryRun,
+                OverwriteHumanValues: overwriteHumanValues,
+                TriggeredBy: 'OnDemand',
             });
 
             this.pushOutput(params, 'ProcessRunID', result.ProcessRunID);

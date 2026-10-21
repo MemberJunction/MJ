@@ -1,13 +1,13 @@
 # MJ Explorer · Application Sitemap
 
-> **Source:** generated from `metadata/applications/*.json` on 2026-05-08.
+> **Source:** generated from `metadata/applications/*.json` on 2026-05-08; the Dashboards app was added on 2026-09-24.
 > **Companion to:** [`plans/explorer-chrome-conventions.md`](explorer-chrome-conventions.md) (the chrome rules), [`plans/explorer-ia-progress.md`](explorer-ia-progress.md) (migration progress).
 >
 > **Reading order:** start with the at-a-glance map below, then the table, then drill into any group that matters for your task. Cross-cutting paths (record viewer, settings, search) live at the bottom because they don't appear in nav metadata.
 
 ## At a glance
 
-**20 apps · ~60 nav-item resources** (plus the universal record-viewer route and Settings, which aren't enumerated in app metadata).
+**21 apps · ~61 nav-item resources** (plus the universal record-viewer route and Settings, which aren't enumerated in app metadata).
 
 ```mermaid
 mindmap
@@ -16,6 +16,7 @@ mindmap
       Home
       Chat
       Data Explorer
+      Dashboards
       Lists
     AI & Knowledge
       AI
@@ -45,7 +46,8 @@ Sorted by user-facing display order (`DefaultSequence`). Sub-page counts are nav
 |---|---|---|---|---|---|
 | -1 | **Home** | 🏠 fa-home | 1 | ✅ | Personalized landing — quick access, pinned items, app launcher |
 | 1 | **Chat** | 💬 fa-comments | 3 | ✅ | Agent conversations, artifact collections, tasks |
-| 2 | **Data Explorer** | 🧭 fa-compass | 3 | ✅ | Card/grid/relationship views across entities; query + dashboard browsers |
+| 2 | **Data Explorer** | 🧭 fa-compass | 2 | ✅ | Card/grid/relationship views across entities; query browser |
+| 3 | **Dashboards** | 🎛 fa-gauge-high | 2 | ✅ | Library, Categories |
 | 50 | **Lists** | ✅ fa-list-check | 3 | ✅ | User-defined collections of records, with bulk operations |
 | 999 | **Admin** | 🔧 fa-screwdriver-wrench | 4 | — | Identity, schema, monitoring, dev tools — aggregate admin |
 | 1000 | **Actions** | ⚡ fa-bolt | 3 | ✅ | Workflow actions; overview, hierarchical explorer, run monitor |
@@ -66,7 +68,7 @@ Sorted by user-facing display order (`DefaultSequence`). Sub-page counts are nav
 
 Format: `Nav label` *(driver class)* — pages with *(default)* are what loads when you click the app from the launcher.
 
-### Core (the 4 default user apps)
+### Core (the 5 default user apps)
 
 #### 🏠 Home
 > Personalized home screen with quick access to all applications.
@@ -85,7 +87,12 @@ Format: `Nav label` *(driver class)* — pages with *(default)* are what loads w
 
 - `Data` *(DataExplorerResource)* — **(default)**
 - `Queries` *(QueryBrowserResource)*
-- `Dashboards` *(DashboardBrowserResource)*
+
+#### 🎛 Dashboards
+> Every dashboard you own or that is shared with you, in one place.
+
+- `Library` *(DashboardBrowserResource)* — **(default)**
+- `Categories` *(DashboardsCategoriesResource)*
 
 #### ✅ Lists
 > Manage user-defined collections of records across the system.
@@ -229,7 +236,7 @@ These pages are reachable from anywhere in the app and don't appear in any app's
 
 When you look at the screenshot run side-by-side with this sitemap:
 
-1. **Sequence ≠ importance.** Apps with `DefaultSequence > 1000` are admin/internal; the four defaults (Home/Chat/Data Explorer/Lists/Testing/Actions/Scheduling) are what most users actually live in.
+1. **Sequence ≠ importance.** Apps with `DefaultSequence > 1000` are admin/internal; the defaults (Home/Chat/Data Explorer/Dashboards/Lists/Testing/Actions/Scheduling) are what most users actually live in.
 2. **Each app has its own color** (per `metadata.Color`), but the **page-header icon color is unified to `--mj-brand-primary`** — that's intentional, per the IA work.
 3. **Documented chrome exceptions** are deliberately structurally different — see [`plans/explorer-chrome-conventions.md`](explorer-chrome-conventions.md#9-documented-exceptions) for the canonical list. Single-page exceptions include Home / Component Studio / Data Explorer / Query Browser / AI Overview / AI Analytics body. Shell-with-left-nav sub-pages (explorer-settings, APIKeys' internal tabs) are deferred pending the Section 10 decision.
 4. **Admin's 4 nav items aggregate further sub-tabs internally** — when we audit Admin, each landing screen will show its own internal navigation. Drilling in would yield more screenshots than what the metadata suggests.
@@ -237,10 +244,10 @@ When you look at the screenshot run side-by-side with this sitemap:
 
 ## Counting summary
 
-- **Apps**: 20
-- **Nav-item resources** (sub-pages): 60 unique driver classes across the 20 apps
-- **Apps marked `DefaultForNewUser: true`**: 8 (Home, Chat, Data Explorer, Lists, Actions, Scheduling, Testing, AI)
+- **Apps**: 21
+- **Nav-item resources** (sub-pages): 61 unique driver classes across the 21 apps
+- **Apps marked `DefaultForNewUser: true`**: 9 (Home, Chat, Data Explorer, Dashboards, Lists, Actions, Scheduling, Testing, AI)
 - **Apps with NO nav items** (special shells): 1 (Component Studio)
 - **Apps with 1 nav item** (single-page apps): 2 (Home, File Browser)
-- **Apps with 2–4 nav items**: 9
+- **Apps with 2–4 nav items**: 10
 - **Apps with 5+ nav items**: 8 (Communication 5, Testing 5, Credentials 5, AI 8, Knowledge Hub 7, Version History 4… AI is the densest)

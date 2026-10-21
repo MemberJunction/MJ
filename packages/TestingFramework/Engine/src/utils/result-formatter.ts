@@ -314,6 +314,13 @@ function escapeCSV(value: string): string {
     return value;
 }
 
+/** Mean score of executed runs. Skipped runs are left out. No executed run scores 0. */
+export function MeanExecutedScore(results: { status: string; score: number }[]): number {
+    const executed = results.filter(result => result.status !== 'Skipped');
+    if (executed.length === 0) return 0;
+    return executed.reduce((sum, result) => sum + result.score, 0) / executed.length;
+}
+
 /**
  * Generate summary statistics from multiple test results.
  *
@@ -341,8 +348,7 @@ export function GenerateSummaryStatistics(results: TestRunResult[]): {
     const executed = results.filter(r => r.status !== 'Skipped');
     const passRate = executed.length > 0 ? passedTests / executed.length : 0;
 
-    const totalScore = executed.reduce((sum, r) => sum + r.score, 0);
-    const averageScore = executed.length > 0 ? totalScore / executed.length : 0;
+    const averageScore = MeanExecutedScore(results);
 
     const totalDuration = results.reduce((sum, r) => sum + r.durationMs, 0);
     const totalCost = results.reduce((sum, r) => sum + r.totalCost, 0);

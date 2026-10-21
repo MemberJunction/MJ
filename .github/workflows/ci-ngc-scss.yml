@@ -21,6 +21,10 @@ on:
       - '.github/scripts/ci/ngc-scss-allowlist.txt'
       - '.github/workflows/ci-ngc-scss.yml'
 
+# Least-privilege token: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   check-ngc-scss:
     name: Check ngc-only packages for Sass in styleUrls

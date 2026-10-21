@@ -117,20 +117,14 @@ export class MJAccordionBodyDirective {
       [class.mj-accordion-panel--fill]="Fill"
       [attr.data-variant]="Variant !== 'default' ? Variant : null">
       <div class="mj-accordion-header-row">
-        <button class="mj-accordion-header" type="button"
-          [id]="HeaderId"
-          [attr.aria-expanded]="Expanded"
-          [attr.aria-controls]="BodyId"
-          [disabled]="Disabled"
-          (click)="Toggle()">
-          <span class="mj-accordion-title">
-            @if (titleTemplate) {
-              <ng-container [ngTemplateOutlet]="titleTemplate.templateRef"></ng-container>
-            } @else {
-              {{ Title }}
-            }
-          </span>
-        </button>
+        <!-- With HeadingLevel set, a heading wraps the toggle; without it, the toggle is a direct child of the row. -->
+        @if (HeadingLevel) {
+          <div class="mj-accordion-heading" role="heading" [attr.aria-level]="HeadingLevel">
+            <ng-container [ngTemplateOutlet]="toggleButton"></ng-container>
+          </div>
+        } @else {
+          <ng-container [ngTemplateOutlet]="toggleButton"></ng-container>
+        }
         @if (actionsTemplate) {
           <div class="mj-accordion-actions">
             <ng-container [ngTemplateOutlet]="actionsTemplate.templateRef"></ng-container>
@@ -158,6 +152,23 @@ export class MJAccordionBodyDirective {
         </div>
       </div>
     </div>
+    <!-- The toggle button: the disclosure control that owns aria-expanded -->
+    <ng-template #toggleButton>
+      <button class="mj-accordion-header" type="button"
+        [id]="HeaderId"
+        [attr.aria-expanded]="Expanded"
+        [attr.aria-controls]="BodyId"
+        [disabled]="Disabled"
+        (click)="Toggle()">
+        <span class="mj-accordion-title">
+          @if (TitleTemplate) {
+            <ng-container [ngTemplateOutlet]="TitleTemplate.templateRef"></ng-container>
+          } @else {
+            {{ Title }}
+          }
+        </span>
+      </button>
+    </ng-template>
   `
 })
 export class MJAccordionPanelComponent {
@@ -195,11 +206,21 @@ export class MJAccordionPanelComponent {
    */
   @Input() Size: 'sm' | 'md' = 'md';
   /**
-   * Bare chrome — drop the panel's own border and header background so the panel
-   * sits cleanly inside a host that already provides chrome (e.g. an expandable
-   * card). The toggle/title/chevron/body still work; only the box styling is removed.
+   * Bare chrome — drop the panel's border, header background, body fill and
+   * row-wide hover fill, so the panel sits cleanly inside a host that already
+   * provides chrome (e.g. an expandable card) or directly on a page as a section.
+   * The toggle keeps its focus ring and, on a device that can hover, a hover cue:
+   * pointing at the title or the chevron gives both the brand color. A `Variant`
+   * keeps its own colors.
    */
   @Input() Bare = false;
+  /**
+   * Heading level (1–6) for the title. When set, a `role="heading"` element with this
+   * `aria-level` wraps the toggle button, so the section title takes part in the page's
+   * heading outline. When null, there is no wrapper and the toggle is a direct child of
+   * the header row.
+   */
+  @Input() HeadingLevel: 1 | 2 | 3 | 4 | 5 | 6 | null = null;
   /**
    * Remove the body's default padding, for bodies that manage their own spacing
    * (code editors, full-bleed grids, custom forms).
