@@ -78,6 +78,9 @@ import { EntityActionChecks } from '../checks/entity-actions.checks';
 import { FlsEnforcementChecks } from '../checks/fls-enforcement.checks';
 import { FlsLifecycleChecks } from '../checks/fls-lifecycle.checks';
 import { FlsClientChecks } from '../checks/fls-client.checks';
+import { FlsCloseoutChecks } from '../checks/fls-closeout.checks';
+import { FlsCloseoutPendingChecks } from '../checks/fls-closeout-pending.checks';
+import { FlsCloseoutClientChecks } from '../checks/fls-closeout-client.checks';
 import { MetadataSyncPushChecks } from '../checks/metadata-sync-push.checks';
 import { TaskGraphExecutionChecks } from '../checks/task-graph-execution.checks';
 import { PerformanceBenchmarkChecks } from '../checks/performance-benchmark.checks';
@@ -209,6 +212,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-enforcement', FlsEnforcementChecks, 24], // FLS1-FLS24 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS24 record names, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
+        ['fls-closeout', FlsCloseoutChecks, 18], // CO1-CO18 FLS close-out, server tier: object width, the clause gate, datasets, Record Changes by ViewID, config guards (CO14-CO16 mutation-gated), agent data sources, search projection (IT130)
+        ['fls-closeout-client', FlsCloseoutClientChecks, 9], // CW1-CW9 FLS close-out over the wire: client-input rejection (GraphQL, transaction groups, REST), transport projection, wire filter gate (IT131)
+        ['fls-closeout-pending', FlsCloseoutPendingChecks, 7], // PC1-PC3 cache segmentation + PQ1-PQ4 RunQuery FLS, written against decided behaviour; IT132 ships parked (Skip) until it lands
         ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
         ['view-properties-client', ViewPropertiesClientChecks, 5], // VP1-VP5 User View properties over the wire: values, locked refusal, token default, RLS on top, cache keying (IT136)
         ['calendar-event-links', CalendarEventLinksChecks, 2], // CL1 UI role over GraphQL reads but cannot create; CL2 links, sync with a moved time and an RSVP, resync on a refused token, cancel (IT127)
@@ -323,6 +329,9 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'feature-pipeline-core': 9,
         'feature-value-only': 5,
         'field-rules-bulk-update': 3,
+        'fls-closeout-client': 9,
+        'fls-closeout-pending': 7,
+        'fls-closeout': 18,
         'fls-enforcement': 24,
         'fls-enforcement-client': 6,
         'fls-lifecycle': 9,
@@ -441,7 +450,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(151);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(154);
     });
 });
 
@@ -598,6 +607,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'feature-value-only.FV3',
         'feature-value-only.FV4',
         'feature-value-only.FV5',
+        'fls-closeout.CO14',
+        'fls-closeout.CO15',
+        'fls-closeout.CO16',
         'fls-lifecycle.LC1',
         'fls-lifecycle.LC2',
         'fls-lifecycle.LC3',
