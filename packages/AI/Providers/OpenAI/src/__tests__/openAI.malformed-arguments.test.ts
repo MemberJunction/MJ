@@ -62,6 +62,12 @@ describe('ReadOpenAICompatibleToolCalls', () => {
         expect(ReadOpenAICompatibleToolCalls([{ id: 'c', type: 'function', function: { name: 't', arguments: '[1,2]' } }], 'Test').Malformed).toContain('not a JSON object');
     });
 
+    it('reads `null` arguments — what some endpoints send for a parameterless tool — as an empty object', () => {
+        const readout = ReadOpenAICompatibleToolCalls([{ id: 'c', type: 'function', function: { name: 't', arguments: 'null' } }], 'Test');
+        expect(readout.Malformed).toBeUndefined();
+        expect(readout.Calls?.[0].arguments).toEqual({});
+    });
+
     it('reads empty arguments as an empty object', () => {
         expect(ReadOpenAICompatibleToolCalls([{ id: 'c', type: 'function', function: { name: 't', arguments: '' } }], 'Test').Calls?.[0].arguments).toEqual({});
     });

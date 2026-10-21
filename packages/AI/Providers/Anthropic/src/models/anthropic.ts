@@ -38,6 +38,12 @@ type AnthropicTextBlock = { type: 'text'; text: string; cache_control?: { type: 
 
 @RegisterClass(BaseLLM, 'AnthropicLLM')
 export class AnthropicLLM extends BaseLLM {
+    /**
+     * Claude 5.x accepts a replayed thinking block only while the system prompt, tools and every
+     * earlier message are unchanged since the turn that produced it.
+     */
+    public static override readonly ReplayedReasoningRequiresStablePrefix: boolean = true;
+
     private _anthropic: Anthropic;
     
     // State tracking for streaming thinking extraction
@@ -424,9 +430,11 @@ export class AnthropicLLM extends BaseLLM {
             }
 
             // If we have two messages with the same role back-to-back, insert a message of the other
-            // role. Two assistant turns in a row get a user filler: an assistant one would merge
-            // into the next turn and put text ahead of its replayed thinking, which must come first.
-            if (role === lastRole && role === 'assistant' && result.length > 0) {
+            // role. An assistant turn that opens with replayed thinking after another assistant turn
+            // gets a user filler instead: an assistant one would merge into it and put text ahead of
+            // the thinking, which must come first.
+            const opensWithThinking = contentBlocks[0]?.type === 'thinking' || contentBlocks[0]?.type === 'redacted_thinking';
+            if (role === lastRole && role === 'assistant' && result.length > 0 && opensWithThinking) {
                 result.push({
                     role: "user",
                     content: [{ type: "text", text: "Continue." }]
@@ -682,19 +690,22 @@ export class AnthropicLLM extends BaseLLM {
     /**
      * The thinking setting this history can be sent with.
      *
-     * With thinking on, Anthropic requires the last tool-call turn of an open tool loop to start
-     * with its own thinking block. A turn made with thinking off, by another provider before a
-     * failover, or on a path that kept no signatures has none to replay, and the request is
-     * rejected. Thinking is turned off for that one request; the effort setting stays.
+     * With budget-form thinking on, Anthropic requires the last tool-call turn of an open tool loop
+     * to start with its own thinking block. A turn made with thinking off, by another provider
+     * before a failover, or on a path that kept no signatures has none to replay, and the request is
+     * rejected. Thinking is turned off for that one request, with a warning; the effort setting
+     * stays. Adaptive models are left as they are: on the models where thinking is always on,
+     * omitting the parameter does not turn it off.
      */
-    private static thinkingForHistory(thinking: AnthropicThinkingRequest, messages: ChatMessage[]): AnthropicThinkingRequest {
-        if (!thinking.thinking) {
+    private static thinkingForHistory(thinking: AnthropicThinkingRequest, messages: ChatMessage[], model: string): AnthropicThinkingRequest {
+        if (!thinking.thinking || UsesAdaptiveThinking(model)) {
             return thinking;
         }
         const lastAssistant = [...messages].reverse().find((m) => m.role === ChatMessageRole.assistant);
         if (!lastAssistant?.toolCalls?.length || AnthropicLLM.reasoningBlocksForReplay(lastAssistant).length > 0) {
             return thinking;
         }
+        console.warn(`AnthropicLLM: thinking is off for this ${model} request — the open tool loop's last call turn carries no thinking to replay.`);
         const { thinking: _omitted, ...rest } = thinking;
         return rest;
     }
@@ -772,7 +783,7 @@ export class AnthropicLLM extends BaseLLM {
             // the messages are formatted: earlier turns' thinking blocks are replayed only when this
             // request thinks too.
             const thinking = AnthropicLLM.thinkingForHistory(
-                BuildAnthropicThinking({ model: params.model, effortLevel: params.effortLevel, budgetTokens: thinkingBudget }), messagesForApi);
+                BuildAnthropicThinking({ model: params.model, effortLevel: params.effortLevel, budgetTokens: thinkingBudget }), messagesForApi, params.model);
 
             // Create the request parameters
             const createParams: MessageCreateParams = {
@@ -1075,7 +1086,7 @@ export class AnthropicLLM extends BaseLLM {
             model: params.model,
             effortLevel: params.effortLevel,
             budgetTokens: params.reasoningBudgetTokens >= 1024 ? params.reasoningBudgetTokens : undefined
-        }), messagesForApi);
+        }), messagesForApi, params.model);
         createParams.messages = this.formatMessagesWithCaching(
             messagesForApi,
             params.enableCaching ?? true,

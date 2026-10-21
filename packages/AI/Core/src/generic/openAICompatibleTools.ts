@@ -234,7 +234,11 @@ const MALFORMED_ARGUMENT_PREVIEW = 200;
 function parseArgumentObject(raw: string | undefined): Record<string, unknown> | undefined {
     try {
         const parsed: unknown = JSON.parse(raw || '{}');
-        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined;
+        // Some endpoints send `null` for a call with no parameters; that is an empty argument set.
+        if (parsed === null) {
+            return {};
+        }
+        return typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined;
     } catch {
         return undefined;
     }

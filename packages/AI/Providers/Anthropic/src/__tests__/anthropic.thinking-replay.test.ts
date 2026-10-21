@@ -187,6 +187,12 @@ describe('Anthropic thinking — a history with nothing to replay', () => {
         expect(lastBody().thinking?.type).toBe('enabled');
     });
 
+    it('leaves an adaptive model as it is: omitting thinking does not turn it off there', async () => {
+        await createLLM().ChatCompletion(paramsFor('claude-opus-5-5', historyWithoutReasoning));
+
+        expect(lastBody().thinking?.type).toBe('adaptive');
+    });
+
     it('keeps thinking on for a request that opens no tool loop', async () => {
         await createLLM().ChatCompletion(paramsFor('claude-sonnet-4-5', [task]));
 
@@ -201,6 +207,13 @@ describe('Anthropic formatting — two assistant turns in a row', () => {
         }
     }
 
+    it('bridges two plain assistant turns with an assistant "OK", as before', () => {
+        const wire = new Probe('test-key').Format([task, { role: ChatMessageRole.assistant, content: 'One.' }, { role: ChatMessageRole.assistant, content: 'Two.' }]);
+
+        expect(wire.map((m) => m.role)).toEqual(['user', 'assistant', 'assistant', 'assistant']);
+        expect(wire[2].content[0].text).toBe('OK');
+    });
+
     it('puts a user filler between them, so no text lands ahead of the second turn\'s thinking', () => {
         const wire = new Probe('test-key').Format([
             task,
@@ -211,5 +224,11 @@ describe('Anthropic formatting — two assistant turns in a row', () => {
 
         expect(wire.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant']);
         expect(wire[3].content[0].type).toBe('thinking');
+    });
+});
+
+describe('Anthropic thinking — the history a replayed block is bound to', () => {
+    it('declares that replayed thinking needs the history before it unchanged', () => {
+        expect(AnthropicLLM.ReplayedReasoningRequiresStablePrefix).toBe(true);
     });
 });
