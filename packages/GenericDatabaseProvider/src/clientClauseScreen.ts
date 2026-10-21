@@ -426,6 +426,38 @@ export class ClientClauseScreen {
     }
 
     /**
+     * The full screen for a whole caller-written statement (ad-hoc SQL), run on the SQL as it will
+     * execute: one read statement, no write or DDL at any depth, no name reserved for the parser,
+     * every SELECT accounted for, and every FROM item that is not a CTE in scope an entity base view
+     * `user` can read unscoped ({@link AssertUnscopedRead}). Base tables, system catalogs and table
+     * functions are refused. Throws on the first refusal.
+     */
+    public static AssertStatementReadsUnscopedEntityViews(
+        sql: string,
+        entities: readonly EntityInfo[],
+        dialect: SQLParserDialect,
+        user: UserInfo,
+        label: string,
+    ): void {
+        ClientClauseScreen.AssertNoIdentifierAliasNames(sql, dialect, label);
+        const parser = new SQLParser(sql, dialect);
+        if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
+            throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);
+        }
+        if (ClientClauseScreen.AstContainsWriteNode(parser.AST)) {
+            throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
+        }
+        const reads = ClientClauseScreen.CollectStatementReads(parser);
+        ClientClauseScreen.AssertEverySelectAccountedFor(sql, dialect, reads, label);
+        const allowed = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
+        for (const relation of reads.Relations) {
+            if (relation.IsCTEReference) continue;
+            const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
+            if (entity) ClientClauseScreen.AssertUnscopedRead(entity, user, label);
+        }
+    }
+
+    /**
      * Every FROM item in a parsed statement, and the number of SELECT nodes. The walk visits every
      * property of every node, so it finds a FROM list wherever the grammar puts one: a subquery in a
      * CASE branch, HAVING, a window's ORDER BY or PARTITION BY, a function argument, IN, EXISTS, a
