@@ -6,6 +6,8 @@
 import { RelationshipDiscoveryPhase, CachedColumnStats } from './discovery.js';
 import { SampleQuery, SampleQueryGenerationSummary } from './sample-queries.js';
 import { OrganicKeyCluster, OrganicKeyDetectionPhase } from './organic-keys.js';
+import type { AutoDocPluginStateSection } from '../plugins/types.js';
+import type { AutoDocIndex } from './driver.js';
 
 export interface DatabaseDocumentation {
   version: string;
@@ -21,6 +23,12 @@ export interface DatabaseDocumentation {
    */
   organicKeyClusters?: OrganicKeyCluster[];
   resumedFromFile?: string; // Path to the state file this analysis resumed from
+  /**
+   * Per-plugin sections, keyed by plugin registration name. Each holds the plugin's hook-run
+   * history and whatever data the plugin chose to persist. Absent in state files from runs
+   * that loaded no plugins.
+   */
+  plugins?: Record<string, AutoDocPluginStateSection>;
 }
 
 /**
@@ -50,6 +58,8 @@ export interface DatabaseInfo {
   name: string;
   server: string;
   analyzedAt: string;
+  /** Database platform the run connected to. Absent in state files from older versions. */
+  provider?: 'sqlserver' | 'mysql' | 'postgresql' | 'oracle';
 }
 
 export interface SeedContext {
@@ -65,10 +75,24 @@ export interface SeedContext {
  * Phases describe HOW deliverables were generated (process history)
  */
 export interface AnalysisPhases {
+  dataSampling?: DataSamplingPhase; // Table data sampling (statistics and sample values); absent on states older than this field
   keyDetection?: RelationshipDiscoveryPhase; // Primary key and foreign key detection
   descriptionGeneration: AnalysisRun[]; // Table and column description analysis
   queryGeneration?: QueryGenerationPhase; // Metadata about query generation process
   organicKeyDetection?: OrganicKeyDetectionPhase; // Optional organic-key cluster detection (runs after description + PK/FK)
+}
+
+/**
+ * Data sampling phase metadata. `skipped` is honoured by a later resume (the run opted out, so a
+ * resume does not start the pass); `partial` means the pass was interrupted and a resume finishes it.
+ */
+export interface DataSamplingPhase {
+  status: 'completed' | 'partial' | 'skipped';
+  startedAt: string;
+  completedAt?: string;
+  /** Tables sampled by the runs that produced this state, cumulative across resumes. */
+  sampledTables: number;
+  totalTables: number;
 }
 
 /**
@@ -115,6 +139,12 @@ export interface TableDefinition {
   dependsOn: ForeignKeyReference[];
   dependents: ForeignKeyReference[];
   columns: ColumnDefinition[];
+  /**
+   * Indexes that exist on the table in the database, read during introspection and shown to the
+   * LLM as key evidence. Absent when they were not read (`analysis.useExistingIndexes: false`, an
+   * older state file, or a catalog read that failed); an empty array means the table has none.
+   */
+  indexes?: AutoDocIndex[];
   description?: string;
   descriptionIterations: DescriptionIteration[];
   userNotes?: string;
@@ -129,6 +159,11 @@ export interface ColumnDefinition {
   isPrimaryKey: boolean;
   isForeignKey: boolean;
   foreignKeyReferences?: ForeignKeyReference;
+  /**
+   * Declared maximum length, in characters, of a character column. Undefined when unknown or
+   * unbounded (varchar(max), PostgreSQL varchar without a length).
+   */
+  maxLength?: number;
   checkConstraint?: string;
   defaultValue?: string;
   possibleValues?: any[];
@@ -171,6 +206,8 @@ export interface ForeignKeyReference {
   table: string;
   column: string;
   referencedColumn: string;
+  /** The constraint this column pair belongs to, when introspected. Groups the columns of a composite key. */
+  constraintName?: string;
 }
 
 /**

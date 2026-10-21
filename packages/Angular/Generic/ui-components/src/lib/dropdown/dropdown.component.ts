@@ -29,6 +29,9 @@ import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
  * what it selects (WCAG 2.1 4.1.2). Use {@link AriaLabelledBy} when a visible label already exists —
  * `<label for>` cannot name a `div[role=combobox]` — and {@link AriaLabel} when none does.
  *
+ * Escape with the list open closes the list and goes no further, so a dialog or popover around the
+ * field stays open. With the list closed, Escape goes on to the host as usual.
+ *
  * @example With a visible label (preferred)
  * ```html
  * <span id="persona-label">Interview persona</span>
@@ -87,6 +90,10 @@ import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
       <i class="fa-solid fa-chevron-down mj-dropdown-arrow"></i>
     </div>
 
+    <!--
+      The overlay's own Escape close is off: it cancels the key but lets it go on to the page.
+      OnOverlayKeyDown closes the list on Escape instead and stops the key there.
+    -->
     <ng-template
       cdkConnectedOverlay
       [cdkConnectedOverlayOrigin]="overlayOrigin"
@@ -94,9 +101,11 @@ import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
       [cdkConnectedOverlayPositions]="Positions"
       [cdkConnectedOverlayWidth]="TriggerWidth"
       [cdkConnectedOverlayHasBackdrop]="true"
+      [cdkConnectedOverlayDisableClose]="true"
       cdkConnectedOverlayBackdropClass="mj-dropdown-backdrop"
       (backdropClick)="Close()"
-      (detach)="Close()">
+      (detach)="Close()"
+      (overlayKeydown)="OnOverlayKeyDown($event)">
       <div class="mj-dropdown-panel" role="listbox"
         [attr.id]="ListboxId"
         [attr.aria-label]="AriaLabel || null"
@@ -384,6 +393,11 @@ export class MJDropdownComponent extends MJNamedControlBase implements ControlVa
     this.FilterChange.emit(this.filterText);
   }
 
+  /**
+   * Keys pressed in the field or in the filter box. Escape with the list open closes the list and
+   * stops the key there (see `closeListOnEscape`). With the list closed, Escape is cancelled as
+   * before and goes on to the host, so a dialog or popover around the field still closes on it.
+   */
   OnKeyDown(event: KeyboardEvent): void {
     const items = this.FilteredItems;
     switch (event.key) {
@@ -402,7 +416,10 @@ export class MJDropdownComponent extends MJNamedControlBase implements ControlVa
           this.SelectItem(items[this.HighlightedIndex]);
         else if (!this.IsOpen) this.Open();
         break;
-      case 'Escape': event.preventDefault(); this.Close(); break;
+      case 'Escape':
+        event.preventDefault();
+        if (this.IsOpen) this.closeListOnEscape(event);
+        break;
       case 'Tab':
         // The panel lives in the overlay, outside a parent dialog. Hand focus back to this
         // field and do not prevent the key, so the browser moves on from the field.
@@ -414,6 +431,29 @@ export class MJDropdownComponent extends MJNamedControlBase implements ControlVa
       case 'Home': if (this.IsOpen) { event.preventDefault(); this.HighlightedIndex = 0; } break;
       case 'End': if (this.IsOpen) { event.preventDefault(); this.HighlightedIndex = items.length - 1; } break;
     }
+  }
+
+  /**
+   * Keys the open list's overlay receives. The overlay listens on the page body, so this sees a
+   * key that did not go through the field or the filter box, for example after a click inside the
+   * panel moved focus to the page. Escape closes the list here too, by the same rule as
+   * {@link OnKeyDown}; other keys are left alone.
+   */
+  OnOverlayKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && this.IsOpen) this.closeListOnEscape(event);
+  }
+
+  /**
+   * Escape with the list open closes the list and nothing else (#5340). The key is cancelled and
+   * stopped here, so it never reaches the page, where a host that closes on Escape (a dialog, a
+   * popover) would close as well. Focus goes back to the field, since the filter box that may have
+   * held it goes away with the list.
+   */
+  private closeListOnEscape(event: KeyboardEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.triggerEl?.nativeElement.focus();
+    this.Close();
   }
 
   OnBlur(): void { this.onTouched(); }

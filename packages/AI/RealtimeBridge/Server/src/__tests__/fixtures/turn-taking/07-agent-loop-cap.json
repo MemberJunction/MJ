@@ -1,0 +1,37 @@
+{
+  "Name": "agent-loop-cap",
+  "Description": "Told to discuss between themselves, Sage and Demo Loop trade turns. After four consecutive agent turns with no person between, both are denied (loop cap) and the room goes quiet. When the person speaks again the cap resets and Sage can answer.",
+  "MaxConsecutiveAgentTurns": 4,
+  "Agents": [
+    { "Id": "sage", "Names": ["Sage"] },
+    { "Id": "demo", "Names": ["Demo Loop"] }
+  ],
+  "Events": [
+    { "Type": "HumanSpeech", "AtMs": 0, "DurationMs": 2000, "Text": "Sage and Demo Loop, discuss the roadmap between you.",
+      "ExpectDecisions": { "sage": "Speak", "demo": "Speak" } },
+    { "Type": "AgentSpeech", "AtMs": 3000, "Agent": "sage", "DurationMs": 2000, "Text": "Here is my first thought on the roadmap." },
+    { "Type": "AgentSpeech", "AtMs": 5200, "Agent": "demo", "DurationMs": 2000, "Text": "I would put reliability ahead of new features." },
+    { "Type": "AgentSpeech", "AtMs": 7400, "Agent": "sage", "DurationMs": 2000, "Text": "Agreed, and then the reporting work second." },
+    { "Type": "AgentSpeech", "AtMs": 9600, "Agent": "demo", "DurationMs": 2000, "Text": "Reporting depends on the new data model." },
+    { "Type": "AgentSpeech", "AtMs": 11800, "Agent": "sage", "DurationMs": 2000, "Text": "True, so the data model comes before reporting." },
+    { "Type": "AgentSpeech", "AtMs": 12000, "Agent": "demo", "DurationMs": 2000, "Text": "And that confirms the order we already had." },
+    { "Type": "HumanSpeech", "AtMs": 14000, "DurationMs": 2000, "Text": "Okay, wrap it up please, Sage.",
+      "ExpectDecisions": { "sage": "Speak", "demo": "Silent" } },
+    { "Type": "AgentSpeech", "AtMs": 17000, "Agent": "sage", "DurationMs": 3000, "Text": "Summary: three priorities, owners assigned." }
+  ],
+  "Expect": {
+    "Speeches": [
+      { "Agent": "sage", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" },
+      { "Agent": "demo", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" },
+      { "Agent": "sage", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" },
+      { "Agent": "demo", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" },
+      { "Agent": "sage", "Kind": "Turn", "Granted": false, "Reason": "LoopCapReached" },
+      { "Agent": "demo", "Kind": "Turn", "Granted": false, "Reason": "LoopCapReached" },
+      { "Agent": "sage", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" }
+    ],
+    "Preempted": [],
+    "BackchannelCount": 0,
+    "LoopCapReached": false,
+    "FinalFloorHolder": null
+  }
+}

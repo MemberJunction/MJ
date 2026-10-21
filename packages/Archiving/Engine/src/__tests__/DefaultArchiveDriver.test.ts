@@ -10,6 +10,7 @@ import {
 // ---- Mock state for Metadata ----
 
 let mockGetEntityObjectResult: MockBaseEntity;
+let mockChildRunViewResult: { Success: boolean; Results: unknown[] } = { Success: true, Results: [] };
 
 vi.mock('@memberjunction/core', () => {
     return {
@@ -28,6 +29,9 @@ vi.mock('@memberjunction/core', () => {
             };
             return MockMetadata;
         })(),
+        RunView: class MockRunView {
+            RunView = vi.fn().mockImplementation(() => Promise.resolve(mockChildRunViewResult));
+        },
         CompositeKey: class MockCompositeKey {
             KeyValuePairs: Array<{ FieldName: string; Value: string }>;
             constructor(pairs: Array<{ FieldName: string; Value: string }>) {
@@ -89,6 +93,22 @@ function createMockRecord(overrides?: Partial<MockBaseEntity>): MockBaseEntity {
     };
 }
 
+interface MockRelatedEntity {
+    Type: string;
+    RelatedEntityID: string;
+    RelatedEntity: string;
+    RelatedEntityJoinField: string;
+}
+
+function createDeletableRecord(id: string, entityId: string, relatedEntities: MockRelatedEntity[]) {
+    const record = createMockRecord({ ID: id });
+    return Object.assign(record, {
+        EntityInfo: { ...record.EntityInfo, ID: entityId, RelatedEntities: relatedEntities },
+        PrimaryKey: { KeyValuePairs: [{ FieldName: 'ID', Value: id }], Values: () => id },
+        Delete: vi.fn().mockResolvedValue(true),
+    });
+}
+
 interface MockStorageDriver {
     PutObject: ReturnType<typeof vi.fn>;
     GetObject: ReturnType<typeof vi.fn>;
@@ -116,12 +136,14 @@ function createFieldConfig(overrides?: Partial<ArchiveFieldConfiguration>): Arch
 function createArchiveContext(overrides?: Partial<{
     record: MockBaseEntity;
     fieldConfig: ArchiveFieldConfiguration;
-    storageDriver: MockStorageDriver;
+    storageDriver: MockStorageDriver | null;
+    storageMode: 'Store' | 'Purge';
+    mode: 'StripFields' | 'HardDelete' | 'ArchiveOnly';
 }>): ArchiveRecordContext {
     const record = overrides?.record ?? createMockRecord();
     const configEntity = createMockRecord({ ID: 'config-entity-1' });
     configEntity.Get.mockImplementation((field: string) => {
-        if (field === 'Mode') return 'StripFields';
+        if (field === 'Mode') return overrides?.mode ?? 'StripFields';
         return null;
     });
 
@@ -131,12 +153,15 @@ function createArchiveContext(overrides?: Partial<{
         return null;
     });
 
+    const storageDriver = overrides?.storageDriver === undefined ? createMockStorageDriver() : overrides.storageDriver;
+
     return {
         Record: record as unknown as import('@memberjunction/core').BaseEntity,
         FieldConfig: overrides?.fieldConfig ?? createFieldConfig(),
         ConfigEntity: configEntity as unknown as import('@memberjunction/core').BaseEntity,
         Config: config as unknown as import('@memberjunction/core').BaseEntity,
-        StorageDriver: (overrides?.storageDriver ?? createMockStorageDriver()) as unknown as import('@memberjunction/storage').FileStorageBase,
+        StorageDriver: storageDriver as unknown as import('@memberjunction/storage').FileStorageBase | null,
+        StorageMode: overrides?.storageMode ?? 'Store',
         BasePath: 'archives',
         ContextUser: { ID: 'user-1' } as unknown as import('@memberjunction/core').UserInfo,
         ArchiveRun: createMockRecord({ ID: 'run-1' }) as unknown as import('@memberjunction/core').BaseEntity,
@@ -153,6 +178,7 @@ describe('DefaultArchiveDriver', () => {
         driver = new DefaultArchiveDriver();
         // Reset the shared mock state
         mockGetEntityObjectResult = createMockRecord();
+        mockChildRunViewResult = { Success: true, Results: [] };
     });
 
     describe('ShouldArchiveRecord', () => {
@@ -371,6 +397,35 @@ describe('DefaultArchiveDriver', () => {
             expect(record.Set).toHaveBeenCalledWith('Description', null);
             expect(record.Set).not.toHaveBeenCalledWith('Notes', null);
         });
+
+        it('should write the parent document and the cascade batch before deleting leaf-first in HardDelete mode', async () => {
+            const child = createDeletableRecord('child-1', 'child-entity-id', []);
+            child.EntityInfo.Name = 'Child Entity';
+            mockChildRunViewResult = { Success: true, Results: [child] };
+            const parent = createDeletableRecord('record-1', 'entity-id-1', [
+                { Type: 'One To Many', RelatedEntityID: 'child-entity-id', RelatedEntity: 'Child Entity', RelatedEntityJoinField: 'ParentID' },
+            ]);
+            parent.Get.mockReturnValue('value');
+            const storageDriver = createMockStorageDriver();
+            const context = createArchiveContext({ record: parent, storageDriver, storageMode: 'Store', mode: 'HardDelete' });
+
+            const result = await driver.ArchiveRecord(context);
+
+            expect(result.Success).toBe(true);
+            expect(storageDriver.PutObject).toHaveBeenCalledTimes(2);
+            const [parentPath] = storageDriver.PutObject.mock.calls[0] as [string, Buffer, string];
+            const [batchPath, batchBuffer] = storageDriver.PutObject.mock.calls[1] as [string, Buffer, string];
+            expect(parentPath).toContain('Test_Entity/record-1/');
+            expect(batchPath).toContain('Child_Entity/cascade_record-1_');
+            expect(JSON.parse(batchBuffer.toString('utf8'))).toMatchObject({ batchType: 'cascade-delete', recordCount: 1 });
+
+            const [parentWriteOrder, batchWriteOrder] = storageDriver.PutObject.mock.invocationCallOrder;
+            const childDeleteOrder = child.Delete.mock.invocationCallOrder[0];
+            const parentDeleteOrder = parent.Delete.mock.invocationCallOrder[0];
+            expect(parentWriteOrder).toBeLessThan(batchWriteOrder);
+            expect(batchWriteOrder).toBeLessThan(childDeleteOrder);
+            expect(childDeleteOrder).toBeLessThan(parentDeleteOrder);
+        });
     });
 
     describe('RestoreRecord', () => {
@@ -479,6 +534,50 @@ describe('DefaultArchiveDriver', () => {
             expect(result.Success).toBe(false);
             expect(result.ErrorMessage).toContain('Failed to load record');
             expect(result.RestoredFields).toEqual([]);
+        });
+    });
+
+    describe('ArchiveRecord with StorageMode Purge', () => {
+        it('should report that it supports purge', () => {
+            expect(driver.SupportsPurge).toBe(true);
+        });
+
+        it('should clear the fields and save without writing to storage', async () => {
+            const record = createMockRecord();
+            record.Get.mockImplementation((field: string) => (field === 'Description' ? 'Some text' : null));
+            const context = createArchiveContext({ record, storageDriver: null, storageMode: 'Purge' });
+
+            const result = await driver.ArchiveRecord(context);
+
+            expect(result).toEqual({ Success: true, StoragePath: null, BytesArchived: 0 });
+            expect(record.Set).toHaveBeenCalledWith('Description', null);
+            expect(record.Set).toHaveBeenCalledWith('Notes', null);
+            expect(record.Save).toHaveBeenCalledOnce();
+        });
+
+        it('should return failure when the record save fails', async () => {
+            const record = createMockRecord({ Save: vi.fn().mockResolvedValue(false) });
+            const context = createArchiveContext({ record, storageDriver: null, storageMode: 'Purge' });
+
+            const result = await driver.ArchiveRecord(context);
+
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('Failed to save record after nullifying');
+        });
+
+        it('should delete the record and its children without writing to storage in HardDelete mode', async () => {
+            const child = createDeletableRecord('child-1', 'child-entity-id', []);
+            mockChildRunViewResult = { Success: true, Results: [child] };
+            const parent = createDeletableRecord('record-1', 'entity-id-1', [
+                { Type: 'One To Many', RelatedEntityID: 'child-entity-id', RelatedEntity: 'Child Entity', RelatedEntityJoinField: 'ParentID' },
+            ]);
+            const context = createArchiveContext({ record: parent, storageDriver: null, storageMode: 'Purge', mode: 'HardDelete' });
+
+            const result = await driver.ArchiveRecord(context);
+
+            expect(result).toEqual({ Success: true, StoragePath: null, BytesArchived: 0 });
+            expect(child.Delete).toHaveBeenCalledOnce();
+            expect(parent.Delete).toHaveBeenCalledOnce();
         });
     });
 });

@@ -19,6 +19,7 @@ vi.mock('../generic/logging', () => ({
     LogError: vi.fn(),
     LogStatus: vi.fn(),
     LogStatusEx: vi.fn(),
+    LogWarning: vi.fn(),
 }));
 
 describe('LocalCacheManager Cache Control', () => {

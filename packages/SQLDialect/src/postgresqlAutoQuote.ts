@@ -28,12 +28,6 @@ const pgDialect = new PostgreSQLDialect();
  * the mixed-case column form still quotes.
  */
 /**
- * Known tokenization limitations (comments containing an apostrophe, and `E'...'` escape
- * strings) are tracked as **MJ #3775** — pre-existing, unchanged by the consolidation, and now
- * fixable in one place rather than two.
- */
-
-/**
  * NOT the only identifier quoter in MJ, and deliberately so.
  *
  * `PostgreSQLDataProvider` carries a separate, METADATA-DRIVEN quoter

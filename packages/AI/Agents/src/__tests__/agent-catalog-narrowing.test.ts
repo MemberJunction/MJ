@@ -57,6 +57,7 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 vi.mock('@memberjunction/actions', () => ({
+    BaseAction: class BaseAction {},
     ActionEngineServer: {
         get Instance() {
             return harness.actionEngineInstance;
@@ -355,6 +356,7 @@ class CatalogHarness {
             Agents: [this.agent, ...SUB_AGENTS],
             AgentRelationships: [],
             AgentCategories: [],
+            ResolveAgentStorageAccountID: () => null,
             ScopedPromptParts: [],
             ScopedPromptConfigs: [],
             AgentTypes: [

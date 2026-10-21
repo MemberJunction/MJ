@@ -9,6 +9,7 @@
 
 import { KeyedSerialTaskQueue, SerialTaskFlushResult } from '@memberjunction/global';
 import { BaseEntity } from './baseEntity';
+import type { EntitySaveReturnMode } from './entityConfiguration';
 import { EntitySaveOptions } from './interfaces';
 import { LogError } from './logging';
 
@@ -22,14 +23,19 @@ import { LogError } from './logging';
 export class BaseEntitySaveQueue {
     private readonly queue = new KeyedSerialTaskQueue();
     private readonly onError?: (message: string) => void;
+    private readonly saveReturnMode?: EntitySaveReturnMode;
 
     /**
      * @param opts.onError Optional handler for a failed save's diagnostic message. Defaults to the
      *   global `LogError`. Consumers with structured logging (e.g. a category/metadata logger) pass
      *   their own so failures stay in their log stream.
+     * @param opts.saveReturnMode Optional {@link EntitySaveReturnMode} forwarded to every queued
+     *   `entity.Save(options)` call (e.g. `'datestamps_only'` for high-write execution log queues
+     *   whose wide JSON/text payload columns are already in memory).
      */
-    constructor(opts?: { onError?: (message: string) => void }) {
+    constructor(opts?: { onError?: (message: string) => void; saveReturnMode?: EntitySaveReturnMode }) {
         this.onError = opts?.onError;
+        this.saveReturnMode = opts?.saveReturnMode;
     }
 
     /**
@@ -38,7 +44,8 @@ export class BaseEntitySaveQueue {
      */
     public Insert(entity: BaseEntity): void {
         const label = this.labelFor('Insert', entity);
-        void this.queue.enqueue(entity, () => this.runSave(entity, label), { isOk: (ok) => ok === true, label });
+        const options = this.buildSaveOptions(false);
+        void this.queue.enqueue(entity, () => this.runSave(entity, label, options), { isOk: (ok) => ok === true, label });
     }
 
     /**
@@ -48,7 +55,8 @@ export class BaseEntitySaveQueue {
      */
     public InsertAfter(entity: BaseEntity, dependency: BaseEntity): void {
         const label = this.labelFor('Insert', entity);
-        void this.queue.enqueue(entity, () => this.runSave(entity, label), { isOk: (ok) => ok === true, label, after: dependency });
+        const options = this.buildSaveOptions(false);
+        void this.queue.enqueue(entity, () => this.runSave(entity, label, options), { isOk: (ok) => ok === true, label, after: dependency });
     }
 
     /**
@@ -59,9 +67,22 @@ export class BaseEntitySaveQueue {
      */
     public Update(entity: BaseEntity, applyMutation?: (entity: BaseEntity) => void): void {
         const label = this.labelFor('Update', entity);
-        const options = new EntitySaveOptions();
-        options.IgnoreDirtyState = true;
+        const options = this.buildSaveOptions(true);
         void this.queue.enqueue(entity, () => this.runSave(entity, label, options, applyMutation), { isOk: (ok) => ok === true, label });
+    }
+
+    private buildSaveOptions(ignoreDirtyState: boolean): EntitySaveOptions | undefined {
+        if (!ignoreDirtyState && !this.saveReturnMode) {
+            return undefined;
+        }
+        const options = new EntitySaveOptions();
+        if (ignoreDirtyState) {
+            options.IgnoreDirtyState = true;
+        }
+        if (this.saveReturnMode) {
+            options.SaveReturnMode = this.saveReturnMode;
+        }
+        return options;
     }
 
     /** Awaits all pending saves and returns failure diagnostics. Call at the run/goal finalize boundary. */

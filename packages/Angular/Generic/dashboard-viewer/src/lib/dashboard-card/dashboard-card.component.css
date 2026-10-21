@@ -1,0 +1,257 @@
+/* Dashboard card: picture, name, description, meta row */
+
+:host {
+    display: block;
+    min-width: 0;
+}
+
+.dc-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-lg);
+    box-shadow: var(--mj-shadow-sm);
+    overflow: hidden;
+    cursor: pointer;
+    transition:
+        border-color var(--mj-transition-fast),
+        box-shadow var(--mj-transition-fast),
+        transform var(--mj-transition-fast);
+}
+
+.dc-card:hover {
+    border-color: var(--mj-border-strong);
+    box-shadow: var(--mj-shadow-md);
+    transform: translateY(-2px);
+}
+
+.dc-card:focus-within {
+    border-color: var(--mj-border-focus);
+}
+
+.dc-card.selected {
+    border-color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
+}
+
+/* Picture: the screenshot, the layout miniature or the placeholder fills the 16:9 area */
+.dc-thumb {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: var(--mj-bg-surface-sunken);
+    border-bottom: 1px solid var(--mj-border-default);
+    overflow: hidden;
+}
+
+.dc-thumb img,
+.dc-thumb mj-dashboard-layout-preview {
+    position: absolute;
+    inset: 0;
+}
+
+.dc-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.dc-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--mj-space-2);
+}
+
+.dc-icon-tile {
+    width: 52px;
+    height: 52px;
+    border-radius: var(--mj-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    font-size: 22px;
+}
+
+.dc-not-set-up {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mj-text-muted);
+}
+
+/* Selection checkbox, top left */
+.dc-select {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 1;
+    display: flex;
+    padding: 6px;
+    border-radius: var(--mj-radius-md);
+    background: color-mix(in srgb, var(--mj-bg-surface) 92%, transparent);
+    border: 1px solid var(--mj-border-default);
+}
+
+/* Edit, Delete and the star, top right */
+.dc-tools {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 1;
+    display: flex;
+    gap: 4px;
+}
+
+.dc-tool {
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: var(--mj-radius-sm);
+    border: 1px solid var(--mj-border-default);
+    background: color-mix(in srgb, var(--mj-bg-surface) 92%, transparent);
+    color: var(--mj-text-muted);
+    cursor: pointer;
+}
+
+.dc-tool:hover {
+    color: var(--mj-text-primary);
+}
+
+.dc-tool:focus-visible {
+    outline: var(--mj-ring-width) solid var(--mj-focus-ring-color);
+    outline-offset: var(--mj-ring-offset);
+}
+
+/* Edit and Delete show on hover or focus; on touch screens they always show */
+.dc-edit,
+.dc-delete {
+    opacity: 0;
+    transition: opacity var(--mj-transition-fast);
+}
+
+.dc-card:hover .dc-edit,
+.dc-card:hover .dc-delete,
+.dc-card:focus-within .dc-edit,
+.dc-card:focus-within .dc-delete {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .dc-edit,
+    .dc-delete {
+        opacity: 1;
+    }
+}
+
+.dc-delete:hover {
+    color: var(--mj-status-error);
+}
+
+.dc-star.on {
+    color: var(--mj-status-warning);
+}
+
+/* Name, description, meta row */
+.dc-body {
+    padding: 10px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.dc-name {
+    border: none;
+    background: none;
+    padding: 0;
+    text-align: left;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dc-name:hover {
+    color: var(--mj-brand-primary);
+}
+
+.dc-name:focus-visible {
+    outline: var(--mj-ring-width) solid var(--mj-focus-ring-color);
+    outline-offset: var(--mj-ring-offset);
+    border-radius: var(--mj-radius-sm);
+}
+
+.dc-desc {
+    margin: 0;
+    font-size: 12px;
+    color: var(--mj-text-muted);
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.dc-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    font-size: 12px;
+    color: var(--mj-text-muted);
+}
+
+.dc-owner,
+.dc-shared,
+.dc-updated {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.dc-shared {
+    padding: 1px 8px;
+    border-radius: var(--mj-radius-full);
+    font-weight: 600;
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+}
+
+.dc-category {
+    padding: 2px 8px;
+    border-radius: var(--mj-radius-full);
+    background: var(--mj-bg-surface-sunken);
+}
+
+/* Search marks come from innerHTML and get no _ngcontent attribute, so they are reached through ::ng-deep under the host */
+:host ::ng-deep mark {
+    background: color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dc-card {
+        transition: none;
+    }
+
+    .dc-card:hover {
+        transform: none;
+    }
+}

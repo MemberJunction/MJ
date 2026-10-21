@@ -1,0 +1,194 @@
+[
+  {
+    "fields": {
+      "Name": "Clef",
+      "Description": "Cloudflare's 27B open-weight decision model (Apache-2.0, released October 1, 2026). It answers Likelihood, Choice (2 to 255 options) and Score (2 to 10 levels) questions, up to 64 in one call, about a state of up to 65,536 tokens, and returns a probability for every allowed option. It writes no text. It takes the same System One request as Jev. Served only on Cloudflare Workers AI, as @cf/cloudflare/clef; Cloudflare reports a median latency of 209 ms. Workers AI also accepts images with the state, which MJ does not send yet. Its raw probabilities are not calibrated to MJ's data, so set thresholds on calibrated values.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 58,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 2,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "MaxQuestionsPerCall": 64,
+          "MaxChoiceOptions": 255,
+          "MaxScoreLevels": 10,
+          "MaxStateTokens": 65536
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cloudflare",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "0A8BFF6D-B3EE-4A27-A955-0FEDA7348CDC"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:59.159Z",
+            "checksum": "86e7f46e0f794ec669a69cb0623fa5093de850b4b8f583544843d43f38cf1d2c"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cloudflare",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "CloudflareDecision",
+            "APIName": "@cf/cloudflare/clef",
+            "MaxInputTokens": 65536,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "4CEAC156-6A17-4407-884E-002365443CC3"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:59.177Z",
+            "checksum": "bcaa2fb08bc0ff80cdf67b2cd3fbe3614c7048593f44e841d04e9198032a6e3e"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cloudflare",
+            "StartedAt": "2026-10-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.24,
+            "OutputPricePerUnit": 0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Clef on Cloudflare Workers AI, October 2026: $0.24 per million input tokens; output is free. Source: https://developers.cloudflare.com/workers-ai/models/clef/"
+          },
+          "primaryKey": {
+            "ID": "511E8D48-E7B7-4133-A90D-27310C4E3D1E"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:59.195Z",
+            "checksum": "a95b22498c516cc04fcdd45d614f43aa36c4f82ac91170391c612e8442b50405"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9F37ABF7-C632-4181-BDFA-86BD36AA4AF3"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:59.111Z",
+      "checksum": "e7dc60d33c09cfad5d092f06bd67658515d8c9e78b349a64192060852429045f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clef-flash",
+      "Description": "Cloudflare's 9B open-weight decision model (Apache-2.0, released October 1, 2026), the smaller sibling of Clef. It answers Likelihood, Choice (2 to 255 options) and Score (2 to 10 levels) questions, up to 64 in one call, about a state of up to 65,536 tokens, and returns a probability for every allowed option. It writes no text. It takes the same System One request as Jev. Served only on Cloudflare Workers AI, as @cf/cloudflare/clef-flash; Cloudflare reports a median latency of 39 ms. Workers AI also accepts images with the state, which MJ does not send yet. Its raw probabilities are not calibrated to MJ's data, so set thresholds on calibrated values.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 54,
+      "IsActive": true,
+      "SpeedRank": 2,
+      "CostRank": 1,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "MaxQuestionsPerCall": 64,
+          "MaxChoiceOptions": 255,
+          "MaxScoreLevels": 10,
+          "MaxStateTokens": 65536
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cloudflare",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "E19A8141-F667-4D74-A483-7DD507F869C3"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:59.212Z",
+            "checksum": "86e7f46e0f794ec669a69cb0623fa5093de850b4b8f583544843d43f38cf1d2c"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cloudflare",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "CloudflareDecision",
+            "APIName": "@cf/cloudflare/clef-flash",
+            "MaxInputTokens": 65536,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7B621499-7EF8-4B6E-9F29-42142D2ED16E"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:59.230Z",
+            "checksum": "fbee95a5a97f8fc90dfcfb172f6c9f06f7dda83e77b9e88c56b6bb6382d1f0e7"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cloudflare",
+            "StartedAt": "2026-10-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.09,
+            "OutputPricePerUnit": 0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Clef-flash on Cloudflare Workers AI, October 2026: $0.09 per million input tokens; output is free. Source: https://developers.cloudflare.com/workers-ai/models/clef-flash/"
+          },
+          "primaryKey": {
+            "ID": "208CFBF9-FEE0-420F-9A19-33193ED67EC8"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T18:59:59.250Z",
+            "checksum": "3b91bc6badf3ff509357151629755e187ebd6c107c3925c72bef1922ff267546"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F43E962D-78D0-43CD-9A23-716DF441BCAD"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:59.133Z",
+      "checksum": "5553ae3fd3a3c873cbe4bb717ae9ade2420e62ad30a1d02dac408a37ed0b3081"
+    }
+  }
+]
