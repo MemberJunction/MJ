@@ -34,6 +34,7 @@ import type { EntitySavePlan } from './entitySavePlan';
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from './entityInfo';
 import type { EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunViewProvider } from './interfaces';
 import { LogError } from './logging';
+import { AssertClientInputWritableForUser } from './entityValueFieldSecurity';
 
 /**
  * When a child collection populates itself from the database.
@@ -1214,6 +1215,10 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
                 out.push(child);
                 continue;
             }
+
+            // A request carries client input: a caller with any field denial may send only the
+            // fields they can read. A no-op without a context user (no server-side caller).
+            AssertClientInputWritableForUser(child.EntityInfo, row.Fields, this.Owner.ContextCurrentUser);
 
             if (row.IsNew) {
                 child.NewRecord();

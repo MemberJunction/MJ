@@ -766,19 +766,20 @@ describe('BaseEntity save guard', () => {
     });
 
     it('ROUND-TRIP SAFETY: a restricted user edits an unrelated field and saves cleanly', async () => {
-        // The regression guard for the rejected load-time-nulling design. Salary is never
-        // nulled in memory, so it is not dirty, so this save is permitted AND the stored
-        // salary is carried through untouched rather than written back as NULL.
+        // The regression guard for the rejected load-time-nulling design. Salary was never
+        // loaded into this user's object at all: it is NOT LOADED, which is not the same as
+        // null. A not-loaded field is not dirty and is left out of the write, so this save is
+        // permitted AND the stored salary is untouched rather than written back as NULL.
         const { entity, saveSpy } = makeEntity(buildUser([INTERN_ROLE_ID]));
         entity.Set('Notes', 'updated note');
 
         await expect(entity.Save(opts())).resolves.toBe(true);
         expect(saveSpy).toHaveBeenCalled();
 
-        // Read the stored value off the EntityField rather than through Get(), which throws for
-        // this user by design. Framework-internal value machinery is exempt from the gate, and
-        // that exemption is exactly what keeps the value intact through the round trip.
-        expect(entity.Fields.find(f => f.Name === 'Salary')!.Value).toBe(250000);
+        const salary = entity.Fields.find(f => f.Name === 'Salary')!;
+        expect(salary.NotLoaded).toBe(true);
+        expect(salary.Dirty).toBe(false);
+        expect('Salary' in entity.GetAll()).toBe(false);
     });
 
     it('does not REJECT an INSERT — a create-denied value is dropped, never an error', async () => {
@@ -903,12 +904,17 @@ describe('BaseEntity Get/Set field-security gate', () => {
         expect(() => entity.SetMany({ Notes: 'x', Salary: 1 })).not.toThrow();
     });
 
-    it('framework-internal reads stay exempt, so the value survives for the save path', () => {
+    it('a denied value never enters the object, so no framework-internal read can return it', () => {
+        // Previously the object held the denied value and only the typed accessors refused it,
+        // so GetAll(), Fields[].Value and every serializer built on them returned it. Hydration
+        // now leaves the field not loaded and empty for this user.
         const entity = makeEntity(buildUser([INTERN_ROLE_ID]));
 
         expect(() => entity.Get('Salary')).toThrow();
-        expect(entity.Fields.find(f => f.Name === 'Salary')!.Value).toBe(250000);
-        expect(entity.GetAll()['Salary']).toBe(250000);
+        const salary = entity.Fields.find(f => f.Name === 'Salary')!;
+        expect(salary.NotLoaded).toBe(true);
+        expect(salary.Value ?? null).toBeNull();
+        expect('Salary' in entity.GetAll()).toBe(false);
     });
 
     // ── GetRecordName: the read that runs whether or not anyone asked for it ──

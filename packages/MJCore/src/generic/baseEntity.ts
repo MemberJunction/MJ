@@ -18,6 +18,7 @@ import { EntitySavePlan, ExecuteEntitySavePlan } from './entitySavePlan';
 import { EntityTransactionScope } from './entityTransactionScope';
 import { JSONFieldBinding, JSONFieldRuleSet, JSONFieldSeverity, ValidateJSONFieldValue } from './jsonFieldBinding';
 import { BaseRemotableOperation } from './baseRemotableOperation';
+import { OmitDeniedFieldKeys } from './entityValueFieldSecurity';
 import {
     SAVE_ENTITY_GRAPH_OPERATION_KEY,
     type SaveEntityGraphInput,
@@ -232,7 +233,18 @@ export class EntityField {
     }
 
     /**
-     * Sets the value of the field. If the field is read only, nothing happens. If the field is not read only, the value is set and the internal representation of the dirty flag is flipped if the value is different from the old value.
+     * Sets the value of the field.
+     *
+     * - A read-only field accepts ONE set after construction or {@link ResetNeverSetFlag} (how a
+     *   load populates it); later sets are ignored.
+     * - Dirty state is not stored here: {@link Dirty} compares the value with {@link OldValue} when
+     *   it is read. A set during record setup (the first set of a never-set field) also becomes
+     *   the old value, so it is not dirty.
+     * - A set onto a {@link NotLoaded} field clears that flag and is always dirty, whatever the
+     *   value, even one equal to the field's construction state. The write therefore reaches the
+     *   save and its update-permission check.
+     * - No field-level security or active-status check happens here. Those live at
+     *   `BaseEntity.Get`/`Set` and at the save; this accessor is framework-internal.
      */
     set Value(value: any) {
         // No active-status assertion here — see the Value getter note. Deprecation/disabled checks
@@ -591,6 +603,11 @@ export class EntityField {
 
     /**
      * This method will set the internal Old Value which is used to track dirty state, to the current value of the field. This effectively resets the dirty state of the field to false. Use this method sparingly.
+     *
+     * It also clears the written-after-not-loaded flag: the current value becomes the field's
+     * loaded baseline. The hydration paths rely on that (a reload that supplies the field must not
+     * leave it dirty), so code outside hydration must not call this to "accept" a write onto a
+     * not-loaded field, or the write would be saved without being seen as a change.
      */
     public ResetOldValue() {
         this._oldValue = this.Value;
@@ -2675,6 +2692,8 @@ export abstract class BaseEntity<T = unknown> {
         // _everSaved, and recreates all EntityField instances with _NeverSet = true
         this.init();
         this.discardJSONFieldObjects();
+        // Field security: denied values never enter this object (see narrowHydrationSource).
+        data = this.narrowHydrationSource(data);
 
         // Recursively hydrate parent entities first (deepest ancestor resets first).
         // After init(), parent fields have fresh _NeverSet=true, so SetMany can set PKs.
@@ -3026,7 +3045,11 @@ export abstract class BaseEntity<T = unknown> {
 
         // Root: rebase field values and dirty state onto what the database now holds.
         this.init();
-        this.SetMany(output.Fields, false, true, true);
+        const fields = this.narrowHydrationSource(output.Fields);
+        this.SetMany(fields, false, true, true);
+        // A hydration source like any other: a field the result omitted (the server withheld it, or
+        // this user may not hold it) is not loaded, so its construction state is never resent as data.
+        this.markFieldsOmittedBySourceAsNotLoaded(fields);
         this._recordLoaded = true;
         this._everSaved = true;
 
@@ -4179,11 +4202,14 @@ export abstract class BaseEntity<T = unknown> {
      * nothing like field security.
      *
      * Framework-internal value machinery (`Dirty`, `Validate`, `GetAll`, hydration, save-SQL
-     * build) reads `EntityField.Value` directly and never routes through here — that exemption
-     * is load-bearing, not an oversight. Do not "fix" it.
+     * build) reads `EntityField.Value` directly and never routes through here. It needs no gate
+     * of its own: every hydration point leaves a denied field not-loaded and empty for a
+     * restricted user (see {@link narrowHydrationSource}), so there is no denied value for that
+     * machinery to read. This assertion is what turns asking for one into an error rather than a
+     * silent null.
      */
     private assertFieldReadable(fieldName: string): void {
-        const denied = this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedReadFields(u));
+        const denied = this.deniedReadFieldsForActiveUser();
         if (denied?.has(fieldName?.trim().toLowerCase())) {
             throw new FieldSecurityError(fieldName, this.EntityInfo.Name);
         }
@@ -4760,12 +4786,21 @@ export abstract class BaseEntity<T = unknown> {
      * Called only by the hydration entry points ({@link LoadFromData} both modes, {@link Hydrate},
      * {@link InnerLoad}) — never by plain {@link SetMany}, which is an incremental mutation API
      * where omitting a field means "leave it alone," not "this field was never loaded."
-     * Both the field Name and CodeName are checked, matching SetMany's key acceptance.
+     * Both the field Name and CodeName are checked, case-insensitively, matching SetMany's key
+     * acceptance: SetMany applies `{name: 'b'}` to a field called `Name`, so an exact-case lookup
+     * here would mark the value it just applied as not loaded, and GetAll and the save would then
+     * drop it.
      */
     private markFieldsOmittedBySourceAsNotLoaded(source: Record<string, unknown>): void {
         if (!source || typeof source !== 'object') return;
+        const presentKeys = new Set<string>();
+        for (const key of Object.keys(source)) {
+            if (source[key] !== undefined) {
+                presentKeys.add(key.trim().toLowerCase());
+            }
+        }
         for (const field of this.Fields) {
-            if (source[field.Name] === undefined && source[field.CodeName] === undefined) {
+            if (!presentKeys.has(field.Name.trim().toLowerCase()) && !presentKeys.has(field.CodeName.trim().toLowerCase())) {
                 // Cleared, not just flagged: otherwise a default from construction, or the previous
                 // record's value on a reload, reads back through Get() as if it had been loaded.
                 field.ClearAsNotLoaded();
@@ -5520,6 +5555,10 @@ export abstract class BaseEntity<T = unknown> {
             } else {
                 fieldData = rawFieldData;
             }
+            // The save returns the whole row, whoever saved it. The provider has already built the
+            // Record Changes payload from this entity's pre-save state, so narrowing the response
+            // here costs the audit nothing; it only keeps denied values out of this object.
+            fieldData = this.narrowHydrationSource(fieldData);
             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
             // IS-A GetAll() merges the parent, including parent virtuals this entity
             // does not own (e.g. OrderHeader on Event Order Line). Keep only columns
@@ -5730,7 +5769,7 @@ export abstract class BaseEntity<T = unknown> {
                 // deliberately skips the readability assertion (hydration / resolver-apply path),
                 // so server-side code can dirty a read-denied field and land here.
                 if (deniedRead === undefined) {
-                    deniedRead = this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedReadFields(u));
+                    deniedRead = this.deniedReadFieldsForActiveUser();
                 }
                 throw deniedRead?.has(key)
                     ? new FieldSecurityError(field.Name, this.EntityInfo.Name)
@@ -5801,6 +5840,36 @@ export abstract class BaseEntity<T = unknown> {
         }
         const denied = select(u);
         return denied.size > 0 ? denied : null;
+    }
+
+    /**
+     * The fields this object's user may not READ, lowercased by Name and CodeName, or null when
+     * field security does not apply. Every readability question this class asks, at hydration,
+     * at the typed accessors and at the save gates, goes through here.
+     */
+    private deniedReadFieldsForActiveUser(): Set<string> | null {
+        return this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedReadFields(u));
+    }
+
+    /**
+     * A hydration source reduced to what this object's user may hold: the same object when the
+     * user is denied nothing (or field security does not apply), otherwise a shallow copy without
+     * the denied keys, matched case-insensitively under Name and CodeName.
+     *
+     * Every point that fills this object from a row passes the row through here first, which is
+     * what makes the object's width a property of its user rather than of the path that built it.
+     * A key absent from a hydration source already means "not loaded" everywhere (`GetAll`, field
+     * building, the save), so omitting a denied key is all it takes for the value never to enter
+     * the object, and for every accessor and serializer to be correct without a check of its own.
+     *
+     * The caller's row is never modified, because it can be a frozen row shared through a cache,
+     * and an unrestricted user's row is returned by reference, so the raw load path stays zero-copy.
+     */
+    private narrowHydrationSource<S>(source: S): S {
+        if (!source || typeof source !== 'object' || Array.isArray(source) || source instanceof Date) {
+            return source;
+        }
+        return OmitDeniedFieldKeys(source, this.deniedReadFieldsForActiveUser());
     }
 
     /**
@@ -5877,7 +5946,7 @@ export abstract class BaseEntity<T = unknown> {
                 this.init(); // wipe out current data if we're loading on top of existing record
             }
 
-            const data = await this.readRowForLoad(CompositeKey, EntityRelationshipsToLoad);
+            let data = await this.readRowForLoad(CompositeKey, EntityRelationshipsToLoad);
             this.discardJSONFieldObjects(); // a reload replaces the record's data
             if (!data) {
                 // A subtype-hint probe asks whether this row exists, so "no" is an answer, not an error
@@ -5886,6 +5955,9 @@ export abstract class BaseEntity<T = unknown> {
                 }
                 return false; // no data loaded, return false
             }
+            // Field security: denied values never enter this object, even from a provider that
+            // did not narrow its SELECT (see narrowHydrationSource).
+            data = this.narrowHydrationSource(data);
 
             // IS-A: hydrate parent chain from loaded data before populating self.
             // Hydrate resets each parent via init() (giving fresh _NeverSet=true on PK fields)
@@ -6048,6 +6120,9 @@ export abstract class BaseEntity<T = unknown> {
      */
     public async LoadFromData(data: any, _replaceOldValues: boolean = false): Promise<boolean> {
         this.discardJSONFieldObjects(); // the record's data is being replaced: parsed JSON objects are stale
+        // Field security: a restricted user's object holds a copy of the row without the keys they
+        // are denied; anyone else's keeps the caller's row by reference (see narrowHydrationSource).
+        data = this.narrowHydrationSource(data);
         // IS-A: hydrate parent chain from data before populating self.
         // Hydrate resets each parent via init() (giving fresh _NeverSet=true on PK fields)
         // then populates from data, ensuring correct PK and saved state on parents.
@@ -6979,7 +7054,7 @@ export abstract class BaseEntity<T = unknown> {
         //
         // Returning null is the same answer callers already handle for "this entity has no name
         // field", and every one of them degrades to the primary key.
-        if (!this.EntityInfo.IsFieldReadableByUser(f.Name, this.ActiveUser)) {
+        if (this.deniedReadFieldsForActiveUser()?.has(f.Name.trim().toLowerCase())) {
             return null;
         }
         return this.Get(f.Name);
