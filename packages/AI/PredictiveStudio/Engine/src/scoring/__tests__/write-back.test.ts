@@ -110,8 +110,8 @@ class TestWriteBackWrapper implements IRecordProcessor {
 }
 
 const CTX: RecordProcessorContext = {
-  contextUser: undefined as unknown as UserInfo,
-  provider: undefined as unknown as IMetadataProvider,
+  ContextUser: undefined as unknown as UserInfo,
+  Provider: undefined as unknown as IMetadataProvider,
 };
 
 function record(id: string): RecordRef {

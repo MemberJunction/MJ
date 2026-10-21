@@ -131,7 +131,7 @@ export type FlowCompileResult = {
  * Compiles a flow's steps and paths into a `TaskGraphSpec`.
  *
  * The order of the phases below is load-bearing and is the plan's §7:
- * exclusion → single entry → reachability prune → cycle rejection → emission.
+ * exclusion → entry points → reachability prune → cycle rejection → emission.
  */
 export function CompileFlowToTaskGraph(
     steps: readonly FlowCompilerStep[],
@@ -151,45 +151,25 @@ export function CompileFlowToTaskGraph(
     const activeIDs = new Set(active.map((s) => s.ID));
     const livePaths = paths.filter((p) => activeIDs.has(p.OriginStepID) && activeIDs.has(p.DestinationStepID));
 
-    // ── 2. Single entry ──────────────────────────────────────────────────────
-    // The walker starts at ONE step: `getStartingSteps` sorts by Name and takes the first. Other
-    // steps flagged StartingStep are not entries, and compiling them as additional roots would run
-    // work the flow never ran.
+    // ── 2. Entry points ──────────────────────────────────────────────────────
+    // Every active step marked StartingStep is an entry root of the compiled graph. Multiple
+    // starting steps compile as parallel wave-1 roots (dependsOn: []), matching task graphs
+    // saved via ConvertTaskGraphToAgentSpec and multi-entry workflows that fan in at a join.
     const startingSteps = active.filter((s) => s.StartingStep === true).sort((a, b) => a.Name.localeCompare(b.Name));
     if (startingSteps.length === 0) {
         errors.push({
             Code: 'NoStartingStep',
-            Message: 'This workflow has no active first step, so there is nothing to run. Mark one step as the starting step and make sure it is active.',
+            Message: 'This workflow has no active first step, so there is nothing to run. Mark at least one step as a starting step and make sure it is active.',
         });
         return { Success: false, Errors: errors, Excluded: excluded };
     }
-    const entry = startingSteps[0];
 
     // ── 3. Reachability prune ────────────────────────────────────────────────
-    // Anything the walker can never reach from the entry must not become a second root.
-    const reachable = computeReachable(entry.ID, livePaths);
+    // Anything reachable from any starting step is compiled; disconnected non-starting islands
+    // are pruned rather than becoming implicit roots.
+    const reachable = computeReachable(startingSteps.map((s) => s.ID), livePaths);
     const compiledSteps = active.filter((s) => reachable.has(s.ID));
     for (const s of active) if (!reachable.has(s.ID)) excluded.push({ StepID: s.ID, Reason: 'Unreachable' });
-
-    // A step the author explicitly marked as a STARTING step, dropped for being unreachable, is
-    // reported rather than quietly excluded. Everything else pruned here was simply not wired up;
-    // this one was wired up *as an entry point* and the single-entry rule overruled it. Staying
-    // silent is how a workflow ships with half its work missing while looking correct on the canvas
-    // — which is exactly what happened to the Content Pipeline demo: its second research step was
-    // pruned, the join it fed had one input instead of two, and every draft was written from half
-    // the evidence. Nothing anywhere said so.
-    for (const s of startingSteps) {
-        if (reachable.has(s.ID)) continue;
-        errors.push({
-            Code: 'UnreachableStartingStep',
-            Message:
-                `Step "${s.Name}" is marked as a starting step, but this workflow begins at ` +
-                `"${entry.Name}" and nothing leads from there to it, so it would never run. ` +
-                `A workflow has ONE starting step: connect "${s.Name}" into the flow, or make it ` +
-                `the starting step instead.`,
-            StepID: s.ID,
-        });
-    }
 
     const compiledIDs = new Set(compiledSteps.map((s) => s.ID));
     const compiledPaths = livePaths.filter((p) => compiledIDs.has(p.OriginStepID) && compiledIDs.has(p.DestinationStepID));
@@ -332,15 +312,15 @@ function withDecisionStepIDs(
     };
 }
 
-/** Everything reachable from the entry by following paths forward. */
-function computeReachable(entryID: string, paths: readonly FlowCompilerPath[]): Set<string> {
+/** Everything reachable from any starting step by following paths forward. */
+function computeReachable(entryIDs: readonly string[], paths: readonly FlowCompilerPath[]): Set<string> {
     const forward = new Map<string, string[]>();
     for (const p of paths) {
         const list = forward.get(p.OriginStepID);
         if (list) list.push(p.DestinationStepID); else forward.set(p.OriginStepID, [p.DestinationStepID]);
     }
-    const seen = new Set<string>([entryID]);
-    const stack = [entryID];
+    const seen = new Set<string>(entryIDs);
+    const stack = [...entryIDs];
     while (stack.length > 0) {
         for (const next of forward.get(stack.pop()!) ?? []) {
             if (seen.has(next)) continue;

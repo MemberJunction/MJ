@@ -81,6 +81,8 @@ pnpm mj test run "IT30 - Conversation Compaction (assembly layer)"   # single bu
 ```
 Unit tests passing is necessary but **not sufficient** — the integration tier catches the seams between packages that unit tests mock away. Run it after migrations + CodeGen have been applied. Full details, authoring rules, and the client-first transport doctrine: [`guides/INTEGRATION_TESTING_QUICKSTART.md`](guides/INTEGRATION_TESTING_QUICKSTART.md).
 
+**Repo-wide gates** — `npm run check:guards` and `npm run check:standards` must pass. Neither is a required check, so a red one merges and breaks `next` for every later PR. A hook runs both before `git push` / `gh pr create`.
+
 ---
 
 ## Always-true facts
@@ -180,6 +182,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 ```bash
 npm run check:ui          # design-token + button gates on changed CSS/SCSS (mirrors the PR gate)
 npm run check:standards   # every adopted MJ standard (see .mj-standards.json)
+npm run check:guards      # UUID, global-provider and primary-key source scanners (CI "Source guards")
 npm run check:esm         # native-ESM import guard for "type": "module" packages
 npm run check:claude-md   # instruction-file budget, link validity, and routing-table coverage
 npm run check:changeset   # changeset bump levels (local only — no CI gate enforces this one)
