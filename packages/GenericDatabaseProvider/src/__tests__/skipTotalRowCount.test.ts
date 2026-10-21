@@ -206,4 +206,22 @@ describe('InternalRunView — full-page fallback COUNT and SkipTotalRowCount', (
         expect(countQueries(provider.executed)).toHaveLength(1);
         expect(result.TotalRowCount).toBe(47);
     });
+
+    it('a paginated read (StartRow) still counts up front by default', async () => {
+        provider.dataRows = [{ ID: 'r1', Name: 'a' }];
+        const result = await provider.testRunView({ EntityName: 'Widgets', StartRow: 0, MaxRows: 10, ResultType: 'simple' });
+        expect(result.Success).toBe(true);
+        expect(countQueries(provider.executed)).toHaveLength(1);
+        expect(result.TotalRowCount).toBe(47);
+    });
+
+    it('SkipTotalRowCount: true also skips the up-front pagination COUNT', async () => {
+        // Fewer rows than MaxRows, so the full-page fallback cannot fire: only the pagination
+        // count could, and the flag must suppress it.
+        provider.dataRows = [{ ID: 'r1', Name: 'a' }];
+        const result = await provider.testRunView({ EntityName: 'Widgets', StartRow: 0, MaxRows: 10, ResultType: 'simple', SkipTotalRowCount: true });
+        expect(result.Success).toBe(true);
+        expect(countQueries(provider.executed)).toHaveLength(0);
+        expect(result.TotalRowCount).toBe(1);
+    });
 });

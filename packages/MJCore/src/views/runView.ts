@@ -224,6 +224,11 @@ export class RunViewParams {
      * single-row existence/lookup read (`MaxRows: 1`) it fires on every HIT, so a hot lookup path
      * pays double round trips to compute a total it never reads. Set this on reads that only
      * consume `Results`. Ignored for `ResultType: 'count_only'`, whose entire point is the count.
+     *
+     * Scope: it also suppresses the up-front count a PAGINATED read (`StartRow` with `MaxRows`)
+     * runs, so a paginated caller that needs "1-100 of N" must leave it unset. With the flag,
+     * `TotalRowCount` is always the number of rows returned. Calls with and without it get
+     * separate cache slots, since their `TotalRowCount` differs.
      */
     SkipTotalRowCount?: boolean;
     /**
