@@ -11,6 +11,8 @@ import { ResolveSegmenter } from '@memberjunction/ai-segmentation';
 import {
     BasePipelineStage,
     Outcome,
+    ResolveConfidence,
+    ResolvedConfidenceScale,
     StageContext,
     StageDeclaration,
     StageOutcome,
@@ -18,8 +20,8 @@ import {
     WorkingRecord,
     WorkingRecordEntity,
     WorkingRecordIdentity,
-    ConfidenceScale,
 } from '@memberjunction/content-pipeline-base';
+import { ContentSourceConfigurationResolver } from '../ContentSourceConfigurationResolver.js';
 
 /** The registered name. */
 export const SEGMENT_STAGE = 'Segment';
@@ -35,7 +37,7 @@ export class SegmentStage extends BasePipelineStage {
         return {
             Reads: ['Text', 'Modality', 'Decorator'],
             Writes: [],
-            ReadsExtensions: [],
+            ReadsExtensions: ['Pipeline.contentSourceID', 'Pipeline.segmenterKeyOverride'],
             WritesExtensions: [`${SEGMENT_STAGE}.segmenterKey`, `${SEGMENT_STAGE}.segmentCount`],
         };
     }
@@ -49,15 +51,15 @@ export class SegmentStage extends BasePipelineStage {
             return Outcome.Skipped('no text to segment');
         }
 
-        const requestedKey = await this.segmenterKey(record, context);
+        const resolved = await this.resolveSegmentation(record, context);
         // An unresolvable key degrades to a default, so the key that actually ran is what gets recorded.
-        const segmenter = ResolveSegmenter(requestedKey ?? undefined);
+        const segmenter = ResolveSegmenter(resolved.SegmenterKey ?? undefined);
 
         let result;
         try {
             result = await segmenter.Segment({
                 Text: text,
-                Options: (context.Configuration.SegmentationOptions as Record<string, unknown>) ?? {},
+                Options: resolved.Options,
             } as never);
         } catch (error) {
             throw new TransientStageError(
@@ -75,7 +77,7 @@ export class SegmentStage extends BasePipelineStage {
 
         const decorator = record.Get('Decorator');
         for (const segment of result.Segments) {
-            record.AddChild(this.toChunk(record, segment, decorator));
+            record.AddChild(this.toChunk(record, segment, decorator, resolved.Confidence));
         }
         record.SetExtension(SEGMENT_STAGE, 'segmenterKey', result.SegmenterKey);
         record.SetExtension(SEGMENT_STAGE, 'segmentCount', result.Segments.length);
@@ -91,38 +93,63 @@ export class SegmentStage extends BasePipelineStage {
         parent: WorkingRecord,
         segment: { Sequence: number; Text?: string; Modality: string },
         decorator: unknown,
+        confidence: ResolvedConfidenceScale,
     ): WorkingRecord {
         const url = `${parent.Identity.EphemeralID}#segment-${segment.Sequence}`;
         const chunk = new WorkingRecord(new WorkingRecordIdentity('Content Item Chunk', url));
         // No well-known field holds Sequence, so it rides to the committer as a per-child column.
         chunk.SetExtension('Pipeline', 'columns', { Sequence: segment.Sequence });
-        chunk.Propose('Text', segment.Text ?? '', ConfidenceScale.SegmentText, SEGMENT_STAGE);
-        chunk.Propose('Modality', segment.Modality, ConfidenceScale.SegmentText, SEGMENT_STAGE);
+        chunk.Propose('Text', segment.Text ?? '', confidence.SegmentText, SEGMENT_STAGE);
+        chunk.Propose('Modality', segment.Modality, confidence.SegmentText, SEGMENT_STAGE);
         if (typeof decorator === 'string' && decorator.length > 0) {
             chunk.Propose('Decorator', decorator, parent.GetConfidence('Decorator'), `${SEGMENT_STAGE}.InheritedFromParent`);
         }
         return chunk;
     }
 
-    /** The segmenter key: the run's configuration, then the Content Source, then its Content Type. */
-    private async segmenterKey(record: WorkingRecord, context: StageContext): Promise<string | null> {
-        const configured = context.Configuration.SegmenterKey;
-        if (typeof configured === 'string' && configured.length > 0) {
-            return configured;
-        }
+    /**
+     * Resolves segmentation settings in canonical precedence order:
+     * Item override → Run Configuration → Content Source → Content Source Type / Content Type → Default.
+     */
+    private async resolveSegmentation(
+        record: WorkingRecord,
+        context: StageContext,
+    ): Promise<{ SegmenterKey: string | null; Confidence: ResolvedConfidenceScale; Options: Record<string, unknown> }> {
+        const itemOverride = record.GetExtension<string>('Pipeline', 'segmenterKeyOverride');
+        const runKey = typeof context.Configuration.SegmenterKey === 'string' && context.Configuration.SegmenterKey.length > 0
+            ? context.Configuration.SegmenterKey
+            : null;
         const contentSourceID = record.GetExtension<string>('Pipeline', 'contentSourceID');
         if (!contentSourceID) {
-            return null;
+            return {
+                SegmenterKey: itemOverride ?? runKey,
+                Confidence: ResolveConfidence(context.Configuration),
+                Options: (context.Configuration.SegmentationOptions as Record<string, unknown>) ?? {},
+            };
         }
         const knowledge = KnowledgeHubMetadataEngine.Instance;
         await knowledge.Config(false, context.ContextUser, context.Provider);
         const source = knowledge.ContentSources.find((c) => UUIDsEqual(c.ID, contentSourceID));
-        if (source?.SegmenterKey) {
-            return source.SegmenterKey;
-        }
         const contentType = source?.ContentTypeID
             ? knowledge.ContentTypes.find((t) => UUIDsEqual(t.ID, source.ContentTypeID))
             : undefined;
-        return contentType?.SegmenterKey ?? null;
+        const resolvedConfig = source
+            ? await new ContentSourceConfigurationResolver(context.Provider, context.ContextUser).Resolve(contentSourceID, context.ContextUser)
+            : null;
+        const sourceKey =
+            source?.SegmenterKey ??
+            (typeof resolvedConfig?.Settings.SegmenterKey === 'string' ? resolvedConfig.Settings.SegmenterKey : null);
+        const typeKey =
+            contentType?.SegmenterKey ??
+            (typeof resolvedConfig?.TypeConfiguration.SegmenterKey === 'string' ? resolvedConfig.TypeConfiguration.SegmenterKey : null);
+        return {
+            SegmenterKey: itemOverride ?? runKey ?? sourceKey ?? typeKey ?? null,
+            Confidence: ResolveConfidence(resolvedConfig?.Confidence, context.Configuration),
+            Options: {
+                ...(resolvedConfig?.Settings.SegmentationOptions as Record<string, unknown> | undefined),
+                ...((context.Configuration.SegmentationOptions as Record<string, unknown>) ?? {}),
+            },
+        };
     }
 }
+

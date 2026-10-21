@@ -525,6 +525,7 @@ export class AutotagEntity extends AutotagBase {
         const orderBy = !keyset ? entityInfo.PrimaryKeys.map((pk) => `[${pk.Name}] ASC`).join(', ') : undefined;
         const hasUpdatedAt = entityInfo.Fields.some((f) => f.Name === '__mj_UpdatedAt');
         const extraFilter = request.Since && hasUpdatedAt ? `__mj_UpdatedAt > '${request.Since.toISOString()}'` : undefined;
+        const confidence = request.Confidence ?? ConfidenceScale;
         let afterKey: CompositeKey | undefined;
         for (let read = 0; ; ) {
             const result = await rv.RunView<Record<string, unknown>>({
@@ -540,7 +541,7 @@ export class AutotagEntity extends AutotagBase {
             for (const record of result.Results) {
                 if (request.Signal.aborted) return;
                 afterKey = CompositeKey.FromEntityRecord(entityInfo, record);
-                yield this.toDiscoveredItem(entityInfo, record, afterKey);
+                yield this.toDiscoveredItem(entityInfo, record, afterKey, confidence);
             }
             read += result.Results.length;
             if (result.Results.length < AutotagEntity.DISCOVER_PAGE_SIZE) return;
@@ -549,7 +550,12 @@ export class AutotagEntity extends AutotagBase {
     }
 
     /** One row as a discovered item, titled the way the autotagger names its Content Item. */
-    private toDiscoveredItem(entityInfo: EntityInfo, record: Record<string, unknown>, key: CompositeKey): DiscoveredItem {
+    private toDiscoveredItem(
+        entityInfo: EntityInfo,
+        record: Record<string, unknown>,
+        key: CompositeKey,
+        confidence: { DiscoveredTitle: number; DiscoveredDate: number },
+    ): DiscoveredItem {
         const rawUpdatedAt = record.__mj_UpdatedAt;
         const updatedAt = rawUpdatedAt instanceof Date
             ? rawUpdatedAt
@@ -561,8 +567,8 @@ export class AutotagEntity extends AutotagBase {
         return {
             URL: key.ToCompactURLSegment(),
             Fields: [
-                ...(title ? [{ Field: 'Title' as const, Value: title, Confidence: ConfidenceScale.DiscoveredTitle }] : []),
-                ...(validDate ? [{ Field: 'Date' as const, Value: validDate, Confidence: ConfidenceScale.DiscoveredDate }] : []),
+                ...(title ? [{ Field: 'Title' as const, Value: title, Confidence: confidence.DiscoveredTitle }] : []),
+                ...(validDate ? [{ Field: 'Date' as const, Value: validDate, Confidence: confidence.DiscoveredDate }] : []),
             ],
         };
     }

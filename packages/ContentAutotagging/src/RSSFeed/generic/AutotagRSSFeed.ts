@@ -263,6 +263,7 @@ export class AutotagRSSFeed extends AutotagBase {
 
     /** List the feed's entries for the pipeline. Throws on an unreadable feed so the walk stays due. */
     public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
+        const confidence = request.Confidence ?? ConfidenceScale;
         for (const entry of await this.readFeed(request.URL, request.Access, request.Signal)) {
             if (request.Signal.aborted) {
                 return;
@@ -279,9 +280,9 @@ export class AutotagRSSFeed extends AutotagBase {
             yield {
                 URL: entry.link,
                 Fields: [
-                    ...(entry.title ? [{ Field: 'Title' as const, Value: entry.title, Confidence: ConfidenceScale.DiscoveredTitle }] : []),
+                    ...(entry.title ? [{ Field: 'Title' as const, Value: entry.title, Confidence: confidence.DiscoveredTitle }] : []),
                     ...(validPublished
-                        ? [{ Field: 'Date' as const, Value: validPublished, Confidence: ConfidenceScale.DiscoveredDate }]
+                        ? [{ Field: 'Date' as const, Value: validPublished, Confidence: confidence.DiscoveredDate }]
                         : []),
                 ],
             };

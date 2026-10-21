@@ -39,14 +39,14 @@ outside a server, call `RegisterPipelineWorkType()` and `LoadContentPipelineStag
 
 | Stage | Runs over | Reuses |
 |---|---|---|
-| Discover | Content Source | The source type's existing driver (`ContentSourceType.DriverClass`, an `AutotagBase` subclass) and its `Discover` method (`Options.Mode`: `'Discover'` incremental via `LastDiscoveredAt`, or `'Sync'` exhaustive orphan sweep via `LastSyncedAt`) |
-| Extract | Content Item | Detection rules from `MJ: Content File Types`; the driver's `Fetch` or `HttpGet`; `@memberjunction/document-parsing`; SHA-256 content checksum reconciliation; durable copies through `FileStorageEngine.UploadFile` |
-| Tag | Content Item | The Content Autotagging prompt and the autotagger's shared prompt helpers; tags through `TagEngine` |
-| Segment | Content Item | `@memberjunction/ai-segmentation` |
+| Discover | Content Source | The source type's existing driver (`ContentSourceType.DriverClass`, an `AutotagBase` subclass) and its `Discover` method (`Options.Mode`: `'Discover'` incremental via `LastDiscoveredAt` minus `ClockSkewOverlapMs`, or `'Sync'` exhaustive orphan sweep via `LastSyncedAt`); session access via `AccessResolver` (`BaseAccessDriver`, including `CredentialAccessDriver`) |
+| Extract | Content Item | Detection rules from `MJ: Content File Types`; `AccessResolver` + the driver's `Fetch` or `HttpGet`; `@memberjunction/document-parsing`; SHA-256 content checksum reconciliation; durable copies through `FileStorageEngine.UploadFile` |
+| Tag | Content Item | `BaseContentClassifier` registry (`ClassifierKey`), defaulting to `ManagedPromptClassifier` wrapping the shared Content Autotagging prompt (`ContentAutotagPrompt`); tags promoted through `TagEngine` |
+| Segment | Content Item | `@memberjunction/ai-segmentation` (`SegmenterKey`) |
 | Embed / Delete | Chunk or Item | `ContentVectorInfrastructure` (shared with the autotagger) for index, model, credential and namespace; `AIEmbeddingRunner`; the vector providers |
 
-Extract picks an extractor by: the item's `ExtractorKeyOverride` → the source's `ExtractorKey` setting →
-`ContentType.ExtractorKey` → `ContentFileType.ExtractorKey` → a sanity-checked plain-text read.
+Every stage resolves its settings in the same precedence order:
+**Item override → Run `Configuration` (`Options`) → Content Source → Content Source Type / Content Type → File Type / Default**.
 
 ## Hydrate and commit
 

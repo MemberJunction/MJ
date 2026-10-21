@@ -1,6 +1,7 @@
 /**
- * @fileoverview Selecting a content extractor: override → source → content type → file type. When
- * no rung applies, Extract does its plain-text fallback.
+ * @fileoverview Selecting a content extractor through the unified setting precedence:
+ * Item override → Run `Configuration` → Content Source → Content Source Type / Content Type → File Type.
+ * When no rung applies, Extract does its plain-text fallback.
  *
  * @module @memberjunction/content-pipeline
  */
@@ -13,9 +14,11 @@ export interface ExtractorCascadeInputs {
     FileType: string;
     /** `ContentItem.ExtractorKeyOverride`, or one a splitting extractor stamped on its child. */
     ExtractorKeyOverride?: string | null;
-    /** The source's `Configuration.ExtractorKey`. */
+    /** The run's `Configuration.ExtractorKey`. */
+    RunExtractorKey?: string | null;
+    /** The source's `Configuration.Extractors[FileType]` or `Configuration.ExtractorKey`. */
     SourceExtractorKey?: string | null;
-    /** `ContentType.ExtractorKey`. */
+    /** `ContentType.ExtractorKey` (or `ContentSourceType.Configuration.ExtractorKey`). */
     ContentTypeExtractorKey?: string | null;
     /** `ContentFileType.ExtractorKey`. */
     FileTypeExtractorKey?: string | null;
@@ -33,7 +36,13 @@ export interface SelectedExtractor {
  * to handle the spreadsheets beside the PDFs.
  */
 export function SelectExtractor(inputs: ExtractorCascadeInputs): SelectedExtractor | null {
-    const rungs = [inputs.ExtractorKeyOverride, inputs.SourceExtractorKey, inputs.ContentTypeExtractorKey, inputs.FileTypeExtractorKey];
+    const rungs = [
+        inputs.ExtractorKeyOverride,
+        inputs.RunExtractorKey,
+        inputs.SourceExtractorKey,
+        inputs.ContentTypeExtractorKey,
+        inputs.FileTypeExtractorKey,
+    ];
     for (const key of rungs) {
         const extractor = key ? BaseContentExtractor.Resolve(key) : null;
         if (key && extractor?.Supports(inputs.FileType)) {

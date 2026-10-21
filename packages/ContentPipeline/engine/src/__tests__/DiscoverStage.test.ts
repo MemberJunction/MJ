@@ -232,15 +232,29 @@ describe('discovery can need credentials too', () => {
         expect(seenRequests.at(-1)?.Access).toBeNull();
     });
 
-    it('passes the hydrated LastDiscoveredAt watermark as Since on incremental walks', async () => {
+    it('passes the hydrated LastDiscoveredAt watermark minus ClockSkewOverlapMs as Since on incremental walks', async () => {
         const lastDiscovered = new Date('2026-10-15T08:00:00Z');
         const record = sourceRecord();
         record.SetExtension('Pipeline', 'lastDiscoveredAt', lastDiscovered);
         await new DiscoverStage().Run(record, contextWith());
-        expect(seenRequests.at(-1)?.Since).toBe(lastDiscovered);
+        expect(seenRequests.at(-1)?.Since?.toISOString()).toBe(new Date(lastDiscovered.getTime() - 60_000).toISOString());
         const completion = record.GetExtension<Record<string, unknown>>('Pipeline', 'completionColumns');
+        expect(completion?.ForceDiscovery).toBe(false);
         expect(completion?.LastDiscoveredAt).toBeInstanceOf(Date);
         expect(completion?.LastSyncedAt).toBeUndefined();
+    });
+
+    it('computes a 64-character SHA-256 checksum when a driver yields inline Text', async () => {
+        items = [
+            {
+                URL: 'entity:Records/1',
+                Fields: [{ Field: 'Text', Value: 'Inline entity content', Confidence: 7 }],
+                Complete: true,
+            },
+        ];
+        const record = sourceRecord();
+        await new DiscoverStage().Run(record, contextWith());
+        expect(record.Children[0].GetExtension<string>('Pipeline', 'checksum')).toMatch(/^[0-9a-f]{64}$/);
     });
 
     it('refuses a Sync walk when the driver does not support exhaustive walks', async () => {
@@ -248,7 +262,7 @@ describe('discovery can need credentials too', () => {
         await expect(new DiscoverStage().Run(sourceRecord(), ctx)).rejects.toThrow(/SupportsExhaustiveWalk = false/);
     });
 
-    it('passes Since = null and records LastSyncedAt when Sync runs over an exhaustive driver', async () => {
+    it('passes Since = null, records LastSyncedAt, and does NOT clear ForceDiscovery when Sync runs over an exhaustive driver', async () => {
         supportsExhaustiveWalk = true;
         try {
             const record = sourceRecord();
@@ -258,6 +272,7 @@ describe('discovery can need credentials too', () => {
             expect(outcome.Status).toBe('Complete');
             expect(seenRequests.at(-1)?.Since).toBeNull();
             const completion = record.GetExtension<Record<string, unknown>>('Pipeline', 'completionColumns');
+            expect(completion?.ForceDiscovery).toBeUndefined();
             expect(completion?.LastDiscoveredAt).toBeInstanceOf(Date);
             expect(completion?.LastSyncedAt).toBeInstanceOf(Date);
         } finally {

@@ -1302,9 +1302,10 @@ import {
     RecordProcessRunNowServerOperation,
 } from '@memberjunction/record-set-processor';
 
-// @memberjunction/content-pipeline (15 classes)
+// @memberjunction/content-pipeline (17 classes)
 import {
     ArchiveExtractor,
+    CredentialAccessDriver,
     DeleteContentItemStage,
     DeleteStage,
     DiscoverStage,
@@ -1312,6 +1313,7 @@ import {
     EmbedStage,
     ExtractStage,
     HtmlExtractor,
+    ManagedPromptClassifier,
     NoOpStage,
     PdfExtractor,
     PlainTextExtractor,
@@ -2580,6 +2582,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RecordProcessResumeRunServerOperation,
     RecordProcessRunNowServerOperation,
     ArchiveExtractor,
+    CredentialAccessDriver,
     DeleteContentItemStage,
     DeleteStage,
     DiscoverStage,
@@ -2587,6 +2590,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     EmbedStage,
     ExtractStage,
     HtmlExtractor,
+    ManagedPromptClassifier,
     NoOpStage,
     PdfExtractor,
     PlainTextExtractor,
@@ -2718,12 +2722,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ComputerUseAction,
     ComputerUseTestDriver,
     IntegrationTestDriver,
-    BraveWebSearchProvider,
-    DuckDuckGoWebSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    BraveWebSearchProvider,
+    DuckDuckGoWebSearchProvider,
     GoogleCustomSearchWebSearchProvider,
     PerplexityWebSearchProvider,
     TavilyWebSearchProvider,
@@ -2920,7 +2924,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1180;
+export const CLASS_REGISTRATIONS_COUNT = 1182;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

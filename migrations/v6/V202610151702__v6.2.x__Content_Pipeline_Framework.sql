@@ -27,8 +27,10 @@
     * FileID            — the durable copy of a fetched artifact, as an MJ File
 
   Scheduling is deployment-owned; the shipped Discover process selects ForceDiscovery = 1 and a
-  completed walk clears the bit, while the shipped Sync process selects sources whose LastSyncedAt
-  is due. There is deliberately no DiscoveryStatus column to re-arm.
+  completed walk clears the bit, while the shipped Sync process selects by LastSyncedAt
+  (LastSyncedAt IS NULL OR LastSyncedAt < DATEADD(day, -30, GETUTCDATE())), never by ForceDiscovery.
+  To force a sync on a source, set its LastSyncedAt back (or to NULL). There is deliberately no
+  DiscoveryStatus column to re-arm.
 
   ContentItem.Checksum holds the SHA-256 hex digest of the extracted text (or raw bytes for
   non-text modality), written by the Extract stage using the same algorithm as the legacy
@@ -265,7 +267,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level2type = N'COLUMN', @level2name = 'LastDiscoveredAt';
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'When this source last completed a full Sync walk (reconciling removals). Stamped with the time a completed sync walk started.',
+    @value = N'When this source last completed a full Sync walk (reconciling removals). Stamped with the time a completed sync walk started. The shipped Sync Record Process selects sources by LastSyncedAt (LastSyncedAt IS NULL OR LastSyncedAt < DATEADD(day, -30, GETUTCDATE())), never by ForceDiscovery; to force a sync, set LastSyncedAt back or to NULL.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = 'ContentSource',
     @level2type = N'COLUMN', @level2name = 'LastSyncedAt';

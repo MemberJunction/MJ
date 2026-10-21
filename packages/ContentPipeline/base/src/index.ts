@@ -10,5 +10,7 @@ export * from './Stage.types.js';
 export * from './BasePipelineStage.js';
 export * from './ConfidenceScale.js';
 export * from './PipelineTuning.js';
+export * from './access/index.js';
 export * from './discover/index.js';
 export * from './extract/index.js';
+export * from './tag/index.js';

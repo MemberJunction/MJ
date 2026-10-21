@@ -8,7 +8,7 @@
  */
 
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { AccessArtifact } from './discover/SourceDriver.js';
+import { AccessArtifact } from './access/BaseAccessDriver.js';
 
 /** How a stage finished with one record. */
 export type StageOutcomeStatus = 'Complete' | 'Failed' | 'Skipped' | 'Retry';
@@ -85,8 +85,8 @@ export interface StageContext {
     ReportProgress(message: string): void;
     Log: StageLogger;
     /**
-     * The source's session, opened once per run by its driver's `OpenSession` and shared by every stage.
-     * Null when the source needs none.
+     * The source's access artifact, acquired once per run through {@link BaseAccessDriver} and shared by
+     * every stage. Null when the source needs none.
      */
     ResolveAccess(contentSourceID: string): Promise<AccessArtifact | null>;
 }

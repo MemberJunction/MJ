@@ -1,22 +1,14 @@
 /**
- * @fileoverview Request/response shapes for a Content Source Type driver's optional `Discover`,
- * `Fetch` and `OpenSession` methods. The driver is the type's `AutotagBase` subclass.
+ * @fileoverview Request/response shapes for a Content Source Type driver's `Discover` and `Fetch`
+ * methods. The driver is the type's `AutotagBase` subclass.
  *
  * @module @memberjunction/content-pipeline-base
  */
 
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { AccessArtifact } from '../access/BaseAccessDriver.js';
+import { ResolvedConfidenceScale } from '../ConfidenceScale.js';
 import { WellKnownField, WellKnownFieldValue } from '../WorkingRecord.types.js';
-
-/** An open session, cached for the run. Plain data, not a live client. */
-export interface AccessArtifact {
-    /** Headers to send — `Authorization`, `Cookie`. */
-    Headers?: Readonly<Record<string, string>>;
-    /** Query parameters to append, for sources that authenticate in the URL. */
-    QueryParameters?: Readonly<Record<string, string>>;
-    /** Origins (`https://host[:port]`) the session may go to. Unset means the source URL's origin only. */
-    Origins?: readonly string[];
-}
 
 /** One field a driver determined directly, with how much it trusts it. */
 export interface DiscoveredField {
@@ -50,8 +42,8 @@ export interface DiscoveredItem {
     Extensions?: Record<string, unknown>;
 }
 
-/** The source a driver is asked about. */
-export interface SessionRequest {
+/** What a driver is told when walking a source. */
+export interface DiscoverRequest {
     /** The Content Source's primary key. */
     ContentSourceID: string;
     /** The source's URL column. */
@@ -60,20 +52,18 @@ export interface SessionRequest {
     Parameters: Readonly<Record<string, string>>;
     /** The source's full parsed `Configuration`. */
     Configuration: Readonly<Record<string, unknown>>;
-    ContextUser: UserInfo;
-    Provider: IMetadataProvider;
-}
-
-/** What a driver is told when walking a source. */
-export interface DiscoverRequest extends SessionRequest {
     /** The run's session for this source, or null when it needs none. */
     Access?: AccessArtifact | null;
     /**
-     * When this source was last walked (`ContentSource.LastDiscoveredAt`), or `null`/`undefined` on a first walk
-     * or an exhaustive `Sync` run. Drivers that can cheaply see modification timestamps skip unchanged items
-     * older than `Since` and yield only new or modified items.
+     * When this source was last walked (`ContentSource.LastDiscoveredAt` minus `ClockSkewOverlapMs`), or
+     * `null`/`undefined` on a first walk or an exhaustive `Sync` run. Drivers that can cheaply see
+     * modification timestamps skip unchanged items older than `Since` and yield only new or modified items.
      */
     Since?: Date | null;
+    /** The resolved confidence scale for this source and run. */
+    Confidence?: ResolvedConfidenceScale;
+    ContextUser: UserInfo;
+    Provider: IMetadataProvider;
     /** Fires when the run is asked to stop; a driver checks it between pages and returns. */
     Signal: AbortSignal;
     ReportProgress(message: string): void;

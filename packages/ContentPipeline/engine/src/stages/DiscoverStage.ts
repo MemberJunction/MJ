@@ -5,6 +5,7 @@
  * @module @memberjunction/content-pipeline
  */
 
+import { createHash } from 'node:crypto';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { AutotagBase } from '@memberjunction/content-autotagging';
 import {
@@ -12,13 +13,14 @@ import {
     DiscoveredItem,
     FatalStageError,
     Outcome,
+    ResolveConfidence,
+    ResolveTuning,
     StageContext,
     StageDeclaration,
     StageOutcome,
     WorkingRecord,
     WorkingRecordEntity,
     WorkingRecordIdentity,
-    ResolveTuning,
 } from '@memberjunction/content-pipeline-base';
 import { ContentSourceConfigurationResolver, ResolvedSourceConfiguration } from '../ContentSourceConfigurationResolver.js';
 
@@ -87,7 +89,12 @@ export class DiscoverStage extends BasePipelineStage {
             return Outcome.Retry('cancelled before discovery started');
         }
         const walkStartedAt = new Date();
-        const since = isSync ? null : (record.GetExtension<Date>('Pipeline', 'lastDiscoveredAt') ?? null);
+        const tuning = ResolveTuning(resolved.Settings, context.Configuration);
+        const lastDiscoveredAt = record.GetExtension<Date>('Pipeline', 'lastDiscoveredAt') ?? null;
+        const since =
+            isSync || !lastDiscoveredAt
+                ? null
+                : new Date(lastDiscoveredAt.getTime() - tuning.ClockSkewOverlapMs);
         const found = await this.walk(driver.Discover.bind(driver), resolved, record, context, since, isSync);
 
         // A driver honouring the stop signal just returns, so only the signal says the walk was cut
@@ -100,11 +107,14 @@ export class DiscoverStage extends BasePipelineStage {
         record.SetExtension(DISCOVER_STAGE, 'itemCount', found);
         record.SetExtension(DISCOVER_STAGE, 'walkStartedAt', walkStartedAt);
         // Written only if every found item commits, so a walk that could not save its items stays due.
-        record.SetExtension('Pipeline', 'completionColumns', {
-            ForceDiscovery: false,
-            LastDiscoveredAt: walkStartedAt,
-            ...(isSync ? { LastSyncedAt: walkStartedAt } : {}),
-        });
+        // ForceDiscovery belongs to Discover and is never cleared by a Sync run.
+        record.SetExtension(
+            'Pipeline',
+            'completionColumns',
+            isSync
+                ? { LastDiscoveredAt: walkStartedAt, LastSyncedAt: walkStartedAt }
+                : { ForceDiscovery: false, LastDiscoveredAt: walkStartedAt },
+        );
         return Outcome.Complete(`found ${found} item(s)`);
     }
 
@@ -122,7 +132,8 @@ export class DiscoverStage extends BasePipelineStage {
         since: Date | null,
         isSync: boolean,
     ): Promise<number> {
-        const { ProgressEveryItems } = ResolveTuning(context.Configuration);
+        const { ProgressEveryItems } = ResolveTuning(resolved.Settings, context.Configuration);
+        const confidence = ResolveConfidence(resolved.Confidence, context.Configuration);
         let found = 0;
         for await (const item of discover({
             ContentSourceID: resolved.ContentSourceID,
@@ -131,6 +142,7 @@ export class DiscoverStage extends BasePipelineStage {
             Configuration: resolved.Configuration,
             Access: await context.ResolveAccess(resolved.ContentSourceID),
             Since: since,
+            Confidence: confidence,
             ContextUser: context.ContextUser,
             Provider: context.Provider,
             Signal: context.Signal,
@@ -150,10 +162,6 @@ export class DiscoverStage extends BasePipelineStage {
     /** A driver's item as a Content Item record; each field competes on the driver's own confidence. */
     private toWorkingRecord(item: DiscoveredItem, setBy: string, isSync: boolean): WorkingRecord {
         const child = new WorkingRecord(new WorkingRecordIdentity('Content Item', item.URL));
-        const legacyChecksum = (item as { Checksum?: string }).Checksum;
-        if (legacyChecksum) {
-            child.SetExtension('Pipeline', 'columns', { Checksum: legacyChecksum });
-        }
         if (item.Columns && Object.keys(item.Columns).length > 0) {
             child.SetExtension('Pipeline', 'customColumns', { ...item.Columns });
         }
@@ -166,6 +174,10 @@ export class DiscoverStage extends BasePipelineStage {
         for (const field of item.Fields ?? []) {
             child.Propose(field.Field, field.Value, field.Confidence, setBy);
         }
+        const inlineText = child.Get('Text');
+        if (typeof inlineText === 'string' && inlineText.length > 0) {
+            child.SetExtension('Pipeline', 'checksum', createHash('sha256').update(inlineText, 'utf8').digest('hex'));
+        }
         for (const [key, value] of Object.entries(item.Extensions ?? {})) {
             child.SetExtension(setBy, key, value);
         }
@@ -175,3 +187,4 @@ export class DiscoverStage extends BasePipelineStage {
         return child;
     }
 }
+

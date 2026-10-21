@@ -48,6 +48,7 @@ const FRAMEWORK_OWNED_COLUMNS: ReadonlySet<string> = new Set([
     'LastSyncedAt',
     'VectorRecordID',
     'FileID',
+    'StorageObjectKey',
     'ExtractorKey',
     'ExtractorKeyOverride',
     'EmbeddingModelID',
@@ -155,7 +156,7 @@ export class WorkingRecordCommitter {
             ...(child.GetExtension<Record<string, unknown>>('Pipeline', 'columns') ?? {}),
         });
         const extractedHash = child.GetExtension<string>('Pipeline', 'checksum');
-        if (extractedHash && !child.GetExtension<Record<string, unknown>>('Pipeline', 'columns')?.Checksum) {
+        if (extractedHash) {
             this.applyValues(entityObject, { Checksum: extractedHash });
         }
     }
@@ -234,10 +235,13 @@ export class WorkingRecordCommitter {
             return this.save(child, entityObject, written, false);
         }
         const isSyncWalk = child.GetExtension<boolean>('Pipeline', 'syncWalk') === true;
-        const dateChanged = child.ChangedFields.includes('Date') && !this.datesEqual(storedDateBefore, child.Get('Date'));
+        const hasDateProposal = child.ChangedFields.includes('Date');
+        const dateChanged = hasDateProposal && !this.datesEqual(storedDateBefore, child.Get('Date'));
+        const dateUnchanged = hasDateProposal && !dateChanged;
+        const nonDateMetadataChanged = written.some((c) => c !== 'Date');
         const currentStatus = this.readColumn(entityObject, statusField);
-        if (isSyncWalk && request !== 'Reextract' && (currentStatus === 'Complete' || currentStatus === 'Skipped')) {
-            if (written.length > 0) {
+        if ((isSyncWalk || dateUnchanged) && request !== 'Reextract' && (currentStatus === 'Complete' || currentStatus === 'Skipped')) {
+            if (nonDateMetadataChanged) {
                 await this.promoteEmbeddingToMetadataOnly(entityObject, written);
             }
             if (dateChanged) {
@@ -249,7 +253,7 @@ export class WorkingRecordCommitter {
             this.applyConfidence(child, entityObject, written, false, unresolved, storedConfidence);
             return this.save(child, entityObject, written, false);
         }
-        if (written.length > 0) {
+        if (nonDateMetadataChanged) {
             await this.promoteEmbeddingToMetadataOnly(entityObject, written);
         }
         this.writeColumn(entityObject, statusField, status);
@@ -308,7 +312,7 @@ export class WorkingRecordCommitter {
             written.push(...this.resetDownstream(child, entityObject, statusField));
             written.push(...this.applyColumns(child, entityObject));
             const extractedHash = child.GetExtension<string>('Pipeline', 'checksum');
-            if (extractedHash && !child.GetExtension<Record<string, unknown>>('Pipeline', 'columns')?.Checksum) {
+            if (extractedHash) {
                 written.push(...this.applyValues(entityObject, { Checksum: extractedHash }));
             }
         }
@@ -321,6 +325,8 @@ export class WorkingRecordCommitter {
      * Compare the SHA-256 checksum produced by Extract against `ContentItem.Checksum`.
      * Same hash leaves `TaggingStatus`/`SegmentationStatus` untouched (and promotes `EmbeddingStatus` to
      * `MetadataOnly` when metadata changed); a changed hash writes `Checksum` and resets downstream stages.
+     * A stored `Checksum` that is null or not a 64-character SHA-256 hex digest is replaced with the
+     * extracted content hash without resetting downstream stages.
      */
     private async reconcileExtractedContent(
         record: WorkingRecord,
@@ -342,27 +348,25 @@ export class WorkingRecordCommitter {
         if (!extractedChecksum) {
             return false;
         }
-        const driverOwnsChecksum = storedChecksum !== null && !SHA256_HEX_PATTERN.test(storedChecksum);
-        if (!storedChecksum) {
+        const isValidStoredHash = storedChecksum !== null && SHA256_HEX_PATTERN.test(storedChecksum);
+        if (!isValidStoredHash) {
             written.push(...this.applyValues(entityObject, { Checksum: extractedChecksum }));
             if (request === 'Reprocess') {
                 written.push(...this.resetDownstream(record, entityObject, statusField));
                 return true;
             }
-            if (request === 'MetadataChanged') {
-                await this.promoteEmbeddingToMetadataOnly(entityObject, written);
-            }
-            return false;
-        }
-        if ((driverOwnsChecksum || extractedChecksum === storedChecksum) && request !== 'Reprocess') {
             if (metadataChanged || request === 'MetadataChanged') {
                 await this.promoteEmbeddingToMetadataOnly(entityObject, written);
             }
             return false;
         }
-        if (!driverOwnsChecksum) {
-            written.push(...this.applyValues(entityObject, { Checksum: extractedChecksum }));
+        if (extractedChecksum === storedChecksum && request !== 'Reprocess') {
+            if (metadataChanged || request === 'MetadataChanged') {
+                await this.promoteEmbeddingToMetadataOnly(entityObject, written);
+            }
+            return false;
         }
+        written.push(...this.applyValues(entityObject, { Checksum: extractedChecksum }));
         written.push(...this.resetDownstream(record, entityObject, statusField));
         return true;
     }
@@ -412,27 +416,23 @@ export class WorkingRecordCommitter {
         return { RecordID: recordID, ColumnsWritten: written, Created: created };
     }
 
-    /** True when the child carries inline content or a checksum to compare against stored values. */
+    /** True when the child carries inline content or a framework-computed checksum to compare against stored values. */
     private hasContentSignal(child: WorkingRecord): boolean {
-        const columnChecksum = child.GetExtension<Record<string, unknown>>('Pipeline', 'columns')?.Checksum;
         const pipelineChecksum = child.GetExtension<string>('Pipeline', 'checksum');
         const text = child.Get('Text');
         return (
-            (typeof columnChecksum === 'string' && columnChecksum.length > 0) ||
             (typeof pipelineChecksum === 'string' && pipelineChecksum.length > 0) ||
             (typeof text === 'string' && text.length > 0)
         );
     }
 
     /**
-     * Whether a produced record's content differs from what is stored. The checksum is the signal (Discover
-     * or Extract computes one); text is the fallback for records produced with text but no checksum.
-     * Neither means nothing says the content moved.
+     * Whether a produced record's content differs from what is stored. The SHA-256 checksum computed by
+     * Discover (for inline text) or Extract is the primary signal; text is the fallback for records
+     * produced with text but no checksum. Neither means nothing says the content moved.
      */
     private contentChanged(child: WorkingRecord, entityObject: BaseEntity): boolean {
-        const checksum =
-            (child.GetExtension<Record<string, unknown>>('Pipeline', 'columns')?.Checksum as string | undefined) ??
-            child.GetExtension<string>('Pipeline', 'checksum');
+        const checksum = child.GetExtension<string>('Pipeline', 'checksum');
         if (typeof checksum === 'string' && checksum.length > 0) {
             return this.readColumn(entityObject, 'Checksum') !== checksum;
         }

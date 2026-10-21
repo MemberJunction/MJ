@@ -152,6 +152,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
         if (!request.URL || !fs.existsSync(request.URL)) {
             throw new Error(`Local File System source path '${request.URL}' does not exist`);
         }
+        const confidence = request.Confidence ?? ConfidenceScale;
         for await (const { Path: filePath, Stats: stats } of this.walk(request.URL, request.Signal)) {
             if (request.Since && stats.mtime <= request.Since && stats.ctime <= request.Since) {
                 continue;
@@ -160,9 +161,9 @@ export class AutotagLocalFileSystem extends AutotagBase {
             yield {
                 URL: filePath,
                 Fields: [
-                    { Field: 'Title', Value: path.basename(filePath), Confidence: ConfidenceScale.DiscoveredTitle },
-                    { Field: 'Date', Value: stats.mtime, Confidence: ConfidenceScale.DiscoveredDate },
-                    ...(extension ? [{ Field: 'FileType' as const, Value: extension, Confidence: ConfidenceScale.DiscoveredFileType }] : []),
+                    { Field: 'Title', Value: path.basename(filePath), Confidence: confidence.DiscoveredTitle },
+                    { Field: 'Date', Value: stats.mtime, Confidence: confidence.DiscoveredDate },
+                    ...(extension ? [{ Field: 'FileType' as const, Value: extension, Confidence: confidence.DiscoveredFileType }] : []),
                 ],
             };
         }

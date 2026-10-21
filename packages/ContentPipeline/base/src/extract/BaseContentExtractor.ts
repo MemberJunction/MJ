@@ -5,6 +5,7 @@
  */
 
 import { MJGlobal } from '@memberjunction/global';
+import { ResolvedConfidenceScale } from '../ConfidenceScale.js';
 import { PipelineStageRequest } from '../discover/SourceDriver.js';
 import { ResolvedPipelineTuning } from '../PipelineTuning.js';
 
@@ -30,6 +31,8 @@ export interface ExtractRequest {
     URL: string;
     /** The source's type-specific settings, already defaulted and validated. */
     Parameters: Readonly<Record<string, string>>;
+    /** The resolved confidence scale for this source and run. */
+    Confidence?: ResolvedConfidenceScale;
     /** The run's resolved tuning. An extractor that needs a limit and finds none must refuse. */
     Tuning?: ResolvedPipelineTuning;
     /** Shared tree-wide budget when unpacking an archive or a nested archive member. */

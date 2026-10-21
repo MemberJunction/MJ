@@ -192,6 +192,7 @@ export class AutotagCloudStorage extends AutotagBase {
         const driver = await this.ResolveStorageDriver(this.providerKeyOf(request), request.ContextUser, request.Provider);
         // IncludeExtensions arrives as ".pdf,.docx" or a JSON array, flattened to a string either way.
         const extensions = request.Parameters.IncludeExtensions?.replace(/[[\]"\s]/g, '').split(',').filter(Boolean);
+        const confidence = request.Confidence ?? ConfidenceScale;
         for (const object of await this.listModifiedObjects(driver, request.Parameters.PathPrefix ?? '', request.Since ?? undefined, extensions)) {
             if (request.Signal.aborted) {
                 return;
@@ -200,9 +201,9 @@ export class AutotagCloudStorage extends AutotagBase {
             yield {
                 URL: object.fullPath,
                 Fields: [
-                    { Field: 'Title', Value: object.name, Confidence: ConfidenceScale.DiscoveredTitle },
-                    ...(object.lastModified ? [{ Field: 'Date' as const, Value: object.lastModified, Confidence: ConfidenceScale.DiscoveredDate }] : []),
-                    ...(extension ? [{ Field: 'FileType' as const, Value: extension, Confidence: ConfidenceScale.DiscoveredFileType }] : []),
+                    { Field: 'Title', Value: object.name, Confidence: confidence.DiscoveredTitle },
+                    ...(object.lastModified ? [{ Field: 'Date' as const, Value: object.lastModified, Confidence: confidence.DiscoveredDate }] : []),
+                    ...(extension ? [{ Field: 'FileType' as const, Value: extension, Confidence: confidence.DiscoveredFileType }] : []),
                 ],
             };
         }

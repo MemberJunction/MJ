@@ -1,26 +1,47 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { RegisterClass } from '@memberjunction/global';
 import { ContentItemTagBridge } from '@memberjunction/tag-engine';
-import type { AutotagKeyword } from '@memberjunction/content-autotagging';
-import { FatalStageError, StageContext, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
-import { ManagedPromptClassification, ManagedPromptClassifier } from '../ManagedPromptClassifier.js';
+import {
+    BaseContentClassifier,
+    ClassifiedTag,
+    ClassifyRequest,
+    ClassifyResult,
+    FatalStageError,
+    StageContext,
+    WorkingRecord,
+    WorkingRecordIdentity,
+} from '@memberjunction/content-pipeline-base';
+import { ManagedPromptClassifier } from '../ManagedPromptClassifier.js';
 import { TagStage } from '../stages/TagStage.js';
 import { SegmentStage } from '../stages/SegmentStage.js';
 
-const keyword = (Tag: string, Weight = 0.5, extra: Partial<AutotagKeyword> = {}): AutotagKeyword => ({
-    Tag,
-    Weight,
-    ParentTag: null,
+const keyword = (Name: string, Score = 0.5, extra: Partial<ClassifiedTag> = {}): ClassifiedTag => ({
+    Name,
+    Score,
+    Parent: null,
     Reasoning: null,
     ...extra,
 });
-const classified = (Keywords: AutotagKeyword[], extra: Partial<ManagedPromptClassification> = {}): ManagedPromptClassification => ({
-    Keywords,
+const classified = (Tags: ClassifiedTag[], extra: Partial<ClassifyResult> = {}): ClassifyResult => ({
+    Tags,
     PromptRunID: null,
     IsValidContent: true,
     ...extra,
 });
 
-let classifyImpl: (text: string, title: string | null) => Promise<ManagedPromptClassification> = async () => classified([]);
+let classifyImpl: (text: string, title: string | null) => Promise<ClassifyResult> = async () => classified([]);
+
+@RegisterClass(BaseContentClassifier, 'CustomTestClassifier')
+class CustomTestClassifier extends BaseContentClassifier {
+    public readonly Key = 'CustomTestClassifier';
+    public async Classify(request: ClassifyRequest): Promise<ClassifyResult> {
+        return {
+            Tags: [{ Name: `custom:${request.Title ?? 'untitled'}`, Score: 0.95 }],
+            PromptRunID: null,
+            IsValidContent: true,
+        };
+    }
+}
 
 /** Tag rows the stage saved, so a test can assert tagging actually persisted something. */
 export const savedTags: { ItemID: string; Tag: string; Weight?: number; AIPromptRunID?: string; Reasoning?: string }[] = [];
@@ -84,7 +105,9 @@ beforeEach(() => {
     classifyImpl = async () => classified([]);
     // The prompt and the taxonomy need AIEngine, TagEngine and a database; covered here are the
     // stage's own decisions, so the classifier and the shared bridge are stubbed.
-    vi.spyOn(ManagedPromptClassifier.prototype, 'Classify').mockImplementation((text, title) => classifyImpl(text, title));
+    vi.spyOn(ManagedPromptClassifier.prototype, 'Classify').mockImplementation((req: ClassifyRequest) =>
+        classifyImpl(req.Text, req.Title ?? null),
+    );
     vi.spyOn(ContentItemTagBridge.prototype, 'Bridge').mockResolvedValue(undefined);
     savedTags.length = 0;
 });
@@ -95,7 +118,7 @@ describe('TagStage', () => {
         const record = item('some text');
         const outcome = await new TagStage().Run(record, contextWith());
         expect(outcome.Status).toBe('Complete');
-        expect(record.GetExtension<AutotagKeyword[]>('Tag', 'tags')).toHaveLength(2);
+        expect(record.GetExtension<ClassifiedTag[]>('Tag', 'tags')).toHaveLength(2);
     });
 
     it('SAVES the tags, rather than leaving them in the extension space', async () => {
@@ -110,6 +133,15 @@ describe('TagStage', () => {
         classifyImpl = async () => classified([keyword('finance', 0.9, { Reasoning: 'central topic' })], { PromptRunID: 'run-1' });
         await new TagStage().Run(item('some text'), contextWith());
         expect(savedTags[0]).toMatchObject({ AIPromptRunID: 'run-1', Reasoning: 'central topic' });
+    });
+
+    it('resolves a custom BaseContentClassifier registered by ClassifierKey', async () => {
+        const record = item('some text');
+        record.Propose('Title', 'Board Minutes', 6, 'Extract');
+        const outcome = await new TagStage().Run(record, contextWith({ ClassifierKey: 'CustomTestClassifier' }));
+        expect(outcome.Status).toBe('Complete');
+        expect(record.GetExtension<string>('Tag', 'classifierKey')).toBe('CustomTestClassifier');
+        expect(savedTags.map((t) => t.Tag)).toEqual(['custom:Board Minutes']);
     });
 
     it('saves nothing on a test run, which commits nothing by definition', async () => {
@@ -164,7 +196,7 @@ describe('TagStage', () => {
         classifyImpl = async () => {
             throw new Error('503 from the model');
         };
-        await expect(new TagStage().Run(item('text'), contextWith())).rejects.toThrow(/Classifying failed: 503/);
+        await expect(new TagStage().Run(item('text'), contextWith())).rejects.toThrow(/Classifying with 'ManagedPrompt' failed: 503/);
     });
 });
 

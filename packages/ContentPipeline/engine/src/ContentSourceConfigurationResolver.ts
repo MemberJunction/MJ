@@ -12,6 +12,7 @@ import {
     MJContentSourceEntity,
     MJContentSourceTypeEntity_IContentSourceTypeField,
 } from '@memberjunction/core-entities';
+import { ResolveConfidence, ResolvedConfidenceScale } from '@memberjunction/content-pipeline-base';
 
 type SourceTypeField = MJContentSourceTypeEntity_IContentSourceTypeField;
 
@@ -32,6 +33,10 @@ export interface ResolvedSourceConfiguration {
     Parameters: Readonly<Record<string, string>>;
     /** The whole `Configuration`, for framework-level settings. */
     Configuration: Readonly<Record<string, unknown>>;
+    /** The `ContentSourceType.Configuration`, for type-level defaults. */
+    TypeConfiguration: Readonly<Record<string, unknown>>;
+    /** The confidence scale resolved across Content Source Type → Content Source. */
+    Confidence: ResolvedConfidenceScale;
     /** `ContentSourceType.DriverClass`. */
     DriverClass: string | null;
     Problems: readonly ConfigurationProblem[];
@@ -53,9 +58,10 @@ export class ContentSourceConfigurationResolver {
         }
         const source = await this.loadSource(contentSourceID, user);
         const type = KnowledgeHubMetadataEngine.Instance.GetContentSourceTypeByID(source.ContentSourceTypeID ?? '');
-        const configuration = { ...(source.ConfigurationObject ?? {}) };
+        const configuration = { ...(source.ConfigurationObject ?? {}) } as Record<string, unknown>;
+        const typeConfiguration = { ...(type?.ConfigurationObject ?? {}) } as Record<string, unknown>;
         const declared = type?.ConfigurationObject?.RequiredFields ?? [];
-        const settings = ApplySourceDefaults(declared, { ...(configuration.SourceSpecificConfiguration ?? {}) });
+        const settings = ApplySourceDefaults(declared, { ...(source.ConfigurationObject?.SourceSpecificConfiguration ?? {}) });
         const problems = ValidateSourceSettings(declared, settings);
         return {
             ContentSourceID: contentSourceID,
@@ -63,6 +69,8 @@ export class ContentSourceConfigurationResolver {
             Settings: settings,
             Parameters: flatten(settings),
             Configuration: configuration,
+            TypeConfiguration: typeConfiguration,
+            Confidence: ResolveConfidence(typeConfiguration, configuration),
             DriverClass: type?.DriverClass ?? null,
             Problems: problems,
             IsValid: problems.length === 0,

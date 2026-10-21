@@ -1410,7 +1410,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         await AIEngine.Instance.Config(false, contextUser);
 
         // Group items by their resolved (embeddingModelID + vectorIndexID) pair
-        const infrastructure = new ContentVectorInfrastructure(this.ProviderToUse, contextUser);
+        const infrastructure = new ContentVectorInfrastructure(this.ProviderToUse, contextUser, { AllowFirstIndexFallback: true });
         const groups = await infrastructure.GroupByInfrastructure(eligible);
 
         // Load tags for all items in one query
@@ -1928,7 +1928,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         if (!items) { stats.failed += toPurge.length; return; }
 
         const itemById = new Map(items.map(i => [NormalizeUUID(i.ID), i]));
-        const infrastructure = new ContentVectorInfrastructure(this.ProviderToUse, contextUser);
+        const infrastructure = new ContentVectorInfrastructure(this.ProviderToUse, contextUser, { AllowFirstIndexFallback: true });
         const itemGroups = await infrastructure.GroupByInfrastructure(items);
 
         for (const [groupKey, groupItems] of itemGroups) {
@@ -2091,7 +2091,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         if (!items) { stats.failed += chunks.length; return; }
 
         const itemById = new Map(items.map(i => [NormalizeUUID(i.ID), i]));
-        const infrastructure = new ContentVectorInfrastructure(this.ProviderToUse, contextUser);
+        const infrastructure = new ContentVectorInfrastructure(this.ProviderToUse, contextUser, { AllowFirstIndexFallback: true });
         const itemGroups = await infrastructure.GroupByInfrastructure(items);
         const tagMap = await LoadContentItemTags(items.map(i => i.ID), this.ProviderToUse, contextUser);
 
@@ -2514,7 +2514,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         await AIEngine.Instance.Config(false, contextUser);
 
         // Resolve infrastructure for this item
-        const infrastructure = new ContentVectorInfrastructure(this.ProviderToUse, contextUser);
+        const infrastructure = new ContentVectorInfrastructure(this.ProviderToUse, contextUser, { AllowFirstIndexFallback: true });
         const groups = await infrastructure.GroupByInfrastructure([contentItem]);
         if (groups.size === 0) {
             LogStatus(`[Dedup] No vector infrastructure found for item ${contentItem.ID}, skipping vector dedup`);

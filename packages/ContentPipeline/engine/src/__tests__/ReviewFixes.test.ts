@@ -38,7 +38,7 @@ const row = (stored: Record<string, unknown>, fields: string[] = []) =>
 
 function discovered(checksum: string): WorkingRecord {
     const r = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/a', 'I1'));
-    r.SetExtension('Pipeline', 'columns', { Checksum: checksum });
+    r.SetExtension('Pipeline', 'checksum', checksum);
     return r;
 }
 
@@ -266,12 +266,42 @@ describe('Extract SHA-256 checksum comparison and custom Columns / Request escap
         expect(stored.EmbeddingStatus).toBe('Pending');
     });
 
-    it('rejects framework-owned columns passed through Columns', async () => {
+    it('replaces a legacy non-SHA256 stored Checksum with the extracted SHA-256 hash without resetting downstream stages', async () => {
+        const stored: Record<string, unknown> = {
+            ID: 'I1',
+            Checksum: '2026-10-01T00:00:00Z',
+            Text: 'same body',
+            ExtractionStatus: 'Pending',
+            TaggingStatus: 'Complete',
+            SegmentationStatus: 'Complete',
+            EmbeddingStatus: 'Complete',
+        };
+        const record = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/a', 'I1'));
+        record.Propose('Text', 'same body', 6, 'Extract');
+        record.SetExtension('Pipeline', 'checksum', HASH_A);
+
+        await buildCommitterWithRow(stored).Commit(record, 'ExtractionStatus', 'Complete', true);
+
+        expect(stored.Checksum).toBe(HASH_A);
+        expect(stored.ExtractionStatus).toBe('Complete');
+        expect(stored.TaggingStatus).toBe('Complete');
+        expect(stored.SegmentationStatus).toBe('Complete');
+        expect(stored.EmbeddingStatus).toBe('Complete');
+    });
+
+    it('rejects framework-owned columns (including Checksum and StorageObjectKey) passed through Columns', async () => {
         const stored: Record<string, unknown> = { ID: 'I1', ExtractionStatus: 'Pending' };
         const record = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/a', 'I1'));
         record.SetExtension('Pipeline', 'customColumns', { Checksum: 'illegal-override' });
 
         await expect(buildCommitterWithRow(stored).Commit(record, 'ExtractionStatus', 'Complete', true)).rejects.toThrow(
+            /owned by the pipeline framework/,
+        );
+
+        const record2 = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/a', 'I1'));
+        record2.SetExtension('Pipeline', 'customColumns', { StorageObjectKey: 'illegal-key' });
+
+        await expect(buildCommitterWithRow(stored).Commit(record2, 'ExtractionStatus', 'Complete', true)).rejects.toThrow(
             /owned by the pipeline framework/,
         );
     });

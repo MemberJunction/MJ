@@ -19,12 +19,24 @@ touch storage. That is what lets the same stage code run live or as a test.
 
 **Confidence, not order.** Each well-known field carries an integer confidence and the stage that set it.
 A proposal wins only if its confidence is strictly higher, so two stages that know nothing of each other
-resolve a shared field on merit, in any order. The scores are the named constants in `ConfidenceScale`,
-set in code, and recorded per field in the `FieldConfidence` column:
+resolve a shared field on merit, in any order. The baseline scores live in `ConfidenceScale`, can be
+overridden per source type, per source, or per run under `Configuration.Confidence` via `ResolveConfidence`,
+and are recorded per field in the `FieldConfidence` column:
 
 ```json
 { "Title": { "Score": 4, "SetBy": "Discover.RSS" } }
 ```
+
+## Configuration precedence
+
+Every stage resolves its driver keys (`ExtractorKey`, `SegmenterKey`, `ClassifierKey`, `AccessDriverKey`)
+and confidence scale (`Confidence`) through one precedence order, from most specific to least specific:
+
+1. **Item override** (e.g. `ExtractorKeyOverride` on an item)
+2. **Run `Configuration`** (`StageContext.Configuration`, populated from `RecordProcessRun.Configuration.Options`)
+3. **Content Source** (`ContentSource.Configuration` and per-extension `ContentSource.Configuration.Extractors`)
+4. **Content Source Type / Content Type** (`ContentSourceType.Configuration` / `ContentType.Configuration`)
+5. **File Type / Default** (`ContentFileType.ExtractorKey`, capability detection, or the built-in default)
 
 ## The stage contract
 
@@ -56,12 +68,17 @@ future Record Set Processing → Work Queue bridge is an adapter, not a change t
 
 ## Driver contracts
 
+- **Access drivers** (`access/BaseAccessDriver.ts`): turn a Content Source's `CredentialID` and driver
+  configuration into an in-memory `AccessArtifact` (headers, query params, cookies, or a token), cached
+  for the run and never persisted on a Content Item.
 - **Source drivers** (`discover/SourceDriver.ts`): the request/response types a Content Source Type's
   driver (`ContentSourceType.DriverClass`) implements for Discover (`Discover`, with incremental `Since`
-  filtering, `SupportsExhaustiveWalk` for orphan sync, custom `Columns`, and per-item `Request` recipes),
-  Extract (`Fetch`) and Access (`OpenSession`).
+  filtering, `SupportsExhaustiveWalk` for orphan sync, custom `Columns`, and per-item `Request` recipes)
+  and Extract (`Fetch`).
 - **Extractors** (`extract/BaseContentExtractor.ts`): turn bytes into one or more text blocks, registered
   by key and chosen by the extractor cascade.
+- **Classifiers** (`tag/BaseContentClassifier.ts`): turn extracted text and an active taxonomy into tag
+  observations and summary proposals, registered by key (`ManagedPrompt` by default).
 - **Detection helpers** (`extract/`): byte signatures and file-type resolution over rules loaded from
   `MJ: Content File Types`, plus the fail-closed object-key template for durable copies.
 - **Tuning** (`PipelineTuning`): operational knobs a run may set under `Options.Tuning`.

@@ -8,6 +8,7 @@ export * from './WorkingRecordHydrator.js';
 export * from './WorkingRecordCommitter.js';
 export * from './PipelineProcessor.js';
 export * from './ContentSourceConfigurationResolver.js';
+export * from './AccessResolver.js';
 export * from './ContentFetcher.js';
 export * from './ContentPipelineDeleteMarker.js';
 export * from './ExtractorCascade.js';

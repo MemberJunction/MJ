@@ -18,7 +18,6 @@ import { FileStorageEngine, IsSafeStorageObjectKey } from '@memberjunction/stora
 import {
     ArchiveBudget,
     BasePipelineStage,
-    ConfidenceScale,
     ContentBlock,
     DetectByteSignature,
     ExtractResult,
@@ -27,6 +26,8 @@ import {
     IsPlausibleText,
     ObjectKeyResolutionError,
     Outcome,
+    ResolveConfidence,
+    ResolvedConfidenceScale,
     ResolveFileType,
     ResolveObjectKey,
     ResolveTuning,
@@ -90,7 +91,7 @@ export class ExtractStage extends BasePipelineStage {
             case 'NonText':
                 return this.handleNonText(record, read.FileType, source, fetched, context);
             case 'NoExtractor':
-                return this.fallbackText(record, fetched.Content, context)
+                return this.fallbackText(record, fetched.Content, source.Confidence, context)
                     ? Outcome.Complete(`read as plain text (no extractor for '${read.FileType || 'unknown'}')`)
                     : Outcome.Fatal(`No extractor handles '${read.FileType || 'unknown'}' and a plain-text read is unreadable`);
             case 'Read':
@@ -109,22 +110,23 @@ export class ExtractStage extends BasePipelineStage {
         archiveDepth: number,
     ): Promise<ReadOutcome> {
         const rules = await this.detection(context).Rules();
-        const fileType = this.resolveFileType(record, content, nameHint, rules.Signatures);
+        const fileType = this.resolveFileType(record, content, nameHint, rules.Signatures, source.Confidence);
         if (rules.NonTextFileTypes.has(fileType)) {
-            record.Propose('Modality', this.modalityFor(fileType), ConfidenceScale.Modality, `${EXTRACT_STAGE}.Signature`);
+            record.Propose('Modality', this.modalityFor(fileType), source.Confidence.Modality, `${EXTRACT_STAGE}.Signature`);
             return { Kind: 'NonText', FileType: fileType };
         }
         const selected = SelectExtractor({
             FileType: fileType,
             ExtractorKeyOverride: record.GetExtension<string>('Pipeline', 'extractorKeyOverride'),
-            SourceExtractorKey: source.SourceExtractorKey,
+            RunExtractorKey: source.RunExtractorKey,
+            SourceExtractorKey: source.SourceExtractors?.[fileType.toLowerCase()] ?? source.SourceExtractorKey,
             ContentTypeExtractorKey: source.ContentTypeExtractorKey,
             FileTypeExtractorKey: rules.ExtractorByFileType.get(fileType),
         });
         if (!selected) {
             return { Kind: 'NoExtractor', FileType: fileType };
         }
-        const tuning = ResolveTuning(context.Configuration);
+        const tuning = ResolveTuning(source.Resolved?.Settings, context.Configuration);
         const isArchive = selected.Key === 'Archive';
         const budget = isArchive ? this.prepareArchiveBudget(archiveState, source.Parameters, tuning, archiveDepth + 1) : archiveState.Budget;
         const result = await selected.Extractor.Extract({
@@ -133,6 +135,7 @@ export class ExtractStage extends BasePipelineStage {
             URL: record.Identity.EphemeralID,
             Parameters: source.Parameters,
             Tuning: tuning,
+            Confidence: source.Confidence,
             ArchiveBudget: budget,
             Signal: context.Signal,
             ReportProgress: (m) => context.ReportProgress(m),
@@ -174,23 +177,29 @@ export class ExtractStage extends BasePipelineStage {
     }
 
     /** Resolve and propose the file type. Returns '' when nothing resolved one. */
-    private resolveFileType(record: WorkingRecord, content: Uint8Array, nameHint: string, signatures: readonly Signature[]): string {
+    private resolveFileType(
+        record: WorkingRecord,
+        content: Uint8Array,
+        nameHint: string,
+        signatures: readonly Signature[],
+        scale: ResolvedConfidenceScale,
+    ): string {
         const signature = DetectByteSignature(content, signatures);
-        // Only a FileType proposed at FileTypeDeclared (7) or higher counts as an explicit declaration.
-        // Lower-confidence proposals (source default at 1, or split/extension hints at 2) yield to byte signatures.
+        // Only a FileType proposed at FileTypeDeclared or higher counts as an explicit declaration.
+        // Lower-confidence proposals (source default, or split/extension hints) yield to byte signatures.
         const stored = record.Get('FileType') as string | null;
         const confidence = record.GetConfidence('FileType');
-        const declared = confidence >= ConfidenceScale.FileTypeDeclared;
-        const extensionFallback = !declared && confidence >= ConfidenceScale.FileTypeExtension && stored ? `.${stored}` : null;
+        const declared = confidence >= scale.FileTypeDeclared;
+        const extensionFallback = !declared && confidence >= scale.FileTypeExtension && stored ? `.${stored}` : null;
         const resolved = ResolveFileType({
             Declared: declared ? stored : null,
             Signature: signature?.FileType ?? null,
             SignatureIsUnambiguous: signature?.Unambiguous ?? false,
             FileName: nameHint || extensionFallback,
-            SourceDefault: !declared && confidence < ConfidenceScale.FileTypeExtension ? stored : null,
+            SourceDefault: !declared && confidence < scale.FileTypeExtension ? stored : null,
         });
         if (resolved.FileType && resolved.Evidence) {
-            const resolvedConfidence = ConfidenceScale[FileTypeEvidenceConfidenceKey[resolved.Evidence]];
+            const resolvedConfidence = scale[FileTypeEvidenceConfidenceKey[resolved.Evidence]];
             record.Propose('FileType', resolved.FileType, resolvedConfidence, `${EXTRACT_STAGE}.${resolved.Evidence}`);
         }
         return resolved.FileType ?? '';
@@ -213,13 +222,13 @@ export class ExtractStage extends BasePipelineStage {
         record.SetExtension(EXTRACT_STAGE, 'isFallback', read.Result.IsFallback === true);
         this.applyExtractExtensions(record, read.Result.Columns, read.Result.Request);
         if (blocks.length === 1 && !blocks[0].Content) {
-            this.applyBlock(record, blocks[0], read.Result.IsFallback === true);
+            this.applyBlock(record, blocks[0], read.Result.IsFallback === true, source.Confidence);
             return Outcome.Complete(`read with ${read.Key}`);
         }
         const memberDepth = read.IsArchive ? archiveDepth + 1 : archiveDepth;
         // The container keeps its own identity; writing the first block onto it would mislabel a member as the whole.
         for (const [index, block] of blocks.entries()) {
-            const child = this.toChild(record, block, `${url}#${block.Key ?? `block-${index}`}`);
+            const child = this.toChild(record, block, `${url}#${block.Key ?? `block-${index}`}`, source.Confidence);
             if (block.Content) {
                 // Read now, while the bytes are in hand: the child's URL is the container's.
                 await this.extractMember(child, block.Content, block.Key ?? '', source, context, archiveState, memberDepth);
@@ -248,7 +257,7 @@ export class ExtractStage extends BasePipelineStage {
             return this.keepOrComplete(child, bytes, source, context);
         }
         if (read.Kind === 'NoExtractor') {
-            if (!this.fallbackText(child, bytes, context)) {
+            if (!this.fallbackText(child, bytes, source.Confidence, context)) {
                 child.MarkComplete();
             }
             return;
@@ -257,7 +266,7 @@ export class ExtractStage extends BasePipelineStage {
         const blocks = read.Result.Blocks;
         if (blocks.length === 1 && !blocks[0].Content) {
             if (blocks[0].Text) {
-                this.applyBlock(child, blocks[0], read.Result.IsFallback === true);
+                this.applyBlock(child, blocks[0], read.Result.IsFallback === true, source.Confidence);
             } else {
                 child.MarkComplete();
             }
@@ -265,7 +274,7 @@ export class ExtractStage extends BasePipelineStage {
             const nextDepth = read.IsArchive ? archiveDepth + 1 : archiveDepth;
             const childUrl = child.Identity.EphemeralID;
             for (const [index, block] of blocks.entries()) {
-                const grandChild = this.toChild(child, block, `${childUrl}#${block.Key ?? `block-${index}`}`);
+                const grandChild = this.toChild(child, block, `${childUrl}#${block.Key ?? `block-${index}`}`, source.Confidence);
                 if (block.Content) {
                     await this.extractMember(grandChild, block.Content, block.Key ?? '', source, context, archiveState, nextDepth);
                 }
@@ -296,12 +305,12 @@ export class ExtractStage extends BasePipelineStage {
     }
 
     /** The last-resort plain-text read, sanity-checked so mojibake never reaches tags, chunks and vectors. */
-    private fallbackText(record: WorkingRecord, content: Uint8Array, context: StageContext): boolean {
+    private fallbackText(record: WorkingRecord, content: Uint8Array, confidence: ResolvedConfidenceScale, context: StageContext): boolean {
         const text = new TextDecoder('utf-8', { fatal: false }).decode(content);
         if (!IsPlausibleText(text, ResolveTuning(context.Configuration).MinimumPrintableRatio)) {
             return false;
         }
-        record.Propose('Text', text, ConfidenceScale.FallbackText, `${EXTRACT_STAGE}.PlainTextFallback`);
+        record.Propose('Text', text, confidence.FallbackText, `${EXTRACT_STAGE}.PlainTextFallback`);
         record.SetExtension(EXTRACT_STAGE, 'isFallback', true);
         record.SetExtension('Pipeline', 'checksum', this.sha256Text(text));
         return true;
@@ -436,12 +445,12 @@ export class ExtractStage extends BasePipelineStage {
     }
 
     /** Put a block's findings on the record, each competing on confidence. */
-    private applyBlock(record: WorkingRecord, block: ContentBlock, isFallback: boolean): void {
+    private applyBlock(record: WorkingRecord, block: ContentBlock, isFallback: boolean, confidence: ResolvedConfidenceScale): void {
         const setBy = `${EXTRACT_STAGE}${isFallback ? '.Fallback' : ''}`;
-        record.Propose('Text', block.Text, isFallback ? ConfidenceScale.FallbackText : ConfidenceScale.ExtractorText, setBy);
+        record.Propose('Text', block.Text, isFallback ? confidence.FallbackText : confidence.ExtractorText, setBy);
         record.SetExtension('Pipeline', 'checksum', this.sha256Text(block.Text));
         if (block.Title) {
-            record.Propose('Title', block.Title, block.TitleConfidence ?? ConfidenceScale.ExtractorTitle, setBy);
+            record.Propose('Title', block.Title, block.TitleConfidence ?? confidence.ExtractorTitle, setBy);
         }
         this.applyExtractExtensions(record, block.Columns, block.Request);
     }
@@ -450,21 +459,21 @@ export class ExtractStage extends BasePipelineStage {
      * An expanded block as a child Content Item (linked by `ParentID` on commit). A child is a
      * different document this one contained — not a chunk — and inherits its parent's date.
      */
-    private toChild(parent: WorkingRecord, block: ContentBlock, url: string): WorkingRecord {
+    private toChild(parent: WorkingRecord, block: ContentBlock, url: string, confidence: ResolvedConfidenceScale): WorkingRecord {
         const child = new WorkingRecord(new WorkingRecordIdentity('Content Item', url));
         if (block.Text) {
-            child.Propose('Text', block.Text, ConfidenceScale.ExtractorText, EXTRACT_STAGE);
+            child.Propose('Text', block.Text, confidence.ExtractorText, EXTRACT_STAGE);
             child.SetExtension('Pipeline', 'checksum', this.sha256Text(block.Text));
         }
         if (block.Title) {
-            child.Propose('Title', block.Title, block.TitleConfidence ?? ConfidenceScale.ExtractorTitle, EXTRACT_STAGE);
+            child.Propose('Title', block.Title, block.TitleConfidence ?? confidence.ExtractorTitle, EXTRACT_STAGE);
         }
         const parentDate = parent.Get('Date');
         if (parentDate) {
             child.Propose('Date', parentDate, parent.GetConfidence('Date'), `${EXTRACT_STAGE}.InheritedFromParent`);
         }
         if (block.FileType) {
-            child.Propose('FileType', block.FileType, ConfidenceScale.FileTypeExtension, `${EXTRACT_STAGE}.Split`);
+            child.Propose('FileType', block.FileType, confidence.FileTypeExtension, `${EXTRACT_STAGE}.Split`);
         }
         if (block.ExtractorKeyOverride) {
             // For this run, and as a column for the child's own turn in a later one.
@@ -512,23 +521,39 @@ export class ExtractStage extends BasePipelineStage {
         return this._detection;
     }
 
-    /** The source's settings and the extractor-cascade rungs that come from configuration. */
+    /**
+     * The source's settings and the extractor-cascade rungs that come from configuration.
+     * Precedence across settings: Item override → Run Configuration → Content Source → Content Source Type / Content Type → File Type / Default.
+     */
     private async resolveSource(record: WorkingRecord, context: StageContext): Promise<ResolvedSource> {
         const contentSourceID = record.GetExtension<string>('Pipeline', 'contentSourceID') ?? '';
         const resolver = new ContentSourceConfigurationResolver(context.Provider, context.ContextUser);
         const resolved = contentSourceID ? await resolver.Resolve(contentSourceID, context.ContextUser) : null;
+        const typeConfig = resolved?.TypeConfiguration ?? {};
         const settings = resolved?.Settings ?? {};
         const configured = (key: string) =>
-            (settings[key] as string | undefined) ?? (context.Configuration[key] as string | undefined) ?? null;
+            (context.Configuration[key] as string | undefined) ?? (settings[key] as string | undefined) ?? null;
+        const sourceExtractors = {
+            ...(typeConfig.Extractors as Record<string, string> | undefined),
+            ...(settings.Extractors as Record<string, string> | undefined),
+            ...(context.Configuration.Extractors as Record<string, string> | undefined),
+        };
         return {
             ContentSourceID: contentSourceID,
             Resolved: resolved,
             Parameters: resolved?.Parameters ?? {},
+            Confidence: ResolveConfidence(resolved?.Confidence, context.Configuration),
+            RunExtractorKey: (context.Configuration.ExtractorKey as string | undefined) ?? null,
+            SourceExtractors: Object.keys(sourceExtractors).length > 0 ? sourceExtractors : undefined,
             SourceExtractorKey: (settings.ExtractorKey as string | undefined) ?? null,
-            ContentTypeExtractorKey: await this.contentTypeExtractorKey(contentSourceID, context),
-            // The source's own setting, else its type's default; unset means inherit, not off.
+            ContentTypeExtractorKey:
+                (await this.contentTypeExtractorKey(contentSourceID, context)) ?? (typeConfig.ExtractorKey as string | undefined) ?? null,
             MultiModalEnabled:
-                typeof settings.MultiModalEnabled === 'boolean' ? settings.MultiModalEnabled : context.Configuration.SupportsMultiModal === true,
+                typeof context.Configuration.MultiModalEnabled === 'boolean'
+                    ? context.Configuration.MultiModalEnabled
+                    : typeof settings.MultiModalEnabled === 'boolean'
+                      ? settings.MultiModalEnabled
+                      : context.Configuration.SupportsMultiModal === true,
             FileStorageAccountID: configured('FileStorageAccountID'),
             ObjectKeyTemplate: configured('ObjectKeyTemplate'),
             ObjectKeyValues: (context.Configuration.ObjectKeyValues as Record<string, string> | undefined) ?? {},
@@ -570,6 +595,9 @@ interface ResolvedSource {
     /** The full resolved configuration; null when the record names no source. */
     Resolved: ResolvedSourceConfiguration | null;
     Parameters: Readonly<Record<string, string>>;
+    Confidence: ResolvedConfidenceScale;
+    RunExtractorKey: string | null;
+    SourceExtractors: Readonly<Record<string, string>> | undefined;
     SourceExtractorKey: string | null;
     ContentTypeExtractorKey: string | null;
     MultiModalEnabled: boolean;

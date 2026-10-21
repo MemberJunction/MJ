@@ -1,5 +1,5 @@
 /**
- * content-pipeline.checks.ts — the 'content-pipeline' bundle (CP1–CP8): the content pipeline
+ * content-pipeline.checks.ts — the 'content-pipeline' bundle (CP1–CP15): the content pipeline
  * framework's record lifecycle, end to end, against real rows.
  *
  * TRANSPORT: **SERVER** — the pipeline is a server-side processor; these run in-process against the
@@ -31,8 +31,12 @@
  * and re-segmenting supersedes EVERY old chunk with a fresh set; CP6 Delete removes the superseded
  * vectors in the namespace they were written to and purges the unreferenced rows; CP7 a
  * metadata-only refresh updates in place and sends no values; CP8 deleting an item removes its
- * vectors through its chunks.
+ * vectors through its chunks; CP9–CP15 pin the incremental `Since` window, unchanged content
+ * re-extract no-op, metadata/Columns in-place vector updates, framework-owned column refusal,
+ * nested archive depth limits, `Sync` orphan removal/revival/empty-walk safeguard, and `Access`
+ * session resolution plus cross-origin header stripping.
  */
+import { gzipSync } from 'node:zlib';
 import { BaseEntity, CompositeKey, RunView } from '@memberjunction/core';
 import { MJGlobal, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckContext, IntegrationCheckRegistry, NamedCheck } from '@memberjunction/testing-integration';
@@ -49,6 +53,9 @@ import {
     VectorRecord,
 } from '@memberjunction/ai-vectordb';
 import {
+    AccessArtifact,
+    AccessRequest,
+    BaseAccessDriver,
     ConfidenceScale,
     DiscoverRequest,
     DiscoveredItem,
@@ -56,7 +63,12 @@ import {
     LocatorFetchResponse,
 } from '@memberjunction/content-pipeline-base';
 import { AutotagBase } from '@memberjunction/content-autotagging';
-import { LoadContentPipelineStages, PipelineProcessor } from '@memberjunction/content-pipeline';
+import {
+    LoadContentPipelineExtractors,
+    LoadContentPipelineStages,
+    PipelineProcessor,
+    SessionApplies,
+} from '@memberjunction/content-pipeline';
 import {
     KnowledgeHubMetadataEngine,
     type MJContentFileTypeEntity,
@@ -72,6 +84,7 @@ import {
 
 const MARKER = '(mj-integration-test — safe to delete)';
 const DRIVER_KEY = 'IT-ContentPipelineSource';
+const ACCESS_DRIVER_KEY = 'IT-ContentPipelineAccess';
 const VECTOR_DB_KEY = 'IT-RecordingVectorDB';
 
 /** What the recording store saw. */
@@ -82,8 +95,40 @@ interface StoreLog {
 }
 const Store: StoreLog = { Upserts: [], Updates: [], Deletes: [] };
 
+interface SourceDoc {
+    Text?: string;
+    Bytes?: Uint8Array;
+    ModifiedAt: Date;
+    Title?: string;
+    TitleConfidence?: number;
+    Columns?: Record<string, unknown>;
+}
+
 /** The documents the test source serves, by URL. Mutated by the checks to simulate change. */
-const Documents = new Map<string, { Text: string; ModifiedAt: Date }>();
+const Documents = new Map<string, SourceDoc>();
+
+/** Access artifacts observed by the source driver and access driver during CP15. */
+const AccessLog: {
+    ConnectCalls: number;
+    DiscoverAccess: (AccessArtifact | null)[];
+    FetchAccess: (AccessArtifact | null)[];
+} = {
+    ConnectCalls: 0,
+    DiscoverAccess: [],
+    FetchAccess: [],
+};
+
+@RegisterClass(BaseAccessDriver, ACCESS_DRIVER_KEY)
+export class InMemoryAccessDriver extends BaseAccessDriver {
+    public readonly Key = ACCESS_DRIVER_KEY;
+    public async Connect(_request: AccessRequest): Promise<AccessArtifact> {
+        AccessLog.ConnectCalls += 1;
+        return {
+            Headers: { Authorization: 'Bearer it-pipeline-session-token' },
+            QueryParameters: { api_key: 'it-pipeline-query-key' },
+        };
+    }
+}
 
 function namespaceOf(directives?: Record<string, unknown>, providerConfig?: Record<string, unknown>): string | null {
     const ns = directives?.['namespace'] ?? providerConfig?.['namespace'];
@@ -176,32 +221,35 @@ export class RecordingVectorDB extends VectorDBBase {
 export class InMemorySourceDriver extends AutotagBase {
     public override readonly SupportsExhaustiveWalk = true;
 
-    public async SetContentItemsToProcess(): Promise<never[]> {
-        return [];
-    }
-    public async Autotag(): Promise<number> {
-        return 0;
-    }
     public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
+        AccessLog.DiscoverAccess.push(request.Access ?? null);
+        const confidence = request.Confidence ?? ConfidenceScale;
         for (const [url, doc] of Documents) {
             if (request.Since && doc.ModifiedAt <= request.Since) {
                 continue;
             }
             yield {
                 URL: url,
+                Columns: doc.Columns,
                 Fields: [
-                    { Field: 'Title', Value: url.split('/').pop() ?? url, Confidence: ConfidenceScale.DiscoveredTitle },
-                    { Field: 'Date', Value: doc.ModifiedAt, Confidence: ConfidenceScale.DiscoveredDate },
+                    {
+                        Field: 'Title',
+                        Value: doc.Title ?? url.split('/').pop() ?? url,
+                        Confidence: doc.TitleConfidence ?? confidence.DiscoveredTitle,
+                    },
+                    { Field: 'Date', Value: doc.ModifiedAt, Confidence: confidence.DiscoveredDate },
                 ],
             };
         }
     }
     public async Fetch(request: LocatorFetchRequest): Promise<LocatorFetchResponse> {
+        AccessLog.FetchAccess.push(request.Access ?? null);
         const doc = Documents.get(request.URL);
         if (!doc) {
             throw new Error(`'${request.URL}' not found`);
         }
-        return { Content: new TextEncoder().encode(doc.Text), ResolvedURL: request.URL };
+        const bytes = doc.Bytes ?? new TextEncoder().encode(doc.Text ?? '');
+        return { Content: bytes, ResolvedURL: request.URL };
     }
 }
 
@@ -223,6 +271,9 @@ let S: BundleState;
 const SENTENCE = 'The quarterly report describes revenue, costs and the outlook for the next period. ';
 const URL_A = 'it-pipeline://docs/a.txt';
 const URL_B = 'it-pipeline://docs/b.txt';
+const URL_C = 'it-pipeline://docs/c.txt';
+const URL_OLD = 'it-pipeline://docs/old.txt';
+const URL_ARCHIVE = 'it-pipeline://docs/nested.txt.gz.gz';
 
 function guardSkip(id: string): boolean {
     if (S?.Skip) {
@@ -233,17 +284,25 @@ function guardSkip(id: string): boolean {
 }
 
 /** The processor over the given stages, configured as a shipped Record Process would be. */
-function processor(stages: string[]): PipelineProcessor {
+function processor(stages: string[], extraConfig: Record<string, unknown> = {}): PipelineProcessor {
     return new PipelineProcessor({
         Stages: stages,
         IsTest: false,
         // Small windows, so a few paragraphs make several chunks deterministically.
-        Configuration: { SegmentationOptions: { MaxSegmentTokens: 40, OverlapTokens: 0 } },
+        Configuration: {
+            SegmentationOptions: { MaxSegmentTokens: 40, OverlapTokens: 0 },
+            ...extraConfig,
+        },
     });
 }
 
-async function run(ctx: IntegrationCheckContext, stages: string[], recordIDs: string[]): Promise<void> {
-    const p = processor(stages);
+async function run(
+    ctx: IntegrationCheckContext,
+    stages: string[],
+    recordIDs: string[],
+    extraConfig: Record<string, unknown> = {},
+): Promise<void> {
+    const p = processor(stages, extraConfig);
     const context = { provider: ctx.Provider, contextUser: ctx.User };
     if (p.ProcessBatch) {
         const results = await p.ProcessBatch(recordIDs.map((id) => ({ RecordID: id }) as never), context);
@@ -547,6 +606,260 @@ export const ContentPipelineChecks: NamedCheck[] = [
             console.log(`      → CP8: item deleted, ${chunkIDs.length} vectors removed in-namespace`);
         },
     },
+    {
+        Id: 'content-pipeline.CP9',
+        Name: 'CP9: incremental Discover passes Since (with clock-skew overlap), skips items older than the window, and ingests new items',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            if (guardSkip('CP9')) return;
+            const olderThanWindow = new Date(Date.now() - 120_000);
+            Documents.set(URL_A, { Text: SENTENCE.repeat(3), ModifiedAt: olderThanWindow });
+            Documents.delete(URL_B);
+            Documents.set(URL_OLD, { Text: SENTENCE.repeat(4), ModifiedAt: olderThanWindow });
+            Documents.set(URL_C, { Text: SENTENCE.repeat(8), ModifiedAt: new Date() });
+
+            await run(ctx, ['Discover'], [S.SourceID]);
+            const allItems = await items(ctx);
+            AssertEqual(allItems.some((i) => i.URL === URL_OLD), false, 'item older than LastDiscoveredAt - ClockSkewOverlapMs is filtered out by Since');
+            const a = await itemByURL(ctx, URL_A);
+            AssertEqual(a.ExtractionStatus, 'Complete', 'unchanged item A stays Complete');
+
+            const c = await itemByURL(ctx, URL_C);
+            AssertEqual(c.ExtractionStatus, 'Pending', 'new item C modified after Since is discovered as Pending');
+            Documents.delete(URL_OLD);
+
+            await run(ctx, ['Extract'], [c.ID]);
+            await run(ctx, ['Segment'], [c.ID]);
+            const cChunks = await liveChunks(ctx, c.ID);
+            Assert(cChunks.length > 0, 'item C segmented into chunks');
+            await run(ctx, ['Embed'], cChunks.map((ch) => ch.ID));
+            console.log(`      → CP9: incremental Since skipped older item and ingested item C (${cChunks.length} chunks)`);
+        },
+    },
+    {
+        Id: 'content-pipeline.CP10',
+        Name: 'CP10: re-discovering an item whose ModifiedAt bumped without changing its content re-extracts once, sees the SAME SHA-256 checksum, and leaves downstream stages and chunks untouched',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            if (guardSkip('CP10')) return;
+            const beforeC = await itemByURL(ctx, URL_C);
+            const beforeChecksum = beforeC.Checksum;
+            const beforeChunkIDs = (await liveChunks(ctx, beforeC.ID)).map((ch) => ch.ID);
+            Assert(typeof beforeChecksum === 'string' && beforeChecksum.length === 64, 'precondition: item C has a 64-char SHA-256 checksum');
+
+            await new Promise((r) => setTimeout(r, 5));
+            Documents.set(URL_C, { Text: SENTENCE.repeat(8), ModifiedAt: new Date() });
+            await run(ctx, ['Discover'], [S.SourceID]);
+
+            let c = await itemByURL(ctx, URL_C);
+            AssertEqual(c.ExtractionStatus, 'Pending', 'bumped ModifiedAt queues item C for Extract');
+            AssertEqual(c.SegmentationStatus, 'Complete', 'SegmentationStatus is not reset before Extract checks the content hash');
+
+            resetStore();
+            await run(ctx, ['Extract'], [c.ID]);
+            c = await itemByURL(ctx, URL_C);
+            AssertEqual(c.ExtractionStatus, 'Complete', 'Extract completes');
+            AssertEqual(c.Checksum, beforeChecksum, 'SHA-256 content checksum is unchanged');
+            AssertEqual(c.SegmentationStatus, 'Complete', 'unchanged content hash leaves SegmentationStatus Complete');
+            const afterChunks = await liveChunks(ctx, c.ID);
+            AssertSameList(afterChunks.map((ch) => ch.ID).sort(), [...beforeChunkIDs].sort(), 'existing chunk rows are untouched');
+            Assert(afterChunks.every((ch) => ch.EmbeddingStatus === 'Complete'), 'chunk EmbeddingStatus remains Complete');
+            console.log('      → CP10: unchanged content re-extract left chunks and downstream statuses untouched');
+        },
+    },
+    {
+        Id: 'content-pipeline.CP11',
+        Name: 'CP11: metadata-only changes (Title and driver Columns) promote existing chunks to MetadataOnly and update vectors in place without re-segmenting',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            if (guardSkip('CP11')) return;
+            const beforeC = await itemByURL(ctx, URL_C);
+            const beforeChunkIDs = (await liveChunks(ctx, beforeC.ID)).map((ch) => ch.ID);
+            const currentDoc = Documents.get(URL_C)!;
+            Documents.set(URL_C, {
+                ...currentDoc,
+                Title: 'Updated C Title',
+                TitleConfidence: 0.95,
+                Columns: { Description: 'Updated C Description via Columns' },
+            });
+
+            await run(ctx, ['Discover'], [S.SourceID]);
+            const c = await itemByURL(ctx, URL_C);
+            AssertEqual(c.Name, 'Updated C Title', 'Discover updated Title (Name)');
+            AssertEqual(c.Description, 'Updated C Description via Columns', 'Discover persisted custom Columns (Description)');
+            AssertEqual(c.SegmentationStatus, 'Complete', 'metadata-only change does not reset SegmentationStatus');
+
+            const chunks = await liveChunks(ctx, c.ID);
+            AssertSameList(chunks.map((ch) => ch.ID).sort(), [...beforeChunkIDs].sort(), 'same chunk rows kept');
+            Assert(chunks.every((ch) => ch.EmbeddingStatus === 'MetadataOnly'), 'all live chunks promoted to MetadataOnly');
+
+            resetStore();
+            await run(ctx, ['Embed'], chunks.map((ch) => ch.ID));
+            AssertEqual(Store.Upserts.length, 0, 'no vector upserts on metadata-only update');
+            AssertEqual(Store.Updates.length, chunks.length, 'in-place update for each chunk');
+            for (const u of Store.Updates) {
+                Assert(!u.hasValues, `in-place update for ${u.id} sent no vector values`);
+                AssertEqual(u.metadata['Title'], 'Updated C Title', 'updated Title rides in vector metadata');
+                AssertEqual(u.metadata['Description'], 'Updated C Description via Columns', 'updated Description from Columns rides in vector metadata');
+            }
+            console.log(`      → CP11: Title + Columns updated ${Store.Updates.length} vectors in place`);
+        },
+    },
+    {
+        Id: 'content-pipeline.CP12',
+        Name: 'CP12: WorkingRecordCommitter refuses driver Columns that target framework-owned status or checksum columns',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            if (guardSkip('CP12')) return;
+            const prevDoc = Documents.get(URL_C)!;
+            Documents.set(URL_C, {
+                ...prevDoc,
+                ModifiedAt: new Date(),
+                Columns: { ExtractionStatus: 'Complete' },
+            });
+
+            const p = processor(['Discover']);
+            const res = await p.ProcessRecord({ RecordID: S.SourceID } as never, { provider: ctx.Provider, contextUser: ctx.User });
+            AssertEqual(res.Status, 'Failed', 'Discover fails when driver Columns attempts to overwrite a framework-owned column');
+            Assert(
+                (res.ErrorMessage ?? '').includes('owned by the pipeline framework'),
+                `expected framework-owned column refusal message, got: ${res.ErrorMessage}`,
+            );
+
+            Documents.set(URL_C, prevDoc);
+            console.log('      → CP12: framework-owned column in Columns refused');
+        },
+    },
+    {
+        Id: 'content-pipeline.CP13',
+        Name: 'CP13: ArchiveExtractor refuses nested archives that exceed MaxArchiveDepth',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            if (guardSkip('CP13')) return;
+            const nestedGzip = gzipSync(gzipSync(Buffer.from('deeply nested archive payload', 'utf8')));
+            Documents.set(URL_ARCHIVE, { Bytes: new Uint8Array(nestedGzip), ModifiedAt: new Date() });
+
+            await run(ctx, ['Discover'], [S.SourceID]);
+            const archiveItem = await itemByURL(ctx, URL_ARCHIVE);
+
+            const p = processor(['Extract'], {
+                ExtractorKey: 'Archive',
+                Tuning: { MaxArchiveDepth: 1, MaxArchiveMembers: 10, MaxArchiveBytes: 1024 * 1024 },
+            });
+            const res = await p.ProcessRecord({ RecordID: archiveItem.ID } as never, { provider: ctx.Provider, contextUser: ctx.User });
+            AssertEqual(res.Status, 'Failed', 'nested archive exceeding MaxArchiveDepth fails closed');
+            Assert(
+                (res.ErrorMessage ?? '').includes('archive nesting depth'),
+                `expected archive nesting depth refusal, got: ${res.ErrorMessage}`,
+            );
+
+            Documents.delete(URL_ARCHIVE);
+            const reloaded = (await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ID='${archiveItem.ID}'`))[0];
+            if (reloaded) {
+                await reloaded.Delete();
+            }
+            console.log('      → CP13: nested archive exceeding MaxArchiveDepth refused');
+        },
+    },
+    {
+        Id: 'content-pipeline.CP14',
+        Name: 'CP14: Sync walks exhaustively, refuses to orphan items on an empty walk, marks removed items Pending delete, revives reappearing items, and updates LastSyncedAt',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            if (guardSkip('CP14')) return;
+            const savedA = Documents.get(URL_A)!;
+            const savedC = Documents.get(URL_C)!;
+
+            // 1. Empty-walk safeguard: if the source returns 0 items when active items exist, Sync refuses to orphan everything.
+            Documents.clear();
+            await run(ctx, ['Sync'], [S.SourceID]);
+            const afterEmpty = await items(ctx);
+            Assert(
+                afterEmpty.filter((i) => i.URL === URL_A || i.URL === URL_C).every((i) => i.DeleteStatus == null),
+                'empty-walk safeguard kept existing active items from being marked Pending delete',
+            );
+
+            // 2. Exhaustive Sync with URL_C removed marks URL_C as DeleteStatus=Pending and leaves ForceDiscovery untouched.
+            const sourceBefore = (await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', `ID='${S.SourceID}'`))[0];
+            sourceBefore.ForceDiscovery = true;
+            await save(sourceBefore, 'source ForceDiscovery=true before Sync');
+
+            Documents.set(URL_A, savedA);
+            await run(ctx, ['Sync'], [S.SourceID]);
+
+            const sourceAfter = (await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', `ID='${S.SourceID}'`))[0];
+            Assert(sourceAfter.LastSyncedAt != null, 'Sync records LastSyncedAt on the Content Source');
+            AssertEqual(sourceAfter.ForceDiscovery, true, 'Sync does NOT clear ForceDiscovery (which belongs to Discover)');
+            sourceAfter.ForceDiscovery = false;
+            await save(sourceAfter, 'reset ForceDiscovery after check');
+
+            const cRemoved = (await items(ctx)).find((i) => i.URL === URL_C)!;
+            AssertEqual(cRemoved.DeleteStatus, 'Pending', 'missing item C is marked DeleteStatus=Pending by Sync');
+            const aKept = await itemByURL(ctx, URL_A);
+            AssertEqual(aKept.ExtractionStatus, 'Complete', 'present item A is untouched by Sync');
+
+            // 3. Revival: URL_C reappears before Delete runs; Sync clears DeleteStatus and queues it for re-extraction.
+            Documents.set(URL_C, { ...savedC, ModifiedAt: new Date() });
+            await run(ctx, ['Sync'], [S.SourceID]);
+            const cRevived = await itemByURL(ctx, URL_C);
+            AssertEqual(cRevived.DeleteStatus, null, 'reappearing item C has DeleteStatus cleared');
+            AssertEqual(cRevived.ExtractionStatus, 'Pending', 'revived item C is queued for re-extraction');
+            console.log('      → CP14: Sync empty-walk safeguard, orphan detection, ForceDiscovery preservation, and revival verified');
+        },
+    },
+    {
+        Id: 'content-pipeline.CP15',
+        Name: 'CP15: AccessResolver opens the configured BaseAccessDriver session for Discover and Extract, and SessionApplies strips session headers on cross-origin requests',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            if (guardSkip('CP15')) return;
+            const source = (await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', `ID='${S.SourceID}'`))[0];
+            source.Configuration = JSON.stringify({
+                Access: { DriverKey: ACCESS_DRIVER_KEY, Token: 'it-secret-token' },
+            });
+            await save(source, 'source Access configuration');
+            await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
+
+            AccessLog.DiscoverAccess.length = 0;
+            AccessLog.FetchAccess.length = 0;
+
+            const c = await itemByURL(ctx, URL_C);
+            await run(ctx, ['Discover'], [S.SourceID]);
+            await run(ctx, ['Extract'], [c.ID]);
+
+            Assert(AccessLog.DiscoverAccess.length > 0, 'Discover received an Access resolution call');
+            const discoverSession = AccessLog.DiscoverAccess[AccessLog.DiscoverAccess.length - 1];
+            AssertEqual(discoverSession?.Headers?.['Authorization'], 'Bearer it-secret-token', 'Discover received Bearer token from Access driver');
+            AssertEqual(discoverSession?.Headers?.['X-Pipeline-Test-Access'], 'it-secret-token', 'Discover received custom header from Access driver');
+
+            Assert(AccessLog.FetchAccess.length > 0, 'Extract (Fetch) received an Access resolution call');
+            const fetchSession = AccessLog.FetchAccess[AccessLog.FetchAccess.length - 1];
+            AssertEqual(fetchSession?.Headers?.['Authorization'], 'Bearer it-secret-token', 'Extract received Bearer token from Access driver');
+
+            const abortController = new AbortController();
+            AssertEqual(
+                SessionApplies({
+                    URL: 'https://docs.example.com/articles/1',
+                    SourceURL: 'https://docs.example.com/root',
+                    Access: discoverSession,
+                    Signal: abortController.signal,
+                }),
+                true,
+                'SessionApplies attaches session headers on same-origin requests',
+            );
+            AssertEqual(
+                SessionApplies({
+                    URL: 'https://cdn.other-domain.example.org/asset.txt',
+                    SourceURL: 'https://docs.example.com/root',
+                    Access: discoverSession,
+                    Signal: abortController.signal,
+                }),
+                false,
+                'SessionApplies strips session headers on cross-origin requests',
+            );
+            console.log('      → CP15: Access session reached Discover + Extract and stripped on cross-origin URLs');
+        },
+    },
 ];
 
 for (const check of ContentPipelineChecks) {
@@ -557,8 +870,11 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('content-pipeline', {
     Setup: async (ctx: IntegrationCheckContext): Promise<void> => {
         S = { Skip: false, SkipReason: '', EmbeddingModelID: '', Prefix: `mj-cp-${Date.now()}`, SourceID: '', Created: [], ItemIDs: [], FirstChunkIDs: [] };
         LoadContentPipelineStages();
+        LoadContentPipelineExtractors();
+        AccessLog.DiscoverAccess.length = 0;
+        AccessLog.FetchAccess.length = 0;
         Documents.clear();
-        const initialModifiedAt = new Date(Date.now() - 60_000);
+        const initialModifiedAt = new Date(Date.now() - 120_000);
         Documents.set(URL_A, { Text: SENTENCE.repeat(40), ModifiedAt: initialModifiedAt });
         Documents.set(URL_B, { Text: SENTENCE.repeat(8), ModifiedAt: initialModifiedAt });
         await AIEngine.Instance.Config(false, ctx.User, ctx.Provider);

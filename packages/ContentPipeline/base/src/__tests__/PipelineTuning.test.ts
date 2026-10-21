@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ConfidenceScale } from '../ConfidenceScale.js';
+import { ConfidenceScale, ResolveConfidence } from '../ConfidenceScale.js';
 import { DefaultPipelineTuning, ResolveTuning } from '../PipelineTuning.js';
 
 describe('ResolveTuning', () => {
@@ -10,6 +10,7 @@ describe('ResolveTuning', () => {
         expect(t.MaxBlockCharacters).toBeNull();
         expect(t.MaxArchiveDepth).toBe(DefaultPipelineTuning.MaxArchiveDepth);
         expect(t.MaxSyncRemovalShare).toBe(DefaultPipelineTuning.MaxSyncRemovalShare);
+        expect(t.ClockSkewOverlapMs).toBe(DefaultPipelineTuning.ClockSkewOverlapMs);
     });
 
     it('takes a configured value', () => {
@@ -19,12 +20,14 @@ describe('ResolveTuning', () => {
                 MinimumPrintableRatio: 0.5,
                 MaxArchiveDepth: 4,
                 MaxSyncRemovalShare: 0.25,
+                ClockSkewOverlapMs: 0,
             },
         });
         expect(t.ProgressEveryItems).toBe(5);
         expect(t.MinimumPrintableRatio).toBe(0.5);
         expect(t.MaxArchiveDepth).toBe(4);
         expect(t.MaxSyncRemovalShare).toBe(0.25);
+        expect(t.ClockSkewOverlapMs).toBe(0);
     });
 
     it('reads Tuning nested under Options when a full Configuration object is passed', () => {
@@ -34,12 +37,14 @@ describe('ResolveTuning', () => {
                     MaxArchiveMembers: 100,
                     MaxArchiveBytes: 2048,
                     MaxArchiveDepth: 2,
+                    ClockSkewOverlapMs: 15_000,
                 },
             },
         });
         expect(t.MaxArchiveMembers).toBe(100);
         expect(t.MaxArchiveBytes).toBe(2048);
         expect(t.MaxArchiveDepth).toBe(2);
+        expect(t.ClockSkewOverlapMs).toBe(15_000);
     });
 
     it('falls back rather than throwing on a nonsense value', () => {
@@ -50,12 +55,14 @@ describe('ResolveTuning', () => {
                 MinimumPrintableRatio: 7,
                 MaxArchiveDepth: 0,
                 MaxSyncRemovalShare: 2,
+                ClockSkewOverlapMs: -5,
             },
         });
         expect(t.ProgressEveryItems).toBe(25);
         expect(t.MinimumPrintableRatio).toBe(0.85);
         expect(t.MaxArchiveDepth).toBe(3);
         expect(t.MaxSyncRemovalShare).toBe(0.5);
+        expect(t.ClockSkewOverlapMs).toBe(60_000);
     });
 
     it('falls back on a wrong type', () => {
@@ -83,5 +90,54 @@ describe('ConfidenceScale', () => {
 
     it('ranks a real extractor above the last-resort plain-text read', () => {
         expect(ConfidenceScale.ExtractorText).toBeGreaterThan(ConfidenceScale.FallbackText);
+    });
+});
+
+describe('ResolveConfidence', () => {
+    it('returns the defaults when nothing is configured', () => {
+        expect(ResolveConfidence(undefined)).toEqual({ ...ConfidenceScale });
+    });
+
+    it('applies an override', () => {
+        const c = ResolveConfidence({ Confidence: { ExtractorTitle: 9 } });
+        expect(c.ExtractorTitle).toBe(9);
+    });
+
+    it('leaves every other entry at its default', () => {
+        const c = ResolveConfidence({ Confidence: { ExtractorTitle: 9 } });
+        expect(c.ExtractorText).toBe(ConfidenceScale.ExtractorText);
+        expect(c.FileTypeDeclared).toBe(ConfidenceScale.FileTypeDeclared);
+    });
+
+    it('can invert a precedence rule, which is the point and the risk', () => {
+        // A deployment whose extractors find better titles than its listing pages do.
+        const c = ResolveConfidence({ Confidence: { ExtractorTitle: 1 } });
+        expect(c.ExtractorTitle).toBeLessThan(ConfidenceScale.FileTypeExtension + 2);
+    });
+
+    it('applies later configurations over earlier ones (SourceType -> Source -> Run)', () => {
+        const c = ResolveConfidence(
+            { Confidence: { DiscoveredTitle: 7, ExtractorTitle: 5 } },
+            { Confidence: { DiscoveredTitle: 8 } },
+            { Confidence: { DiscoveredTitle: 9 } },
+        );
+        expect(c.DiscoveredTitle).toBe(9);
+        expect(c.ExtractorTitle).toBe(5);
+        expect(c.FallbackText).toBe(ConfidenceScale.FallbackText);
+    });
+
+    it('ignores a non-numeric override rather than reordering precedence on a typo', () => {
+        const c = ResolveConfidence({ Confidence: { ExtractorText: 'high' } } as never);
+        expect(c.ExtractorText).toBe(ConfidenceScale.ExtractorText);
+    });
+
+    it('ignores an unknown key', () => {
+        const c = ResolveConfidence({ Confidence: { NotAThing: 5 } } as never);
+        expect(c).toEqual({ ...ConfidenceScale });
+    });
+
+    it('ignores a non-finite override', () => {
+        const c = ResolveConfidence({ Confidence: { ExtractorText: Number.POSITIVE_INFINITY } });
+        expect(c.ExtractorText).toBe(ConfidenceScale.ExtractorText);
     });
 });

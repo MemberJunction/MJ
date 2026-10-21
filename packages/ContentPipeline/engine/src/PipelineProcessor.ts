@@ -8,8 +8,8 @@
 
 import { IRecordProcessor, RecordProcessorContext, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import {
-    AccessArtifact,
     BasePipelineStage,
+    DEFAULT_ACCESS_ROLE,
     FatalStageError,
     Outcome,
     ResolveTuning,
@@ -22,12 +22,13 @@ import {
 } from '@memberjunction/content-pipeline-base';
 import { NormalizeUUID, UUIDMap } from '@memberjunction/global';
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { AccessResolver } from './AccessResolver.js';
 import { GetEntityName } from './EntityFieldMap.js';
 import { ChildCommitDefaults, WorkingRecordCommitter } from './WorkingRecordCommitter.js';
 import { WorkingRecordHydrator } from './WorkingRecordHydrator.js';
 import { ContentPipelineDeleteMarker } from './ContentPipelineDeleteMarker.js';
 import { ContentSourceConfigurationResolver } from './ContentSourceConfigurationResolver.js';
-import { DISCOVER_STAGE, IsSyncMode, ResolveSourceDriver } from './stages/DiscoverStage.js';
+import { DISCOVER_STAGE, IsSyncMode } from './stages/DiscoverStage.js';
 import { WhereEqual } from './Filters.js';
 
 /** How a {@link PipelineProcessor} is configured for one run. */
@@ -373,13 +374,14 @@ export class PipelineProcessor implements IRecordProcessor {
                 Orphans: [],
             };
         }
+        const tuning = ResolveTuning(this.config.Configuration);
         const walkStartedAt = working.GetExtension<Date>(DISCOVER_STAGE, 'walkStartedAt');
         const existingBeforeWalk = live.Results.filter((row) => {
             if (!walkStartedAt || !row.__mj_CreatedAt) {
                 return true;
             }
             const createdMs = row.__mj_CreatedAt instanceof Date ? row.__mj_CreatedAt.getTime() : new Date(row.__mj_CreatedAt).getTime();
-            return Number.isNaN(createdMs) || createdMs <= walkStartedAt.getTime();
+            return Number.isNaN(createdMs) || createdMs <= walkStartedAt.getTime() - tuning.ClockSkewOverlapMs;
         });
         if (existingBeforeWalk.length === 0) {
             return { Orphans: [] };
@@ -394,7 +396,7 @@ export class PipelineProcessor implements IRecordProcessor {
         }
         const produced = new Set(working.Children.map((c) => c.Identity.EphemeralID));
         const missing = existingBeforeWalk.filter((r) => !produced.has(r.URL));
-        const maxShare = ResolveTuning(this.config.Configuration).MaxSyncRemovalShare;
+        const maxShare = tuning.MaxSyncRemovalShare;
         const share = missing.length / existingBeforeWalk.length;
         if (share > maxShare) {
             return {
@@ -567,35 +569,20 @@ export class PipelineProcessor implements IRecordProcessor {
     }
 
     /**
-     * The source's session, opened once per run by its driver's `OpenSession` and shared by every stage.
-     * A failed open is evicted, so one outage does not poison the rest of the run.
+     * One {@link AccessResolver} per run, built lazily so a run that never asks for access never
+     * constructs one. Every stage in the run shares it, so a session opened by Discover is reused by
+     * Extract rather than opened a second time.
      */
-    private resolveAccess(context: RecordProcessorContext, contentSourceID: string): Promise<AccessArtifact | null> {
-        let session = this.sessions.Get(contentSourceID);
-        if (!session) {
-            session = this.openSession(context, contentSourceID);
-            session.catch(() => this.sessions.Delete(contentSourceID));
-            this.sessions.Set(contentSourceID, session);
-        }
-        return session;
+    private access(context: RecordProcessorContext): AccessResolver {
+        this._access ??= new AccessResolver(
+            context.provider,
+            context.contextUser,
+            new ContentSourceConfigurationResolver(context.provider, context.contextUser),
+            this.config.Configuration,
+        );
+        return this._access;
     }
-    private readonly sessions = new UUIDMap<Promise<AccessArtifact | null>>();
-
-    private async openSession(context: RecordProcessorContext, contentSourceID: string): Promise<AccessArtifact | null> {
-        const resolved = await new ContentSourceConfigurationResolver(context.provider, context.contextUser).Resolve(contentSourceID);
-        const driver = resolved.DriverClass ? ResolveSourceDriver(resolved.DriverClass) : null;
-        if (!driver?.OpenSession) {
-            return null;
-        }
-        return driver.OpenSession({
-            ContentSourceID: contentSourceID,
-            URL: resolved.URL,
-            Parameters: resolved.Parameters,
-            Configuration: resolved.Configuration,
-            ContextUser: context.contextUser,
-            Provider: context.provider,
-        });
-    }
+    private _access: AccessResolver | null = null;
 
     /** Build the per-record context a stage sees. */
     private buildContext(stage: BasePipelineStage, context: RecordProcessorContext, key: string, signal: AbortSignal): StageContext {
@@ -612,7 +599,7 @@ export class PipelineProcessor implements IRecordProcessor {
             Signal: signal,
             ReportProgress: (message: string) => this.progress?.ReportProgress(key, message),
             Log: logger,
-            ResolveAccess: (contentSourceID: string) => this.resolveAccess(context, contentSourceID),
+            ResolveAccess: (contentSourceID: string) => this.access(context).Artifact(contentSourceID, DEFAULT_ACCESS_ROLE),
         };
     }
 

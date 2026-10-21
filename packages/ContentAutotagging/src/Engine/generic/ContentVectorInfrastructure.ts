@@ -52,10 +52,23 @@ export interface ProviderDirectiveResult {
     Rejected: { Item: MJContentItemEntity; Reason: string }[];
 }
 
-/** Group-key part meaning "no explicit pair — use the first vector index". */
+/** Options controlling default vector-index fallback behaviour. */
+export interface ContentVectorInfrastructureOptions {
+    /**
+     * Legacy autotagger compatibility: when true, if multiple vector indexes exist and no default
+     * is configured on the source, content type, or active default `MJ: AI Configurations` row,
+     * fall back to `AIEngine.Instance.VectorIndexes[0]`. The Content Pipeline leaves this false so
+     * multi-index environments fail closed rather than writing into whichever index loaded first.
+     */
+    AllowFirstIndexFallback?: boolean;
+}
+
+/** Group-key part meaning "no explicit pair — resolve the default vector index". */
 const DEFAULT_PART = 'default';
 /** Records per vector-DB upsert call. */
 const UPSERT_BATCH_SIZE = 50;
+/** Parameter name on the active default `MJ: AI Configurations` row naming the fallback vector index. */
+const DEFAULT_VECTOR_INDEX_PARAM = 'contentpipeline.defaultvectorindexid';
 
 /**
  * Resolves and caches vector infrastructure for content items.
@@ -70,6 +83,7 @@ export class ContentVectorInfrastructure {
     constructor(
         private readonly provider: IMetadataProvider,
         private readonly contextUser: UserInfo,
+        private readonly options: ContentVectorInfrastructureOptions = {},
     ) {
         this.fieldPaths = new FieldPathResolver(provider, contextUser, 'MJ: Content Items');
     }
@@ -156,17 +170,62 @@ export class ContentVectorInfrastructure {
         await AIEngine.Instance.Config(false, this.contextUser, this.provider);
         const [embeddingPart, indexPart] = groupKey.split('|');
         if (indexPart === DEFAULT_PART) {
-            const first = AIEngine.Instance.VectorIndexes[0];
-            if (!first) {
-                throw new Error('No vector indexes found — create one in the Configuration tab first');
-            }
-            return this.fromIndex(first, first.EmbeddingModelID);
+            const defaultIndex = await this.resolveDefaultVectorIndex();
+            return this.fromIndex(defaultIndex, defaultIndex.EmbeddingModelID);
         }
         const index = await this.cachedOrLoaded(AIEngine.Instance.VectorIndexes, 'MJ: Vector Indexes', indexPart);
         if (!index) {
             throw new Error(`Vector index ${indexPart} not found`);
         }
         return this.fromIndex(index, embeddingPart === DEFAULT_PART ? index.EmbeddingModelID : embeddingPart);
+    }
+
+    /**
+     * Resolve the fallback vector index when neither `ContentSource.VectorIndexID` nor `ContentType.VectorIndexID`
+     * is set: (3) `ContentPipeline.DefaultVectorIndexID` on the single active default `MJ: AI Configurations` row,
+     * (4) the sole vector index when `VectorIndexes.length === 1`, or (5) fail closed naming those settings.
+     */
+    private async resolveDefaultVectorIndex(): Promise<MJVectorIndexEntity> {
+        const configuredID = this.configuredDefaultVectorIndexID();
+        if (configuredID) {
+            const index = await this.cachedOrLoaded(AIEngine.Instance.VectorIndexes, 'MJ: Vector Indexes', configuredID);
+            if (!index) {
+                throw new Error(`Vector index ${configuredID} configured in ContentPipeline.DefaultVectorIndexID not found`);
+            }
+            return index;
+        }
+        const indexes = AIEngine.Instance.VectorIndexes ?? [];
+        if (indexes.length === 0) {
+            throw new Error('No vector indexes found — create one in the Configuration tab first');
+        }
+        if (indexes.length === 1 || this.options.AllowFirstIndexFallback) {
+            return indexes[0];
+        }
+        throw new Error(
+            `Cannot resolve a vector index across ${indexes.length} configured MJ: Vector Indexes without an explicit target. ` +
+                'Set ContentSource.VectorIndexID, ContentType.VectorIndexID, or the ContentPipeline.DefaultVectorIndexID parameter on the active default MJ: AI Configurations row.',
+        );
+    }
+
+    /** Read `ContentPipeline.DefaultVectorIndexID` from the single active default `MJ: AI Configurations` row. */
+    private configuredDefaultVectorIndexID(): string | null {
+        const configs = AIEngine.Instance.Configurations ?? [];
+        const activeDefaults = configs.filter((c) => Boolean(c.IsDefault) && (c.Status ?? 'Active') === 'Active');
+        if (activeDefaults.length > 1) {
+            throw new Error(
+                `Multiple active default MJ: AI Configurations found (${activeDefaults.map((c) => c.Name ?? c.ID).join(', ')}); at most one active configuration may set IsDefault = 1`,
+            );
+        }
+        if (activeDefaults.length === 0) {
+            return null;
+        }
+        const defaultConfigID = activeDefaults[0].ID;
+        const params = AIEngine.Instance.ConfigurationParams ?? [];
+        const match = params.find(
+            (p) => UUIDsEqual(p.ConfigurationID, defaultConfigID) && p.Name?.trim().toLowerCase() === DEFAULT_VECTOR_INDEX_PARAM,
+        );
+        const value = match?.Value?.trim();
+        return value && value.length > 0 ? value : null;
     }
 
     /** Database instance, provider index name, dimensions and ProviderConfig for one index. */
