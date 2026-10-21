@@ -74,6 +74,17 @@ describe('UserInfo', () => {
         expect(user.FirstName).toBe('Jane');
         expect(user.LastName).toBe('Smith');
     });
+
+    it('should store AnonymousVisitorID on a non-enumerable backing field', () => {
+        const user = new UserInfo(null, { ID: 'u-anon' });
+        expect(user.AnonymousVisitorID).toBeUndefined();
+
+        user.AnonymousVisitorID = 'visitor-sid-1';
+        expect(user.AnonymousVisitorID).toBe('visitor-sid-1');
+        expect(Object.keys(user)).not.toContain('_anonymousVisitorID');
+        expect(Object.keys(user)).not.toContain('AnonymousVisitorID');
+        expect(JSON.parse(JSON.stringify(user))).not.toHaveProperty('_anonymousVisitorID');
+    });
 });
 
 describe('UserRoleInfo', () => {
