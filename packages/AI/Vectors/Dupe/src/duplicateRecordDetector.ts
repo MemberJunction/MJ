@@ -1361,7 +1361,7 @@ export class DuplicateRecordDetector extends VectorBase {
 
         const entityInfo = records[0].EntityInfo;
         const rows = await this.LoadTemplateRows(records, entityInfo);
-        const dataBuilder = new EntityDocumentTemplateDataBuilder(this.RunView, contextUser ?? this.CurrentUser);
+        const dataBuilder = new EntityDocumentTemplateDataBuilder(this.RunView, contextUser ?? this.CurrentUser, this.Provider);
         // Only saved records have related rows: a new record's key, even a client-generated one, has none yet.
         const savedRows = rows.filter((_, index) => records[index].IsSaved);
         const relatedData = await dataBuilder.LoadRelatedData(entityInfo, savedRows, template);
@@ -1490,6 +1490,7 @@ export class DuplicateRecordDetector extends VectorBase {
             }
 
             const dupeResult = this.ParseVectorMatches(queryResponse, compositeKey);
+            this.ProjectCandidateMetadata(dupeResult.Duplicates, record.EntityInfo);
             dupeResult.Duplicates = this.FilterSelfMatches(dupeResult.Duplicates, compositeKey);
             const potentialThreshold = options.PotentialMatchThreshold ?? entityDocument.PotentialMatchThreshold;
             dupeResult.Duplicates = dupeResult.Duplicates.filter(
@@ -1575,6 +1576,23 @@ export class DuplicateRecordDetector extends VectorBase {
     }
 
     /**
+     * Remove from each candidate's `VectorMetadata` the fields of `entityInfo` the current user may not
+     * read. The metadata was written by the sync under another identity and is returned to this user for
+     * display, so it is projected here the same way their own reads are. Mutates the candidates.
+     */
+    protected ProjectCandidateMetadata(candidates: PotentialDuplicate[], entityInfo: EntityInfo | undefined): void {
+        if (!entityInfo || !this.CurrentUser) return;
+        const denied = entityInfo.GetDeniedReadFields(this.CurrentUser);
+        if (denied.size === 0) return;
+        for (const candidate of candidates) {
+            if (!candidate.VectorMetadata) continue;
+            candidate.VectorMetadata = Object.fromEntries(
+                Object.entries(candidate.VectorMetadata).filter(([key]) => !denied.has(key.toLowerCase()))
+            );
+        }
+    }
+
+    /**
      * True when two composite keys identify the same record. Compares the normalized
      * (trimmed, lower-cased) URL-segment representation, so it is robust to UUID-casing
      * differences across platforms (SQL Server upper- vs PostgreSQL lower-case) and to a
@@ -1621,11 +1639,14 @@ export class DuplicateRecordDetector extends VectorBase {
      */
     protected buildSourceMetadataMap(records: BaseEntity[], entityInfo: EntityInfo): Map<string, string> {
         const metadataMap = new Map<string, string>();
+        // Fields the user may not read are left out: the records were loaded for this user, and the
+        // map is shown to them. Reading them as absent also keeps Get() from refusing them.
+        const readable = (fieldName: string) => entityInfo.IsFieldReadableByUser(fieldName, this.CurrentUser);
         for (const record of records) {
             // Keyed by the same compact segment the batch ids use, so CreateRunDetailRecords can
             // look the metadata up by record id for single-column and composite keys alike.
             const id = record.PrimaryKey.ToCompactURLSegment();
-            metadataMap.set(id, JSON.stringify(this.BuildRecordMetadata(fieldName => record.Get(fieldName), entityInfo)));
+            metadataMap.set(id, JSON.stringify(this.BuildRecordMetadata(fieldName => (readable(fieldName) ? record.Get(fieldName) : undefined), entityInfo)));
         }
         return metadataMap;
     }

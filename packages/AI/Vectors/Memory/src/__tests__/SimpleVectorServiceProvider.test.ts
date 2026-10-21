@@ -129,14 +129,21 @@ function recordlessEvent(type: BaseEntityEvent['type'], entityName: string = ERD
     return { type, payload: null, baseEntity: null, entityName };
 }
 
-function queryDoc(entityDocumentId: string, vector: number[], topK = 5, user?: UserInfo): Promise<BaseResponse> {
+/**
+ * The user test queries run as. Indexes are cached per (EntityDocument, user) and not at all without a
+ * user, so every caching test needs one.
+ */
+const TEST_USER = Object.assign(new UserInfo(), { ID: 'test-user' });
+
+/** `user` defaults to {@link TEST_USER}; pass `null` to query with no user. */
+function queryDoc(entityDocumentId: string, vector: number[], topK = 5, user: UserInfo | null = TEST_USER): Promise<BaseResponse> {
     const params: QueryOptions = { id: entityDocumentId, vector, topK };
-    return new SimpleVectorServiceProvider().QueryIndex(params, user);
+    return new SimpleVectorServiceProvider().QueryIndex(params, user ?? undefined);
 }
 function looseQuery(params: LooseQuery): Promise<BaseResponse> {
-    return new SimpleVectorServiceProvider().QueryIndex(params as QueryOptions);
+    return new SimpleVectorServiceProvider().QueryIndex(params as QueryOptions, TEST_USER);
 }
-async function loadDoc(entityDocumentId: string, rows: LoadRow[], user?: UserInfo): Promise<void> {
+async function loadDoc(entityDocumentId: string, rows: LoadRow[], user: UserInfo | null = TEST_USER): Promise<void> {
     runViewMock.mockResolvedValueOnce(viewResult(rows));
     await queryDoc(entityDocumentId, [1, 0, 0], 1, user);
 }
@@ -222,14 +229,14 @@ describe('SimpleVectorServiceProvider', () => {
 
         it('rejects calls without an EntityDocumentID', async () => {
             const provider = new SimpleVectorServiceProvider();
-            const result = await provider.QueryIndex({ id: '', vector: [1, 0, 0], topK: 5 } as never);
+            const result = await provider.QueryIndex({ id: '', vector: [1, 0, 0], topK: 5 } as never, TEST_USER);
             expect(result.success).toBe(false);
             expect(result.message).toMatch(/EntityDocumentID/);
         });
 
         it('rejects calls without a query vector', async () => {
             const provider = new SimpleVectorServiceProvider();
-            const result = await provider.QueryIndex({ id: 'doc-1', topK: 5 } as never);
+            const result = await provider.QueryIndex({ id: 'doc-1', topK: 5 } as never, TEST_USER);
             expect(result.success).toBe(false);
             expect(result.message).toMatch(/vector/);
         });
@@ -266,6 +273,36 @@ describe('SimpleVectorServiceProvider', () => {
     });
 
     describe('caching', () => {
+        // An index is loaded with a RunView as the asking user, so it holds only what that user may read.
+        it('never serves one user\'s loaded index to another user', async () => {
+            const alice = Object.assign(new UserInfo(), { ID: 'alice' });
+            const bob = Object.assign(new UserInfo(), { ID: 'bob' });
+            runViewMock.mockImplementation((_params: RunViewParams, user: UserInfo | undefined) =>
+                Promise.resolve(viewResult<LoadRow>(user === alice
+                    ? [{ ID: 'erd-a', RecordID: 'ALICE-ONLY', VectorJSON: vec(1, 0, 0) }]
+                    : [{ ID: 'erd-b', RecordID: 'BOB-VISIBLE', VectorJSON: vec(1, 0, 0) }])));
+
+            const forAlice = await queryDoc('doc-1', [1, 0, 0], 5, alice);
+            const forBob = await queryDoc('doc-1', [1, 0, 0], 5, bob);
+            const forAliceAgain = await queryDoc('doc-1', [1, 0, 0], 5, alice);
+
+            expect(recordIdsOf(forAlice)).toEqual(['ALICE-ONLY']);
+            expect(recordIdsOf(forBob)).toEqual(['BOB-VISIBLE']);
+            expect(recordIdsOf(forAliceAgain)).toEqual(['ALICE-ONLY']);
+            expect(runViewMock).toHaveBeenCalledTimes(2); // each user's index is still cached for that user
+            expect(runViewCall(1).User).toBe(bob);
+        });
+
+        it('does not cache an index loaded with no user', async () => {
+            runViewMock.mockResolvedValue(viewResult<LoadRow>([{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) }]));
+
+            await queryDoc('doc-1', [1, 0, 0], 1, null);
+            await queryDoc('doc-1', [1, 0, 0], 1, null);
+
+            expect(runViewMock).toHaveBeenCalledTimes(2);
+            expect(SimpleVectorIndexCache.Instance.Size).toBe(0);
+        });
+
         it('reuses a loaded index across calls within the TTL window', async () => {
             runViewMock.mockResolvedValue({
                 Success: true,
@@ -275,9 +312,9 @@ describe('SimpleVectorServiceProvider', () => {
             });
 
             const provider = new SimpleVectorServiceProvider();
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
 
             // RunView only called once — second and third hits the cache
             expect(runViewMock).toHaveBeenCalledTimes(1);
@@ -294,8 +331,8 @@ describe('SimpleVectorServiceProvider', () => {
             const provider = new SimpleVectorServiceProvider();
             SimpleVectorServiceProvider.TtlMs = 0; // immediate expiry
 
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
 
             expect(runViewMock).toHaveBeenCalledTimes(2);
         });
@@ -309,11 +346,11 @@ describe('SimpleVectorServiceProvider', () => {
             });
 
             const provider = new SimpleVectorServiceProvider();
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
             expect(runViewMock).toHaveBeenCalledTimes(1);
 
             SimpleVectorServiceProvider.InvalidateIndex('doc-1');
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
             expect(runViewMock).toHaveBeenCalledTimes(2);
         });
 
@@ -326,9 +363,9 @@ describe('SimpleVectorServiceProvider', () => {
 
             const provider = new SimpleVectorServiceProvider();
             // Fire three callers concurrently before any of them complete.
-            const a = provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
-            const b = provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
-            const c = provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
+            const a = provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
+            const b = provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
+            const c = provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
             await loaderStarted();
 
             // Release the in-flight RunView with a single payload.
@@ -353,8 +390,8 @@ describe('SimpleVectorServiceProvider', () => {
             });
 
             const provider = new SimpleVectorServiceProvider();
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
-            await provider.QueryIndex({ id: 'doc-2', vector: [1, 0, 0], topK: 1 } as never);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
+            await provider.QueryIndex({ id: 'doc-2', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
             expect(SimpleVectorServiceProvider.CacheSize).toBe(2);
 
             SimpleVectorServiceProvider.InvalidateAll();
@@ -744,13 +781,13 @@ describe('SimpleVectorServiceProvider', () => {
 
             it('recovers from a loader that throws synchronously instead of wedging the EntityDocument', async () => {
                 const cache = SimpleVectorIndexCache.Instance;
-                await expect(cache.GetOrLoad('doc-sync-throw', undefined, () => {
+                await expect(cache.GetOrLoad('doc-sync-throw', TEST_USER, () => {
                     throw new Error('loader blew up');
                 })).rejects.toThrow('loader blew up');
                 expect(LogError).toHaveBeenCalledWith(expect.stringContaining('load failed for EntityDocumentID="doc-sync-throw": loader blew up'));
 
                 const retry = vi.fn(async () => null);
-                await expect(cache.GetOrLoad('doc-sync-throw', undefined, retry)).resolves.toBeNull();
+                await expect(cache.GetOrLoad('doc-sync-throw', TEST_USER, retry)).resolves.toBeNull();
                 expect(retry).toHaveBeenCalledTimes(1);
             });
 
@@ -1032,7 +1069,7 @@ describe('SimpleVectorServiceProvider', () => {
                 send(keyOnlySave('erd-5'));
                 await vi.advanceTimersByTimeAsync(REMOTE_REFRESH_DEBOUNCE_MS);
                 expect(runViewMock).toHaveBeenCalledTimes(2);
-                expect(runViewCall(1).User).toBeUndefined(); // no loaded index yet to borrow a user from
+                expect(runViewCall(1).User).toBe(TEST_USER); // the user the load still in flight reads as
 
                 release(viewResult([{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) }]));
                 expect(recordIds(await pending)).toEqual(['E']);
@@ -1110,8 +1147,8 @@ describe('SimpleVectorServiceProvider', () => {
             });
 
             it('re-reads changed rows as the user a loaded index was loaded as', async () => {
-                const loader = new UserInfo();
-                await loadDoc('doc-0', [{ ID: 'erd-0', RecordID: 'O', VectorJSON: vec(1, 0, 0) }]); // no user
+                const loader = Object.assign(new UserInfo(), { ID: 'loader' });
+                await loadDoc('doc-0', [{ ID: 'erd-0', RecordID: 'O', VectorJSON: vec(1, 0, 0) }], null); // no user: not cached
                 await loadDoc('doc-1', [{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) }], loader);
                 expect(runViewCall(1).User).toBe(loader);
 
@@ -1204,7 +1241,7 @@ describe('SimpleVectorServiceProvider', () => {
         });
 
         it('escapes the EntityDocumentID into the load filter and loads as the calling user', async () => {
-            const caller = new UserInfo();
+            const caller = Object.assign(new UserInfo(), { ID: 'caller' });
             runViewMock.mockResolvedValueOnce(viewResult<LoadRow>([]));
 
             await queryDoc(`doc'1`, [1, 0, 0], 1, caller);
