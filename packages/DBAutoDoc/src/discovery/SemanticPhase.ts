@@ -58,6 +58,7 @@ import {
 } from './ColumnNormalizer.js';
 import { ColumnClusterer, ClustererInputColumn } from './ColumnClusterer.js';
 import { CreateEmbeddingProvider, EmbeddingProviderName } from './EmbeddingProvider.js';
+import { DefaultEmbeddingProviderFor } from './embedding-provider-default.js';
 
 const AUDIT_COLUMN_PATTERN = /^(modified|created|updated|inserted|changed)(date|at|time|by|on)?$|^rowguid$|^timestamp$|^row_?version$|^__mj_.*$/i;
 const NON_VALUEMATCHABLE_TYPES = /(binary|blob|image|varbinary|xml|geography|geometry|hierarchyid|sql_variant)/i;
@@ -117,6 +118,13 @@ export interface SemanticPhaseResult {
         clustersFound: number;
         /** Sub-clusters discarded during the split for falling below minClusterSize / minDistinctTables. */
         clustersDropped: number;
+        /**
+         * Tables never normalized because `tokenBudget` ran out. Non-zero means every count above
+         * is a floor, not a finding: the clusters that would have come from those tables were
+         * never looked for. Reporting a short run as a complete one is how a budget cap becomes a
+         * silent quality regression.
+         */
+        tablesSkippedForBudget: number;
     };
 }
 
@@ -136,15 +144,26 @@ export async function RunSemanticPhase(
         return emptyResult(candidates.length);
     }
 
+    // Resolve the embedding provider BEFORE the paid normalization calls. A vendor with no
+    // embedding driver, or a driver package that is not registered, is a configuration error the
+    // pass cannot get past, so it has to fail here rather than after every table was normalized.
+    const embedProvider = ResolveEmbeddingProvider(config, aiConfig);
+
     // ─── 2. Normalize to business space (LLM per-table) ──────────────────────
     progress('semantic: normalizing column descriptions to business space');
     const tableInputs = groupColumnsByTable(state, candidates);
     const normResult = await new TableNormalizer(aiConfig).normalizeAll(tableInputs, {
         Concurrency: config.refinementConcurrency ?? DEFAULT_DETECTOR_CONFIG.RefinementConcurrency,
         MaxRetries: config.maxRefinementRetries ?? 2,
+        TokenBudget: config.tokenBudget,
         OnProgress: () => {},
     });
     progress(`semantic: ${normResult.Normalized.length} columns kept (${normResult.rejected} rejected by PR-#2193 axes)`);
+    if (normResult.BudgetExhausted) {
+        progress(
+            `semantic: PARTIAL — token budget reached, ${normResult.TablesSkippedForBudget} table(s) not normalized`,
+        );
+    }
 
     if (normResult.Normalized.length < (config.minClusterSize ?? DEFAULT_DETECTOR_CONFIG.MinClusterSize)) {
         return {
@@ -157,12 +176,12 @@ export async function RunSemanticPhase(
                 clustersBeforeSplit: 0,
                 clustersFound: 0,
                 clustersDropped: 0,
+                tablesSkippedForBudget: normResult.TablesSkippedForBudget,
             },
         };
     }
 
     // ─── 3. Embed the normalized descriptions ────────────────────────────────
-    const embedProvider = resolveEmbeddingProvider(config, aiConfig);
     progress(`semantic: embedding ${normResult.Normalized.length} descriptions via ${embedProvider.name}`);
     const texts = normResult.Normalized.map((n) => buildEmbeddingText(n));
     const embeddings = await embedProvider.embed(texts);
@@ -217,6 +236,7 @@ export async function RunSemanticPhase(
             clustersBeforeSplit: rawClusters.length,
             clustersFound: clusters.length,
             clustersDropped: dropped,
+            tablesSkippedForBudget: normResult.TablesSkippedForBudget,
         },
     };
 }
@@ -504,12 +524,16 @@ interface EmbeddingProviderHandle {
     embed: (texts: string[]) => Promise<Float32Array[]>;
 }
 
-function resolveEmbeddingProvider(
+/** Exported for test: the default this picks is the fix, so it needs to be assertable directly. */
+export function ResolveEmbeddingProvider(
     config: OrganicKeyDetectionConfig,
     aiConfig: AIConfig,
 ): EmbeddingProviderHandle {
     const cfg = config.embedding ?? {};
-    const provider = (cfg.provider ?? 'openai') as EmbeddingProviderName;
+    // No configured provider means "use the vendor whose key we already have". Hardcoding openai
+    // here sent a Gemini key to OpenAIEmbedding under the SHIPPED DEFAULTS — see
+    // DefaultEmbeddingProviderFor.
+    const provider = (cfg.provider ?? DefaultEmbeddingProviderFor(aiConfig.provider)) as EmbeddingProviderName;
     const apiKey = aiConfig.apiKey;
     const impl = CreateEmbeddingProvider({
         provider,
@@ -518,6 +542,7 @@ function resolveEmbeddingProvider(
         Dimensions: cfg.dimensions,
         BatchSize: cfg.batchSize,
         Endpoint: cfg.endpoint,
+        CallTimeoutMs: aiConfig.callTimeoutMs,
     });
     return {
         name: `${provider}:${cfg.model ?? 'default'}`,
@@ -543,6 +568,7 @@ function emptyResult(columnsInScope: number): SemanticPhaseResult {
             clustersBeforeSplit: 0,
             clustersFound: 0,
             clustersDropped: 0,
+            tablesSkippedForBudget: 0,
         },
     };
 }

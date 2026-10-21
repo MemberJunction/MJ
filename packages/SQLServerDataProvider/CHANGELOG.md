@@ -1,5 +1,96 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 3b0e8db: Abstract `SaveReturnMode` return-context resolution (`SaveReturnContext`, `ResolveSaveReturnContext`, `GetDatestampSelectColumnsSQL`) into `GenericDatabaseProvider` and expose the dialect-specific `ProjectSaveCallToDatestamps` hook implemented by both `SQLServerDataProvider` and `PostgreSQLDataProvider`.
+- d29b5c2: Deleting a record no longer fails with SQL error 213 ("Column name or number of supplied values does not match table definition") when its entity tracks record changes and cascades deletes, and another record references it. The cascading delete procedure's own result sets are no longer captured into a one-column table; the delete is confirmed by the row being gone from the entity's base view (which runtime logins can read, and which hides soft-deleted rows), and the Delete record change is still written. Primary-key values written into the delete SQL are now escaped, so a string key containing a quote no longer breaks the statement. A delete inside a transaction group now reports failure when the returned key does not match the record, instead of always reporting success.
+- 7e72c86: Phase 2 fresh efficiency and quality audit across Core Data Primitives, Task Graph Engine, AI Agent Runtime & PayloadManager, High-Volume Telemetry SaveReturnMode, and Angular Chat / Step Inspector UI:
+  - **Core Data Primitives (`@memberjunction/core`, `@memberjunction/generic-database-provider`, `@memberjunction/sqlserver-dataprovider`, `@memberjunction/server`, `@memberjunction/templates-base-types`)**:
+    - Restore lazy `_raw` `BaseEntity` hydration on `GetEntityObject()` + `LoadFromData()` (`20.87x` faster, `-100%` `EntityField` allocations on read-only `entity_object` views) while guarding subsequent `LoadFromData()` calls on already-loaded instances.
+    - Support runtime `options.SaveReturnMode === 'datestamps_only'` projection in `SQLServerDataProvider.WrapSaveCallForResult`.
+    - Eliminate duplicate `DiffObjects()` and `CreateUserDescriptionOfChanges()` calls in `GenericDatabaseProvider.Save()`.
+    - Add precomputed `FieldMappingPlan` in `ResolverBase.ArrayMapFieldNamesToCodeNames` and `O(1)` `EntityInfo.FieldByCodeName()` lookup.
+    - Deduplicate `entity.GetAll()` across `DatabaseProviderBase.Save()` and `BaseEntity.finalizeSave()` via `__mj_preMerged`, mark unpopulated virtual fields `NotLoaded = true` on new `datestamps_only` inserts, compute `ProviderBase.prepareSmartCacheCheckParams` fingerprint before widening `param.Fields`, and avoid double property reads in `NunjucksSandbox.guardMemberLookup`.
+  - **Task Graph Engine (`@memberjunction/task-graph`)**:
+    - Collapse `TaskGraphDispatcher.pollOnce` from `6 + 13G` to `3 + 2G` DB queries via a single `loadGraphState` per active graph per poll, gate `checkHumanTaskCompletion` with an in-memory `pendingHumanTasks` set, pass pre-hydrated `ClaimedTaskCandidate` into `executeClaimed` (`0` re-queries), parallelize `TaskGraphService.Submit` and `persistComputedLayout`, and complete `AgentSpecSync.LoadFromDatabase` round-trip hydration.
+  - **AI Agent Runtime, Prompts & PayloadManager (`@memberjunction/ai-agents`, `@memberjunction/ai-prompts`)**:
+    - Gate `BaseAgent.runPostRunCompaction` on `!IsVolatileResultMessage(msg)` and `!msg.toolCalls?.length`, reuse `_promptRunner`, queue compaction steps via `_stepSaveQueue`, and account for compaction steps in `_treeBudget`.
+    - Remove synchronous `stepEntity.Save()` queue bypasses in `checkExecutionGuardrails` and `validateSuccessNextStep`, and route `AIPromptRunner.executePromptInParallel` parent completion save through `queuePromptRunCompletionUpdate`.
+    - Fix `PayloadManager.mergeAllowedPaths` `arguments[2]` warning bug and cache compiled glob/wildcard `RegExp` and parsed path specs statically (`49,150x` fewer regex compilations).
+    - Add `O(1)` reference + metadata snapshot fast path to `BaseAgent.capturePromptStepMessages` (`16.2x` faster) and memoize child template placeholder analysis.
+  - **High-Volume Telemetry `SaveReturnMode: 'datestamps_only'` (`@memberjunction/ai-core-plus`, `@memberjunction/ai-agents`, `@memberjunction/ai-prompts`, `@memberjunction/actions`)**:
+    - Pass `{ SaveReturnMode: 'datestamps_only' }` in `AgentRunStepSaveQueue`, `BaseAgent._agentRun.Save`, `BaseModelRunner._promptRunQueue`, and `ActionEngineServer._logQueue`.
+  - **Angular Chat, Task Graph & Step Inspector (`@memberjunction/ng-conversations`, `@memberjunction/ng-ai-test-harness`, `@memberjunction/ng-core-entity-forms`)**:
+    - Memoize `DisplayArtifacts`, `SupportingArtifacts`, and single-pass `buildWorkflowStepSummaries` in `MessageItemComponent`, memoize JSON parsing and graph layout positions in `AIAgentRunStepDetailComponent` and `MJAIAgentRunFormComponentExtended`, add `ShouldReplaceDetailAgentRun` guard and `RefreshRenderedMessage` in `ConversationMessageListComponent`, migrate `artifactPaneWidth` from `localStorage` to `UserInfoEngine`, and remove redundant `MJ: AI Agent Runs` query in `AIAgentRunDataHelper`.
+
+- 8c120db: Cached RunQuery results now carry the definition of the query that produced them, so an edited query's old results are no longer served. A read under another definition misses; a client's cache check is answered stale when its slot came from another definition; on a shared cache a mismatch holds back writes instead of deleting the slot. The server where an edit was saved deletes the query's slots, and those of queries that compose it, once the edit settles. Slots are keyed by the resolved query, so requests by ID, by name or by both share one. Query extraction rewrites the shared cache slots once per save instead of once per row. The SQL Server cache-status check now reads the documented `TotalRows` column. A client talking to a server that predates the definition check (during a rolling deploy) retries its cache check without the definition, and tries it again a few minutes later.
+- 17a4137: Security: the SQL screens now read quotes, identifiers and comments the way the database does. A new dialect-aware scanner, `ScanSQLForScreening` in `@memberjunction/global`, replaces the regex behind `StripSQLStringLiterals`. It understands T-SQL `[…]` identifiers, double-quoted identifiers, `''` escapes, PostgreSQL `E'…'` and dollar-quoted strings, and `--` and nested block comments. It rejects text it cannot classify, such as an unterminated literal. Before this change, a quote inside a bracket identifier, a comment, or a PostgreSQL string opened a literal the database never saw, so `ValidateUserProvidedSQLClause` and `SQLExpressionValidator` accepted a stacked statement hidden behind it. Providers now pass their dialect to the clause, aggregate and ad-hoc query screens. `SQLValidationOptions.Dialect` and the optional `dialect` argument of `ValidateFullQuery` and `StripSQLStringLiterals` let other callers do the same. Without a dialect, SQL must pass under both SQL Server and PostgreSQL rules. A full query must open with the unquoted keyword `SELECT` or `WITH`, compared in ASCII. The GetData resolver screens exactly the text it runs: it trims the query, and it no longer screens a copy in which literal `\n`, `\r` and `\t` sequences are rewritten. A query that passed only because of that rewriting, such as one whose first real line follows a `--` comment ending in a literal `\n`, is now refused.
+- 5f707d1: SQL Server entity saves and deletes now send their values as typed parameters instead of pasting them into the batch as literals. The statement keeps its DECLARE / SET / EXEC shape with `SET @Name$ = @p$0`, so its text is the same for every record of an entity (for a given set of fields) and SQL Server reuses one cached plan instead of compiling every save. Each parameter is typed from its column (`nvarchar(100)`, `uniqueidentifier`, `bit`, …); `decimal`, `numeric`, `money` and `smallmoney` are sent as their exact text, because the driver would round them through a double. Record Change values are typed from the Record Changes columns, so their text is stored as Unicode. The SQL log, migration captures, error messages and TransactionGroup items get the literal form: the same statement with the values written back in, as before. `SaveSQLResult`, `DeleteSQLResult`, `ExecuteSQLOptions` and `SaveSQLFragment` gain an optional `literalSQL` for that. Date and time values (`date`, `time`, `datetime`, `datetime2`, `datetimeoffset`, `smalldatetime`) are sent as their ISO-8601 text, so nothing depends on the server's time zone: the stored offset is `+00:00`, seconds round as before, and year-boundary values such as `0001-01-01` and `9999-12-31` still save on servers outside UTC. A number field whose value is not a finite number (an empty string, `abc`) fails the save, as it did before, instead of storing `0` or NULL. `sql_variant` values stay inline literals, so SQL Server still picks their base type from the value. If the startup `datetimeoffset` probe fails, it is retried after 30 seconds rather than on every call. `sysname` columns are sent as text; they used to be written unquoted and fail. The public `GetSaveSQL` returns the statement with its values written in.
+- 091e7ea: Record Change audit rows keep characters outside the database code page. The SQL Server provider now sends the entity name, record ID, ChangesJSON, ChangesDescription and FullRecordJSON to `spCreateRecordChange_Internal` as `N'…'` literals, so emoji, CJK, Greek and other non-Latin text are no longer stored as `?`.
+- Updated dependencies [3b0e8db]
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [a9344ad]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0ab85d7]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [a0db1fb]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [006a5e7]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [2ca8690]
+- Updated dependencies [c7d1170]
+- Updated dependencies [79d4f27]
+- Updated dependencies [5f707d1]
+- Updated dependencies [03c085c]
+- Updated dependencies [dc38250]
+  - @memberjunction/generic-database-provider@6.2.0-edge.5
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/actions-base@6.2.0-edge.5
+  - @memberjunction/actions@6.2.0-edge.5
+  - @memberjunction/aiengine@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/sql-dialect@6.2.0-edge.5
+  - @memberjunction/ai-vectordb@6.2.0-edge.5
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.5
+  - @memberjunction/encryption@6.2.0-edge.5
+  - @memberjunction/queue@6.2.0-edge.5
+  - @memberjunction/query-processor@6.2.0-edge.5
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Minor Changes

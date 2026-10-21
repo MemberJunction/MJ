@@ -1,5 +1,52 @@
 # @memberjunction/open-app-engine
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- d26183d: Fix CodeQL insecure-randomness and filesystem-race findings in runtime code (#5574).
+  - **Open App installs** download migration and teardown SQL into a fresh private temp directory (`mkdtempSync`) instead of a predictable `mj-app-<name>-<timestamp>` path that reused any directory already there.
+  - **Password generation** picks and shuffles characters with `crypto.randomInt`, removing the modulo bias of `randomBytes % length`.
+  - **Number pool `Random` selection** and the **Pi harness session id** use `node:crypto` instead of `Math.random`.
+  - **SQL log reads** drop the existence check before reading; a missing file is still reported through the existing `ENOENT` handling.
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [c7d1170]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/record-cloning@6.2.0-edge.5
+  - @memberjunction/sql-dialect@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Minor Changes
