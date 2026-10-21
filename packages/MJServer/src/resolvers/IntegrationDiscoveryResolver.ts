@@ -61,6 +61,7 @@ import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnProm
 import { ClearRekeyedObjectData, ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DecideFieldMapReconcile, DecideRekeyed, DisableUnselectedEntityMaps, IdentityKeyFields, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { ComputeInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
 import { FieldsForBuild, LoadScopedFieldsForBuild, type ScopedBuildFields } from "../integration/ScopedFieldsForBuild.js";
+import { LookupObjectNamesByID } from "../integration/ObjectNamesByID.js";
 import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildReactivateMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 // Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
 // server subclass it actually gets back from GetEntityObject with a real type rather than a cast.
@@ -1990,21 +1991,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             .filter(so => !so.SourceObjectName && so.SourceObjectID)
             .map(so => so.SourceObjectID!);
 
-        const idToName = new Map<string, string>();
-        if (idsToLookup.length > 0) {
-            const rv = new RunView();
-            const result = await rv.RunView<{ ID: string; Name: string }>({
-                EntityName: 'MJ: Integration Objects',
-                ExtraFilter: idsToLookup.map(id => `ID='${id}'`).join(' OR '),
-                ResultType: 'simple',
-                Fields: ['ID', 'Name'],
-            }, user);
-            if (result.Success) {
-                for (const row of result.Results) {
-                    idToName.set(row.ID.toUpperCase(), row.Name);
-                }
-            }
-        }
+        // Per-connection ids first (the picker's ids inside a catalog scope), then the shared catalog.
+        const idToName = await LookupObjectNamesByID(idsToLookup, user);
 
         const plan: Array<{ Name: string; Fields?: string[] }> = [];
         for (const so of sourceObjects) {
@@ -2043,16 +2031,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // newly-discovered objects with no persisted row).
         void integrationID;
         if (ids && ids.length > 0) {
-            const rv = new RunView();
-            const result = await rv.RunView<{ ID: string; Name: string }>({
-                EntityName: 'MJ: Integration Objects',
-                ExtraFilter: ids.map(id => `ID='${id}'`).join(' OR '),
-                ResultType: 'simple',
-                Fields: ['ID', 'Name'],
-            }, user);
-            if (result.Success) {
-                return result.Results.map(r => r.Name);
-            }
+            // Through the connection's catalog first, and in INPUT order: the batch flow zips these
+            // names back onto its id cursor, which a database-ordered result did not match.
+            const idToName = await LookupObjectNamesByID(ids, user);
+            return ids
+                .map(id => idToName.get(String(id).toUpperCase()))
+                .filter((n): n is string => !!n);
         }
         if (names && names.length > 0) {
             const nameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
@@ -2094,19 +2078,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const idsToLookup = sourceObjects
             .map(so => so.SourceObjectID)
             .filter((id): id is string => typeof id === 'string' && id.length > 0);
-        const idToName = new Map<string, string>();
-        if (idsToLookup.length > 0) {
-            const rv = new RunView();
-            const result = await rv.RunView<{ ID: string; Name: string }>({
-                EntityName: 'MJ: Integration Objects',
-                ExtraFilter: idsToLookup.map(id => `ID='${id}'`).join(' OR '),
-                ResultType: 'simple',
-                Fields: ['ID', 'Name'],
-            }, user);
-            if (result.Success) {
-                for (const r of result.Results) idToName.set(r.ID, r.Name);
-            }
-        }
+        // Per-connection ids first (the picker's ids inside a catalog scope), then the shared catalog.
+        const idToName = await LookupObjectNamesByID(idsToLookup, user);
 
         const schemaNameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
         const resolvedNames: string[] = [];
@@ -2114,8 +2087,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const dropped: SourceObjectInput[] = [];
         for (const so of sourceObjects) {
             let name: string | undefined;
-            if (so.SourceObjectID && idToName.has(so.SourceObjectID)) {
-                name = idToName.get(so.SourceObjectID);
+            if (so.SourceObjectID && idToName.has(so.SourceObjectID.toUpperCase())) {
+                name = idToName.get(so.SourceObjectID.toUpperCase());
             } else if (so.SourceObjectName) {
                 // Normalize case against the schema when the connector reports it
                 name = schemaNameMap.get(so.SourceObjectName.toLowerCase()) ?? so.SourceObjectName;
@@ -2149,20 +2122,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<void> {
         const idsToResolve = objects.filter(o => o.SourceObjectID && !o.SourceObjectName).map(o => o.SourceObjectID!);
         if (idsToResolve.length > 0) {
-            const rv = new RunView();
-            const result = await rv.RunView<{ ID: string; Name: string }>({
-                EntityName: 'MJ: Integration Objects',
-                ExtraFilter: idsToResolve.map(id => `ID='${id}'`).join(' OR '),
-                ResultType: 'simple',
-                Fields: ['ID', 'Name'],
-            }, user);
-            if (result.Success) {
-                const idToName = new Map(result.Results.map(r => [r.ID.toUpperCase(), r.Name]));
-                for (const obj of objects) {
-                    if (obj.SourceObjectID) {
-                        const resolved = idToName.get(obj.SourceObjectID.toUpperCase());
-                        if (resolved) obj.SourceObjectName = resolved;
-                    }
+            const idToName = await LookupObjectNamesByID(idsToResolve, user);
+            for (const obj of objects) {
+                if (obj.SourceObjectID) {
+                    const resolved = idToName.get(obj.SourceObjectID.toUpperCase());
+                    if (resolved) obj.SourceObjectName = resolved;
                 }
             }
         }
@@ -3700,6 +3664,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             const resolved = await this.resolveSourceObjectsToNames(input.SourceObjects, sourceSchema, user);
             const resolvedNames = resolved.names;
+            // An apply that resolved nothing builds nothing: refuse it here, before the migration,
+            // CodeGen and the restart, which otherwise all run for a Success with 0 tables.
+            if (input.SourceObjects.length > 0 && resolvedNames.length === 0) {
+                return {
+                    Success: false,
+                    Message: `Apply refused: none of the ${input.SourceObjects.length} selected object(s) resolved to this ` +
+                        `connection's catalog (${resolved.droppedCount} dropped) — nothing was built. Re-open the table ` +
+                        `picker and select the tables again.`,
+                };
+            }
 
             // Build SchemaPreviewObjectInput with Fields from the matching
             // SourceObjectInput (resolved.sourceObjects is order-aligned with names).
@@ -5626,6 +5600,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         }
                         for (let i = 0; i < resolvedNames.length; i++) {
                             fieldsByName.set(resolvedNames[i].toLowerCase(), orderedSources[i].Fields);
+                        }
+                        // Mirror the filtered flow: nothing resolved means nothing to build.
+                        if (connInput.SourceObjects.length > 0 && resolvedNames.length === 0) {
+                            throw new Error(
+                                `No source objects resolved — none of the ${connInput.SourceObjects.length} selection(s) ` +
+                                `matched this connection's catalog or the shared catalog; nothing was built`
+                            );
                         }
                     }
 
