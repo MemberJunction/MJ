@@ -352,25 +352,9 @@
         <!-- Explainability: Local Feature Drivers -->
         <div class="pg-detail-drivers-wrap">
           <div class="ps-section-title">
-            <i class="fa-solid fa-lightbulb" style="color:var(--mj-status-warning)"></i> Key Decision Drivers (Explainability)
+            <i class="fa-solid fa-lightbulb" style="color:var(--mj-status-warning)"></i> Factors behind this score (associations, not causes)
           </div>
-          @if (!selectedRow.drivers || selectedRow.drivers.length === 0) {
-            <div class="ps-small ps-muted">No individual driver breakdown was recorded for this row.</div>
-          } @else {
-            <div class="pg-detail-drivers-list">
-              @for (d of selectedRow.drivers; track d.label) {
-                <div class="pg-detail-driver-item">
-                  <div class="pg-detail-driver-label">
-                    <i class="fa-solid" [class.fa-arrow-up]="d.up" [class.fa-arrow-down]="!d.up" [style.color]="d.up ? 'var(--mj-status-error)' : 'var(--mj-status-success)'"></i>
-                    {{ d.label }}
-                  </div>
-                  <span class="ps-badge" [class]="d.up ? 'red' : 'green'">
-                    {{ d.up ? 'Increases Risk' : 'Lowers Risk' }}
-                  </span>
-                </div>
-              }
-            </div>
-          }
+          <ps-row-drivers [Drivers]="selectedRow.drivers"></ps-row-drivers>
         </div>
 
         <!-- Historical Trendline across Runs -->

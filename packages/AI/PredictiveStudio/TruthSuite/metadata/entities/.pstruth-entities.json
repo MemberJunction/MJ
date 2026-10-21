@@ -1,0 +1,618 @@
+[
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W1_Person"
+    },
+    "fields": {
+      "Name": "PS Truth: W1_Person",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W1_MembershipYear"
+    },
+    "fields": {
+      "Name": "PS Truth: W1_MembershipYear",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W2_Person"
+    },
+    "fields": {
+      "Name": "PS Truth: W2_Person",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W2_MembershipYear"
+    },
+    "fields": {
+      "Name": "PS Truth: W2_MembershipYear",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W3_Person"
+    },
+    "fields": {
+      "Name": "PS Truth: W3_Person",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W3_MembershipYear"
+    },
+    "fields": {
+      "Name": "PS Truth: W3_MembershipYear",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W4_Person"
+    },
+    "fields": {
+      "Name": "PS Truth: W4_Person",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W4_MembershipYear"
+    },
+    "fields": {
+      "Name": "PS Truth: W4_MembershipYear",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W5_Person"
+    },
+    "fields": {
+      "Name": "PS Truth: W5_Person",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W5_MembershipYear"
+    },
+    "fields": {
+      "Name": "PS Truth: W5_MembershipYear",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W6_Person"
+    },
+    "fields": {
+      "Name": "PS Truth: W6_Person",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W6_MembershipYear"
+    },
+    "fields": {
+      "Name": "PS Truth: W6_MembershipYear",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W7_Person"
+    },
+    "fields": {
+      "Name": "PS Truth: W7_Person",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W7_MembershipYear"
+    },
+    "fields": {
+      "Name": "PS Truth: W7_MembershipYear",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W8_Person"
+    },
+    "fields": {
+      "Name": "PS Truth: W8_Person",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W8_MembershipYear"
+    },
+    "fields": {
+      "Name": "PS Truth: W8_MembershipYear",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W9_Person"
+    },
+    "fields": {
+      "Name": "PS Truth: W9_Person",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: W9_EventRegistration"
+    },
+    "fields": {
+      "Name": "PS Truth: W9_EventRegistration",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_C2"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_C2",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_C4"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_C4",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_D1c"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_D1c",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_D1r"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_D1r",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_D2"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_D2",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_N1c"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_N1c",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_N1r"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_N1r",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_R1"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_R1",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_R2p"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_R2p",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_R3"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_R3",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_T1p"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_T1p",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_T2p"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_T2p",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_T3"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_T3",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_T3lag"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_T3lag",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_T4"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_T4",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_R2real"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_R2real",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_T1real"
+    },
+    "fields": {
+      "Name": "PS Truth: Scn_T1real",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesFrame_T1p"
+    },
+    "fields": {
+      "Name": "PS Truth: SeriesFrame_T1p",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesTrain_T1p"
+    },
+    "fields": {
+      "Name": "PS Truth: SeriesTrain_T1p",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesFrame_T3"
+    },
+    "fields": {
+      "Name": "PS Truth: SeriesFrame_T3",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesTrain_T3"
+    },
+    "fields": {
+      "Name": "PS Truth: SeriesTrain_T3",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesFrame_T4"
+    },
+    "fields": {
+      "Name": "PS Truth: SeriesFrame_T4",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesTrain_T4"
+    },
+    "fields": {
+      "Name": "PS Truth: SeriesTrain_T4",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesFrame_T1real"
+    },
+    "fields": {
+      "Name": "PS Truth: SeriesFrame_T1real",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesTrain_T1real"
+    },
+    "fields": {
+      "Name": "PS Truth: SeriesTrain_T1real",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=PS Truth: PersonYear"
+    },
+    "fields": {
+      "Name": "PS Truth: PersonYear",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  }
+]

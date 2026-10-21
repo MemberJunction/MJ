@@ -1,70 +1,65 @@
 #!/usr/bin/env node
 /**
- * setup-python.mjs — create the bundled Python venv for the Predictive Studio
- * sidecar and install its pinned requirements.
+ * setup-python.mjs — create a venv on a supported interpreter (CPython 3.11 / 3.12) and install pinned requirements.
  *
- * Creates `.venv/` at the package root and runs
- * `pip install -r src/python/requirements.txt`. The resulting interpreter is
- * what `MLSidecar` spawns by default in managed mode.
+ *   node scripts/setup-python.mjs                                   # .venv at the package root + src/python/requirements.txt
+ *   node scripts/setup-python.mjs --python /opt/homebrew/bin/python3.11
+ *   node scripts/setup-python.mjs --venv <dir> --requirements <file>  # any venv built on these pins (the truth suite)
  *
- * macOS note: xgboost / lightgbm need an OpenMP runtime. Install it once with
- *   brew install libomp
- * `MLSidecar` injects DYLD_LIBRARY_PATH=/opt/homebrew/opt/libomp/lib at spawn
- * time so the venv finds it. On Linux the OpenMP runtime is libgomp1 (installed
- * by the Dockerfile / your distro).
+ * macOS: xgboost / lightgbm need an OpenMP runtime (`brew install libomp`); MLSidecar and run-pytest.mjs add
+ * /opt/homebrew/opt/libomp/lib to DYLD_LIBRARY_PATH. Linux: libgomp1.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
+import { PythonProbe } from './python-probe.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, '..');
-const venvDir = path.join(packageRoot, '.venv');
+const { values } = parseArgs({
+  options: { python: { type: 'string' }, venv: { type: 'string' }, requirements: { type: 'string' } },
+});
+const venvDir = path.resolve(values.venv || path.join(packageRoot, '.venv'));
+const requirements = path.resolve(values.requirements || path.join(packageRoot, 'src', 'python', 'requirements.txt'));
 const venvPython = path.join(venvDir, 'bin', 'python');
-const requirements = path.join(packageRoot, 'src', 'python', 'requirements.txt');
 
-function run(cmd, args, opts = {}) {
+function run(cmd, args) {
   console.log(`> ${cmd} ${args.join(' ')}`);
-  const result = spawnSync(cmd, args, { stdio: 'inherit', ...opts });
+  const result = spawnSync(cmd, args, { stdio: 'inherit' });
   if (result.status !== 0) {
     console.error(`Command failed (${result.status}): ${cmd} ${args.join(' ')}`);
-    process.exit(result.status ?? 1);
+    process.exit(result.status || 1); // status is non-zero or null here; null (killed by a signal) exits 1
   }
-}
-
-function resolveBasePython() {
-  // Prefer python3, fall back to python.
-  for (const candidate of ['python3', 'python']) {
-    const probe = spawnSync(candidate, ['--version']);
-    if (probe.status === 0) return candidate;
-  }
-  console.error('No python3/python interpreter found on PATH. Install Python 3.9+ first.');
-  process.exit(1);
 }
 
 if (!existsSync(requirements)) {
-  console.error(`requirements.txt not found at ${requirements}`);
+  console.error(`requirements file not found at ${requirements}`);
   process.exit(1);
 }
 
-if (!existsSync(venvPython)) {
-  const basePython = resolveBasePython();
-  console.log(`Creating venv at ${venvDir} ...`);
-  run(basePython, ['-m', 'venv', venvDir]);
+if (existsSync(venvPython)) {
+  const existing = PythonProbe.ProbeCommand(venvPython);
+  if (!PythonProbe.IsSupported(existing.Version)) {
+    const v = existing.Version ? `${existing.Version.Major}.${existing.Version.Minor}.${existing.Version.Patch}` : 'an unknown Python';
+    console.error(`The venv at ${venvDir} runs ${v}; the pins need 3.11 or 3.12. Delete it (rm -rf "${venvDir}") and re-run.`);
+    process.exit(1);
+  }
+  console.log(`Reusing venv at ${venvDir} (Python ${existing.Version.Major}.${existing.Version.Minor}.${existing.Version.Patch})`);
 } else {
-  console.log(`Reusing existing venv at ${venvDir}`);
+  const selection = PythonProbe.Select(values.python ? [values.python] : PythonProbe.DefaultCandidates);
+  if (!selection.Ok) {
+    console.error(PythonProbe.FormatReport(selection.Probed));
+    process.exit(1);
+  }
+  console.log(`Creating venv at ${venvDir} with ${selection.Command} (Python ${selection.Version.Major}.${selection.Version.Minor}.${selection.Version.Patch})`);
+  run(selection.Command, ['-m', 'venv', venvDir]);
 }
 
-console.log('Upgrading pip ...');
 run(venvPython, ['-m', 'pip', 'install', '--upgrade', 'pip']);
-
-console.log('Installing pinned requirements ...');
 run(venvPython, ['-m', 'pip', 'install', '-r', requirements]);
-
-console.log('\nPredictive Studio sidecar Python environment ready.');
+console.log('\nPython environment ready:', venvPython);
 if (process.platform === 'darwin') {
-  console.log(
-    'macOS: ensure libomp is installed (`brew install libomp`) so xgboost/lightgbm load.'
-  );
+  console.log('macOS: ensure libomp is installed (`brew install libomp`) so xgboost/lightgbm load.');
 }

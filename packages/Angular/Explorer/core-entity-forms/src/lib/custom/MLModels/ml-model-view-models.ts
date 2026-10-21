@@ -2,6 +2,7 @@
  * Pure view-model functions and types for ML Model detail and metrics rendering.
  * Framework-free, deterministic calculations over plain model entity data.
  */
+import { ImportanceDisplay } from '@memberjunction/predictive-studio-core';
 
 export interface PSFeatureBar {
   name: string;
@@ -282,4 +283,12 @@ export function OverfitGap(model: { Metrics?: string | null; HoldoutMetrics?: st
 /** @deprecated Use {@link OverfitGap}. */
 export function overfitGap(model: { Metrics?: string | null; HoldoutMetrics?: string | null }): number | null {
   return OverfitGap(model);
+}
+
+/** The importance a model view may show. */
+export class ModelImportanceView {
+  /** The importance bars a person may see: coefficient models only (split / impurity counts are hidden, C4 / F-SC-11). */
+  public static DisplayedFeatureImportance(algorithm: string | null | undefined, raw: string | null | undefined, topN: number = 6): PSFeatureBar[] {
+    return ImportanceDisplay.GlobalDriversShowable(algorithm) ? ParseFeatureImportance(raw, topN) : [];
+  }
 }

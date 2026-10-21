@@ -6,6 +6,7 @@ import {
     FormatValue,
     GaugePct,
     ParseDrivers,
+    PredictionDrivers,
     ParsePayloadDrivers,
     ParseHistoryItem,
     FilterHistoryByModel,
@@ -143,6 +144,14 @@ describe('model-prediction.logic', () => {
         it('drops zero-importance features', () => {
             const drivers = ParseDrivers(JSON.stringify({ a: 0, b: 0.5 }));
             expect(drivers.map(d => d.name)).toEqual(['b']);
+        });
+    });
+
+    describe('PredictionDrivers.DriversForModel', () => {
+        const json = JSON.stringify({ tenure_years: 0.8, nondues_lines_y: 1.7 });
+        it('returns drivers for coefficient models only', () => {
+            expect(PredictionDrivers.DriversForModel('Logistic Regression', json).length).toBeGreaterThan(0);
+            expect(PredictionDrivers.DriversForModel('XGBoost', json)).toEqual([]);
         });
     });
 

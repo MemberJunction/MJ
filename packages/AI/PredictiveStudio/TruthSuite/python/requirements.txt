@@ -1,0 +1,7 @@
+# Truth-suite judges + reference pipeline. Product pins come first so the judge computes with the sidecar's libraries.
+-r ../../Sidecar/src/python/requirements.txt
+statsmodels==0.15.0
+patsy==1.0.3
+pyarrow==25.0.1
+mypy==1.17.1
+pandas-stubs==2.2.2.240807

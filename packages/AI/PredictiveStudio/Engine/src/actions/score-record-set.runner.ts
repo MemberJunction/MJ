@@ -30,6 +30,7 @@ import type { RecordRef, RecordProcessorContext, RecordResult } from '@memberjun
 
 import { MLModelInferenceProcessor } from '../scoring/ml-model-inference-processor';
 import { RunViewMLModelLoader, MJSidecarPredictor } from '../scoring/seams';
+import { ReadCapExceededError } from '../feature-assembly/read-cap-error';
 import type { MLInferenceDeps, IArtifactLoader } from '../scoring/types';
 import type { MLInferenceResultPayload } from '../scoring/ml-model-inference-processor';
 import type {
@@ -159,7 +160,7 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<RecordRef[]> {
-    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView(); // global-provider-ok: fallback when no scoped provider is passed
 
     const listResult = await rv.RunView<{ EntityID: string }>(
       { EntityName: 'MJ: Lists', ExtraFilter: `ID='${listId}'`, Fields: ['EntityID'], ResultType: 'simple', MaxRows: 1 },
@@ -172,13 +173,13 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     if (!entityId) {
       throw new Error(`Score Record Set: list '${listId}' not found.`);
     }
-    const entityName = (provider ?? Metadata.Provider)?.Entities.find((e) => UUIDsEqual(e.ID, entityId))?.Name;
+    const entityName = (provider ?? Metadata.Provider)?.Entities.find((e) => UUIDsEqual(e.ID, entityId))?.Name; // global-provider-ok: fallback when no scoped provider is passed
     if (!entityName) {
       throw new Error(`Score Record Set: list '${listId}' targets an unknown entity (id '${entityId}').`);
     }
 
     const memberResult = await rv.RunView<{ RecordID: string }>(
-      { EntityName: 'MJ: List Details', ExtraFilter: `ListID='${listId}'`, Fields: ['RecordID'], OrderBy: 'ID', ResultType: 'simple' },
+      { EntityName: 'MJ: List Details', ExtraFilter: `ListID='${listId}'`, Fields: ['RecordID'], OrderBy: 'ID', IgnoreMaxRows: true, ResultType: 'simple' },
       contextUser,
     );
     if (!memberResult.Success) {
@@ -193,11 +194,38 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     // member's key as a compact CompositeKey URL segment (the bare value for a single-column
     // key, whatever that column is called; `F1|v1||F2|v2` for a composite key), so the filter
     // is built from the entity's real primary key(s) — never an assumed column named ID.
-    const entityInfo = (provider ?? Metadata.Provider)?.EntityByName(entityName);
+    const entityInfo = (provider ?? Metadata.Provider)?.EntityByName(entityName); // global-provider-ok: fallback when no scoped provider is passed
     if (!entityInfo) {
       throw new Error(`Score Record Set: entity '${entityName}' not found in metadata.`);
     }
-    return this.resolveFilter(entityName, this.primaryKeyInFilter(entityInfo, recordIds), undefined, contextUser, provider);
+    const ID_CHUNK_SIZE = 100;
+    const chunks: string[][] = [];
+    for (let i = 0; i < recordIds.length; i += ID_CHUNK_SIZE) {
+      chunks.push(recordIds.slice(i, i + ID_CHUNK_SIZE));
+    }
+    if (chunks.length === 1) {
+      return this.resolveFilter(entityName, this.primaryKeyInFilter(entityInfo, chunks[0]), undefined, contextUser, provider);
+    }
+    const batchResults = await rv.RunViews<BaseEntity>(
+      chunks.map((chunk) => ({
+        EntityName: entityName,
+        ExtraFilter: this.primaryKeyInFilter(entityInfo, chunk),
+        IgnoreMaxRows: true,
+        ResultType: 'entity_object' as const,
+      })),
+      contextUser,
+    );
+    const resolvedEntityId = this.resolveEntityId(entityName, provider);
+    const refs: RecordRef[] = [];
+    for (const res of batchResults) {
+      if (!res.Success) {
+        throw new Error(`Score Record Set: failed to resolve scope for '${entityName}': ${res.ErrorMessage}`);
+      }
+      for (const row of res.Results) {
+        refs.push(this.entityToRecordRef(row, resolvedEntityId));
+      }
+    }
+    return refs;
   }
 
   /**
@@ -223,18 +251,25 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<RecordRef[]> {
-    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView(); // global-provider-ok: fallback when no scoped provider is passed
     const result = await rv.RunView<BaseEntity>(
       {
         EntityName: entityName,
         ExtraFilter: extraFilter,
         MaxRows: maxRows,
+        // No explicit cap means every matching row. Without this RunView silently stops at the entity's
+        // UserViewMaxRows (1,000 by default) and the run reports success on a fraction of the scope (F-L3-2).
+        IgnoreMaxRows: maxRows === undefined,
         ResultType: 'entity_object',
       },
       contextUser,
     );
     if (!result.Success) {
       throw new Error(`Score Record Set: failed to resolve scope for '${entityName}': ${result.ErrorMessage}`);
+    }
+    // Refuse a scope an explicit cap cut short: scoring a fraction and reporting success is F-L3-2 (decision D2-C1).
+    if (maxRows !== undefined && ReadCapExceededError.IsTruncated(maxRows, result.Results.length, result.TotalRowCount)) {
+      throw ReadCapExceededError.ForScoring(entityName, maxRows, result.Results.length, result.TotalRowCount);
     }
     const entityId = this.resolveEntityId(entityName, provider);
     return result.Results.map((row) => this.entityToRecordRef(row, entityId));
@@ -246,9 +281,9 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<RecordRef[]> {
-    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView(); // global-provider-ok: fallback when no scoped provider is passed
     const result = await rv.RunView<BaseEntity>(
-      { ViewID: params.ViewID, ResultType: 'entity_object' },
+      { ViewID: params.ViewID, IgnoreMaxRows: true, ResultType: 'entity_object' },
       contextUser,
     );
     if (!result.Success) {

@@ -3,11 +3,10 @@ import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global
 import { CompositeKey, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLModelEntity, MJProcessRunDetailEntity, MJListEntity, MJListDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { trustDots, trustEvidenceLine } from '@memberjunction/predictive-studio-core';
+import { TrustDots, TrustVerdicts, AtRiskRules, ImportanceDisplay, resolveOutcomeConfig, TopGlobalDrivers, LabelFromRecord, type AtRiskRow } from '@memberjunction/predictive-studio-core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
 import { buildBusinessCatalog, type BusinessPredictionCard } from '../business-predictions.view-models';
-import { ParseAtRiskRows, TopGlobalDrivers, LabelFromRecord, type AtRiskRow } from '../at-risk.view-models';
 import { buildPredictionsAgentContext, resolvePSRecord, buildPSNotFoundError } from '../predictive-studio-agent-context';
 import { validateStringParam } from '../../shared/agent-tool-validation';
 import { BuildRecordIdFilter } from '../../shared/record-id-filter';
@@ -123,7 +122,7 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                     @if (selected.canOpen) {
                       @if (drivers.length > 0) {
                         <div class="ps-drivers" data-testid="ps-drivers">
-                          <i class="fa-solid fa-lightbulb"></i> <strong>What's driving this:</strong>
+                          <i class="fa-solid fa-lightbulb"></i> <strong>Weighted most by this model:</strong>
                           @for (d of drivers; track d) { <span class="ps-driver-chip">{{ d }}</span> }
                         </div>
                       }
@@ -440,7 +439,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public set atRiskRows(value: AtRiskRow[]) {
     this.AtRiskRows = value;
   }
-  /** Plain-language "what's driving this" drivers for the open prediction (global feature importance). */
+  /** The features the model weighted most for the open prediction (coefficient models only). */
   public Drivers: string[] = [];
 
   /** @deprecated Use {@link Drivers}. */
@@ -522,6 +521,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
         HoldoutMetrics: m.HoldoutMetrics,
         Metrics: m.Metrics,
         ProblemType: m.ProblemType,
+        Lineage: m.Lineage,
         updatedAt: m.__mj_UpdatedAt ?? null,
       })),
     );
@@ -532,13 +532,13 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     return this.Cards;
   }
 
-  public Dots(c: BusinessPredictionCard): number { return trustDots(c.trust.grade); }
+  public Dots(c: BusinessPredictionCard): number { return TrustDots(c.trust.grade); }
 
   /** @deprecated Use {@link Dots}. */
   public dots(c: BusinessPredictionCard): number {
     return this.Dots(c);
   }
-  public Evidence(): string { return trustEvidenceLine({ noun: 'records' }); }
+  public Evidence(): string { return TrustVerdicts.TrustEvidenceLine({ noun: 'records' }); }
 
   /** @deprecated Use {@link Evidence}. */
   public evidence(): string {
@@ -659,7 +659,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   /** Load the open prediction's plain-language drivers + its latest run's ranked at-risk rows. */
   private async loadAtRisk(c: BusinessPredictionCard): Promise<void> {
     const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, c.modelId));
-    this.Drivers = TopGlobalDrivers(model?.FeatureImportance ?? null, 3);
+    this.Drivers = ImportanceDisplay.GlobalDriversShowable(model?.Algorithm) ? TopGlobalDrivers(model?.FeatureImportance || null, 3) : [];
     this.AtRiskLoading = true;
     this.AtRiskError = null;
     this.cdrLocal.detectChanges();
@@ -675,7 +675,9 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
           user,
         );
         if (res.Success && this.Selected?.modelId === c.modelId) {
-          this.AtRiskRows = ParseAtRiskRows((res.Results ?? []).map((d) => ({ recordId: d.RecordID, ResultPayload: d.ResultPayload })));
+          const details = (res.Results || []).map((d) => ({ recordId: d.RecordID, ResultPayload: d.ResultPayload }));
+          const options = AtRiskRules.BuildAtRiskOptions(details.map((d) => d.ResultPayload), model?.TargetVariable, resolveOutcomeConfig(model || undefined));
+          this.AtRiskRows = AtRiskRules.ParseAtRiskRows(details, options);
           await this.resolveAtRiskLabels(model);
         }
       }
@@ -840,7 +842,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
         this.ListResult = `Couldn't create the list: ${list.LatestResult?.CompleteMessage ?? 'unknown error'}`;
         return;
       }
-      const members = this.AtRiskRows.filter((r) => r.band !== 'low').slice(0, 200);
+      const members = AtRiskRules.SelectAtRiskListMembers(this.AtRiskRows, 200);
       let seq = 0;
       let added = 0;
       let firstFailure: string | null = null;
@@ -890,7 +892,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public ExportList(): void {
     if (this.AtRiskRows.length === 0) return;
     const csv = [
-      'Record,Likelihood %,Predicted',
+      'Record,Risk %,Predicted',
       ...this.AtRiskRows.map((r) => `${this.csvCell(r.label ?? r.recordId)},${r.riskPct},${this.csvCell(r.class ?? '')}`),
     ].join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));

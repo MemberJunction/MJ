@@ -1,0 +1,53 @@
+{
+  "name": "@memberjunction/predictive-studio-truth-suite",
+  "version": "6.2.0-edge.4",
+  "private": true,
+  "type": "module",
+  "license": "BUSL-1.1",
+  "description": "Predictive Studio planted-truth suite: the 111-gate registry, seeded generators, test-schema loaders, harness, judges and reference pipeline. Repo-local test content; never published.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:db": "vitest run --config vitest.db.config.ts",
+    "truth:gates": "vitest run --config vitest.gates.config.ts",
+    "truth:registry": "tsx src/registry/cli.ts",
+    "truth:loom": "node scripts/fetch-loom.mjs",
+    "truth:data": "tsx src/data/cli.ts",
+    "test:regeneration": "vitest run --config vitest.regeneration.config.ts",
+    "truth:provision": "node scripts/provision.mjs",
+    "truth:sidecar": "tsx scripts/sidecar.mts",
+    "truth:smoke": "tsx scripts/smoke-w1.mts",
+    "truth:run": "node scripts/run-truth.mjs",
+    "truth:report": "node scripts/report.mjs",
+    "truth:readme": "tsx scripts/readme-walkthrough.mts",
+    "truth:ui-fixture": "tsx scripts/ui-fixture.mts",
+    "truth:majority-rule": "tsx scripts/majority-rule-check.mts",
+    "setup:python": "node scripts/setup-python.mjs",
+    "test:python": "node scripts/run-pytest.mjs"
+  },
+  "dependencies": {
+    "@memberjunction/ai-agents": "6.2.0-edge.4",
+    "@memberjunction/aiengine": "6.2.0-edge.4",
+    "@memberjunction/core": "6.2.0-edge.4",
+    "@memberjunction/core-entities": "6.2.0-edge.4",
+    "@memberjunction/global": "6.2.0-edge.4",
+    "@memberjunction/graphql-dataprovider": "6.2.0-edge.4",
+    "@memberjunction/predictive-studio": "6.2.0-edge.4",
+    "@memberjunction/predictive-studio-core": "6.2.0-edge.4",
+    "@memberjunction/predictive-studio-sidecar": "6.2.0-edge.4",
+    "@memberjunction/server-bootstrap-lite": "6.2.0-edge.4",
+    "@memberjunction/testing-engine-base": "6.2.0-edge.4",
+    "@memberjunction/testing-integration": "6.2.0-edge.4",
+    "mssql": "^12.2.0"
+  },
+  "devDependencies": {
+    "@types/mssql": "^9.1.9",
+    "@types/node": "24.10.11",
+    "tsc-alias": "^1.8.10",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

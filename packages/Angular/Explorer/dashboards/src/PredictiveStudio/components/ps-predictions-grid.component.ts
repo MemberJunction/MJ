@@ -44,8 +44,6 @@ import {
   ResolveRenewalPolarity,
   type RenewalPolarityResult,
   type RowDriver,
-} from '../at-risk.view-models';
-import {
   type OutcomeConfig,
   type OutcomeBand,
   resolveOutcomeConfig,
@@ -58,6 +56,7 @@ import {
   type ModelScoreHistoryPoint,
 } from '../predictive-studio-score-history.service';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
+import { PSRowDriversComponent } from './ps-row-drivers.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -145,6 +144,7 @@ interface TrendlinePlotPoint {
     MJViewToggleComponent,
     MjSlidePanelComponent,
     AgGridModule,
+    PSRowDriversComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -464,6 +464,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   }
 
   public IsRenewalModel = false;
+  private invertedRisk = false;
 
   /** @deprecated Use {@link IsRenewalModel}. */
   public get isRenewalModel() {
@@ -785,6 +786,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       // When the model outputs P(Renewed) (scoreIsLapseRisk = false), adverse risk is inverted (1 - score).
       // When the model outputs P(Lapse) (scoreIsLapseRisk = true), adverse risk is ALREADY score (invertedRisk = false).
       const shouldInvertRisk = polarity.IsRenewalModel ? !polarity.ScoreIsLapseRisk : false;
+      this.invertedRisk = shouldInvertRisk;
 
       const parsedAtRisk = ParseAtRiskRows(
         detailsRes.Results.map((d) => ({ recordId: d.RecordID, ResultPayload: d.ResultPayload })),
@@ -1468,6 +1470,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         modelId: this.modelId,
         OutcomeConfig: this.OutcomeConfig,
         ProblemType: this.ProblemType,
+        InvertedRisk: this.invertedRisk,
       });
     } finally {
       this.HistoryLoading = false;

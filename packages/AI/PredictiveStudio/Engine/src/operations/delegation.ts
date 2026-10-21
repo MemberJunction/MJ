@@ -6,7 +6,7 @@
  * The six Manual-mode Remote Operations and the four Predictive Studio Actions are
  * two thin invocation surfaces over the SAME engine service classes
  * (`TrainingEngine`, `ProductionScoreRecordSetRunner`, `ExperimentOrchestrator` via
- * `buildProductionExperimentDeps`, `ProductionModelPromotionGate`). Per CLAUDE.md
+ * `ExperimentDepsBuilder.BuildProductionExperimentDeps`, `ProductionModelPromotionGate`). Per CLAUDE.md
  * "push improvements to the generic level" and DRY, the production wiring each path
  * needs lives here exactly ONCE, so the Remote Ops and Actions share one delegation
  * path rather than duplicating the deps/seam construction.
@@ -27,7 +27,7 @@ import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../trainin
 
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
 import type { ExperimentRunOptions, ExperimentSessionResult } from '../experiment/types';
-import { BuildProductionExperimentDeps } from '../actions/run-experiment.deps';
+import { ExperimentDepsBuilder } from '../actions/run-experiment.deps';
 
 import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
 import { RunViewMLModelLoader, MJSidecarPredictor } from '../scoring/seams';
@@ -192,7 +192,7 @@ export function scoreRecordSetViaRunner(
 /**
  * Start (run) an experiment session, delegating to
  * {@link ExperimentOrchestrator.runSession} with the SAME production deps the
- * Run-Experiment action builds ({@link buildProductionExperimentDeps}). The
+ * Run-Experiment action builds ({@link ExperimentDepsBuilder.BuildProductionExperimentDeps}). The
  * `orchestrator` is injectable for tests.
  *
  * @param plan the approved modeling plan to execute
@@ -208,7 +208,7 @@ export async function RunExperimentSessionViaOrchestrator(
   user: UserInfo,
   orchestrator: ExperimentOrchestrator = new ExperimentOrchestrator(),
 ): Promise<ExperimentSessionResult> {
-  return orchestrator.runSession(plan, await BuildProductionExperimentDeps(user, provider), options);
+  return orchestrator.runSession(plan, await ExperimentDepsBuilder.BuildProductionExperimentDeps(user, provider), options);
 }
 
 /** @deprecated Use {@link RunExperimentSessionViaOrchestrator}. */

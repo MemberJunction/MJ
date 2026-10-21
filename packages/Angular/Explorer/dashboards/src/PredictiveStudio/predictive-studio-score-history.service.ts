@@ -2,8 +2,9 @@ import { Injectable } from '@angular/core';
 import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { MJProcessRunDetailEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
-import { ParseRowDrivers, type RowDriver } from './at-risk.view-models';
 import {
+  AtRiskRules,
+  type RowDriver,
   formatPredictionScore,
   resolveScoreBand,
   type OutcomeConfig,
@@ -34,6 +35,7 @@ export interface LoadScoreHistoryParams {
   MaxRuns?: number;
   OutcomeConfig?: OutcomeConfig | null;
   ProblemType?: string | null;
+  InvertedRisk: boolean;
 }
 
 function bandForScore(score: number): 'high' | 'medium' | 'low' {
@@ -52,7 +54,7 @@ export class PredictiveStudioScoreHistoryService {
    * Load the history of predictions for a specific record across all runs (ordered oldest to newest).
    */
   public async LoadRecordScoreHistory(params: LoadScoreHistoryParams): Promise<ModelScoreHistoryPoint[]> {
-    const { provider, User: user, entityId, recordId, modelId, MaxRuns: maxRuns = 50, OutcomeConfig: outcomeConfig, ProblemType: problemType } = params;
+    const { provider, User: user, entityId, recordId, modelId, MaxRuns: maxRuns = 50, OutcomeConfig: outcomeConfig, ProblemType: problemType, InvertedRisk: invertedRisk } = params;
     if (!recordId) return [];
 
     let extraFilter = `RecordID = '${recordId.replace(/'/g, "''")}'`;
@@ -122,7 +124,7 @@ export class PredictiveStudioScoreHistoryService {
           band: resolvedBand?.Key ?? bandForScore(score),
           status: resolvedBand?.Label ?? d.Status ?? 'Completed',
           DurationMs: d.DurationMs ?? null,
-          drivers: ParseRowDrivers(p.drivers) ?? [],
+          drivers: AtRiskRules.ParseRowDrivers(p.drivers, invertedRisk) ?? [],
           Delta: delta,
         });
       }

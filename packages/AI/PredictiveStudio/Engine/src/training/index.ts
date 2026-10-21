@@ -10,4 +10,5 @@
 export * from './types';
 export * from './artifact-store';
 export * from './seams';
+export * from './as-of-refusal';
 export * from './training-engine';

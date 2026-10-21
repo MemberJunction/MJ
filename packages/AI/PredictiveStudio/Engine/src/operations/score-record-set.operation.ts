@@ -68,6 +68,7 @@ export class PredictiveStudioScoreRecordSetServerOperation extends PredictiveStu
         modelId: input.modelId,
         scope: scope as ScoringScope,
         writeBack: input.writeBack as WriteBackDirective | undefined,
+        dryRun: input.dryRun === true,
         contextUser: user,
         provider,
       },

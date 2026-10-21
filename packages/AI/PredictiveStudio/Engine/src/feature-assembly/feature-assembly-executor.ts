@@ -48,6 +48,7 @@ import type { AIPromptParams } from '@memberjunction/ai-core-plus';
 import type { VisionLLMFeatureStep } from '@memberjunction/predictive-studio-core';
 
 import { type IFeatureDataAccess, RunViewDataAccess, type SourceRow } from './data-access';
+import { ReadCapExceededError } from './read-cap-error';
 import { type DatedRow, ResolveAsOfDate, DaysSinceLastActivityAsOf, ActivityCountAsOf } from './as-of';
 import { LeakageGuardEnforcer } from './leakage-guard';
 import { VisionFeatureExtractor, type IVisionPromptRunner } from './vision-llm';
@@ -249,6 +250,12 @@ export class FeatureAssemblyExecutor {
     });
     if (!res.Success) {
       throw new Error(`Failed to fetch target records: ${res.ErrorMessage ?? 'unknown error'}`);
+    }
+    const cap = params.recordSet.MaxRows;
+    // `??` on purpose: a match count of 0 is legitimate; an in-memory fixture without a count means "what it served".
+    const matched = res.TotalRowCount ?? res.Rows.length;
+    if (cap !== undefined && ReadCapExceededError.IsTruncated(cap, res.Rows.length, matched)) {
+      throw ReadCapExceededError.ForTraining(params.recordSet.EntityName, cap, res.Rows.length, matched);
     }
     return res.Rows;
   }

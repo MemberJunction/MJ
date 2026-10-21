@@ -5,18 +5,22 @@ import type {
   MJMLModelEntity,
   MJMLTrainingRunEntity,
 } from '@memberjunction/core-entities';
-import type {
-  TrainRequest,
-  TrainResponse,
-  MatrixData,
-  FeatureStepGraph,
-  SourceBinding,
-  AsOfStrategy,
-  LeakageGuard,
-  ValidationStrategy,
+import {
+  EvaluationLineage,
+  InvalidMajorityBaselineRuleError,
+  TrustVerdicts,
+  type TrainRequest,
+  type TrainResponse,
+  type MatrixData,
+  type FeatureStepGraph,
+  type SourceBinding,
+  type AsOfStrategy,
+  type LeakageGuard,
+  type ValidationStrategy,
 } from '@memberjunction/predictive-studio-core';
 
 import { TrainingEngine } from '../training-engine';
+import { AsOfSettingHasNoEffectError } from '../as-of-refusal';
 import { InMemoryArtifactStore } from '../artifact-store';
 import type {
   IEntityFactory,
@@ -414,5 +418,64 @@ describe('TrainingEngine.trainModel — experiment session iteration linkage (§
     const { deps, factory } = buildDeps();
     await engine.trainModel({ pipelineId: 'pipe-1', experimentSessionIterationId: 'iter-7' }, deps);
     expect(factory.Runs[0].ExperimentSessionIterationID).toBe('iter-7');
+  });
+});
+
+describe('TrainingEngine.trainModel — as-of settings that change nothing are refused (W4 → S2.1, F-PIT-3)', () => {
+  const ignored: ReadonlyArray<AsOfStrategy> = [{ Mode: 'column', Column: 'StartDate' }, { Mode: 'offset', OffsetDays: 30 }];
+  for (const asOf of ignored) {
+    it(`refuses AsOfStrategy.Mode='${asOf.Mode}' before any row is written`, async () => {
+      const pipeline = new FakeMLPipeline();
+      pipeline.AsOfStrategy = JSON.stringify(asOf);
+      const { deps, factory, sidecar } = buildDeps({ pipeline });
+      await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toBeInstanceOf(AsOfSettingHasNoEffectError);
+      await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toMatchObject({ Source: 'pipeline', Mode: asOf.Mode });
+      expect(factory.Runs).toHaveLength(0);
+      expect(factory.Models).toHaveLength(0);
+      expect(sidecar.LastRequest).toBeNull();
+    });
+  }
+
+  it("still trains Mode='none'", async () => {
+    const { deps } = buildDeps();
+    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(model.Status).toBe('Draft');
+  });
+});
+
+describe('TrainingEngine — evaluation record and the time-index containment (T4 → S6.5, F-SCN-1)', () => {
+  it('stores an out-of-sample evaluation record with no withheld reason by default', async () => {
+    const { deps } = buildDeps();
+    const { model, run } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(EvaluationLineage.Read(model.Lineage)).toEqual({ ValidationOutOfSample: true, TimeIndexColumn: null, EvaluatedAsForecast: false, WithheldReason: null, MajorityBaselineRule: 'enforce' });
+    expect(run.Notes).not.toContain('Trust withheld');
+  });
+
+  it("records the pipeline's majority-baseline rule in Lineage.evaluation (D2-C5d)", async () => {
+    const pipeline = new FakeMLPipeline();
+    pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'warn' });
+    const { deps } = buildDeps({ pipeline });
+    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(EvaluationLineage.Read(model.Lineage)?.MajorityBaselineRule).toBe('warn');
+  });
+
+  it('refuses an unknown majority-baseline rule before any row is written', async () => {
+    const pipeline = new FakeMLPipeline();
+    pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'off' });
+    const { deps, factory, sidecar } = buildDeps({ pipeline });
+    await expect(buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps)).rejects.toBeInstanceOf(InvalidMajorityBaselineRuleError);
+    expect(factory.Runs).toHaveLength(0);
+    expect(factory.Models).toHaveLength(0);
+    expect(sidecar.LastRequest).toBeNull();
+  });
+
+  it('withholds trust for a pipeline that declares a time index, and stores the reason on the model and the run', async () => {
+    const pipeline = new FakeMLPipeline();
+    pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' });
+    const { deps } = buildDeps({ pipeline });
+    const { model, run } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(EvaluationLineage.Read(model.Lineage)?.WithheldReason).toBe(EvaluationLineage.NotEvaluatedAsForecast);
+    expect(run.Notes).toContain('Trust withheld — not evaluated as a forecast');
+    expect(TrustVerdicts.DeriveTrustVerdict(model)).toMatchObject({ grade: 'Poor', canAct: false, withheldReason: EvaluationLineage.NotEvaluatedAsForecast });
   });
 });

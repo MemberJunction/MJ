@@ -51,6 +51,11 @@ export interface FetchRowsResult {
   Success: boolean;
   /** The fetched rows (empty when `Success` is false). */
   Rows: SourceRow[];
+  /**
+   * Rows matching the read's filter as counted by the database, whatever cap applied. Equals `Rows.length` for an
+   * uncapped read and is larger when `MaxRows` cut the read short. Optional so in-memory fixtures may omit it.
+   */
+  TotalRowCount?: number;
   /** Error detail when `Success` is false. */
   ErrorMessage?: string;
 }
@@ -129,7 +134,7 @@ export class RunViewDataAccess implements IFeatureDataAccess {
     if (!result.Success) {
       return { Success: false, Rows: [], ErrorMessage: result.ErrorMessage };
     }
-    return { Success: true, Rows: result.Results ?? [] };
+    return { Success: true, Rows: result.Results || [], TotalRowCount: result.TotalRowCount };
   }
 
   /**

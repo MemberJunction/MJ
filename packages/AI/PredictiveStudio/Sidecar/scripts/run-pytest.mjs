@@ -14,10 +14,10 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, '..');
 const pythonDir = path.join(packageRoot, 'src', 'python');
-const venvPython = path.join(packageRoot, '.venv', 'bin', 'python');
-
+const fromEnv = process.env.PREDICTIVE_STUDIO_PYTHON?.trim();
+const venvPython = fromEnv && fromEnv.length > 0 ? fromEnv : path.join(packageRoot, '.venv', 'bin', 'python');
 if (!existsSync(venvPython)) {
-  console.error('Bundled venv not found. Run `npm run setup:python` first.');
+  console.error(`Python not found at ${venvPython}. Run \`pnpm run setup:python\` or set PREDICTIVE_STUDIO_PYTHON.`);
   process.exit(1);
 }
 
@@ -27,7 +27,8 @@ if (process.platform === 'darwin') {
   env.DYLD_LIBRARY_PATH = env.DYLD_LIBRARY_PATH ? `${libomp}:${env.DYLD_LIBRARY_PATH}` : libomp;
 }
 
-const args = process.argv.slice(2);
+const rawArgs = process.argv.slice(2);
+const args = rawArgs[0] === '--' ? rawArgs.slice(1) : rawArgs;
 const result = spawnSync(venvPython, ['-m', 'pytest', ...args], {
   cwd: pythonDir,
   stdio: 'inherit',

@@ -27,6 +27,7 @@ import {
   type PredictiveStudioTrainModelOutput,
 } from '@memberjunction/core-entities';
 
+import { AsOfSettingHasNoEffectError } from '../training/as-of-refusal';
 import type { TrainModelInput } from '../training/types';
 import { TrainingEngine } from '../training/training-engine';
 import { TrainModelViaEngine, WasTrainingLeakageFlagged } from './delegation';
@@ -48,6 +49,9 @@ export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioT
   ): Promise<PredictiveStudioTrainModelOutput> {
     if (!input?.pipelineId) {
       throw new Error('pipelineId is required');
+    }
+    if (AsOfSettingHasNoEffectError.WouldBeIgnored(input.asOf)) {
+      throw new AsOfSettingHasNoEffectError('train-input', input.asOf.Mode, input.pipelineId);
     }
 
     context.emitProgress({

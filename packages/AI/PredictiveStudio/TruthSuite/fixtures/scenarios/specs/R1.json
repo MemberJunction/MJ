@@ -1,0 +1,44 @@
+{
+  "id": "R1",
+  "namespace": "89ca3616-90bd-47bf-9ca2-0c5f01ad6b40",
+  "seed": 2203,
+  "description": "Fictitious delivery minutes: planted linear model plus Gaussian noise (sigma 5).",
+  "kind": "regression",
+  "nEntities": 6000,
+  "features": {
+    "DistanceZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "ItemsZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "TrafficZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    }
+  },
+  "betas": {
+    "DistanceZ": 3.0,
+    "ItemsZ": -2.0,
+    "TrafficZ": 1.5
+  },
+  "intercept": 30.0,
+  "sigma": 5.0,
+  "sizingNote": "6,000 rows (Ruling Q9: >= 5,000). Each beta's OLS SE is about sigma/sqrt(n) = 0.064, so every planted effect is more than 20 SE from zero, and the true model's RMSE (5.01) is far below the mean baseline's (6.41).",
+  "slices": {
+    "extrapolation": {
+      "rule": "rows with any |feature| > 2 (outside +/-2 SD of the N(0,1) feature distributions) form the extrapolation slice; judges score it separately from the interior",
+      "features": [
+        "DistanceZ",
+        "ItemsZ",
+        "TrafficZ"
+      ],
+      "absThreshold": 2
+    }
+  }
+}

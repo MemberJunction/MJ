@@ -17,7 +17,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, ArtifactDirective } from '@memberjunction/ai-core-plus';
-import type { ModelingPlanSpec, TrustGrade, FeatureStepWarning } from '@memberjunction/predictive-studio-core';
+import { ImportanceDisplay, type ModelingPlanSpec, type TrustGrade, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
 import { PredictiveStudioPipelineBuilder, type BuildPredictionResult, type MLLeaderboardEntryPayload } from './pipeline-builder';
 export type { MLLeaderboardEntryPayload };
@@ -160,7 +160,9 @@ export function GenerateMarkdownReport(
   features: MLFeatureImportancePayload[],
   leaderboard?: MLLeaderboardEntryPayload[],
 ): string {
-  const topFeatures = features.slice(0, 8).map((f) => `- **${f.feature}**: ${(f.importance * 100).toFixed(1)}% weight`).join('\n');
+  const topFeatures = features.length > 0
+    ? features.slice(0, 8).map((f) => `- **${f.feature}**: ${(f.importance * 100).toFixed(1)}% of the model's weight`).join('\n')
+    : `- ${ImportanceDisplay.HiddenNote}`;
 
   let leaderboardSection = '';
   if (leaderboard && leaderboard.length > 0) {
@@ -183,12 +185,12 @@ ${oneLiner}
 - **Primary Metric**: **${targetMetric}** = **${score.toFixed(3)}**
 - **Trust Grade**: **${trustGrade}** (${published ? 'Published to Catalog' : 'Held for Review'})
 ${leaderboardSection}
-## Top Influential Features
-${topFeatures || '- Features analyzed from source entity.'}
+## Features the model weighted most (associations, not causes)
+${topFeatures}
 
-## Verification & Lineage
-- Trained with honest holdout evaluation to safeguard against out-of-sample error.
-- Fully registered in Predictive Studio Models catalog for scoring and deployment.
+## How this was measured
+- The score comes from the rows held back from training; the winner was picked on those same rows, so the score is optimistic.
+- Registered in the Predictive Studio Models catalog; the Trust Grade line above says whether it was published.
 `;
 }
 
@@ -250,14 +252,10 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       const targetMetric = payload.TargetDefinition?.SuccessMetric ?? (isReg ? 'R²' : 'AUC');
       const scoreVal = result.trust?.headlineMetric?.value ?? 0.85;
 
-      let featureBars = ParseFeatureImportance(result.model?.FeatureImportance);
-      if (featureBars.length === 0 && payload.CandidateFeatures && payload.CandidateFeatures.length > 0) {
-        featureBars = payload.CandidateFeatures.slice(0, 10).map((f, idx) => ({
-          feature: f.Name,
-          importance: Math.max(0.05, Number((1.0 - idx * 0.08).toFixed(2))),
-        }));
-      }
-      featureBars.sort((a, b) => b.importance - a.importance);
+      const winnerAlgorithm = (result.leaderboard || []).find((r) => r.isWinner)?.algorithm || payload.ProposedExperiments?.[0]?.AlgorithmName || null;
+      const featureBars = ImportanceDisplay.GlobalDriversShowable(winnerAlgorithm)
+        ? ParseFeatureImportance(result.model?.FeatureImportance).sort((a, b) => b.importance - a.importance)
+        : [];
 
       const leaderboard: MLLeaderboardEntryPayload[] =
         result.leaderboard && result.leaderboard.length > 0

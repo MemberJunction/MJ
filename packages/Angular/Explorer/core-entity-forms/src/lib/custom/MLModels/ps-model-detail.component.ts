@@ -17,8 +17,10 @@ import {
   PredictiveStudioPromoteModelOperation,
   PredictiveStudioModelTargetStatus,
 } from '@memberjunction/core-entities';
+import { ImportanceDisplay } from '@memberjunction/predictive-studio-core';
 
 import {
+  ModelImportanceView,
   PSFeatureBar,
   PSMetricDisplay,
   PS_FEATURE_DOMINANCE_THRESHOLD,
@@ -315,6 +317,32 @@ export class PSModelDetailComponent {
   public get importance(): PSFeatureBar[] {
     return this.Importance;
   }
+
+  /** Bars of the last (algorithm, importance JSON) pair; the template reads `DisplayedImportance` every change-detection pass. */
+  private displayedImportanceCache: { key: string; bars: PSFeatureBar[] } | null = null;
+
+  /**
+   * The importance bars shown in the Feature Importance card (empty for split / impurity importance). Cached on the
+   * algorithm and importance JSON, so the parse runs once per model and again whenever either value changes
+   * (coding standards §7: getters Angular bindings hit).
+   */
+  public get DisplayedImportance(): PSFeatureBar[] {
+    if (!this.Model) return [];
+    const key = `${this.Model.Algorithm}\u0000${this.Model.FeatureImportance}`;
+    if (this.displayedImportanceCache?.key !== key) {
+      const bars = ModelImportanceView.DisplayedFeatureImportance(this.Model.Algorithm, this.Model.FeatureImportance, 6).map((b) => ({ ...b, name: HumanizeFeatureName(b.name) }));
+      this.displayedImportanceCache = { key, bars };
+    }
+    return this.displayedImportanceCache.bars;
+  }
+
+  /** True when the model has importance data that is hidden because of its kind. */
+  public get ImportanceHidden(): boolean {
+    return this.Importance.length > 0 && this.DisplayedImportance.length === 0;
+  }
+
+  /** The note shown in place of hidden importance. */
+  public readonly ImportanceHiddenNote = ImportanceDisplay.HiddenNote;
 
   public get ImportanceCaption(): string {
     const n = this.Importance.length;

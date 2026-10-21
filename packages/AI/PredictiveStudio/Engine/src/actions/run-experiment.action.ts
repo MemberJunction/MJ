@@ -28,7 +28,7 @@ import { validateModelingPlanSpec, validateBudget } from '@memberjunction/predic
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
 import type { ExperimentDeps, ExperimentRunOptions, ExperimentSessionResult } from '../experiment/types';
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
-import { BuildProductionExperimentDeps } from './run-experiment.deps';
+import { ExperimentDepsBuilder, ExperimentSessionsUnavailableError } from './run-experiment.deps';
 
 /** The driver-class key this action registers under (matches the metadata row). */
 export const RUN_EXPERIMENT_DRIVER_CLASS = 'PredictiveStudioRunExperimentAction';
@@ -76,6 +76,9 @@ export class PredictiveStudioRunExperimentAction extends BasePredictiveStudioAct
       const result = await orchestrator.runSession(plan, deps, options);
       return this.mapResult(params, result);
     } catch (e) {
+      if (e instanceof ExperimentSessionsUnavailableError) {
+        return this.fail('EXPERIMENT_UNAVAILABLE', e.message);
+      }
       LogError(e);
       return this.fail('EXPERIMENT_FAILED', `Experiment session failed: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -144,6 +147,6 @@ export class PredictiveStudioRunExperimentAction extends BasePredictiveStudioAct
    * (entity factory, fake clock, fake trainer).
    */
   protected buildDeps(params: RunActionParams): Promise<ExperimentDeps> {
-    return BuildProductionExperimentDeps(params.ContextUser, params.Provider);
+    return ExperimentDepsBuilder.BuildProductionExperimentDeps(params.ContextUser, params.Provider);
   }
 }

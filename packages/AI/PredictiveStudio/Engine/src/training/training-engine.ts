@@ -45,10 +45,13 @@ import {
   type FeatureStepGraph,
   type OutcomeConfig,
   resolveOutcomeConfig,
+  EvaluationLineage,
+  type EvaluationRecord,
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
+import { AsOfSettingHasNoEffectError } from './as-of-refusal';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from './types';
 
 /** Parsed JSON config columns pulled off a `MJ: ML Training Pipelines` row. */
@@ -98,6 +101,11 @@ export class TrainingEngine {
    */
   public async trainModel(input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
     const resolved = await this.resolvePipeline(input.pipelineId, deps);
+    if (AsOfSettingHasNoEffectError.WouldBeIgnored(resolved.asOf)) {
+      throw new AsOfSettingHasNoEffectError('pipeline', resolved.asOf.Mode, resolved.pipeline.ID);
+    }
+    // Validates the evaluation settings (D2-C5d: an unknown MajorityBaselineRule is refused) before any row is written.
+    EvaluationLineage.Build(resolved.validation);
     const run = await this.createRunRow(resolved, input, deps);
 
     try {
@@ -197,7 +205,7 @@ export class TrainingEngine {
     run.Status = 'Completed';
     run.CompletedAt = new Date();
     run.ComputeCost = 0;
-    run.Notes = this.buildRunNotes(dominance);
+    run.Notes = this.buildRunNotes(dominance, EvaluationLineage.Build(resolved.validation));
     await this.saveOrThrow(run, 'finalize ML Training Run');
   }
 
@@ -214,17 +222,20 @@ export class TrainingEngine {
   }
 
   /** Compose the plain-language run note, surfacing leakage suspicion loudly (§6.4). */
-  private buildRunNotes(dominance: DominanceResult): string {
-    if (dominance.Dominant) {
-      const share = ((dominance.TopShare ?? 0) * 100).toFixed(1);
-      return (
-        `LEAKAGE WARNING: one field ("${dominance.TopFeature}") is doing almost all the predicting ` +
-        `(${share}% of total importance, over the ${(dominance.Threshold * 100).toFixed(0)}% threshold). ` +
-        `This often means we are accidentally peeking at the answer. A human should confirm this is legitimate ` +
-        `before this model is trusted — the model is kept in Draft and will NOT be auto-promoted.`
-      );
+  private buildRunNotes(dominance: DominanceResult, evaluation: EvaluationRecord): string {
+    const base = dominance.Dominant
+      ? `LEAKAGE WARNING: one field ("${dominance.TopFeature}") is doing almost all the predicting ` +
+        `(${((dominance.TopShare ?? 0) * 100).toFixed(1)}% of total importance, over the ${(dominance.Threshold * 100).toFixed(0)}% threshold). ` +
+        `This often means we are accidentally peeking at the answer. The model is kept in Draft and will NOT be ` +
+        `auto-promoted: the promotion gate refuses it unless a promote request records a sign-off with a reason.`
+      : 'Training completed. No single-feature dominance detected.';
+    if (!evaluation.WithheldReason) {
+      return base;
     }
-    return 'Training completed. No single-feature dominance detected.';
+    return (
+      `${base} Trust withheld — ${evaluation.WithheldReason}: the pipeline declares '${evaluation.TimeIndexColumn}' as its time index, ` +
+      'but the model was scored on rows from its own training period, not on later periods.'
+    );
   }
 
   // region: assembly ------------------------------------------------------------
@@ -373,6 +384,7 @@ export class TrainingEngine {
       lockedHoldoutRowCount: split.holdoutRowCount,
       trainingRowCount: split.trainingRowCount,
       assembledAt: new Date().toISOString(),
+      [EvaluationLineage.Key]: EvaluationLineage.Build(resolved.validation),
     };
   }
 

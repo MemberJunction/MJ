@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  ModelImportanceView,
   ParseMetrics,
   ParseFeatureImportance,
   PrimaryModelScore,
@@ -121,6 +122,17 @@ describe('ml-model-view-models', () => {
       const auc = displays.find((d) => d.key === 'AUC');
       expect(auc?.label).toBe('AUC (ROC)');
       expect(auc?.value).toBe('0.885');
+    });
+  });
+
+  describe('ModelImportanceView.DisplayedFeatureImportance', () => {
+    const raw = JSON.stringify({ AutoRenew: 1.13, IncomeK: 0.01, Noise1: 0.002 });
+    it('shows coefficient importance for logistic regression', () => {
+      expect(ModelImportanceView.DisplayedFeatureImportance('Logistic Regression', raw).map((b) => b.name)).toEqual(['AutoRenew', 'IncomeK', 'Noise1']);
+    });
+    it('hides split / impurity importance', () => {
+      expect(ModelImportanceView.DisplayedFeatureImportance('Random Forest', raw)).toEqual([]);
+      expect(ModelImportanceView.DisplayedFeatureImportance('LightGBM', raw)).toEqual([]);
     });
   });
 });

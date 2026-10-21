@@ -85,10 +85,13 @@ import type { RecordRef, RecordProcessorContext } from '@memberjunction/record-s
 
 const INTEGRATION_ENABLED = process.env.PS_INTEGRATION === '1';
 
-/** Resolve the bundled Sidecar venv python; null when it doesn't exist. */
+/** The sidecar interpreter: PREDICTIVE_STUDIO_PYTHON when set, else the bundled Sidecar venv; null when neither exists. */
 function resolveVenvPython(): string | null {
+  const fromEnv = process.env.PREDICTIVE_STUDIO_PYTHON?.trim();
+  if (fromEnv !== undefined && fromEnv.length > 0) {
+    return existsSync(fromEnv) ? fromEnv : null;
+  }
   const here = path.dirname(fileURLToPath(import.meta.url));
-  // …/Engine/src/__tests__/integration → up to PredictiveStudio, then Sidecar/.venv
   const venv = path.resolve(here, '..', '..', '..', '..', 'Sidecar', '.venv', 'bin', 'python');
   return existsSync(venv) ? venv : null;
 }
@@ -104,8 +107,8 @@ if (INTEGRATION_ENABLED && VENV_PYTHON === null) {
   // eslint-disable-next-line no-console
   console.warn(
     '[PS integration] PS_INTEGRATION=1 but the sidecar venv was not found at ' +
-      'packages/AI/PredictiveStudio/Sidecar/.venv. Run `npm run setup:python` in the Sidecar ' +
-      'package first. Skipping the live train+score integration suite.',
+      'packages/AI/PredictiveStudio/Sidecar/.venv (or PREDICTIVE_STUDIO_PYTHON). Run `npm run setup:python` in the Sidecar ' +
+      'package or set PREDICTIVE_STUDIO_PYTHON first. Skipping the live train+score integration suite.',
   );
 }
 
@@ -527,6 +530,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
     expect(runRec.Fields.Status).toBe('Completed');
 
     // --- Score clearly-positive and clearly-negative rows through the REAL processor ---
+    model.Status = 'Validated';
     const modelLoader = new InMemoryModelLoader(model);
     const artifactLoader = new InMemoryArtifactLoader(artifactStore.Saved);
     const scoreDeps: MLInferenceDeps = {
@@ -621,6 +625,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
     expect(holdoutAuc!).toBeGreaterThanOrEqual(0.7);
 
     // Score the strong probes — logistic must also separate them.
+    model.Status = 'Validated';
     const scoreDeps: MLInferenceDeps = {
       modelLoader: new InMemoryModelLoader(model),
       artifactLoader: new InMemoryArtifactLoader(artifactStore.Saved),
@@ -670,6 +675,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
     expect(holdoutR2!).toBeGreaterThanOrEqual(0.4);
 
     // Score a high-engagement vs low-engagement row → higher satisfaction for the former.
+    model.Status = 'Validated';
     const scoreDeps: MLInferenceDeps = {
       modelLoader: new InMemoryModelLoader(model),
       artifactLoader: new InMemoryArtifactLoader(artifactStore.Saved),

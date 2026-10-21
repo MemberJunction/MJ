@@ -8,8 +8,6 @@ import {
   MJArtifactEntity,
   MJArtifactVersionEntity,
   MJExperimentSessionEntity,
-  PredictiveStudioControlExperimentSessionOperation,
-  PredictiveStudioExperimentSessionAction,
 } from '@memberjunction/core-entities';
 import { type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
@@ -20,8 +18,6 @@ import {
   DeriveLeaderboard,
   GroupIterationsToKanban,
 } from '../predictive-studio.view-models';
-import { PSConfirmModalComponent } from './ps-confirm-modal.component';
-import { PSRunExperimentModalComponent } from './ps-run-experiment-modal.component';
 
 /** A budget gauge derived from the session's budget JSON + actual iteration spend. */
 interface BudgetGaugeVM {
@@ -43,15 +39,14 @@ interface BudgetGaugeVM {
  *   ranked by score) via the pure {@link groupIterationsToKanban} / {@link deriveLeaderboard} helpers.
  * - **Budget gauges** combine the session's budget JSON caps with actual iteration spend (compute
  *   cost, iteration count).
- * - **Pause / Cancel** call the {@link PredictiveStudioControlExperimentSessionOperation} Remote Op
- *   behind a confirmation; on success the engine refreshes.
+ * - Sessions are switched off: the panel shows earlier sessions and offers no start or control action.
  *
  * Empty state when there are no sessions. 100% entity-agnostic.
  */
 @Component({
   standalone: true,
   selector: 'ps-experiments',
-  imports: [CommonModule, MJButtonDirective, PSConfirmModalComponent, PSRunExperimentModalComponent, ArtifactsModule],
+  imports: [CommonModule, MJButtonDirective, ArtifactsModule],
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['../predictive-studio.shared.css', './ps-experiments.component.css'],
   template: `
@@ -60,12 +55,7 @@ interface BudgetGaugeVM {
         <div class="ps-empty" data-testid="ps-experiments-empty">
           <span class="ps-empty-ico"><i class="fa-solid fa-flask"></i></span>
           <h3>No experiment sessions yet</h3>
-          <p>Launch an experiment to watch the Model Dev Agent search algorithms and feature sets in waves, or configure a manual multi-algorithm tournament.</p>
-          <div style="margin-top: 12px; display: flex; gap: 8px;">
-            <button mjButton variant="primary" size="sm" data-testid="ps-experiments-new-btn-empty" (click)="openNewExperimentModal()">
-              <i class="fa-solid fa-flask"></i> New Experiment
-            </button>
-          </div>
+          <p>Experiment sessions are switched off: the session runner cannot yet train the experiments it plans. Build models with the Model Development Agent or from the Pipelines tab.</p>
         </div>
       } @else {
         <!-- session header strip -->
@@ -90,18 +80,11 @@ interface BudgetGaugeVM {
           <button mjButton variant="secondary" size="sm" data-testid="ps-experiments-view-artifact" [disabled]="artifactLoading" (click)="viewResultsArtifact()">
             <i class="fa-solid fa-flask-vial"></i> {{ artifactLoading ? 'Loading…' : 'View Results Artifact' }}
           </button>
-          <button mjButton variant="primary" size="sm" data-testid="ps-experiments-new-btn" (click)="openNewExperimentModal()">
-            <i class="fa-solid fa-plus"></i> New Experiment
-          </button>
-          @if (canPause) {
-            <button mjButton variant="secondary" size="sm" data-testid="ps-experiments-pause" (click)="requestControl('pause')"><i class="fa-solid fa-pause"></i> Pause</button>
-          }
-          @if (canResume) {
-            <button mjButton variant="secondary" size="sm" data-testid="ps-experiments-resume" (click)="requestControl('resume')"><i class="fa-solid fa-play"></i> Resume</button>
-          }
-          @if (canCancel) {
-            <button mjButton variant="danger" size="sm" data-testid="ps-experiments-cancel" (click)="requestControl('cancel')"><i class="fa-solid fa-stop"></i> Cancel</button>
-          }
+        </div>
+        <div class="ps-callout warn" data-testid="ps-experiments-unavailable">
+          <i class="fa-solid fa-circle-info"></i>
+          <div>Experiment sessions are switched off: earlier sessions are shown for reference, but new sessions cannot be
+          started, paused or resumed until the session runner can train the experiments it plans.</div>
         </div>
 
         <!-- Leaderboard strip -->
@@ -203,20 +186,6 @@ interface BudgetGaugeVM {
         </ng-template>
       }
 
-      @if (pendingAction) {
-        <ps-confirm-modal
-          [title]="pendingTitle"
-          [icon]="pendingIcon"
-          [confirmIcon]="pendingIcon"
-          [confirmLabel]="pendingConfirmLabel"
-          [variant]="pendingAction === 'cancel' ? 'danger' : 'warn'"
-          [busy]="busy"
-          (confirmed)="confirmControl()"
-          (cancelled)="cancelControl()">
-          <div [innerHTML]="pendingMessage"></div>
-        </ps-confirm-modal>
-      }
-
       @if (showArtifactModal && activeArtifactId) {
         <div class="ps-modal-backdrop" (click)="closeArtifactModal()">
           <div class="ps-modal-dialog" style="max-width: 960px; width: 92vw; height: 85vh; display: flex; flex-direction: column; padding: 0; overflow: hidden;"
@@ -231,16 +200,6 @@ interface BudgetGaugeVM {
             </div>
           </div>
         </div>
-      }
-
-      @if (showNewExperimentModal) {
-        <ps-run-experiment-modal
-          [engine]="engine"
-          [provider]="provider"
-          [currentUser]="currentUser"
-          (started)="onExperimentStarted($event)"
-          (closed)="closeNewExperimentModal()">
-        </ps-run-experiment-modal>
       }
     </div>
   `,
@@ -297,39 +256,6 @@ export class PSExperimentsComponent implements OnInit {
     this.Budget = value;
   }
 
-  /** Pending control action awaiting confirmation (null when no modal is open). */
-  public PendingAction: PredictiveStudioExperimentSessionAction | null = null;
-
-  /** @deprecated Use {@link PendingAction}. */
-  public get pendingAction(): PredictiveStudioExperimentSessionAction | null {
-    return this.PendingAction;
-  }
-  /** @deprecated Use {@link PendingAction}. */
-  public set pendingAction(value: PredictiveStudioExperimentSessionAction | null) {
-    this.PendingAction = value;
-  }
-  /** Remote Op in flight. */
-  public Busy = false;
-
-  /** @deprecated Use {@link Busy}. */
-  public get busy() {
-    return this.Busy;
-  }
-  /** @deprecated Use {@link Busy}. */
-  public set busy(value) {
-    this.Busy = value;
-  }
-
-  public ShowNewExperimentModal = false;
-
-  /** @deprecated Use {@link ShowNewExperimentModal}. */
-  public get showNewExperimentModal() {
-    return this.ShowNewExperimentModal;
-  }
-  /** @deprecated Use {@link ShowNewExperimentModal}. */
-  public set showNewExperimentModal(value) {
-    this.ShowNewExperimentModal = value;
-  }
   public ShowArtifactModal = false;
 
   /** @deprecated Use {@link ShowArtifactModal}. */
@@ -379,37 +305,6 @@ export class PSExperimentsComponent implements OnInit {
   /** @deprecated Use {@link SelectSession}. */
   public selectSession(id: string): void {
     return this.SelectSession(id);
-  }
-
-  public OpenNewExperimentModal(): void {
-    this.ShowNewExperimentModal = true;
-  }
-
-  /** @deprecated Use {@link OpenNewExperimentModal}. */
-  public openNewExperimentModal(): void {
-    return this.OpenNewExperimentModal();
-  }
-
-  public CloseNewExperimentModal(): void {
-    this.ShowNewExperimentModal = false;
-  }
-
-  /** @deprecated Use {@link CloseNewExperimentModal}. */
-  public closeNewExperimentModal(): void {
-    return this.CloseNewExperimentModal();
-  }
-
-  public async OnExperimentStarted(newSessionId: string): Promise<void> {
-    this.CloseNewExperimentModal();
-    await this.engine.Config(true, this.currentUser ?? undefined, this.provider ?? undefined);
-    this.sessionId = newSessionId;
-    this.rebuild();
-    this.cdr.detectChanges();
-  }
-
-  /** @deprecated Use {@link OnExperimentStarted}. */
-  public async onExperimentStarted(newSessionId: string): Promise<void> {
-    return this.OnExperimentStarted(newSessionId);
   }
 
   public CloseArtifactModal(): void {
@@ -666,174 +561,4 @@ export class PSExperimentsComponent implements OnInit {
   public statusLabel(status: PSIterationCard['Status']): string {
     return this.StatusLabel(status);
   }
-
-  // ---- control availability ----
-
-  public get CanPause(): boolean {
-    return this.Session?.Status === 'Running';
-  }
-
-  /** @deprecated Use {@link CanPause}. */
-  public get canPause(): boolean {
-    return this.CanPause;
-  }
-  public get CanResume(): boolean {
-    return this.Session?.Status === 'Paused';
-  }
-
-  /** @deprecated Use {@link CanResume}. */
-  public get canResume(): boolean {
-    return this.CanResume;
-  }
-  public get CanCancel(): boolean {
-    const s = this.Session?.Status;
-    return s === 'Running' || s === 'Paused' || s === 'AwaitingApproval';
-  }
-
-  /** @deprecated Use {@link CanCancel}. */
-  public get canCancel(): boolean {
-    return this.CanCancel;
-  }
-
-  // ---- control flow (Remote Op) ----
-
-  public RequestControl(action: PredictiveStudioExperimentSessionAction): void {
-    if (!this.Session) return;
-    this.PendingAction = action;
-  }
-
-  /** @deprecated Use {@link RequestControl}. */
-  public requestControl(action: PredictiveStudioExperimentSessionAction): void {
-    return this.RequestControl(action);
-  }
-
-  public CancelControl(): void {
-    if (this.Busy) return;
-    this.PendingAction = null;
-  }
-
-  /** @deprecated Use {@link CancelControl}. */
-  public cancelControl(): void {
-    return this.CancelControl();
-  }
-
-  public get PendingTitle(): string {
-    switch (this.PendingAction) {
-      case 'pause': return 'Pause experiment';
-      case 'resume': return 'Resume experiment';
-      case 'cancel': return 'Cancel experiment';
-      default: return '';
-    }
-  }
-
-  /** @deprecated Use {@link PendingTitle}. */
-  public get pendingTitle(): string {
-    return this.PendingTitle;
-  }
-  public get PendingIcon(): string {
-    switch (this.PendingAction) {
-      case 'pause': return 'fa-solid fa-pause';
-      case 'resume': return 'fa-solid fa-play';
-      case 'cancel': return 'fa-solid fa-stop';
-      default: return 'fa-solid fa-check';
-    }
-  }
-
-  /** @deprecated Use {@link PendingIcon}. */
-  public get pendingIcon(): string {
-    return this.PendingIcon;
-  }
-  public get PendingConfirmLabel(): string {
-    switch (this.PendingAction) {
-      case 'pause': return 'Pause';
-      case 'resume': return 'Resume';
-      case 'cancel': return 'Cancel run';
-      default: return 'Confirm';
-    }
-  }
-
-  /** @deprecated Use {@link PendingConfirmLabel}. */
-  public get pendingConfirmLabel(): string {
-    return this.PendingConfirmLabel;
-  }
-  public get PendingMessage(): string {
-    const name = escapeHtml(this.Session?.Name ?? 'this session');
-    switch (this.PendingAction) {
-      case 'pause':
-        return `Pause <strong>${name}</strong>? The orchestrator stops at the next wave checkpoint; in-flight iterations finish. You can resume later.`;
-      case 'resume':
-        return `Resume <strong>${name}</strong>? The orchestrator continues searching from where it paused.`;
-      case 'cancel':
-        return `Cancel <strong>${name}</strong>? This stops the search at the next checkpoint. Completed iterations and the leaderboard are kept, but the session cannot be resumed.`;
-      default:
-        return '';
-    }
-  }
-
-  /** @deprecated Use {@link PendingMessage}. */
-  public get pendingMessage(): string {
-    return this.PendingMessage;
-  }
-
-  /** Run the control Remote Op, then refresh the engine + close on success. */
-  public async ConfirmControl(): Promise<void> {
-    if (!this.PendingAction || !this.Session || this.Busy) return;
-    this.Busy = true;
-    const action = this.PendingAction;
-    const sessionId = this.Session.ID;
-    const name = this.Session.Name;
-    try {
-      const op = new PredictiveStudioControlExperimentSessionOperation();
-      const result = await op.Execute(
-        { sessionId, action },
-        { provider: this.provider ?? undefined, user: this.CurrentUser ?? undefined },
-      );
-      if (result.Success) {
-        this.notifications.CreateSimpleNotification(
-          `${name} → ${result.Output?.status ?? action}`,
-          'success',
-          3500,
-        );
-        await this.refreshAfterMutation();
-        this.PendingAction = null;
-      } else {
-        this.notifications.CreateSimpleNotification(
-          result.ErrorMessage || `Could not ${action} ${name}.`,
-          'error',
-          5000,
-        );
-      }
-    } catch (e) {
-      this.notifications.CreateSimpleNotification(
-        `${action} failed: ${e instanceof Error ? e.message : String(e)}`,
-        'error',
-        5000,
-      );
-    } finally {
-      this.Busy = false;
-      this.cdr.detectChanges();
-    }
-  }
-
-  /** @deprecated Use {@link ConfirmControl}. */
-  public async confirmControl(): Promise<void> {
-    return this.ConfirmControl();
-  }
-
-  /** Force-refresh the engine's cached sessions/iterations, then rebuild. */
-  private async refreshAfterMutation(): Promise<void> {
-    await this.engine.Config(true, this.CurrentUser ?? undefined, this.provider ?? undefined);
-    this.selectActiveSession();
-    this.rebuild();
-    this.cdr.detectChanges();
-  }
-}
-
-/** Minimal HTML-escape for interpolating session names into the modal's innerHTML message. */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }

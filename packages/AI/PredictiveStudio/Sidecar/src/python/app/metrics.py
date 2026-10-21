@@ -53,6 +53,15 @@ def classification_metrics(
     metrics["precision"] = float(precision_score(y_true, y_pred, **kw))
     metrics["recall"] = float(recall_score(y_true, y_pred, **kw))
 
+    # The rate an always-majority guess achieves on these rows, and how many classes the model actually predicts.
+    # The trust verdict grades accuracy only against this baseline (F-TR-1); n / n_positive let judges build intervals.
+    _, true_counts = np.unique(y_true, return_counts=True)
+    metrics["baseline_accuracy"] = float(true_counts.max() / true_counts.sum())
+    metrics["predicted_classes"] = float(len(np.unique(y_pred)))
+    metrics["n"] = float(len(y_true))
+    if is_binary and len(classes) == 2:
+        metrics["n_positive"] = float(np.sum(y_true == classes[1]))
+
     auc = _safe_auc(y_true, y_score)
     if auc is not None:
         metrics["auc"] = auc

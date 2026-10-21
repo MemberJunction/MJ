@@ -30,6 +30,13 @@ describe('toBusinessPredictionCard', () => {
   it('falls back to a placeholder title when the name is blank', () => {
     expect(ToBusinessPredictionCard({ modelId: 'm', name: '  ', HoldoutMetrics: JSON.stringify({ AUC: 0.9 }), ProblemType: 'classification' }).title).toBe('Untitled prediction');
   });
+
+  it('blocks a card whose model withholds its verdict (time index not evaluated as a forecast)', () => {
+    const lineage = JSON.stringify({ evaluation: { ValidationOutOfSample: true, TimeIndexColumn: 'MonthIndex', EvaluatedAsForecast: false, WithheldReason: 'not evaluated as a forecast' } });
+    const c = ToBusinessPredictionCard({ modelId: 'm9', name: 'Monthly volume', HoldoutMetrics: JSON.stringify({ r2: 0.8 }), ProblemType: 'regression', Lineage: lineage });
+    expect(c.canOpen).toBe(false);
+    expect(c.trust.withheldReason).toBe('not evaluated as a forecast');
+  });
 });
 
 describe('buildBusinessCatalog', () => {

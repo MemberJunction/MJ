@@ -1,0 +1,78 @@
+"""G0.9 / F-SC-1 / F-TR-1: validation metrics are out-of-sample for every strategy, K is honoured, and the
+classification metrics report the majority rate they must be judged against."""
+
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
+import numpy as np
+import pytest
+
+from app import metrics
+from tests.test_train_predict import client
+
+
+def _noise_request(strategy: str, algorithm: str, k: Optional[int] = None, n: int = 1000) -> Dict[str, Any]:
+    rng = np.random.default_rng(100)
+    X = rng.normal(size=(n, 6))
+    y = rng.integers(0, 2, size=n)
+    columns = [f"x{i}" for i in range(6)] + ["label"]
+    rows: List[List[Any]] = [[float(v) for v in X[i]] + [int(y[i])] for i in range(n)]
+    validation: Dict[str, Any] = {"strategy": strategy, "test_size": 0.2, "random_state": 42}
+    if k is not None:
+        validation["k"] = k
+    return {
+        "algorithm": algorithm,
+        "problem_type": "classification",
+        "hyperparameters": {},
+        "validation": validation,
+        "feature_schema": [{"Name": c, "Kind": "numeric"} for c in columns[:-1]],
+        "preprocessing": [{"op": "standardize", "cols": columns[:-1]}],
+        "target": "label",
+        "data": {"columns": columns, "rows": rows},
+    }
+
+
+@pytest.mark.parametrize("strategy", ["kfold", "holdout"])
+@pytest.mark.parametrize("algorithm", ["random_forest", "xgboost", "lightgbm", "logistic_regression"])
+def test_validation_metrics_are_out_of_sample_on_noise(strategy: str, algorithm: str) -> None:
+    resp = client.post("/train", json=_noise_request(strategy, algorithm, k=5 if strategy == "kfold" else None))
+    assert resp.status_code == 200, resp.text
+    auc = resp.json()["metrics"]["auc"]
+    assert 0.35 <= auc <= 0.65, (strategy, algorithm, auc)
+
+
+def test_kfold_uses_k() -> None:
+    m3 = client.post("/train", json=_noise_request("kfold", "logistic_regression", k=3)).json()["metrics"]
+    m10 = client.post("/train", json=_noise_request("kfold", "logistic_regression", k=10)).json()["metrics"]
+    assert m3["auc"] != m10["auc"]
+    assert m3["n"] == 1000.0 and m10["n"] == 1000.0
+
+
+def test_kfold_refuses_k_larger_than_a_class() -> None:
+    req = _noise_request("kfold", "logistic_regression", k=5, n=40)
+    rows = req["data"]["rows"]
+    req["data"]["rows"] = [r[:-1] + [0] for r in rows[:37]] + [r[:-1] + [1] for r in rows[37:]]
+    resp = client.post("/train", json=req)
+    assert resp.status_code == 400
+    assert "needs at least 5 rows of every class" in resp.text
+
+
+def test_too_few_rows_are_refused_not_scored_in_sample() -> None:
+    req = _noise_request("train_test_split", "logistic_regression", n=3)
+    req["data"]["rows"][0][-1] = 0
+    req["data"]["rows"][1][-1] = 1
+    resp = client.post("/train", json=req)
+    assert resp.status_code == 400
+    assert "at least 4" in resp.text
+
+
+def test_classification_metrics_report_majority_rate_and_predicted_classes() -> None:
+    y_true = np.array([0] * 19 + [1])
+    y_pred = np.zeros(20, dtype=int)
+    y_score = np.column_stack([np.full(20, 0.9), np.full(20, 0.1)])
+    m = metrics.classification_metrics(y_true, y_pred, y_score)
+    assert m["baseline_accuracy"] == pytest.approx(0.95)
+    assert m["predicted_classes"] == 1.0
+    assert m["n"] == 20.0
+    assert m["n_positive"] == 1.0

@@ -13,7 +13,7 @@ Endpoints:
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
@@ -29,6 +29,8 @@ from .schemas import (
 )
 
 app = FastAPI(title="Predictive Studio Sidecar", version="1.0.0")
+
+MIN_VALIDATION_ROWS = 4
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -234,7 +236,7 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
         X_hold, y_hold = matrix[hold_idx], y[hold_idx]
         dev_rows = [rows[i] for i in dev_idx]
 
-    # Train/validation split (or full-fit fallback for kfold/none). The validation
+    # Out-of-sample validation for every strategy (train/test split, holdout, or pooled K-fold). The validation
     # metric fits preprocessing on the TRAIN fold ONLY (no val-fold leakage), so the
     # reported `metrics` are an honest estimate; the production `estimator` + the
     # FROZEN `fitted` payload remain fit on ALL dev data.
@@ -327,9 +329,9 @@ def _fit_and_score(
 ) -> Tuple[Dict[str, float], Any]:
     """Fit the estimator using the configured validation strategy.
 
-    For ``train_test_split`` the validation metric is computed with preprocessing
-    fit on the TRAIN fold ONLY — the raw dev rows are split first, preprocessing is
-    fit on the training fold and APPLIED (never re-fit) to the validation fold, and
+    Validation metrics are computed out-of-sample for every strategy (`train_test_split`, `holdout`, and `kfold`)
+    with preprocessing fit on the training fold only — the raw dev rows are split first, preprocessing is
+    fit on the training fold and APPLIED (never re-fit) to the held-out fold, and
     only then is the estimator scored. This prevents the validation fold from
     leaking into the fitted preprocessing (which would make ``metrics`` optimistic).
 
@@ -346,27 +348,34 @@ def _fit_and_score(
             req.algorithm, req.problem_type, req.hyperparameters
         )
 
-    if strategy == "train_test_split" and X.shape[0] >= 4:
-        test_size = req.validation.test_size or 0.2
-        idx = np.arange(X.shape[0])
-        stratify = y if is_classification and len(np.unique(y)) > 1 else None
-        tr_idx, te_idx = train_test_split(
-            idx, test_size=test_size, random_state=random_state, stratify=stratify
+    n_dev = X.shape[0]
+    if n_dev < MIN_VALIDATION_ROWS:
+        raise ValueError(
+            f"Only {n_dev} training rows remain after the locked holdout; at least {MIN_VALIDATION_ROWS} are needed to "
+            "measure the model on rows it did not train on. Add rows or lower LockedHoldoutFraction."
         )
+
+    if strategy == "kfold":
+        val_metrics = _kfold_out_of_fold_metrics(
+            req, dev_rows, columns, feature_cols, ops_spec, target_idx, y, is_classification, build, random_state,
+        )
+    elif strategy in ("train_test_split", "holdout"):
+        # `holdout` uses the same out-of-sample split as train_test_split (F-SC-1): it used to score in-sample.
+        test_size = req.validation.test_size or 0.2
+        idx = np.arange(n_dev)
+        stratify = y if is_classification and len(np.unique(y)) > 1 else None
+        tr_idx, te_idx = train_test_split(idx, test_size=test_size, random_state=random_state, stratify=stratify)
         val_metrics = _anti_skew_val_metrics(
             req, dev_rows, columns, feature_cols, ops_spec, target_idx,
             tr_idx, te_idx, y, is_classification, encoder, build,
         )
-        # re-fit on all dev data (with the frozen, fit-on-all-dev preprocessing)
-        # for the production model.
-        final = build()
-        final.fit(X, y)
-        return val_metrics, final
+    else:
+        raise ValueError(f"Unknown validation strategy '{strategy}'. Use train_test_split, kfold or holdout.")
 
-    # kfold / holdout-only / tiny data: fit on all dev data and score in-sample.
-    est = build()
-    est.fit(X, y)
-    return _score(est, X, y, is_classification), est
+    # The production estimator is fit on all dev rows (with the frozen, fit-on-all-dev preprocessing).
+    final = build()
+    final.fit(X, y)
+    return val_metrics, final
 
 
 def _anti_skew_val_metrics(
@@ -389,25 +398,86 @@ def _anti_skew_val_metrics(
     train fold and APPLIED to the validation fold (fit-once / apply-everywhere within
     the split), so the validation fold never leaks into the fitted params.
     """
+    est, X_te = _fit_fold(dev_rows, columns, feature_cols, ops_spec, target_idx, tr_idx, te_idx, y_dev, build)
+    return _score(est, X_te, y_dev[te_idx], is_classification)
+
+
+def _fit_fold(
+    dev_rows: List[Sequence[Any]],
+    columns: List[str],
+    feature_cols: List[str],
+    ops_spec: List[Dict[str, Any]],
+    target_idx: int,
+    tr_idx: np.ndarray,
+    te_idx: np.ndarray,
+    y_dev: np.ndarray,
+    build: Callable[[], Any],
+) -> Tuple[Any, np.ndarray]:
+    """Fit preprocessing and the estimator on the training fold only; return the estimator and the transformed
+    held-out fold (preprocessing APPLIED, never re-fit — no held-out leakage into the fitted params)."""
     tr_rows = [list(dev_rows[i]) for i in tr_idx]
     te_rows = [list(dev_rows[i]) for i in te_idx]
-
-    # Fit preprocessing on the train fold ONLY, then apply to the validation fold.
-    X_tr, _, fold_fitted = preprocessing.fit_transform(
-        columns, tr_rows, ops_spec, feature_cols
-    )
-    te_feature_dicts = [
-        {c: r[i] for i, c in enumerate(columns) if i != target_idx}
-        for r in te_rows
-    ]
+    X_tr, _, fold_fitted = preprocessing.fit_transform(columns, tr_rows, ops_spec, feature_cols)
+    te_feature_dicts = [{c: r[i] for i, c in enumerate(columns) if i != target_idx} for r in te_rows]
     X_te = preprocessing.transform(te_feature_dicts, fold_fitted, feature_cols)
-
-    y_tr = y_dev[tr_idx]
-    y_te = y_dev[te_idx]
-
     est = build()
-    est.fit(X_tr, y_tr)
-    return _score(est, X_te, y_te, is_classification)
+    est.fit(X_tr, y_dev[tr_idx])
+    return est, X_te
+
+
+def _kfold_out_of_fold_metrics(
+    req: TrainRequest,
+    dev_rows: List[Sequence[Any]],
+    columns: List[str],
+    feature_cols: List[str],
+    ops_spec: List[Dict[str, Any]],
+    target_idx: int,
+    y_dev: np.ndarray,
+    is_classification: bool,
+    build: Callable[[], Any],
+    random_state: int,
+) -> Dict[str, float]:
+    """Pooled out-of-fold metrics for ``kfold``: every dev row is predicted exactly once by a model (and preprocessing)
+    fit without it. ``K`` = ``req.validation.k`` (default 5); stratified folds for classification."""
+    # Function-local, as every other scikit-learn import in main.py is (lines 126, 204, 340 at c92d4a47f9).
+    from sklearn.model_selection import KFold, StratifiedKFold
+
+    n_rows = len(dev_rows)
+    k = req.validation.k or 5
+    if k < 2 or k > n_rows:
+        raise ValueError(f"kfold needs 2 <= K <= {n_rows} (the training rows); got K={k}.")
+    idx = np.arange(n_rows)
+    if is_classification:
+        smallest = int(np.min(np.bincount(y_dev.astype(int))))
+        if smallest < k:
+            raise ValueError(
+                f"kfold with K={k} needs at least {k} rows of every class; the smallest class has {smallest}. "
+                "Lower K or use train_test_split."
+            )
+        splits = StratifiedKFold(n_splits=k, shuffle=True, random_state=random_state).split(idx, y_dev)
+    else:
+        splits = KFold(n_splits=k, shuffle=True, random_state=random_state).split(idx)
+
+    oof_pred: Optional[np.ndarray] = None
+    oof_score: Optional[np.ndarray] = None
+    for tr_idx, te_idx in splits:
+        est, X_te = _fit_fold(dev_rows, columns, feature_cols, ops_spec, target_idx, tr_idx, te_idx, y_dev, build)
+        pred = np.asarray(est.predict(X_te))
+        if oof_pred is None:
+            oof_pred = np.empty(n_rows, dtype=pred.dtype)
+        oof_pred[te_idx] = pred
+        if is_classification:
+            score = _positive_scores(est, X_te)
+            if oof_score is None:
+                oof_score = np.empty((n_rows,) + score.shape[1:], dtype=float)
+            oof_score[te_idx] = score
+
+    # K >= 2 guarantees at least one fold; an explicit raise (not `assert`, which `python -O` strips) narrows for mypy.
+    if oof_pred is None or (is_classification and oof_score is None):
+        raise RuntimeError(f"kfold produced no out-of-fold predictions (K={k}, rows={n_rows})")
+    if is_classification and oof_score is not None:
+        return metrics.classification_metrics(y_dev, oof_pred, oof_score)
+    return metrics.regression_metrics(y_dev, oof_pred)
 
 
 def _score(

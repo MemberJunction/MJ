@@ -47,55 +47,53 @@ export class UnresolvedPipelineResolver implements IPipelineResolver {
   }
 }
 
-/**
- * Build the production {@link ExperimentDeps} from the request user/provider. The
- * training-side bundle (entity factory + record loader + sidecar + artifact store)
- * is composed here and handed to the {@link TrainingEngineExperimentTrainer} so
- * each iteration trains through the real {@link TrainingEngine}.
- *
- * The artifact store is built the same way the standalone training path builds it:
- * resolve the active `MJ: File Storage Providers` id (see
- * {@link resolveActiveFileStorageProviderId}) and stamp it on the store, which
- * creates a real `MJ: Files` row and writes the bytes to local disk keyed by that
- * id (dev / on-prem). Async so the provider lookup is part of the wiring.
- *
- * @param contextUser request user — threaded for isolation/audit
- * @param provider optional provider for multi-provider correctness
- */
-export async function BuildProductionExperimentDeps(
-  contextUser?: UserInfo,
-  provider?: IMetadataProvider,
-): Promise<ExperimentDeps> {
-  const entityFactory = new MetadataEntityFactory(provider);
-  const providerId = await ResolveActiveFileStorageProviderId(contextUser, provider);
-  const trainingDeps: TrainingDeps = {
-    entityFactory,
-    recordLoader: new RunViewRecordLoader(),
-    sidecar: new MJSidecarTrainer(),
-    artifactStore: BuildArtifactStore(providerId, entityFactory),
-    contextUser,
-    provider,
-  };
+/** Why experiment sessions are switched off (containment of F-EXP-1). */
+export const EXPERIMENT_SESSIONS_UNAVAILABLE_MESSAGE =
+  'Experiment sessions are switched off: the session runner has no way to turn a proposed experiment into a training ' +
+  'pipeline, so every iteration failed while the session still reported Completed. Build models with the Model ' +
+  'Development Agent (its Pipeline Builder trains the approved experiments) or train a pipeline with Train ML Model.';
 
-  const trainer = new TrainingEngineExperimentTrainer(
-    trainingDeps,
-    new UnresolvedPipelineResolver(),
-    new TrainingEngine(),
-  );
-
-  return {
-    entityFactory: new MetadataExperimentEntityFactory(provider),
-    trainer,
-    clock: new SystemClock(),
-    contextUser,
-    provider,
-  };
+/** Thrown when an experiment session is requested while sessions are switched off. */
+export class ExperimentSessionsUnavailableError extends Error {
+  constructor() {
+    super(EXPERIMENT_SESSIONS_UNAVAILABLE_MESSAGE);
+    this.name = 'ExperimentSessionsUnavailableError';
+  }
 }
 
-/** @deprecated Use {@link BuildProductionExperimentDeps}. */
-export async function buildProductionExperimentDeps(
-  contextUser?: UserInfo,
-  provider?: IMetadataProvider,
-): Promise<ExperimentDeps> {
-  return BuildProductionExperimentDeps(contextUser, provider);
+/** Builds the experiment orchestrator's dependencies (static members on one owner, coding standards §2). */
+export class ExperimentDepsBuilder {
+  /**
+   * Production {@link ExperimentDeps}: refused until a real {@link IPipelineResolver} exists (a later change wires one
+   * through {@link ExperimentDepsBuilder.BuildWithResolver}). Refusing here stops both the Action and the Remote Operation
+   * before the orchestrator creates any Experiment, Session or Iteration row.
+   */
+  public static async BuildProductionExperimentDeps(_contextUser?: UserInfo, _provider?: IMetadataProvider): Promise<ExperimentDeps> {
+    throw new ExperimentSessionsUnavailableError();
+  }
+
+  /**
+   * The orchestrator's dependencies with a caller-supplied pipeline resolver: the production wiring, with `resolver`
+   * deciding which pipeline each experiment trains.
+   */
+  public static async BuildWithResolver(resolver: IPipelineResolver, contextUser: UserInfo, provider: IMetadataProvider): Promise<ExperimentDeps> {
+    const entityFactory = new MetadataEntityFactory(provider);
+    const providerId = await ResolveActiveFileStorageProviderId(contextUser, provider);
+    const trainingDeps: TrainingDeps = {
+      entityFactory,
+      recordLoader: new RunViewRecordLoader(),
+      sidecar: new MJSidecarTrainer(),
+      artifactStore: BuildArtifactStore(providerId, entityFactory),
+      contextUser,
+      provider,
+    };
+    const trainer = new TrainingEngineExperimentTrainer(trainingDeps, resolver, new TrainingEngine());
+    return {
+      entityFactory: new MetadataExperimentEntityFactory(provider),
+      trainer,
+      clock: new SystemClock(),
+      contextUser,
+      provider,
+    };
+  }
 }

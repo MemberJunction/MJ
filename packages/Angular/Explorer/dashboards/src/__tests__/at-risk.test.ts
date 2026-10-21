@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
+  AtRiskRules,
+  AT_RISK_LIST_MIN_RISK_PCT,
+  type AtRiskRow,
   ParseAtRiskRows,
   ResolveRenewalPolarity,
   TopGlobalDrivers,
   HumanizeFeatureName,
-} from '../PredictiveStudio/at-risk.view-models';
+} from '@memberjunction/predictive-studio-core';
 
 describe('parseAtRiskRows', () => {
   it('parses + ranks per-record predictions highest-risk first, with bands', () => {
@@ -185,5 +188,49 @@ describe('resolveRenewalPolarity', () => {
     const result = ResolveRenewalPolarity(payloads, 'IsSLABreached', 'Tasks: SLA Breach Risk');
     expect(result.IsRenewalModel).toBe(false);
     expect(result.ScoreIsLapseRisk).toBe(false);
+  });
+});
+
+describe('driver direction follows the displayed risk (W1 → S9.4, F-UI-3)', () => {
+  it('a positive contribution to P(renew) lowers risk', () => {
+    expect(AtRiskRules.DriverRaisesRisk(1.135756, true)).toBe(false);
+    expect(AtRiskRules.DriverBadgeText(AtRiskRules.DriverRaisesRisk(1.135756, true))).toBe('Lowers Risk');
+  });
+  it('a positive contribution to P(lapse) raises risk', () => {
+    expect(AtRiskRules.DriverRaisesRisk(0.42, false)).toBe(true);
+    expect(AtRiskRules.DriverBadgeText(true)).toBe('Increases Risk');
+  });
+  it('AtRiskRules.ParseAtRiskRows signs drivers relative to the inverted risk', () => {
+    const rows = AtRiskRules.ParseAtRiskRows(
+      [{ recordId: 'm1', ResultPayload: JSON.stringify({ score: 0.91, class: '1', drivers: [{ feature: 'AutoRenew', value: 1.135756 }, { feature: 'Plan=Basic', value: -0.301 }] }) }],
+      { InvertedRisk: true },
+    );
+    expect(rows[0].drivers?.map((d) => [d.label, d.up])).toEqual([['Auto Renew', false], ['Plan = Basic', true]]);
+  });
+});
+
+describe('the At-Risk list is the highest-risk rows (W1 → S9.5, F-UI-4)', () => {
+  // W1-shaped payloads: target "Renewed", classes "0"/"1", score = P("1") = P(renew).
+  const truth: Record<string, number> = { a: 0.95, b: 0.9, c: 0.85, d: 0.6, e: 0.4, f: 0.3, g: 0.2 };
+  const scores: Record<string, number> = { a: 0.96, b: 0.92, c: 0.88, d: 0.62, e: 0.41, f: 0.33, g: 0.18 };
+  const details = Object.keys(scores).map((id) => ({ recordId: id, ResultPayload: JSON.stringify({ score: scores[id], class: scores[id] >= 0.5 ? '1' : '0' }) }));
+
+  it('AtRiskRules.BuildAtRiskOptions inverts a P(renew) model', () => {
+    expect(AtRiskRules.BuildAtRiskOptions(details.map((d) => d.ResultPayload), 'Renewed').InvertedRisk).toBe(true);
+    expect(AtRiskRules.BuildAtRiskOptions(details.map((d) => d.ResultPayload), 'IsSLABreached').InvertedRisk).toBe(false);
+  });
+
+  it('selects the highest-risk rows, at or above the minimum risk, up to the limit', () => {
+    const rows = AtRiskRules.ParseAtRiskRows(details, AtRiskRules.BuildAtRiskOptions(details.map((d) => d.ResultPayload), 'Renewed'));
+    const list = AtRiskRules.SelectAtRiskListMembers(rows, 3);
+    expect(list.map((r) => r.recordId)).toEqual(['g', 'f', 'e']);
+    expect(list.every((r) => r.riskPct >= AT_RISK_LIST_MIN_RISK_PCT)).toBe(true);
+    const mean = (ids: string[]): number => ids.reduce((s, id) => s + truth[id], 0) / ids.length;
+    expect(mean(list.map((r) => r.recordId))).toBeLessThan(mean(Object.keys(truth)));
+  });
+
+  it('never pads the list with low-risk rows', () => {
+    const rows: AtRiskRow[] = [10, 20, 39].map((riskPct, i) => ({ recordId: `r${i}`, label: null, score: 1 - riskPct / 100, riskPct, class: null, band: 'low', drivers: null }));
+    expect(AtRiskRules.SelectAtRiskListMembers(rows, 200)).toEqual([]);
   });
 });

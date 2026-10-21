@@ -27,6 +27,7 @@ const SCHEMA: FeatureSchemaEntry[] = [{ Name: 'tenure', Kind: 'numeric' }];
 
 /** A model fake exposing exactly what the processor reads. */
 class FakeModel {
+  public Status: MJMLModelEntity['Status'] = 'Published';
   public FittedPreprocessing: string | null = '{}';
   public FeatureSchema = JSON.stringify(SCHEMA);
   public ProblemType: 'classification' | 'regression' = 'classification';

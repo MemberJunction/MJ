@@ -1518,6 +1518,67 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/AI/PredictiveStudio/TruthSuite:
+    dependencies:
+      '@memberjunction/ai-agents':
+        specifier: 6.2.0-edge.4
+        version: link:../../Agents
+      '@memberjunction/aiengine':
+        specifier: 6.2.0-edge.4
+        version: link:../../Engine
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJGlobal
+      '@memberjunction/graphql-dataprovider':
+        specifier: 6.2.0-edge.4
+        version: link:../../../GraphQLDataProvider
+      '@memberjunction/predictive-studio':
+        specifier: 6.2.0-edge.4
+        version: link:../Engine
+      '@memberjunction/predictive-studio-core':
+        specifier: 6.2.0-edge.4
+        version: link:../Core
+      '@memberjunction/predictive-studio-sidecar':
+        specifier: 6.2.0-edge.4
+        version: link:../Sidecar
+      '@memberjunction/server-bootstrap-lite':
+        specifier: 6.2.0-edge.4
+        version: link:../../../ServerBootstrapLite
+      '@memberjunction/testing-engine-base':
+        specifier: 6.2.0-edge.4
+        version: link:../../../TestingFramework/EngineBase
+      '@memberjunction/testing-integration':
+        specifier: 6.2.0-edge.4
+        version: link:../../../TestingFramework/testing-integration
+      mssql:
+        specifier: ^12.2.0
+        version: 12.7.0
+    devDependencies:
+      '@types/mssql':
+        specifier: ^9.1.9
+        version: 9.1.9
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      tsc-alias:
+        specifier: ^1.8.10
+        version: 1.8.16
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/AI/Prompts:
     dependencies:
       '@memberjunction/ai':

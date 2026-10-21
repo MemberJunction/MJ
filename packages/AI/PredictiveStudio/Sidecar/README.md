@@ -83,19 +83,18 @@ package.
 
 ## Setting up the bundled Python environment
 
-The managed mode spawns a Python interpreter. Create the bundled venv + install the
-pinned requirements once:
+**One-time setup (fresh clone).** Predictive Studio's packages depend on other workspace packages, so build them
+together, never one by one (a per-package `tsc` on a fresh clone fails with `TS2307 Cannot find module
+'@memberjunction/core'`):
 
-```bash
-cd packages/AI/PredictiveStudio/Sidecar
-npm run setup:python      # creates .venv and pip-installs src/python/requirements.txt
-```
+    pnpm install                                                      # repo root
+    npx turbo run build --filter=@memberjunction/predictive-studio...  # PS + everything it depends on
+    pnpm --filter @memberjunction/predictive-studio-sidecar run setup:python
 
-**macOS:** xgboost / lightgbm need an OpenMP runtime. Install it once:
-
-```bash
-brew install libomp
-```
+`setup:python` needs CPython 3.11 or 3.12 (numpy 1.26.4 has no wheels for 3.13+); it tries `python3.11`, `python3.12`,
+`python3`, `python` and stops with the list it probed if none fits. Pass `--python <path>` to choose one. On macOS
+also `brew install libomp` (XGBoost/LightGBM). To run the sidecar or its tests on another interpreter, set
+`PREDICTIVE_STUDIO_PYTHON=<path to python>`.
 
 `MLSidecar` automatically appends `DYLD_LIBRARY_PATH=/opt/homebrew/opt/libomp/lib`
 to the spawn environment on `darwin`, so the venv finds libomp at runtime. On Linux

@@ -8,6 +8,7 @@ import type {
 } from '@memberjunction/core-entities';
 
 import { PredictiveStudioRunExperimentAction } from '../run-experiment.action';
+import { ExperimentDepsBuilder, ExperimentSessionsUnavailableError } from '../run-experiment.deps';
 import { ExperimentOrchestrator } from '../../experiment/experiment-orchestrator';
 import type { ExperimentDeps, ExperimentRunOptions, ExperimentSessionResult } from '../../experiment/types';
 
@@ -192,5 +193,34 @@ describe('PredictiveStudioRunExperimentAction — orchestrator error', () => {
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('EXPERIMENT_FAILED');
     expect(result.Message).toContain('pipeline resolver');
+  });
+});
+
+/** The action with production deps (no buildDeps override) and a recording orchestrator. */
+class ProductionDepsExperimentAction extends PredictiveStudioRunExperimentAction {
+  constructor(private readonly orchestrator: ExperimentOrchestrator) {
+    super();
+  }
+  protected override createOrchestrator(): ExperimentOrchestrator {
+    return this.orchestrator;
+  }
+  public RunAction(params: RunActionParams): Promise<ActionResultSimple> {
+    return this.Run(params);
+  }
+}
+
+describe('Experiment sessions are switched off (F-EXP-1)', () => {
+  it('ExperimentDepsBuilder.BuildProductionExperimentDeps refuses before touching the database', async () => {
+    await expect(ExperimentDepsBuilder.BuildProductionExperimentDeps(undefined, undefined)).rejects.toBeInstanceOf(ExperimentSessionsUnavailableError);
+  });
+
+  it('the action refuses an approved plan with EXPERIMENT_UNAVAILABLE and never runs the orchestrator', async () => {
+    const orch = new MockOrchestrator(sessionResult());
+    const p = params([{ Name: 'PlanSpec', Type: 'Input', Value: approvedPlan() }]);
+    const result = await new ProductionDepsExperimentAction(orch).RunAction(p);
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('EXPERIMENT_UNAVAILABLE');
+    expect(result.Message).toMatch(/Experiment sessions are switched off/);
+    expect(orch.CallCount).toBe(0);
   });
 });

@@ -70,7 +70,13 @@ import {
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, type DatedSourceSpec } from '../feature-assembly';
 import type { SourceRow } from '../feature-assembly';
-import { ModelHasTrainedArtifact, ModelNeedsTrainingMessage, ModelArtifactMissingMessage, ModelNeedsTrainingError } from './model-readiness';
+import {
+  ModelHasTrainedArtifact,
+  ModelNeedsTrainingMessage,
+  ModelArtifactMissingMessage,
+  ModelNeedsTrainingError,
+  ModelNotScorableError,
+} from './model-readiness';
 import type {
   IModelAutoTrainer,
   MLAutoTrainConfig,
@@ -258,6 +264,9 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     const bytes = await this.deps.artifactLoader.load(model.ArtifactFileID, context.ContextUser);
     if (!bytes) {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelArtifactMissingMessage(this.modelId, model.ArtifactFileID)}`);
+    }
+    if (!ModelNotScorableError.CanScore(model.Status)) {
+      throw new ModelNotScorableError(this.modelId, model.Status);
     }
     return this.buildLoadedModel(model, bytes, context);
   }

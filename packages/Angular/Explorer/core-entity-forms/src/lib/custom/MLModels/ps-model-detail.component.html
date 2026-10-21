@@ -92,8 +92,8 @@
         <span class="ps-muted ps-small">{{ importanceCaption }}</span>
       </div>
       <div class="ps-card-body">
-        @if (importance.length > 0) {
-          @for (f of importance; track f.name) {
+        @if (DisplayedImportance.length > 0) {
+          @for (f of DisplayedImportance; track f.name) {
             <div class="ps-fbar">
               <span class="name ps-small" [title]="f.name">{{ f.name }}</span>
               <div class="track">
@@ -103,7 +103,11 @@
             </div>
           }
         } @else {
-          <div class="ps-small ps-muted">No feature-importance data was recorded for this model.</div>
+          @if (ImportanceHidden) {
+            <div class="ps-small ps-muted" data-testid="ps-importance-hidden">{{ ImportanceHiddenNote }}</div>
+          } @else {
+            <div class="ps-small ps-muted">No feature-importance data was recorded for this model.</div>
+          }
         }
       </div>
     </div>

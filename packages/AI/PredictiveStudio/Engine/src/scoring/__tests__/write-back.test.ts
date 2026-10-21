@@ -38,6 +38,7 @@ const FROZEN_SCHEMA: FeatureSchemaEntry[] = [
 
 class FakeMLModel {
   public ID = 'model-1';
+  public Status: MJMLModelEntity['Status'] = 'Published';
   public ArtifactFileID: string | null = 'file-1';
   public FittedPreprocessing: string | null = JSON.stringify({});
   public FeatureSchema = JSON.stringify(FROZEN_SCHEMA);

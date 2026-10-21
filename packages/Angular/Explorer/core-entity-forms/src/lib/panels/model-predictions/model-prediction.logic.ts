@@ -9,6 +9,7 @@
  */
 
 import {
+    ImportanceDisplay,
     OutcomeBand,
     OutcomeConfig,
     formatPredictionScore,
@@ -185,6 +186,14 @@ export function ParseDrivers(featureImportanceJson: string | null): PredictionDr
 /** @deprecated Use {@link ParseDrivers}. */
 export function parseDrivers(featureImportanceJson: string | null): PredictionDriver[] {
     return ParseDrivers(featureImportanceJson);
+}
+
+/** The global drivers a prediction card may show. */
+export class PredictionDrivers {
+    /** Global drivers for a model's card: coefficient models only (split / impurity counts are hidden, C4 / F-SC-11). */
+    public static DriversForModel(algorithm: string | null | undefined, featureImportanceJson: string | null): PredictionDriver[] {
+        return ImportanceDisplay.GlobalDriversShowable(algorithm) ? ParseDrivers(featureImportanceJson) : [];
+    }
 }
 
 /** Format a last-scored timestamp to a short date, or null when absent/invalid. */

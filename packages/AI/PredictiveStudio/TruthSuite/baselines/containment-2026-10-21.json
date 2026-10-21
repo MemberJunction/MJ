@@ -1,0 +1,176 @@
+{
+  "mjCommit": "141d8d065c",
+  "runId": "pr-2026-10-21T16-09-09-477Z",
+  "weeklyRunId": "weekly-2026-10-21T16-13-31-937Z",
+  "lane": "nightly",
+  "gates": {
+    "G0.1": {
+      "GateID": "G0.1",
+      "TestName": "W1 → S7.5",
+      "OwnerPR": 2,
+      "Outcome": "xfail",
+      "Measured": {
+        "labelledRows": 16776,
+        "trainingRows": 13421,
+        "holdoutRows": 3355,
+        "trainError": null,
+        "filterScored": 1000,
+        "scoreError": null
+      },
+      "Detail": "training read 16776 of 16776; filter scoring scored 1000"
+    },
+    "G0.2": {
+      "GateID": "G0.2",
+      "TestName": "W2 → C1.1",
+      "OwnerPR": 4,
+      "Outcome": "xfail",
+      "Measured": {
+        "seeds": 60,
+        "published": 60,
+        "consistent": 0
+      },
+      "Detail": "60 of 60 published; 0 of 60 consistent"
+    },
+    "G0.3": {
+      "GateID": "G0.3",
+      "TestName": "W3 → C1.1",
+      "OwnerPR": 4,
+      "Outcome": "xfail",
+      "Measured": {
+        "runs": 2,
+        "published": 2,
+        "orders": "lr-first,lr-last"
+      },
+      "Detail": "2 of 2 agent runs on W3 s42 reached Published with automated publishing on"
+    },
+    "G0.4": {
+      "GateID": "G0.4",
+      "TestName": "W1 → S9.4",
+      "OwnerPR": 2,
+      "Outcome": "xfail",
+      "Measured": {
+        "autoRenewTopDriverRows": 488,
+        "lowersRisk": 0
+      },
+      "Detail": "0 of 488 AutoRenew top-driver rows render \"Lowers Risk\""
+    },
+    "G0.5": {
+      "GateID": "G0.5",
+      "TestName": "W1 → S9.5",
+      "OwnerPR": 2,
+      "Outcome": "xfail",
+      "Measured": {
+        "listSize": 200,
+        "listMeanTrueP": 0.9672944226135961,
+        "populationMeanTrueP": 0.8044434253805068
+      },
+      "Detail": "At-Risk list mean TrueP 0.9673 vs population 0.8044"
+    },
+    "G0.6": {
+      "GateID": "G0.6",
+      "TestName": "W1 → S9.3",
+      "OwnerPR": 2,
+      "Outcome": "xfail",
+      "Measured": {
+        "filesScanned": 43,
+        "causalHits": 5,
+        "firstHit": "/Users/arieglazier/repos/MJ_20260925/packages/Angular/Explorer/dashboards/src/PredictiveStudio/components/ps-predictions-grid.component.html:355: <i class=\"fa-solid fa-lightbulb\" style=\"color:var(--mj-status-warning)\"></i> Key Decision Drivers (Explainability)",
+        "storiesGenerated": 10,
+        "causalStories": 0
+      },
+      "Detail": "5 causal phrases in UI strings/story prompt; 0 of 10 stories causal"
+    },
+    "G0.7": {
+      "GateID": "G0.7",
+      "TestName": "W1 → S7.3",
+      "OwnerPR": 2,
+      "Outcome": "xfail",
+      "Measured": {
+        "draftWritten": 1625,
+        "draftError": null,
+        "archivedWritten": 1625,
+        "archivedError": null,
+        "dryRunWritten": 1625
+      },
+      "Detail": "Draft/Archived refused with 0 rows written: 0 of 2; dry run wrote 1625 rows"
+    },
+    "G0.8": {
+      "GateID": "G0.8",
+      "TestName": "W4 → S2.1",
+      "OwnerPR": 2,
+      "Outcome": "xfail",
+      "Measured": {
+        "refused": 0,
+        "columnModeError": null,
+        "asOfInputError": null,
+        "columnModeModel": "438E0703-5D03-451E-88C9-F54464C95F32",
+        "asOfInputModel": "EB92CCCC-C221-4792-A928-DCDD425DEA8F"
+      },
+      "Detail": "0 of 2 no-effect as-of variants refused before training"
+    },
+    "G0.9": {
+      "GateID": "G0.9",
+      "TestName": "W2 → S5.3",
+      "OwnerPR": 2,
+      "Outcome": "xfail",
+      "Measured": {
+        "kfoldAuc": 1,
+        "kfoldLower": 1,
+        "kfoldUpper": 1,
+        "holdoutAuc": 1,
+        "holdoutLower": 1,
+        "holdoutUpper": 1
+      },
+      "Detail": "0 of 2 strategies honest on noise (interval contains 0.5) or refused"
+    },
+    "G0.10": {
+      "GateID": "G0.10",
+      "TestName": "W1 → S5.4",
+      "OwnerPR": 2,
+      "Outcome": "xpass",
+      "Measured": {
+        "threads": null,
+        "logistic_regressionMaxDiff": 0,
+        "xgboostMaxDiff": 0,
+        "lightgbmMaxDiff": 0
+      },
+      "Detail": "3 of 3 algorithms reproduce predictions within 1e-9"
+    },
+    "G0.11": {
+      "GateID": "G0.11",
+      "TestName": "T4 → S6.5",
+      "OwnerPR": 2,
+      "Outcome": "xfail",
+      "Measured": {
+        "origins": 12,
+        "timeIndexDeclared": 0,
+        "gradedAbovePoorOrActionable": 12,
+        "withheldVerdictsStored": 0
+      },
+      "Detail": "12 of 12 origins above Poor or actionable; 0 of 12 store the withheld verdict"
+    },
+    "G0.12": {
+      "GateID": "G0.12",
+      "TestName": "W7 → S4.2",
+      "OwnerPR": 2,
+      "Outcome": "xfail",
+      "Measured": {
+        "s42Accuracy": 0.9206349206349206,
+        "s42Majority": 0.9206349206349206,
+        "s42Grade": "Fair",
+        "s42CanAct": true,
+        "s43Accuracy": 0.9682539682539683,
+        "s43Majority": 0.9682539682539683,
+        "s43Grade": "Good",
+        "s43CanAct": true,
+        "s44Accuracy": 0.967741935483871,
+        "s44Majority": 0.967741935483871,
+        "s44Grade": "Excellent",
+        "s44CanAct": true,
+        "qualifying": 3,
+        "violations": 3
+      },
+      "Detail": "3 of 3 at-or-below-majority models graded above Poor or actionable"
+    }
+  }
+}

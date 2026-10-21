@@ -1,0 +1,11 @@
+.venv
+.loom/
+.data/
+.run/
+results/
+dist/
+python/.scratch/
+python/.mypy_cache/
+python/.pytest_cache/
+**/__pycache__/
+

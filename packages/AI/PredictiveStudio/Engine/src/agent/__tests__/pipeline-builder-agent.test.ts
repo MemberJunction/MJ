@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { IMetadataProvider, EntityInfo } from '@memberjunction/core';
-import { SummarizeBuildResult, BuildOutcomeMessage } from '../pipeline-builder-agent';
+import { CausalCopy } from '@memberjunction/predictive-studio-core';
+import { SummarizeBuildResult, BuildOutcomeMessage, GenerateMarkdownReport } from '../pipeline-builder-agent';
 import type { BuildPredictionResult } from '../pipeline-builder';
 
 /**
@@ -177,6 +178,19 @@ describe('resolveEntity', () => {
     expect(ResolveEntity('AI Prompt Runs', fakeProvider)?.ID).toBe('E1');
     // Unknown returns undefined
     expect(ResolveEntity('NonExistentEntity', fakeProvider)).toBeUndefined();
+  });
+});
+
+describe('GenerateMarkdownReport — copy (W1 → S9.3)', () => {
+  const report = (features: Array<{ feature: string; importance: number }>) =>
+    GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', 0.72, 'Good', 'Right about 8 out of 10 times.', true, features, []);
+  it('prints the hidden-list note instead of inventing a ranking', () => {
+    const md = report([]);
+    expect(md).toContain('split or impurity counts');
+    expect(md).not.toMatch(/Features analyzed from source entity/);
+  });
+  it('contains no causal phrase and no canned "honest holdout" sentence', () => {
+    expect(CausalCopy.FindPhrases(report([{ feature: 'AutoRenew', importance: 0.6 }]))).toEqual([]);
   });
 });
 

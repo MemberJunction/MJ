@@ -119,7 +119,7 @@ export interface PredictionsAgentContextInput {
   HighRiskCount?: number;
   MediumRiskCount?: number;
   LowRiskCount?: number;
-  /** Plain-language "what's driving this" drivers for the selection (bounded). */
+  /** The features the model weighted most for the selection (coefficient models only; bounded). */
   Drivers?: string[];
 }
 
