@@ -276,7 +276,7 @@ export const NativeToolLoopChecks: NamedCheck[] = [
                 Assert(!prompt.includes(envelope), `NTL5: the tools-only prompt teaches no envelope, found '${envelope}'`);
             }
             Assert(first.Tools.includes('scratchpad_write'), `NTL5: scratchpad_write is declared, got [${first.Tools.join(', ')}]`);
-            AssertEqual(first.ParallelToolCalls, true, 'NTL5: parallel tool calls are on');
+            AssertEqual(first.ParallelToolCalls, undefined, 'NTL5: no parallel-calls flag is sent; each provider keeps its own default');
             const next = request(o, 1, 'NTL5');
             assertValidHistory(next, 'NTL5');
             Assert(answersTo(next, 'scratchpad_write').every((b) => b.isError === false), 'NTL5: the scratchpad call succeeded');
