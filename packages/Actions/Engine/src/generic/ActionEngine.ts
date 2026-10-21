@@ -255,7 +255,9 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * impossible). The queue is self-bounding (in-flight tasks only), so it needs no flush on this
     * long-lived singleton.
     */
-   private readonly _logQueue = new BaseEntitySaveQueue();
+   private readonly _logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only' });
+   /** Per-run cache of resolved BaseAction instances so CheckAudience, ValidateInputs, and RunClassBasedAction share one instance. */
+   private readonly _actionInstanceCache = new WeakMap<RunActionParams, BaseAction | null>();
 
    /**
     * Engine-default wall-clock timeout applied to any action whose
@@ -269,57 +271,61 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    }
 
    public async RunAction(params: RunActionParams): Promise<ActionResult> {
-      // An audience the run cannot honour refuses it before anything else — no validation, no filters, no log
-      // row: the action never runs. Otherwise the audience is normalized for the action (see CheckAudience).
-      const audienceRefusal = this.CheckAudience(params);
-      if (audienceRefusal) {
-         return audienceRefusal;
-      }
-      // Snapshot the inputs BEFORE anything can run — see SnapshotInputParams. Threaded down every
-      // path (validation failure, filter refusal, timeout, normal run) so all four write the same
-      // as-called values into ActionExecutionLog.Params.
-      const inputSnapshot = this.SnapshotInputParams(params);
-      const validInputs: boolean = await this.ValidateInputs(params);
-      if(!validInputs){
-         const result: ActionResult = {
-            Success: false,
-            Message: "Input validation failed. This is a failure condition.",
-            LogEntry: null,
-            Params: params.Params,
-            RunParams: params
-         };
+      try {
+         // An audience the run cannot honour refuses it before anything else — no validation, no filters, no log
+         // row: the action never runs. Otherwise the audience is normalized for the action (see CheckAudience).
+         const audienceRefusal = this.CheckAudience(params);
+         if (audienceRefusal) {
+            return audienceRefusal;
+         }
+         // Snapshot the inputs BEFORE anything can run — see SnapshotInputParams. Threaded down every
+         // path (validation failure, filter refusal, timeout, normal run) so all four write the same
+         // as-called values into ActionExecutionLog.Params.
+         const inputSnapshot = this.SnapshotInputParams(params);
+         const validInputs: boolean = await this.ValidateInputs(params);
+         if(!validInputs){
+            const result: ActionResult = {
+               Success: false,
+               Message: "Input validation failed. This is a failure condition.",
+               LogEntry: null,
+               Params: params.Params,
+               RunParams: params
+            };
 
-         if(this.ShouldLogOutcome(params, result)){
-            result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
+            if(this.ShouldLogOutcome(params, result)){
+               result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
+            }
+
+            return result;
          }
 
-         return result;
-      }
+         const filtersPassed: boolean = await this.RunFilters(params);
+         if(!filtersPassed){
+            // filters indicated we should NOT run this action
+            const result: ActionResult = {
+               Success: true,
+               Message: ACTION_PREVENTED_BY_FILTER_MESSAGE,
+               LogEntry: null, // initially null
+               Params: params.Params,
+               RunParams: params
+            };
 
-      const filtersPassed: boolean = await this.RunFilters(params);
-      if(!filtersPassed){
-         // filters indicated we should NOT run this action
-         const result: ActionResult = {
-            Success: true,
-            Message: ACTION_PREVENTED_BY_FILTER_MESSAGE,
-            LogEntry: null, // initially null
-            Params: params.Params,
-            RunParams: params
-         };
+            if(this.ShouldLogOutcome(params, result)){
+               result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
+            }
 
-         if(this.ShouldLogOutcome(params, result)){
-            result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
+            // RETURNING here is the entire point of a filter. Without it this block logged a refusal
+            // and then fell through to run the action anyway — so every filter recorded that it had
+            // prevented something while preventing nothing. The refusal row made it look like the
+            // mechanism worked, which is why it survived: the observable said "prevented" and the side
+            // effect happened regardless.
+            return result;
          }
 
-         // RETURNING here is the entire point of a filter. Without it this block logged a refusal
-         // and then fell through to run the action anyway — so every filter recorded that it had
-         // prevented something while preventing nothing. The refusal row made it look like the
-         // mechanism worked, which is why it survived: the observable said "prevented" and the side
-         // effect happened regardless.
-         return result;
+         return await this.RunActionWithTimeout(params, inputSnapshot);
+      } finally {
+         this._actionInstanceCache.delete(params);
       }
-
-      return await this.RunActionWithTimeout(params, inputSnapshot);
    }
 
    /**
@@ -633,11 +639,24 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * the Type dispatch is readable.
     */
    protected async RunClassBasedAction(params: RunActionParams): Promise<ActionResultSimple> {
-      const action = this.CreateActionInstance(params);
+      const action = this.GetOrCreateActionInstance(params);
       if (!action) {
          throw new Error(`Could not find a class for action ${params.Action.Name}.`);
       }
       return await action.Run(params);
+   }
+
+   /**
+    * Returns the memoized `BaseAction` instance for `params` (or creates it once via `CreateActionInstance`),
+    * avoiding duplicate `ClassFactory.CreateInstance` calls across `CheckAudience`, `ValidateInputs`, and `RunClassBasedAction`.
+    */
+   protected GetOrCreateActionInstance(params: RunActionParams): BaseAction | null {
+      if (this._actionInstanceCache.has(params)) {
+         return this._actionInstanceCache.get(params) ?? null;
+      }
+      const instance = this.CreateActionInstance(params);
+      this._actionInstanceCache.set(params, instance);
+      return instance;
    }
 
    /**
@@ -698,7 +717,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       if (params.Action.Type === 'Runtime') {
          return 'a runtime-defined action cannot declare that it honours an audience';
       }
-      if (this.CreateActionInstance(params)?.SupportsAudience === true) {
+      if (this.GetOrCreateActionInstance(params)?.SupportsAudience === true) {
          return null;
       }
       return 'it has not declared that it can limit what it returns to what every one of them may see';
@@ -828,7 +847,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * the `Params` column, so redaction here is what makes the column safe by construction.
     */
    protected SnapshotInputParams(params: RunActionParams): string {
-      if (!params.Params || params.Params.length === 0) {
+      if (params.SkipActionLog || this.ResolveLoggingMode(params) === 'None' || !params.Params || params.Params.length === 0) {
          return '[]';
       }
       return RedactParamsToJSON(params.Params, this.ParamDefinitionsFor(params), params.Provenance?.EntityActionParams);

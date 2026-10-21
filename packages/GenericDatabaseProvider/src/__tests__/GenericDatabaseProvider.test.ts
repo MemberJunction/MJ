@@ -42,6 +42,7 @@ import {
     ProviderConfigDataBase,
     InMemoryLocalStorageProvider,
     LocalCacheManager,
+    SQLMaxLength,
 } from '@memberjunction/core';
 import type { PostCommitToken, QueryExecutionSpec, RunViewParams } from '@memberjunction/core';
 import type { MJEntityAIActionEntity } from '@memberjunction/core-entities';
@@ -192,6 +193,9 @@ class TestGenericProvider extends GenericDatabaseProvider {
         throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
     }
     protected WrapSaveCallForResult(): SaveSQLFragment {
+        throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
+    }
+    protected ProjectSaveCallToDatestamps(): SaveSQLFragment {
         throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
     }
     protected WrapSaveCallWithRecordChange(): SaveSQLFragment {
@@ -851,12 +855,8 @@ describe('GenericDatabaseProvider', () => {
                 Length: f.Length ?? 0,
                 Precision: f.Precision ?? 0,
                 Scale: f.Scale ?? 0,
-                // Mirrors EntityFieldInfo.MaxLength: the n-types halve the byte length.
-                MaxLength: f.MaxLength ?? (
-                    ['nvarchar', 'nchar', 'ntext'].includes((f.Type ?? '').toLowerCase())
-                        ? ((f.Length ?? 0) > 0 ? (f.Length ?? 0) / 2 : 0)
-                        : ((f.Length ?? 0) > 0 ? (f.Length ?? 0) : 0)
-                ),
+                // The helper EntityFieldInfo.MaxLength calls, so the fixture cannot drift from it.
+                MaxLength: f.MaxLength ?? SQLMaxLength(f.Type ?? '', f.Length ?? 0),
             }));
             const entityInfo = {
                 Name: 'TestEntity',
@@ -1043,6 +1043,22 @@ describe('GenericDatabaseProvider', () => {
                         provider.BuildRLSSyntheticRowProjections(entity, entityInfo),
                         `${dialect.constructor.name}: byte length must be halved to characters`,
                     ).toBe(expected);
+                }
+            });
+
+            it('keeps the byte length of a fixed binary column (VARBINARY(16), never VARBINARY(0))', () => {
+                // `MaxLength` is a character count and is 0 for the binary types; SQL Server rejects a
+                // zero length, so a NULL varbinary(n) used to fail the save.
+                for (const Type of ['varbinary', 'binary']) {
+                    const { entity, entityInfo } = MakeRLSEntity({
+                        rlsClause: '',
+                        fields: [{ Name: 'Hash', NeedsQuotes: true, Type, Length: 16, SQLFullType: `${Type}(16)`, Value: null }],
+                    });
+                    const provider = RLS();
+                    (provider as unknown as { getDialect(): unknown }).getDialect = () => new SQLServerDialect();
+
+                    expect(provider.BuildRLSSyntheticRowProjections(entity, entityInfo))
+                        .toBe(`CAST(NULL AS ${Type.toUpperCase()}(16)) AS "Hash"`);
                 }
             });
 
@@ -3123,5 +3139,136 @@ describe('GenericDatabaseProvider RunView dedup scope follows transaction member
         await p.BeginTransaction();
         expect(p.CallerDedupScope).not.toBe(memberScope);
         await p.RollbackTransaction();
+    });
+});
+
+describe('GenericDatabaseProvider SaveReturnContext & ProjectSaveCallToDatestamps abstraction', () => {
+    function makeMockEntity(saveReturnMode: 'full' | 'datestamps_only'): BaseEntity {
+        const datestampFields = [
+            { Name: 'ID', IsPrimaryKey: true },
+            { Name: '__mj_CreatedAt', IsPrimaryKey: false },
+            { Name: '__mj_UpdatedAt', IsPrimaryKey: false },
+        ] as unknown as EntityFieldInfo[];
+        return {
+            EntityInfo: {
+                Name: 'Widgets',
+                SchemaName: '__mj',
+                BaseTable: 'Widget',
+                SaveReturnMode: saveReturnMode,
+                DatestampReturnFields: datestampFields,
+                PrimaryKeys: [datestampFields[0]],
+                Fields: [],
+            },
+        } as unknown as BaseEntity;
+    }
+
+    it('GetDatestampSelectColumnsSQL quotes identifiers using the provider QuoteIdentifier implementation', () => {
+        const pgLike = new TestGenericProvider(); // QuoteIdentifier -> "col"
+        const entity = makeMockEntity('full');
+        const cols = (pgLike as unknown as { GetDatestampSelectColumnsSQL: (info: EntityInfo) => string }).GetDatestampSelectColumnsSQL(entity.EntityInfo);
+        expect(cols).toBe('"ID", "__mj_CreatedAt", "__mj_UpdatedAt"');
+    });
+
+    it('ResolveSaveReturnContext sets needsDatestampProjection only when compiled SP is full and runtime option is datestamps_only', () => {
+        const p = new TestGenericProvider();
+        const resolve = (e: BaseEntity, opts?: EntitySaveOptions) =>
+            (p as unknown as { ResolveSaveReturnContext: (ent: BaseEntity, o?: EntitySaveOptions) => Record<string, unknown> }).ResolveSaveReturnContext(e, opts);
+
+        const fullDefault = resolve(makeMockEntity('full'));
+        expect(fullDefault).toMatchObject({
+            spReturnMode: 'full',
+            effectiveReturnMode: 'full',
+            spReturnsDatestampsOnly: false,
+            needsDatestampProjection: false,
+            routineSelectColumnsSQL: '*',
+            finalSelectColumnsSQL: '*',
+        });
+
+        const runtimeProjected = resolve(makeMockEntity('full'), { SaveReturnMode: 'datestamps_only' } as EntitySaveOptions);
+        expect(runtimeProjected).toMatchObject({
+            spReturnMode: 'full',
+            effectiveReturnMode: 'datestamps_only',
+            spReturnsDatestampsOnly: false,
+            needsDatestampProjection: true,
+            routineSelectColumnsSQL: '"ID", "__mj_CreatedAt", "__mj_UpdatedAt"',
+            finalSelectColumnsSQL: '"ID", "__mj_CreatedAt", "__mj_UpdatedAt"',
+        });
+
+        const compiledDatestamps = resolve(makeMockEntity('datestamps_only'));
+        expect(compiledDatestamps).toMatchObject({
+            spReturnMode: 'datestamps_only',
+            effectiveReturnMode: 'datestamps_only',
+            spReturnsDatestampsOnly: true,
+            needsDatestampProjection: false,
+            routineSelectColumnsSQL: '*',
+            finalSelectColumnsSQL: '"ID", "__mj_CreatedAt", "__mj_UpdatedAt"',
+        });
+    });
+});
+
+describe('GenericDatabaseProvider RunViewCore single-batch execution (MJ-CORE-6)', () => {
+    it('batches [viewSQL, countSQL] into a single ExecuteSQLBatch call when pagination is used, and uses ExecuteSQL for a single query', async () => {
+        const p = new TestGenericProvider();
+        const entityInfo = {
+            ID: 'entity-1',
+            Name: 'Widgets',
+            SchemaName: '__mj',
+            BaseView: 'vwWidgets',
+            BaseTable: 'Widget',
+            AllowAllRowsAPI: true,
+            TrackRecordChanges: false,
+            PrimaryKeys: [{ Name: 'ID', CodeName: 'ID', NeedsQuotes: true }],
+            Fields: [{ Name: 'ID', CodeName: 'ID', NeedsQuotes: true, AllowInView: true, DefaultInView: true, IsBinaryFieldType: false }],
+            DatetimeFields: [],
+            BinaryFields: [],
+            RelatedEntities: [],
+            UserExemptFromRowLevelSecurity: () => true,
+            GetEffectiveRowFilterWhereClause: () => '',
+            CanUserRead: () => true,
+            CheckPermissions: () => true,
+        } as unknown as EntityInfo;
+
+        Object.defineProperty(p, 'Entities', {
+            get: () => [entityInfo],
+            configurable: true,
+        });
+        vi.spyOn(p, 'EntityByName').mockReturnValue(entityInfo);
+        vi.spyOn(p, 'CheckUserReadPermissions').mockImplementation(() => undefined);
+
+        const batchSpy = vi.spyOn(p, 'ExecuteSQLBatch').mockResolvedValue([
+            [{ ID: 'row-1' }, { ID: 'row-2' }],
+            [{ TotalRowCount: 42 }],
+        ]);
+        const singleSpy = vi.spyOn(p, 'ExecuteSQL').mockResolvedValue([{ ID: 'row-1' }]);
+
+        const runViewCore = (params: RunViewParams) =>
+            (p as unknown as { RunViewCore: (prm: RunViewParams, u?: UserInfo) => Promise<{ Success: boolean; Results: unknown[]; TotalRowCount: number }> }).RunViewCore(params, mockUser);
+
+        // Paginated RunView -> generates [viewSQL, countSQL] -> must call ExecuteSQLBatch once
+        const paginatedResult = await runViewCore({
+            EntityName: 'Widgets',
+            StartRow: 0,
+            MaxRows: 2,
+            ResultType: 'simple',
+        });
+        expect(paginatedResult.Success).toBe(true);
+        expect(paginatedResult.Results).toHaveLength(2);
+        expect(paginatedResult.TotalRowCount).toBe(42);
+        expect(batchSpy).toHaveBeenCalledTimes(1);
+        expect(batchSpy.mock.calls[0][0]).toHaveLength(2);
+        expect(singleSpy).not.toHaveBeenCalled();
+
+        batchSpy.mockClear();
+        singleSpy.mockClear();
+
+        // Non-paginated unbounded RunView -> generates [viewSQL] -> must call ExecuteSQL directly
+        const singleResult = await runViewCore({
+            EntityName: 'Widgets',
+            ResultType: 'simple',
+        });
+        expect(singleResult.Success).toBe(true);
+        expect(singleResult.Results).toHaveLength(1);
+        expect(singleSpy).toHaveBeenCalledTimes(1);
+        expect(batchSpy).not.toHaveBeenCalled();
     });
 });

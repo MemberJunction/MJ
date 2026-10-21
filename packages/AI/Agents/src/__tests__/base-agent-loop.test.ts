@@ -635,8 +635,9 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         expect(harness.steps[1].TargetID).toBe(CHILD_PROMPT_ID);
         expect(harness.steps[2].TargetID).toBe(ACTION_ID);
 
-        // All fire-and-forget saves were flushed by finalizeAgentRun (INSERT + finalize UPDATE each)
-        expect(harness.steps.every((s) => s.saveCount >= 2)).toBe(true);
+        // Pre-completed Validation step persists in a single INSERT; two-phase steps (Prompt, Actions) do INSERT + finalize UPDATE
+        expect(harness.steps[0].saveCount).toBe(1);
+        expect(harness.steps.slice(1).every((s) => s.saveCount >= 2)).toBe(true);
     });
 
     it("propagates the payload: step N's output payload is exactly what step N+1's prompt receives, and the run records the last step's payload", async () => {
@@ -2506,6 +2507,29 @@ describe("BaseAgent.Execute — memory, RAG and the prompt read the run's valida
     });
 });
 
+describe('BaseAgent.Execute — system placeholders in scoped prompt parts', () => {
+    afterEach(() => vi.useRealTimers());
+    const contentOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
+
+    it('replaces them in the messages InjectScopedPromptParts adds, even from an override, and nowhere else', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(2026, 9, 14, 12));
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const keyhole = agent as unknown as Record<string, (...args: unknown[]) => unknown>;
+        vi.spyOn(keyhole, 'InjectContextMemory').mockResolvedValue({ notes: [], examples: [] });
+        vi.spyOn(keyhole, 'InjectPreExecutionRAG').mockResolvedValue(null);
+        vi.spyOn(keyhole, 'InjectScopedPromptParts').mockImplementation((_agent, messages) => {
+            (messages as AgentChatMessage[]).unshift({ role: 'system', content: 'Today is {{ _CURRENT_DATE }}, {{ _USER_NAME }}.' });
+        });
+
+        await agent.Execute(makeParams({ conversationMessages: [{ role: 'user', content: 'Keep {{ _CURRENT_DATE }} as typed' }] }));
+
+        const sent = (runner.Calls[0].conversationMessages ?? []).map(contentOf);
+        expect(sent).toContain(`Today is 2026-10-14, ${TEST_USER.Name}.`);
+        expect(sent.some((c) => c.includes('Keep {{ _CURRENT_DATE }} as typed'))).toBe(true);
+    });
+});
+
 describe('BaseAgent.Execute — the reserved run-data keys count only with TrustReservedRunData', () => {
     const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000b7';
     /** What an untrusted caller (a browser, an Execute Agent action call, MCP, A2A) might put in `data`. */
@@ -2701,6 +2725,10 @@ describe('BaseAgent.Execute — agent.AgentTypePromptParams task graph gate & fo
         expect(seenDecisions[0].step).toBe('Sub-Agent');
         expect(seenDecisions[0].subAgent?.name).toBe('Query Builder');
         expect(seenDecisions[0].taskGraph?.folded).toBe(true);
+
+        // Pre-completed folded TaskGraph step persists in a single INSERT (saveCount === 1)
+        const foldedStep = harness.steps.find((s) => s.StepType === 'TaskGraph');
+        expect(foldedStep?.saveCount).toBe(1);
     });
 });
 

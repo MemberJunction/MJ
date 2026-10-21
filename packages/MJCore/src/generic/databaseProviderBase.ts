@@ -1829,6 +1829,16 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 const preSaveValues: Record<string, unknown> | undefined = effectiveReturnMode === 'datestamps_only'
                     ? (entity.GetAll() as Record<string, unknown>)
                     : undefined;
+                if (preSaveValues && bNewRecord) {
+                    // On a new record saved with 'datestamps_only', the SP does not query BaseView,
+                    // so virtual non-PK fields (e.g. joined name columns) that were never set stay
+                    // null. Omit them from preSaveValues so finalizeSave marks them NotLoaded=true.
+                    for (const f of entity.EntityInfo.Fields) {
+                        if (f.IsVirtual && !f.IsPrimaryKey && (preSaveValues[f.Name] === null || preSaveValues[f.Name] === undefined)) {
+                            delete preSaveValues[f.Name];
+                        }
+                    }
+                }
 
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
@@ -1897,9 +1907,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         // __mj_CreatedAt/__mj_UpdatedAt columns. Merge those returned values
                         // onto the pre-save snapshot so caller-set fields remain intact without
                         // falsely marking concurrent in-flight mutations as clean.
-                        const mergedRow: Record<string, unknown> = preSaveValues
-                            ? { ...preSaveValues, ...result[0] }
-                            : result[0];
+                        let mergedRow: Record<string, unknown>;
+                        if (preSaveValues) {
+                            mergedRow = { ...preSaveValues, ...result[0] };
+                            Object.defineProperty(mergedRow, '__mj_preMerged', {
+                                value: true,
+                                enumerable: false,
+                                configurable: true,
+                            });
+                        } else {
+                            mergedRow = result[0];
+                        }
 
                         // OnSaveCompleted may return patch fields (e.g., updated lat/lng
                         // from geocoding) that need to be merged onto the SP result before

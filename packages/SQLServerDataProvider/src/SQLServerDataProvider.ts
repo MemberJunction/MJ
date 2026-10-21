@@ -63,7 +63,7 @@ import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import { EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
-import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
+import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from '@memberjunction/generic-database-provider';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 
 import sql from 'mssql';
@@ -506,7 +506,7 @@ export class SQLServerDataProvider
    * ENOTBEGUN on a finished handle. A query on an explicit handle a caller passed in — an IS-A chain
    * sharing its own transaction — is never subject to that check.
    */
-  private _sqlQueue$ = new Subject<SQLQueueItem>();
+  private _sqlQueue$: Subject<SQLQueueItem> | null = null;
   /**
    * Handles whose commit or rollback has run — or whose commit FAILED, which dooms them just the same.
    * The ambient check in runQueueItem consults this as well as `_transaction`, because a failed
@@ -518,8 +518,31 @@ export class SQLServerDataProvider
   // Subscription for the queue processor
   private _queueSubscription: any;
   
-  // Transaction state management
-  private _transactionState$ = new BehaviorSubject<boolean>(false);
+  // Transaction state management — lazy-allocated so read-only per-request providers
+  // avoid allocating RxJS Subject/BehaviorSubject instances when no transaction is opened.
+  private _isTransactionActive = false;
+  private _transactionState$: BehaviorSubject<boolean> | null = null;
+
+  private ensureSqlQueue(): Subject<SQLQueueItem> {
+    if (!this._sqlQueue$) {
+      this._sqlQueue$ = new Subject<SQLQueueItem>();
+    }
+    return this._sqlQueue$;
+  }
+
+  private ensureTransactionStateSubject(): BehaviorSubject<boolean> {
+    if (!this._transactionState$) {
+      this._transactionState$ = new BehaviorSubject<boolean>(this._isTransactionActive);
+    }
+    return this._transactionState$;
+  }
+
+  private setTransactionActiveState(active: boolean): void {
+    this._isTransactionActive = active;
+    if (this._transactionState$) {
+      this._transactionState$.next(active);
+    }
+  }
 
 
   /**
@@ -532,7 +555,7 @@ export class SQLServerDataProvider
    * });
    */
   public get TransactionState$(): Observable<boolean> {
-    return this._transactionState$.asObservable();
+    return this.ensureTransactionStateSubject().asObservable();
   }
 
   /** @deprecated Use {@link TransactionState$}. */
@@ -570,7 +593,7 @@ export class SQLServerDataProvider
   public get IsTransactionActive(): boolean {
     // Always return instance-level state
     // Request-specific state should be accessed via getTransactionContext
-    return this._transactionState$.value;
+    return this._isTransactionActive;
   }
 
   /** @deprecated Use {@link IsTransactionActive}. */
@@ -746,7 +769,7 @@ export class SQLServerDataProvider
     // Each instance gets its own queue processor, but only do this ONCE if we get this method called more than once we don't need to reinit
     // the sub, taht would cause duplicate rprocessing.
     if (!this._queueSubscription) {
-      this._queueSubscription = this._sqlQueue$.pipe(
+      this._queueSubscription = this.ensureSqlQueue().pipe(
         concatMap(item =>
           from(this.runQueueItem(item)).pipe(
             // runQueueItem settles the item's own promise on success; only failure is handled here
@@ -1299,16 +1322,18 @@ export class SQLServerDataProvider
    */
   private getDatestampEntityColumnsSQL(entityInfo: EntityInfo): string {
     return entityInfo.DatestampReturnFields
-      .map((f) => `[${f.Name}] ${f.SQLFullType} ${f.AllowsNull || f.IsVirtual ? 'NULL' : 'NOT NULL'}`)
+      .map((f) => `${this.QuoteIdentifier(f.Name)} ${f.SQLFullType} ${f.AllowsNull || f.IsVirtual ? 'NULL' : 'NOT NULL'}`)
       .join(',\n');
   }
 
   /**
-   * Returns the comma-separated bracketed column list for {@link EntityInfo.DatestampReturnFields},
-   * used when selecting only primary key(s) and datestamp columns from `@ResultTable`.
+   * Selects the `@ResultTable` column declarations matching the compiled stored procedure's
+   * return shape (`returnContext.spReturnsDatestampsOnly`).
    */
-  private getDatestampSelectColumnsSQL(entityInfo: EntityInfo): string {
-    return entityInfo.DatestampReturnFields.map((f) => `[${f.Name}]`).join(', ');
+  private getSaveResultTableColumnsSQL(entityInfo: EntityInfo, returnContext: SaveReturnContext): string {
+    return returnContext.spReturnsDatestampsOnly
+      ? this.getDatestampEntityColumnsSQL(entityInfo)
+      : this.getAllEntityColumnsSQL(entityInfo);
   }
 
   /** Entities already warned about base-after-virtual field-order skew — so we warn once, not every save. */
@@ -1637,16 +1662,44 @@ export class SQLServerDataProvider
    * shape: `DECLARE ... ; SET ... ; EXEC [schema].sp callArgs`. When
    * record-change tracking is on, this output is further wrapped by
    * `WrapSaveCallWithRecordChange`.
+   *
+   * When `returnContext.needsDatestampProjection` is true (either passed by
+   * `GenericDatabaseProvider.GenerateSaveSQL` or resolved from `options`),
+   * delegates to {@link ProjectSaveCallToDatestamps}.
    */
   protected override WrapSaveCallForResult(
     binding: SaveCallBinding,
     entity: BaseEntity,
     spName: string,
-    _options?: EntitySaveOptions,
+    options?: EntitySaveOptions,
+    returnContext?: SaveReturnContext,
   ): SaveSQLFragment {
+    const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
+    if (resolvedReturn.needsDatestampProjection) {
+      return this.ProjectSaveCallToDatestamps(binding, entity, spName, resolvedReturn);
+    }
     const saveBinding = this.asSaveBinding(binding, 'WrapSaveCallForResult');
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${saveBinding.callArgsSQL}`;
     return this.toSaveFragment(entity, `${this.renderDeclareSetHead(saveBinding)}${execSQL}`, saveBinding.parameters, saveBinding.recordSuffix);
+  }
+
+  /**
+   * Captures the stored procedure's output into `@ResultTable` and projects only
+   * `returnContext.datestampSelectColumnsSQL` (`SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;`)
+   * when a caller requests `SaveReturnMode: 'datestamps_only'` at runtime on an entity whose
+   * compiled stored procedure returns the full row.
+   */
+  protected override ProjectSaveCallToDatestamps(
+    binding: SaveCallBinding,
+    entity: BaseEntity,
+    spName: string,
+    returnContext: SaveReturnContext,
+  ): SaveSQLFragment {
+    const saveBinding = this.asSaveBinding(binding, 'ProjectSaveCallToDatestamps');
+    const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${saveBinding.callArgsSQL}`;
+    const resultTableColumnsSQL = this.getSaveResultTableColumnsSQL(entity.EntityInfo, returnContext);
+    const sql = `${this.renderDeclareSetHead(saveBinding)}DECLARE @ResultTable TABLE (\n    ${resultTableColumnsSQL}\n);\n\nINSERT INTO @ResultTable\n${execSQL};\n\nSELECT ${returnContext.datestampSelectColumnsSQL} FROM @ResultTable;`;
+    return this.toSaveFragment(entity, sql, saveBinding.parameters, saveBinding.recordSuffix);
   }
 
   /**
@@ -1654,10 +1707,10 @@ export class SQLServerDataProvider
    * `spCreateRecordChange_Internal` EXEC pattern. The CONCAT-built `@ID`
    * inline supports composite-key entities.
    *
-   * When `entity.EntityInfo.SaveReturnMode === 'datestamps_only'`, `@ResultTable` is declared
-   * with only the PK + datestamp columns emitted by the stored procedure. When the effective
-   * return mode (`options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode`) is
-   * `'datestamps_only'`, the final `SELECT` from `@ResultTable` returns only those columns.
+   * Consumes {@link SaveReturnContext} resolved by `GenericDatabaseProvider`:
+   * - `@ResultTable` column declarations match the compiled stored procedure's return mode
+   *   (`returnContext.spReturnsDatestampsOnly`).
+   * - The final `SELECT` from `@ResultTable` uses `returnContext.finalSelectColumnsSQL`.
    */
   protected override WrapSaveCallWithRecordChange(
     _saveSQL: SaveSQLFragment,
@@ -1665,6 +1718,7 @@ export class SQLServerDataProvider
     payload: RecordChangePayload,
     entity: BaseEntity,
     options?: EntitySaveOptions,
+    returnContext?: SaveReturnContext,
   ): SaveSQLFragment {
     const saveBinding = this.asSaveBinding(binding, 'WrapSaveCallWithRecordChange');
     const params = new SaveParameterCollector(saveBinding.parameters);
@@ -1679,14 +1733,9 @@ export class SQLServerDataProvider
     const recordChangeEXEC = this.renderRecordChangeEXEC(entity.EntityInfo.Name, '@ID', payload, params);
 
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${saveBinding.callArgsSQL}`;
-    const spReturnsDatestampsOnly = entity.EntityInfo.SaveReturnMode === 'datestamps_only';
-    const effectiveReturnMode = options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode;
-    const resultTableColumnsSQL = spReturnsDatestampsOnly
-      ? this.getDatestampEntityColumnsSQL(entity.EntityInfo)
-      : this.getAllEntityColumnsSQL(entity.EntityInfo);
-    const finalSelectSQL = effectiveReturnMode === 'datestamps_only'
-      ? `SELECT ${this.getDatestampSelectColumnsSQL(entity.EntityInfo)} FROM @ResultTable;`
-      : 'SELECT * FROM @ResultTable;';
+    const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
+    const resultTableColumnsSQL = this.getSaveResultTableColumnsSQL(entity.EntityInfo, resolvedReturn);
+    const finalSelectSQL = `SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM @ResultTable;`;
 
     const sql = `
                     ${saveBinding.preambleSQL}
@@ -2320,8 +2369,9 @@ export class SQLServerDataProvider
     // For transactional queries, use the instance queue to ensure serialization
     // This prevents EREQINPROG errors when multiple queries try to use the same transaction
     this.initializeQueueProcessor();
+    const queue = this.ensureSqlQueue();
     return new Promise<sql.IResult<any>>((resolve, reject) => {
-      this._sqlQueue$.next({
+      queue.next({
         kind: 'query',
         query,
         parameters,
@@ -3006,7 +3056,7 @@ IF ${varName} IS NOT NULL
     const transaction = new sql.Transaction(this._pool);
     await transaction.begin();
     this._transaction = transaction;
-    this._transactionState$.next(true);
+    this.setTransactionActiveState(true);
   }
 
   /**
@@ -3046,8 +3096,9 @@ IF ${varName} IS NOT NULL
    */
   private enqueueTransactionAction(description: string, handle: sql.Transaction, run: () => Promise<void>): Promise<void> {
     this.initializeQueueProcessor();
+    const queue = this.ensureSqlQueue();
     return new Promise<void>((resolve, reject) => {
-      this._sqlQueue$.next({ kind: 'action', description, handle, run, resolve, reject });
+      queue.next({ kind: 'action', description, handle, run, resolve, reject });
     });
   }
 
@@ -3072,14 +3123,14 @@ IF ${varName} IS NOT NULL
       // AbandonPhysicalTransaction can roll the doomed handle back — nulling it first, as the old
       // `finally` did, made that abandon a no-op and leaked the server-side transaction (#4447).
       this._transaction = null;
-      this._transactionState$.next(false);
+      this.setTransactionActiveState(false);
     });
   }
 
   protected override async AbandonPhysicalTransaction(): Promise<void> {
     const stale = this._transaction;
     this._transaction = null;
-    this._transactionState$.next(false);
+    this.setTransactionActiveState(false);
     if (stale) {
       try {
         // Through the queue, like commit and rollback: the handle is already nulled above, so any
@@ -3111,7 +3162,7 @@ IF ${varName} IS NOT NULL
       });
     } finally {
       this._transaction = null;
-      this._transactionState$.next(false);
+      this.setTransactionActiveState(false);
     }
   }
 
