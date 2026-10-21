@@ -4,6 +4,7 @@
  * @module @memberjunction/telephony-adapters
  */
 
+import { LogError } from '@memberjunction/core';
 import type { AcsInboundAudioFrame, IAcsMediaPump } from '@memberjunction/ai-bridge-teams';
 
 /**
@@ -94,8 +95,8 @@ export class TeamsAcsMediaRegistry implements IAcsMediaPump {
         }
         try {
             channel.transport?.close();
-        } catch {
-            /* best-effort */
+        } catch (err) {
+            LogError(`[TeamsAcsMediaRegistry] Error closing transport for call ${callId}`, undefined, err);
         }
         this.channels.delete(callId);
     }

@@ -11,7 +11,7 @@ import { createDisplayName } from "@memberjunction/global";
  * context, and errs toward being short.
  */
 const COMMON_SHORT_WORDS = new Set([
-    'add', 'age', 'all', 'and', 'any', 'api', 'app', 'are', 'bio', 'bot', 'box',
+    'add', 'age', 'ai', 'all', 'and', 'any', 'api', 'app', 'are', 'bio', 'bot', 'box',
     'buy', 'can', 'car', 'cc', 'city', 'code', 'cost', 'data', 'date', 'day',
     'doc', 'due', 'end', 'eta', 'fax', 'fee', 'file', 'for', 'geo', 'has', 'id',
     'ids', 'job', 'key', 'kind', 'lat', 'law', 'link', 'list', 'log', 'long',
@@ -88,9 +88,14 @@ export interface DisplayNameOpacityResult {
 export function AssessDisplayNameOpacity(entityName: string): DisplayNameOpacityResult {
     const mechanicalDisplayName = createDisplayName(entityName ?? '').trim();
 
-    // Split on whitespace; punctuation from prefixed names ("CRM: Accounts") is
-    // stripped so a schema prefix never reads as an abbreviation.
-    const tokens = mechanicalDisplayName
+    // A schema prefix ("CRM: Accounts", "MJ: AI Agents") is a namespace, not part of the name:
+    // judge only what follows it. Stripping just its punctuation left "CRM"/"MJ" as vowel-less
+    // tokens, so every prefixed entity read as opaque.
+    const colon = mechanicalDisplayName.indexOf(':');
+    const judged = colon >= 0 ? mechanicalDisplayName.slice(colon + 1) : mechanicalDisplayName;
+
+    // Split on whitespace; any remaining punctuation is stripped from each token.
+    const tokens = judged
         .split(/\s+/)
         .map(t => t.replace(/[^A-Za-z0-9]/g, ''))
         .filter(t => t.length > 0);

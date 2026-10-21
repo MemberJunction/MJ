@@ -670,10 +670,8 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     }
 
     try {
-      // Check if file exists
-      await fs.access(session.filePath);
-      
-      // Read file content
+      // Read directly: a missing file surfaces as ENOENT below, so a separate existence check
+      // would only open a window for the file to change between the check and the read.
       const content = await fs.readFile(session.filePath, 'utf-8');
       
       // Apply line limit if specified

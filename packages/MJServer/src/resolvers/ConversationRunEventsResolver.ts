@@ -7,7 +7,7 @@ import type { AppContext } from '../types.js';
 import { GetReadOnlyProvider } from '../util.js';
 
 /** The run columns the tail reads. */
-type TailRunRow = Pick<MJAIAgentRunEntity, 'ID' | 'Status' | 'Result'>;
+type TailRunRow = Pick<MJAIAgentRunEntity, 'ID' | 'Status' | 'FinalPayload' | 'Result'>;
 
 /** The step columns an event carries. The large data columns are never read. */
 type TailStepRow = Pick<
@@ -15,7 +15,7 @@ type TailStepRow = Pick<
     'StepNumber' | 'StepType' | 'StepName' | 'Status' | 'Success' | 'ErrorMessage' | 'StartedAt' | 'CompletedAt'
 >;
 
-const RUN_FIELDS: (keyof TailRunRow)[] = ['ID', 'Status', 'Result'];
+const RUN_FIELDS: (keyof TailRunRow)[] = ['ID', 'Status', 'FinalPayload', 'Result'];
 const STEP_FIELDS: (keyof TailStepRow)[] = [
     'StepNumber', 'StepType', 'StepName', 'Status', 'Success', 'ErrorMessage', 'StartedAt', 'CompletedAt',
 ];
@@ -94,10 +94,14 @@ export class ConversationRunEventsOutput {
     /**
      * The run's answer, returned only once the run is terminal.
      *
-     * Sourced from `AIAgentRun.Result`, falling back to the conversation detail's message because
-     * `Result` is agent-dependent and null on many successful runs. Still nullable: a caller must
-     * decide a message is finished from {@link IsInFlight} / {@link DetailStatus}, never from the
-     * presence of this field, or it will wait forever on an agent that writes neither.
+     * Sourced from `AIAgentRun.FinalPayload` (`Result` on older rows), then the conversation detail's
+     * message, because the run payload is agent-dependent and null on many successful runs. Still
+     * nullable: a caller must decide a message is finished from {@link IsInFlight} /
+     * {@link DetailStatus}, never from the presence of this field, or it will wait forever on an
+     * agent that writes neither.
+     *
+     * A run that ended without completing (for example `Cancelled`) returns whatever `FinalPayload`
+     * it had saved, which can be partial, so a caller should check {@link RunStatus} first.
      */
     @Field(() => String, { nullable: true })
     FinalPayload?: string;
@@ -206,11 +210,11 @@ export class ConversationRunEventsResolver {
                 // Only meaningful once terminal; sending it mid-run would hand the client a
                 // partial payload it could mistake for the final answer.
                 //
-                // `AIAgentRun.Result` is agent-dependent — it is null on a large share of
-                // genuinely successful runs — so the conversation detail's own message is the
-                // fallback. That is the text the chat renders, so it is the answer a caller
-                // waiting on this field actually wants.
-                FinalPayload: isInFlight ? undefined : (run.Result ?? detail.Message ?? undefined),
+                // `AIAgentRun.FinalPayload` (`Result` on older rows) is agent-dependent — it is
+                // null on a large share of genuinely successful runs — so the conversation detail's
+                // own message is the fallback. That is the text the chat renders, so it is the
+                // answer a caller waiting on this field actually wants.
+                FinalPayload: isInFlight ? undefined : (run.FinalPayload ?? run.Result ?? detail.Message ?? undefined),
                 DetailStatus: detail.Status ?? undefined,
             };
         } catch (e) {

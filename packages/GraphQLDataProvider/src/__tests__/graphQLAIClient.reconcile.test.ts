@@ -7,7 +7,8 @@ import { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-
 
 /**
  * Covers the idle-stall reconciliation added to the fire-and-forget agent paths:
- * - payload rehydration from the persisted run record (recovers a lost completion event)
+ * - payload rehydration from the persisted run record's FinalPayload, or Result on older rows
+ *   (recovers a lost completion event)
  * - the run selector used to query the record (ConversationDetailID for the conversation
  *   path, the captured run id for the plain path)
  */
@@ -20,6 +21,7 @@ const IDLE_MS = DEFAULT_IDLE_TIMEOUT_MS;
 interface RunRow {
     ID: string;
     Status: string;
+    FinalPayload: string | null;
     Result: string | null;
     ErrorMessage: string | null;
 }
@@ -59,7 +61,8 @@ describe('GraphQLAIClient idle-stall reconciliation', () => {
         const run: RunRow = {
             ID: 'run-9',
             Status: 'Completed',
-            Result: JSON.stringify({ answer: 42 }),
+            FinalPayload: JSON.stringify({ answer: 42 }),
+            Result: null,
             ErrorMessage: null,
         };
         const client = new GraphQLAIClient(makeProvider(stream, run, runView));
@@ -85,7 +88,7 @@ describe('GraphQLAIClient idle-stall reconciliation', () => {
     it('plain RunAIAgent path reconciles by the run id captured from the stream', async () => {
         const stream = new Subject<string>();
         const runView = vi.fn();
-        const run: RunRow = { ID: 'run-7', Status: 'Completed', Result: null, ErrorMessage: null };
+        const run: RunRow = { ID: 'run-7', Status: 'Completed', FinalPayload: null, Result: null, ErrorMessage: null };
         const client = new GraphQLAIClient(makeProvider(stream, run, runView));
 
         const p = client.RunAIAgent(agentParams);
@@ -97,14 +100,17 @@ describe('GraphQLAIClient idle-stall reconciliation', () => {
 
         const result = (await p) as ExecuteAgentResult;
         expect(result.success).toBe(true);
-        expect(result.payload).toBeUndefined(); // null Result -> no payload
+        expect(result.payload).toBeUndefined(); // no FinalPayload or Result -> no payload
         expect(runView.mock.calls[0][0].ExtraFilter).toBe("ID='run-7'");
     });
 
     it('keeps waiting while the run record is still Running, then resolves once terminal', async () => {
         const stream = new Subject<string>();
-        const runView = vi.fn().mockResolvedValueOnce({ Success: true, Results: [{ ID: 'run-1', Status: 'Running', Result: null, ErrorMessage: null }] })
-            .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'run-1', Status: 'Completed', Result: JSON.stringify({ ok: true }), ErrorMessage: null }] });
+        // FinalPayload is filled during the run, so a Running row can already carry one.
+        const running: RunRow = { ID: 'run-1', Status: 'Running', FinalPayload: JSON.stringify({ partial: true }), Result: null, ErrorMessage: null };
+        const completed: RunRow = { ID: 'run-1', Status: 'Completed', FinalPayload: JSON.stringify({ ok: true }), Result: null, ErrorMessage: null };
+        const runView = vi.fn().mockResolvedValueOnce({ Success: true, Results: [running] })
+            .mockResolvedValueOnce({ Success: true, Results: [completed] });
         const client = new GraphQLAIClient(makeProvider(stream, undefined, runView));
 
         const p = client.RunAIAgentFromConversationDetail({
@@ -127,7 +133,7 @@ describe('GraphQLAIClient idle-stall reconciliation', () => {
 
     it('treats Paused / AwaitingFeedback as a successful recovery', async () => {
         const stream = new Subject<string>();
-        const run: RunRow = { ID: 'run-3', Status: 'AwaitingFeedback', Result: JSON.stringify({ q: 'x' }), ErrorMessage: null };
+        const run: RunRow = { ID: 'run-3', Status: 'AwaitingFeedback', FinalPayload: JSON.stringify({ q: 'x' }), Result: null, ErrorMessage: null };
         const client = new GraphQLAIClient(makeProvider(stream, run));
 
         const p = client.RunAIAgentFromConversationDetail({
@@ -141,5 +147,72 @@ describe('GraphQLAIClient idle-stall reconciliation', () => {
         const result = (await p) as ExecuteAgentResult;
         expect(result.success).toBe(true);
         expect(result.payload).toEqual({ q: 'x' });
+    });
+
+    it('falls back to Result on an older row that has no FinalPayload', async () => {
+        const stream = new Subject<string>();
+        const run: RunRow = { ID: 'run-4', Status: 'Completed', FinalPayload: null, Result: JSON.stringify({ legacy: true }), ErrorMessage: null };
+        const client = new GraphQLAIClient(makeProvider(stream, run));
+
+        const p = client.RunAIAgentFromConversationDetail({
+            conversationDetailId: 'cd-4',
+            agentId: 'agent-1',
+        } as Parameters<GraphQLAIClient['RunAIAgentFromConversationDetail']>[0]);
+
+        await flush();
+        await vi.advanceTimersByTimeAsync(IDLE_MS);
+
+        const result = (await p) as ExecuteAgentResult;
+        expect(result.success).toBe(true);
+        expect(result.payload).toEqual({ legacy: true });
+    });
+
+    it('prefers FinalPayload over Result when a row has both', async () => {
+        const stream = new Subject<string>();
+        const run: RunRow = {
+            ID: 'run-5',
+            Status: 'Completed',
+            FinalPayload: JSON.stringify({ source: 'FinalPayload' }),
+            Result: JSON.stringify({ source: 'Result' }),
+            ErrorMessage: null,
+        };
+        const client = new GraphQLAIClient(makeProvider(stream, run));
+
+        const p = client.RunAIAgentFromConversationDetail({
+            conversationDetailId: 'cd-5',
+            agentId: 'agent-1',
+        } as Parameters<GraphQLAIClient['RunAIAgentFromConversationDetail']>[0]);
+
+        await flush();
+        await vi.advanceTimersByTimeAsync(IDLE_MS);
+
+        const result = (await p) as ExecuteAgentResult;
+        expect(result.payload).toEqual({ source: 'FinalPayload' });
+    });
+
+    it('returns the partial payload a Cancelled run saved, with success false', async () => {
+        const stream = new Subject<string>();
+        // Cancelling saves the run with no Result, but it keeps the FinalPayload saved during the run.
+        const run: RunRow = {
+            ID: 'run-6',
+            Status: 'Cancelled',
+            FinalPayload: JSON.stringify({ partial: true }),
+            Result: null,
+            ErrorMessage: 'Cancelled by user',
+        };
+        const client = new GraphQLAIClient(makeProvider(stream, run));
+
+        const p = client.RunAIAgentFromConversationDetail({
+            conversationDetailId: 'cd-6',
+            agentId: 'agent-1',
+        } as Parameters<GraphQLAIClient['RunAIAgentFromConversationDetail']>[0]);
+
+        await flush();
+        await vi.advanceTimersByTimeAsync(IDLE_MS);
+
+        const result = (await p) as ExecuteAgentResult;
+        expect(result.success).toBe(false);
+        expect(result.payload).toEqual({ partial: true });
+        expect(result.errorMessage).toBe('Cancelled by user');
     });
 });

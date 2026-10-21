@@ -11,7 +11,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 32px;
+  min-width: 0;
   overflow-y: auto;
   transition: margin-right var(--mj-transition-slow);
 }
@@ -21,25 +21,87 @@
   margin-right: 320px;
 }
 
-/* Header */
+/* The overview column: greeting, Pinned and My applications */
+.home-overview {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--mj-space-7) var(--mj-space-8) var(--mj-space-10);
+}
+
+/* Header: greeting */
 .home-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 32px;
+  align-items: flex-end;
+  gap: var(--mj-space-4);
+  margin-bottom: var(--mj-space-6);
 }
 
 .greeting-section h1 {
-  margin: 0 0 8px 0;
-  font-size: var(--mj-text-4xl);
-  font-weight: var(--mj-font-semibold);
+  margin: 0;
+  font-size: var(--mj-text-2xl);
+  font-weight: var(--mj-font-bold);
+  letter-spacing: var(--mj-tracking-tight);
+  line-height: var(--mj-leading-tight);
   color: var(--mj-text-primary);
 }
 
 .greeting-section .date {
-  margin: 0;
-  font-size: var(--mj-text-base);
+  margin: var(--mj-space-1) 0 0;
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-medium);
   color: var(--mj-text-muted);
+}
+
+/* ========================================
+   DASHBOARD VIEW
+   ======================================== */
+
+/* The dashboard view fills the page; the editor lays out its header and body. */
+.home-dashboard-view {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 520px;
+}
+
+/* View-mode title: breadcrumb over the title switcher */
+.dashboard-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dashboard-crumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+}
+
+.crumb-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-link);
+  cursor: pointer;
+}
+
+.crumb-home:hover {
+  color: var(--mj-text-link-hover);
+}
+
+.crumb-home:focus-visible {
+  outline: none;
+  border-radius: var(--mj-radius-sm);
+  box-shadow: var(--mj-focus-ring);
 }
 
 /* FAB Toggle Button for Quick Access - top-right on desktop */
@@ -102,171 +164,86 @@
   color: var(--mj-brand-primary);
 }
 
-/* Apps Section */
+/* My applications */
 .apps-section {
-  flex: 0 0 auto;
+  margin-bottom: var(--mj-space-8);
 }
 
 .section-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 0 0 24px 0;
-  font-size: var(--mj-text-xl);
-  font-weight: var(--mj-font-semibold);
-  color: var(--mj-text-secondary);
+  margin: 0 0 var(--mj-space-3);
+  font-size: var(--mj-text-base);
+  font-weight: var(--mj-font-bold);
+  color: var(--mj-text-primary);
 }
 
-.section-title i {
-  color: var(--mj-text-muted);
-}
-
-/* Apps Grid */
 .apps-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: var(--mj-space-3);
 }
 
-/* App Card */
+/* App Card: an icon tile in the app's color, then the name and description */
 .app-card {
-  --app-color: var(--mj-text-muted);
+  --app-color: var(--mj-brand-primary);
   display: flex;
   align-items: flex-start;
-  gap: 16px;
-  padding: 20px;
-  background: var(--mj-bg-surface-card);
-  border-radius: var(--mj-radius-lg);
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-4);
+  background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
   box-shadow: var(--mj-shadow-sm);
   cursor: pointer;
-  transition: all 0.25s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.app-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 100%;
-  background: var(--app-color);
-  opacity: 0;
-  transition: opacity 0.25s ease;
+  transition:
+    border-color var(--mj-transition-fast),
+    box-shadow var(--mj-transition-fast),
+    transform var(--mj-transition-fast);
 }
 
 .app-card:hover {
-  border-color: var(--app-color);
-  box-shadow: var(--mj-shadow-lg);
-  transform: translateY(-3px);
+  border-color: var(--mj-border-strong);
+  box-shadow: var(--mj-shadow-md);
+  transform: translateY(-2px);
 }
 
-.app-card:hover::before {
-  opacity: 1;
-}
-
-/* App Icon */
-.app-icon-wrapper {
-  flex-shrink: 0;
+.app-card:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
 }
 
 .app-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: var(--mj-radius-lg);
+  flex: 0 0 36px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--mj-radius-md);
   background: color-mix(in srgb, var(--app-color) 12%, transparent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.25s ease;
-}
-
-.app-icon i {
-  font-size: var(--mj-text-xl);
   color: var(--app-color);
-  transition: transform 0.25s ease;
+  font-size: 16px;
 }
 
-.app-card:hover .app-icon {
-  background: var(--app-color);
-}
-
-.app-card:hover .app-icon i {
-  color: var(--mj-text-inverse);
-  transform: scale(1.1);
-}
-
-/* App Info */
 .app-info {
   flex: 1;
   min-width: 0;
 }
 
 .app-name {
-  margin: 0 0 4px 0;
-  font-size: var(--mj-text-base);
+  margin: 0;
+  font-size: var(--mj-text-sm);
   font-weight: var(--mj-font-semibold);
   color: var(--mj-text-primary);
 }
 
 .app-description {
-  margin: 0 0 10px 0;
-  font-size: var(--mj-text-sm);
-  color: var(--mj-text-muted);
+  margin: 2px 0 0;
+  font-size: var(--mj-text-xs);
   line-height: var(--mj-leading-snug);
+  color: var(--mj-text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-/* Nav Items Preview */
-.nav-preview {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-.nav-item-chip {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  background: var(--mj-bg-surface-card);
-  border-radius: var(--mj-radius-sm);
-  font-size: var(--mj-text-xs);
-  color: var(--mj-text-secondary);
-}
-
-.nav-item-chip i {
-  font-size: 9px;
-  color: var(--mj-text-muted);
-}
-
-.more-items {
-  font-size: var(--mj-text-xs);
-  color: var(--mj-text-muted);
-  font-style: italic;
-}
-
-/* App Arrow */
-.app-arrow {
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%) translateX(10px);
-  opacity: 0;
-  transition: all 0.25s ease;
-  color: var(--app-color);
-  font-size: var(--mj-text-base);
-}
-
-.app-card:hover .app-arrow {
-  opacity: 1;
-  transform: translateY(-50%) translateX(0);
 }
 
 /* ========================================
@@ -514,61 +491,30 @@
 /* ========================================
    PINNED SECTION
    ======================================== */
+/* The section's accordion panel. The panel's header row holds the title, the actions and the chevron. */
 .pinned-section {
-  margin-bottom: 32px;
+  display: block;
+  margin-bottom: var(--mj-space-8);
 }
 
-.pinned-header {
-  display: flex;
+/* Section title in the panel's toggle. It takes the toggle's text color, so the hover cue shows. */
+.pinned-title {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.pinned-header .section-title {
-  margin: 0;
+  gap: var(--mj-space-2);
+  font-size: var(--mj-text-base);
+  font-weight: var(--mj-font-bold);
 }
 
 .pinned-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-}
-
-.pin-action-btn {
-  padding: 6px 14px;
-  border-radius: var(--mj-radius-md);
-  border: 1px solid var(--mj-border-default);
-  background: var(--mj-bg-surface);
-  color: var(--mj-text-secondary);
-  font-size: var(--mj-text-sm);
-  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
-  transition: all var(--mj-transition-base);
+  gap: var(--mj-space-2);
 }
 
-.pin-action-btn:hover {
-  background: var(--mj-bg-surface-hover);
-  border-color: var(--mj-brand-primary);
-  color: var(--mj-brand-primary);
-}
-
-.pin-action-btn.primary {
-  background: var(--mj-brand-primary);
-  color: var(--mj-text-inverse);
-  border-color: var(--mj-brand-primary);
-}
-
-.pin-action-btn.primary:hover {
-  background: var(--mj-brand-primary-hover);
-}
-
-.pin-action-btn.done {
-  background: var(--mj-status-success);
-  color: var(--mj-text-inverse);
-  border-color: var(--mj-status-success);
+/* The accordion body is flush (FlushBody); the grid gets its top gap here */
+.pinned-body {
+  padding-top: var(--mj-space-3);
 }
 
 /* Edit Mode Banner */
@@ -628,8 +574,8 @@
 .pin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 12px;
+  gap: var(--mj-space-4);
+  margin-bottom: var(--mj-space-3);
 }
 
 /* Group Header */
@@ -710,17 +656,23 @@
 
 /* Pin Card */
 .pin-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   background: var(--mj-bg-surface);
-  border-radius: var(--mj-radius-lg);
   border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
+  box-shadow: var(--mj-shadow-sm);
   overflow: hidden;
   cursor: pointer;
-  transition: all 0.25s ease;
-  position: relative;
+  transition:
+    border-color var(--mj-transition-fast),
+    box-shadow var(--mj-transition-fast),
+    transform var(--mj-transition-fast);
 }
 
 .pin-card:hover {
-  border-color: color-mix(in srgb, var(--mj-brand-primary) 40%, var(--mj-border-default));
+  border-color: var(--mj-border-strong);
   box-shadow: var(--mj-shadow-md);
   transform: translateY(-2px);
 }
@@ -819,10 +771,12 @@
 
 /* Pin Thumbnail */
 .pin-thumbnail {
+  position: relative;
   width: 100%;
   aspect-ratio: 16 / 10;
   overflow: hidden;
-  position: relative;
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .pin-thumbnail img {
@@ -831,25 +785,27 @@
   object-fit: cover;
 }
 
+/* Every pin but an action pin shows its icon on a brand-tinted tile */
 .pin-thumbnail.icon-mode {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--pin-icon-color, var(--mj-text-muted)) 10%, var(--mj-bg-surface-card));
+  display: grid;
+  place-items: center;
 }
 
 .pin-thumbnail.icon-mode > i {
-  font-size: 36px;
-  color: var(--pin-icon-color, var(--mj-text-muted));
-  opacity: 0.7;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--mj-radius-md);
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  font-size: 22px;
 }
 
-/* Action-pin card: colored gradient background with white icon/SVG */
+/* Action pins keep their accent gradient (inline style) and white icon */
 .pin-thumbnail.action-mode {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--mj-text-inverse, white);
+  display: grid;
+  place-items: center;
   background: var(--mj-brand-primary);
 }
 
@@ -858,114 +814,128 @@
   color: var(--mj-text-inverse, white);
 }
 
-/* Hover overlay */
+/* Hover overlay with the Open (or Run) button */
 .pin-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-  background: rgba(0,0,0,0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--mj-bg-overlay);
   opacity: 0;
-  transition: opacity 0.2s ease;
+  pointer-events: none;
+  transition: opacity var(--mj-transition-fast);
 }
 
-.pin-card:hover .pin-overlay {
+.pin-card:hover .pin-overlay,
+.pin-card:focus-within .pin-overlay {
   opacity: 1;
   pointer-events: auto;
 }
 
-.open-btn {
-  padding: 8px 20px;
-  background: var(--mj-bg-surface);
-  color: var(--mj-text-primary);
-  border: none;
-  border-radius: var(--mj-radius-md);
-  font-size: var(--mj-text-sm);
-  font-weight: var(--mj-font-semibold);
-  cursor: pointer;
-  box-shadow: var(--mj-shadow-md);
-}
-
 /* Pin Info */
 .pin-info {
-  padding: 10px 12px;
+  padding: var(--mj-space-3);
 }
 
 .pin-name {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-1);
+  min-width: 0;
   font-size: var(--mj-text-sm);
   font-weight: var(--mj-font-semibold);
   color: var(--mj-text-primary);
-  white-space: nowrap;
+}
+
+.pin-name-text {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
-  margin-bottom: 4px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .pin-name .more-btn {
-  margin-left: auto;
-  opacity: 0;
-  transition: opacity var(--mj-transition-base);
-  background: none;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px -4px -4px 0;
+  padding: 0;
   border: none;
+  border-radius: var(--mj-radius-sm);
+  background: transparent;
   color: var(--mj-text-muted);
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 4px;
   font-size: 14px;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--mj-transition-fast),
+    background-color var(--mj-transition-fast),
+    color var(--mj-transition-fast);
 }
 
-/* Also reveal on keyboard focus — the pin's overflow menu is the only route to
-   rename/remove/configure, and at opacity 0 it was pointer-only: invisible to a
-   tabbing keyboard user and unreachable without a hover. */
-.pin-card:hover .pin-name .more-btn,
-.pin-card:focus-within .pin-name .more-btn {
+/* Shown on hover, on keyboard focus, and while its menu is open */
+.pin-card:hover .more-btn,
+.pin-card:focus-within .more-btn,
+.pin-card.menu-open .more-btn {
   opacity: 1;
 }
 
-.pin-name .more-btn:hover {
+.pin-name .more-btn:hover,
+.pin-card.menu-open .more-btn {
   color: var(--mj-text-primary);
   background: var(--mj-bg-surface-hover);
 }
 
+.pin-name .more-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+
 .pin-name-input {
+  width: 100%;
+  padding: 2px 6px;
+  border: 1px solid var(--mj-border-focus);
+  border-radius: var(--mj-radius-sm);
+  outline: none;
+  background: var(--mj-bg-surface);
   font-size: var(--mj-text-sm);
   font-weight: var(--mj-font-semibold);
   color: var(--mj-text-primary);
-  border: 1px solid var(--mj-border-focus);
-  border-radius: var(--mj-radius-sm);
-  padding: 2px 6px;
-  width: 100%;
-  outline: none;
-  background: var(--mj-bg-surface);
 }
 
+/* Kind line */
 .pin-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
+  gap: 5px;
+  min-width: 0;
+  margin-top: 2px;
+  font-size: var(--mj-text-xs);
   color: var(--mj-text-muted);
 }
 
 .pin-meta > i {
-  font-size: 10px;
+  font-size: 11px;
 }
 
-.pin-app-badge {
-  background: var(--mj-bg-surface-card);
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: var(--mj-font-semibold);
-  color: var(--mj-text-secondary);
+.pin-kind {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pin-card,
+  .app-card {
+    transition: none;
+  }
+  .pin-card:hover,
+  .app-card:hover {
+    transform: none;
+  }
 }
 
 /* Add Pin Card */
@@ -1002,65 +972,70 @@
 /* ========================================
    PIN CONTEXT MENU (ELLIPSIS)
    ======================================== */
+/* Fixed next to its button and above the page chrome; the component limits its height to the room on that side */
 .pin-context-menu {
   position: fixed;
-  background: var(--mj-bg-surface);
+  z-index: 10001;
+  width: 220px;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--mj-bg-surface-elevated);
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-md);
   box-shadow: var(--mj-shadow-lg);
-  min-width: 180px;
-  z-index: 10001;
-  overflow: hidden;
-  animation: pinMenuIn 0.15s ease;
+  animation: pinMenuIn var(--mj-transition-fast);
 }
 
 @keyframes pinMenuIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .pin-context-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 14px;
-  cursor: pointer;
+  gap: var(--mj-space-3);
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--mj-radius-sm);
+  background: transparent;
+  font: inherit;
   font-size: var(--mj-text-sm);
   color: var(--mj-text-primary);
-  transition: background 0.15s;
+  text-align: left;
+  cursor: pointer;
 }
 
 .pin-context-item:hover {
   background: var(--mj-bg-surface-hover);
 }
 
+/* Keyboard focus: a ring drawn inside the row */
+.pin-context-item:focus-visible {
+  outline: none;
+  background: var(--mj-bg-surface-hover);
+  box-shadow: inset 0 0 0 var(--mj-ring-width) var(--mj-focus-ring-color);
+}
+
 .pin-context-item i {
-  width: 16px;
+  width: 14px;
   text-align: center;
-  color: var(--mj-text-secondary);
-  font-size: var(--mj-text-sm);
+  font-size: 12px;
+  color: var(--mj-text-muted);
 }
 
-.pin-context-item.danger {
-  color: var(--mj-status-error);
-}
-
+.pin-context-item.danger,
 .pin-context-item.danger i {
   color: var(--mj-status-error);
 }
 
-.pin-context-item.danger:hover {
-  background: color-mix(in srgb, var(--mj-status-error) 8%, var(--mj-bg-surface));
-}
-
 .pin-context-item.submenu-header {
-  font-weight: var(--mj-font-medium);
+  padding-bottom: 4px;
   cursor: default;
-  font-size: 12px;
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
   color: var(--mj-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  padding: 6px 14px;
 }
 
 .pin-context-item.submenu-header:hover {
@@ -1068,14 +1043,17 @@
 }
 
 .pin-context-item.submenu-item {
-  padding-left: 30px;
-  font-size: var(--mj-text-sm);
+  padding-left: 34px;
 }
 
 .pin-context-divider {
   height: 1px;
+  margin: 6px 4px;
   background: var(--mj-border-default);
-  margin: 4px 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pin-context-menu { animation: none; }
 }
 
 /* ========================================
@@ -1416,22 +1394,10 @@
   .home-dashboard.sidebar-open .main-content {
     margin-right: 280px;
   }
-
-  .apps-grid {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  }
 }
 
 /* Tablet */
 @media (max-width: 992px) {
-  .main-content {
-    padding: 24px;
-  }
-
-  .greeting-section h1 {
-    font-size: var(--mj-text-3xl);
-  }
-
   /* Make sidebar an overlay on tablet */
   .quick-access-sidebar {
     position: absolute;
@@ -1460,25 +1426,17 @@
   }
 }
 
+/* Narrow screens: less page padding. The pin and app grids reflow on their own. */
+@media (max-width: 900px) {
+  .home-overview {
+    padding: var(--mj-space-5) var(--mj-space-4);
+  }
+}
+
 /* Mobile */
 @media (max-width: 768px) {
-  /* Keep the fixed-height + scroll contract on mobile (matches desktop and the
-     shared <mj-page-layout>/<mj-page-body> primitives). Overriding to
-     height:auto / overflow:visible breaks .main-content's flex:1 scroll inside
-     the fixed-height shell, leaving the page non-scrollable. */
-  .main-content {
-    padding: 20px;
+  .home-overview {
     padding-bottom: 100px; /* Space for FAB button */
-  }
-
-  .home-header {
-    flex-direction: column;
-    gap: 16px;
-    margin-bottom: 24px;
-  }
-
-  .greeting-section h1 {
-    font-size: var(--mj-text-2xl);
   }
 
   /* Full-width sidebar on mobile — fixed overlay covering full viewport */
@@ -1506,37 +1464,11 @@
 
   .pin-grid {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 12px;
+    gap: var(--mj-space-3);
   }
 
   .slide-panel {
     width: 100%;
-  }
-
-  .apps-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .app-card {
-    padding: 16px;
-  }
-
-  .app-icon {
-    width: 44px;
-    height: 44px;
-  }
-
-  .app-icon i {
-    font-size: var(--mj-text-lg);
-  }
-
-  .app-name {
-    font-size: var(--mj-text-sm);
-  }
-
-  .nav-preview {
-    display: none;
   }
 
   /* Move FAB to bottom-right on mobile — fixed so it stays visible while scrolling */
@@ -1552,8 +1484,7 @@
 }
 
 @media (max-width: 480px) {
-  .main-content {
-    padding: 16px;
+  .home-overview {
     padding-bottom: 80px;
   }
 
@@ -1565,9 +1496,22 @@
     font-size: var(--mj-text-sm);
   }
 
-  .section-title {
-    font-size: var(--mj-text-base);
-    margin-bottom: 16px;
+  /* Pinned header: the title without its icon, and icon-only actions, so it fits on one row.
+     The action labels stay in the accessibility tree, so each button keeps its name. */
+  .pinned-title i {
+    display: none;
+  }
+
+  .pinned-actions .pin-action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
   }
 
   .sidebar-fab-toggle {

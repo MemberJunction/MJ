@@ -36,9 +36,17 @@ describe('AssessDisplayNameOpacity - names the heuristic already handles', () =>
 
     it('does not flag a schema prefix as an abbreviation', () => {
         // "CRM:" survives the punctuation strip as "CRM", which has no vowel —
-        // it must not be what triggers the verdict.
-        const result = AssessDisplayNameOpacity('Accounts');
-        expect(result.IsOpaque).toBe(false);
+        // it must not be what triggers the verdict. Exercise the PREFIXED name
+        // (the unprefixed one passes trivially and proves nothing).
+        expect(AssessDisplayNameOpacity('CRM: Accounts').IsOpaque).toBe(false);
+        expect(AssessDisplayNameOpacity('MJ: AI Agents').IsOpaque).toBe(false);
+        expect(AssessDisplayNameOpacity('MJ: Company Integrations').IsOpaque).toBe(false);
+    });
+
+    it('still judges the part after a schema prefix', () => {
+        const result = AssessDisplayNameOpacity('CRM: Acct Mgr');
+        expect(result.IsOpaque).toBe(true);
+        expect(result.OffendingToken).not.toBe('CRM');
     });
 });
 

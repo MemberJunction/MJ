@@ -6,6 +6,7 @@
  * - Tab-scoped filtering prevents cross-tab leakage
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { Subject } from 'rxjs';
 import { LogError } from '@memberjunction/core';
 import { NavigationService, TabQueryParamUpdateGuard } from '../navigation.service';
 import { BaseResourceComponent } from '../base-resource-component';
@@ -746,5 +747,87 @@ describe('BaseResourceComponent re-homing on a cache reattach', () => {
     host.RebindTabId('tab-birth');
 
     expect(child.ParentTabId).toBe('tab-birth');
+  });
+});
+
+describe('BaseResourceComponent query-param delivery while its tab shows another resource', () => {
+  type DeliverySeam = { setupQueryParamSubscription(): void; setupInitialParamDelivery(): void };
+
+  /** A resource that records what it receives, over a NavigationService double that reports `showing`. */
+  function makeResource(showing: boolean): {
+    component: BaseResourceComponent;
+    received: Record<string, string>[];
+    popstate: Subject<{ TabId: string; Params: Record<string, string>; Force?: boolean }>;
+    observeTabQueryParams: ReturnType<typeof vi.fn>;
+    isTabShowingResource: ReturnType<typeof vi.fn>;
+  } {
+    const received: Record<string, string>[] = [];
+    class CachedResource extends BaseResourceComponent {
+      async GetResourceDisplayName(_data: ResourceData): Promise<string> { return 'Cached'; }
+      async GetResourceIconClass(_data: ResourceData): Promise<string> { return 'fa-solid fa-cube'; }
+      protected override OnQueryParamsChanged(params: Record<string, string>): void { received.push(params); }
+    }
+    const component = Object.create(CachedResource.prototype) as BaseResourceComponent;
+    const internals = component as unknown as Record<string, unknown>;
+    // Object.create skips the field initializers
+    internals['destroy$'] = new Subject<void>();
+    internals['_lastDeliveredParamsKey'] = null;
+    const popstate = new Subject<{ TabId: string; Params: Record<string, string>; Force?: boolean }>();
+    const observeTabQueryParams = vi.fn(() => new Subject<Record<string, string>>().asObservable());
+    const isTabShowingResource = vi.fn(() => showing);
+    internals['navigationService'] = {
+      QueryParamChanged$: popstate.asObservable(),
+      ObserveTabQueryParams: observeTabQueryParams,
+      IsTabShowingResource: isTabShowingResource,
+    };
+    component.Data = resourceData({ tabId: 'tab-1', resourceType: 'Custom', driverClass: 'LibraryResource' });
+    return { component, received, popstate, observeTabQueryParams, isTabShowingResource };
+  }
+
+  it('ignores a back/forward change on its tab while the tab shows another resource', () => {
+    const { component, received, popstate, isTabShowingResource } = makeResource(false);
+    (component as unknown as DeliverySeam).setupQueryParamSubscription();
+
+    popstate.next({ TabId: 'tab-1', Params: { dashboard: 'd-1' } });
+
+    expect(received).toEqual([]);
+    expect(isTabShowingResource).toHaveBeenCalledWith('tab-1', component.Data);
+  });
+
+  it('applies a back/forward change on its tab while the tab shows it', () => {
+    const { component, received, popstate } = makeResource(true);
+    (component as unknown as DeliverySeam).setupQueryParamSubscription();
+
+    popstate.next({ TabId: 'tab-1', Params: { dashboard: 'd-1' } });
+
+    expect(received).toEqual([{ dashboard: 'd-1' }]);
+  });
+
+  it('still applies a back/forward change for a child its host stamps with ParentTabId', () => {
+    const { component, received, popstate, isTabShowingResource } = makeResource(false);
+    component.ParentTabId = 'host-tab';
+    (component as unknown as DeliverySeam).setupQueryParamSubscription();
+
+    popstate.next({ TabId: 'host-tab', Params: { section: 'summary' } });
+
+    expect(received).toEqual([{ section: 'summary' }]);
+    expect(isTabShowingResource).not.toHaveBeenCalled();
+  });
+
+  it("observes its tab's params as the resource the tab container gave it", () => {
+    const { component, observeTabQueryParams } = makeResource(true);
+
+    (component as unknown as DeliverySeam).setupInitialParamDelivery();
+
+    expect(observeTabQueryParams).toHaveBeenCalledWith('tab-1', component.Data);
+  });
+
+  it("observes its host tab's params with no owner when a host stamps it with ParentTabId", () => {
+    const { component, observeTabQueryParams } = makeResource(true);
+    component.ParentTabId = 'host-tab';
+
+    (component as unknown as DeliverySeam).setupInitialParamDelivery();
+
+    expect(observeTabQueryParams).toHaveBeenCalledWith('host-tab', undefined);
   });
 });

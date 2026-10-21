@@ -20,7 +20,8 @@
       ],
       "Options": {
         "allowedNames": [
-          "environment"
+          "environment",
+          "handler"
         ]
       }
     }
