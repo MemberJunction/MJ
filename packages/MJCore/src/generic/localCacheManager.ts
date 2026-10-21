@@ -1846,11 +1846,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
         const snapshot = [...fingerprints];
         const nowISO = new Date().toISOString();
+        const savesComplete = LocalCacheManager.everySavedRowComplete(changes); // per change, not per slot
         const BATCH_SIZE = 8;
         for (let i = 0; i < snapshot.length; i += BATCH_SIZE) {
             await Promise.all(snapshot.slice(i, i + BATCH_SIZE).map(async (fingerprint) => {
                 try {
-                    await this.applyEntityChangesToSlot(fingerprint, changes, nowISO);
+                    await this.applyEntityChangesToSlot(fingerprint, changes, nowISO, savesComplete);
                 } catch (err) {
                     LogError(`LocalCacheManager: failed to apply batched changes to "${fingerprint}": ${(err as Error).message}`);
                 }
@@ -1862,14 +1863,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * One slot, several changes: the same decisions {@link processEntityEventForFingerprint} makes
      * per event, made once for the whole list.
      */
-    private async applyEntityChangesToSlot(fingerprint: string, changes: BufferedEntityChange[], nowISO: string): Promise<void> {
+    private async applyEntityChangesToSlot(
+        fingerprint: string,
+        changes: BufferedEntityChange[],
+        nowISO: string,
+        savesComplete: boolean = LocalCacheManager.everySavedRowComplete(changes),
+    ): Promise<void> {
         const hasSave = changes.some(c => c.Type === 'save');
         // Subset and aggregate slots cannot be maintained in place; filtered slots cannot take an
         // upsert (the new row may not match the filter) but can drop deleted rows.
         // A saved row missing columns cannot replace a full-width row either (see RowHasEveryField).
         if (this.isSubsetFingerprint(fingerprint) || this.hasAggregates(fingerprint.split('|'))
             || (hasSave && this.isFilteredFingerprint(fingerprint))
-            || changes.some(c => c.Type === 'save' && !LocalCacheManager.RowHasEveryField(c.EntityInfo, c.Record))) {
+            || !savesComplete) {
             await this.InvalidateRunViewResult(fingerprint);
             return;
         }
@@ -1972,11 +1978,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
                 LogStatusVerbose(`LocalCacheManager: remote-invalidate (save) for "${entityName}" PK=${key.ToConcatenatedString()}, updating ${fingerprints.size} cached fingerprint(s)`);
 
+                const rowComplete = LocalCacheManager.RowHasEveryField(entityInfo, recordData); // per row, not per slot
                 for (const fingerprint of fingerprintSnapshot) {
                     try {
                         // Subset slot (MaxRows/StartRow): upserting would grow the slot past the
                         // caller's own row limit. Invalidate, same as a filtered slot.
-                        if (this.CanUpsertRowIntoSlot(fingerprint, entityInfo, recordData)) {
+                        if (rowComplete && !this.isFilteredFingerprint(fingerprint) && !this.isSubsetFingerprint(fingerprint)) {
                             await this.UpsertSingleEntity(fingerprint, recordData, key, nowISO);
                         } else {
                             await this.InvalidateRunViewResult(fingerprint);
@@ -2146,6 +2153,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             }
         }
         return true;
+    }
+
+    /** Whether every saved row among `changes` carries every column ({@link RowHasEveryField}). */
+    private static everySavedRowComplete(changes: BufferedEntityChange[]): boolean {
+        return changes.every(c => c.Type !== 'save' || LocalCacheManager.RowHasEveryField(c.EntityInfo, c.Record));
     }
 
     /**

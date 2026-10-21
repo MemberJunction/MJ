@@ -1,4 +1,4 @@
-import { EntityPermissionType, IsPlatformSQL, type EntityInfo, type PlatformSQL, type UserInfo } from '@memberjunction/core';
+import { CurrentFieldSecurityGeneration, EntityPermissionType, IsPlatformSQL, type EntityInfo, type PlatformSQL, type UserInfo } from '@memberjunction/core';
 import { FindForbiddenFunctionCalls, IsKeyword, LexSQL, SignificantTokens, SQLParser } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 
@@ -102,6 +102,9 @@ interface ClauseVariant {
     Text: string;
     Dialect: SQLParserDialect;
 }
+
+/** Allow-lists already built, per entity array (see {@link ClientClauseScreen.BuildEntityBaseViewAllowList}). */
+const allowListCache = new WeakMap<readonly EntityInfo[], { Length: number; Generation: number; List: EntityBaseViewAllowList }>();
 
 /**
  * SECURITY — screens for SQL text that a client (or a client-saved record) supplies to RunView.
@@ -326,8 +329,24 @@ export class ClientClauseScreen {
         return !schema;
     }
 
-    /** Builds the base-view allow-list for a set of entities. */
+    /**
+     * The base-view allow-list for a set of entities. Memoized per entity array: reused while the
+     * array keeps its length and no `EntityInfo` has been built since (the field-security
+     * generation, which moves on every build, so a refreshed or replaced entity is noticed).
+     */
     public static BuildEntityBaseViewAllowList(entities: readonly EntityInfo[]): EntityBaseViewAllowList {
+        const generation = CurrentFieldSecurityGeneration();
+        const memo = allowListCache.get(entities);
+        if (memo && memo.Length === entities.length && memo.Generation === generation) {
+            return memo.List;
+        }
+        const list = ClientClauseScreen.buildAllowList(entities);
+        allowListCache.set(entities, { Length: entities.length, Generation: generation, List: list });
+        return list;
+    }
+
+    /** The uncached build behind {@link BuildEntityBaseViewAllowList}. */
+    private static buildAllowList(entities: readonly EntityInfo[]): EntityBaseViewAllowList {
         const qualified = new Map<string, EntityInfo>();
         const bare = new Map<string, EntityInfo | null>();
         for (const e of entities) {

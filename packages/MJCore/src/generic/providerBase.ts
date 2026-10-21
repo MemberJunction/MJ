@@ -3060,15 +3060,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param user - The user whose denials to describe
      */
     protected ComputeFieldSecurityProfileKey(user: UserInfo): string {
-        const entries: string[] = [];
-        for (const entity of this.Entities ?? []) {
-            if (!entity?.FieldLevelSecurityApplies) continue;
-            const denied = entity.GetDeniedReadFields(user);
-            if (denied.size > 0) {
-                entries.push(`${NormalizeUUID(entity.ID)}:${[...denied].sort().join(',')}`);
-            }
-        }
-        return entries.sort().join(';');
+        // Memoized per (catalog, user) and recomputed whenever field-security configuration or the
+        // user's roles change, so a saved-view RunView does not walk the catalog each time.
+        return FieldSecuritySQLGate.CatalogDenialProfileKey(this.Entities, user);
     }
 
     /**

@@ -66,6 +66,8 @@ function entityOwnedBy(entityInfo: EntityInfo, owner: UserInfo) {
         GetAll: () => ({ ...row }),
         PrimaryKey: { KeyValuePairs: [{ FieldName: 'ID', Value: row.ID }] },
         Fields: entityInfo.Fields.map(f => ({ Name: f.Name, Dirty: false })),
+        Get: (name: string) => (row as Record<string, unknown>)[name],
+        GetDirtyFieldNames: (): string[] => [],
     };
 }
 type OwnedEntity = ReturnType<typeof entityOwnedBy>;

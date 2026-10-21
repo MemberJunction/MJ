@@ -1686,7 +1686,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (event.type !== 'save' || !event.baseEntity) {
             return true;
         }
-        return LocalCacheManager.RowHasEveryField(event.baseEntity.EntityInfo, event.baseEntity.GetAll());
+        const entity = event.baseEntity;
+        // Asked of the object directly, so no throwaway GetAll() row is built per event. An object
+        // that is not a BaseEntity (a test double) is judged on its row, as before.
+        return typeof entity.HoldsEveryField === 'function'
+            ? entity.HoldsEveryField()
+            : LocalCacheManager.RowHasEveryField(entity.EntityInfo, entity.GetAll());
     }
 
     protected async applyImmediateMutation(config: BaseEnginePropertyConfig, event: BaseEntityEvent): Promise<void> {

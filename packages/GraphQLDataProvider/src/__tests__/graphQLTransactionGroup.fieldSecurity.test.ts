@@ -59,12 +59,12 @@ function newRecord(entityInfo: EntityInfo) {
     };
 }
 
-async function sentPayload(roleId: string): Promise<Record<string, unknown>> {
+async function sentPayload(roleId: string, record: object = newRecord(employees()), operation = 'Create'): Promise<Record<string, unknown>> {
     const executeGQL = vi.fn().mockResolvedValue({ ExecuteTransactionGroup: { Success: true, ErrorMessages: [], ResultsJSON: ['{}'] } });
     const provider = { ExecuteGQL: executeGQL, CurrentUser: user(roleId) };
     const group = new GraphQLTransactionGroup(provider as never);
     (group as unknown as { _pendingTransactions: unknown[] })._pendingTransactions.push(
-        { BaseEntity: newRecord(employees()), OperationType: 'Create' },
+        { BaseEntity: record, OperationType: operation },
     );
     await (group as unknown as { HandleSubmit(): Promise<unknown> }).HandleSubmit();
     const vars = executeGQL.mock.calls[0][1] as { group: { Items: Array<{ EntityObjectJSON: string }> } };
@@ -80,5 +80,17 @@ describe('GraphQLTransactionGroup: payloads omit the fields their user may not r
     it('a user who may read the field still sends it', async () => {
         const payload = await sentPayload(HR);
         expect(payload).toEqual({ ID: 'emp-1', Name: 'Ada', Salary: null });
+    });
+
+    it('with nothing to leave out, a create or delete is serialized without reading the field objects', async () => {
+        for (const operation of ['Create', 'Delete']) {
+            const record = newRecord(employees());
+            let fieldReads = 0;
+            const fields = record.Fields;
+            Object.defineProperty(record, 'Fields', { get: () => { fieldReads++; return fields; } });
+            const payload = await sentPayload(HR, record, operation);
+            expect(payload).toEqual({ ID: 'emp-1', Name: 'Ada', Salary: null });
+            expect(fieldReads).toBe(0); // reading Fields builds every field object of a raw-mode record
+        }
     });
 });
