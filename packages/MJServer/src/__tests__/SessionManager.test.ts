@@ -238,6 +238,47 @@ describe('SessionManager.CreateSession', () => {
             ),
         ).rejects.toThrow(/session insert denied/);
     });
+
+    it('stamps conversation.ExternalID with AnonymousVisitorID for an anonymous principal (even when MagicLinkScope.ResourceID is shared)', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const conversation = makeSessionEntity({ ID: 'conv-anon' });
+        const session = makeSessionEntity({ ID: 'session-anon' });
+        const { provider } = makeProvider((name) =>
+            name === 'MJ: Conversations' ? conversation : session,
+        );
+        const mgr = new SessionManager();
+        const anonUser = {
+            ID: 'anon-1',
+            Email: 'anonymous@magic-link.local',
+            IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: 'visitor-sid-1',
+            MagicLinkScope: { ResourceID: 'shared-link-resource' },
+        } as unknown as UserInfo;
+
+        await mgr.CreateSession({ agentID: 'agent-1', userID: 'anon-1' }, anonUser, provider);
+
+        expect(conversation.ExternalID).toBe('visitor-sid-1');
+    });
+
+    it('stamps conversation.ExternalID with MagicLinkScope.ResourceID for a non-anonymous scoped principal', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const conversation = makeSessionEntity({ ID: 'conv-scoped' });
+        const session = makeSessionEntity({ ID: 'session-scoped' });
+        const { provider } = makeProvider((name) =>
+            name === 'MJ: Conversations' ? conversation : session,
+        );
+        const mgr = new SessionManager();
+        const scopedUser = {
+            ID: 'user-1',
+            Email: 'named@example.com',
+            IsMagicLinkAnonymous: false,
+            MagicLinkScope: { ResourceID: 'res-named-1' },
+        } as unknown as UserInfo;
+
+        await mgr.CreateSession({ agentID: 'agent-1', userID: 'user-1' }, scopedUser, provider);
+
+        expect(conversation.ExternalID).toBe('res-named-1');
+    });
 });
 
 describe('SessionManager.CloseSession', () => {

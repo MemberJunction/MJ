@@ -435,4 +435,103 @@ describe('createUnifiedAuthMiddleware', () => {
       expect(next).toHaveBeenCalled();
     });
   });
+
+  describe('magic-link anonymous visitor identity (mj_sid -> AnonymousVisitorID)', () => {
+    it('stamps AnonymousVisitorID from mj_sid on an anonymous magic-link token and preserves MagicLinkScope.ResourceID', async () => {
+      setupSuccessfulAuth();
+      const anonClaims = {
+        iss: 'https://test-issuer.com',
+        sub: 'magic-link|invite-1',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        mj_magic_link: true,
+        mj_anon: true,
+        mj_sid: 'visitor-sid-1',
+        mj_scopes: [{ inviteId: 'invite-1', appId: 'app-1', role: 'Guest', resourceId: 'shared-res-1', resourceType: 'Custom' }],
+      };
+      mockJwtDecode.mockReturnValue(anonClaims);
+      mockJwtVerify.mockImplementation(
+        (_token: string, _keyFn: unknown, _options: unknown, callback: (err: Error | null, decoded: unknown) => void) => {
+          callback(null, anonClaims);
+        }
+      );
+
+      const req = makeMockReq({ headers: { authorization: 'Bearer valid-anon-token' } });
+      const res = makeMockRes();
+      const next = vi.fn();
+
+      await middleware(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(req.userPayload?.userRecord.IsMagicLinkAnonymous).toBe(true);
+      expect(req.userPayload?.userRecord.AnonymousVisitorID).toBe('visitor-sid-1');
+      expect(req.userPayload?.userRecord.MagicLinkScope).toEqual({
+        ResourceID: 'shared-res-1',
+        ResourceType: 'Custom',
+      });
+    });
+
+    it('rejects an anonymous magic-link token when mj_sid is missing or empty', async () => {
+      for (const [idx, badSid] of [undefined, '', '   '].entries()) {
+        setupSuccessfulAuth();
+        const badClaims = {
+          iss: 'https://test-issuer.com',
+          sub: 'magic-link|invite-1',
+          exp: Math.floor(Date.now() / 1000) + 3600,
+          mj_magic_link: true,
+          mj_anon: true,
+          ...(badSid !== undefined ? { mj_sid: badSid } : {}),
+          mj_scopes: [{ inviteId: 'invite-1', appId: 'app-1', role: 'Guest', resourceId: 'shared-res-1' }],
+        };
+        mockJwtDecode.mockReturnValue(badClaims);
+        mockJwtVerify.mockImplementation(
+          (_token: string, _keyFn: unknown, _options: unknown, callback: (err: Error | null, decoded: unknown) => void) => {
+            callback(null, badClaims);
+          }
+        );
+
+        const req = makeMockReq({ headers: { authorization: `Bearer missing-sid-token-${idx}` } });
+        const res = makeMockRes();
+        const next = vi.fn();
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        await middleware(req, res, next);
+
+        expect(next).not.toHaveBeenCalled();
+        expect(res._status).toBe(401);
+        expect(req.userPayload).toBeUndefined();
+        errorSpy.mockRestore();
+      }
+    });
+
+    it('leaves AnonymousVisitorID undefined on a non-anonymous magic-link token', async () => {
+      setupSuccessfulAuth();
+      const namedClaims = {
+        iss: 'https://test-issuer.com',
+        sub: 'magic-link|invite-named',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        mj_magic_link: true,
+        mj_scopes: [{ inviteId: 'invite-named', appId: 'app-1', role: 'Guest', resourceId: 'res-named-1', resourceType: 'Reports' }],
+      };
+      mockJwtDecode.mockReturnValue(namedClaims);
+      mockJwtVerify.mockImplementation(
+        (_token: string, _keyFn: unknown, _options: unknown, callback: (err: Error | null, decoded: unknown) => void) => {
+          callback(null, namedClaims);
+        }
+      );
+
+      const req = makeMockReq({ headers: { authorization: 'Bearer valid-named-token' } });
+      const res = makeMockRes();
+      const next = vi.fn();
+
+      await middleware(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(req.userPayload?.userRecord.IsMagicLinkAnonymous).toBe(false);
+      expect(req.userPayload?.userRecord.AnonymousVisitorID).toBeUndefined();
+      expect(req.userPayload?.userRecord.MagicLinkScope).toEqual({
+        ResourceID: 'res-named-1',
+        ResourceType: 'Reports',
+      });
+    });
+  });
 });

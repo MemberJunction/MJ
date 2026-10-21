@@ -30,6 +30,7 @@ import type { MJAIAgentSessionEntity, MJConversationEntity } from '@memberjuncti
 /** Entity names, centralised so the `MJ: ` prefix convention lives in one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 const CONVERSATION_ENTITY = 'MJ: Conversations';
+const SAFE_SESSION_ID_PATTERN = /^[A-Za-z0-9-]+$/;
 
 /** What the decision needs to know about the session. */
 export interface SessionAccessSubject {
@@ -47,9 +48,11 @@ export interface SessionAccessSubject {
 export interface SessionAccessPrincipal {
     /** The caller's user id. */
     ID: string;
-    /** True for the shared-Anonymous-user principal of a public-widget guest. */
+    /** True for the shared-Anonymous-user principal of a public-widget guest or anonymous magic link. */
     IsMagicLinkAnonymous?: boolean;
-    /** The signed per-session scope carried by the caller's token, when any. */
+    /** Per-visitor session id (`mj_sid` from the verified token) for an anonymous principal. */
+    AnonymousVisitorID?: string;
+    /** The signed per-session resource scope carried by the caller's token, when any. */
     MagicLinkScope?: { ResourceID?: string } | undefined;
 }
 
@@ -74,11 +77,18 @@ export function AuthorizeSessionAccess(
     if (!principal?.ID || !subject.SessionUserID || !UUIDsEqual(subject.SessionUserID, principal.ID)) {
         return { Allowed: false, Reason: 'not_owner' };
     }
+    if (principal.IsMagicLinkAnonymous) {
+        const visitorId = principal.AnonymousVisitorID;
+        if (!visitorId) {
+            return { Allowed: false, Reason: 'scope_missing' };
+        }
+        return subject.ConversationExternalID === visitorId
+            ? { Allowed: true }
+            : { Allowed: false, Reason: 'scope_mismatch' };
+    }
     const scopeId = principal.MagicLinkScope?.ResourceID;
     if (!scopeId) {
-        // An anonymous principal without a per-session scope is indistinguishable from every other
-        // anonymous principal: owning "the Anonymous user's" session proves nothing.
-        return principal.IsMagicLinkAnonymous ? { Allowed: false, Reason: 'scope_missing' } : { Allowed: true };
+        return { Allowed: true };
     }
     // Scope ids are opaque base64url strings (case-significant), so compare exactly — not UUIDsEqual.
     return subject.ConversationExternalID === scopeId ? { Allowed: true } : { Allowed: false, Reason: 'scope_mismatch' };
@@ -108,7 +118,7 @@ export async function LoadSessionForAccess(
     contextUser: UserInfo,
     provider: IMetadataProvider,
 ): Promise<LoadedSessionForAccess | null> {
-    if (!IsValidUUID(agentSessionId)) {
+    if (!agentSessionId || (!IsValidUUID(agentSessionId) && !SAFE_SESSION_ID_PATTERN.test(agentSessionId))) {
         return null;
     }
     const session = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);

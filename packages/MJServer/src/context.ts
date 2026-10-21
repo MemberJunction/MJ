@@ -224,9 +224,17 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
     }
   }
 
-  // Anonymous: synthesize the claimed role(s) (persisted nowhere). Named: keep real DB roles.
+  // Anonymous: synthesize the claimed role(s) (persisted nowhere) and require the per-visitor
+  // session id (`mj_sid`) so concurrent anonymous visitors sharing the Anonymous user and resource
+  // scope can always be told apart. Named: keep real DB roles.
   let synthesizedRoles: { UserID: string; RoleID: string; RoleName: string }[] | undefined;
+  let anonymousVisitorId: string | undefined;
   if (isAnon) {
+    const rawSid = payload['mj_sid'];
+    if (typeof rawSid !== 'string' || !rawSid.trim()) {
+      throw new AuthenticationError('Anonymous magic-link session token is missing a valid mj_sid claim.');
+    }
+    anonymousVisitorId = rawSid;
     const roleNames = new Set<string>();
     if (Array.isArray(scopes)) {
       for (const s of scopes) {
@@ -279,6 +287,7 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
     // Mark the session so the CurrentUser field resolver serves these synthesized roles
     // (the shared Anonymous principal holds none in the DB). See UserInfo.IsMagicLinkAnonymous.
     sessionUser.IsMagicLinkAnonymous = true;
+    sessionUser.AnonymousVisitorID = anonymousVisitorId;
   }
   return sessionUser;
 }
