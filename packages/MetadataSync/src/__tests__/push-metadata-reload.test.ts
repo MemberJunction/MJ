@@ -74,7 +74,7 @@ vi.mock('../lib/sync-metadata-engine', () => ({
     },
 }));
 
-vi.mock('../lib/entity-subclass-guard', () => ({ describeMissingEntitySubclass: () => undefined }));
+vi.mock('../lib/entity-subclass-guard', () => ({ DescribeMissingEntitySubclass: () => undefined, describeMissingEntitySubclass: () => undefined }));
 
 vi.mock('../lib/record-dependency-analyzer', async () => {
     const actual = await vi.importActual<typeof import('../lib/record-dependency-analyzer')>('../lib/record-dependency-analyzer');

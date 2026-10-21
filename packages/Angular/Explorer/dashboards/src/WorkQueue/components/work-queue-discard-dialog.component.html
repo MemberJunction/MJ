@@ -1,0 +1,16 @@
+<mj-dialog [Visible]="Visible" [Title]="Title" Size="sm" (Close)="Cancel()">
+  <div class="wq-discard-body">
+    @if (Message) {
+      <p class="wq-discard-message">{{ Message }}</p>
+    }
+    <label class="wq-discard-label" for="wq-discard-reason">Reason (stored with the resolution)</label>
+    <textarea id="wq-discard-reason" class="wq-discard-reason" rows="3" maxlength="1000"
+      [(ngModel)]="Reason" [disabled]="Busy" placeholder="Why this work is being dropped"></textarea>
+    <div class="wq-discard-actions">
+      <button mjButton variant="primary" size="sm" [disabled]="!CanConfirm" (click)="Confirm()">
+        @if (Busy) { <i class="fa-solid fa-spinner fa-spin"></i> Discarding… } @else { <i class="fa-solid fa-trash"></i> Discard }
+      </button>
+      <button mjButton variant="secondary" size="sm" [disabled]="Busy" (click)="Cancel()">Cancel</button>
+    </div>
+  </div>
+</mj-dialog>

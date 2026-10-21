@@ -47,7 +47,10 @@ export class MJAIModelFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIModels', sectionName: 'AI Models', isExpanded: false },
             { sectionKey: 'mJScopedPromptConfigs', sectionName: 'Scoped Prompt Configs', isExpanded: false },
             { sectionKey: 'mJAIAgentHarnesses', sectionName: 'AI Agent Harnesses', isExpanded: false },
-            { sectionKey: 'mJAIModelPersonas', sectionName: 'AI Model Personas', isExpanded: false }
+            { sectionKey: 'mJAIModelPersonas', sectionName: 'AI Model Personas', isExpanded: false },
+            { sectionKey: 'mJFeaturePipelineVersions', sectionName: 'Feature Pipeline Versions', isExpanded: false },
+            { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false },
+            { sectionKey: 'mJFeatureValueCaches', sectionName: 'Feature Value Caches', isExpanded: false }
         ]);
     }
 }

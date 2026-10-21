@@ -1,22 +1,14 @@
-import { MJGlobal } from '@memberjunction/global';
-import { BaseFormPanel, FormPanelRegistrationMetadata } from './base-form-panel';
 import type { FormContributionRegistration } from './form-contribution';
+import { CollectClassFormPanelRegistrations } from './collect-form-contribution-registrations';
 
 /**
- * Every BaseFormPanel registration that carries an `entity` metadata field.
- * Used by the composer and by `BaseFormComponent.formContext` to hide baked
- * related sections a panel has claimed.
+ * Every compiled BaseFormPanel registration that carries an `entity` metadata field. Compiled
+ * registrations only: no `MJ: Entity Form Contributions` rows, and the user's hidden panels are
+ * not removed.
+ *
+ * @deprecated Use `CollectFormContributionRegistrations(entity, provider)`, which returns the
+ * compiled registrations together with the rows that apply to the entity and the current user.
  */
 export function CollectFormPanelRegistrations(): FormContributionRegistration[] {
-    return MJGlobal.Instance.ClassFactory.GetAllRegistrationsByMetadata(
-        BaseFormPanel,
-        (metadata) => {
-            if (!metadata) return false;
-            const entity = (metadata as Partial<FormPanelRegistrationMetadata>).entity;
-            return typeof entity === 'string' && entity.length > 0;
-        },
-    ).map((reg) => ({
-        Priority: reg.Priority,
-        Metadata: reg.Metadata as FormPanelRegistrationMetadata,
-    }));
+    return CollectClassFormPanelRegistrations();
 }

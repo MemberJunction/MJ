@@ -786,6 +786,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                     ResultType: 'simple',
                     Fields: ['EntityID', 'RecordID'],
                     MaxRows: 1,
+                    // A one-off lookup by ID. A cached RunView reads every column (DocumentText, VectorJSON)
+                    // and keeps a single-use slot, so bypass the cache and let Fields apply.
+                    BypassCache: true,
                 }, contextUser);
 
                 if (!erdResult.Success || erdResult.Results.length === 0) return;
@@ -2899,9 +2902,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         vectorIndexID: string,
         _contextUser: UserInfo
     ): Promise<ResolvedVectorInfrastructure> {
-        const vectorIndex = this.khEngine.GetVectorIndexByID(vectorIndexID);
+        const vectorIndex = AIEngine.Instance.GetVectorIndexByID(vectorIndexID);
         if (!vectorIndex) {
-            throw new Error(`Vector index ${vectorIndexID} not found in KnowledgeHubMetadataEngine cache`);
+            throw new Error(`Vector index ${vectorIndexID} not found in AIEngine cache`);
         }
 
         return this.createInfrastructureFromIndex(vectorIndex, embeddingModelID);
@@ -2911,7 +2914,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Fallback: resolve infrastructure from the first available VectorIndex (original behavior).
      */
     private async getDefaultVectorInfrastructure(_contextUser: UserInfo): Promise<ResolvedVectorInfrastructure> {
-        const vectorIndexes = this.khEngine.VectorIndexes;
+        const vectorIndexes = AIEngine.Instance.VectorIndexes;
         if (vectorIndexes.length === 0) {
             throw new Error('No vector indexes found — create one in the Configuration tab first');
         }
@@ -2939,8 +2942,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const driverClass = aiModel.DriverClass;
         const embeddingModelName = aiModel.APIName ?? aiModel.Name;
 
-        // The 3rd-party index is addressed by ExternalID (the provider-side name); Name is the MJ display label.
-        const externalIndexName = vectorIndex.ExternalID?.trim() || vectorIndex.Name;
+        const externalIndexName = AIEngine.Instance.GetProviderIndexName(vectorIndex);
         LogStatus(`VectorizeContentItems: USING embedding model "${aiModel.Name}" (${driverClass}), vector DB "${vectorDBClassKey}", index "${externalIndexName}" (Vector Index "${vectorIndex.Name}")`);
 
         const vectorDB = this.createVectorDBInstance(vectorDBClassKey);

@@ -7,7 +7,7 @@
  * it), on the spec `BuildMeasurementSpecs` builds, with a plain record: no database, no model.
  */
 import { describe, expect, it } from 'vitest';
-import { InferProcessor } from '@memberjunction/record-set-processor';
+import { InferProcessor } from '@memberjunction/feature-pipelines-engine';
 import type { RecordRef } from '@memberjunction/record-set-processor-base';
 import {
     AddValueDescriptions, CreateMeasurementProcessor, DescribeConstraintBlock, OutputValueDescriptions, VALUE_DESCRIPTIONS_KEY, ValueDescribingInferProcessor,
@@ -51,7 +51,7 @@ function textOf(data: Record<string, unknown>, key: string): string {
 
 describe('the LLM arm\'s prompt data', () => {
     it('lists each allowed value with its description in the constraint block', async () => {
-        const data = await new DescribingProbe(SPECS.LLM.PromptID, undefined, SPECS.LLM).PromptData(RECORD);
+        const data = await new DescribingProbe(SPECS.LLM.PromptID, undefined, SPECS.LLM, null).PromptData(RECORD);
         for (const key of ['constraints', 'ConstraintBlock']) {
             const block = textOf(data, key);
             expect(block).toContain('- **Category** ($.Category):');
@@ -61,21 +61,21 @@ describe('the LLM arm\'s prompt data', () => {
     });
 
     it('holds the descriptions by output and value, and leaves the record as it was', async () => {
-        const data = await new DescribingProbe(SPECS.LLM.PromptID, undefined, SPECS.LLM).PromptData(RECORD);
+        const data = await new DescribingProbe(SPECS.LLM.PromptID, undefined, SPECS.LLM, null).PromptData(RECORD);
         expect(data[VALUE_DESCRIPTIONS_KEY]).toEqual({ Category: { System: 'DESC-SYSTEM-XYZ', Data: 'DESC-DATA-XYZ' } });
         expect(data.record).toEqual({ ID: 'r1', Name: 'Save a file', Description: 'Writes bytes to storage' });
     });
 
     it('is the plain prompt data plus the descriptions', async () => {
-        const plain = await new PlainProbe(SPECS.LLM.PromptID, undefined, SPECS.LLM).PromptData(RECORD);
-        const described = await new DescribingProbe(SPECS.LLM.PromptID, undefined, SPECS.LLM).PromptData(RECORD);
+        const plain = await new PlainProbe(SPECS.LLM.PromptID, undefined, SPECS.LLM, null).PromptData(RECORD);
+        const described = await new DescribingProbe(SPECS.LLM.PromptID, undefined, SPECS.LLM, null).PromptData(RECORD);
         expect(described).toEqual(AddValueDescriptions(plain, SPECS.LLM.Outputs));
     });
 });
 
 describe('the Decision arm\'s prompt data', () => {
     it('is the plain processor\'s, whose constraint block has no descriptions (Decision gets them as Choice options)', async () => {
-        const data = await new PlainProbe(SPECS.Decision.PromptID, undefined, SPECS.Decision).PromptData(RECORD);
+        const data = await new PlainProbe(SPECS.Decision.PromptID, undefined, SPECS.Decision, null).PromptData(RECORD);
         expect(JSON.stringify(data)).not.toMatch(/DESC-/);
         expect(textOf(data, 'constraints')).toContain('* "System"');
         expect(data[VALUE_DESCRIPTIONS_KEY]).toBeUndefined();

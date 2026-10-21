@@ -1,5 +1,6 @@
 import { Readable } from 'stream';
 import { RequiresSubclass } from '@memberjunction/global';
+import { NormalizeStorageObjectKey, StorageObjectKeyNormalizer } from './ObjectKeys';
 
 /**
  * Represents the payload returned by the CreatePreAuthUploadUrl method.
@@ -412,7 +413,7 @@ export interface StorageProviderConfig {
  * immediate, named failure at the point of resolution.
  */
 @RequiresSubclass()
-export abstract class FileStorageBase {
+export abstract class FileStorageBase implements StorageObjectKeyNormalizer {
   /**
    * The name of this storage provider, used in error messages and logging.
    * Each implementation must define this property with a descriptive name.
@@ -942,6 +943,24 @@ export abstract class FileStorageBase {
    * @returns A Promise that resolves to a boolean indicating if the directory exists.
    */
   public abstract DirectoryExists(directoryPath: string): Promise<boolean>;
+
+  /**
+   * The canonical form of an object key for this storage — what the storage access checks compare when they ask whether
+   * an object backs an `MJ: Files` row (see `StorageAccessEvaluator.UnreadableTrackedObjectKeys`). Both the key a client
+   * sends and the key a row stores go through this one method, so two spellings this driver resolves to the same object
+   * must canonicalize alike.
+   *
+   * The default ({@link NormalizeStorageObjectKey}) trims the key, collapses runs of `/` and strips leading and
+   * trailing `/` — right for every driver whose spellings differ only in slashes. A driver that adds its own root or
+   * prefix to SOME keys and not others (S3's key prefix) overrides this to return the key relative to that root.
+   * Case is preserved; callers compare case-insensitively.
+   *
+   * @param objectKey - An object key as a client or an `MJ: Files` row spells it
+   * @returns The canonical key: relative to this driver's root, no leading/trailing `/`, no repeated `/`
+   */
+  public NormalizeObjectKey(objectKey: string): string {
+    return NormalizeStorageObjectKey(objectKey);
+  }
 
   /**
    * Initialize storage provider with optional configuration.

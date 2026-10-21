@@ -27,9 +27,9 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
             if (this.Variables.length > 0) {
                 await this.executeWithVariables(items, client, pgProvider, returnResults);
             } else if (this.BatchedSubmit) {
-                await this.executeBatched(items, client, returnResults);
+                await this.executeBatched(items, client, pgProvider, returnResults);
             } else {
-                await this.executeWithoutVariables(items, client, returnResults);
+                await this.executeWithoutVariables(items, client, pgProvider, returnResults);
             }
 
             await client.query('COMMIT');
@@ -70,7 +70,7 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
                     }
                 }
 
-                result = await this.executeItem(client, item);
+                result = await this.executeItem(client, item, pgProvider);
                 if (result && result.length > 0) {
                     this.SetVariableValuesFromEntity(item.BaseEntity, result[0]);
                 }
@@ -90,13 +90,14 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
     private async executeWithoutVariables(
         items: TransactionItem[],
         client: pg.PoolClient,
+        pgProvider: PostgreSQLDataProvider,
         returnResults: TransactionResult[]
     ): Promise<void> {
         for (const item of items) {
             let result: Record<string, unknown>[] | undefined;
             let bSuccess = false;
             try {
-                result = await this.executeItem(client, item);
+                result = await this.executeItem(client, item, pgProvider);
                 bSuccess = (result != null && result.length > 0);
             } catch (e) {
                 returnResults.push(new TransactionResult(item, e, false));
@@ -126,13 +127,14 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
     private async executeBatched(
         items: TransactionItem[],
         client: pg.PoolClient,
+        pgProvider: PostgreSQLDataProvider,
         returnResults: TransactionResult[]
     ): Promise<void> {
         const SENTINEL = '__mj_batch_item';
         const escapeFn = (client as unknown as { escapeLiteral?: (v: string) => string }).escapeLiteral?.bind(client);
         if (!escapeFn) {
             // No driver-provided literal escaper on this client — never hand-roll one; run sequentially.
-            await this.executeWithoutVariables(items, client, returnResults);
+            await this.executeWithoutVariables(items, client, pgProvider, returnResults);
             return;
         }
         const literalFor = (value: unknown): string | undefined => {
@@ -142,7 +144,12 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
                 case 'boolean': return value ? 'TRUE' : 'FALSE';
                 case 'string': return escapeFn(value);
                 default:
-                    return value instanceof Date ? escapeFn(value.toISOString()) : undefined;
+                    if (value instanceof Date) return escapeFn(value.toISOString());
+                    // bytea parameter (a binary field): inline as PostgreSQL's hex bytea format.
+                    if (value instanceof Uint8Array) {
+                        return `${escapeFn('\\x' + Buffer.from(value.buffer, value.byteOffset, value.byteLength).toString('hex'))}::bytea`;
+                    }
+                    return undefined;
             }
         };
 
@@ -175,7 +182,7 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
                 });
             }
             if (bail) {
-                await this.executeWithoutVariables(items, client, returnResults);
+                await this.executeWithoutVariables(items, client, pgProvider, returnResults);
                 return;
             }
             parts.push(`SELECT ${index} AS ${SENTINEL};`);
@@ -222,7 +229,7 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
             }
         }
         for (let i = 0; i < items.length; i++) {
-            const rows = perItem[i];
+            const rows = perItem[i] ? await this.postProcessRows(perItem[i]!, items[i], pgProvider) : perItem[i];
             const ok = rows != null && rows.length > 0;
             returnResults.push(new TransactionResult(items[i], ok ? rows![0] : rows, ok));
         }
@@ -231,7 +238,7 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
     /**
      * Executes a single transaction item against the given client connection.
      */
-    private async executeItem(client: pg.PoolClient, item: TransactionItem): Promise<Record<string, unknown>[]> {
+    private async executeItem(client: pg.PoolClient, item: TransactionItem, pgProvider: PostgreSQLDataProvider): Promise<Record<string, unknown>[]> {
         // The parameters come from GenerateSaveSQL/GenerateDeleteSQL as an array of values
         // for $1, $2, ... placeholders. They may be stored in ExtraData.parameters (set during
         // transaction creation) or in Vars (set by AddTransaction in the base class).
@@ -239,7 +246,31 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
         const params = PGQueryParameterProcessor.ProcessParameters(rawParams);
 
         const queryResult = await client.query(item.Instruction, params);
-        return queryResult.rows as Record<string, unknown>[];
+        return this.postProcessRows(queryResult.rows as Record<string, unknown>[], item, pgProvider);
+    }
+
+    /**
+     * Runs a saved record's returned row through the provider's row post-processing, as every
+     * other read path does: binary columns become base64, datetimes are adjusted and encrypted
+     * fields decrypted. Without it, a record saved in a transaction group would hydrate with a raw
+     * Buffer or an encrypted value. Deletes return no entity row and are left alone.
+     */
+    private async postProcessRows(
+        rows: Record<string, unknown>[] | null | undefined,
+        item: TransactionItem,
+        pgProvider: PostgreSQLDataProvider,
+    ): Promise<Record<string, unknown>[]> {
+        if (!rows || rows.length === 0 || item.OperationType === 'Delete' || !item.BaseEntity) return rows ?? [];
+        return this.providerFor(item, pgProvider).ProcessEntityRows(rows, item.BaseEntity.EntityInfo, item.BaseEntity.ContextCurrentUser);
+    }
+
+    /**
+     * The provider that owns an item's entity — the connection, metadata and encryption context its
+     * rows belong to — falling back to the group's provider when the entity's is not a PostgreSQL one.
+     */
+    private providerFor(item: TransactionItem, fallback: PostgreSQLDataProvider): PostgreSQLDataProvider {
+        const own = item.BaseEntity?.ProviderToUse;
+        return own instanceof PostgreSQLDataProvider ? own : fallback;
     }
 
     /**

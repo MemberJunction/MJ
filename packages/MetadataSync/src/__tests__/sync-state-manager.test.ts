@@ -174,4 +174,20 @@ describe('SyncStateManager', () => {
     expect(mgr.hasFileChanged('gone.json', 'bbb')).toBe(true);
     expect(mgr.hasFileChanged('also-gone.json', 'ccc')).toBe(true);
   });
+
+  it('pruneStaleChecksums() with folders checks only keys under those folders', async () => {
+    const baseDir = path.join(TMP_DIR, 'prune-within-test');
+    await fsReal.ensureDir(baseDir);
+
+    mgr.setFileChecksum(path.join('a', 'gone.json'), 'aaa');
+    mgr.setFileChecksum(path.join('ab', 'gone.json'), 'bbb');
+    mgr.setFileChecksum(path.join('b', 'gone.json'), 'ccc');
+
+    const pruned = await mgr.pruneStaleChecksums(baseDir, ['a']);
+
+    expect(pruned).toBe(1);
+    expect(mgr.hasFileChanged(path.join('a', 'gone.json'), 'aaa')).toBe(true);
+    expect(mgr.hasFileChanged(path.join('ab', 'gone.json'), 'bbb')).toBe(false);
+    expect(mgr.hasFileChanged(path.join('b', 'gone.json'), 'ccc')).toBe(false);
+  });
 });

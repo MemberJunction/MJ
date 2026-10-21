@@ -8,3 +8,5 @@ export { ReportGenerator } from './ReportGenerator.js';
 export { HTMLGenerator, HTMLGeneratorOptions } from './HTMLGenerator.js';
 export { CSVGenerator, CSVGeneratorOptions, CSVExport } from './CSVGenerator.js';
 export { MermaidGenerator, MermaidGeneratorOptions } from './MermaidGenerator.js';
+export { ErdClusterer, ErdClustererOptions, ErdClustererSettings, ErdClusterPlan, ErdCluster, ErdClusterPage, ErdEdge } from './ErdClusterer.js';
+export { ErdClusterGenerator, ErdClusterGeneratorOptions, ErdClusterOutput, ErdClusterFile } from './ErdClusterGenerator.js';

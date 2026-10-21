@@ -134,6 +134,15 @@ export interface IVonageClientBindings {
      * @param callUuid The call UUID whose queued outbound audio to flush.
      */
     flushOutbound(callUuid: string): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+    /**
+     * **Optional.** Speaks `message` to the caller and ends the call, via a Voice API transfer to a one-action
+     * `talk` NCCO (the call ends when the NCCO finishes). When absent the SDK just hangs the call up.
+     *
+     * @param callUuid The call UUID.
+     * @param message The text to speak.
+     */
+    sayAndHangup?(callUuid: string, message: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** The default bindings used when none are supplied — every operation throws the bind-me error. */
@@ -244,6 +253,20 @@ export class VonageCallSdk implements ITelephonyCallSdk {
         this.endedCb = cb;
         if (this.activeCallUuid) {
             this.bindings.onCallStatus(this.activeCallUuid, cb);
+        }
+    }
+
+    /** @inheritdoc — after a transfer / goodbye Vonage owns the call; forget it locally, never hang it up. */
+    public async detach(_callId: string): Promise<void> {
+        this.activeCallUuid = null;
+    }
+
+    /** @inheritdoc — speaks the message via an NCCO `talk` and lets the NCCO end the call; hangs up when it cannot. */
+    public async playMessageAndHangup(callId: string, message: string): Promise<void> {
+        if (this.bindings.sayAndHangup) {
+            await this.bindings.sayAndHangup(callId, message);
+        } else {
+            await this.bindings.hangupCall(callId);
         }
     }
 
