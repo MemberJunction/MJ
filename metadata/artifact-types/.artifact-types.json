@@ -60,7 +60,7 @@
       "DriverClass": "JsonArtifactViewerPlugin",
       "ToolLibraryClass": "JSONToolLibrary",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-brackets-curly"
+      "Icon": "fa-solid fa-file-code"
     },
     "primaryKey": {
       "ID": "AE674C7E-EA0D-49EA-89E4-0649F5EB20D4"
@@ -78,7 +78,7 @@
       "ContentType": "application/vnd.mj.report",
       "DriverClass": "ComponentArtifactViewerPlugin",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-chart-mixed"
+      "Icon": "fa-solid fa-chart-line"
     },
     "primaryKey": {
       "ID": "62D0243B-57A9-4702-BC2C-06F1E5A751B5"
@@ -241,7 +241,7 @@
       "ContentType": "application/typescript",
       "DriverClass": "CodeArtifactViewerPlugin",
       "IsEnabled": true,
-      "Icon": "fa-solid fa-ts"
+      "Icon": "fa-solid fa-file-code"
     },
     "primaryKey": {
       "ID": "7CF1E417-0D0D-447F-91F2-C7861F8BA5A2"

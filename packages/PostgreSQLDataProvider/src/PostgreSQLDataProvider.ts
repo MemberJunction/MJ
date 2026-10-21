@@ -22,10 +22,11 @@ import {
     RecordChangeSource,
     RecordChangePayload,
     EntityDeleteOptions,
+    EntitySaveOptions,
 } from '@memberjunction/core';
 
 
-import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
+import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from '@memberjunction/generic-database-provider';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import { BytesToBase64, EscapeSQLString, IsByteArray, TryBase64ToBytes } from '@memberjunction/global';
 import { PostgreSQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
@@ -949,12 +950,22 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * Wraps a PG binding with the bare `SELECT * FROM schema.fn(...)`
      * result-capture pattern. PG returns the row directly; no
      * @ResultTable equivalent.
+     *
+     * When `returnContext.needsDatestampProjection` is true (either passed by
+     * `GenericDatabaseProvider.GenerateSaveSQL` or resolved from `options`),
+     * delegates to {@link ProjectSaveCallToDatestamps}.
      */
     protected override WrapSaveCallForResult(
         binding: SaveCallBinding,
         entity: BaseEntity,
         spName: string,
+        options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
     ): SaveSQLFragment {
+        const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
+        if (resolvedReturn.needsDatestampProjection) {
+            return this.ProjectSaveCallToDatestamps(binding, entity, spName, resolvedReturn);
+        }
         if (binding.kind !== 'pg-positional' && binding.kind !== 'pg-json-arg') {
             throw new Error(`PostgreSQLDataProvider.WrapSaveCallForResult: unexpected binding kind '${binding.kind}'`);
         }
@@ -966,20 +977,43 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     /**
+     * Projects a PG save function call down to `returnContext.datestampSelectColumnsSQL`
+     * (`SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM schema."fn"(...)`) when
+     * `options.SaveReturnMode === 'datestamps_only'` is passed at runtime on an entity
+     * whose compiled function returns the full view.
+     */
+    protected override ProjectSaveCallToDatestamps(
+        binding: SaveCallBinding,
+        entity: BaseEntity,
+        spName: string,
+        returnContext: SaveReturnContext,
+    ): SaveSQLFragment {
+        if (binding.kind !== 'pg-positional' && binding.kind !== 'pg-json-arg') {
+            throw new Error(`PostgreSQLDataProvider.ProjectSaveCallToDatestamps: unexpected binding kind '${binding.kind}'`);
+        }
+        const sql = `SELECT ${returnContext.datestampSelectColumnsSQL} FROM ${pgDialect.QuoteSchema(entity.EntityInfo.SchemaName, spName)}(${binding.callArgsSQL})`;
+        return { sql, parameters: [...binding.values] };
+    }
+
+    /**
      * Wraps a PG save SQL with the record-change CTE chain. The
      * `save_result` CTE captures the inserted/updated row; `record_change`
      * inserts the audit row with the SQL-side `RecordID` expression
-     * derived from `save_result`'s PK column(s).
+     * derived from `save_result`'s PK column(s), and the outer `SELECT`
+     * returns `returnContext.finalSelectColumnsSQL` from `save_result`.
      */
     protected override WrapSaveCallWithRecordChange(
         saveSQL: SaveSQLFragment,
         binding: SaveCallBinding,
         payload: RecordChangePayload,
         entity: BaseEntity,
+        options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
     ): SaveSQLFragment {
         if (binding.kind !== 'pg-positional' && binding.kind !== 'pg-json-arg') {
             throw new Error(`PostgreSQLDataProvider.WrapSaveCallWithRecordChange: unexpected binding kind '${binding.kind}'`);
         }
+        const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
         const baseValues = saveSQL.parameters ?? [];
         const recordIDExpr = this.buildRecordIDFromCTE(entity.EntityInfo, 'save_result');
         const s = baseValues.length + 1;
@@ -994,7 +1028,7 @@ record_change AS (
     FROM save_result
     RETURNING "ID"
 )
-SELECT * FROM save_result`;
+SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM save_result`;
         const parameters = [
             ...baseValues,
             payload.entityID,

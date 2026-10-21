@@ -147,21 +147,26 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  
      * per-turn flag resets on the next `speech_started` ({@link onSpeechStartedFrame}).
      */
     protected override onUserTranscriptFrame(transcript: string): void {
-        if (transcript && transcript.trim().length > 0) {
-            // Two ways this caption REPLACES rather than appends: another already landed in this turn,
-            // OR it continues the previous utterance (the provider re-emits the whole thing with more
-            // words). The second case rescues a mid-sentence pause — the VAD fires speech_started and
-            // clears the flag even though the user never stopped, which would otherwise split one
-            // spoken thought into several growing bubbles. Mirrors the server session exactly so both
-            // topologies collapse the stream identically.
-            const replacesPrevious = this.userTurnTranscribed || IsTranscriptContinuation(this.lastUserTranscript, transcript);
-            this.emitTranscript({
-                Role: 'User', Text: transcript, IsFinal: true, Kind: 'normal',
-                ReplacesPrevious: replacesPrevious,
-            });
-            this.userTurnTranscribed = true;
-            this.lastUserTranscript = transcript;
+        if (!transcript || transcript.trim().length === 0) {
+            // An empty transcription (a VAD false positive) passes through as a plain final, like the
+            // OpenAI base: the host releases the speech onset it stamped (MJ#5483). It is not part of
+            // the streamed utterance, so the per-turn flags stay as they are.
+            super.onUserTranscriptFrame(transcript ?? '');
+            return;
         }
+        // Two ways this caption REPLACES rather than appends: another already landed in this turn,
+        // OR it continues the previous utterance (the provider re-emits the whole thing with more
+        // words). The second case rescues a mid-sentence pause — the VAD fires speech_started and
+        // clears the flag even though the user never stopped, which would otherwise split one
+        // spoken thought into several growing bubbles. Mirrors the server session exactly so both
+        // topologies collapse the stream identically.
+        const replacesPrevious = this.userTurnTranscribed || IsTranscriptContinuation(this.lastUserTranscript, transcript);
+        this.emitTranscript({
+            Role: 'User', Text: transcript, IsFinal: true, Kind: 'normal',
+            ReplacesPrevious: replacesPrevious,
+        });
+        this.userTurnTranscribed = true;
+        this.lastUserTranscript = transcript;
     }
 
     /**

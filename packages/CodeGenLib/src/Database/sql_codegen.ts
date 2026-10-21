@@ -117,9 +117,17 @@ export class SQLCodeGenBase {
      */
     protected existingRoutines: Set<string> | null = null;
 
+    /**
+     * Map of `schema.routine` (lowercased) to its live `OBJECT_DEFINITION` text on SQL Server,
+     * used by {@link isRoutineSaveReturnModeChanged} to detect when `Entity.Configuration.SaveReturnMode`
+     * changed via `mj sync push` without a physical table/column change.
+     */
+    protected existingRoutineDefinitions: Map<string, string> | null = null;
+
     public async ManageSQLScriptsAndExecution(pool: CodeGenConnection, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
             this.existingRoutines = null;
+            this.existingRoutineDefinitions = null;
             // Build list of entities qualified for forced regeneration if entityWhereClause is provided
             if (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.entityWhereClause) {
                 this.filterEntitiesQualifiedForRegeneration = true; // Enable filtering
@@ -372,11 +380,21 @@ export class SQLCodeGenBase {
             // Pass 2 (this call) only re-runs to pick up new virtual fields from regenerated views and to apply advanced
             // generation. Scoping to changed entities collapses the SP scans to seeks; an empty list means no work to do.
             // forceRegeneration override skips the scoping so all entities get reprocessed (used when prompts change, etc.).
+            //
+            // The two lists only ever contain entities something changed on during THIS run, so an
+            // entity whose virtual-field row was missed once drops out of scope forever and its
+            // record forms stay broken until someone runs forceRegeneration over the whole database.
+            // The drift probe closes that: it asks the catalog which entities have a view-only
+            // column with no EntityField and unions those in, so recovery is a normal run.
+            const driftEntities = configInfo.forceRegeneration?.enabled
+                ? []
+                : await manageMD.FindVirtualFieldDriftEntities(pool, configInfo.excludeSchemas);
             const pass2EntityFilter: string[] | undefined = configInfo.forceRegeneration?.enabled
                 ? undefined
                 : [...new Set([
                     ...ManageMetadataBase.newEntityList,
                     ...ManageMetadataBase.modifiedEntityList,
+                    ...driftEntities,
                 ])];
             StartSpinner('Managing entity fields metadata...');
             if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, false, false, pass2EntityFilter)) {
@@ -728,7 +746,12 @@ export class SQLCodeGenBase {
         enableSQLLoggingForNewOrModifiedEntities?: boolean,
         /** Optional UNION of will-regenerate keys across ALL batches in the same
          *  codegen run. When provided, takes precedence over the per-batch set. */
-        willRegenerate?: Set<string>
+        willRegenerate?: Set<string>,
+        /**
+         * Phase name for the per-batch progress line, e.g. 'Generating SQL'. Defaults from
+         * `onlyPermissions`. See {@link reportEntityBatchProgress} for why the line exists.
+         */
+        progressLabel?: string
     }): Promise<{Success: boolean, Files: string[]}> {
         if (!options.batchSize)
             options.batchSize = 5; // default to 5 if not specified
@@ -748,8 +771,11 @@ export class SQLCodeGenBase {
                 options.entities.map(e => `${e.SchemaName}.${e.BaseView}`)
             );
 
+            const phaseLabel = options.progressLabel ?? (options.onlyPermissions ? 'Applying permissions' : 'Generating SQL');
+            const phaseStart = Date.now();
             for (let i = 0; i < totalEntities; i += options.batchSize) {
                 const batch = options.entities.slice(i, i + options.batchSize);
+                this.reportEntityBatchProgress(phaseLabel, i, totalEntities, batch[0], phaseStart);
                 const promises = batch.map(async (e) => {
                     const pkeyField = e.Fields.find(f => f.IsPrimaryKey)
                     if (!pkeyField) {
@@ -1641,10 +1667,12 @@ export class SQLCodeGenBase {
     /**
      * Snapshot every CRUD routine currently in the database (one query) so
      * generate-and-log can force-emit CREATE PROC for objects that vanished
-     * without the entity landing on newEntityList/modifiedEntityList.
+     * without the entity landing on newEntityList/modifiedEntityList, or whose
+     * return-row mode (`SaveReturnMode`) changed via `mj sync push`.
      */
     protected async loadExistingRoutines(pool: CodeGenConnection, entities: EntityInfo[]): Promise<void> {
         this.existingRoutines = new Set<string>();
+        this.existingRoutineDefinitions = null;
         const schemas = [...new Set(entities.map((e) => e.SchemaName).filter((s) => !!s))];
         const sql = this._dbProvider.getRoutineNamesBySchemaSQL(schemas);
         if (!sql || !sql.trim()) {
@@ -1659,9 +1687,27 @@ export class SQLCodeGenBase {
                     this.existingRoutines.add(`${schemaName}.${routineName}`);
                 }
             }
+
+            if (this._dbProvider.PlatformKey === 'sqlserver' && schemas.length > 0) {
+                const inList = schemas.map((s) => `'${s.replace(/'/g, "''")}'`).join(', ');
+                const defResult = await pool.query(
+                    `SELECT s.name AS schema_name, p.name AS routine_name, OBJECT_DEFINITION(p.object_id) AS routine_definition ` +
+                    `FROM sys.procedures p INNER JOIN sys.schemas s ON s.schema_id = p.schema_id WHERE s.name IN (${inList})`
+                );
+                this.existingRoutineDefinitions = new Map<string, string>();
+                for (const row of defResult.recordset ?? []) {
+                    const schemaName = String(row.schema_name ?? '').toLowerCase();
+                    const routineName = String(row.routine_name ?? '').toLowerCase();
+                    const routineDef = row.routine_definition != null ? String(row.routine_definition) : '';
+                    if (schemaName && routineName && routineDef) {
+                        this.existingRoutineDefinitions.set(`${schemaName}.${routineName}`, routineDef);
+                    }
+                }
+            }
         } catch (e) {
             LogWarning(`Could not load existing CRUD routines (missing-proc self-heal disabled this run): ${e instanceof Error ? e.message : String(e)}`);
             this.existingRoutines = null;
+            this.existingRoutineDefinitions = null;
         }
     }
 
@@ -1672,8 +1718,37 @@ export class SQLCodeGenBase {
         return !this.existingRoutines.has(`${schema}.${routineName}`.toLowerCase());
     }
 
+    /**
+     * Returns true when `spCreate` or `spUpdate` in the database was generated under a different
+     * `SaveReturnMode` (`'full'` vs `'datestamps_only'`) than the entity's current metadata.
+     * This ensures that when `Entity.Configuration.SaveReturnMode` is updated via `mj sync push`,
+     * the subsequent `mj codegen` run automatically logs and executes the updated stored procedures.
+     */
+    protected isRoutineSaveReturnModeChanged(entity: EntityInfo, routineName: string): boolean {
+        if (!this.existingRoutineDefinitions || !entity.BaseView) {
+            return false;
+        }
+        const createSpName = this.GetSPName(entity, SPType.Create).toLowerCase();
+        const updateSpName = this.GetSPName(entity, SPType.Update).toLowerCase();
+        const lowerRoutine = routineName.toLowerCase();
+        if (lowerRoutine !== createSpName && lowerRoutine !== updateSpName) {
+            return false;
+        }
+        const def = this.existingRoutineDefinitions.get(`${entity.SchemaName}.${routineName}`.toLowerCase());
+        if (!def) {
+            return false;
+        }
+        const selectsFromBaseView = def.toLowerCase().includes(`[${entity.BaseView.toLowerCase()}]`);
+        if (entity.SaveReturnMode === 'datestamps_only') {
+            return selectsFromBaseView;
+        }
+        return !selectsFromBaseView;
+    }
+
     protected forceLogForRoutine(entity: EntityInfo, routineName: string, baseViewChanged: boolean): boolean {
-        return baseViewChanged || this.isRoutineMissing(entity.SchemaName, routineName);
+        return baseViewChanged ||
+               this.isRoutineMissing(entity.SchemaName, routineName) ||
+               this.isRoutineSaveReturnModeChanged(entity, routineName);
     }
 
     public GetEntityPermissionFileNames(entity: EntityInfo): string[] {
@@ -1786,6 +1861,14 @@ export class SQLCodeGenBase {
                 throw new Error(`Could not update the FullTextSearchFunction for entity ${entity.Name}`);
         }
 
+        // Say what enabling full-text search costs, at the one moment the person who enabled it is
+        // still in the room. The objects below are charged on every write to the table from here on
+        // and are not removed by turning the entity's flags back off.
+        const costDisclosure = this._dbProvider.FullTextSearchCostDisclosure(entity, searchFields);
+        if (costDisclosure) {
+            LogWarning(`   > ${costDisclosure}`);
+        }
+
         // Delegate SQL generation to the provider
         const result = this._dbProvider.generateFullTextSearch(entity, searchFields, primaryKeyIndexName);
 
@@ -1824,6 +1907,39 @@ export class SQLCodeGenBase {
     /** @deprecated Use {@link GenerateAllEntitiesSQLFileHeader}. */
     public generateAllEntitiesSQLFileHeader(): string {
       return this.GenerateAllEntitiesSQLFileHeader();
+    }
+
+    /**
+     * Emits the one live progress line for the entity generation/permissions loop: which phase, how
+     * far through, which entity is being worked on, and how long the phase has been running.
+     *
+     * WHY. The spinner already re-renders an elapsed timer every 100 ms, so a long run is not silent
+     * — but the message it re-renders was set ONCE before the loop ("Generating SQL for 1,200
+     * entities…") and never changed again. A run that has been sitting on entity 3 for four minutes
+     * and a run that is on entity 1,180 render identically, which makes a stall and normal progress
+     * indistinguishable. `N/total` is the whole difference.
+     *
+     * Called per BATCH rather than per entity: the batch is the unit of concurrency (its members run
+     * under one `Promise.all`), so a per-entity line would just interleave five entities' names at
+     * random. The named entity is the batch's first, which is what the run is demonstrably on.
+     *
+     * `UpdateSpinner` covers both output modes by construction — in verbose mode it routes to
+     * `logStatus`, so a verbose run gets the same information as a line per batch instead of a
+     * re-rendered spinner.
+     */
+    protected reportEntityBatchProgress(
+        phaseLabel: string,
+        completed: number,
+        total: number,
+        currentEntity: EntityInfo | undefined,
+        phaseStartMs: number
+    ): void {
+        if (total === 0) {
+            return;
+        }
+        const elapsed = ((Date.now() - phaseStartMs) / 1000).toFixed(1);
+        const where = currentEntity ? ` — ${currentEntity.SchemaName}.${currentEntity.Name}` : '';
+        UpdateSpinner(`${phaseLabel}: ${completed}/${total} entities, ${elapsed}s elapsed${where}`);
     }
 
     public GenerateSingleEntitySQLFileHeader(entity: EntityInfo, itemName: string): string {

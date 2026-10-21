@@ -19,7 +19,15 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Type of diagram to generate: 'flow' (flowchart), 'org' (org chart), or 'er' (entity-relationship diagram). Required.",
-            "IsRequired": true
+            "IsRequired": true,
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "flow",
+                "org",
+                "er"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "ED22E312-286C-47C0-8F9C-E2E39BD62F1F"
@@ -74,7 +82,16 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Layout direction for flow diagrams: 'TB' (top-bottom), 'LR' (left-right), 'RL' (right-left), 'BT' (bottom-top). Default: 'TB'.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "TB",
+                "LR",
+                "RL",
+                "BT"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "4AB95D44-F9D0-4F3E-A618-8459BF165E1D"
@@ -93,7 +110,10 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Diagram width in pixels. Default: 800.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "8EF38607-E7DF-475B-B9EA-67E457710BF2"
@@ -112,7 +132,10 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Diagram height in pixels. Default: 600.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "D7E158B8-F504-4338-B606-B635C9112453"
@@ -149,7 +172,16 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Color palette: 'mjDefault', 'gray', 'pastel', or 'highContrast'. Default: 'mjDefault'.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "mjDefault",
+                "gray",
+                "pastel",
+                "highContrast"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "9536A0D4-A5D7-421E-8BBD-C67BB45BCF05"
@@ -167,7 +199,10 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Random seed for deterministic layouts (optional). Use same seed for reproducible diagrams.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "ADFA7B2F-D9FA-4EF9-B8A3-5497DFF173CD"

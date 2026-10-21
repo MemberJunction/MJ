@@ -11,6 +11,7 @@ export * from './lib/base-navigation-component';
 export * from './lib/navigation.service';
 export * from './lib/moved-nav-items';
 export * from './lib/record-open-style';
+export * from './lib/record-delete';
 export * from './lib/record-tab-icon';
 export * from './lib/explorer-breakpoint.service';
 export * from './lib/safe-detect-changes';

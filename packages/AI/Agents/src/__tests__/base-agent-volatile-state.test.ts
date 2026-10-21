@@ -7,6 +7,9 @@
  * (or told to), and never touch the live history.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import type { ExecuteAgentParams, AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
@@ -181,6 +184,23 @@ describe('BaseAgent.buildVolatileStateMessage', () => {
         const msg = await a.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE, syncedSystemPrompt);
         expect(msg).not.toBeNull();
         expect(msg!.metadata?.volatileState).toBe(true);
+    });
+
+    it('shipped Flow Agent system prompt template resolves to trailing <mj-runtime-state> delivery (not embedded)', async () => {
+        const here = dirname(fileURLToPath(import.meta.url));
+        const flowTemplatePath = join(here, '../../../../../metadata/prompts/templates/system/flow-agent-type-system-prompt.template.md');
+        const flowTemplateText = readFileSync(flowTemplatePath, 'utf8');
+        templates.byId.set('tmpl-flow-system', flowTemplateText);
+        const flowSystemPrompt = { ID: 'flow-sys-1', Name: 'Flow Agent System Prompt', TemplateID: 'tmpl-flow-system' } as unknown as MJAIPromptEntityExtended;
+
+        const a = agentUnderTest();
+        const { params, promptParams } = makeInputs(TRAILING);
+        const msg = await a.buildVolatileStateMessage(params, promptParams, { orderTotal: 1250 }, CHILD, AGENT_TYPE, flowSystemPrompt);
+        expect(msg).not.toBeNull();
+        expect(msg!.metadata?.volatileState).toBe(true);
+        const content = String(msg!.content);
+        expect(content.startsWith(`<${RUNTIME_STATE_TAG}>`)).toBe(true);
+        expect(content).toContain('{"orderTotal":1250}');
     });
 
     it('template sync guard: the markers are an overridable extension point, defaulting to VOLATILE_TEMPLATE_MARKERS', async () => {

@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ChatMessageContentBlock, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration, CredentialScopeAllows, type AICredentialScope } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ChatMessageContentBlock, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration, CredentialScopeAllows, ResolveEffectiveModelConfiguration, type AICredentialScope } from '@memberjunction/ai';
 import {
   BaseModelRunner,
   type ExecutionBound,
@@ -14,7 +14,7 @@ import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResul
 import { MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { TemplateEngineServer, type ReferencedVariablesResult } from '@memberjunction/templates';
-import { TemplateRenderResult } from '@memberjunction/templates-base-types';
+import { TemplateRenderResult, type TemplateRenderOptions } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
 import { ParseManifestEntryMime, TrimSpacesAndTabs } from './linearTextScan';
@@ -164,6 +164,11 @@ interface ResolvedScalarInferenceParams {
 }
 
 export class AIPromptRunner extends BaseModelRunner {
+  /** The render options a prompt asks for: a raw render when `templateAutoescape` is false, else the engine's default. */
+  public static RenderOptions(params: AIPromptParams): TemplateRenderOptions | undefined {
+    return params.templateAutoescape === false ? { autoescape: false } : undefined;
+  }
+
   /**
    * The model type this runner requires. Returns 'LLM' for AIPromptRunner.
    */
@@ -204,7 +209,9 @@ export class AIPromptRunner extends BaseModelRunner {
 
   constructor() {
     super();
-    this._metadata = (this._provider as unknown as Metadata) ?? new Metadata();
+    this._metadata =
+      (this._provider as unknown as Metadata) ??
+      (typeof Metadata === 'function' ? new Metadata() : ({} as Metadata)); // global-provider-ok: the same no-provider fallback as `provider ?? new Metadata()`; the typeof guard keeps core mocks without Metadata working
     this._templateEngine = TemplateEngineServer.Instance;
     this._executionPlanner = new ExecutionPlanner();
     this._jsonValidator = new JSONValidator();
@@ -475,7 +482,7 @@ export class AIPromptRunner extends BaseModelRunner {
           promptRun.ErrorDetails = error.message;
         }
         
-        const saveResult = await promptRun.Save();
+        const saveResult = await promptRun.Save({ SaveReturnMode: 'datestamps_only' });
         if (!saveResult) {
           this.logError(`Failed to save error to AIPromptRun: ${promptRun.LatestResult?.CompleteMessage || 'Unknown error'}`, {
             category: 'PromptRunSave',
@@ -810,18 +817,22 @@ export class AIPromptRunner extends BaseModelRunner {
       }
     }
 
-    // Update parent with selected arm's model and vendor
-    consolidatedPromptRun.ModelID = selectedResult.task.model.ID;
-    if (selectedResult.task.vendorId) {
-      consolidatedPromptRun.VendorID = selectedResult.task.vendorId;
-    } else if (selectedResult.task.promptModel?.VendorID) {
-      consolidatedPromptRun.VendorID = selectedResult.task.promptModel.VendorID;
+    // Update parent with selected arm's model and vendor (also re-applied inside applyConsolidatedFields
+    // so an in-flight INSERT reload on consolidatedPromptRun can never revert them).
+    const selectedModelId = selectedResult.task.model.ID;
+    const selectedVendorId = selectedResult.task.vendorId ?? selectedResult.task.promptModel?.VendorID;
+    consolidatedPromptRun.ModelID = selectedModelId;
+    if (selectedVendorId) {
+      consolidatedPromptRun.VendorID = selectedVendorId;
     }
 
-    // Ensure selectedResult child is marked WasSelectedResult = true
+    // Ensure selectedResult child is marked WasSelectedResult = true via the fire-and-forget prompt run queue
     if (selectedResult.promptRun) {
-      selectedResult.promptRun.WasSelectedResult = true;
-      await selectedResult.promptRun.Save();
+      const selectedRun = selectedResult.promptRun;
+      selectedRun.WasSelectedResult = true;
+      this._promptRunQueue.Update(selectedRun, () => {
+        selectedRun.WasSelectedResult = true;
+      });
     }
 
     // Calculate total tokens and costs from all parallel executions
@@ -848,66 +859,75 @@ export class AIPromptRunner extends BaseModelRunner {
       }
     }
 
-    // Update with parallel execution metadata
+    // Update with parallel execution metadata (applied immediately in memory and re-applied inside the
+    // queued Update callback so an in-flight INSERT reload can never clobber the consolidated fields).
     const endTime = new Date();
-    consolidatedPromptRun.CompletedAt = endTime;
-    consolidatedPromptRun.ExecutionTimeMS = parallelResult.totalExecutionTimeMS;
-    consolidatedPromptRun.Result = selectedResult.rawResult || '';
-    consolidatedPromptRun.TokensUsed = parallelResult.totalTokensUsed;
-
-    // Layer 4 instrumentation, same as the single-model path. This path reaches the same
-    // `executeModel` and therefore declares tools, so leaving the column NULL here would tell the
-    // agent loop a NativeImplicit turn was not implicit — every control-flow call would then be
-    // rejected as an undeclared tool and the loop would retry on tools it declared itself.
-    consolidatedPromptRun.ToolCallingMode = GetToolCallingMode(selectedResult.modelResult) ?? null;
-    
-    // Extract token and cost info from selected result
-    const selectedResultUsage = selectedResult.modelResult?.data?.usage;
-    if (selectedResultUsage) {
-      consolidatedPromptRun.TokensPrompt = selectedResultUsage.promptTokens;
-      consolidatedPromptRun.TokensCompletion = selectedResultUsage.completionTokens;
-      // Persist the selected result's cache token counts so (a) they are recorded and (b) any
-      // downstream cost recompute (MJAIPromptRunEntityServer, when no provider cost is present)
-      // prices the full input including cached tokens rather than dropping them.
-      consolidatedPromptRun.TokensCacheRead = selectedResultUsage.cacheReadTokens ?? 0;
-      consolidatedPromptRun.TokensCacheWrite = selectedResultUsage.cacheWriteTokens ?? 0;
-      // NOTE (§5.1): On the parent, do NOT assign Cost from the selected arm. Leave Cost = null.
-      // TotalCost is maintained by server-side TriggerParentCostRollup.
-      if (selectedResultUsage.costCurrency !== undefined) {
-        consolidatedPromptRun.CostCurrency = selectedResultUsage.costCurrency;
-      }
-    }
-
-    // Store the parallel execution summary in the Messages field, with the messages and the allowed template inputs
-    const parallelMetadata: StoredParallelExecutionInfo = {
+    const storedMessagesJSON = this.buildStoredMessagesJSON(prompt, params, params.conversationMessages || [], {
       parallelizationMode: prompt.ParallelizationMode,
       totalTasks: executionTasks.length,
       successfulTasks: parallelResult.successCount,
       failedTasks: parallelResult.failureCount,
       selectedTaskId: selectedResult.task.taskId,
       executionGroups: Array.from(parallelResult.groupResults.keys()),
+    });
+    const selectedToolCallingMode = GetToolCallingMode(selectedResult.modelResult) ?? null;
+    const selectedResultUsage = selectedResult.modelResult?.data?.usage;
+    const consolidatedStatus: MJAIPromptRunEntityExtended['Status'] =
+      parallelResult.successCount > 0 ? 'Completed' : 'Failed';
+
+    const applyConsolidatedFields = (): void => {
+      consolidatedPromptRun.ModelID = selectedModelId;
+      if (selectedVendorId) {
+        consolidatedPromptRun.VendorID = selectedVendorId;
+      }
+      consolidatedPromptRun.CompletedAt = endTime;
+      consolidatedPromptRun.ExecutionTimeMS = parallelResult.totalExecutionTimeMS;
+      consolidatedPromptRun.Result = selectedResult.rawResult || '';
+      consolidatedPromptRun.TokensUsed = parallelResult.totalTokensUsed;
+
+      // Layer 4 instrumentation, same as the single-model path. This path reaches the same
+      // `executeModel` and therefore declares tools, so leaving the column NULL here would tell the
+      // agent loop a NativeImplicit turn was not implicit — every control-flow call would then be
+      // rejected as an undeclared tool and the loop would retry on tools it declared itself.
+      consolidatedPromptRun.ToolCallingMode = selectedToolCallingMode;
+
+      // Extract token and cost info from selected result
+      if (selectedResultUsage) {
+        consolidatedPromptRun.TokensPrompt = selectedResultUsage.promptTokens;
+        consolidatedPromptRun.TokensCompletion = selectedResultUsage.completionTokens;
+        // Persist the selected result's cache token counts so (a) they are recorded and (b) any
+        // downstream cost recompute (MJAIPromptRunEntityServer, when no provider cost is present)
+        // prices the full input including cached tokens rather than dropping them.
+        consolidatedPromptRun.TokensCacheRead = selectedResultUsage.cacheReadTokens ?? 0;
+        consolidatedPromptRun.TokensCacheWrite = selectedResultUsage.cacheWriteTokens ?? 0;
+        // NOTE (§5.1): On the parent, do NOT assign Cost from the selected arm. Leave Cost = null.
+        // TotalCost is maintained by server-side TriggerParentCostRollup.
+        if (selectedResultUsage.costCurrency !== undefined) {
+          consolidatedPromptRun.CostCurrency = selectedResultUsage.costCurrency;
+        }
+      }
+
+      // Store the parallel execution summary in the Messages field, with the messages and the allowed template inputs
+      consolidatedPromptRun.Messages = storedMessagesJSON;
+
+      // For parallel execution, set rollup fields to match totals
+      consolidatedPromptRun.TokensPromptRollup = totalPromptTokens;
+      consolidatedPromptRun.TokensCompletionRollup = totalCompletionTokens;
+      consolidatedPromptRun.TokensUsedRollup = totalPromptTokens + totalCompletionTokens;
+      consolidatedPromptRun.TokensCacheReadRollup = totalCacheReadTokens;
+      consolidatedPromptRun.TokensCacheWriteRollup = totalCacheWriteTokens;
+      if (hasCost) {
+        consolidatedPromptRun.DescendantCost = totalCost;
+        consolidatedPromptRun.TotalCost = totalCost;
+      }
+
+      // Set Status and WasSelectedResult for parallel execution
+      consolidatedPromptRun.Status = consolidatedStatus;
+      consolidatedPromptRun.WasSelectedResult = false; // WasSelectedResult stays on the selected child, not the parent
     };
-    consolidatedPromptRun.Messages = this.buildStoredMessagesJSON(prompt, params, params.conversationMessages || [], parallelMetadata);
 
-    // For parallel execution, set rollup fields to match totals
-    consolidatedPromptRun.TokensPromptRollup = totalPromptTokens;
-    consolidatedPromptRun.TokensCompletionRollup = totalCompletionTokens;
-    consolidatedPromptRun.TokensUsedRollup = totalPromptTokens + totalCompletionTokens;
-    consolidatedPromptRun.TokensCacheReadRollup = totalCacheReadTokens;
-    consolidatedPromptRun.TokensCacheWriteRollup = totalCacheWriteTokens;
-    if (hasCost) {
-      consolidatedPromptRun.DescendantCost = totalCost;
-      consolidatedPromptRun.TotalCost = totalCost;
-    }
-    
-    // Set Status and WasSelectedResult for parallel execution
-    consolidatedPromptRun.Status = parallelResult.successCount > 0 ? 'Completed' : 'Failed';
-    consolidatedPromptRun.WasSelectedResult = false; // WasSelectedResult stays on the selected child, not the parent
-
-    // Persist the consolidated run fire-and-forget; the finalize UPDATE chains after its INSERT via
-    // the save queue. These fields are set after all the awaited parallel work, so the INSERT has long
-    // landed — a plain Update (no post-INSERT callback) is race-safe here.
-    this._promptRunQueue.Update(consolidatedPromptRun);
+    applyConsolidatedFields();
+    this._promptRunQueue.Update(consolidatedPromptRun, () => applyConsolidatedFields());
 
     // Create additional results from all other successful results (excluding the best one)
     const additionalResults: AIPromptRunResult<T>[] = [];
@@ -995,7 +1015,9 @@ export class AIPromptRunner extends BaseModelRunner {
   private async loadTemplate(templateId: string, _contextUser?: UserInfo): Promise<MJTemplateEntityExtended | null> {
     try {
       // Use the template engine to find the template
-      const template = this._templateEngine.Templates.find((t: MJTemplateEntityExtended) => UUIDsEqual(t.ID, templateId));
+      const template = typeof this._templateEngine.FindTemplateByID === 'function'
+        ? this._templateEngine.FindTemplateByID(templateId)
+        : this._templateEngine.Templates.find((t: MJTemplateEntityExtended) => UUIDsEqual(t.ID, templateId));
       return template || null;
     } catch (error) {
       this.logError(error, {
@@ -1308,11 +1330,14 @@ export class AIPromptRunner extends BaseModelRunner {
       }
 
       // Render the template with the full params context
-      // We already have system placeholders resolved, so we'll render directly
+      // We already have system placeholders resolved, so we'll render directly.
       const renderedPrompt = await this._templateEngine.RenderTemplate(
-        template, 
-        template.GetHighestPriorityContent()!, 
-        mergedData
+        template,
+        template.GetHighestPriorityContent()!,
+        mergedData,
+        undefined,
+        undefined,
+        AIPromptRunner.RenderOptions(params)
       );
       
       if (!renderedPrompt.Success) {
@@ -1766,7 +1791,7 @@ export class AIPromptRunner extends BaseModelRunner {
       // almost always what the author meant. If real param validation is
       // needed (e.g., catching typos at template-author time), it should
       // live in the authoring tools, not in the runtime render path.
-      return await this._templateEngine.RenderTemplate(template, templateContent, mergedData, true, false);
+      return await this._templateEngine.RenderTemplate(template, templateContent, mergedData, true, false, AIPromptRunner.RenderOptions(params));
     } catch (error) {
       this.logError(error, {
         category: 'TemplateRendering',
@@ -1930,7 +1955,7 @@ export class AIPromptRunner extends BaseModelRunner {
     try {
       return ResolveNativeToolCalling({
         catalogConfiguration: this.catalogConfigurationFor(model, vendorId),
-        promptConfiguration: prompt.PromptConfigurationObject,
+        promptConfiguration: this.ResolveEffectivePromptConfiguration(prompt, params),
         promptModelConfiguration,
         // Action tools and control-flow tools are counted separately: under the hybrid the control
         // tools are stripped, so on their own they must not open the gate (spec §5).
@@ -1947,6 +1972,31 @@ export class AIPromptRunner extends BaseModelRunner {
     }
   }
 
+
+  /**
+   * The prompt layer of the native tool-calling cascade, with a hierarchical run's child prompt
+   * merged over its parent.
+   *
+   * An agent runs its agent type's system prompt as `prompt` and its own prompt as the first
+   * child, so the parent's bag alone describes the agent TYPE, not the agent. Native tool calling
+   * is a property of the agent's own prompt, so the child's bag sits between the parent and the
+   * selected `AIPromptModel` row: parent → child → row. The merge is per key, so an explicit value
+   * in the child (including `false`) overrides the parent, and an absent key inherits.
+   *
+   * @param prompt The prompt being run (the parent on a hierarchical run)
+   * @param params The caller's params — supplies the child prompts, if any
+   * @returns The merged prompt configuration, or null when neither layer sets one
+   */
+  protected ResolveEffectivePromptConfiguration(
+    prompt: MJAIPromptEntityExtended,
+    params: AIPromptParams
+  ): AIPromptConfiguration | null {
+    const childPrompt = params.childPrompts?.[0]?.childPrompt?.prompt;
+    return ResolveEffectiveModelConfiguration(
+      prompt.PromptConfigurationObject ?? null,
+      childPrompt?.PromptConfigurationObject ?? null
+    );
+  }
 
   /**
    * Returns the template data with `_NATIVE_TOOL_CALLING` and `_NATIVE_CONTROL_FLOW` set.
@@ -3288,6 +3338,15 @@ export class AIPromptRunner extends BaseModelRunner {
    * for "is this an envelope or plain prose?" under implicit control flow. Never throws.
    */
   private parsesAsJSON(text: string): boolean {
+    const trimmed = text.trimStart();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        JSON.parse(text);
+        return true;
+      } catch {
+        // Fall through to CleanJSON extraction
+      }
+    }
     try {
       JSON.parse(CleanJSON(text) ?? text);
       return true;
@@ -3562,8 +3621,18 @@ export class AIPromptRunner extends BaseModelRunner {
     let parsedResult: unknown;
     
     try {
-      // First attempt: Use CleanJSON to handle common JSON issues
-      parsedResult = JSON.parse(CleanJSON(rawOutput));
+      // Fast path: when rawOutput already begins with '{' or '[', try native JSON.parse
+      // directly before running CleanJSON's multi-pass regex extraction.
+      const trimmed = rawOutput.trimStart();
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+          parsedResult = JSON.parse(rawOutput);
+        } catch {
+          parsedResult = JSON.parse(CleanJSON(rawOutput));
+        }
+      } else {
+        parsedResult = JSON.parse(CleanJSON(rawOutput));
+      }
     } catch (jsonError) {
       // If attemptJSONRepair is enabled and we're dealing with object output
       if (params?.attemptJSONRepair && prompt.OutputType === 'object') {
@@ -3581,8 +3650,7 @@ export class AIPromptRunner extends BaseModelRunner {
     
     // Clean validation syntax if needed
     if (parsedResult && (cleanValidationSyntax || (!skipValidation && prompt.OutputExample))) {
-      const validator = new JSONValidator();
-      parsedResult = validator.cleanValidationSyntax<unknown>(parsedResult);
+      parsedResult = this._jsonValidator.cleanValidationSyntax<unknown>(parsedResult);
     }
     
     return parsedResult;
@@ -4080,7 +4148,9 @@ export class AIPromptRunner extends BaseModelRunner {
     const problems: string[] = [];
     const addPromptTemplate = (templateId: string | null, promptName: string): void => {
       if (!templateId) return;
-      const template = this._templateEngine.Templates.find((t) => UUIDsEqual(t.ID, templateId));
+      const template = typeof this._templateEngine.FindTemplateByID === 'function'
+        ? this._templateEngine.FindTemplateByID(templateId)
+        : this._templateEngine.Templates.find((t) => UUIDsEqual(t.ID, templateId));
       const text = template?.GetHighestPriorityContent()?.TemplateText;
       if (!text) {
         problems.push(`the template of prompt "${promptName}" was not found`);
