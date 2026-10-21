@@ -6,6 +6,9 @@ import { MJListDetailEntityType, MJListEntityType, MJTemplateEntityExtended, MJT
 import { MJEntityCommunicationMessageTypeEntityExtended, EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
 
  
+/** One row of a recipient or related-entity view, as RunView returns it with `ResultType: 'simple'`. */
+export type EntityCommunicationRecord = Record<string, unknown>;
+
 /**
  * Server-side implementation of the entity communications engine
  */
@@ -16,92 +19,109 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
     }
 
     /**
-     * Executes a given message request against a view of records for a given entity
+     * Executes a given message request against a view of records for a given entity.
+     *
+     * Every read runs as `params.ContextUser`, the acting user, so row-level security, entity
+     * permissions and field-level security apply. A request without one is refused rather than run
+     * under the engine's own context user, which would let a preview read past all three.
      */
     public async RunEntityCommunication(params: EntityCommunicationParams): Promise<EntityCommunicationResult> {
         try {
             this.TryThrowIfNotLoaded();
+            const contextUser = params.ContextUser;
+            if (!contextUser)
+                throw new Error('EntityCommunicationParams.ContextUser is required: entity communications run as the acting user');
 
             const md = new Metadata(); // global-provider-ok: server bootstrap, single-provider context
             const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, params.EntityID));
             if (!entityInfo)
                 throw new Error(`Entity ${params.EntityID} not found`);
-    
-            if (!this.EntitySupportsCommunication(params.EntityID)) {
+            if (!this.EntitySupportsCommunication(params.EntityID))
                 throw new Error(`Entity ${params.EntityID} does not support communication`);
-            }
-    
-            await CommunicationEngine.Instance.Config(false, this.ContextUser);
-    
-            const provider: MJCommunicationProviderEntityExtended = CommunicationEngine.Instance.Providers.find(p => p.Name.trim().toLowerCase() === params.ProviderName.trim().toLowerCase());
-            if (!provider) {
-                throw new Error(`Provider ${params.ProviderName} not found`);
-            }
 
-            if(!provider.SupportsSending){
-                throw new Error(`Provider ${params.ProviderName} does not support sending messages`);
+            await CommunicationEngine.Instance.Config(false, contextUser);
+            const entityMessageType = this.ResolveEntityMessageType(params);
+            const records = await this.RunRecipientView(entityInfo, params.RunViewParams, contextUser);
+            const recipients = await this.PopulateRecipientContextData(entityInfo, entityMessageType, params.Message, records, contextUser);
+            const sendResult = await CommunicationEngine.Instance.SendMessages(params.ProviderName, params.ProviderMessageTypeName, params.Message, recipients, params.PreviewOnly, undefined, contextUser);
+            if (sendResult && sendResult.length === recipients.length) {
+                return {
+                    Success: !sendResult.some(r => !r.Success),
+                    ErrorMessage: sendResult.filter(r => !r.Success).map(r => r.Error).join('; '),
+                    Results: sendResult.map((r, i) => ({ RecipientData: recipients[i], Message: r.Message }))
+                };
             }
-
-            const message: Message = params.Message;
-            if(message.SendAt && !provider.SupportsScheduledSending){
-                throw new Error(`Provider ${params.ProviderName} does not support scheduled sending`);
-            }
-
-            const providerMessageType = provider.MessageTypes.find(mt => mt.Name.trim().toLowerCase() === params.ProviderMessageTypeName.trim().toLowerCase());
-    
-            const entityMessageTypes = this.GetEntityCommunicationMessageTypes(params.EntityID);
-            const entityMessageType = entityMessageTypes.find(m => UUIDsEqual(m.BaseMessageTypeID, providerMessageType.CommunicationBaseMessageTypeID));
-            if (!entityMessageType) {
-                throw new Error(`Entity ${params.EntityID} does not support message type ${providerMessageType.CommunicationBaseMessageType}`);
-            }
-    
-            // next our main job here is to run the view, get all the records, and then call the communication engine
-            const rv = new RunView();
-            const rvParams2 = {
-                ...params.RunViewParams
-            }
-            // now change rvParams2.Fields to have ALL entity fields to make sure we get them all
-            rvParams2.Fields = entityInfo.Fields.map(f => f.Name);
-    
-            const result = await rv.RunView(rvParams2, this.ContextUser);
-            if (result && result.Success) {
-                // have the results, now we can map the results to the types the comm engine needs and call SendMessages() in the comm engine
-                await CommunicationEngine.Instance.Config(false, this.ContextUser);
-
-                const recipients = await this.PopulateRecipientContextData(entityInfo, entityMessageType, params.Message, result.Results);
-                const sendResult = await CommunicationEngine.Instance.SendMessages(params.ProviderName, params.ProviderMessageTypeName, params.Message, recipients, params.PreviewOnly);
-                if (sendResult && sendResult.length === recipients.length) {
-                    // make sure none of the messages failed
-                    return { 
-                        Success: !sendResult.some(r => !r.Success), 
-                        ErrorMessage: sendResult.filter(r => !r.Success).map(r => r.Error).join('; '),
-                        Results: sendResult.map((r,i) => {
-                            return {
-                                RecipientData: recipients[i], 
-                                Message: r.Message
-                            }
-                        })
-                    };
-                }
-            }
-            else {
-                throw new Error(`Failed to run view ${params.RunViewParams.ViewName}: ${result.ErrorMessage}`);
-            }
-    
             return {
                 Success: false,
-                ErrorMessage: 'Unknown error'
+                ErrorMessage: `Communication engine returned ${sendResult?.length ?? 0} results for ${recipients.length} recipients`
             }
         }
         catch (e) {
             return {
                 Success: false,
-                ErrorMessage: e.message
+                ErrorMessage: e instanceof Error ? e.message : String(e)
             }
         }
     }
 
-    protected async PopulateRecipientContextData(entityInfo: EntityInfo, entityMessageType: MJEntityCommunicationMessageTypeEntityExtended, message: Message, records: any[]): Promise<MessageRecipient[]> {
+    /**
+     * Finds the provider and the entity's message type the request names, validating that the
+     * provider can send (and schedule, when the message asks for it).
+     */
+    protected ResolveEntityMessageType(params: EntityCommunicationParams): MJEntityCommunicationMessageTypeEntityExtended {
+        const provider: MJCommunicationProviderEntityExtended = CommunicationEngine.Instance.Providers.find(p => p.Name.trim().toLowerCase() === params.ProviderName.trim().toLowerCase());
+        if (!provider)
+            throw new Error(`Provider ${params.ProviderName} not found`);
+        if (!provider.SupportsSending)
+            throw new Error(`Provider ${params.ProviderName} does not support sending messages`);
+        if (params.Message.SendAt && !provider.SupportsScheduledSending)
+            throw new Error(`Provider ${params.ProviderName} does not support scheduled sending`);
+
+        const providerMessageType = provider.MessageTypes.find(mt => mt.Name.trim().toLowerCase() === params.ProviderMessageTypeName.trim().toLowerCase());
+        if (!providerMessageType)
+            throw new Error(`Provider ${params.ProviderName} does not have message type ${params.ProviderMessageTypeName}`);
+        const entityMessageType = this.GetEntityCommunicationMessageTypes(params.EntityID).find(m => UUIDsEqual(m.BaseMessageTypeID, providerMessageType.CommunicationBaseMessageTypeID));
+        if (!entityMessageType)
+            throw new Error(`Entity ${params.EntityID} does not support message type ${providerMessageType.CommunicationBaseMessageType}`);
+        return entityMessageType;
+    }
+
+    /**
+     * Runs the caller's view of recipient records as `contextUser`, asking for every field of the
+     * entity. The provider narrows that list to the fields the user may read; the rows are stripped
+     * again here so a denied field can never reach a message.
+     */
+    protected async RunRecipientView(entityInfo: EntityInfo, runViewParams: RunViewParams, contextUser: UserInfo): Promise<EntityCommunicationRecord[]> {
+        const rvParams: RunViewParams = {
+            ...runViewParams,
+            EntityName: entityInfo.Name,
+            Fields: entityInfo.Fields.map(f => f.Name),
+            ResultType: 'simple'
+        };
+        const result = await new RunView().RunView<EntityCommunicationRecord>(rvParams, contextUser);
+        if (!result || !result.Success)
+            throw new Error(`Failed to run view ${runViewParams.ViewName ?? runViewParams.ViewID ?? entityInfo.Name}: ${result?.ErrorMessage}`);
+        return this.StripDeniedReadFields(entityInfo, result.Results, contextUser);
+    }
+
+    /**
+     * Returns copies of `rows` without any field `contextUser` may not read on `entityInfo`, so a
+     * template that references a denied field renders it empty.
+     */
+    protected StripDeniedReadFields(entityInfo: EntityInfo, rows: EntityCommunicationRecord[], contextUser: UserInfo): EntityCommunicationRecord[] {
+        if (!entityInfo.EnableFieldLevelSecurity)
+            return rows;
+        const denied = entityInfo.GetDeniedReadFields(contextUser);
+        if (denied.size === 0)
+            return rows;
+        return rows.map(row => Object.fromEntries(Object.entries(row).filter(([key]) => !denied.has(key.trim().toLowerCase()))));
+    }
+
+    /**
+     * Builds one recipient per record, with the template context data each needs. `contextUser` is
+     * the acting user; related-entity data is read as that user.
+     */
+    protected async PopulateRecipientContextData(entityInfo: EntityInfo, entityMessageType: MJEntityCommunicationMessageTypeEntityExtended, message: Message, records: any[], contextUser?: UserInfo): Promise<MessageRecipient[]> {
         // we have now validated we are good on the message type requested...
         // next up we will figure out which field to use for the entity, starting at the entity level and then going to the record level, IF the entity has
         // a PreferredCommunicationField we will flag that here as recordLevelPref = true
@@ -112,7 +132,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         if (hasTemplates) {
             this.ValidateTemplateContextParamAlignment(message);
         }
-        const relatedData = await this.GetRelatedData(message, records, entityInfo.FirstPrimaryKey.Name, entityInfo.FirstPrimaryKey.NeedsQuotes); // first-pk-ok: the recipient key is the FK target of each Entity-param's LinkedParameterField; FK targets are single-column by design
+        const relatedData = await this.GetRelatedData(message, records, entityInfo.FirstPrimaryKey.Name, entityInfo.FirstPrimaryKey.NeedsQuotes, contextUser); // first-pk-ok: the recipient key is the FK target of each Entity-param's LinkedParameterField; FK targets are single-column by design
         // assume that the template(s) if there are multiple, ALL use the same parameters for their contexts, that is validated above
         const templates: MJTemplateEntityExtended[] = [];
         if (message.BodyTemplate) {
@@ -189,10 +209,15 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
     /**
      * Returns an array of objects that have the distinct param names across all templates in use, and the complete data for
      * those relationships for all of the recipient records provided to the method.
+     * Each related entity is read as `contextUser`, and its rows are stripped of fields that user may
+     * not read.
      * @param message 
      * @param records 
+     * @param contextUser the acting user; required, the read never falls back to the engine's own user
      */
-    protected async GetRelatedData(message: Message, recipients: any[], recipientPrimaryKeyFieldName: string, recipientPrimaryKeyNeedsQuotes: boolean): Promise<{paramName: string, data: any[]}[]> {
+    protected async GetRelatedData(message: Message, recipients: any[], recipientPrimaryKeyFieldName: string, recipientPrimaryKeyNeedsQuotes: boolean, contextUser?: UserInfo): Promise<{paramName: string, data: any[]}[]> {
+        if (!contextUser)
+            throw new Error('GetRelatedData requires the acting user');
         // First, get a distinct list of params of type Entity
         const templates: MJTemplateEntityExtended[] = [];
         if (message.BodyTemplate) {
@@ -224,16 +249,17 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             const quotes = recipientPrimaryKeyNeedsQuotes ? "'" : "";
             const filter = `${relatedField} in (${recipients.map(r => `${quotes}${r[recipientPrimaryKeyFieldName]}${quotes}`).join(',')})`;
             const finalFilter = p.ExtraFilter ? `(${filter}) AND (${p.ExtraFilter})` : filter;
-            const rv = new RunView();
-            const params: any = {
+            const params: RunViewParams = {
                 EntityName: relatedEntity,
                 ExtraFilter: finalFilter,
+                ResultType: 'simple'
             }
-            const result = await rv.RunView(params, this.ContextUser);
+            const result = await new RunView().RunView<EntityCommunicationRecord>(params, contextUser);
             if (result && result.Success) {
+                const relatedEntityInfo = new Metadata().EntityByName(relatedEntity); // global-provider-ok: server bootstrap, single-provider context
                 data.push({
                     paramName: p.Name,
-                    data: result.Results
+                    data: relatedEntityInfo ? this.StripDeniedReadFields(relatedEntityInfo, result.Results, contextUser) : result.Results
                 });
             }
         }

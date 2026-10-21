@@ -17,6 +17,14 @@ export class EntityCommunicationParams {
     Message: Message
     PreviewOnly?: boolean = false
     IncludeProcessedMessages?: boolean = false
+    /**
+     * The user the communication runs as. Required on the server: every recipient and related-entity
+     * read runs as this user, so row-level security, entity permissions and field-level security all
+     * apply, and no field this user cannot read is merged into a message or returned. The server
+     * engine refuses a request without it. Clients leave it unset; the API sets it from the
+     * authenticated caller.
+     */
+    ContextUser?: UserInfo
 }
 export class EntityCommunicationResultItem {
     RecipientData: any

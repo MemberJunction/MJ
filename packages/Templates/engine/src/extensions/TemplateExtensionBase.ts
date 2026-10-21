@@ -1,4 +1,5 @@
 import { UserInfo } from "@memberjunction/core";
+import { CurrentTemplateRenderUser } from "../TemplateRenderUser";
 // TODO: Add type defs based on nunjucks classes used for extensions
 type Parser = any;
 type Nodes = any;
@@ -27,11 +28,20 @@ export abstract class TemplateExtensionBase {
         this.Tags = value;
     }
 
+    /**
+     * The user this extension acts for: the user of the render in progress. An extension instance is
+     * shared by every render in the process, so it must read this at run time and never cache it.
+     * Outside a render it falls back to the user the instance was constructed with.
+     */
     public get ContextUser(): UserInfo {
-        return this._contextUser;
+        return CurrentTemplateRenderUser() ?? this._contextUser;
     }
     private _contextUser: UserInfo;
 
+    /**
+     * @param contextUser fallback for {@link ContextUser} outside a render. The engine builds its
+     *   extensions once, with whichever user configured it first, so a render never relies on this.
+     */
     constructor(contextUser: UserInfo) {
         this._contextUser = contextUser;
     }
