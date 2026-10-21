@@ -26,46 +26,54 @@ import { type RecordProcessScopeOverride } from '@memberjunction/core-entities';
 import { RecordSetProcessor } from './RecordSetProcessor';
 import { ActionRecordProcessor } from './processors/ActionRecordProcessor';
 import { AgentRecordProcessor } from './processors/AgentRecordProcessor';
-import { InferProcessor } from './processors/InferProcessor';
 import { FieldRulesProcessor } from './processors/FieldRulesProcessor';
 import { WriteBackProcessor } from './processors/WriteBackProcessor';
-import { ChildRecordMapping, FieldLookupConfig, OutputMappingConfig, RunProvenance, TagOutputMapping } from './writeBack';
-import { type DataFeatureSpec } from '@memberjunction/feature-pipelines';
+import { OutputMappingConfig, RunProvenance } from './writeBack';
 
 /** Options for executing a Record Process. */
 export interface RunRecordProcessOptions {
     /** The acting user. */
-    contextUser: UserInfo;
+    ContextUser: UserInfo;
     /** The owning provider (defaults to the active provider). */
-    provider?: IMetadataProvider;
+    Provider?: IMetadataProvider;
     /** What triggered the run (default `OnDemand`). */
-    triggeredBy?: TriggeredByValue;
+    TriggeredBy?: TriggeredByValue;
     /** Process a single record (the on-change / on-demand single-record case) instead of the scope. */
-    singleRecordID?: string;
+    SingleRecordID?: string;
     /**
      * Runtime scope override (selected rows / a view / a list / a filter), used instead of the stored
      * Scope. This is how a grid/list UI runs a process against exactly what the user is looking at.
      */
-    scope?: RecordProcessScopeOverride;
+    Scope?: RecordProcessScopeOverride;
     /**
-     * Compute-only: for work types that support it (currently `FieldRules`), produce the per-record diff
-     * WITHOUT writing. Powers the preview step of the bulk-update UX.
+     * Compute-only: produce each record's result and the write-back preview WITHOUT writing (see
+     * {@link RecordProcessExecutor.BuildProcessor} for what each work type does). Powers the preview step of the
+     * bulk-update UX.
      */
-    dryRun?: boolean;
+    DryRun?: boolean;
+    /** Dry runs preview at most this many records when no scope or single record is given and the processor declares a default sample size. */
+    DryRunSampleSize?: number;
     /** FK to the owning `ScheduledJobRun` when launched by the scheduler (links the Process Run back). */
-    scheduledJobRunID?: string;
+    ScheduledJobRunID?: string;
     /** Optional timestamp of the previous run, used for 'UpdatedAt' watermark strategy. */
-    lastRunAt?: Date | null;
+    LastRunAt?: Date | null;
     /** Progress callback. */
-    onProgress?: (progress: ProgressInfo) => void;
+    OnProgress?: (progress: ProgressInfo) => void;
+    /** Overwrite values a person entered, and retire their Human values (default false). */
+    OverwriteHumanValues?: boolean;
+    /**
+     * Whether the run skips records its watermark says are unchanged (default: the Record Process's `SkipUnchanged`).
+     * A version backfill passes false; it still refreshes the watermarks of the records it processes.
+     */
+    SkipUnchanged?: boolean;
 }
 
 /** Builds and runs a RecordSetProcessor pass from a Record Process definition. */
 export class RecordProcessExecutor {
     /** Loads the Record Process by ID and runs it. */
     public async RunByID(recordProcessID: string, options: RunRecordProcessOptions): Promise<ProcessRunResult> {
-        const provider = options.provider ?? Metadata.Provider;
-        const rp = await provider.GetEntityObject<MJRecordProcessEntity>('MJ: Record Processes', options.contextUser);
+        const provider = options.Provider ?? Metadata.Provider;
+        const rp = await provider.GetEntityObject<MJRecordProcessEntity>('MJ: Record Processes', options.ContextUser);
         const loaded = await rp.Load(recordProcessID);
         if (!loaded) {
             throw new Error(`Record Process '${recordProcessID}' not found`);
@@ -75,9 +83,11 @@ export class RecordProcessExecutor {
 
     /** Runs an already-loaded Record Process. */
     public async Run(rp: MJRecordProcessEntity, options: RunRecordProcessOptions): Promise<ProcessRunResult> {
-        const provider = options.provider ?? Metadata.Provider;
-        let lastRunAt = options.lastRunAt;
-        if (!lastRunAt && rp.SkipUnchanged && rp.WatermarkStrategy === 'UpdatedAt') {
+        const provider = options.Provider ?? Metadata.Provider;
+        // `??`: false is a deliberate override of the Record Process's setting
+        const skipUnchanged = options.SkipUnchanged ?? rp.SkipUnchanged;
+        let lastRunAt = options.LastRunAt;
+        if (!lastRunAt && skipUnchanged && rp.WatermarkStrategy === 'UpdatedAt') {
             try {
                 const rv = RunView.FromMetadataProvider(provider);
                 const lastRunRes = await rv.RunView<{ StartedAt?: Date }>({
@@ -85,7 +95,7 @@ export class RecordProcessExecutor {
                     ExtraFilter: `RecordProcessID = '${EscapeSQLString(rp.ID)}' AND Status = 'Completed'`,
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 1,
-                }, options.contextUser);
+                }, options.ContextUser);
                 if (lastRunRes.Success && lastRunRes.Results && lastRunRes.Results.length > 0) {
                     lastRunAt = lastRunRes.Results[0].StartedAt ?? null;
                 }
@@ -94,24 +104,38 @@ export class RecordProcessExecutor {
             }
         }
 
+        const processor = this.BuildProcessor(rp, options.DryRun, provider);
         return RecordSetProcessor.Instance.Process({
-            source: this.BuildSource(rp, provider, options.singleRecordID, options.scope),
-            processor: this.BuildProcessor(rp, options.dryRun, provider),
-            contextUser: options.contextUser,
-            provider,
-            dryRun: options.dryRun,
-            recordProcessID: rp.ID,
-            scheduledJobRunID: options.scheduledJobRunID,
-            entityID: rp.EntityID,
-            triggeredBy: options.triggeredBy ?? 'OnDemand',
-            batchSize: rp.BatchSize ?? undefined,
-            maxConcurrency: rp.MaxConcurrency ?? undefined,
-            skipUnchanged: rp.SkipUnchanged,
-            watermarkStrategy: rp.WatermarkStrategy ?? 'Checksum',
-            lastRunAt,
-            onProgress: options.onProgress,
-            configuration: { recordProcessName: rp.Name, workType: rp.WorkType, scopeType: rp.ScopeType },
+            Source: this.BuildSource(rp, provider, options.SingleRecordID, options.Scope),
+            Processor: processor,
+            ContextUser: options.ContextUser,
+            Provider: provider,
+            DryRun: options.DryRun,
+            MaxRecords: this.DryRunMaxRecords(rp, options, processor),
+            RecordProcessID: rp.ID,
+            ScheduledJobRunID: options.ScheduledJobRunID,
+            EntityID: rp.EntityID,
+            TriggeredBy: options.TriggeredBy ?? 'OnDemand',
+            BatchSize: rp.BatchSize ?? undefined,
+            MaxConcurrency: rp.MaxConcurrency ?? undefined,
+            SkipUnchanged: skipUnchanged,
+            WatermarkStrategy: rp.WatermarkStrategy ?? 'Checksum',
+            LastRunAt: lastRunAt,
+            OnProgress: options.OnProgress,
+            OverwriteHumanValues: options.OverwriteHumanValues,
+            Configuration: { recordProcessName: rp.Name, workType: rp.WorkType, scopeType: rp.ScopeType },
         });
+    }
+
+    /**
+     * The record cap of a dry run over the stored scope (`DryRunSampleSize`, else `processor?.DefaultDryRunSampleSize`);
+     * undefined for a real run, a processor without a default sample size, or a caller-chosen scope or record.
+     */
+    protected DryRunMaxRecords(_rp: MJRecordProcessEntity, options: RunRecordProcessOptions, processor?: IRecordProcessor): number | undefined {
+        if (options.DryRun !== true || options.Scope || options.SingleRecordID) {
+            return undefined;
+        }
+        return options.DryRunSampleSize || processor?.DefaultDryRunSampleSize;
     }
 
     /** Builds the record-set source from a single-record override, a runtime scope override, or the process's stored Scope. */
@@ -141,7 +165,7 @@ export class RecordProcessExecutor {
                 return new FilterSource(entity.Name, rp.ScopeFilter ?? undefined);
             }
             case 'SingleRecord':
-                throw new Error(`Record Process '${rp.Name}': ScopeType=SingleRecord requires a record ID (pass singleRecordID)`);
+                throw new Error(`Record Process '${rp.Name}': ScopeType=SingleRecord requires a record ID (pass SingleRecordID)`);
             default:
                 throw new Error(`Record Process '${rp.Name}': unsupported ScopeType '${rp.ScopeType}'`);
         }
@@ -173,10 +197,9 @@ export class RecordProcessExecutor {
 
     /**
      * Builds the processor from the process's Work. `FieldRules` reads its rule set from `Configuration`
-     * and writes itself (honoring `dryRun`); the other work types build a base processor wrapped with
-     * output-mapping write-back when configured. The write-back wrapper also honors `dryRun` — on a
-     * dry-run the inner work runs but the mapping only previews (nothing is saved), so EVERY work type's
-     * dry-run is side-effect-free, not just FieldRules.
+     * and writes itself (honoring `dryRun`); `Action` and `Agent` build their built-in processors; other work
+     * types (including `Infer` and `'ML Model'`) resolve through {@link RecordProcessorRegistry}, then wrap
+     * with output-mapping write-back when configured.
      */
     public BuildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean, provider?: IMetadataProvider): IRecordProcessor {
         if (rp.WorkType === 'FieldRules') {
@@ -188,9 +211,9 @@ export class RecordProcessExecutor {
             return new FieldRulesProcessor({ RuleSet: ruleSet, DryRun: dryRun });
         }
 
-        const inputMapping = rp.InputMapping ? SafeJSONParse<Record<string, string>>(rp.InputMapping) : undefined;
+        // unparseable mapping JSON (SafeJSONParse answers null) falls back to the default mapping, as an absent one does
+        const inputMapping = (rp.InputMapping ? SafeJSONParse<Record<string, string>>(rp.InputMapping) : null) || undefined;
         let base: IRecordProcessor;
-        let spec: DataFeatureSpec | undefined;
         if (rp.WorkType === 'Action') {
             if (!rp.ActionID) {
                 throw new Error(`Record Process '${rp.Name}': WorkType=Action requires ActionID`);
@@ -201,48 +224,30 @@ export class RecordProcessExecutor {
                 throw new Error(`Record Process '${rp.Name}': WorkType=Agent requires AgentID`);
             }
             base = new AgentRecordProcessor(rp.AgentID, inputMapping);
-        } else if (rp.WorkType === 'Infer') {
-            // Shared with a Decision pipeline's escalation target, which is built the same way
-            const infer = InferProcessor.FromRecordProcess(rp, provider);
-            spec = infer.Spec;
-            base = infer;
         } else {
-            // Not a built-in work type — consult the pluggable registry. This is the open seam that
-            // lets external packages (e.g. Predictive Studio's 'ML Model' scoring) register a processor
-            // factory for their own work type WITHOUT this package depending on them.
-            base = this.resolveFromRegistry(rp, dryRun);
+            // Consult the pluggable registry. This open seam lets external packages (e.g.
+            // FeaturePipelinesEngine's 'Infer' and Predictive Studio's 'ML Model' scoring) register
+            // a processor factory for their own work type WITHOUT this package depending on them.
+            base = this.resolveFromRegistry(rp, dryRun, provider);
         }
 
-        const outputMapping = rp.OutputMapping ? SafeJSONParse<OutputMappingConfig>(rp.OutputMapping) : undefined;
-        if (outputMapping?.fields && spec?.Outputs) {
-            for (const out of spec.Outputs) {
-                if (out.Target && out.Target.Mode === 'field') {
-                    const fieldName = out.Target.EntityFieldName;
-                    if (outputMapping.fields[fieldName] && (out.Target.LookupMatchField || out.Target.OnLookupMiss)) {
-                        outputMapping.fieldLookups = outputMapping.fieldLookups ?? {};
-                        if (!outputMapping.fieldLookups[fieldName]) {
-                            outputMapping.fieldLookups[fieldName] = {
-                                matchField: out.Target.LookupMatchField ?? 'Name',
-                                onLookupMiss: out.Target.OnLookupMiss ?? 'null',
-                            };
-                        }
-                    }
-                }
-            }
-        }
+        const rawOutputMapping = rp.OutputMapping ? SafeJSONParse<OutputMappingConfig>(rp.OutputMapping) ?? undefined : undefined;
+        const prepared = base.PrepareOutputMapping?.(rawOutputMapping as Record<string, unknown> | undefined);
+        const outputMapping = (prepared?.OutputMapping as OutputMappingConfig | undefined) ?? rawOutputMapping;
 
-        if (
-            outputMapping &&
-            (outputMapping.fields ||
+        const hasMappedWrites = !!outputMapping &&
+            !!(outputMapping.fields ||
                 outputMapping.childRecord ||
                 (outputMapping.childRecords && outputMapping.childRecords.length > 0) ||
-                (outputMapping.tags && outputMapping.tags.length > 0))
-        ) {
+                (outputMapping.tags && outputMapping.tags.length > 0));
+        const hasUnmappedWrites = prepared?.HasUnmappedWrites === true;
+        if (hasMappedWrites || hasUnmappedWrites) {
             const run: RunProvenance = {
                 RecordProcessID: rp.ID,
                 PromptID: rp.PromptID ?? undefined,
             };
-            return new WriteBackProcessor(base, outputMapping, dryRun, run);
+            const mapping: OutputMappingConfig = outputMapping ?? {};
+            return new WriteBackProcessor(base, mapping, dryRun, run);
         }
         return base;
     }
@@ -259,7 +264,7 @@ export class RecordProcessExecutor {
      * per-run context. Throws the same "unsupported WorkType" error as before when nothing is registered,
      * so behavior is unchanged for genuinely-unknown work types.
      */
-    private resolveFromRegistry(rp: MJRecordProcessEntity, dryRun?: boolean): IRecordProcessor {
+    private resolveFromRegistry(rp: MJRecordProcessEntity, dryRun?: boolean, provider?: IMetadataProvider): IRecordProcessor {
         const context: RecordProcessorBuildContext = {
             WorkType: rp.WorkType,
             Configuration: rp.Configuration,
@@ -269,6 +274,7 @@ export class RecordProcessExecutor {
             RecordProcessID: rp.ID,
             RecordProcessName: rp.Name,
             DryRun: dryRun,
+            Provider: provider,
             RecordProcess: rp,
         };
         const resolved = RecordProcessorRegistry.Instance.Resolve(context);
