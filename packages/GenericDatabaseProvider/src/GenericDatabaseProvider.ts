@@ -24,6 +24,9 @@ import {
     EntityFieldInfo,
     EntityFieldTSType,
     ProjectRowsToFields,
+    ProjectEntityValueRowsForUser,
+    FieldSecurityError,
+    FieldSecuritySQLGate,
     ProviderBase,
     EntitySaveOptions,
     EntityDeleteOptions,
@@ -94,7 +97,7 @@ import {
     BuildViewPropertyFilter,
 } from '@memberjunction/core';
 
-import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -2422,6 +2425,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
 
         const startTime = new Date();
+        // The entity the view reads, once resolved — the catch below needs it to tell a restricted
+        // caller's "no such column" apart from any other failure.
+        let resolvedEntity: EntityInfo | null = null;
         try {
             if (!params) return null as unknown as RunViewResult<T>;
 
@@ -2444,6 +2450,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
 
             this.CheckUserReadPermissions(entityInfo.Name, user);
+            resolvedEntity = entityInfo;
 
             // A stored view's properties: refused here (Success:false, naming the property) before any SQL runs.
             const propertyFilter = this.BuildViewPropertyFilter(viewEntity, entityInfo, params, user);
@@ -2487,6 +2494,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const saveViewResults: boolean = params.SaveViewResults ?? false;
             this.AssertClauseFragmentIsSingleStatement(extraFilter, 'ExtraFilter');
             this.AssertClauseFragmentIsSingleStatement(overrideExcludeFilter, 'OverrideExcludeFilter');
+            // Field-level security on the clauses as this provider runs them, now that a ViewID- or
+            // ViewName-only request has an entity. Before any SQL, like every other screen here.
+            this.AssertClausesRespectFieldSecurityForEntity(entityInfo, [
+                extraFilter,
+                overrideExcludeFilter,
+                ...(params.Aggregates ?? []).map(a => a?.expression),
+            ], user);
 
             // ── TOP / pagination mode ──
             // Keyset (AfterKey) takes precedence: validate now so failures are early, predictable,
@@ -2561,6 +2575,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // {%UserView%} templates) are written against entity base views, which the screens
                 // permit when the running user reads each of those entities unscoped.
                 this.ScreenStoredViewWhereClause(viewEntity, renderedWhere, user);
+                // Field-level security covers CustomWhereClause views too: their clause is
+                // admin-written, but it still runs as the acting user and could read a column
+                // that user is denied.
+                this.AssertClausesRespectFieldSecurityForEntity(entityInfo, [renderedWhere], user);
                 const isCustomWhereClause = !!viewEntity.CustomWhereClause; // truthy — the DB may hand back true or 1
                 if (!isCustomWhereClause && !this.ValidateUserProvidedSQLClause(renderedWhere)) {
                     throw new Error(`Invalid view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}': contains one or more forbidden keywords`);
@@ -2714,6 +2732,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 : '';
             if (orderBy.length > 0 && !usingKeyset && !orderByIsPkFallback) {
                 this.AssertClauseFragmentIsSingleStatement(orderBy, 'OrderBy');
+                this.AssertClausesRespectFieldSecurityForEntity(entityInfo, [orderBy], user);
                 // No caller OrderBy means the sort came from the saved view's stored sort state.
                 if (!params.OrderBy && viewEntity) this.ScreenStoredViewOrderBy(orderBy, user);
             }
@@ -2768,6 +2787,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 );
                 aggregateSQL = aggregateBuild.aggregateSQL;
                 aggregateValidationErrors = aggregateBuild.validationErrors;
+                this.assertAggregateRefusalsAreNotColumnProbes(aggregateValidationErrors, entityInfo, user);
             }
 
             // ── Execute queries (single TDS batch via ExecuteSQLBatch when multiple SQL statements are needed) ──
@@ -2918,6 +2938,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // no results." Only query-level errors are safe to return as { Success: false }.
             if (this.isConnectionError(e)) {
                 throw e;
+            }
+            // A field-security refusal throws, as the provider's pre-cache gate does, and a
+            // restricted caller's "no such column" becomes the same refusal — so a denied column
+            // and a missing one look identical however the request reached this point.
+            const fieldSecurityError = this.fieldSecurityErrorFor(e, resolvedEntity, contextUser ?? this.CurrentUser);
+            if (fieldSecurityError) {
+                throw fieldSecurityError;
             }
 
             const exceptionStopTime = new Date();
@@ -3360,7 +3387,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // forbidden keyword). Quoting `{0}` in the format is what actually closes that.
             //
             // The screen reads the quote-doubled term, because that is the text `{0}` becomes.
-            if (this.userSearchFieldsUseCustomFormat(entityInfo, deniedSearchFields) && !this.ValidateUserProvidedSQLClause(safeUserSearchString)) {
+            const termIsSQL = this.userSearchFieldsUseCustomFormat(entityInfo, deniedSearchFields);
+            if (termIsSQL && user) {
+                // Spliced in unquoted, the term is a predicate the caller wrote, so it gets the
+                // field-security gate every other caller predicate gets.
+                this.AssertClausesRespectFieldSecurityForEntity(entityInfo, [safeUserSearchString], user);
+            }
+            if (termIsSQL && !this.ValidateUserProvidedSQLClause(safeUserSearchString)) {
                 throw new Error(
                     `Invalid User Search string: this entity has a field using UserSearchParamFormatAPI, ` +
                     `which splices the term directly into SQL, and the term is not allowed there: it contains ` +
@@ -3526,6 +3559,48 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     public ScreenClientClause(clause: string | null | undefined, label: string, contextUser?: UserInfo, entityInfo?: EntityInfo): void {
         const text = clause && entityInfo ? this.TransformExternalSQLClause(clause, entityInfo) : clause;
         ClientClauseScreen.AssertClauseUsesEntityBaseViews(text, label, this.Entities, this.Dialect, contextUser);
+    }
+
+    /**
+     * The field-security error a failed RunView must raise, or null to report the failure as
+     * usual: a {@link FieldSecurityError} raised along the way, or — for a caller denied fields on
+     * `entity` — a database "no such column" rejection, rewritten into the error a denied column
+     * gets ({@link FieldSecuritySQLGate.ErrorForInvalidColumn}).
+     */
+    protected fieldSecurityErrorFor(error: unknown, entity: EntityInfo | null, user: UserInfo | undefined): Error | null {
+        if (error instanceof Error && (error instanceof FieldSecurityError || error.name === FieldSecurityError.ErrorName)) {
+            return error;
+        }
+        return FieldSecuritySQLGate.ErrorForInvalidColumn(error, entity, user);
+    }
+
+    /**
+     * For a caller denied fields on `entity`, throws the field-security error when an aggregate was
+     * refused because it names a column the entity does not have. A denied column in an aggregate is
+     * refused by the gate with that error, so an unknown one must not answer differently.
+     */
+    protected assertAggregateRefusalsAreNotColumnProbes(errors: AggregateResult[], entity: EntityInfo, user: UserInfo): void {
+        if (errors.length === 0 || !FieldSecuritySQLGate.UserCarriesDenials([entity], user)) {
+            return;
+        }
+        for (const refused of errors) {
+            const match = /references "((?:[^"]|"")*)", which (?:is not a column|matches more than one column) of this entity/.exec(refused.error ?? '');
+            if (match) {
+                throw new FieldSecurityError(this.reportedColumnName(refused.expression, match[1].replace(/""/g, '"')), entity.Name);
+            }
+        }
+    }
+
+    /**
+     * A column name as this database reports it: on PostgreSQL an unquoted reference folds to lower
+     * case, so the name is folded when `sql` writes it unquoted.
+     */
+    private reportedColumnName(sql: string, name: string): string {
+        if (this.PlatformKey !== 'postgresql') {
+            return name;
+        }
+        const token = ScanSQLForScreening(sql, 'postgresql').Tokens.find(t => t.Text === name);
+        return token?.Kind === 'word' ? name.replace(/[A-Z]/g, c => c.toLowerCase()) : name;
     }
 
     /**
@@ -3915,7 +3990,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 for (const { index, item, entityInfo, whereSQL, serverCached, fingerprint } of itemsForDBCheck) {
                     const serverStatus = cacheStatusResults.get(index);
                     if (!serverStatus || !serverStatus.success) {
-                        errorResults.push({ viewIndex: index, status: 'error', errorMessage: serverStatus?.errorMessage || 'Failed to get cache status' });
+                        const statusError = serverStatus?.errorMessage || 'Failed to get cache status';
+                        const fieldSecurityError = FieldSecuritySQLGate.ErrorForInvalidColumn(statusError, entityInfo, user);
+                        errorResults.push({ viewIndex: index, status: 'error', errorMessage: fieldSecurityError?.message ?? statusError });
                         continue;
                     }
 
@@ -4231,7 +4308,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         viewIndex: number,
         contextUser?: UserInfo,
     ): Promise<RunViewWithCacheCheckResult<T>> {
-        const result = await this.InternalRunView<T>(params, contextUser);
+        let result: RunViewResult<T>;
+        try {
+            result = await this.InternalRunView<T>(params, contextUser);
+        } catch (e: unknown) {
+            // A field-security refusal fails this item only, as the up-front gate does on this path.
+            if (e instanceof Error && e.name === FieldSecurityError.ErrorName) {
+                return { viewIndex, status: 'error', errorMessage: e.message };
+            }
+            throw e;
+        }
         if (!result.Success) {
             return { viewIndex, status: 'error', errorMessage: result.ErrorMessage || 'Unknown error executing view' };
         }
@@ -6641,7 +6727,78 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (!entity.GetUserPermisions(contextUser)?.CanRead) {
             return { Filter: filter, RowFilter: '', Refusal: `User ${contextUser.Email} does not have read permissions on ${entity.Name}` };
         }
+        const fieldSecurityRefusal = this.datasetItemFilterFieldSecurityRefusal(entity, clientFilter, contextUser);
+        if (fieldSecurityRefusal) {
+            return { Filter: filter, RowFilter: '', Refusal: fieldSecurityRefusal };
+        }
         return { Filter: filter, RowFilter: entity.GetEffectiveRowFilterWhereClause(contextUser, EntityPermissionType.Read, ''), Refusal: null };
+    }
+
+    /**
+     * Why a caller's ItemFilter is refused by the field-level security gate — the same gate every
+     * RunView filter passes — or null when it may run. The item's stored WhereClause is
+     * administrator-defined dataset metadata, not a predicate the caller chose, so it is not checked.
+     */
+    private datasetItemFilterFieldSecurityRefusal(entity: EntityInfo, clientFilter: string, contextUser: UserInfo): string | null {
+        try {
+            this.AssertClausesRespectFieldSecurityForEntity(entity, [clientFilter], contextUser);
+            return null;
+        } catch (e: unknown) {
+            if (e instanceof Error && e.name === FieldSecurityError.ErrorName) {
+                return e.message;
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * The fields of a dataset item's entity the caller may not read, lowercased; empty when none,
+     * when there is no caller, or for MJ_Metadata, which every principal loads to learn the schema.
+     */
+    private datasetItemDeniedFields(datasetName: string, entity: EntityInfo | undefined, contextUser: UserInfo | undefined): Set<string> {
+        if (!entity || !contextUser || datasetName === GenericDatabaseProvider._mjMetadataDatasetName || !entity.FieldLevelSecurityApplies) {
+            return new Set<string>();
+        }
+        return entity.GetDeniedReadFields(contextUser);
+    }
+
+    /**
+     * The error a failed dataset batch reports to the caller. When the caller is denied fields on
+     * an item's entity and the database rejected a column that does not exist, every item reports
+     * the field-security error a denied column gets instead, so the two cannot be told apart.
+     */
+    private datasetBatchErrorForCaller(
+        batchError: string,
+        items: Record<string, unknown>[],
+        datasetName: string,
+        contextUser: UserInfo | undefined,
+    ): string {
+        if (!contextUser || datasetName === GenericDatabaseProvider._mjMetadataDatasetName) {
+            return batchError;
+        }
+        for (const item of items) {
+            const converted = FieldSecuritySQLGate.ErrorForInvalidColumn(batchError, this.EntityByName(String(item['Entity'])), contextUser);
+            if (converted) return converted.message;
+        }
+        return batchError;
+    }
+
+    /**
+     * Dataset item rows as the caller may see them: denied columns removed, and Record Changes
+     * payloads narrowed. Cached rows are shared and full width, so this always builds new rows
+     * rather than narrowing the cached ones. MJ_Metadata is exempt for the reason given on
+     * {@link datasetItemDeniedFields}.
+     */
+    private projectDatasetRowsForCaller(
+        datasetName: string,
+        entity: EntityInfo | undefined,
+        rows: Record<string, unknown>[],
+        contextUser: UserInfo | undefined,
+    ): Record<string, unknown>[] {
+        if (!entity || !contextUser || datasetName === GenericDatabaseProvider._mjMetadataDatasetName) {
+            return rows;
+        }
+        return ProjectEntityValueRowsForUser(this, entity, rows, contextUser) ?? rows;
     }
 
     /**
@@ -6891,7 +7048,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         EntityID: entityID,
                         EntityName: entityName,
                         Code: code,
-                        Results: cached.results as Record<string, unknown>[],
+                        Results: this.projectDatasetRowsForCaller(datasetName, itemEntity, cached.results as Record<string, unknown>[], contextUser),
                         LatestUpdateDate: latestUpdateDate,
                         Success: true,
                     });
@@ -6901,7 +7058,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
             // Cache miss (or invalidated stale slot) — validate columns and build SQL
             cacheMissCount++;
-            const columns = provider.getColumnsForDatasetItem(item, datasetName);
+            // A caller denied fields never has them selected; such a narrowed read is not written to
+            // the shared slot, which holds full-width rows for every caller.
+            const deniedFields = this.datasetItemDeniedFields(datasetName, itemEntity, contextUser);
+            const columns = provider.getColumnsForDatasetItem(item, datasetName, deniedFields);
             if (!columns) {
                 errorResults.push({
                     EntityID: entityID,
@@ -6919,7 +7079,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const filterSQL = whereSQL ? 'WHERE ' + whereSQL : '';
             uncachedQueries.push(`SELECT ${columns} FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)} ${filterSQL}`);
             uncachedItems.push(item);
-            uncachedFingerprints.push(fingerprint);
+            // A narrowed read (the caller is denied fields) is never written to the shared slot.
+            uncachedFingerprints.push(deniedFields.size === 0 ? fingerprint : '');
         }
 
         // Phase 2: Execute SQL only for cache misses
@@ -6940,6 +7101,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             } catch (err) {
                 batchError = err instanceof Error ? err.message : String(err);
                 LogError(`GetDatasetByName("${datasetName}"): Batch execution failed: ${batchError}`);
+                batchError = this.datasetBatchErrorForCaller(batchError, uncachedItems, datasetName, contextUser);
             }
         }
 
@@ -7012,7 +7174,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 EntityID: entityID,
                 EntityName: entityName,
                 Code: code,
-                Results: itemData,
+                Results: this.projectDatasetRowsForCaller(datasetName, provider.EntityByName(entityName), itemData, contextUser),
                 LatestUpdateDate: latestUpdateDate,
                 Success: itemData !== null && itemData !== undefined,
             });
@@ -7240,41 +7402,54 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * binary column can still be named explicitly. When the entity's metadata is not loaded yet —
      * the first `MJ_Metadata` read at boot — the item falls back to `*`, and the rows' byte arrays
      * are converted to base64 by the caller.
+     *
+     * `deniedFields` (lowercased) are the columns the caller may not read. They are never
+     * selected: a named one is dropped, and an item that names none selects every readable column.
      */
-    protected getColumnsForDatasetItem(item: Record<string, unknown>, datasetName: string): string | null {
+    protected getColumnsForDatasetItem(item: Record<string, unknown>, datasetName: string, deniedFields?: Set<string>): string | null {
         const specifiedColumns = item['Columns'] ? String(item['Columns']).split(',').map(col => col.trim()) : [];
+        const entity = this.EntityByID(item['EntityID'] as string);
+        const denied = deniedFields ?? new Set<string>();
         if (specifiedColumns.length === 0) {
-            const entity = this.EntityByID(item['EntityID'] as string);
+            if (entity && denied.size > 0) {
+                return this.readableDatasetColumns(entity.Fields.filter(f => !f.IsBinaryFieldType).map(f => f.Name), entity, denied);
+            }
             if (entity?.HasBinaryFields) {
                 return entity.Fields.filter(f => !f.IsBinaryFieldType).map(f => this.QuoteIdentifier(f.Name)).join(',');
             }
+            return '*';
         }
-        if (specifiedColumns.length > 0) {
-            const entity = this.EntityByID(item['EntityID'] as string);
-            if (!entity && this.Entities.length > 0) {
-                LogError(`Entity not found for dataset item ${item['Code']} in dataset ${datasetName}`);
+        if (!entity && this.Entities.length > 0) {
+            LogError(`Entity not found for dataset item ${item['Code']} in dataset ${datasetName}`);
+            return null;
+        }
+        if (entity) {
+            const invalidColumns = specifiedColumns.filter(col => !entity.FieldByName(col));
+            if (invalidColumns.length > 0) {
+                LogError(`Invalid columns specified for dataset item ${item['Code']} in dataset ${datasetName}: ${invalidColumns.join(', ')}`);
                 return null;
             }
-            if (entity) {
-                const invalidColumns: string[] = [];
-                specifiedColumns.forEach(col => {
-                    if (!entity.FieldByName(col)) {
-                        invalidColumns.push(col);
-                    }
-                });
-                if (invalidColumns.length > 0) {
-                    LogError(`Invalid columns specified for dataset item ${item['Code']} in dataset ${datasetName}: ${invalidColumns.join(', ')}`);
-                    return null;
-                }
-            }
-            // Ensure DateFieldToCheck is included
-            const dateField = item['DateFieldToCheck'] ? String(item['DateFieldToCheck']).trim() : '';
-            if (dateField.length > 0 && specifiedColumns.indexOf(dateField) === -1) {
-                if (!entity || entity.FieldByName(dateField))
-                    specifiedColumns.push(dateField);
-            }
         }
-        return specifiedColumns.length > 0 ? specifiedColumns.map(col => this.QuoteIdentifier(col.trim())).join(',') : '*';
+        // Ensure DateFieldToCheck is included
+        const dateField = item['DateFieldToCheck'] ? String(item['DateFieldToCheck']).trim() : '';
+        if (dateField.length > 0 && specifiedColumns.indexOf(dateField) === -1) {
+            if (!entity || entity.FieldByName(dateField))
+                specifiedColumns.push(dateField);
+        }
+        if (entity && denied.size > 0) {
+            return this.readableDatasetColumns(specifiedColumns, entity, denied);
+        }
+        return specifiedColumns.map(col => this.QuoteIdentifier(col.trim())).join(',');
+    }
+
+    /**
+     * `columns` without the denied ones, quoted and joined. When every one is denied, the primary
+     * key columns are selected instead, which are never denied, so the read still has a shape.
+     */
+    private readableDatasetColumns(columns: string[], entity: EntityInfo, denied: Set<string>): string {
+        const readable = columns.filter(col => !denied.has(col.trim().toLowerCase()));
+        const selected = readable.length > 0 ? readable : entity.PrimaryKeys.map(pk => pk.Name);
+        return selected.map(col => this.QuoteIdentifier(col.trim())).join(',');
     }
 
     /**************************************************************************/

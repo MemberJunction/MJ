@@ -11,7 +11,7 @@ import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal, MJEvent, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, IndexByUUID, EscapeSQLString, ordinalCompare } from "@memberjunction/global";
-import { FindReferencedIdentifiers } from "@memberjunction/sql-dialect";
+import { FieldSecuritySQLContext, FieldSecuritySQLGate } from "./fieldSecuritySQLGate";
 import { TelemetryManager } from "./telemetryManager";
 import { LogDebug, LogError, LogStatus, LogStatusEx, LogWarning } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
@@ -3172,74 +3172,65 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     // ========================================================================
 
     /**
-     * Rejects a RunView whose `ExtraFilter`, `OrderBy`, or `Aggregates` expressions reference a
-     * field the user cannot read.
+     * Rejects a RunView whose caller-authored SQL reads a field the user cannot read: `ExtraFilter`,
+     * `OrderBy`, `OverrideExcludeFilter`, every `Aggregates[].expression`, and — when the request
+     * carries a loaded `ViewEntity` — that view's stored `WhereClause` and `OrderByClause`.
      *
      * Output projection alone is security theater. A user denied `Salary` can send
      * `ExtraFilter: "Salary > 200000"` or `OrderBy: "Salary DESC"` and reconstruct the values
      * from which rows come back and in what order — the column never appears in a result, so
      * every output-stripping point reports "secure." Aggregates are the same channel in a purer
      * form: `Aggregates: [{expression: 'MIN(Salary)'}]` under a narrow filter returns a denied
-     * field's exact values directly. Predicate validation is a first-class enforcement point,
-     * not a belt-and-braces afterthought. Together these cover every caller-authored expression
-     * surface (`UserSearchString` is handled by excluding denied fields from the searched set,
-     * not by rejection — see below).
+     * field's exact values directly. `UserSearchString` is handled by excluding denied fields from
+     * the searched set, not by rejection.
      *
-     * Lives at the provider layer rather than in the GraphQL resolver (where the plan first
-     * placed it) because every RunView funnels through here — the batch path, server-internal
-     * agents and actions running under a restricted `contextUser`, and the resolver alike. One
-     * gate, no path left uncovered.
+     * Lives at the provider layer because every RunView funnels through here — the batch path,
+     * server-internal agents and actions running under a restricted `contextUser`, and the
+     * resolver alike. A database provider checks the clauses it actually runs a second time, once
+     * a saved view is resolved, so a request that names only a `ViewID` is covered too.
      *
-     * The error deliberately does not say whether the field is missing or merely forbidden —
-     * see {@link ProviderBase.FieldSecurityDenialMessage}.
+     * The reading of each clause, and the error it raises, is {@link FieldSecuritySQLGate}'s.
      */
     protected AssertPredicatesRespectFieldSecurity(params: RunViewParams, contextUser?: UserInfo): void {
-        if (!contextUser || !params.EntityName) {
+        if (!contextUser) {
             return;
         }
-        const entity = this.EntityByName(params.EntityName);
-        if (!entity?.FieldLevelSecurityApplies) {
-            return; // the overwhelmingly common case — one boolean, no allocation
-        }
-        const denied = entity.GetDeniedReadFields(contextUser);
-        if (denied.size === 0) {
+        const entity = this.ResolveRunViewEntitySync(params);
+        if (!entity) {
             return;
         }
-
-        // Map lowercased denied names back to their real casing for the message.
-        const deniedByName = new Map<string, string>();
-        for (const field of entity.Fields) {
-            if (denied.has(field.Name.trim().toLowerCase())) {
-                deniedByName.set(field.Name.trim().toLowerCase(), field.Name);
-            }
-        }
-
-        // Aliases are deliberately not scanned — an alias names the output column, no data
-        // flows through it.
-        const clauses = [
+        const view = params.ViewEntity;
+        this.AssertClausesRespectFieldSecurityForEntity(entity, [
             params.ExtraFilter,
             params.OrderBy,
+            params.OverrideExcludeFilter,
             ...(params.Aggregates ?? []).map(a => a?.expression),
-        ];
+            view ? view.Get('WhereClause') : undefined,
+            view ? view.Get('OrderByClause') : undefined,
+        ], contextUser);
+    }
+
+    /**
+     * Throws a {@link FieldSecurityError} when any of `clauses` — SQL fragments that run against
+     * `entity`'s view — reads a field `user` cannot read, reads whole rows of an entity the user is
+     * denied fields on, or cannot be read well enough to tell. Non-string and blank entries are
+     * skipped. A no-op, with nothing scanned, for a user denied nothing on any entity.
+     *
+     * The shared entry point for every clause slot a provider runs: RunView parameters, a saved
+     * view's stored clauses, dataset item filters, user-search text spliced as SQL.
+     */
+    protected AssertClausesRespectFieldSecurityForEntity(entity: EntityInfo, clauses: Iterable<unknown>, user: UserInfo): void {
+        const context: FieldSecuritySQLContext = { User: user, Dialect: this.PlatformKey, Catalog: this.Entities, TargetEntity: entity };
         for (const clause of clauses) {
-            if (typeof clause !== 'string' || clause.length === 0) {
+            if (typeof clause !== 'string' || clause.trim().length === 0) {
                 continue;
             }
-            const hits = FindReferencedIdentifiers(clause, deniedByName.values());
-            if (hits.length > 0) {
-                LogDebug(
-                    `[FieldSecurity] Rejected RunView on '${entity.Name}' for user ${contextUser.Email}: ` +
-                    `predicate references denied field(s) ${hits.join(', ')}`
-                );
-                throw new FieldSecurityError(hits[0], entity.Name);
+            const violation = FieldSecuritySQLGate.FindViolation(clause, context);
+            if (violation) {
+                LogDebug(`[FieldSecurity] Rejected SQL on '${entity.Name}' for user ${user.Email}: ${violation.Kind} ${violation.Reference}`);
+                throw FieldSecuritySQLGate.ErrorForViolation(violation, entity.Name);
             }
         }
-
-        // UserSearchString is not a predicate the caller authored — it is a search term the
-        // platform expands across IncludeInUserSearchAPI fields. There is nothing to reject;
-        // the correct handling is to not search the denied fields, which the SQL builder does
-        // by consulting the same denied set. Rejecting here would make the search box fail
-        // for a term that merely happens to match a restricted field's name.
     }
 
     /**
@@ -3333,6 +3324,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Everything about the per-row denied set, the payload treatment, and the fail-closed decision
      * lives in {@link RecordChangeFieldSecurityProjector}; this is only the RunView wiring.
      *
+     * A request whose entity cannot be resolved without I/O (only a `ViewID` or `ViewName`) is
+     * projected too, so a saved view over Record Changes is not a way around it.
+     *
      * Runs at all four RunView projection points, matching the main projection: both cache-hit
      * paths and both cache-miss paths. The cache-hit path is not optional — it is the exact path
      * the original cross-user leak runs through, an unrestricted user warming a full-width slot
@@ -3355,9 +3349,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (!rows?.length || !contextUser || params.ResultType === 'entity_object') {
             return rows;
         }
-        if (!RecordChangeFieldSecurityProjector.IsRecordChangesEntity(this.ResolveRunViewEntitySync(params))) {
+        const entity = this.ResolveRunViewEntitySync(params);
+        if (entity && !RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entity)) {
             return rows;
         }
+        // An entity that does not resolve here (a ViewID/ViewName-only request) may be Record
+        // Changes. The projector decides per row from the row's own EntityID and fails closed on a
+        // row without one; rows that carry no payload column come back untouched.
         return new RecordChangeFieldSecurityProjector(this, contextUser).ProjectRows(rows);
     }
 
