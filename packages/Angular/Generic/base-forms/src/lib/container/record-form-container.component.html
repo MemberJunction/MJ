@@ -19,6 +19,9 @@
   [DirtyFieldNames]="EffectiveDirtyFieldNames"
   [ListCount]="ListCount"
   [TagCount]="TagCount"
+  [LinksOpen]="ShowRecordLinks"
+  [LinkCount]="LinkCount"
+  [ConflictCount]="ConflictCount"
   [AttachmentCount]="AttachmentCount"
   [AttachmentsAvailable]="AttachmentsAvailable"
   [IsAttachmentsPanelOpen]="ShowAttachmentsPanel"
@@ -66,6 +69,7 @@
   (ResetSectionOrderRequested)="OnResetSectionOrder()"
   (ManageSectionsRequested)="OnManageSections()"
   (TagsPanelToggled)="OnTagsPanelToggled()"
+  (LinksRequest)="OnToggleRecordLinks()"
   (AttachmentsPanelToggled)="OnAttachmentsPanelToggled()"
   (VariantPicked)="OnVariantPicked($event)">
 </mj-form-toolbar>
@@ -498,6 +502,21 @@
     (RecordNavigate)="OnTagsRecordNavigate($event)"
     (WidthChanged)="OnTagsPanelWidthChanged($event)">
   </mj-record-tags>
+}
+
+<!-- ============================================
+     LINKS DRAWER (shown when links button clicked)
+     ============================================ -->
+@if (ShowRecordLinks && EffectiveRecord && EffectiveRecord.IsSaved) {
+  <mj-record-links
+    [Provider]="Provider"
+    [Record]="EffectiveRecord"
+    [Mode]="'drawer'"
+    [IsOpen]="ShowRecordLinks"
+    (Close)="OnRecordLinksClosed()"
+    (LinkCountChange)="OnLinkCountChanged($event)"
+    (Navigate)="OnNavigate($event)">
+  </mj-record-links>
 }
 
 <!-- ============================================
