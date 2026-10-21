@@ -66,39 +66,18 @@ export class DiscoverStage extends BasePipelineStage {
         if (!contentSourceID) {
             throw new FatalStageError('Discover was handed a Content Source that has not been persisted');
         }
-        const resolver = new ContentSourceConfigurationResolver(context.Provider, context.ContextUser);
-        const resolved = await resolver.Resolve(contentSourceID, context.ContextUser);
-        if (!resolved.IsValid) {
-            const detail = resolved.Problems.map((p) => p.Message).join('; ');
-            throw new FatalStageError(`Content Source '${contentSourceID}' is not configured correctly: ${detail}`);
-        }
-        if (!resolved.DriverClass) {
-            throw new FatalStageError("No Discover driver for this source. Set its Content Source Type's DriverClass.");
-        }
-        const driver = ResolveSourceDriver(resolved.DriverClass);
-        if (!driver.Discover) {
-            throw new FatalStageError(`Driver '${resolved.DriverClass}' cannot discover: it has no Discover method`);
-        }
         const isSync = IsSyncMode(context.Configuration);
-        if (isSync && !driver.SupportsExhaustiveWalk) {
-            throw new FatalStageError(
-                `Driver '${resolved.DriverClass}' does not support exhaustive walks (SupportsExhaustiveWalk = false), so Sync mode cannot run against this source`,
-            );
-        }
+        const { resolved, driver } = await this.resolveWalkSource(contentSourceID, isSync, context);
         if (context.Signal.aborted) {
             return Outcome.Retry('cancelled before discovery started');
         }
         const walkStartedAt = new Date();
-        const tuning = ResolveTuning(resolved.Settings, context.Configuration);
+        const tuning = ResolveTuning(resolved.TypeConfiguration, resolved.Configuration, resolved.Settings, context.Configuration);
+        record.SetExtension(DISCOVER_STAGE, 'tuning', tuning);
         const lastDiscoveredAt = record.GetExtension<Date>('Pipeline', 'lastDiscoveredAt') ?? null;
-        const since =
-            isSync || !lastDiscoveredAt
-                ? null
-                : new Date(lastDiscoveredAt.getTime() - tuning.ClockSkewOverlapMs);
-        const found = await this.walk(driver.Discover.bind(driver), resolved, record, context, since, isSync);
+        const since = isSync || !lastDiscoveredAt ? null : new Date(lastDiscoveredAt.getTime() - tuning.ClockSkewOverlapMs);
+        const found = await this.walk(driver.Discover!.bind(driver), resolved, record, context, since, isSync, tuning.ProgressEveryItems);
 
-        // A driver honouring the stop signal just returns, so only the signal says the walk was cut
-        // short — and a cut-short walk must not commit Complete, or what it missed is never revisited.
         if (context.Signal.aborted) {
             context.ReportProgress(`stopped after ${found} item(s)`);
             return Outcome.Retry(`cancelled after finding ${found} item(s)`);
@@ -118,6 +97,32 @@ export class DiscoverStage extends BasePipelineStage {
         return Outcome.Complete(`found ${found} item(s)`);
     }
 
+    private async resolveWalkSource(
+        contentSourceID: string,
+        isSync: boolean,
+        context: StageContext,
+    ): Promise<{ resolved: ResolvedSourceConfiguration; driver: AutotagBase }> {
+        const resolver = new ContentSourceConfigurationResolver(context.Provider, context.ContextUser);
+        const resolved = await resolver.Resolve(contentSourceID, context.ContextUser);
+        if (!resolved.IsValid) {
+            const detail = resolved.Problems.map((p) => p.Message).join('; ');
+            throw new FatalStageError(`Content Source '${contentSourceID}' is not configured correctly: ${detail}`);
+        }
+        if (!resolved.DriverClass) {
+            throw new FatalStageError("No Discover driver for this source. Set its Content Source Type's DriverClass.");
+        }
+        const driver = ResolveSourceDriver(resolved.DriverClass);
+        if (!driver.Discover) {
+            throw new FatalStageError(`Driver '${resolved.DriverClass}' cannot discover: it has no Discover method`);
+        }
+        if (isSync && !driver.SupportsExhaustiveWalk) {
+            throw new FatalStageError(
+                `Driver '${resolved.DriverClass}' does not support exhaustive walks (SupportsExhaustiveWalk = false), so Sync mode cannot run against this source`,
+            );
+        }
+        return { resolved, driver };
+    }
+
     /**
      * Walk the source, adding each item as a child. Children are linked to the source on commit by
      * `ContentSourceID` and matched to existing rows by URL.
@@ -131,8 +136,8 @@ export class DiscoverStage extends BasePipelineStage {
         context: StageContext,
         since: Date | null,
         isSync: boolean,
+        progressEveryItems: number,
     ): Promise<number> {
-        const { ProgressEveryItems } = ResolveTuning(resolved.Settings, context.Configuration);
         const confidence = ResolveConfidence(resolved.Confidence, context.Configuration);
         let found = 0;
         for await (const item of discover({
@@ -151,8 +156,8 @@ export class DiscoverStage extends BasePipelineStage {
             if (context.Signal.aborted) {
                 return found;
             }
-            record.AddChild(this.toWorkingRecord(item, `${DISCOVER_STAGE}.${resolved.DriverClass}`, isSync));
-            if (++found % ProgressEveryItems === 0) {
+            record.AddChild(this.toWorkingRecord(item, `${DISCOVER_STAGE}.${resolved.DriverClass}`, isSync, resolved.ContentSourceID));
+            if (++found % progressEveryItems === 0) {
                 context.ReportProgress(`found ${found} item(s)`);
             }
         }
@@ -160,8 +165,9 @@ export class DiscoverStage extends BasePipelineStage {
     }
 
     /** A driver's item as a Content Item record; each field competes on the driver's own confidence. */
-    private toWorkingRecord(item: DiscoveredItem, setBy: string, isSync: boolean): WorkingRecord {
+    private toWorkingRecord(item: DiscoveredItem, setBy: string, isSync: boolean, contentSourceID: string): WorkingRecord {
         const child = new WorkingRecord(new WorkingRecordIdentity('Content Item', item.URL));
+        child.SetExtension('Pipeline', 'contentSourceID', contentSourceID);
         if (item.Columns && Object.keys(item.Columns).length > 0) {
             child.SetExtension('Pipeline', 'customColumns', { ...item.Columns });
         }

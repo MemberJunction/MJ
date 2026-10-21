@@ -286,10 +286,12 @@ export class AccessResolver {
     ): Promise<Readonly<Record<string, unknown>>> {
         const runAccess = this.runConfiguration as AccessConfiguration;
         const sourceAccess = resolved.Configuration as AccessConfiguration;
+        const settingsAccess = resolved.Settings as AccessConfiguration;
         const typeAccess = resolved.TypeConfiguration as AccessConfiguration;
         const reference =
             runAccess.AccessCredentials?.[role] ??
             sourceAccess.AccessCredentials?.[role] ??
+            settingsAccess.AccessCredentials?.[role] ??
             typeAccess.AccessCredentials?.[role];
         if (!reference) {
             return {};
@@ -322,7 +324,9 @@ export class AccessResolver {
         if (typeof fromRun === 'string' && fromRun.length > 0) {
             return fromRun;
         }
-        const own = (resolved.Configuration as AccessConfiguration).AccessDriverKey;
+        const own =
+            (resolved.Configuration as AccessConfiguration).AccessDriverKey ??
+            (resolved.Settings as AccessConfiguration).AccessDriverKey;
         if (typeof own === 'string' && own.length > 0) {
             return own;
         }
@@ -335,3 +339,5 @@ export class AccessResolver {
         return artifact.ExpiresAt instanceof Date && artifact.ExpiresAt.getTime() <= Date.now();
     }
 }
+
+void CredentialAccessDriver;

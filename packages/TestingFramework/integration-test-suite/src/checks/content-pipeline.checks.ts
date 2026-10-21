@@ -124,7 +124,10 @@ export class InMemoryAccessDriver extends BaseAccessDriver {
     public async Connect(_request: AccessRequest): Promise<AccessArtifact> {
         AccessLog.ConnectCalls += 1;
         return {
-            Headers: { Authorization: 'Bearer it-pipeline-session-token' },
+            Headers: {
+                Authorization: 'Bearer it-secret-token',
+                'X-Pipeline-Test-Access': 'it-secret-token',
+            },
             QueryParameters: { api_key: 'it-pipeline-query-key' },
         };
     }
@@ -679,7 +682,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
             Documents.set(URL_C, {
                 ...currentDoc,
                 Title: 'Updated C Title',
-                TitleConfidence: 0.95,
+                TitleConfidence: ConfidenceScale.DiscoveredTitle,
                 Columns: { Description: 'Updated C Description via Columns' },
             });
 
@@ -769,10 +772,24 @@ export const ContentPipelineChecks: NamedCheck[] = [
             if (guardSkip('CP14')) return;
             const savedA = Documents.get(URL_A)!;
             const savedC = Documents.get(URL_C)!;
+            const syncConfig = { Mode: 'Sync', Tuning: { ClockSkewOverlapMs: 0 } };
+            const syncScopeFilter = `ID='${S.SourceID}' AND (LastSyncedAt IS NULL OR LastSyncedAt < DATEADD(day, -30, GETUTCDATE()))`;
 
-            // 1. Empty-walk safeguard: if the source returns 0 items when active items exist, Sync refuses to orphan everything.
+            const dueBefore = await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', syncScopeFilter);
+            AssertEqual(dueBefore.length, 1, 'source with LastSyncedAt IS NULL is selected by the shipped Sync ScopeFilter');
+
+            // 1. Empty-walk safeguard: if the source returns 0 items when active items exist, Sync fails closed.
             Documents.clear();
-            await run(ctx, ['Sync'], [S.SourceID]);
+            const emptySync = processor(['Discover'], syncConfig);
+            const emptyRes = await emptySync.ProcessRecord(
+                { RecordID: S.SourceID } as never,
+                { provider: ctx.Provider, contextUser: ctx.User },
+            );
+            AssertEqual(emptyRes.Status, 'Failed', 'empty Sync walk fails closed when live items exist');
+            Assert(
+                (emptyRes.ErrorMessage ?? '').includes('refusing to mark existing items for deletion'),
+                `expected empty-walk safeguard message, got: ${emptyRes.ErrorMessage}`,
+            );
             const afterEmpty = await items(ctx);
             Assert(
                 afterEmpty.filter((i) => i.URL === URL_A || i.URL === URL_C).every((i) => i.DeleteStatus == null),
@@ -785,11 +802,13 @@ export const ContentPipelineChecks: NamedCheck[] = [
             await save(sourceBefore, 'source ForceDiscovery=true before Sync');
 
             Documents.set(URL_A, savedA);
-            await run(ctx, ['Sync'], [S.SourceID]);
+            await run(ctx, ['Discover'], [S.SourceID], syncConfig);
 
             const sourceAfter = (await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', `ID='${S.SourceID}'`))[0];
             Assert(sourceAfter.LastSyncedAt != null, 'Sync records LastSyncedAt on the Content Source');
             AssertEqual(sourceAfter.ForceDiscovery, true, 'Sync does NOT clear ForceDiscovery (which belongs to Discover)');
+            const dueAfter = await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', syncScopeFilter);
+            AssertEqual(dueAfter.length, 0, 'Sync ScopeFilter ignores ForceDiscovery and skips recently synced sources');
             sourceAfter.ForceDiscovery = false;
             await save(sourceAfter, 'reset ForceDiscovery after check');
 
@@ -800,11 +819,22 @@ export const ContentPipelineChecks: NamedCheck[] = [
 
             // 3. Revival: URL_C reappears before Delete runs; Sync clears DeleteStatus and queues it for re-extraction.
             Documents.set(URL_C, { ...savedC, ModifiedAt: new Date() });
-            await run(ctx, ['Sync'], [S.SourceID]);
+            await run(ctx, ['Discover'], [S.SourceID], syncConfig);
             const cRevived = await itemByURL(ctx, URL_C);
             AssertEqual(cRevived.DeleteStatus, null, 'reappearing item C has DeleteStatus cleared');
             AssertEqual(cRevived.ExtractionStatus, 'Pending', 'revived item C is queued for re-extraction');
-            console.log('      → CP14: Sync empty-walk safeguard, orphan detection, ForceDiscovery preservation, and revival verified');
+            await run(ctx, ['Extract'], [cRevived.ID]);
+
+            // 4. Full removal: URL_C disappears again; Sync marks it Pending, and DeleteContentItem + Delete remove its vectors.
+            const cChunkIDs = (await liveChunks(ctx, cRevived.ID)).map((ch) => ch.ID);
+            Assert(cChunkIDs.length > 0, 'precondition: revived item C still has its embedded chunks');
+            Documents.delete(URL_C);
+            await run(ctx, ['Discover'], [S.SourceID], syncConfig);
+            await run(ctx, ['DeleteContentItem'], [cRevived.ID]);
+            resetStore();
+            await run(ctx, ['Delete'], cChunkIDs);
+            AssertSameList(Store.Deletes.map((d) => d.id).sort(), [...cChunkIDs].sort(), 'Sync-removed item C had all its vectors deleted');
+            console.log('      → CP14: Sync ScopeFilter, empty-walk safeguard, orphan removal, ForceDiscovery preservation, and revival verified');
         },
     },
     {
@@ -815,18 +845,20 @@ export const ContentPipelineChecks: NamedCheck[] = [
             if (guardSkip('CP15')) return;
             const source = (await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', `ID='${S.SourceID}'`))[0];
             source.Configuration = JSON.stringify({
-                Access: { DriverKey: ACCESS_DRIVER_KEY, Token: 'it-secret-token' },
+                AccessDriverKey: ACCESS_DRIVER_KEY,
             });
             await save(source, 'source Access configuration');
             await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
 
+            AccessLog.ConnectCalls = 0;
             AccessLog.DiscoverAccess.length = 0;
             AccessLog.FetchAccess.length = 0;
 
-            const c = await itemByURL(ctx, URL_C);
+            const a = await itemByURL(ctx, URL_A);
             await run(ctx, ['Discover'], [S.SourceID]);
-            await run(ctx, ['Extract'], [c.ID]);
+            await run(ctx, ['Extract'], [a.ID]);
 
+            Assert(AccessLog.ConnectCalls > 0, 'InMemoryAccessDriver.Connect was invoked');
             Assert(AccessLog.DiscoverAccess.length > 0, 'Discover received an Access resolution call');
             const discoverSession = AccessLog.DiscoverAccess[AccessLog.DiscoverAccess.length - 1];
             AssertEqual(discoverSession?.Headers?.['Authorization'], 'Bearer it-secret-token', 'Discover received Bearer token from Access driver');

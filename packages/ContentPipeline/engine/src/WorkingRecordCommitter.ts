@@ -617,7 +617,12 @@ export class WorkingRecordCommitter {
         for (const field of record.ChangedFields) {
             const mapping = map[field];
             const priorConfidence = storedConfidence[field];
-            if (!mapping || (priorConfidence && priorConfidence.Score > record.GetConfidence(field))) {
+            const currentField = record.GetField(field);
+            const sameStage =
+                priorConfidence != null &&
+                currentField != null &&
+                priorConfidence.SetBy.split('.')[0] === currentField.SetBy.split('.')[0];
+            if (!mapping || (priorConfidence && !sameStage && priorConfidence.Score > record.GetConfidence(field))) {
                 continue; // no column on this entity, or an existing higher-confidence stage already owns the field
             }
             const value = mapping.Kind === 'Lookup' ? await this.lookupID(mapping.LookupEntity, String(record.Get(field) ?? '')) : record.Get(field);
@@ -703,7 +708,8 @@ export class WorkingRecordCommitter {
                 continue;
             }
             const prior = merged[field];
-            if (!prior || entry.Score >= prior.Score) {
+            const sameStage = prior != null && prior.SetBy.split('.')[0] === entry.SetBy.split('.')[0];
+            if (!prior || sameStage || entry.Score >= prior.Score) {
                 merged[field] = entry;
             }
         }

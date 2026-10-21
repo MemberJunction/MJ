@@ -68,9 +68,9 @@ future Record Set Processing → Work Queue bridge is an adapter, not a change t
 
 ## Driver contracts
 
-- **Access drivers** (`access/BaseAccessDriver.ts`): turn a Content Source's `CredentialID` and driver
-  configuration into an in-memory `AccessArtifact` (headers, query params, cookies, or a token), cached
-  for the run and never persisted on a Content Item.
+- **Access drivers** (`access/BaseAccessDriver.ts`): turn a Content Source's `Configuration.AccessCredentials`
+  (resolved from `MJ: Credentials`) and driver configuration into an in-memory `AccessArtifact` (headers,
+  query params, cookies, or a token), cached for the run and never persisted on a Content Item.
 - **Source drivers** (`discover/SourceDriver.ts`): the request/response types a Content Source Type's
   driver (`ContentSourceType.DriverClass`) implements for Discover (`Discover`, with incremental `Since`
   filtering, `SupportsExhaustiveWalk` for orphan sync, custom `Columns`, and per-item `Request` recipes)

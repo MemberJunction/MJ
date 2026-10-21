@@ -28,8 +28,10 @@ import {
     WorkingRecord,
     WorkingRecordEntity,
 } from '@memberjunction/content-pipeline-base';
-import { MANAGED_PROMPT_CLASSIFIER } from '../ManagedPromptClassifier.js';
+import { MANAGED_PROMPT_CLASSIFIER, ManagedPromptClassifier } from '../ManagedPromptClassifier.js';
 import { WhereEqual } from '../Filters.js';
+
+void ManagedPromptClassifier;
 
 /** The registered name. */
 export const TAG_STAGE = 'Tag';
@@ -45,7 +47,7 @@ export class TagStage extends BasePipelineStage {
         return {
             Reads: ['Text', 'Title'],
             Writes: [],
-            ReadsExtensions: [],
+            ReadsExtensions: ['Pipeline.contentSourceID', 'Pipeline.classifierKeyOverride'],
             WritesExtensions: [`${TAG_STAGE}.tags`, `${TAG_STAGE}.classifierKey`],
         };
     }
@@ -133,7 +135,9 @@ export class TagStage extends BasePipelineStage {
     private async classifierKey(record: WorkingRecord, context: StageContext): Promise<string> {
         const itemColumns = record.GetExtension<Record<string, unknown>>('Pipeline', 'columns');
         const fromItem =
-            itemColumns?.ClassifierKeyOverride ?? record.GetExtension<string>(TAG_STAGE, 'classifierKeyOverride');
+            itemColumns?.ClassifierKeyOverride ??
+            record.GetExtension<string>('Pipeline', 'classifierKeyOverride') ??
+            record.GetExtension<string>(TAG_STAGE, 'classifierKeyOverride');
         if (typeof fromItem === 'string' && fromItem.trim().length > 0) {
             return fromItem.trim();
         }
@@ -143,30 +147,37 @@ export class TagStage extends BasePipelineStage {
         }
         const contentSourceID = record.GetExtension<string>('Pipeline', 'contentSourceID');
         if (contentSourceID) {
-            const knowledge = KnowledgeHubMetadataEngine.Instance;
-            await knowledge.Config(false, context.ContextUser, context.Provider);
-            const source = knowledge.GetContentSourceByID(contentSourceID);
-            const fromSource = (source?.ConfigurationObject as Record<string, unknown> | undefined)?.ClassifierKey;
-            if (typeof fromSource === 'string' && fromSource.trim().length > 0) {
-                return fromSource.trim();
-            }
-            const contentType = source?.ContentTypeID ? knowledge.GetContentTypeByID(source.ContentTypeID) : undefined;
-            const fromContentType = (
-                contentType as unknown as { ConfigurationObject?: Record<string, unknown> } | undefined
-            )?.ConfigurationObject?.ClassifierKey;
-            if (typeof fromContentType === 'string' && fromContentType.trim().length > 0) {
-                return fromContentType.trim();
-            }
-            const sourceType = source?.ContentSourceTypeID
-                ? knowledge.GetContentSourceTypeByID(source.ContentSourceTypeID)
-                : undefined;
-            const fromSourceType = (sourceType?.ConfigurationObject as Record<string, unknown> | undefined)
-                ?.ClassifierKey;
-            if (typeof fromSourceType === 'string' && fromSourceType.trim().length > 0) {
-                return fromSourceType.trim();
-            }
+            return (await this.sourceClassifierKey(contentSourceID, context)) ?? MANAGED_PROMPT_CLASSIFIER;
         }
         return MANAGED_PROMPT_CLASSIFIER;
+    }
+
+    private async sourceClassifierKey(contentSourceID: string, context: StageContext): Promise<string | null> {
+        const knowledge = KnowledgeHubMetadataEngine.Instance;
+        await knowledge.Config(false, context.ContextUser, context.Provider);
+        let source = knowledge.GetContentSourceByID(contentSourceID);
+        if (!source) {
+            await knowledge.Config(true, context.ContextUser, context.Provider);
+            source = knowledge.GetContentSourceByID(contentSourceID);
+        }
+        const sourceConfig = source?.ConfigurationObject as Record<string, unknown> | undefined;
+        const sourceSettings = (sourceConfig?.SourceSpecificConfiguration as Record<string, unknown> | undefined) ?? {};
+        const fromSource = sourceConfig?.ClassifierKey ?? sourceSettings.ClassifierKey;
+        if (typeof fromSource === 'string' && fromSource.trim().length > 0) {
+            return fromSource.trim();
+        }
+        const contentType = source?.ContentTypeID ? knowledge.GetContentTypeByID(source.ContentTypeID) : undefined;
+        const fromContentType = (
+            contentType as unknown as { ConfigurationObject?: Record<string, unknown> } | undefined
+        )?.ConfigurationObject?.ClassifierKey;
+        if (typeof fromContentType === 'string' && fromContentType.trim().length > 0) {
+            return fromContentType.trim();
+        }
+        const sourceType = source?.ContentSourceTypeID
+            ? knowledge.GetContentSourceTypeByID(source.ContentSourceTypeID)
+            : undefined;
+        const fromSourceType = (sourceType?.ConfigurationObject as Record<string, unknown> | undefined)?.ClassifierKey;
+        return typeof fromSourceType === 'string' && fromSourceType.trim().length > 0 ? fromSourceType.trim() : null;
     }
 
     /**

@@ -95,7 +95,7 @@ export class ExtractStage extends BasePipelineStage {
                     ? Outcome.Complete(`read as plain text (no extractor for '${read.FileType || 'unknown'}')`)
                     : Outcome.Fatal(`No extractor handles '${read.FileType || 'unknown'}' and a plain-text read is unreadable`);
             case 'Read':
-                return this.applyResult(record, read, url, source, context, archiveState, 0);
+                return this.applyResult(record, read, url, source, context, archiveState, 0, fetched.Content);
         }
     }
 
@@ -115,18 +115,24 @@ export class ExtractStage extends BasePipelineStage {
             record.Propose('Modality', this.modalityFor(fileType), source.Confidence.Modality, `${EXTRACT_STAGE}.Signature`);
             return { Kind: 'NonText', FileType: fileType };
         }
+        const lowerFileType = fileType.toLowerCase();
         const selected = SelectExtractor({
             FileType: fileType,
             ExtractorKeyOverride: record.GetExtension<string>('Pipeline', 'extractorKeyOverride'),
-            RunExtractorKey: source.RunExtractorKey,
-            SourceExtractorKey: source.SourceExtractors?.[fileType.toLowerCase()] ?? source.SourceExtractorKey,
-            ContentTypeExtractorKey: source.ContentTypeExtractorKey,
+            RunExtractorKey: source.RunExtractors?.[lowerFileType] ?? source.RunExtractorKey,
+            SourceExtractorKey: source.SourceExtractors?.[lowerFileType] ?? source.SourceExtractorKey,
+            ContentTypeExtractorKey: source.TypeExtractors?.[lowerFileType] ?? source.ContentTypeExtractorKey,
             FileTypeExtractorKey: rules.ExtractorByFileType.get(fileType),
         });
         if (!selected) {
             return { Kind: 'NoExtractor', FileType: fileType };
         }
-        const tuning = ResolveTuning(source.Resolved?.Settings, context.Configuration);
+        const tuning = ResolveTuning(
+            source.Resolved?.TypeConfiguration,
+            source.Resolved?.Configuration,
+            source.Resolved?.Settings,
+            context.Configuration,
+        );
         const isArchive = selected.Key === 'Archive';
         const budget = isArchive ? this.prepareArchiveBudget(archiveState, source.Parameters, tuning, archiveDepth + 1) : archiveState.Budget;
         const result = await selected.Extractor.Extract({
@@ -214,6 +220,7 @@ export class ExtractStage extends BasePipelineStage {
         context: StageContext,
         archiveState: ArchiveTreeState,
         archiveDepth: number,
+        fetchedContent: Uint8Array,
     ): Promise<StageOutcome> {
         const blocks = read.Result.Blocks;
         if (blocks.length === 0) {
@@ -225,6 +232,8 @@ export class ExtractStage extends BasePipelineStage {
             this.applyBlock(record, blocks[0], read.Result.IsFallback === true, source.Confidence);
             return Outcome.Complete(`read with ${read.Key}`);
         }
+        record.SetExtension('Pipeline', 'checksum', this.sha256Bytes(fetchedContent));
+        record.MarkComplete();
         const memberDepth = read.IsArchive ? archiveDepth + 1 : archiveDepth;
         // The container keeps its own identity; writing the first block onto it would mislabel a member as the whole.
         for (const [index, block] of blocks.entries()) {
@@ -530,30 +539,43 @@ export class ExtractStage extends BasePipelineStage {
         const resolver = new ContentSourceConfigurationResolver(context.Provider, context.ContextUser);
         const resolved = contentSourceID ? await resolver.Resolve(contentSourceID, context.ContextUser) : null;
         const typeConfig = resolved?.TypeConfiguration ?? {};
+        const sourceConfig = resolved?.Configuration ?? {};
         const settings = resolved?.Settings ?? {};
         const configured = (key: string) =>
-            (context.Configuration[key] as string | undefined) ?? (settings[key] as string | undefined) ?? null;
+            (context.Configuration[key] as string | undefined) ??
+            (sourceConfig[key] as string | undefined) ??
+            (settings[key] as string | undefined) ??
+            (typeConfig[key] as string | undefined) ??
+            null;
+        const runExtractors = context.Configuration.Extractors as Record<string, string> | undefined;
         const sourceExtractors = {
-            ...(typeConfig.Extractors as Record<string, string> | undefined),
             ...(settings.Extractors as Record<string, string> | undefined),
-            ...(context.Configuration.Extractors as Record<string, string> | undefined),
+            ...(sourceConfig.Extractors as Record<string, string> | undefined),
         };
+        const typeExtractors = typeConfig.Extractors as Record<string, string> | undefined;
         return {
             ContentSourceID: contentSourceID,
             Resolved: resolved,
             Parameters: resolved?.Parameters ?? {},
             Confidence: ResolveConfidence(resolved?.Confidence, context.Configuration),
+            RunExtractors: runExtractors && Object.keys(runExtractors).length > 0 ? runExtractors : undefined,
             RunExtractorKey: (context.Configuration.ExtractorKey as string | undefined) ?? null,
             SourceExtractors: Object.keys(sourceExtractors).length > 0 ? sourceExtractors : undefined,
-            SourceExtractorKey: (settings.ExtractorKey as string | undefined) ?? null,
+            SourceExtractorKey:
+                (sourceConfig.ExtractorKey as string | undefined) ?? (settings.ExtractorKey as string | undefined) ?? null,
+            TypeExtractors: typeExtractors && Object.keys(typeExtractors).length > 0 ? typeExtractors : undefined,
             ContentTypeExtractorKey:
                 (await this.contentTypeExtractorKey(contentSourceID, context)) ?? (typeConfig.ExtractorKey as string | undefined) ?? null,
             MultiModalEnabled:
                 typeof context.Configuration.MultiModalEnabled === 'boolean'
                     ? context.Configuration.MultiModalEnabled
-                    : typeof settings.MultiModalEnabled === 'boolean'
-                      ? settings.MultiModalEnabled
-                      : context.Configuration.SupportsMultiModal === true,
+                    : typeof sourceConfig.MultiModalEnabled === 'boolean'
+                      ? sourceConfig.MultiModalEnabled
+                      : typeof settings.MultiModalEnabled === 'boolean'
+                        ? settings.MultiModalEnabled
+                        : typeof typeConfig.MultiModalEnabled === 'boolean'
+                          ? typeConfig.MultiModalEnabled
+                          : context.Configuration.SupportsMultiModal === true || typeConfig.SupportsMultiModal === true,
             FileStorageAccountID: configured('FileStorageAccountID'),
             ObjectKeyTemplate: configured('ObjectKeyTemplate'),
             ObjectKeyValues: (context.Configuration.ObjectKeyValues as Record<string, string> | undefined) ?? {},
@@ -596,9 +618,11 @@ interface ResolvedSource {
     Resolved: ResolvedSourceConfiguration | null;
     Parameters: Readonly<Record<string, string>>;
     Confidence: ResolvedConfidenceScale;
+    RunExtractors: Readonly<Record<string, string>> | undefined;
     RunExtractorKey: string | null;
     SourceExtractors: Readonly<Record<string, string>> | undefined;
     SourceExtractorKey: string | null;
+    TypeExtractors: Readonly<Record<string, string>> | undefined;
     ContentTypeExtractorKey: string | null;
     MultiModalEnabled: boolean;
     FileStorageAccountID: string | null;

@@ -115,7 +115,11 @@ export class SegmentStage extends BasePipelineStage {
         record: WorkingRecord,
         context: StageContext,
     ): Promise<{ SegmenterKey: string | null; Confidence: ResolvedConfidenceScale; Options: Record<string, unknown> }> {
-        const itemOverride = record.GetExtension<string>('Pipeline', 'segmenterKeyOverride');
+        const itemColumns = record.GetExtension<Record<string, unknown>>('Pipeline', 'columns');
+        const fromColumns = typeof itemColumns?.SegmenterKeyOverride === 'string' && itemColumns.SegmenterKeyOverride.trim().length > 0
+            ? itemColumns.SegmenterKeyOverride.trim()
+            : null;
+        const itemOverride = fromColumns ?? record.GetExtension<string>('Pipeline', 'segmenterKeyOverride');
         const runKey = typeof context.Configuration.SegmenterKey === 'string' && context.Configuration.SegmenterKey.length > 0
             ? context.Configuration.SegmenterKey
             : null;
@@ -129,7 +133,11 @@ export class SegmentStage extends BasePipelineStage {
         }
         const knowledge = KnowledgeHubMetadataEngine.Instance;
         await knowledge.Config(false, context.ContextUser, context.Provider);
-        const source = knowledge.ContentSources.find((c) => UUIDsEqual(c.ID, contentSourceID));
+        let source = knowledge.ContentSources.find((c) => UUIDsEqual(c.ID, contentSourceID));
+        if (!source) {
+            await knowledge.Config(true, context.ContextUser, context.Provider);
+            source = knowledge.ContentSources.find((c) => UUIDsEqual(c.ID, contentSourceID));
+        }
         const contentType = source?.ContentTypeID
             ? knowledge.ContentTypes.find((t) => UUIDsEqual(t.ID, source.ContentTypeID))
             : undefined;
@@ -138,6 +146,7 @@ export class SegmentStage extends BasePipelineStage {
             : null;
         const sourceKey =
             source?.SegmenterKey ??
+            (typeof resolvedConfig?.Configuration.SegmenterKey === 'string' ? resolvedConfig.Configuration.SegmenterKey : null) ??
             (typeof resolvedConfig?.Settings.SegmenterKey === 'string' ? resolvedConfig.Settings.SegmenterKey : null);
         const typeKey =
             contentType?.SegmenterKey ??
@@ -146,6 +155,8 @@ export class SegmentStage extends BasePipelineStage {
             SegmenterKey: itemOverride ?? runKey ?? sourceKey ?? typeKey ?? null,
             Confidence: ResolveConfidence(resolvedConfig?.Confidence, context.Configuration),
             Options: {
+                ...(resolvedConfig?.TypeConfiguration.SegmentationOptions as Record<string, unknown> | undefined),
+                ...(resolvedConfig?.Configuration.SegmentationOptions as Record<string, unknown> | undefined),
                 ...(resolvedConfig?.Settings.SegmentationOptions as Record<string, unknown> | undefined),
                 ...((context.Configuration.SegmentationOptions as Record<string, unknown>) ?? {}),
             },

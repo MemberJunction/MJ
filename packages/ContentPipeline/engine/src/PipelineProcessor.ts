@@ -12,6 +12,7 @@ import {
     DEFAULT_ACCESS_ROLE,
     FatalStageError,
     Outcome,
+    ResolvedPipelineTuning,
     ResolveTuning,
     StageContext,
     StageLogger,
@@ -209,8 +210,9 @@ export class PipelineProcessor implements IRecordProcessor {
     }
 
     /**
-     * Run each stage in order, stopping at the first non-Complete. A stage on a different entity than the
-     * previous one runs over what that stage produced — `[Discover, Extract]` extracts the discovered items.
+     * Run each stage in order, stopping at the first non-Complete. A stage on the same entity continues over
+     * the in-place record (or its expanded same-entity children for archives/multi-block items); a stage on a
+     * different entity runs over the children produced by earlier stages.
      */
     private async runStages(working: WorkingRecord, context: RecordProcessorContext, key: string): Promise<StageOutcome> {
         let last: StageOutcome = Outcome.Complete();
@@ -225,7 +227,9 @@ export class PipelineProcessor implements IRecordProcessor {
             if (last.Status !== 'Complete') {
                 return last;
             }
-            current = targets.flatMap((t) => [...t.Children]);
+            current = targets.flatMap((t) =>
+                t.Children.some((c) => c.Entity === t.Entity) ? [...t.Children] : [t, ...t.Children],
+            );
         }
         return last;
     }
@@ -374,9 +378,18 @@ export class PipelineProcessor implements IRecordProcessor {
                 Orphans: [],
             };
         }
-        const tuning = ResolveTuning(this.config.Configuration);
+        const tuning =
+            working.GetExtension<ResolvedPipelineTuning>(DISCOVER_STAGE, 'tuning') ?? ResolveTuning(this.config.Configuration);
+        return this.reconcileSyncOrphans(working, live.Results, tuning);
+    }
+
+    private reconcileSyncOrphans(
+        working: WorkingRecord,
+        liveRows: readonly { ID: string; URL: string; __mj_CreatedAt?: Date | string }[],
+        tuning: ResolvedPipelineTuning,
+    ): { Failure?: StageOutcome; Orphans: Orphan[] } {
         const walkStartedAt = working.GetExtension<Date>(DISCOVER_STAGE, 'walkStartedAt');
-        const existingBeforeWalk = live.Results.filter((row) => {
+        const existingBeforeWalk = liveRows.filter((row) => {
             if (!walkStartedAt || !row.__mj_CreatedAt) {
                 return true;
             }

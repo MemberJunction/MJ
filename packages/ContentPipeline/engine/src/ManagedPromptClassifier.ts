@@ -52,30 +52,7 @@ export class ManagedPromptClassifier extends BaseContentClassifier {
             request.ContextUser,
             request.Provider,
         );
-        // Attribute prompts come from the autotagger's cache, the taxonomy from TagEngine's. The
-        // taxonomy is best-effort: without one the model classifies into a fresh one.
-        await AutotagBaseEngine.Instance.Config(false, request.ContextUser, request.Provider);
-        await TagEngine.Instance.Config(false, request.ContextUser).catch((e: unknown) =>
-            LogStatus(`ManagedPromptClassifier: no taxonomy context (${e instanceof Error ? e.message : String(e)})`),
-        );
-        const data = {
-            ...BuildContentAutotagPromptData({
-                ContentSourceTypeID: source.ContentSourceTypeID,
-                ContentTypeID: contentType.ID,
-                MinTags: contentType.MinTags,
-                MaxTags: contentType.MaxTags,
-                AttributePrompt: AutotagBaseEngine.Instance.GetAdditionalContentTypePrompt(contentType.ID),
-                ClassificationContext: await ResolveItemClassificationContext(
-                    source.ID,
-                    contentType.ID,
-                    request.ContextUser,
-                    request.Provider,
-                ),
-                ContentText: request.Text,
-            }),
-            title: request.Title ?? '',
-            ...request.Parameters,
-        };
+        const data = await this.buildPromptData(request, source, contentType);
         const result = await RunContentAutotagPrompt<{ keywords?: unknown; isValidContent?: boolean }>(
             GetContentAutotagPrompt(),
             data,
@@ -97,6 +74,37 @@ export class ManagedPromptClassifier extends BaseContentClassifier {
             PromptRunID: result.promptRun?.ID ?? null,
             IsValidContent: isValidContent,
             Extensions: { keywords },
+        };
+    }
+
+    private async buildPromptData(
+        request: ClassifyRequest,
+        source: MJContentSourceEntity,
+        contentType: MJContentTypeEntity,
+    ): Promise<Record<string, unknown>> {
+        // Attribute prompts come from the autotagger's cache, the taxonomy from TagEngine's. The
+        // taxonomy is best-effort: without one the model classifies into a fresh one.
+        await AutotagBaseEngine.Instance.Config(false, request.ContextUser, request.Provider);
+        await TagEngine.Instance.Config(false, request.ContextUser).catch((e: unknown) =>
+            LogStatus(`ManagedPromptClassifier: no taxonomy context (${e instanceof Error ? e.message : String(e)})`),
+        );
+        return {
+            ...BuildContentAutotagPromptData({
+                ContentSourceTypeID: source.ContentSourceTypeID,
+                ContentTypeID: contentType.ID,
+                MinTags: contentType.MinTags,
+                MaxTags: contentType.MaxTags,
+                AttributePrompt: AutotagBaseEngine.Instance.GetAdditionalContentTypePrompt(contentType.ID),
+                ClassificationContext: await ResolveItemClassificationContext(
+                    source.ID,
+                    contentType.ID,
+                    request.ContextUser,
+                    request.Provider,
+                ),
+                ContentText: request.Text,
+            }),
+            title: request.Title ?? '',
+            ...request.Parameters,
         };
     }
 

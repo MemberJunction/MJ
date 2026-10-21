@@ -154,6 +154,8 @@ describe('PipelineProcessor chained stages', () => {
         const processor = build({ Stages: ['ProcTestStage', 'ProcTestSecond'] });
         await processor.ProcessRecord(ref(), rsContext);
         expect(hydrate).toHaveBeenCalledTimes(1);
+        const committedRecord = commit.mock.calls[0]?.[0] as WorkingRecord | undefined;
+        expect(committedRecord?.Get('Decorator')).toBe('second ran');
     });
 
     it('commits against the LAST stage status field', async () => {

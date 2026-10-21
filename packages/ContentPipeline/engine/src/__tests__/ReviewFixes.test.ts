@@ -424,4 +424,49 @@ describe('Extract SHA-256 checksum comparison and custom Columns / Request escap
         expect(stored.ExtractionStatus).toBe('Pending');
         expect(chunkStored.EmbeddingStatus).toBe('MetadataOnly');
     });
+
+    it('allows Extract to overwrite its own previously persisted Text and Checksum on re-extraction', async () => {
+        const stored: Record<string, unknown> = {
+            ID: 'I1',
+            URL: 'https://x.test/doc.txt',
+            Name: 'Old Title',
+            Text: 'old body text',
+            Checksum: '1'.repeat(64),
+            ExtractionStatus: 'Pending',
+            TaggingStatus: 'Complete',
+            SegmentationStatus: 'Complete',
+            EmbeddingStatus: 'Complete',
+            FieldConfidence: JSON.stringify({
+                Title: { Score: 5, SetBy: 'Extract' },
+                Text: { Score: 6, SetBy: 'Extract' },
+            }),
+            InnerLoad: async () => true,
+            Save: async () => true,
+            NewRecord: () => {},
+        };
+        const entityRow = row(stored, ITEM_FIELDS);
+        const provider = {
+            RunView: async () => ({ Success: true, Results: [] }),
+            GetEntityObject: async () => entityRow,
+        };
+        const record = await new WorkingRecordHydrator(provider as never, {} as never).Hydrate('Content Item', 'I1');
+        expect(record.Propose('Text', 'new body text', 6, 'Extract.PlainText')).toBe(true);
+        expect(record.Propose('Title', 'New Title', 5, 'Extract.PlainText')).toBe(true);
+        record.SetExtension('Pipeline', 'checksum', '2'.repeat(64));
+
+        await new WorkingRecordCommitter(provider as never, {} as never).Commit(
+            record,
+            'ExtractionStatus',
+            'Complete',
+            true,
+        );
+
+        expect(stored.Text).toBe('new body text');
+        expect(stored.Name).toBe('New Title');
+        expect(stored.Checksum).toBe('2'.repeat(64));
+        expect(stored.ExtractionStatus).toBe('Complete');
+        expect(stored.TaggingStatus).toBe('Pending');
+        expect(stored.SegmentationStatus).toBe('Pending');
+        expect(stored.EmbeddingStatus).toBe('Pending');
+    });
 });

@@ -330,31 +330,37 @@ export class AutotagWebsite extends AutotagBase {
         }
     }
 
+    private activeDiscoverRequest?: DiscoverRequest;
+
     /** Crawl the site for the pipeline, yielding each discovered page link for Extract to fetch and hash. */
     public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
         const configuration = request.Configuration as MJContentSourceEntity_IContentSourceConfiguration;
         this.configureCrawl(configuration.Website, new Map(Object.entries(request.Parameters)));
         const rootURL = this.RootURL ?? this.getBasePath(request.URL);
         const pattern = this.URLPattern ? new RegExp(this.URLPattern) : /.*/;
-        for await (const link of this.streamAllLinksFromContentSource(request.URL, rootURL, pattern)) {
-            if (request.Signal.aborted) {
-                return;
+        this.activeDiscoverRequest = request;
+        try {
+            for await (const link of this.streamAllLinksFromContentSource(request.URL, rootURL, pattern)) {
+                if (request.Signal.aborted) {
+                    return;
+                }
+                if (request.Since && await this.isUnmodifiedSince(link, request.Since)) {
+                    continue;
+                }
+                yield { URL: link };
             }
-            if (request.Since && await this.isUnmodifiedSince(link, request.Since, request.Signal)) {
-                continue;
-            }
-            yield { URL: link };
+        } finally {
+            this.activeDiscoverRequest = undefined;
         }
     }
 
     /** True when HTTP HEAD returns a valid `Last-Modified` header at or before `since`. */
-    private async isUnmodifiedSince(url: string, since: Date, signal: AbortSignal): Promise<boolean> {
+    private async isUnmodifiedSince(url: string, since: Date): Promise<boolean> {
         try {
             const response = await HttpHead(url, {
                 Timeout: 10000,
                 ThrowOnError: false,
-                ValidateUrl: true,
-                Signal: signal,
+                ...this.buildCrawlHttpOptions(url),
             });
             const lastModified = response?.Headers?.['last-modified'] ?? response?.Headers?.['Last-Modified'];
             if (!lastModified) {
@@ -362,6 +368,47 @@ export class AutotagWebsite extends AutotagBase {
             }
             const parsed = new Date(lastModified);
             return !Number.isNaN(parsed.getTime()) && parsed.getTime() <= since.getTime();
+        } catch {
+            return false;
+        }
+    }
+
+    /** Build SSRF-guarded, signal-aware, same-origin-scoped HTTP options when crawling under Discover. */
+    private buildCrawlHttpOptions(url: string): {
+        ValidateUrl?: boolean;
+        StripHeadersOnCrossOriginRedirect?: boolean;
+        Signal?: AbortSignal;
+        Headers?: Record<string, string>;
+        Query?: Record<string, string>;
+    } {
+        const req = this.activeDiscoverRequest;
+        if (!req) {
+            return {};
+        }
+        const access = this.sessionAppliesToUrl(req, url) ? req.Access : null;
+        return {
+            ValidateUrl: true,
+            StripHeadersOnCrossOriginRedirect: true,
+            Signal: req.Signal,
+            Headers: access?.Headers ? { ...access.Headers } : undefined,
+            Query: access?.QueryParameters ? { ...access.QueryParameters } : undefined,
+        };
+    }
+
+    private sessionAppliesToUrl(req: DiscoverRequest, targetUrl: string): boolean {
+        if (!req.Access) {
+            return false;
+        }
+        const allowed = req.Access.Origins?.length ? req.Access.Origins : req.URL ? [req.URL] : [];
+        try {
+            const targetOrigin = new URL(targetUrl).origin;
+            return allowed.some((origin) => {
+                try {
+                    return new URL(origin).origin === targetOrigin;
+                } catch {
+                    return false;
+                }
+            });
         } catch {
             return false;
         }
@@ -630,7 +677,7 @@ export class AutotagWebsite extends AutotagBase {
 
         const discovered: string[] = [];
         try {
-            const { Data: data } = await HttpGet<string>(url, { ResponseType: 'text' });
+            const { Data: data } = await HttpGet<string>(url, { ResponseType: 'text', ...this.buildCrawlHttpOptions(url) });
             const $ = cheerio.load(data);
             $('a').each((_, element) => {
                 const link = $(element).attr('href');
@@ -733,7 +780,7 @@ export class AutotagWebsite extends AutotagBase {
 
     protected async urlIsValid(url: string): Promise<boolean> {
         try { 
-            const response = await HttpHead(url, { ThrowOnError: false });
+            const response = await HttpHead(url, { ThrowOnError: false, ...this.buildCrawlHttpOptions(url) });
             return response.Status === 200;
         }
         catch (e) {
@@ -764,7 +811,7 @@ export class AutotagWebsite extends AutotagBase {
 
             const extractedLinks: string[] = [];
 
-            const { Data: data } = await HttpGet<string>(url, { ResponseType: 'text' });
+            const { Data: data } = await HttpGet<string>(url, { ResponseType: 'text', ...this.buildCrawlHttpOptions(url) });
             const $ = cheerio.load(data);
 
             $('a').each((_, element) => {

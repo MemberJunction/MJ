@@ -73,14 +73,19 @@ export class WorkingRecord {
     }
 
     /**
-     * Offer a value; it is taken only if `confidence` is strictly higher than the current one. That is what
-     * lets two stages that know nothing of each other resolve a shared field on merit, in any order.
+     * Offer a value; it is taken if `confidence` is strictly higher than the current one, or when the
+     * proposing stage is replacing a value that the same stage wrote on a prior run (hydrated via
+     * {@link Restore}). That lets two stages resolve a shared field on merit while allowing a stage to
+     * refresh its own output on re-execution.
      *
      * @returns True if the proposal was taken.
      */
     public Propose(field: WellKnownField, value: WellKnownFieldValue, confidence: number, setBy: string): boolean {
         const existing = this._fields.get(field);
-        if (existing && existing.Confidence >= confidence) {
+        const sameStage =
+            existing != null &&
+            (existing.SetBy === setBy || (!this._changed.has(field) && existing.SetBy.split('.')[0] === setBy.split('.')[0]));
+        if (existing && (sameStage ? (!this._changed.has(field) ? false : existing.Confidence > confidence) : existing.Confidence >= confidence)) {
             return false;
         }
         this._fields.set(field, new WorkingRecordField(value, confidence, setBy));
