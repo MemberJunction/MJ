@@ -646,8 +646,9 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         expect(harness.steps[1].TargetID).toBe(CHILD_PROMPT_ID);
         expect(harness.steps[2].TargetID).toBe(ACTION_ID);
 
-        // All fire-and-forget saves were flushed by finalizeAgentRun (INSERT + finalize UPDATE each)
-        expect(harness.steps.every((s) => s.saveCount >= 2)).toBe(true);
+        // Pre-completed Validation step persists in a single INSERT; two-phase steps (Prompt, Actions) do INSERT + finalize UPDATE
+        expect(harness.steps[0].saveCount).toBe(1);
+        expect(harness.steps.slice(1).every((s) => s.saveCount >= 2)).toBe(true);
     });
 
     it("propagates the payload: step N's output payload is exactly what step N+1's prompt receives, and the run records the last step's payload", async () => {
@@ -3266,6 +3267,10 @@ describe('BaseAgent.Execute — agent.AgentTypePromptParams task graph gate & fo
         expect(seenDecisions[0].step).toBe('Sub-Agent');
         expect(seenDecisions[0].subAgent?.name).toBe('Query Builder');
         expect(seenDecisions[0].taskGraph?.folded).toBe(true);
+
+        // Pre-completed folded TaskGraph step persists in a single INSERT (saveCount === 1)
+        const foldedStep = harness.steps.find((s) => s.StepType === 'TaskGraph');
+        expect(foldedStep?.saveCount).toBe(1);
     });
 });
 

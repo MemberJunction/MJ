@@ -555,13 +555,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         ];
         this.appendRealtimeRegistryConfigs(params, provider);
 
-        // make sure engines we depend on downstream are loaded up before we load
-        await Promise.all([
+        // Load dependent engines in parallel with our own entity configs so AIEngineBase's
+        // 51 entity configs coalesce into the initial startup RunViews batch instead of
+        // waiting for TemplateEngineBase/ArtifactMetadataEngine to finish first.
+        const [, , loadResult] = await Promise.all([
             TemplateEngineBase.Instance.Config(false, contextUser),
-            ArtifactMetadataEngine.Instance.Config(false, contextUser)
+            ArtifactMetadataEngine.Instance.Config(false, contextUser),
+            this.Load(params, provider, forceRefresh, contextUser)
         ]);
-
-        return await this.Load(params, provider, forceRefresh, contextUser);
+        return loadResult;
     }
 
     /**

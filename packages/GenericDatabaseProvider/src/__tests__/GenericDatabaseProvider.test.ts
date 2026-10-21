@@ -3205,3 +3205,70 @@ describe('GenericDatabaseProvider SaveReturnContext & ProjectSaveCallToDatestamp
         });
     });
 });
+
+describe('GenericDatabaseProvider RunViewCore single-batch execution (MJ-CORE-6)', () => {
+    it('batches [viewSQL, countSQL] into a single ExecuteSQLBatch call when pagination is used, and uses ExecuteSQL for a single query', async () => {
+        const p = new TestGenericProvider();
+        const entityInfo = {
+            ID: 'entity-1',
+            Name: 'Widgets',
+            SchemaName: '__mj',
+            BaseView: 'vwWidgets',
+            BaseTable: 'Widget',
+            AllowAllRowsAPI: true,
+            TrackRecordChanges: false,
+            PrimaryKeys: [{ Name: 'ID', CodeName: 'ID', NeedsQuotes: true }],
+            Fields: [{ Name: 'ID', CodeName: 'ID', NeedsQuotes: true, AllowInView: true, DefaultInView: true, IsBinaryFieldType: false }],
+            DatetimeFields: [],
+            BinaryFields: [],
+            RelatedEntities: [],
+            UserExemptFromRowLevelSecurity: () => true,
+            GetEffectiveRowFilterWhereClause: () => '',
+            CanUserRead: () => true,
+            CheckPermissions: () => true,
+        } as unknown as EntityInfo;
+
+        Object.defineProperty(p, 'Entities', {
+            get: () => [entityInfo],
+            configurable: true,
+        });
+        vi.spyOn(p, 'EntityByName').mockReturnValue(entityInfo);
+        vi.spyOn(p, 'CheckUserReadPermissions').mockImplementation(() => undefined);
+
+        const batchSpy = vi.spyOn(p, 'ExecuteSQLBatch').mockResolvedValue([
+            [{ ID: 'row-1' }, { ID: 'row-2' }],
+            [{ TotalRowCount: 42 }],
+        ]);
+        const singleSpy = vi.spyOn(p, 'ExecuteSQL').mockResolvedValue([{ ID: 'row-1' }]);
+
+        const runViewCore = (params: RunViewParams) =>
+            (p as unknown as { RunViewCore: (prm: RunViewParams, u?: UserInfo) => Promise<{ Success: boolean; Results: unknown[]; TotalRowCount: number }> }).RunViewCore(params, mockUser);
+
+        // Paginated RunView -> generates [viewSQL, countSQL] -> must call ExecuteSQLBatch once
+        const paginatedResult = await runViewCore({
+            EntityName: 'Widgets',
+            StartRow: 0,
+            MaxRows: 2,
+            ResultType: 'simple',
+        });
+        expect(paginatedResult.Success).toBe(true);
+        expect(paginatedResult.Results).toHaveLength(2);
+        expect(paginatedResult.TotalRowCount).toBe(42);
+        expect(batchSpy).toHaveBeenCalledTimes(1);
+        expect(batchSpy.mock.calls[0][0]).toHaveLength(2);
+        expect(singleSpy).not.toHaveBeenCalled();
+
+        batchSpy.mockClear();
+        singleSpy.mockClear();
+
+        // Non-paginated unbounded RunView -> generates [viewSQL] -> must call ExecuteSQL directly
+        const singleResult = await runViewCore({
+            EntityName: 'Widgets',
+            ResultType: 'simple',
+        });
+        expect(singleResult.Success).toBe(true);
+        expect(singleResult.Results).toHaveLength(1);
+        expect(singleSpy).toHaveBeenCalledTimes(1);
+        expect(batchSpy).not.toHaveBeenCalled();
+    });
+});

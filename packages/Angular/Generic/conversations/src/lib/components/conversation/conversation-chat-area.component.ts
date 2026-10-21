@@ -3814,13 +3814,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  private _cachedInputsArray: Array<{conversationId: string; conversationName: string | null}> = [];
+  private _cachedInputsKey = '';
+
   /**
-   * Returns array of cached message-input metadata for rendering
+   * Returns array of cached message-input metadata for rendering.
    * This allows multiple message-input components to exist simultaneously (hidden)
-   * preserving their state when switching conversations
+   * preserving their state when switching conversations.
+   * Memoized on cache contents so template `@for` loops receive a stable array reference across CD ticks.
    */
   public GetCachedInputs(): Array<{conversationId: string; conversationName: string | null}> {
-    return Array.from(this.messageInputMetadataCache.values());
+    if (this.messageInputMetadataCache.size === 0) {
+      return this._cachedInputsArray.length === 0 ? this._cachedInputsArray : (this._cachedInputsArray = []);
+    }
+    let key = '';
+    for (const [id, meta] of this.messageInputMetadataCache.entries()) {
+      key += `${id}:${meta.conversationName ?? ''}|`;
+    }
+    if (key !== this._cachedInputsKey) {
+      this._cachedInputsKey = key;
+      this._cachedInputsArray = Array.from(this.messageInputMetadataCache.values());
+    }
+    return this._cachedInputsArray;
   }
 
   /** @deprecated Use {@link GetCachedInputs}. */
@@ -6747,11 +6762,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.HasSystemArtifacts;
   }
 
+  private _artifactsArrayCache: Array<{
+    artifactId: string;
+    versionId: string;
+    name: string;
+    versionCount: number;
+    visibility: string;
+    versions: Array<{versionId: string; versionNumber: number}>;
+  }> = [];
+  private _artifactsArrayKey = '';
+
   /**
-   * Get unique artifacts grouped by artifact ID (not by conversation detail)
-   * Returns the latest version info for each unique artifact with all versions
-   * Works with LazyArtifactInfo - uses display data without loading full entities
-   * Respects showSystemArtifacts toggle
+   * Get unique artifacts grouped by artifact ID (not by conversation detail).
+   * Returns the latest version info for each unique artifact with all versions.
+   * Works with LazyArtifactInfo - uses display data without loading full entities.
+   * Respects showSystemArtifacts toggle and memoizes the result across CD passes.
    */
   GetArtifactsArray(): Array<{
     artifactId: string;
@@ -6761,6 +6786,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     visibility: string;
     versions: Array<{versionId: string; versionNumber: number}>
   }> {
+    const effectiveMap = this.EffectiveArtifactsMap;
+    let sig = `${this.ShowSystemArtifacts ? 1 : 0}|${effectiveMap.size}|`;
+    for (const artifactList of effectiveMap.values()) {
+      for (const info of artifactList) {
+        sig += `${info.artifactVersionId}:${info.artifactName ?? ''};`;
+      }
+    }
+    if (sig === this._artifactsArrayKey) {
+      return this._artifactsArrayCache;
+    }
+    this._artifactsArrayKey = sig;
+
     const artifactMap = new Map<string, {
       artifactId: string;
       versionId: string;
@@ -6771,7 +6808,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Group by artifactId, collecting all version details
     // Use effectiveArtifactsMap to respect showSystemArtifacts toggle
-    for (const artifactList of this.EffectiveArtifactsMap.values()) {
+    for (const artifactList of effectiveMap.values()) {
       for (const info of artifactList) {
         const artifactId = info.artifactId;
         const versionId = info.artifactVersionId;
@@ -6799,7 +6836,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     // Convert to array with version count, sorted by version number descending
-    return Array.from(artifactMap.values()).map(item => ({
+    this._artifactsArrayCache = Array.from(artifactMap.values()).map(item => ({
       artifactId: item.artifactId,
       versionId: item.versionId,
       name: item.name,
@@ -6807,6 +6844,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       versionCount: item.versions.length,
       versions: item.versions.sort((a, b) => b.versionNumber - a.versionNumber)
     }));
+    return this._artifactsArrayCache;
   }
 
   /** @deprecated Use {@link GetArtifactsArray}. */
