@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { Arg, Ctx, Field, Int, ObjectType, Query, Resolver, Root, Subscription } from 'type-graphql';
-import { Metadata, UserInfo } from '@memberjunction/core';
+import { EntityInfo, Metadata, UserInfo } from '@memberjunction/core';
 import {
     CacheInvalidationBroadcastManager,
 } from '../broadcast/index.js';
@@ -40,20 +40,41 @@ export function ConfigureRecordDataBroadcast(entities: readonly string[] | undef
  *
  * The subscription below is filtered only by ENTITY-level read permission, so anything included
  * here is disclosed to every signed-in session that may read the entity at all — regardless of
- * row-level security or any tenant scoping a consumer applies on the read path, neither of which
- * this push traverses. The answer is therefore NO unless a deployment has explicitly opted the
- * entity in via `cacheSettings.recordDataBroadcastEntities`.
+ * row-level security, field-level security, or any tenant scoping a consumer applies on the read
+ * path, none of which this push traverses. The answer is therefore NO unless a deployment has
+ * explicitly opted the entity in via `cacheSettings.recordDataBroadcastEntities`, and always NO
+ * for an entity under field-level security (its own flag or an IS-A ancestor's), whatever the
+ * allowlist says: the row would carry the columns some of those sessions may not read.
  *
  * Callers that get `false` simply omit `recordData`; the event still carries the entity name and
  * primary key, so clients evict and re-fetch through the normal access-controlled read path.
  *
  * Matching is exact (trimmed, case-insensitive) rather than substring: a loose match would let an
  * allowlisted name drag in every entity whose name contains it.
+ *
+ * @param entityInfo The entity's metadata, when the caller holds it. Otherwise it is looked up by
+ *   name, so the field-security refusal applies either way.
  */
-export function MayBroadcastRecordData(entityName: string): boolean {
+export function MayBroadcastRecordData(entityName: string, entityInfo?: EntityInfo | null): boolean {
   if (allowedRecordDataEntities.length === 0) return false;
+  if (fieldSecurityApplies(entityName, entityInfo)) return false;
   if (allowedRecordDataEntities.includes('*')) return true;
   return allowedRecordDataEntities.includes(entityName.trim().toLowerCase());
+}
+
+/** Whether field-level security applies to the entity, resolving it by name when not supplied. */
+function fieldSecurityApplies(entityName: string, entityInfo: EntityInfo | null | undefined): boolean {
+  const info = entityInfo ?? lookUpEntity(entityName);
+  return Boolean(info?.FieldLevelSecurityApplies);
+}
+
+/** The entity by name from the process's metadata, or undefined when none is loaded. */
+function lookUpEntity(entityName: string): EntityInfo | undefined {
+  try {
+    return new Metadata().EntityByName(entityName) ?? undefined; // global-provider-ok: metadata lookup for a process-wide broadcast gate
+  } catch {
+    return undefined;
+  }
 }
 
 @ObjectType()

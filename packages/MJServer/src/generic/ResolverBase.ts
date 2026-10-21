@@ -1,5 +1,6 @@
 import {
   AggregateExpression,
+  AssertClientInputWritableForUser,
   BaseEntity,
   BaseEntityEvent,
   CompositeKey,
@@ -837,6 +838,24 @@ export class ResolverBase {
     return results;
   }
 
+  /**
+   * What an entity event may carry to a CloudEvents sink or a log line.
+   *
+   * The whole row for an entity without field security. For one where it applies (its own flag
+   * or an IS-A ancestor's), only the primary key and the names of the fields that changed: the
+   * sink is outside MemberJunction with no reader to project the row for, and these events fire
+   * for server-internal saves too, whose objects hold every column.
+   */
+  protected EntityEventPayload(baseEntity: BaseEntity): Record<string, unknown> {
+    if (!baseEntity.EntityInfo?.FieldLevelSecurityApplies) {
+      return baseEntity.GetAll();
+    }
+    return {
+      PrimaryKey: (baseEntity.PrimaryKey?.KeyValuePairs ?? []).map((kv) => ({ FieldName: kv.FieldName, Value: kv.Value })),
+      ChangedFields: (baseEntity.Fields ?? []).filter((f) => f.Dirty).map((f) => f.Name),
+    };
+  }
+
   private static _priorEmittedData: {Entity: string, PKey: CompositeKey}[] = [];
   protected async EmitCloudEvent({ component, event, eventCode, args }: MJEvent) {
     if (ResolverBase._emit && event === MJEventType.ComponentEvent && eventCode === BaseEntity.BaseEventCode) {
@@ -844,7 +863,7 @@ export class ResolverBase {
       const type = `MemberJunction.${event}${extendedType}`;
       const source = `${process.env.CLOUDEVENTS_SOURCE ?? 'MemberJunction'}`;
       const subject = args instanceof BaseEntityEvent ? args.baseEntity.EntityInfo.CodeName : undefined;
-      const data = args?.baseEntity?.GetAll() ?? {};
+      const data = args?.baseEntity ? this.EntityEventPayload(args.baseEntity) : {};
 
       const cloudEvent = new CloudEvent({ type, source, subject, data });
 
@@ -1617,8 +1636,9 @@ export class ResolverBase {
    * skip redundant re-fetches (it already handled the event locally).
    *
    * The row itself rides along ONLY for entities opted in via
-   * `cacheSettings.recordDataBroadcastEntities` — this event reaches every connected client
-   * unfiltered, so the row would otherwise be readable by sessions that could not read the record.
+   * `cacheSettings.recordDataBroadcastEntities`, and never for one under field-level security —
+   * this event reaches every connected client unprojected, so the row would otherwise be readable
+   * by sessions that could not read the record or its restricted fields.
    */
   protected PublishCacheInvalidation(entityObject: BaseEntity, action: 'save' | 'delete', userPayload: UserPayload): void {
     const entityName = entityObject.EntityInfo.Name;
@@ -1630,7 +1650,7 @@ export class ResolverBase {
       timestamp: new Date(),
       originSessionId: userPayload?.sessionId || null,
       recordData:
-        action === 'save' && MayBroadcastRecordData(entityName)
+        action === 'save' && MayBroadcastRecordData(entityName, entityObject.EntityInfo)
           ? JSON.stringify(entityObject.GetAll())
           : undefined,
     });
@@ -1671,7 +1691,7 @@ export class ResolverBase {
             return;
           }
 
-          const baseEntityValues = baseEntity ? baseEntity.GetAll() : null;
+          const baseEntityValues = baseEntity ? this.EntityEventPayload(baseEntity) : null;
           const eventToLog = { entityName: entityObject.EntityInfo.Name, baseEntity: baseEntityValues, event: event.event, eventCode: event.eventCode };
           LogDebug(`ResolverBase.ListenForEntityMessages: Received Event from within MJGlobal.Instance.GetEventListener() callback. Will call EmitCloudEvent() next\nEvent data:\n${JSON.stringify(eventToLog)}`);
           await this.EmitCloudEvent(event);
@@ -1771,6 +1791,9 @@ export class ResolverBase {
       // IS-A promotion: bind the new child to its EXISTING parent row BEFORE the field
       // assignments, so values the client sent for parent fields land on the loaded parent
       // (as an update) instead of being wiped by the load.
+      // Field-level security: refuse a key the caller may not read, or that names no field, before
+      // anything is applied (the same gate as the update path).
+      AssertClientInputWritableForUser(entityObject.EntityInfo, fieldsForSet, this.GetUserFromPayload(userPayload));
       await this.attachToExistingParentIfPromotion(entityObject, fieldsForSet);
       entityObject.SetMany(fieldsForSet);
 
@@ -1827,12 +1850,11 @@ export class ResolverBase {
       });
 
       // Field-level security: any value the client sends for a field it cannot READ is
-      // fabricated by construction (the field was stripped from every payload the client ever
-      // received), so strip such values before anything applies them. When any field is
-      // denied we also force the truth-load branch below — client OldValues for denied fields
-      // are equally fabricated, so hydrating from them (the no-DB-load path) would write
-      // fabricated state into the denied columns on save.
-      const hasDeniedReadFields = this.StripDeniedReadFieldsFromClientInput(entityInfo, userInfo, input, clientNewValues);
+      // fabricated by construction (the field was absent from every payload the client ever
+      // received), so the input is refused before anything applies it. When any field is
+      // denied we also force the truth-load branch below, so the denied columns keep what the
+      // database holds rather than anything derived from the client's OldValues.
+      const hasDeniedReadFields = this.AssertClientInputFieldSecurity(entityInfo, userInfo, input, clientNewValues);
       // The audit-trail equivalent. Its `true` matters most on THIS entity: 'MJ: Record Changes'
       // has TrackRecordChanges off, so without it a client sending OldValues takes the branch below
       // that hydrates from those values — never loading what the database actually holds.
@@ -2013,26 +2035,25 @@ export class ResolverBase {
   }
 
   /**
-   * Field-level security guard for the update path.
+   * Field-level security gate on the update path's client input.
    *
-   * Every denied-read field is stripped — new values AND OldValues. A field the user cannot
-   * read was absent from every payload that client ever received, so any value coming back for
-   * it is the transport's invention rather than user intent, and applying it would silently
-   * overwrite the real column. Stripping is what makes "load a record, edit an unrelated field,
-   * save" safe for a restricted user.
+   * For a caller denied at least one field on the entity, refuses (with a `FieldSecurityError`)
+   * any key in the new values or in `OldValues___` that names a field the caller cannot READ, or
+   * that names no field at all, with the same message for both (see
+   * `AssertClientInputWritableForUser`), so the refusal does not reveal which columns exist.
    *
-   * There is no split by update permission: Read is required for Update, so a user denied read
-   * is denied update too and denied-read ∩ denied-update is just denied-read.
+   * Refused rather than dropped: a field the caller cannot read was absent from every payload the
+   * client received, so a value for it can only be fabricated. A well-behaved client never sends
+   * one (it omits fields it did not load), so ordinary traffic is unaffected.
    *
-   * Silent narrowing, not rejection — consistent with the output projection the client already
-   * experiences, and with the ambiguous-error rule (naming the field would confirm it exists
-   * and is restricted).
+   * There is no split by update permission: Read is required for Update, so a user denied read is
+   * denied update too.
    *
-   * Returns true when the user has a non-empty denied-read set on this entity. The caller
-   * must then hydrate the entity from the DATABASE (never from client OldValues), so denied
-   * fields hold true values that an omitted key leaves untouched.
+   * Returns true when the user has a non-empty denied-read set on this entity. The caller must
+   * then hydrate the entity from the DATABASE (never from client OldValues), so denied fields hold
+   * true values the client input never touches.
    */
-  protected StripDeniedReadFieldsFromClientInput(
+  protected AssertClientInputFieldSecurity(
     entityInfo: EntityInfo,
     userInfo: UserInfo,
     input: { OldValues___?: Array<{ Key: string; Value: unknown }> } & Record<string, unknown>,
@@ -2041,38 +2062,16 @@ export class ResolverBase {
     if (!entityInfo.FieldLevelSecurityApplies || !userInfo) {
       return false;
     }
-    const deniedReadNames = entityInfo.GetDeniedReadFields(userInfo);
-    if (deniedReadNames.size === 0) {
+    if (entityInfo.GetDeniedReadFields(userInfo).size === 0) {
       return false;
     }
-
-    // Input keys are entity CodeNames (post ReverseMapInputFieldNames); the denied set holds
-    // lowercased field Names — bridge via the field metadata once.
-    const deniedReadCodeNames = new Set<string>();
-    for (const field of entityInfo.Fields) {
-      if (deniedReadNames.has(field.Name.trim().toLowerCase())) {
-        deniedReadCodeNames.add(field.CodeName.trim().toLowerCase());
-      }
-    }
-
-    const stripped: string[] = [];
-    for (const key of Object.keys(clientNewValues)) {
-      if (deniedReadCodeNames.has(key.trim().toLowerCase())) {
-        delete clientNewValues[key];
-        delete input[key];
-        stripped.push(key);
-      }
-    }
+    AssertClientInputWritableForUser(entityInfo, clientNewValues, userInfo);
     if (Array.isArray(input.OldValues___)) {
-      input.OldValues___ = input.OldValues___.filter(
-        (item) => !deniedReadCodeNames.has(String(item.Key).trim().toLowerCase())
-      );
-    }
-    if (stripped.length > 0) {
-      LogDebug(
-        `[FieldSecurity] UpdateRecord on '${entityInfo.Name}' for user ${userInfo.Email}: ` +
-          `stripped client-sent value(s) for denied-read field(s) ${stripped.join(', ')}`
-      );
+      const oldValueKeys: Record<string, unknown> = {};
+      for (const item of input.OldValues___) {
+        oldValueKeys[String(item.Key)] = null;
+      }
+      AssertClientInputWritableForUser(entityInfo, oldValueKeys, userInfo);
     }
     return true;
   }

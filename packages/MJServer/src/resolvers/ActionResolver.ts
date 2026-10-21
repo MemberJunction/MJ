@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Arg, Ctx } from "type-graphql";
 import { ActionEngineServer } from "@memberjunction/actions";
 import { EntityActionEngineServer } from "@memberjunction/actions";
-import { Metadata, UserInfo, BaseEntity, CompositeKey, KeyValuePair, LogError, RunView, DatabaseProviderBase } from "@memberjunction/core";
+import { Metadata, UserInfo, BaseEntity, CompositeKey, KeyValuePair, LogError, RunView, DatabaseProviderBase, EntityInfo, IMetadataProvider } from "@memberjunction/core";
 import { ActionParam, ActionResult, MJActionEntityExtended } from "@memberjunction/actions-base";
 import { UserCache } from "@memberjunction/generic-database-provider";
 import { Field, InputType, ObjectType } from "type-graphql";
@@ -12,6 +12,8 @@ import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IsScopeLimitedPrincipal } from "../auth/scopeLimitedPrincipal.js";
 import { EvaluateActionRunAuthorization, IsOwner } from "../auth/actionAuthorization.js";
+import { EntityObjectDataBinding, ProjectActionParamsForCaller } from "../generic/actionOutputFieldSecurity.js";
+import type { EntityActionResult } from "@memberjunction/actions-base";
 
 /**
  * Input type for action parameters
@@ -442,11 +444,11 @@ export class ActionResolver extends ResolverBase {
         };
       }
 
-      // Return the result
+      // Return the result, its echoed parameters projected for the caller
       return {
         Success: result.Success,
         Message: result.Message,
-        ResultData: JSON.stringify(result)
+        ResultData: JSON.stringify(this.projectEntityActionResult(result, entityAction, params.EntityObject, user, ctx.providers))
       };
     } catch (e) {
       return this.handleError(e);
@@ -513,11 +515,58 @@ export class ActionResolver extends ResolverBase {
       throw new Error("Entity information is required");
     }
 
-    // Create a composite key and load the entity object
+    // Create a composite key and load the entity object FOR THE CALLER: with no user the load
+    // falls back to the provider's current user, which on a server is the system user (every
+    // column, and none of the caller's row-level security).
     const compositeKey = this.createCompositeKey(entity, input.PrimaryKey);
-    const entityObject = await md.GetEntityObject(entity.Name);
-    await entityObject.InnerLoad(compositeKey);
+    const entityObject = await md.GetEntityObject(entity.Name, user);
+    if (!await entityObject.InnerLoad(compositeKey)) {
+      // One message whether the record is missing or out of the caller's reach.
+      throw new Error('Record not found or access denied');
+    }
     params['EntityObject'] = entityObject;
+  }
+
+  /**
+   * The entity action result as it may be sent to `user`: its parameters, which the result echoes
+   * (in `Params` and in `RunParams.Params`), projected for the caller wherever their entity is known.
+   * That is any entity object among them, and the parameters bound to the record's field values
+   * (`'Entity Object Data'`), whose entity is the bound record's.
+   */
+  private projectEntityActionResult(
+    result: EntityActionResult,
+    entityAction: { EntityID?: string; Params?: Array<{ ActionParamID: string; ValueType: string }> },
+    entityObject: BaseEntity | undefined,
+    user: UserInfo,
+    providers: Array<ProviderInfo>
+  ): EntityActionResult {
+    const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }) ?? undefined;
+    const binding = this.entityObjectDataBinding(entityAction, entityObject, provider);
+    const projected: EntityActionResult = { ...result, Params: ProjectActionParamsForCaller(result.Params, user, provider, binding) };
+    if (result.RunParams) {
+      projected.RunParams = { ...result.RunParams, Params: ProjectActionParamsForCaller(result.RunParams.Params, user, provider, binding) };
+    }
+    return projected;
+  }
+
+  /** The action parameters bound as `'Entity Object Data'`, with the entity their values belong to. */
+  private entityObjectDataBinding(
+    entityAction: { EntityID?: string; Params?: Array<{ ActionParamID: string; ValueType: string }> },
+    entityObject: BaseEntity | undefined,
+    provider: IMetadataProvider | undefined
+  ): EntityObjectDataBinding | undefined {
+    const entityInfo: EntityInfo | undefined = entityObject?.EntityInfo
+      ?? provider?.Entities?.find(e => UUIDsEqual(e.ID, entityAction?.EntityID));
+    if (!entityInfo) {
+      return undefined;
+    }
+    const names = new Set<string>();
+    for (const eap of entityAction?.Params ?? []) {
+      if (eap.ValueType !== 'Entity Object Data') continue;
+      const param = ActionEngineServer.Instance.ActionParams.find(ap => UUIDsEqual(ap.ID, eap.ActionParamID));
+      if (param?.Name) names.add(param.Name.trim().toLowerCase());
+    }
+    return names.size > 0 ? { EntityInfo: entityInfo, ParamNames: names } : undefined;
   }
 
   /**

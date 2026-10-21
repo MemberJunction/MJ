@@ -14,8 +14,10 @@ import type {
     AgentExecutionStreamingCallback,
     ExecuteAgentResult,
 } from '@memberjunction/ai-core-plus';
+import type { EntityInfo } from '@memberjunction/core';
 import type { UserPayload } from '../types.js';
 import { PublishStatusUpdate } from '../generic/PushStatusResolver.js';
+import { ProjectEntityObjectForCaller } from '../generic/fieldSecurityTransport.js';
 
 const SIGNIFICANT_STEPS = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
 
@@ -25,7 +27,8 @@ interface StatusRun {
     ConversationDetailID?: string;
     ErrorMessage?: string;
     Steps?: Array<{ StepName?: string }>;
-    GetAll?: () => unknown;
+    EntityInfo?: EntityInfo | null;
+    GetAll?: () => Record<string, unknown>;
 }
 
 export class AgentRunStatusPublisher {
@@ -71,7 +74,7 @@ export class AgentRunStatusPublisher {
                 agentRunId: agentRun.ID,
                 type: 'progress',
                 ...this.replyRow(),
-                agentRun: agentRun.GetAll ? agentRun.GetAll() : agentRun,
+                agentRun: this.runValues(agentRun),
                 progress: {
                     currentStep: progress.step,
                     percentage: progress.percentage,
@@ -99,7 +102,7 @@ export class AgentRunStatusPublisher {
                 agentRunId: agentRun.ID,
                 type: 'streaming',
                 ...this.replyRow(),
-                agentRun: agentRun.GetAll ? agentRun.GetAll() : agentRun,
+                agentRun: this.runValues(agentRun),
                 streaming: {
                     content: chunk.content,
                     isPartial: !chunk.isComplete,
@@ -170,6 +173,18 @@ export class AgentRunStatusPublisher {
     /** `{ conversationDetailId }` when this run has a reply row, otherwise nothing, so the message keeps its old shape. */
     private replyRow(): { conversationDetailId?: string } {
         return this.conversationDetailId ? { conversationDetailId: this.conversationDetailId } : {};
+    }
+
+    /**
+     * The run's field values as the recipient may read them. The run object comes from the agent
+     * engine, which is not bound to this session's user, so it is projected here.
+     */
+    private runValues(agentRun: StatusRun): unknown {
+        if (!agentRun.GetAll) {
+            return agentRun;
+        }
+        const getAll = agentRun.GetAll;
+        return ProjectEntityObjectForCaller({ EntityInfo: agentRun.EntityInfo, GetAll: () => getAll.call(agentRun) }, this.userPayload?.userRecord);
     }
 
     private publish(type: 'ExecutionProgress' | 'StreamingContent', data: unknown): void {
