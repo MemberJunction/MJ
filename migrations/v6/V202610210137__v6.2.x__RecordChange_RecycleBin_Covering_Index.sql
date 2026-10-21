@@ -18,14 +18,7 @@
 -- One composite serves the filter and the sort together and covers RecordID, so there is no
 -- key lookup and no sort. Key stays far under the 1700-byte nonclustered cap:
 -- 16 + nvarchar(20) + datetimeoffset = 66 bytes.
-IF NOT EXISTS (
-    SELECT 1 FROM sys.indexes
-    WHERE name = 'IDX_RecordChange_Entity_Type_ChangedAt'
-      AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[RecordChange]')
-)
-BEGIN
-    CREATE NONCLUSTERED INDEX [IDX_RecordChange_Entity_Type_ChangedAt]
-        ON [${flyway:defaultSchema}].[RecordChange]
-            ([EntityID], [Type], [ChangedAt] DESC)
-        INCLUDE ([RecordID]);
-END
+CREATE NONCLUSTERED INDEX [IDX_RecordChange_Entity_Type_ChangedAt]
+    ON [${flyway:defaultSchema}].[RecordChange]
+        ([EntityID], [Type], [ChangedAt] DESC)
+    INCLUDE ([RecordID]);
