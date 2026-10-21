@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Import Copilot mockup</title><style>@import url(_base.css);.steps{display:flex;gap:6px;margin-bottom:16px}.steps div{flex:1;padding:8px;border-radius:8px;background:#eceff4;color:var(--mut);font-size:12px;text-align:center;font-weight:600}.steps .d{background:var(--ok-s);color:var(--ok)}.steps .n{background:var(--pri);color:#fff}.kpi{text-align:center}.kpi .big{display:block}</style></head><body>
+<div class="app"><nav class="side"><b>MemberJunction</b><a>Home</a><a>Data</a><a class="on">Import</a><a>Lists</a></nav>
+<main><h1>Import: <i>spring-members-2026.xlsx</i></h1><div class="sub">4,812 rows · 11 columns · 3 sheets merged · nothing is written until you commit.</div>
+<div class="steps"><div class="d">✓ Profile</div><div class="d">✓ Map</div><div class="d">✓ Normalize</div><div class="d">✓ Match</div><div class="d">✓ Dry-run</div><div class="d">✓ Commit</div><div class="n">7 Verify</div></div>
+<div class="card"><b>Reconciliation — every row accounted for</b>
+<div class="row" style="margin-top:10px"><div class="kpi card"><span class="big" style="color:var(--ok)">4,310</span>created</div><div class="kpi card"><span class="big" style="color:var(--pri)">402</span>updated (blank fields only)</div><div class="kpi card"><span class="big" style="color:var(--mut)">71</span>skipped (exact duplicates)</div><div class="kpi card"><span class="big" style="color:var(--bad)">29</span>errors</div></div>
+<p>4,310 + 402 + 71 + 29 = <b>4,812</b> <span class="chip ok">✓ matches file</span> &nbsp; Control total (dues $): file $312,480 · system $312,480 <span class="chip ok">✓</span></p>
+<span class="btn">Download exception file (29)</span> <span class="btn o">Spot-check 25 random rows</span> <span class="btn o" style="color:var(--bad);border-color:var(--bad)">Undo this import (available 6 days)</span></div>
+<div class="row"><div class="card"><b>AI-assisted mapping</b> <span class="mut">(reviewed)</span><table><tr><th>Column</th><th>→ Field</th><th>Confidence</th></tr>
+<tr><td>Fname</td><td>Members.FirstName</td><td><span class="chip ok">98%</span></td></tr>
+<tr><td>Given Nm</td><td>Members.FirstName</td><td><span class="chip warn">61% · conflicts with Fname</span></td></tr>
+<tr><td>Joined</td><td>Memberships.StartDate</td><td><span class="chip ok">94%</span></td></tr>
+<tr><td>Lvl</td><td>MembershipType (via value list)</td><td><span class="chip warn">72% · confirmed by you</span></td></tr></table></div>
+<div class="card"><b>Match stage</b><table><tr><th>Class</th><th>Rows</th><th>Policy</th></tr>
+<tr><td><span class="chip ok">New</span></td><td>4,310</td><td>Create</td></tr><tr><td><span class="chip pri">Exact match</span></td><td>473</td><td>Update blanks only</td></tr>
+<tr><td><span class="chip warn">Probable match</span></td><td>38</td><td>Reviewed side-by-side</td></tr><tr><td><span class="chip bad">Conflict</span></td><td>29</td><td>Error → exception file</td></tr></table>
+<p class="mut">“Maria Alvarez, m.alvarez@old.org” ≈ existing “María Álvarez” (same phone) — you chose <i>merge into existing</i>.</p></div></div>
+</main></div></body></html>

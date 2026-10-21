@@ -191,8 +191,9 @@ export const SEARCH_SCOPE_PERMISSION_RESOLVER_KEY = 'SearchScopePermissionResolv
  *   4. Agent.SearchScopeAccess === 'All' → allow at Search level (lets
  *      trusted agents act across all scopes when no user-side grant exists), but ONLY if the
  *      caller may actually run that agent. The agent is judged HERE and not at supply because
- *      elsewhere AIAgentID is attribution — pre-execution RAG threads it purely for
- *      SearchExecutionLog — and gating attribution turns an analytics field into an outage.
+ *      every agent-mediated search supplies one (the Scoped Search action and pre-execution RAG
+ *      both pass the running agent) and only this arm widens: judged at supply, an agent missing
+ *      from the AI metadata cache would refuse users whose own grant covers the scope.
  *      A DENIAL here rejects (for the message — 4b would refuse it too). A merely unevaluable agent
  *      falls through, and is then rejected by 4b if an 'All' skill follows, or by step 5 if not.
  *      Either way the outcome is a rejection; the distinction survives in the message.
@@ -258,11 +259,12 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
 
         // Step 1e: A SUPPLIED SKILL MUST BE ACTIVATABLE, WHOEVER ENDS UP GRANTING.
         //
-        // The agent is judged at step 4, where it widens, because elsewhere it is pure attribution:
-        // the pre-execution RAG path threads AIAgentID only so SearchExecutionLog can attribute the
-        // search, and gating that turns an analytics field into an outage.
+        // The agent is judged at step 4, where it widens. It is supplied on every agent-mediated
+        // search (the Scoped Search action and pre-execution RAG both pass the running agent), and
+        // where it only restricts, judging whether the caller may wield it would let an agent missing
+        // from the AI metadata cache refuse users whose own grant covers the scope.
         //
-        // A skill has no such second life. It is supplied for exactly one reason — to STEER — and it
+        // A skill is judged wherever it is named. It is supplied for exactly one reason — to STEER — and it
         // steers through a second surface the permission verdict never sees: `SearchParams.AISkillID`
         // is bound into `Principals.SkillID` and, for a `restricts: true` dimension, the expansion
         // query's output IS the enforced bound. Judging it only in the 'All' fallback would leave a
@@ -344,10 +346,10 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
             // A PRINCIPAL MAY ONLY WIDEN IF THE CALLER MAY WIELD IT.
             //
             // This is the one place an agent GRANTS an outcome: by here the user has no direct or
-            // role grant, and 'All' is about to supply one. Elsewhere `Agent` is attribution — the
-            // pre-execution RAG path threads AIAgentID purely so SearchExecutionLog can attribute
-            // the search — so the check belongs HERE and not at the point the id is supplied.
-            // Gating supply instead of grant is what turns an analytics field into an outage.
+            // role grant, and 'All' is about to supply one. Elsewhere `Agent` only restricts — the
+            // Scoped Search action and pre-execution RAG pass it on every agent-mediated search — so
+            // the check belongs HERE and not at the point the agent is supplied. Gating supply instead
+            // of grant would turn an agent-cache miss into a retrieval outage.
             if (agentVerdict?.ok) {
                 return this.buildResult(true, 'Search', 'AgentUnscopedAll',
                     `Agent '${Agent.Name}' has SearchScopeAccess='All'; granting 'Search' as a fallback for this scope.`);
@@ -518,9 +520,9 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
      * (no rows means anyone may run it), so without this an id a caller merely NAMED could grant
      * `Search`.
      *
-     * Deliberately NOT asked at the point an `AIAgentID` is supplied: pre-execution RAG threads it
-     * purely so `SearchExecutionLog` can attribute the search, and gating that turns an analytics
-     * field into a retrieval outage.
+     * Deliberately NOT asked at the point an agent is supplied: the Scoped Search action and
+     * pre-execution RAG pass the running agent on every agent-mediated search, and where the agent
+     * only restricts, gating it would turn an agent-cache miss into a retrieval outage.
      *
      * A stale metadata cache is reported distinctly. `GetUserAgentPermissions` throws when the agent
      * is absent from `AIEngine.Instance.Agents` and fails closed to all-false, so an agent created

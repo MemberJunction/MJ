@@ -49,8 +49,12 @@ name: Integration Tier
 # with the unused browser/Computer-Use regression wiring — this repo does not run that stack in CI.
 
 on:
+  # Line branches run this gate too (process doc 5.2 rule 4): lts/* is what a publish
+  # ships from and what customers pin to, so a break discovered after merge is worse
+  # here than on next. The trigger lives on next so every candidate cut inherits it;
+  # lts/5 got it from a line-only commit (6937c7c050) and lts/6.1 was cut without it.
   pull_request:
-    branches: [next]
+    branches: [next, 'lts/**']
     paths:
       - 'pnpm-lock.yaml'
       - 'packages/**'
@@ -72,7 +76,7 @@ on:
   # heuristic; migrations + runtime @RegisterClass wiring can couple files no filter foresees)
   # can never merge silently and red the next PR (R3, mirrors test.yml).
   push:
-    branches: [next]
+    branches: [next, 'lts/**']
   workflow_dispatch:
     inputs:
       run_live_model:
@@ -622,6 +626,37 @@ jobs:
             fi
             echo "MJAPI on ${PORT} is up."
           done
+
+      # ANTI-VACUITY. Every assertion in the rig presupposes that both processes actually
+      # swapped LocalCacheManager to RedisLocalStorageProvider — that is the only thing that
+      # publishes a CacheChangedEvent. If REDIS_URL were ever dropped, mistyped, or ignored,
+      # both would silently fall back to the in-memory cache, no cross-server event would be
+      # emitted, and XS1–XS7 would all PASS while testing nothing. A green lane asserting
+      # nothing is worse than a red one.
+      #
+      # MJServer logs the swap only at `verbose` (index.ts: startupLog.LogIf('verbose', …)),
+      # so the log is not a dependable signal. Assert against Redis itself: two servers that
+      # have booted and served a healthcheck through a shared cache never leave it empty.
+      # `redis-cli` is not installed on ubuntu-latest, and the Redis here is a service
+      # container (generated name), so `docker exec` by name is unreliable. Use ioredis,
+      # which integration-test-suite already declares for the sibling Redis rig.
+      - name: Verify both processes actually swapped to Redis
+        working-directory: packages/TestingFramework/integration-test-suite
+        run: |
+          node -e "
+            const Redis = require('ioredis');
+            const c = new Redis('redis://localhost:6379');
+            c.dbsize()
+              .then(n => {
+                console.log('Redis DBSIZE after both MJAPI processes booted: ' + n);
+                if (n === 0) {
+                  console.log('::error::Redis is empty — neither MJAPI swapped to RedisLocalStorageProvider, so the cross-server rig would assert nothing. Check REDIS_URL handling in packages/MJServer/src/index.ts.');
+                  process.exit(1);
+                }
+                process.exit(0);
+              })
+              .catch(e => { console.log('::error::Could not reach Redis: ' + e.message); process.exit(1); });
+          " || { echo '--- mjapi-a ---'; tail -100 /tmp/mjapi-a.log || true; exit 1; }
 
       - name: Run cross-server invalidation rig
         env:

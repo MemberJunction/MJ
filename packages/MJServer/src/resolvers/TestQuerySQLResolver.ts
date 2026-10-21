@@ -1,9 +1,12 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver } from 'type-graphql';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { RunQuery, IRunQueryProvider, LogError, LogStatus, QueryExecutionSpec } from '@memberjunction/core';
+import type { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
+import { RenderPipeline } from '@memberjunction/generic-database-provider';
 import { AppContext } from '../types.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 
 /**
  * GraphQL input type for inline dependency queries.
@@ -88,6 +91,14 @@ export class TestQuerySQLResult {
  *
  * Security:
  * - Requires `query:test` scope for API key users (no-op for JWT auth)
+ * - Refuses scope-limited principals (see {@link IsScopeLimitedPrincipal}). Raw SQL bypasses
+ *   RunView, entity permissions and row-level security, so the RLS scope tokens that confine a
+ *   magic-link session are never applied on this path — there is no narrower filter to fall back
+ *   to, only refusal.
+ * - Authorizes the RENDERED SQL: every table reference must be an entity base view the caller
+ *   reads unscoped (CanRead, no row-level filter, no denied fields). Entities with row/field
+ *   policy for this user are refused — raw SQL cannot apply that policy, so those reads belong
+ *   on RunView. Same screen as {@link AdhocQueryResolver.ExecuteAdhocQuery}.
  * - Uses read-only database connection (no mutation possible)
  * - Enforces MaxRows limit (default 100) to prevent unbounded queries
  *
@@ -104,15 +115,24 @@ export class TestQuerySQLResolver extends ResolverBase {
     ): Promise<TestQuerySQLResult> {
         try {
             await this.CheckAPIKeyScopeAuthorization('query:test', '*', context.userPayload);
+            // SECURITY: refuse principals whose read authority is narrower than their role grant.
+            // Transient test SQL does not go through RunView, entity permissions or row-level
+            // security, so the RLS scope tokens that confine a magic-link session are never
+            // substituted. There is no filter to narrow, so the only correct answer for such a
+            // principal is no — the same refusal ExecuteAdhocQuery applies.
+            if (IsScopeLimitedPrincipal(context.userPayload?.userRecord)) {
+                return this.buildErrorResult('Ad-hoc SQL execution is not permitted for scope-limited sessions.');
+            }
             // Use read-only provider for security — no mutation possible
             const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false });
             if (!provider) {
-                return {
-                    Success: false,
-                    RowCount: 0,
-                    ExecutionTime: 0,
-                    ErrorMessage: 'Read-only data source is not available. TestQuerySQL requires a read-only connection for security.',
-                };
+                return this.buildErrorResult('Read-only data source is not available. TestQuerySQL requires a read-only connection for security.');
+            }
+
+            const contextUser = context.userPayload?.userRecord;
+            const refusal = this.AuthorizeRenderedTestSQL(input, provider, contextUser);
+            if (refusal) {
+                return this.buildErrorResult(refusal);
             }
 
             const rq = new RunQuery(provider as unknown as IRunQueryProvider);
@@ -127,7 +147,7 @@ export class TestQuerySQLResolver extends ResolverBase {
 
             LogStatus(`TestQuerySQL: Executing transient query (MaxRows=${spec.MaxRows}, UsesTemplate=${spec.UsesTemplate ?? false}, Dependencies=${spec.Dependencies?.length ?? 0})`);
 
-            const result = await rq.ExecuteFromSpec(spec, context.userPayload.userRecord);
+            const result = await rq.ExecuteFromSpec(spec, contextUser);
 
             return {
                 Success: result.Success,
@@ -141,12 +161,47 @@ export class TestQuerySQLResolver extends ResolverBase {
         } catch (err) {
             LogError(err);
             const errorMessage = err instanceof Error ? err.message : String(err);
-            return {
-                Success: false,
-                RowCount: 0,
-                ExecutionTime: 0,
-                ErrorMessage: `TestQuerySQL failed: ${errorMessage}`,
-            };
+            return this.buildErrorResult(`TestQuerySQL failed: ${errorMessage}`);
         }
+    }
+
+    /**
+     * SECURITY: authorizes the READ itself, against the SQL that will actually run — the same
+     * screen `AdhocQueryResolver.AuthorizeRenderedSQL` applies to ad-hoc SQL. Rendering comes
+     * first because composition (`{{query:"..."}}`), inline dependencies and Nunjucks templates
+     * can introduce table references the raw input never named, so the render here uses the same
+     * Parameters / UsesTemplate / Dependencies the execution spec will. Every table reference in
+     * the rendered SQL must be an entity base view the caller can read UNSCOPED — CanRead with no
+     * row-level filter and no denied fields — because raw SQL applies neither (see
+     * `assertFullQueryUsesReadableEntityViews`). The provider renders the same input the same way
+     * and only wraps it in server-built MaxRows capping, so the rendered SQL is the full set of
+     * reads. Returns the refusal message, or null.
+     */
+    public AuthorizeRenderedTestSQL(input: TestQuerySQLInput, provider: DatabaseProviderBase, contextUser: UserInfo | undefined): string | null {
+        try {
+            const rendered = RenderPipeline.Run(input.SQL, {
+                Platform: provider.PlatformKey,
+                ContextUser: contextUser,
+                Parameters: input.Parameters,
+                UsesTemplate: input.UsesTemplate,
+                Dependencies: input.Dependencies,
+                OriginalSQL: input.SQL,
+                RequireReadStatement: true,
+            });
+            this.assertFullQueryUsesReadableEntityViews(rendered.Trace.AfterTemplates, provider, contextUser, 'transient test SQL');
+            return null;
+        } catch (err) {
+            return err instanceof Error ? err.message : String(err);
+        }
+    }
+
+    /** Builds a failed TestQuerySQLResult carrying the given message. */
+    private buildErrorResult(errorMessage: string): TestQuerySQLResult {
+        return {
+            Success: false,
+            RowCount: 0,
+            ExecutionTime: 0,
+            ErrorMessage: errorMessage,
+        };
     }
 }
