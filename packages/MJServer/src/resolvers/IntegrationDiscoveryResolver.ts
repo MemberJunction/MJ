@@ -6878,7 +6878,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             for (const em of continuingMaps) {
                 const io = iosByLowerName.get((em.ExternalObjectName ?? '').toLowerCase());
                 if (!io || !em.EntityID) continue;
-                const entity = md.Entities.find(e => UUIDsEqual(e.ID, em.EntityID));
+                const entity = md.EntityByID(em.EntityID);
                 if (!entity) continue;
                 const builtKey = IdentityKeyFields(entity.Fields.map(ef => ({
                     Name: ef.Name, IsPrimaryKey: ef.IsPrimaryKey, Sequence: ef.Sequence,

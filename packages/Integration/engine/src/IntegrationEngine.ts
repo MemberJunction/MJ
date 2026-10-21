@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { RefreshCatalogScope, RunInWarmedCatalogScope, UnpinCatalogObjects, WarmCatalogObject } from './CatalogScope.js';
 import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogError, LogStatusEx, Metadata, RunView, type UserInfo, TransactionGroupBase, BaseEntity, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
 import { RunOwnershipLostError, RunOwnershipService, type TerminalRunStatus } from './RunOwnershipService.js';
-import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import type {
     MJCompanyIntegrationEntity,
@@ -2165,9 +2165,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const own = this.Base.GetCompanyIntegrationObject(companyIntegrationID, objectName);
         if (!own) return [];
         const ids = [own.ID];
+        const seen = new Set([NormalizeUUID(own.ID)]);
         for (const parentID of depGraph?.parentsByIoId.get(own.ID.toUpperCase()) ?? []) {
             const parent = this.Base.GetCompanyIntegrationObjectByID(parentID);
-            if (parent && !ids.some(id => UUIDsEqual(id, parent.ID))) ids.push(parent.ID);
+            if (parent && !seen.has(NormalizeUUID(parent.ID))) {
+                seen.add(NormalizeUUID(parent.ID));
+                ids.push(parent.ID);
+            }
         }
         const pinned: string[] = [];
         try {
