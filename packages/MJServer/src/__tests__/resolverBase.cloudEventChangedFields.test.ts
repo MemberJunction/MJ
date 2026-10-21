@@ -86,6 +86,9 @@ class TestResolver extends ResolverBase {
     public Listen(entity: BaseEntity) {
         this.ListenForEntityMessages(entity, {} as PubSubEngine, { sessionId: 's' } as UserPayload);
     }
+    public Payload(entity: BaseEntity, changed?: string[]): Record<string, unknown> {
+        return this.EntityEventPayload(entity, changed);
+    }
 }
 
 async function loadedEmployee(entityInfo: EntityInfo, user: UserInfo): Promise<Employee> {
@@ -137,5 +140,18 @@ describe('ResolverBase CloudEvents: changed fields from a real save', () => {
         const data = await saveEventData(entity);
 
         expect(data).toMatchObject({ ID: 'emp-1', Notes: 'edited' });
+    });
+
+    it('a payload for a record still in raw mode does not build its field objects', async () => {
+        const entity = new Employee(updatableEmployees(true), makeProvider() as unknown as IEntityDataProvider);
+        entity.ContextCurrentUser = HRUser();
+        await entity.LoadFromData(FullWidthEmployeeRow()); // a load_complete listener sees exactly this object
+        const hydrated = () => (entity as unknown as { _fieldsHydrated: boolean })._fieldsHydrated;
+        expect(hydrated()).toBe(false);
+
+        const data = new TestResolver().Payload(entity);
+
+        expect(data.ChangedFields).toEqual([]);
+        expect(hydrated()).toBe(false);
     });
 });

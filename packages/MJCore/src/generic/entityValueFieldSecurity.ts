@@ -1,4 +1,4 @@
-import { EntityInfo, FieldSecurityError, ReadableFieldsTransportKey } from './entityInfo';
+import { CurrentFieldSecurityGeneration, EntityInfo, EntityFieldInfo, FieldSecurityError, ReadableFieldsTransportKey } from './entityInfo';
 import { UserInfo } from './securityInfo';
 import { RecordChangeFieldSecurityProjector, RecordChangeMetadataSource } from './recordChangeFieldSecurity';
 
@@ -226,16 +226,46 @@ export function FieldSecurityClientInputMessage(key: string, entityName: string)
     return `Field '${key}' cannot be written on entity '${entityName}'.`;
 }
 
+/** {@link ClientInputTransportKeys}, lowercased and trimmed, as {@link AssertClientInputWritableForUser} matches them. */
+const NORMALIZED_CLIENT_INPUT_TRANSPORT_KEYS: ReadonlySet<string> = new Set(ClientInputTransportKeys.map((k) => k.trim().toLowerCase()));
+
+/**
+ * One memoized {@link knownFieldKeys} answer, valid while the entity's field array, its IS-A
+ * chain and the field-security generation (which moves whenever an `EntityInfo` is built) are
+ * what they were when it was built.
+ */
+type KnownFieldKeysMemo = {
+    fields: EntityFieldInfo[];
+    chain: EntityInfo[];
+    generation: number;
+    keys: ReadonlySet<string>;
+};
+
+const knownFieldKeysCache = new WeakMap<EntityInfo, KnownFieldKeysMemo>();
+
 /** Every key that names a field of `entityInfo` or of an IS-A ancestor, lowercased, by Name and CodeName. */
-function knownFieldKeys(entityInfo: EntityInfo): Set<string> {
-    const known = new Set<string>();
-    for (const entity of [entityInfo, ...(entityInfo.ParentChain ?? [])]) {
+function knownFieldKeys(entityInfo: EntityInfo): ReadonlySet<string> {
+    const fields = entityInfo.Fields;
+    const chain = entityInfo.ParentChain ?? [];
+    const generation = CurrentFieldSecurityGeneration();
+    const memo = knownFieldKeysCache.get(entityInfo);
+    if (memo && memo.fields === fields && memo.chain === chain && memo.generation === generation) {
+        return memo.keys;
+    }
+    const keys = new Set<string>();
+    for (const entity of [entityInfo, ...chain]) {
         for (const f of entity.Fields) {
-            known.add(f.Name.trim().toLowerCase());
-            known.add(f.CodeName.trim().toLowerCase());
+            keys.add(f.Name.trim().toLowerCase());
+            keys.add(f.CodeName.trim().toLowerCase());
         }
     }
-    return known;
+    knownFieldKeysCache.set(entityInfo, { fields, chain, generation, keys });
+    return keys;
+}
+
+/** Whether `normalized` is a transport key, built in or one the caller added. */
+function isAllowedTransportKey(normalized: string, additional: ReadonlySet<string> | null): boolean {
+    return NORMALIZED_CLIENT_INPUT_TRANSPORT_KEYS.has(normalized) || (additional?.has(normalized) ?? false);
 }
 
 /**
@@ -278,13 +308,12 @@ export function AssertClientInputWritableForUser(
     if (!denied) {
         return;
     }
-    const allowed = new Set(
-        [...ClientInputTransportKeys, ...(options?.additionalAllowedKeys ?? [])].map((k) => k.trim().toLowerCase())
-    );
+    const extra = options?.additionalAllowedKeys;
+    const additional = extra && extra.length > 0 ? new Set(extra.map((k) => k.trim().toLowerCase())) : null;
     const known = knownFieldKeys(entityInfo);
     for (const key of Object.keys(values)) {
         const normalized = key.trim().toLowerCase();
-        if (allowed.has(normalized)) {
+        if (isAllowedTransportKey(normalized, additional)) {
             continue;
         }
         if (denied.has(normalized) || !known.has(normalized)) {

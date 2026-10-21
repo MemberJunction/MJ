@@ -3111,9 +3111,27 @@ export abstract class BaseEntity<T = unknown> {
         this.RaiseEvent('save', null, saveSubType, changedFieldNames);
     }
 
+    /**
+     * The names of the fields that are dirty right now. Cheaper than walking {@link Fields}: an
+     * object still in raw mode (loaded and never written to) cannot be dirty, so it answers `[]`
+     * without building its field objects.
+     */
+    public GetDirtyFieldNames(): string[] {
+        if (!this._fieldsHydrated && this._raw !== null && !this._parentEntity) {
+            return [];
+        }
+        const names: string[] = [];
+        for (const f of this.Fields) {
+            if (f.Dirty) {
+                names.push(f.Name);
+            }
+        }
+        return names;
+    }
+
     /** The names of the fields that are dirty right now, for the `save` event's {@link BaseEntityEvent.ChangedFieldNames}. */
     private dirtyFieldNames(): string[] {
-        return this.Fields.filter(f => f.Dirty).map(f => f.Name);
+        return this.GetDirtyFieldNames();
     }
 
     /**
@@ -4591,6 +4609,55 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Whether {@link GetAll} would carry a key for every non-binary field of this entity: the
+     * object holds a value for each one (none is not loaded, or withheld from its user), here or,
+     * for an IS-A child, on an ancestor. Answers the question
+     * `LocalCacheManager.RowHasEveryField(this.EntityInfo, this.GetAll())` answers, without
+     * building the row, and without building field objects for an object in raw mode.
+     */
+    public HoldsEveryField(): boolean {
+        const infos = this.EntityInfo?.Fields;
+        if (!Array.isArray(infos) || infos.length === 0) {
+            return true;
+        }
+        if (!this._fieldsHydrated && this._raw !== null) {
+            for (const fi of infos) {
+                if (!fi.IsBinaryFieldType && this.rawValueFor(this._raw, fi) === undefined && !this.ancestorHoldsField(fi.Name)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        for (const field of this.Fields) {
+            if (!field.EntityFieldInfo.IsBinaryFieldType && field.NotLoaded && !this.ancestorHoldsField(field.Name)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Whether an IS-A ancestor's {@link GetAll} would carry the key `name` (an exact field name). */
+    private ancestorHoldsField(name: string): boolean {
+        return this._parentEntity?.holdsFieldNamed(name) ?? false;
+    }
+
+    /** Whether this object's {@link GetAll} would carry the key `name`, counting its own ancestors. */
+    private holdsFieldNamed(name: string): boolean {
+        if (!this._fieldsHydrated && this._raw !== null) {
+            const fi = this.EntityInfo?.FieldByName(name);
+            if (fi && fi.Name === name && this.rawValueFor(this._raw, fi) !== undefined) {
+                return true;
+            }
+        } else {
+            const field = this.GetFieldByName(name);
+            if (field && field.Name === name && !field.NotLoaded) {
+                return true;
+            }
+        }
+        return this.ancestorHoldsField(name);
+    }
+
+    /**
      * Returns a partial object that contains only the fields that have changed since the last time the record was saved. This is useful for scenarios where you want to send only the changes to the server or to a client.
      * It is also helpful for quickly finding the fields that are "dirty".
      * @returns 
@@ -4846,19 +4913,36 @@ export abstract class BaseEntity<T = unknown> {
      */
     private markFieldsOmittedBySourceAsNotLoaded(source: Record<string, unknown>): void {
         if (!source || typeof source !== 'object') return;
-        const presentKeys = new Set<string>();
-        for (const key of Object.keys(source)) {
-            if (source[key] !== undefined) {
-                presentKeys.add(key.trim().toLowerCase());
-            }
-        }
+        // Exact keys first: a source keyed by the field names, the usual case, never builds the
+        // case-insensitive key set. It is built once, on the first field the exact check misses.
+        let presentKeys: Set<string> | null = null;
         for (const field of this.Fields) {
+            if (BaseEntity.ownValuePresent(source, field.Name) || BaseEntity.ownValuePresent(source, field.CodeName)) {
+                continue;
+            }
+            presentKeys ??= BaseEntity.normalizedPresentKeys(source);
             if (!presentKeys.has(field.Name.trim().toLowerCase()) && !presentKeys.has(field.CodeName.trim().toLowerCase())) {
                 // Cleared, not just flagged: otherwise a default from construction, or the previous
                 // record's value on a reload, reads back through Get() as if it had been loaded.
                 field.ClearAsNotLoaded();
             }
         }
+    }
+
+    /** Whether `source` holds `key` as its own property with a value (an inherited `constructor` does not count). */
+    private static ownValuePresent(source: Record<string, unknown>, key: string): boolean {
+        return source[key] !== undefined && Object.prototype.hasOwnProperty.call(source, key);
+    }
+
+    /** The keys of `source` that carry a value, trimmed and lowercased. */
+    private static normalizedPresentKeys(source: Record<string, unknown>): Set<string> {
+        const keys = new Set<string>();
+        for (const key of Object.keys(source)) {
+            if (source[key] !== undefined) {
+                keys.add(key.trim().toLowerCase());
+            }
+        }
+        return keys;
     }
 
     /**

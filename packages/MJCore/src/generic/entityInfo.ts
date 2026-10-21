@@ -2826,13 +2826,14 @@ const _entityFieldIndexCache = new WeakMap<EntityInfo, {
 }>();
 
 /**
- * One memoized set of denied-field answers for an (entity, user) pair, valid while the entity's
- * field-security generation, its field list and the user's roles are what they were when it was
- * filled.
+ * One memoized set of denied-field answers for an (entity, user) pair, valid while the
+ * field-security generation, the entity's field list, its resolved IS-A ancestors and the user's
+ * roles are what they were when it was filled.
  */
 type DeniedFieldsMemoEntry = {
     fieldsRef: EntityFieldInfo[];
-    generationKey: string;
+    generation: number;
+    ancestors: readonly EntityInfo[];
     rolesKey: string;
     read?: Set<string>;
     update?: Set<string>;
@@ -2842,25 +2843,72 @@ type DeniedFieldsMemoEntry = {
 const _entityDeniedFieldsCache = new WeakMap<EntityInfo, WeakMap<UserInfo, DeniedFieldsMemoEntry>>();
 
 /**
- * Field-security generations. Every `EntityInfo` takes a fresh number when it is built (a metadata
- * refresh rebuilds every entity, so each refresh is a new generation) and another whenever
- * {@link EntityInfo.InvalidateFieldSecurityCache} is called. Numbers are never reused, so a memo
- * that recorded an ancestor's number notices when that ancestor is rebuilt or invalidated.
- * Held outside the instance so it never reaches `toJSON()` and cannot be restored from a cache.
+ * The field-security generation: one process-wide number that moves whenever an answer derived
+ * from field-security configuration may have changed. It moves when an `EntityInfo` is built (a
+ * metadata refresh rebuilds every entity), when an entity's {@link EntityInfo.EnableFieldLevelSecurity}
+ * flag is assigned, and when {@link EntityInfo.InvalidateFieldSecurityCache} is called. Every memo
+ * of a field-security answer records the number it was filled under and is discarded once the
+ * number has moved, so a memo is never served across any of those changes. Numbers only grow.
  */
-const _fieldSecurityGenerations = new WeakMap<EntityInfo, number>();
-let _nextFieldSecurityGeneration = 0;
+let _fieldSecurityGeneration = 0;
 
-function fieldSecurityGenerationOf(entity: EntityInfo): number {
-    let generation = _fieldSecurityGenerations.get(entity);
-    if (generation === undefined) {
-        generation = ++_nextFieldSecurityGeneration;
-        _fieldSecurityGenerations.set(entity, generation);
-    }
-    return generation;
+/** Marks every memoized field-security answer stale (see {@link CurrentFieldSecurityGeneration}). */
+function advanceFieldSecurityGeneration(): void {
+    _fieldSecurityGeneration++;
 }
 
-/** The role IDs a user holds, in order, as one string: changes whenever a role is added, removed or swapped. */
+/**
+ * The current field-security generation. A memo of anything derived from field-security
+ * configuration (denied sets, whether field security applies, a user's denial profile across a
+ * catalog) is valid only while this returns the number the memo was filled under. It moves when an
+ * `EntityInfo` is built, when an entity's `EnableFieldLevelSecurity` flag is assigned, and when
+ * `EntityInfo.InvalidateFieldSecurityCache()` is called.
+ */
+export function CurrentFieldSecurityGeneration(): number {
+    return _fieldSecurityGeneration;
+}
+
+/**
+ * An entity's IS-A ancestors as {@link EntityInfo.ParentEntityInfo} resolves them, nearest first,
+ * with what the resolution depended on: the field-security generation (which moves whenever any
+ * `EntityInfo` is built, so a rebuilt ancestor is noticed), the provider it went through, that
+ * provider's entity array and the entity's own `ParentID`.
+ */
+type LiveAncestorsMemo = {
+    generation: number;
+    provider: IMetadataProvider | undefined;
+    entities: EntityInfo[] | undefined;
+    parentID: string | null;
+    ancestors: readonly EntityInfo[];
+};
+
+const NO_ANCESTORS: readonly EntityInfo[] = Object.freeze([]);
+
+/** Whether two ancestor lists hold the same entities, by identity, in the same order. */
+function sameAncestors(a: readonly EntityInfo[], b: readonly EntityInfo[]): boolean {
+    if (a === b) {
+        return true;
+    }
+    if (a.length !== b.length) {
+        return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * The role IDs a user holds, in order, as one string: changes whenever a role is added, removed
+ * or swapped. Field-level security reads nothing else about a user, so this, with
+ * {@link CurrentFieldSecurityGeneration}, keys any memo of a user's field-security answers.
+ */
+export function FieldSecurityUserRolesKey(user: UserInfo): string {
+    return userRolesKey(user);
+}
+
 function userRolesKey(user: UserInfo): string {
     const roles = user.UserRoles;
     if (!roles || roles.length === 0) {
@@ -3195,8 +3243,18 @@ export class EntityInfo extends BaseInfo {
      * Turning it on snapshots the entity's existing entity-level permissions into per-field
      * rows, so enabling changes no behavior until an administrator tightens a field. Turning it
      * off leaves the rows in place, inactive, so re-enabling does not lose the configuration.
+     *
+     * Assigning it moves the field-security generation ({@link CurrentFieldSecurityGeneration}),
+     * so every memoized field-security answer that read the old value is recomputed.
      */
-    EnableFieldLevelSecurity: boolean = false
+    public get EnableFieldLevelSecurity(): boolean {
+        return this._enableFieldLevelSecurity;
+    }
+    public set EnableFieldLevelSecurity(value: boolean) {
+        this._enableFieldLevelSecurity = value;
+        advanceFieldSecurityGeneration();
+    }
+    private _enableFieldLevelSecurity: boolean = false
     /**
      * Whether this entity is available through the GraphQL API
      */
@@ -3754,28 +3812,68 @@ export class EntityInfo extends BaseInfo {
         if (!this.ParentID) {
             return false; // one boolean for every entity outside an IS-A chain
         }
-        return this.anyLiveAncestorEnablesFieldSecurity();
-    }
-
-    /**
-     * Whether an IS-A ancestor has field security on, walking {@link ParentEntityInfo} as it
-     * resolves NOW rather than the cached {@link ParentChain}. The denied walk
-     * ({@link addFieldsDeniedOnParent}) and the memo key ({@link fieldSecurityGenerationKey})
-     * follow the live parent, so this gate must too: read from a chain cached before a metadata
-     * refresh replaced an ancestor, it could answer "no" while the ancestor now in place has
-     * rules, and every enforcement point would skip them.
-     */
-    private anyLiveAncestorEnablesFieldSecurity(): boolean {
-        const visited = new Set<EntityInfo>([this]);
-        let ancestor = this.ParentEntityInfo;
-        while (ancestor && !visited.has(ancestor)) {
-            if (ancestor.EnableFieldLevelSecurity) {
+        // The ancestors are memoized; their flags are read live, so an in-place flip is seen at once.
+        const ancestors = this.liveAncestors();
+        for (let i = 0; i < ancestors.length; i++) {
+            if (ancestors[i].EnableFieldLevelSecurity) {
                 return true;
             }
-            visited.add(ancestor);
-            ancestor = ancestor.ParentID ? ancestor.ParentEntityInfo : null;
         }
         return false;
+    }
+
+    /** See {@link liveAncestors}. A `_` field with no matching getter, so `toJSON()` leaves it out. */
+    private _liveAncestorsMemo: LiveAncestorsMemo | null = null;
+
+    /**
+     * This entity's IS-A ancestors, nearest first, as {@link ParentEntityInfo} resolves them NOW
+     * rather than the cached {@link ParentChain}. The denied walk ({@link addFieldsDeniedOnParent})
+     * follows the live parent, so the gate and the memo key must too: read from a chain cached
+     * before a metadata refresh replaced an ancestor, the gate could answer "no" while the
+     * ancestor now in place has rules, and every enforcement point would skip them.
+     *
+     * The walk is memoized, valid while the field-security generation (which moves whenever any
+     * `EntityInfo` is built, so a rebuilt ancestor is noticed), the provider this entity resolves
+     * its parent through (its owning provider, else the global one), that provider's entity array
+     * and this entity's `ParentID` are unchanged. Ancestors resolve their own parents through
+     * their own providers; a chain whose entities came from one provider, the only way providers
+     * build them, is covered by that provider's array. A walk cut
+     * short because a `ParentID` did not resolve (asked before the provider held its entities) is
+     * returned but not kept, so it cannot pin an incomplete answer.
+     */
+    private liveAncestors(): readonly EntityInfo[] {
+        if (!this.ParentID) {
+            return NO_ANCESTORS;
+        }
+        const provider = MetadataProviderFor(this); // the provider ParentEntityInfo resolves through
+        const entities = provider?.Entities;
+        const memo = this._liveAncestorsMemo;
+        if (memo !== null && memo.generation === _fieldSecurityGeneration && memo.provider === provider
+            && memo.entities === entities && memo.parentID === this.ParentID) {
+            return memo.ancestors;
+        }
+        const generation = _fieldSecurityGeneration;
+        const { ancestors, complete } = this.walkLiveAncestors();
+        if (complete) {
+            this._liveAncestorsMemo = { generation, provider, entities, parentID: this.ParentID, ancestors };
+        }
+        return ancestors;
+    }
+
+    /** The uncached walk behind {@link liveAncestors}; stops at the root or at a cycle. */
+    private walkLiveAncestors(): { ancestors: readonly EntityInfo[]; complete: boolean } {
+        const ancestors: EntityInfo[] = [];
+        const visited = new Set<EntityInfo>([this]);
+        let current: EntityInfo = this;
+        let ancestor = this.ParentEntityInfo;
+        while (ancestor && !visited.has(ancestor)) {
+            visited.add(ancestor);
+            ancestors.push(ancestor);
+            current = ancestor;
+            ancestor = ancestor.ParentID ? ancestor.ParentEntityInfo : null;
+        }
+        const complete = !current.ParentID || ancestor !== null;
+        return { ancestors: Object.freeze(ancestors), complete };
     }
 
     /**
@@ -3882,24 +3980,27 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
-     * Discards this entity's memoized denied-field sets, and with them the sets of every IS-A
-     * descendant (their memos record this entity's generation).
+     * Discards the memoized field-security answers: this entity's denied-field sets, those of
+     * every IS-A descendant, and every other memo keyed on the field-security generation
+     * ({@link CurrentFieldSecurityGeneration}), such as a user's denial profile across a catalog.
+     * Invalidation is process-wide because a rule on one entity can change answers about others.
      *
      * A metadata refresh needs no call: it builds new `EntityInfo` objects, which start with
      * empty memos. Call this only after changing field rules IN PLACE on an existing
      * `EntityInfo`, for example editing an {@link EntityFieldPermissionInfo}'s access values.
      */
     public InvalidateFieldSecurityCache(): void {
-        _fieldSecurityGenerations.set(this, ++_nextFieldSecurityGeneration);
+        advanceFieldSecurityGeneration();
     }
 
     /**
      * Memoized front for {@link getDeniedFields}, per (entity, user, verb).
      *
-     * An entry is reused while three things are unchanged: this entity's field-security
-     * generation together with every IS-A ancestor's (see {@link InvalidateFieldSecurityCache}),
-     * the field array itself, and the role IDs the user holds. Counting fields or rules is not
-     * enough: editing a rule from `Allow` to `Deny` changes neither count.
+     * An entry is reused while four things are unchanged: the field-security generation (see
+     * {@link CurrentFieldSecurityGeneration}; it moves on every rebuild, flag assignment and
+     * {@link InvalidateFieldSecurityCache}), the IS-A ancestors as they resolve now, the field
+     * array itself, and the role IDs the user holds. Counting fields or rules is not enough:
+     * editing a rule from `Allow` to `Deny` changes neither count.
      */
     private getCachedDeniedFields(
         user: UserInfo,
@@ -3924,7 +4025,8 @@ export class EntityInfo extends BaseInfo {
 
     /** The current memo entry for `user`, replaced with an empty one when any part of its key moved. */
     private deniedFieldsMemoEntryFor(user: UserInfo): DeniedFieldsMemoEntry {
-        const generationKey = this.fieldSecurityGenerationKey();
+        const generation = _fieldSecurityGeneration;
+        const ancestors = this.liveAncestors();
         const rolesKey = userRolesKey(user);
         let byUser = _entityDeniedFieldsCache.get(this);
         if (!byUser) {
@@ -3932,31 +4034,12 @@ export class EntityInfo extends BaseInfo {
             _entityDeniedFieldsCache.set(this, byUser);
         }
         let entry = byUser.get(user);
-        if (!entry || entry.fieldsRef !== this._fields || entry.generationKey !== generationKey || entry.rolesKey !== rolesKey) {
-            entry = { fieldsRef: this._fields, generationKey, rolesKey };
+        if (!entry || entry.fieldsRef !== this._fields || entry.generation !== generation
+            || !sameAncestors(entry.ancestors, ancestors) || entry.rolesKey !== rolesKey) {
+            entry = { fieldsRef: this._fields, generation, ancestors, rolesKey };
             byUser.set(user, entry);
         }
         return entry;
-    }
-
-    /**
-     * This entity's field-security generation followed by each IS-A ancestor's, nearest first.
-     * Walks {@link ParentEntityInfo} the same way the inheritance does (see
-     * {@link addFieldsDeniedOnParent}), so the key follows the ancestors the answer was built from.
-     */
-    private fieldSecurityGenerationKey(): string {
-        let key = String(fieldSecurityGenerationOf(this));
-        if (!this.ParentID) {
-            return key;
-        }
-        const visited = new Set<EntityInfo>([this]);
-        let ancestor = this.ParentEntityInfo;
-        while (ancestor && !visited.has(ancestor)) {
-            visited.add(ancestor);
-            key += `.${fieldSecurityGenerationOf(ancestor)}`;
-            ancestor = ancestor.ParentID ? ancestor.ParentEntityInfo : null;
-        }
-        return key;
     }
 
     /**
@@ -5420,6 +5503,9 @@ export class EntityInfo extends BaseInfo {
      */
     constructor(initData: any = null, md?: IMetadataProvider) {
         super();
+        // A new entity can replace one that memoized field-security answers point at (a metadata
+        // refresh, an IS-A ancestor rebuilt), so building one moves the generation.
+        advanceFieldSecurityGeneration();
         this.SetOwningProvider(md);
         if (initData) {
             this.copyInitData(initData, EntityInfo.CHILD_INIT_KEYS);

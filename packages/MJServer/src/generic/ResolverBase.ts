@@ -855,10 +855,12 @@ export class ResolverBase {
       return baseEntity.GetAll(); // fls-guard: entity without field security and not the audit trail; whole row is the documented payload
     }
     return {
-      PrimaryKey: (baseEntity.PrimaryKey?.KeyValuePairs ?? []).map((kv) => ({ FieldName: kv.FieldName, Value: kv.Value })),
+      // Read through Get() rather than PrimaryKey, which builds every field object of a raw-mode record.
+      PrimaryKey: (entityInfo.PrimaryKeys ?? []).map((pk) => ({ FieldName: pk.Name, Value: baseEntity.Get(pk.Name) })),
       // A completed save has already rebased the object, so nothing on it is dirty: the event
       // carries the names the save wrote. Other events (save_started) still read them off the object.
-      ChangedFields: changedFieldNames ?? (baseEntity.Fields ?? []).filter((f) => f.Dirty).map((f) => f.Name),
+      // GetDirtyFieldNames answers without building field objects for a record still in raw mode.
+      ChangedFields: changedFieldNames ?? baseEntity.GetDirtyFieldNames(),
     };
   }
 

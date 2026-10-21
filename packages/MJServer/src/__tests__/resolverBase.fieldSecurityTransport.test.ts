@@ -88,6 +88,8 @@ function fullWidthEntity(entityInfo: EntityInfo, dirty: string[] = ['Notes']) {
         PrimaryKey: { KeyValuePairs: [{ FieldName: 'ID', Value: row.ID }] },
         PrimaryKeys: [],
         Fields: entityInfo.Fields.map(f => ({ Name: f.Name, Dirty: dirty.includes(f.Name) })),
+        Get: (name: string) => (row as Record<string, unknown>)[name],
+        GetDirtyFieldNames: () => entityInfo.Fields.filter(f => dirty.includes(f.Name)).map(f => f.Name),
         SetManyCalls: [] as Array<Record<string, unknown>>,
         NewRecord(): boolean { return true; },
         SetMany(values: Record<string, unknown>): void { this.SetManyCalls.push(values); },

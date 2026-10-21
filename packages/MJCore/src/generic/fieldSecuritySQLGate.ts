@@ -1,6 +1,6 @@
-import { ScanSQLForScreening, SQLScreeningDialect, SQLScreeningToken } from '@memberjunction/global';
+import { NormalizeUUID, ScanSQLForScreening, SQLScreeningDialect, SQLScreeningToken } from '@memberjunction/global';
 import { AutoQuoteLeavesWordBare, GetDialect, IdentifierMatches } from '@memberjunction/sql-dialect';
-import { EntityInfo, FieldSecurityError } from './entityInfo';
+import { CurrentFieldSecurityGeneration, EntityInfo, FieldSecurityError, FieldSecurityUserRolesKey } from './entityInfo';
 import { UserInfo } from './securityInfo';
 
 /** Why {@link FieldSecuritySQLGate} refuses a piece of SQL. */
@@ -111,6 +111,22 @@ const ALIAS_STOP_WORDS = new Set([
     'except', 'intersect', 'limit', 'offset', 'fetch', 'for', 'window', 'apply', 'pivot', 'unpivot', 'tablesample',
     'natural', 'lateral', 'with', 'using', 'select', 'returning', 'into', 'values', 'set', 'option', 'as', 'and', 'or',
 ]);
+
+/**
+ * A user's field denials across a whole catalog: whether there are any, and (built on first
+ * request) the profile key naming them. Valid while the catalog's length, the field-security
+ * generation and the user's roles are what they were when it was filled.
+ */
+interface CatalogDenialSummary {
+    Length: number;
+    Generation: number;
+    RolesKey: string;
+    HasAnyDenial: boolean;
+    ProfileKey?: string;
+}
+
+/** Per-catalog, per-user denial summaries (see {@link FieldSecuritySQLGate.CatalogHasDenialsForUser}). */
+const catalogDenialCache = new WeakMap<readonly EntityInfo[], WeakMap<UserInfo, CatalogDenialSummary>>();
 
 /** Per-catalog relation index, rebuilt when the catalog array changes length. */
 const relationIndexCache = new WeakMap<readonly EntityInfo[], { Length: number; Index: RelationIndex }>();
@@ -307,6 +323,70 @@ export class FieldSecuritySQLGate {
     }
 
     /**
+     * True when `user` is denied at least one field on any entity of `catalog`.
+     *
+     * Memoized per (catalog, user): after the first call it costs a few comparisons. The memo is
+     * discarded when the catalog array changes length, when the field-security generation moves
+     * (an entity rebuilt, a flag assigned, a cache invalidated; see
+     * `CurrentFieldSecurityGeneration`) or when the user's roles change, which are everything the
+     * answer depends on. A catalog swapped for a new array starts a new memo.
+     */
+    public static CatalogHasDenialsForUser(catalog: readonly EntityInfo[] | null | undefined, user: UserInfo): boolean {
+        return FieldSecuritySQLGate.catalogDenialSummary(catalog, user).HasAnyDenial;
+    }
+
+    /**
+     * Every field `user` may not read across `catalog`: one `entityID:field,field` entry per
+     * entity on which the user is denied something, sorted. '' for a user denied nothing.
+     * Memoized exactly as {@link CatalogHasDenialsForUser}.
+     */
+    public static CatalogDenialProfileKey(catalog: readonly EntityInfo[] | null | undefined, user: UserInfo): string {
+        const summary = FieldSecuritySQLGate.catalogDenialSummary(catalog, user);
+        if (!summary.HasAnyDenial) {
+            return '';
+        }
+        summary.ProfileKey ??= FieldSecuritySQLGate.buildDenialProfileKey(catalog ?? [], user);
+        return summary.ProfileKey;
+    }
+
+    /** The current summary for (`catalog`, `user`), rebuilt when any part of its key moved. */
+    private static catalogDenialSummary(catalog: readonly EntityInfo[] | null | undefined, user: UserInfo): CatalogDenialSummary {
+        const entities = catalog ?? [];
+        const generation = CurrentFieldSecurityGeneration();
+        const rolesKey = FieldSecurityUserRolesKey(user);
+        let byUser = catalogDenialCache.get(entities);
+        const existing = byUser?.get(user);
+        if (existing && existing.Length === entities.length && existing.Generation === generation && existing.RolesKey === rolesKey) {
+            return existing;
+        }
+        const summary: CatalogDenialSummary = {
+            Length: entities.length,
+            Generation: generation,
+            RolesKey: rolesKey,
+            HasAnyDenial: FieldSecuritySQLGate.UserCarriesDenials(entities, user),
+        };
+        if (!byUser) {
+            byUser = new WeakMap();
+            catalogDenialCache.set(entities, byUser);
+        }
+        byUser.set(user, summary);
+        return summary;
+    }
+
+    /** The uncached walk behind {@link CatalogDenialProfileKey}. */
+    private static buildDenialProfileKey(catalog: readonly EntityInfo[], user: UserInfo): string {
+        const entries: string[] = [];
+        for (const entity of catalog) {
+            if (!entity?.FieldLevelSecurityApplies) continue;
+            const denied = entity.GetDeniedReadFields(user);
+            if (denied.size > 0) {
+                entries.push(`${NormalizeUUID(entity.ID)}:${[...denied].sort().join(',')}`);
+            }
+        }
+        return entries.sort().join(';');
+    }
+
+    /**
      * The column a database "no such column" message names, or null. A qualified name gives its
      * last part, which is what the gate reports for the same reference.
      */
@@ -399,12 +479,31 @@ export class FieldSecuritySQLGate {
         return null;
     }
 
-    /** True when the user carries a denial on any entity the SQL could read. */
+    /**
+     * True when the user carries a denial on any entity the SQL could read: the target, the
+     * declared read entities (checked directly, as they need not be catalog members), or any
+     * catalog entity, since the text can name any of them. The catalog answer is memoized
+     * ({@link CatalogHasDenialsForUser}).
+     *
+     * Deliberately catalog-wide rather than "the target and read entities only". Which other
+     * entities a fragment reads is only known once its text has been read the way the database
+     * reads it: a subquery, a parenthesized join, a schema-qualified or bracketed name, or a name
+     * spelled with look-alike characters all reach another entity's view. And text that cannot be
+     * read at all, a dynamic-SQL call or an invisible character must be refused for such a user
+     * whatever it appears to name. Every one of those checks needs the tokens, so a user with a
+     * denial anywhere has every fragment tokenized; {@link analyze} then derives the read set, and
+     * a fragment whose read set carries none of the user's denials passes without the
+     * denied-name and whole-row checks.
+     */
     private static mayReadRestrictedEntity(context: FieldSecuritySQLContext): boolean {
-        return FieldSecuritySQLGate.UserCarriesDenials(
-            [context.TargetEntity, ...(context.ReadEntities ?? []), ...context.Catalog],
-            context.User,
-        );
+        const user = context.User;
+        if (context.TargetEntity && FieldSecuritySQLGate.UserCarriesDenials([context.TargetEntity], user)) {
+            return true;
+        }
+        if (context.ReadEntities && FieldSecuritySQLGate.UserCarriesDenials(context.ReadEntities, user)) {
+            return true;
+        }
+        return FieldSecuritySQLGate.CatalogHasDenialsForUser(context.Catalog, user);
     }
 
     /** Builds the relation bindings, the restricted set and its denied names. */
