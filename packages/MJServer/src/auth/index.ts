@@ -13,6 +13,7 @@ export * from './APIKeyScopeAuth.js';
 export * from './scopeLimitedPrincipal.js';
 export * from './actingContextResolver.js';
 export * from './AuthProviderEngine.js';
+export * from './LoginScreenEngine.js';
 export * from './AuthProviderCatalogRouter.js';
 export { InitializeAuthProviders, initializeAuthProviders, InitializeAuthProvidersFromMetadata, initializeAuthProvidersFromMetadata, RefreshAuthProviders, refreshAuthProviders, ValidateAuthProvidersRegistered, validateAuthProvidersRegistered } from './initializeProviders.js';
 
@@ -284,7 +285,9 @@ export const VerifyUserRecord = async (
     );
   }
 
-  let user = emailMatches[0];
+  // Nothing cached: ask FindUser, which reads the database for a user this process has not loaded
+  // yet (created seconds ago on another server) instead of treating them as nonexistent.
+  let user = emailMatches[0] ?? (await UserCache.Instance.FindUser({ Email: email }));
 
   if (!user) {
     // REFRESH THE CACHE BEFORE PROVISIONING. This block used to sit AFTER the auto-create below,

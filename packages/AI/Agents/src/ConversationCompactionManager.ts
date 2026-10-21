@@ -28,7 +28,7 @@ import {
     MJConversationCompactionRunEntity,
     MJConversationDetailEntity
 } from '@memberjunction/core-entities';
-import { AIPromptParams, ExtractPromptResultText, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, ExtractPromptResultText, MJAIAgentEntityExtended, PickPromptExecutionScope, type AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
 import { FormatSequencedHistoryLine } from './conversation-history-format';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -55,6 +55,8 @@ export interface EffectiveContextBudget {
 export interface CompactIfNeededInput {
     /** The conversation whose window may need compacting */
     ConversationId: string;
+    /** The branch whose path is compacted; null or omitted is the trunk. */
+    BranchID?: string | null;
     /** The executing agent (per-agent compaction knobs + summary prompt override) */
     Agent: MJAIAgentEntityExtended;
     /** The agent's type (type-level defaults) — null only for typeless programmatic runs */
@@ -64,6 +66,12 @@ export interface CompactIfNeededInput {
     ContextUser: UserInfo;
     /** Provider for the boundary-row entity write (falls back to the global provider) */
     Provider?: IMetadataProvider;
+    /**
+     * The run's execution scope (configuration, runtime keys, credential scope) for the summary
+     * prompt, so it runs on the same credentials as the run that triggered it. `ContextUser` still
+     * names the user.
+     */
+    ExecutionScope?: AIPromptExecutionScope;
     /**
      * Token estimator for context messages — supplied by the caller so trigger math uses
      * the SAME heuristic BaseAgent uses for in-turn context management (no drift).
@@ -315,7 +323,9 @@ export class ConversationCompactionManager {
         const rows = await ConversationEngine.LoadWindowRowsFresh(
             input.ConversationId,
             input.ContextUser,
-            input.Provider || Metadata.Provider // global-provider-ok: caller-supplied provider preferred; global is the documented last-resort fallback
+            input.Provider || Metadata.Provider, // global-provider-ok: caller-supplied provider preferred; global is the documented last-resort fallback
+            undefined,
+            input.BranchID ?? null
         );
         return ConversationEngine.AssembleContextWindow(rows, {
             excludeDetailIds: input.ExcludeDetailIds
@@ -440,6 +450,9 @@ export class ConversationCompactionManager {
         }
 
         const promptParams = new AIPromptParams();
+        if (input.ExecutionScope) {
+            Object.assign(promptParams, PickPromptExecutionScope(input.ExecutionScope));
+        }
         promptParams.prompt = prompt;
         // Keys are the conversation-summary.template.md contract ({{ priorSummary }}, {{ deltaMessages }})
         promptParams.data = {

@@ -28,11 +28,11 @@
  * @module @memberjunction/ng-conversations
  */
 import { RegisterClass } from '@memberjunction/global';
-import { RealtimeToolDefinition } from '@memberjunction/ai';
-import { FormatAppContextNote } from '@memberjunction/ai-core-plus';
+import { JSONObject, RealtimeToolDefinition } from '@memberjunction/ai';
+import { FormatAppContextNote, REALTIME_CHANNEL_CONTRACT_VERSION, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
 import { Subscription } from 'rxjs';
 import { distinctUntilChanged } from 'rxjs/operators';
-import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
+import { BaseRealtimeChannelClient, type RealtimeContextActionResult } from '@memberjunction/realtime-runtime';
 
 /** The stable name of the single proxy tool this channel registers with the realtime provider. */
 export const CONTEXT_TOOL_NAME = 'ContextTool';
@@ -41,10 +41,13 @@ export const CONTEXT_TOOL_NAME = 'ContextTool';
 const CONTEXT_TOOL_DEFINITION: RealtimeToolDefinition = {
   Name: CONTEXT_TOOL_NAME,
   Description:
-    "Perform an action in the application the user is currently in. The set of valid actions (the " +
-    "client tools and the things you can do on the current surface) is provided to you continuously " +
-    "as context — only call actions listed as currently available. Pass the action name and its " +
-    "parameters.",
+    "Perform an action in the application the user is currently in, or on one of the interactive " +
+    "channels listed in your channel notes. The set of valid actions (the client tools and the things " +
+    "you can do on the current surface) is provided to you continuously as context — only call actions " +
+    "listed as currently available. Pass the action name and its parameters. To act on an interactive " +
+    "channel instead of the app, also pass `target` naming the channel (and, for a channel that has " +
+    "several, the instance); to open a channel that is available but not open yet, use action \"open\" " +
+    "with that target.",
   ParametersSchema: {
     type: 'object',
     properties: {
@@ -55,6 +58,15 @@ const CONTEXT_TOOL_DEFINITION: RealtimeToolDefinition = {
       params: {
         type: 'object',
         description: "The action's parameters, matching its advertised input schema."
+      },
+      target: {
+        type: 'object',
+        description: 'Set this to act on an interactive channel rather than the app. Omit it for app actions.',
+        properties: {
+          channel: { type: 'string', description: 'The channel to address (from your channel notes).' },
+          instance: { type: 'string', description: 'Which instance, for a channel that has several. Usually omitted.' }
+        },
+        required: ['channel']
       }
     },
     required: ['action']
@@ -94,7 +106,32 @@ export class ClientContextChannel extends BaseRealtimeChannelClient<object> {
   }
 
   /**
-   * Routes a `ContextTool({ action, params })` call to the host's registered surface client tool.
+   * The channel's self-description. It has NO verbs of its own: it is the door, not a room — `ContextTool`
+   * runs app client tools, or addresses another channel through `target`. Declaring that explicitly keeps
+   * it from being addressed as if it were a channel with things to do.
+   */
+  public override GetDescriptor(): RealtimeChannelDescriptor {
+    return {
+      Key: this.ChannelName,
+      Version: REALTIME_CHANNEL_CONTRACT_VERSION,
+      DisplayName: this.TabTitle,
+      Instructions:
+        'Keeps you aware of where the user is in the app and lets you act there through ContextTool. ' +
+        'It is not itself something to operate.',
+      Nouns: [],
+      Verbs: [],
+      DisplayPolicy: 'headless',
+      DefaultAvailability: 'all-sessions',
+      MaxExposure: 'state'
+    };
+  }
+
+  /**
+   * Routes a `ContextTool({ action, params, target? })` call. With a `target` the call is handed to the
+   * runtime, which validates it against the addressed channel's verb schema (a malformed call comes back
+   * as a structured, model-recoverable error) and opens an `on-demand` channel when asked; without one it
+   * runs the host's registered surface client tool, exactly as before.
+   *
    * Tolerant: malformed args, a missing host executor, or an unknown/throwing tool all serialize to
    * a structured `{ success: false, output }` the model narrates (never throws).
    */
@@ -105,6 +142,9 @@ export class ClientContextChannel extends BaseRealtimeChannelClient<object> {
     const parsed = this.parseArgs(argsJson);
     if (!parsed.action) {
       return JSON.stringify({ success: false, output: 'ContextTool requires an "action" naming the tool to run.' });
+    }
+    if (parsed.target) {
+      return this.applyChannelAction(parsed.action, parsed.params, parsed.target);
     }
     const executor = this.Context?.ExecuteClientTool;
     if (!executor) {
@@ -117,6 +157,35 @@ export class ClientContextChannel extends BaseRealtimeChannelClient<object> {
     return result.Success
       ? JSON.stringify({ success: true, output: result.Result ?? 'Done.' })
       : JSON.stringify({ success: false, output: result.ErrorMessage ?? 'The action could not be performed.' });
+  }
+
+  /** Runs a channel-addressed call through the runtime and serializes its structured outcome. */
+  private async applyChannelAction(
+    action: string,
+    params: Record<string, unknown>,
+    target: { channel: string; instance?: string }
+  ): Promise<string> {
+    const dispatch = this.Context?.DispatchContextAction;
+    if (!dispatch) {
+      return JSON.stringify({ success: false, output: 'Channel actions are not available in this session.' });
+    }
+    // The params came off the wire as JSON, so they are JSON by construction.
+    const outcome = await dispatch({ Target: { Channel: target.channel, Instance: target.instance }, Action: action, Params: params as JSONObject });
+    return JSON.stringify(this.serializeDispatchOutcome(outcome));
+  }
+
+  /** The model-facing shape of a dispatch outcome: success carries the result; a refusal carries what to fix. */
+  private serializeDispatchOutcome(outcome: RealtimeContextActionResult): Record<string, unknown> {
+    if (outcome.Success) {
+      return { success: true, output: outcome.Result ?? 'Done.' };
+    }
+    return {
+      success: false,
+      output: outcome.ErrorMessage ?? 'The action could not be performed.',
+      errorCode: outcome.ErrorCode,
+      ...(outcome.Details ? { details: outcome.Details } : {}),
+      ...(outcome.Available ? { available: outcome.Available } : {})
+    };
   }
 
   /** Headless — no surface to bind. */
@@ -147,19 +216,37 @@ export class ClientContextChannel extends BaseRealtimeChannelClient<object> {
       });
   }
 
-  /** Tolerantly parses the `{ action, params }` arguments. */
-  private parseArgs(argsJson: string): { action: string | null; params: Record<string, unknown> } {
+  /** Tolerantly parses the `{ action, params, target? }` arguments. */
+  private parseArgs(argsJson: string): {
+    action: string | null;
+    params: Record<string, unknown>;
+    target: { channel: string; instance?: string } | null;
+  } {
     try {
-      const parsed = JSON.parse(argsJson) as { action?: unknown; params?: unknown };
+      const parsed = JSON.parse(argsJson) as { action?: unknown; params?: unknown; target?: unknown };
       const action = typeof parsed.action === 'string' && parsed.action.trim().length > 0 ? parsed.action.trim() : null;
       const params =
         parsed.params && typeof parsed.params === 'object' && !Array.isArray(parsed.params)
           ? (parsed.params as Record<string, unknown>)
           : {};
-      return { action, params };
+      return { action, params, target: this.parseTarget(parsed.target) };
     } catch {
-      return { action: null, params: {} };
+      return { action: null, params: {}, target: null };
     }
+  }
+
+  /** Reads a `target` — `{ channel, instance? }` — or `null` when absent or unusable (the call is then an app action). */
+  private parseTarget(raw: unknown): { channel: string; instance?: string } | null {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return null;
+    }
+    const target = raw as { channel?: unknown; instance?: unknown };
+    const channel = typeof target.channel === 'string' ? target.channel.trim() : '';
+    if (channel.length === 0) {
+      return null;
+    }
+    const instance = typeof target.instance === 'string' && target.instance.trim().length > 0 ? target.instance.trim() : undefined;
+    return instance ? { channel, instance } : { channel };
   }
 
   /** Unsubscribes the app-context stream and tears down. */

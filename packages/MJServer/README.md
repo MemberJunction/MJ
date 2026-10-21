@@ -182,6 +182,11 @@ module.exports = {
     level: 'standard',  // 'minimal' | 'standard' | 'verbose' | 'debug'
   },
 
+  // Template data that prompt runs store — see "Prompt run template data" below
+  aiPromptRuns: {
+    templateDataCapture: 'None',  // 'None' | 'Referenced' | 'Full'
+  },
+
   // Realtime WebRTC SDP broker router (/realtime/sdp-exchange)
   // Enabled by default; can be disabled via MJ_REALTIME_ENABLED=false or realtime.enabled: false
   realtime: {
@@ -196,6 +201,18 @@ module.exports = {
   },
 };
 ```
+
+### Prompt run template data (`aiPromptRuns`)
+
+`aiPromptRuns.templateDataCapture` is the server default for the template inputs that a prompt run stores in `AIPromptRun.Messages`:
+
+| Value | What a run stores |
+|---|---|
+| `'None'` (default) | Top-level key names and byte sizes only, no values |
+| `'Referenced'` | Only the keys that the prompt's templates read |
+| `'Full'` | All keys |
+
+A value on the prompt (`AIPrompt.TemplateDataCapture`) or on the call (`AIPromptParams.TemplateDataCapture`) overrides it. MJServer checks the value when it starts: any other value stops MJAPI with `Configuration validation failed`. For the full rules, see [Template data capture](../AI/Prompts/README.md#template-data-capture) in the AI Prompts README.
 
 ### Debugging GraphQL requests
 
@@ -612,6 +629,8 @@ All built-in resolvers extend `ResolverBase`, which provides:
 | `BeforeUpdate()` / `AfterUpdate()` | Lifecycle hooks for update |
 | `BeforeDelete()` / `AfterDelete()` | Lifecycle hooks for delete |
 
+`UpdateRecord()` supports both full-record and **delta-only** `Update<Type>Input` mutations (where `GraphQLDataProvider.Save()` sends only primary keys and dirty writable fields in `input` and `input.OldValues___`). When `hasCompleteOldValues()` detects a partial `OldValues___` delta, `MustLoadTruthFromDatabase()` ensures `InnerLoad` populates the full baseline row from the database before `TestAndSetClientOldValuesToDBValues()` checks dirty fields for concurrent modifications and applies `entityObject.SetMany(clientNewValues)`.
+
 ## REST API
 
 In addition to GraphQL, MJServer provides a REST API at `/api/v1/`. By default it is disabled and can be enabled via configuration.
@@ -907,6 +926,36 @@ connectionPool: {
 - Production: `max: 50, min: 5`
 - High load: `max: 100, min: 10`
 
+### The Read-Only Login
+
+Ad-hoc SQL (`ExecuteAdhocQuery`), `TestQuerySQL` and query specs run caller-supplied SQL as the read-only login (`dbReadOnlyUsername` / `dbReadOnlyPassword`). Without one, ad-hoc SQL is refused. Grant that login **`SELECT` on the entity base views and nothing else**:
+
+- no access to the base tables behind them;
+- no membership of PostgreSQL's `pg_read_server_files`, or any SQL Server permission to reach files or other servers.
+
+MJAPI checks what SQL reads in two ways. It refuses a table reference that isn't a readable entity view, and it refuses functions that run SQL given as a string or read files (`query_to_xml`, `ts_stat`, `pg_read_file`, `OPENROWSET`, …). The login's own grants are still the only limit that SQL can never get around. On PostgreSQL, MJAPI logs a warning at startup if the read-only login can read base tables in the core schema or server files.
+
+### Database Settings on PostgreSQL
+
+PostgreSQL reads the same `databaseSettings` as SQL Server, with the same defaults. There are no PostgreSQL-only settings.
+
+| Setting (default) | SQL Server | PostgreSQL |
+|---|---|---|
+| `requestTimeout` (30,000) | Driver request timeout: a client-side timer over the whole request | `statement_timeout` on every pooled connection |
+| `connectionPool.max` / `min` (50 / 5) | Pool size | Pool size. The read-only pool is capped at 10 and keeps no idle minimum |
+| `connectionPool.idleTimeoutMillis` (30,000) | Idle connection eviction | Idle connection eviction |
+| `connectionPool.acquireTimeoutMillis` (30,000) | Wait for a pooled connection | `connectionTimeoutMillis` (see below) |
+| `connectionTimeout` (45,000) | Time to open a connection | Not used |
+| `dbReadOnlyUsername` / `dbReadOnlyPassword` | Read-only pool | Read-only pool; falls back to `PG_READ_ONLY_USERNAME` / `PG_READ_ONLY_PASSWORD` |
+
+Where the two platforms cannot match:
+
+- **One connection timeout.** The `pg` pool has a single `connectionTimeoutMillis` covering both waiting for a free slot and opening a connection. It is fed from `acquireTimeoutMillis`; `connectionTimeout` is not used.
+- **The request timeout measures something different.** SQL Server's `requestTimeout` is a client-side timer over the whole request, including reading rows. PostgreSQL's `statement_timeout` is execution time on the server, per statement. A query that executes quickly but returns rows slowly is cut off on SQL Server and not on PostgreSQL.
+- **Idle transactions.** PostgreSQL also gets `idle_in_transaction_session_timeout`, set to twice `requestTimeout`, so a connection left inside an open transaction is closed. SQL Server has no counterpart, so there is no setting for it.
+- **Connection count.** MJAPI opens two PostgreSQL pools at up to `connectionPool.max` each (a raw compatibility pool and the provider pool), plus the read-only pool (up to 10) and, when `CODEGEN_DB_USERNAME` is set, a CodeGen pool of 10. With the default of 50, that can exceed PostgreSQL's default `max_connections` of 100. Size `max` with this in mind. SQL Server opens one pool.
+- **Encryption.** SQL Server uses `encrypt` with `DB_TRUST_SERVER_CERTIFICATE`. On PostgreSQL, connections the data provider opens itself use SSL when `NODE_ENV` is `production`; the pools MJAPI opens directly (the compatibility, read-only and CodeGen pools) do not set SSL.
+
 ### Metadata Caching
 
 Entity metadata is loaded once at startup and shared across all per-request provider instances. The cache refresh interval is configurable:
@@ -940,6 +989,7 @@ For full architecture details, refer to the **[Server Extensions Guide](../../gu
 5. Core integrations (Twilio, Vonage, RingCentral, Teams meetings) register their management services directly into `loader.Services` under `'TwilioTelephonyService'`, `'VonageTelephonyService'`, `'RingCentralTelephonyService'`, and `'TeamsMeetingsService'`.
 6. Open App server packages listed in `dynamicPackages.server[]` declare their extensions (`MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`). The host `mj.config.cjs` `serverExtensions[]` overlays those by `DriverClass`.
 7. Core routes (`/graphql`, `/health`, `/auth`, `/media`, `/schema`, `/mcp`) are protected by a reserved roots registry; extensions attempting to claim a reserved root fail closed during bootstrap.
+8. MJServer's global CORS middleware runs before every extension. An extension with its own origin policy sets `OwnsCORS: true` in its config; global CORS then skips its `RootPath`, so its preflights reach the extension and no origin is reflected onto its responses. See the guide's "Owning CORS for Your RootPath" section. Express's `X-Powered-By` header is disabled app-wide.
 
 ### Configuration
 

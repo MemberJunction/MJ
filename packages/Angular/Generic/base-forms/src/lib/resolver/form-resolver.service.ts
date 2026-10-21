@@ -1,9 +1,13 @@
 import { Injectable, Type } from '@angular/core';
 import { IMetadataProvider, UserInfo, EntityInfo, LogError } from '@memberjunction/core';
-import { InteractiveFormsEngine } from '@memberjunction/core-entities';
+import { FormScopeAllowedOnEntity, InteractiveFormsEngine, IsSelectableFormOverride } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent } from '../base-form-component';
 import { UserInfoEngine } from '@memberjunction/core-entities';
+import {
+    FORM_VARIANT_EXPLICIT_DEFAULT,
+    FORM_VARIANT_SETTING_PREFIX,
+} from '@memberjunction/interactive-component-types/forms';
 
 /**
  * Slim row shape for an `EntityFormOverride` lookup. Resolution doesn't need
@@ -44,7 +48,7 @@ export type FormResolution =
  *     the CodeGen Angular fallback explicitly; resolver skips all overrides
  *   - (key absent) → no preference, apply auto-pick rules
  */
-const VARIANT_SETTING_PREFIX = 'mj.formVariant.';
+const VARIANT_SETTING_PREFIX = FORM_VARIANT_SETTING_PREFIX;
 
 /**
  * Picks the form to render for an entity record and exposes the full list of
@@ -120,7 +124,7 @@ export class FormResolverService {
      * Format: a leading `__` makes it visually distinct from a UUID and
      * impossible to collide with one (UUIDs don't contain underscores).
      */
-    public static readonly EXPLICIT_DEFAULT_SENTINEL = '__codegen-default__';
+    public static readonly EXPLICIT_DEFAULT_SENTINEL = FORM_VARIANT_EXPLICIT_DEFAULT;
 
     /**
      * Build the per-entity setting key. Lowercased so case variants of
@@ -206,11 +210,13 @@ export class FormResolverService {
         );
 
         // Filter cached overrides for this (entity, user, roles) tuple.
-        // Includes Active + Pending + Inactive (the variant picker shows
-        // all three; pickActive() filters to Active separately). Replaces
+        // Includes Active + Pending + Inactive; the variant picker and
+        // pickActive() keep the ones IsSelectableFormOverride allows. Replaces
         // a per-LoadForm RunView with an in-memory predicate — sub-ms.
+        // An identity or permission entity takes only the user's own forms.
         const applicable = InteractiveFormsEngine.Instance.Overrides.filter(o => {
             if (!o.EntityID || !UUIDsEqual(o.EntityID, entity.ID)) return false;
+            if (!FormScopeAllowedOnEntity(entity.Name, o.Scope)) return false;
             if (o.Scope === 'User')   return !!o.UserID && o.UserID.toLowerCase() === user.ID.toLowerCase();
             if (o.Scope === 'Role')   return !!o.RoleID && userRoleIds.has(o.RoleID);
             if (o.Scope === 'Global') return true;
@@ -265,8 +271,10 @@ export class FormResolverService {
      *     form-loading path falls back to CodeGen's `@RegisterClass` lookup.
      *     This is what makes the Angular fallback reachable from the UI.
      *   - Else if the user has a saved variant ID AND that variant is in
-     *     the applicable list AND it's Active → use it.
-     *   - Else → first Active row in tier+priority order (auto-pick).
+     *     the applicable list AND it is selectable (`IsSelectableFormOverride`:
+     *     Active, or the user's own form set aside by a later apply) → use it.
+     *   - Else → the stored choice is dropped, and the first Active row in
+     *     tier+priority order is used (auto-pick).
      *   - Else → null (fall back to CodeGen/@RegisterClass path).
      */
     private pickActive(
@@ -278,7 +286,11 @@ export class FormResolverService {
             return null;
         }
         if (selectedID) {
-            const sel = variants.find(v => v.Status === 'Active' && UUIDsEqual(v.ID, selectedID));
+            // The user's own set-aside form is a legitimate choice, not history: applying a
+            // second form sets the first one aside rather than merging into it, so the picker
+            // offers both and the user's pick outranks which row happens to hold Active. A
+            // shared form set aside was retracted, and a Pending row is a draft; neither renders.
+            const sel = variants.find(v => IsSelectableFormOverride(v) && UUIDsEqual(v.ID, selectedID));
             if (sel) return sel;
             // Selection no longer valid — wipe it so future loads auto-pick.
             this.ClearSelectedVariant(entity.Name);

@@ -1,0 +1,92 @@
+<section class="author" aria-label="Version diff">
+  <div class="card cockpit">
+    <span class="eyebrow">Rubric version diff</span>
+    <h2>{{ Heading }}</h2>
+    @if (Bump) {
+      <span class="pill-major"><i class="fa-solid fa-triangle-exclamation"></i> {{ Bump }} → {{ NextVersion }}</span>
+    }
+  </div>
+  @if (VersionMarks.length) {
+    <article class="card" aria-label="Version">
+      <h3>Version</h3>
+      @for (mark of VersionMarks; track mark.property) {
+        <p class="mark">{{ Sentence(mark) }}</p>
+      }
+    </article>
+  }
+  @for (row of GroupRows; track row.key) {
+    <article class="card" aria-label="Group">
+      <h3>Group: {{ row.name }}</h3>
+      <div class="diff-grid">
+        @if (Base) {
+        <div class="diff-side">
+          <span class="eyebrow">Base {{ BaseLabel }}</span>
+          <p>Weight {{ row.baseWeight }}</p>
+        </div>
+        }
+        <div class="diff-side diff-draft">
+          <span class="eyebrow">Draft</span>
+          <p>Weight {{ row.draftWeight }}</p>
+          @for (mark of row.marks; track mark.property) {
+            <p class="mark">{{ Sentence(mark) }}</p>
+          }
+        </div>
+      </div>
+    </article>
+  }
+  @for (row of CriterionRows; track row.key) {
+    <article class="card">
+      <h3><i class="fa-solid fa-scale-balanced"></i> Criterion: {{ row.name }}</h3>
+      <div class="diff-grid">
+        @if (Base) {
+        <div class="diff-side">
+          <span class="eyebrow">Base {{ BaseLabel }}</span>
+          <p>Weight {{ row.baseWeight }}</p>
+          <p>Quality gate {{ row.baseGate }}</p>
+          <p>Scale {{ row.baseScale }}</p>
+        </div>
+        }
+        <div class="diff-side diff-draft">
+          <span class="eyebrow">{{ Base ? 'Draft next ' + NextVersion : DraftLabel }}</span>
+          <p>Weight {{ row.draftWeight }}</p>
+          <p>Quality gate {{ row.draftGate }}</p>
+          <p>Scale {{ row.draftScale }}</p>
+          @for (mark of row.marks; track mark.property + mark.subject + mark.bump) {
+            <p class="mark">{{ Sentence(mark) }}</p>
+          }
+        </div>
+      </div>
+    </article>
+  }
+  @for (band of BandRangeRows; track band.label) {
+    <article class="card" aria-label="Band range">
+      <h3>Band {{ band.label }}</h3>
+      <p>Range {{ band.baseMin }}–{{ band.baseMax }}</p>
+      <p>Range {{ band.draftMin }}–{{ band.draftMax }}</p>
+      <p class="mark">The band range changed</p>
+    </article>
+  }
+  @for (band of AddedBands; track band.label) {
+    <article class="card" aria-label="Added band">
+      <h3>Band {{ band.label }}</h3>
+      <p>Added in draft</p>
+      <p>Range {{ band.min }}–{{ band.max }}</p>
+    </article>
+  }
+  @for (band of RemovedBands; track band.label) {
+    <article class="card">
+      <h3><i class="fa-solid fa-layer-group"></i> Rating bands</h3>
+      <div class="diff-grid">
+        <div class="diff-side">
+          <span class="eyebrow">Base</span>
+          <p><strong>Band {{ band.label }}</strong></p>
+          <p>Range {{ band.min }}–{{ band.max }}</p>
+        </div>
+        <div class="removed">
+          <span>Removed in draft</span>
+          {{ band.label }} is not on the draft.
+        </div>
+      </div>
+    </article>
+  }
+</section>

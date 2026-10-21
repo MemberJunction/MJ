@@ -20,6 +20,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { existsSync } from 'node:fs';
 
 // ── Stub every external collaborator the install path touches ──────────────
+// The template-user step loads the record-cloning engine, which this file's mocks don't provide for.
+vi.mock('../install/template-user.js', () => ({
+    OfferTemplateUser: vi.fn(),
+    NamesFromEmail: vi.fn(),
+    TEMPLATE_USER_ENV: {},
+}));
 vi.mock('../github/github-client.js', () => ({
     FetchManifestFromGitHub: vi.fn(),
     DownloadMigrations: vi.fn(),
@@ -51,7 +57,7 @@ vi.mock('../install/migration-runner.js', () => ({ RunAppMigrations: vi.fn() }))
 vi.mock('../install/package-manager.js', () => ({
     AddAppPackages: vi.fn(),
     RemoveAppPackages: vi.fn(),
-    RunPackageInstall: vi.fn(),
+    RunPackageInstallAsync: vi.fn(),
     BumpPrefixedDependencies: vi.fn(),
 }));
 vi.mock('../install/config-manager.js', () => ({
@@ -92,8 +98,8 @@ import type { OrchestratorContext } from '../install/install-orchestrator.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
 import { CheckCanMigrateAppSchema, CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
-import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies } from '../install/package-manager.js';
-import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, PruneDynamicPackagesNotInManifest } from '../install/config-manager.js';
+import { AddAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies } from '../install/package-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, PruneDynamicPackagesNotInManifest } from '../install/config-manager.js';
 import {
     RecordAppInstallation,
     RecordInstallHistoryEntry,
@@ -102,6 +108,7 @@ import {
     FindInstalledApp,
     ListInstalledApps,
     CheckSchemaSharedByOtherApps,
+    UpdateAppRecord,
 } from '../install/history-recorder.js';
 
 /** Records the name of each app as it reaches the "record installation" step. */
@@ -160,7 +167,7 @@ describe('InstallApp dependency orchestration', () => {
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
         vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
-        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
@@ -303,7 +310,7 @@ describe('HandleMigrations — platform-aware dialect directory', () => {
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true, MigrationsApplied: 1, AppliedFiles: ['V1__x.sql'] });
         vi.mocked(AddAppPackages).mockReturnValue({ Success: true } as never);
-        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true } as never);
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true } as never);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
         vi.mocked(SetAppStatus).mockResolvedValue(undefined);
@@ -521,7 +528,7 @@ describe('InstallApp — post-install summary (B16: schema-only shell needs Code
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
         vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
-        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
@@ -564,7 +571,7 @@ describe('InstallApp — reinstall over a prior install (B17: Error apps are rei
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
         vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
-        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
@@ -623,7 +630,7 @@ describe('InstallApp — npm-install failure disables the app AND its dynamicPac
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
         vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
         // npm install fails AFTER package.json was updated → app finalizes Disabled.
-        vi.mocked(RunPackageInstall).mockReturnValue({ Success: false, ErrorMessage: 'peer dep conflict' });
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: false, ErrorMessage: 'peer dep conflict' });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
@@ -673,7 +680,7 @@ describe('InstallApp — schema rollback tracks actual creation (B18)', () => {
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(DropAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
-        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
@@ -908,6 +915,143 @@ describe('UpgradeApp — config prune ordering', () => {
     });
 });
 
+describe('UpgradeApp — repairs a drifted OpenApp.SchemaName', () => {
+    // The app's schema name is denormalized onto OpenApp.SchemaName at INSTALL time, but the
+    // manifest is the source of truth and upgrade already rewrites ManifestJSON. Before the fix,
+    // upgrade left the column alone, so an app whose manifest later corrected its schema name —
+    // in practice its CASING — kept the install-time value forever. That value is load-bearing:
+    // CodeGen's spUpdateSchemaInfoFromDatabase backfills SchemaInfo.CanonicalSchemaName FROM it
+    // (fill-NULLs-only, so it never self-corrects), and vwEntities prefers CanonicalSchemaName
+    // when deriving entity ClassName/CodeName and the runtime GraphQL type names — so stale
+    // casing became client GraphQL operation names the server's generated resolvers reject.
+    // Real-world instance: the BCSaaS app installed as '__bcsaas', corrected to '__BCSaaS'.
+    const executedSQL: string[] = [];
+
+    /** Fully-stubbed dialect so PersistCanonicalSchemaName can build and "run" its UPDATE. */
+    const driftContext = {
+        ...context,
+        Callbacks: {},
+        MJCoreSchema: '__mj',
+        DatabaseProvider: {
+            Dialect: {
+                PlatformKey: 'sqlserver',
+                CanonicalSchemaName: (schema: string) => schema,
+                QuoteSchema: (schema: string, obj: string) => `[${schema}].[${obj}]`,
+                QuoteIdentifier: (id: string) => `[${id}]`,
+                QuoteStringLiteral: (value: string) => `'${value}'`,
+            },
+            ExecuteSQL: async (sql: string) => {
+                executedSQL.push(sql);
+            },
+        },
+    } as unknown as OrchestratorContext;
+
+    /** v2 manifest naming the CORRECTED schema casing, `__BCSaaS`. */
+    function correctedCasingManifest(): string {
+        return JSON.stringify({
+            manifestVersion: 1,
+            name: 'app-x',
+            displayName: 'app-x',
+            description: 'app-x test app description',
+            version: '2.0.0',
+            publisher: { name: 'Test' },
+            repository: 'https://github.com/test/app-x',
+            mjVersionRange: '>=5.0.0 <6.0.0',
+            schema: { name: '__BCSaaS' },
+            packages: {},
+            dependencies: {},
+        });
+    }
+
+    /** v2 manifest declaring NO schema at all — the column must not be clobbered. */
+    function schemalessManifest(): string {
+        return JSON.stringify({
+            manifestVersion: 1,
+            name: 'app-x',
+            displayName: 'app-x',
+            description: 'app-x test app description',
+            version: '2.0.0',
+            publisher: { name: 'Test' },
+            repository: 'https://github.com/test/app-x',
+            mjVersionRange: '>=5.0.0 <6.0.0',
+            packages: {},
+            dependencies: {},
+        });
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        installSequence.length = 0;
+        executedSQL.length = 0;
+        vi.mocked(SchemaExists).mockResolvedValue(true);
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
+        vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
+        // A casing correction reads as a schema RENAME to PruneStaleServerConfig, which strips the
+        // old name's config references — so this stub is on the path for these cases.
+        vi.mocked(RemoveEntityPackageMapping).mockReturnValue({ Success: true });
+        vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(GetLatestVersion).mockResolvedValue('2.0.0' as unknown as Awaited<ReturnType<typeof GetLatestVersion>>);
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true } as ReturnType<typeof AddServerDynamicPackages>);
+        vi.mocked(PruneDynamicPackagesNotInManifest).mockReturnValue(
+            { Success: true } as ReturnType<typeof PruneDynamicPackagesNotInManifest>
+        );
+        // The INSTALLED row still carries the stale lowercase name.
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Active',
+            RepositoryURL: 'https://github.com/test/app-x', SchemaName: '__bcsaas',
+            ManifestJSON: JSON.stringify({ schema: { name: '__bcsaas' } }),
+        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
+    });
+
+    it('rewrites SchemaName from the manifest, so corrected casing survives the upgrade', async () => {
+        serveManifests({ 'https://github.com/test/app-x': correctedCasingManifest() });
+
+        const result = await UpgradeApp({ AppName: 'app-x', AllowDoubleUnderscoreSchema: true }, driftContext);
+
+        expect(result.Success).toBe(true);
+        expect(vi.mocked(UpdateAppRecord)).toHaveBeenCalledWith(
+            expect.anything(),
+            'app-x-id',
+            expect.objectContaining({ SchemaName: '__BCSaaS', ManifestJSON: expect.any(String) }),
+        );
+    });
+
+    it('re-asserts CanonicalSchemaName on the SchemaInfo row, healing a value frozen from the stale column', async () => {
+        // The codegen backfill only fills NULLs, so a CanonicalSchemaName already frozen to the bad
+        // casing is never corrected by another codegen pass — only this unconditional UPDATE heals it.
+        serveManifests({ 'https://github.com/test/app-x': correctedCasingManifest() });
+
+        const result = await UpgradeApp({ AppName: 'app-x', AllowDoubleUnderscoreSchema: true }, driftContext);
+
+        expect(result.Success).toBe(true);
+        const canonicalUpdate = executedSQL.find((sql) => sql.includes('CanonicalSchemaName'));
+        expect(canonicalUpdate).toBeDefined();
+        expect(canonicalUpdate).toContain("[CanonicalSchemaName] = '__BCSaaS'");
+        // Keyed case-insensitively on the physical name, so it matches the poisoned row.
+        expect(canonicalUpdate).toContain('LOWER([SchemaName]) = LOWER(');
+    });
+
+    it('leaves SchemaName alone when the new manifest declares no schema', async () => {
+        serveManifests({ 'https://github.com/test/app-x': schemalessManifest() });
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, driftContext);
+
+        expect(result.Success).toBe(true);
+        const updates = vi.mocked(UpdateAppRecord).mock.calls.map(([, , u]) => u);
+        const recordUpdate = updates.find((u) => u && 'ManifestJSON' in u);
+        expect(recordUpdate).toBeDefined();
+        expect(recordUpdate).not.toHaveProperty('SchemaName');
+        expect(executedSQL).toEqual([]);
+    });
+});
+
 describe('reserved-schema guard on the adopt-an-existing-schema path', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -918,7 +1062,7 @@ describe('reserved-schema guard on the adopt-an-existing-schema path', () => {
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
         vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
-        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
@@ -1007,7 +1151,7 @@ describe('reserved-schema guard on the UPGRADE path', () => {
         vi.mocked(SchemaExists).mockResolvedValue(true);
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
         vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
-        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
@@ -1091,7 +1235,7 @@ describe('adopting a schema another installed app already owns', () => {
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
         vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
-        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
@@ -1150,7 +1294,7 @@ describe('creating the app schema — core schema owner (#4756)', () => {
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
         vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
-        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
