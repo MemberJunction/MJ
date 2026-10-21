@@ -14,7 +14,7 @@ import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/versi
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, DescribeUnresolvedVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
 import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation } from './schema-manager.js';
 import { RunFkGraphTeardown, BuildRootDoomedPredicate } from './entity-teardown.js';
@@ -730,7 +730,9 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     const explicitUpgradeVersion = options.Version;
     const targetVersion = explicitUpgradeVersion ?? (await GetLatestVersion(existingApp.RepositoryURL, context.GitHubOptions, existingApp.Subpath ?? undefined, existingApp.Name));
     if (!targetVersion) {
-      return BuildFailureResult('Upgrade', options.AppName, '', 'Schema', startTime, 'Could not determine target version');
+      // An empty listing may be a repo this credential cannot see (GitHub 404s it) — say which.
+      const reason = await DescribeUnresolvedVersion(existingApp.RepositoryURL, context.GitHubOptions, existingApp.Subpath ?? undefined);
+      return BuildFailureResult('Upgrade', options.AppName, '', 'Schema', startTime, reason);
     }
 
     // If an explicit version was requested, validate the tag exists on GitHub

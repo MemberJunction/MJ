@@ -136,6 +136,8 @@ After making code changes, **always compile the affected package** and fix all T
 
 **Migration authoring structure**: Hand-written DDL at top (`ALTER TABLE`, extended properties) → at least 50 blank lines → standard CodeGen comment block → appended CodeGen output (`EntityField` INSERT with apply-time sequence, procs, views, permissions). Never do ad-hoc inline metadata updates in migrations; manage metadata via `metadata/*.json` seed files (`mj sync push`).
 
+**Polymorphic foreign keys (`EntityField.EntityIDFieldName`)**: Whenever a table has a polymorphic FK column pair (e.g., `EntityID` + `RecordID`, `SourceEntityID` + `SourceRecordID`, `TargetEntityID` + `TargetRecordID`), always decorate the record-ID field's `EntityField` metadata with `EntityIDFieldName` pointing to its companion entity column in `metadata/entities/.polymorphic-fk-entity-fields.json` (never inline in SQL migrations, and never rely on column-name heuristics in code). Details: [`metadata/CLAUDE.md`](metadata/CLAUDE.md).
+
 ---
 
 ## Where the rest of the guidance lives
