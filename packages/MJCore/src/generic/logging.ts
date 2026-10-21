@@ -225,7 +225,13 @@ export function LogStatusEx(options: LogStatusOptions | string): void {
     if (options.verboseOnly) {
         const checkVerbose = options.isVerboseEnabled || IsVerboseLoggingEnabled;
         if (!checkVerbose()) {
-            return; // Skip verbose messages when verbose mode is off
+            // In a real browser (non-Node) dev session, emit verbose-only messages via
+            // console.debug so Chrome DevTools' native "Verbose" log level filter controls
+            // their visibility while keeping the default "Info" console clean.
+            if (!options.isVerboseEnabled && !runningOnNode() && runningInBrowser() && !GetProductionStatus() && (options.logToFileName === null || options.logToFileName === undefined)) {
+                console.debug(options.message, ...(options.additionalArgs || []));
+            }
+            return; // Skip standard console.log when verbose mode is off
         }
     }
     

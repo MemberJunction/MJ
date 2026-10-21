@@ -601,39 +601,43 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
             yesterday.setDate(yesterday.getDate() - 1);
             const yesterdayIso = yesterday.toISOString();
 
-            const [totalResult, failedResult, pendingResult, recentResult, allLogsResult, providersResult] = await Promise.all([
-                rv.RunView({
+            const logFields = ['ID', 'MessageDate', 'Status', 'Direction', 'CommunicationProvider', 'CommunicationProviderMessageType'];
+            const [totalResult, failedResult, pendingResult, recentResult, allLogsResult, providersResult] = await rv.RunViews([
+                {
                     EntityName: 'MJ: Communication Logs',
                     ExtraFilter: `MessageDate >= '${yesterdayIso}'`,
                     ResultType: 'count_only'
-                }),
-                rv.RunView({
+                },
+                {
                     EntityName: 'MJ: Communication Logs',
                     ExtraFilter: `MessageDate >= '${yesterdayIso}' AND Status = 'Failed'`,
                     ResultType: 'count_only'
-                }),
-                rv.RunView({
+                },
+                {
                     EntityName: 'MJ: Communication Logs',
                     ExtraFilter: `Status = 'Pending'`,
                     ResultType: 'count_only'
-                }),
-                rv.RunView<MJCommunicationLogEntity>({
+                },
+                {
                     EntityName: 'MJ: Communication Logs',
                     OrderBy: 'MessageDate DESC',
                     MaxRows: 8,
-                    ResultType: 'entity_object'
-                }),
-                rv.RunView<MJCommunicationLogEntity>({
+                    Fields: logFields,
+                    ResultType: 'simple'
+                },
+                {
                     EntityName: 'MJ: Communication Logs',
                     ExtraFilter: `MessageDate >= '${yesterdayIso}'`,
                     OrderBy: 'MessageDate ASC',
-                    ResultType: 'entity_object'
-                }),
-                rv.RunView<MJCommunicationProviderEntity>({
+                    Fields: logFields,
+                    ResultType: 'simple'
+                },
+                {
                     EntityName: 'MJ: Communication Providers',
                     OrderBy: 'Name ASC',
-                    ResultType: 'entity_object'
-                })
+                    Fields: ['ID', 'Name', 'Status'],
+                    ResultType: 'simple'
+                }
             ]);
 
             if (totalResult.Success) this.Stats.totalSent = totalResult.TotalRowCount;
@@ -645,16 +649,20 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
                 : 100;
 
             if (recentResult.Success) {
-                this.RecentLogs = recentResult.Results;
+                this.RecentLogs = recentResult.Results as MJCommunicationLogEntity[];
             }
 
             if (allLogsResult.Success) {
-                this.ChartData = this.processTrendData(allLogsResult.Results, yesterday);
-                this.ChannelBreakdown = this.buildChannelBreakdown(allLogsResult.Results);
+                const allLogs = allLogsResult.Results as MJCommunicationLogEntity[];
+                this.ChartData = this.processTrendData(allLogs, yesterday);
+                this.ChannelBreakdown = this.buildChannelBreakdown(allLogs);
             }
 
             if (providersResult.Success && allLogsResult.Success) {
-                this.ProviderHealth = this.buildProviderHealth(providersResult.Results, allLogsResult.Results);
+                this.ProviderHealth = this.buildProviderHealth(
+                    providersResult.Results as MJCommunicationProviderEntity[],
+                    allLogsResult.Results as MJCommunicationLogEntity[]
+                );
             }
 
         } catch (error) {

@@ -16,7 +16,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab, ResourceUrlsEquivalent } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration, NormalizeRecordIdForMatch } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration, NormalizeRecordIdForMatch, FORM_MODE_QUERY_PARAM, ReadStandardFormQuery } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -447,6 +447,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           // to 'auto' (compact under a handful of apps, launcher otherwise)
           appSwitcherStyle: rawStyle === 'launcher' || rawStyle === 'compact' ? rawStyle : 'auto',
           appNav: engine.GetBoolean('Shell.AppNav.Enabled', true),
+          // The same key explorer-app read directly before the overlay went through the policy;
+          // explorer-app now reads the resolved bit from ChromeFlags.
+          chatOverlay: engine.GetBoolean('Shell.ChatOverlay.Enabled', true),
           // Resolved (and pushed to collaborators) in resolveRecordOpenStyle()
           // during initializeShell — NEVER as a getter side effect; getters
           // run at change detection's whim and startup correctness must not
@@ -458,6 +461,17 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           this._chromeFlags = flags;
       }
       return flags;
+  }
+
+  /**
+   * The resolved chrome, for collaborators outside the shell. explorer-app reads `chatOverlay`
+   * from here (through its view query on this component) so the overlay follows the host's
+   * chrome policy with ONE policy instance and ONE `Changed`; the memoization above makes a
+   * read from a parent's change detection a field access. Read-only on purpose: this IS the
+   * memo, and a consumer writing to it would poison the shell's own chrome.
+   */
+  public get ChromeFlags(): Readonly<ShellChromeFlags> {
+      return this.chromeFlags;
   }
 
   /** The policy's answer may have changed: forget the cached flags and repaint. */
@@ -1704,17 +1718,21 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * another forced tab, which is the loop that killed the browser.
    */
   private openRecordFromUrl(entityName: string, recordId: string, queryParams: URLSearchParams): void {
+    // Recreating from browser history must keep `?form=standard` (MJ#4755),
+    // or back/forward would reopen the record in the custom form.
+    const formMode = ReadStandardFormQuery({ [FORM_MODE_QUERY_PARAM]: queryParams.get(FORM_MODE_QUERY_PARAM) });
     if (IsNewEntityRecordUrlId(recordId)) {
       const nrv = queryParams.get(NEW_RECORD_VALUES_QUERY_PARAM) ?? undefined;
       this.navigationService.OpenNewEntityRecord(entityName, {
         newRecordValues: nrv,
         recordSource: 'none',
+        formMode,
       });
       return;
     }
     const compositeKey = new CompositeKey();
     compositeKey.SimpleLoadFromURLSegment(recordId);
-    this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none' });
+    this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none', formMode });
   }
 
   private recordTabMatchesUrl(tab: WorkspaceTab, entityName: string, recordId: string): boolean {
@@ -1961,6 +1979,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       return `${url}${separator}${params.toString()}`;
     };
 
+    // Extra query params a record tab's URL carries beyond the tab's own
+    // queryParams (which appendQP already merges — that is where the
+    // standard-form `form` param lives, MJ#4755): initial values for an
+    // unsaved record.
+    const recordQueryParams = (isNewRecord: boolean): Record<string, string> => {
+      const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
+      return nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : {};
+    };
+
     // Helper function to get app path for URL
     const getAppPath = (appIdOrName: string): string | null => {
       // First try by ID
@@ -2086,10 +2113,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
               // here, `syncUrlWithWorkspace`'s `currentUrl !== newUrl` check is permanently true and can
               // drive a re-navigation loop (with onSameUrlNavigation:'reload'). The read side already
               // decodeURIComponent()s this segment, so encoding here keeps both sides consistent.
-              const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
               return appendQP(
                 `/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${encodeURIComponent(idSeg)}`,
-                nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : undefined,
+                recordQueryParams(isNewRecord),
               );
             }
           }
@@ -2166,10 +2192,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           if (idSeg) {
             // Encode the CompositeKey segment ('|' → %7C) to match Angular's serialized router.url and
             // the decodeURIComponent() on the read side — see the app-scoped 'records' case above.
-            const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
             return appendQP(
               `/resource/record/${encodeURIComponent(entityName)}/${encodeURIComponent(idSeg)}`,
-              nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : undefined,
+              recordQueryParams(isNewRecord),
             );
           }
         }

@@ -190,4 +190,13 @@ describe('SearchSuggestComponent (DOM)', () => {
     // the option matching the current MinRelevancePercent carries the active class
     expect(queryAll(fixture, '.suggest-filter-option-active').length).toBeGreaterThanOrEqual(1);
   });
+
+  it('unsubscribes the MJGlobal login listener on ngOnDestroy (MJ-NG-6)', () => {
+    const fixture = render({ IsOpen: true, Query: '' });
+    const internal = fixture.componentInstance as unknown as { _mjGlobalSub: { closed: boolean } | null };
+    expect(internal._mjGlobalSub).not.toBeNull();
+    expect(internal._mjGlobalSub?.closed).toBe(false);
+    fixture.destroy();
+    expect(internal._mjGlobalSub).toBeNull();
+  });
 });

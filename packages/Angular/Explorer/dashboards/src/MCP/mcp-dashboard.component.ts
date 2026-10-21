@@ -1957,18 +1957,30 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     }
 
     /** Values record consumed by the centralized <mj-filter-panel>, scoped to the current tab. */
+    private _mcpFilterValuesCache: Record<string, unknown> = {};
+    private _mcpFilterValuesKey = '';
+
+    /**
+     * Filter values object passed to `<mj-filter-panel>`.
+     * Memoized on filter field signature so template bindings do not allocate a fresh object on every CD pass.
+     */
     public get McpFilterValues(): Record<string, unknown> {
         const f = this.Filters$.value;
-        return {
-            serverStatus:     f.serverStatus,
-            connectionStatus: f.connectionStatus,
-            toolStatus:       f.toolStatus,
-            logStatus:        f.logStatus,
-            toolsServer:      f.toolsServer,
-            toolsCategory:    f.toolsCategory,
-            favoritesOnly:    f.favoritesOnly,
-            recentOnly:       f.recentOnly,
-        };
+        const key = `${f.serverStatus}|${f.connectionStatus}|${f.toolStatus}|${f.logStatus}|${f.toolsServer ?? ''}|${f.toolsCategory ?? ''}|${f.favoritesOnly ? 1 : 0}|${f.recentOnly ? 1 : 0}`;
+        if (key !== this._mcpFilterValuesKey) {
+            this._mcpFilterValuesKey = key;
+            this._mcpFilterValuesCache = {
+                serverStatus:     f.serverStatus,
+                connectionStatus: f.connectionStatus,
+                toolStatus:       f.toolStatus,
+                logStatus:        f.logStatus,
+                toolsServer:      f.toolsServer,
+                toolsCategory:    f.toolsCategory,
+                favoritesOnly:    f.favoritesOnly,
+                recentOnly:       f.recentOnly,
+            };
+        }
+        return this._mcpFilterValuesCache;
     }
 
     /** @deprecated Use {@link McpFilterValues}. */
@@ -1976,8 +1988,22 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
       return this.McpFilterValues;
     }
 
-    /** Field config built dynamically based on the active tab. */
+    private _mcpFilterFieldsCache: import('@memberjunction/ng-ui-components').FilterFieldConfig[] = [];
+    private _mcpFilterFieldsKey = '';
+
+    /**
+     * Field config built dynamically based on the active tab.
+     * Memoized on active tab and available servers/categories so `<mj-filter-panel>` receives a stable reference across CD ticks.
+     */
     public get McpFilterFields(): import('@memberjunction/ng-ui-components').FilterFieldConfig[] {
+        const srvSig = this.ActiveTab === 'tools' ? this.ToolsAvailableServers.map(s => s.ID).join(',') : '';
+        const catSig = this.ActiveTab === 'tools' ? this.ToolsAvailableCategories.map(c => `${c.category}:${c.count}`).join(',') : '';
+        const key = `${this.ActiveTab}|${srvSig}|${catSig}`;
+        if (key === this._mcpFilterFieldsKey) {
+            return this._mcpFilterFieldsCache;
+        }
+        this._mcpFilterFieldsKey = key;
+
         const fields: import('@memberjunction/ng-ui-components').FilterFieldConfig[] = [];
 
         if (this.ActiveTab === 'tools') {
@@ -2079,6 +2105,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             });
         }
 
+        this._mcpFilterFieldsCache = fields;
         return fields;
     }
 
@@ -3238,40 +3265,55 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
       return this.TrackPagedTool(_index, tool);
     }
 
+    private _visiblePagedToolsCache: MCPToolSummary[] = [];
+    private _visiblePagedToolsKey = '';
+    private _testRecentToolIDsCache: string[] = [];
+    private _testRecentToolIDSetCache = new Set<string>();
+    private _testRecentToolIDsSource: MCPExecutionLogData[] | null = null;
+    private _testRecentToolIDsLen = -1;
+    private _testComboboxToolsCache: MCPToolData[] = [];
+    private _testComboboxToolsKey = '';
+
     /** Part 3.6 — Scale mode display. When a client-side filter (Favorites/Recently-used) is active,
      *  bypass server pagination and filter the fully-loaded local `this.tools` list so the filter
-     *  considers ALL tools, not just the current 50-row page. */
+     *  considers ALL tools, not just the current 50-row page.
+     *  Memoized on filter state, tool count, favorite count, and log count to avoid repeated array allocation per CD pass. */
     public get VisiblePagedTools(): MCPToolSummary[] {
         const f = this.Filters$.value;
         if (f.favoritesOnly || f.recentOnly) {
-            const search = (f.searchTerm || '').toLowerCase();
-            const recent = f.recentOnly ? this.RecentToolIDSet() : null;
-            return this.tools
-                .filter(t => {
-                    if (f.favoritesOnly && !this.IsFavorited(t.ID)) return false;
-                    if (recent && !recent.has(NormalizeUUID(t.ID))) return false;
-                    if (f.toolsServer && f.toolsServer !== 'all' && !UUIDsEqual(t.MCPServerID, f.toolsServer)) return false;
-                    if (f.toolsCategory && f.toolsCategory !== 'all') {
-                        const idx = t.ToolName.indexOf('_');
-                        const cat = idx > 0 ? t.ToolName.substring(0, idx) : t.ToolName;
-                        if (cat !== f.toolsCategory) return false;
-                    }
-                    if (search && !(
-                        t.ToolName.toLowerCase().includes(search) ||
-                        (t.ToolTitle?.toLowerCase().includes(search) ?? false) ||
-                        (t.ToolDescription?.toLowerCase().includes(search) ?? false)
-                    )) return false;
-                    return true;
-                })
-                .map(t => ({
-                    ID: t.ID,
-                    MCPServerID: t.MCPServerID,
-                    ToolName: t.ToolName,
-                    ToolTitle: t.ToolTitle ?? null,
-                    ToolDescription: t.ToolDescription ?? null,
-                    Status: t.Status,
-                    ServerName: t.ServerName ?? null
-                }));
+            const key = `${f.favoritesOnly ? 1 : 0}|${f.recentOnly ? 1 : 0}|${f.toolsServer ?? ''}|${f.toolsCategory ?? ''}|${f.searchTerm ?? ''}|${this.tools.length}|${this.FavoritedToolIDs.size}|${this.ExecutionLogs.length}`;
+            if (key !== this._visiblePagedToolsKey) {
+                this._visiblePagedToolsKey = key;
+                const search = (f.searchTerm || '').toLowerCase();
+                const recent = f.recentOnly ? this.RecentToolIDSet() : null;
+                this._visiblePagedToolsCache = this.tools
+                    .filter(t => {
+                        if (f.favoritesOnly && !this.IsFavorited(t.ID)) return false;
+                        if (recent && !recent.has(NormalizeUUID(t.ID))) return false;
+                        if (f.toolsServer && f.toolsServer !== 'all' && !UUIDsEqual(t.MCPServerID, f.toolsServer)) return false;
+                        if (f.toolsCategory && f.toolsCategory !== 'all') {
+                            const idx = t.ToolName.indexOf('_');
+                            const cat = idx > 0 ? t.ToolName.substring(0, idx) : t.ToolName;
+                            if (cat !== f.toolsCategory) return false;
+                        }
+                        if (search && !(
+                            t.ToolName.toLowerCase().includes(search) ||
+                            (t.ToolTitle?.toLowerCase().includes(search) ?? false) ||
+                            (t.ToolDescription?.toLowerCase().includes(search) ?? false)
+                        )) return false;
+                        return true;
+                    })
+                    .map(t => ({
+                        ID: t.ID,
+                        MCPServerID: t.MCPServerID,
+                        ToolName: t.ToolName,
+                        ToolTitle: t.ToolTitle ?? null,
+                        ToolDescription: t.ToolDescription ?? null,
+                        Status: t.Status,
+                        ServerName: t.ServerName ?? null
+                    }));
+            }
+            return this._visiblePagedToolsCache;
         }
         return this.PagedTools;
     }
@@ -3297,37 +3339,54 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
       return this.ScaleDenominator();
     }
 
-    /** Part 3.5 — recently used tool IDs derived from execution logs (dedup, max 5) */
+    /** Part 3.5 — recently used tool IDs derived from execution logs (dedup, max 5), memoized on `ExecutionLogs`. */
     public get TestRecentToolIDs(): string[] {
-        const seen = new Set<string>();
-        const out: string[] = [];
-        for (const log of this.ExecutionLogs) {
-            if (!log.ToolID) continue;
-            if (seen.has(log.ToolID)) continue;
-            seen.add(log.ToolID);
-            out.push(log.ToolID);
-            if (out.length >= 5) break;
+        if (
+            this._testRecentToolIDsSource !== this.ExecutionLogs ||
+            this._testRecentToolIDsLen !== this.ExecutionLogs.length
+        ) {
+            this._testRecentToolIDsSource = this.ExecutionLogs;
+            this._testRecentToolIDsLen = this.ExecutionLogs.length;
+            const seen = new Set<string>();
+            const out: string[] = [];
+            for (const log of this.ExecutionLogs) {
+                if (!log.ToolID) continue;
+                if (seen.has(log.ToolID)) continue;
+                seen.add(log.ToolID);
+                out.push(log.ToolID);
+                if (out.length >= 5) break;
+            }
+            this._testRecentToolIDsCache = out;
+            this._testRecentToolIDSetCache = seen;
         }
-        return out;
+        return this._testRecentToolIDsCache;
     }
 
-    /** Part 3.5 — Test dialog combobox: filtered tools with recent-first ordering */
+    /** Part 3.5 — Test dialog combobox: filtered tools with recent-first ordering, memoized on inputs. */
     public get TestComboboxTools(): MCPToolData[] {
         const term = this.TestToolSearch.trim().toLowerCase();
-        const base = this.TestFilteredTools.filter(t =>
-            !term ||
-            t.ToolName.toLowerCase().includes(term) ||
-            (t.ToolTitle && t.ToolTitle.toLowerCase().includes(term)) ||
-            (t.ToolDescription && t.ToolDescription.toLowerCase().includes(term))
-        );
-        const recentSet = new Set(this.TestRecentToolIDs);
-        const recent = base.filter(t => recentSet.has(t.ID));
-        const rest = base.filter(t => !recentSet.has(t.ID));
-        return [...recent, ...rest];
+        const base = this.TestFilteredTools;
+        const recentIds = this.TestRecentToolIDs;
+        const key = `${term}|${base.length}|${base[0]?.ID ?? ''}|${recentIds.join(',')}`;
+        if (key !== this._testComboboxToolsKey) {
+            this._testComboboxToolsKey = key;
+            const filtered = base.filter(t =>
+                !term ||
+                t.ToolName.toLowerCase().includes(term) ||
+                (t.ToolTitle && t.ToolTitle.toLowerCase().includes(term)) ||
+                (t.ToolDescription && t.ToolDescription.toLowerCase().includes(term))
+            );
+            const recentSet = this._testRecentToolIDSetCache;
+            const recent = filtered.filter(t => recentSet.has(t.ID));
+            const rest = filtered.filter(t => !recentSet.has(t.ID));
+            this._testComboboxToolsCache = [...recent, ...rest];
+        }
+        return this._testComboboxToolsCache;
     }
 
     public IsRecentTestTool(toolID: string): boolean {
-        return this.TestRecentToolIDs.includes(toolID);
+        void this.TestRecentToolIDs;
+        return this._testRecentToolIDSetCache.has(toolID);
     }
 
     /** @deprecated Use {@link IsRecentTestTool}. */

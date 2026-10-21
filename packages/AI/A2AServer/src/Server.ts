@@ -360,8 +360,8 @@ function setupRoutes() {
             return;
         }
 
-        task.status = 'cancelled';
-        task.updated = new Date();
+        // Cancel a task and propagate cancellation to any in-flight agent execution
+        tasks.CancelTask(taskId);
 
         res.json({ success: true });
     });
@@ -380,13 +380,35 @@ function resolveProviderForRequest(): IMetadataProvider {
     return Metadata.Provider; // global-provider-ok: A2A server lacks per-request provider plumbing today; centralized boundary so future migration is one-line
 }
 
+let cachedAgentCard: AgentCard | null = null;
+let cachedAgentCardEntityCount = -1;
+let cachedAgentCardAgentCount = -1;
+
+/** Clears the cached AgentCard so the next discovery request rebuilds it. */
+export function ClearAgentCardCache(): void {
+    cachedAgentCard = null;
+    cachedAgentCardEntityCount = -1;
+    cachedAgentCardAgentCount = -1;
+}
+
 async function generateAgentCard(): Promise<AgentCard> {
     const contextUser = UserCache.Instance.Users[0];
     const md = resolveProviderForRequest();
+    const aiEngine = AIEngine.Instance;
+    await aiEngine.Config(false, contextUser);
+
+    if (
+        cachedAgentCard !== null &&
+        cachedAgentCardEntityCount === md.Entities.length &&
+        cachedAgentCardAgentCount === aiEngine.Agents.length
+    ) {
+        return cachedAgentCard;
+    }
+
     const entityCapabilities = getEntityCapabilities(md.Entities, contextUser);
     const agentCapabilities = await getAgentCapabilities(contextUser);
 
-    return {
+    cachedAgentCard = {
         name: a2aServerSettings?.agentName || "MemberJunction",
         description: a2aServerSettings?.agentDescription || "MemberJunction A2A Agent",
         version: "1.0.0",
@@ -406,6 +428,10 @@ async function generateAgentCard(): Promise<AgentCard> {
             agents: agentCapabilities
         }
     };
+    cachedAgentCardEntityCount = md.Entities.length;
+    cachedAgentCardAgentCount = aiEngine.Agents.length;
+
+    return cachedAgentCard;
 }
 
 function getEntityCapabilities(allEntities: EntityInfo[], contextUser: UserInfo) {
@@ -631,62 +657,64 @@ function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?
 function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Response, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
     const result = handleTaskSend(requestBody, authenticatedUser, authContext);
     const task = tasks.get(result.taskId);
-    
+
     if (!task) {
         res.write(`data: ${JSON.stringify({ error: { code: 404, message: "Task not found" } })}\n\n`);
         res.end();
         return;
     }
-    
+
     // Send initial task state
-    res.write(`data: ${JSON.stringify({ 
+    res.write(`data: ${JSON.stringify({
         taskId: task.id,
-        status: task.status 
+        status: task.status
     })}\n\n`);
-    
-    // Set up a listener for task updates
-    const updateInterval = setInterval(() => {
-        const updatedTask = tasks.get(task.id);
-        
-        if (!updatedTask) {
-            clearInterval(updateInterval);
-            res.end();
-            return;
+
+    if (task.status === 'completed' || task.status === 'cancelled' || task.status === 'failed') {
+        if (task.artifacts.length > 0) {
+            res.write(`data: ${JSON.stringify({
+                taskId: task.id,
+                artifacts: task.artifacts
+            })}\n\n`);
         }
-        
-        // Send task status updates
-        res.write(`data: ${JSON.stringify({ 
+        res.end();
+        return;
+    }
+
+    // Subscribe to event-driven task updates (zero polling timers)
+    const unsubscribe = tasks.Subscribe(task.id, (updatedTask) => {
+        res.write(`data: ${JSON.stringify({
             taskId: updatedTask.id,
-            status: updatedTask.status 
+            status: updatedTask.status
         })}\n\n`);
-        
-        // If task is completed, send final message and end the stream
+
         if (updatedTask.status === 'completed' || updatedTask.status === 'cancelled' || updatedTask.status === 'failed') {
-            clearInterval(updateInterval);
-            
-            // Send final artifacts
+            unsubscribe();
+
             if (updatedTask.artifacts.length > 0) {
                 res.write(`data: ${JSON.stringify({
                     taskId: updatedTask.id,
                     artifacts: updatedTask.artifacts
                 })}\n\n`);
             }
-            
+
             res.end();
         }
-    }, 500);
-    
+    });
+
     // Handle client disconnect
     res.on('close', () => {
-        clearInterval(updateInterval);
+        unsubscribe();
     });
 }
 
 // Process a task using MemberJunction APIs
 async function processTask(task: Task, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
+    const abortController = tasks.RegisterAbortController(task.id);
     try {
         task.status = 'in_progress';
         task.updated = new Date();
+        tasks.Notify(task);
 
         // Get the last user message
         const lastMessage = task.messages.filter(m => m.role === 'user').pop();
@@ -780,7 +808,7 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
                 }
 
                 // Agent operation
-                operationResult = await agentOps.processOperation(operation, parameters);
+                operationResult = await agentOps.processOperation(operation, parameters, abortController.signal);
             } else {
                 // Authorize entity operation if authContext is provided
                 if (authContext && entityName) {
@@ -858,11 +886,16 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
             created: new Date()
         };
 
-        // Update the task
+        // Update the task (preserve 'cancelled' if cancelled while in flight)
         task.messages.push(responseMessage);
         task.artifacts.push(artifact);
-        task.status = 'completed';
+        if ((task.status as TaskStatus) !== 'cancelled' && !abortController.signal.aborted) {
+            task.status = 'completed';
+        } else {
+            task.status = 'cancelled';
+        }
         task.updated = new Date();
+        tasks.Notify(task);
 
     } catch (error) {
         console.error("Error processing task:", error);
@@ -903,8 +936,13 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
 
         task.messages.push(errorMessage);
         task.artifacts.push(errorArtifact);
-        task.status = 'failed';
+        if ((task.status as TaskStatus) !== 'cancelled' && !abortController.signal.aborted) {
+            task.status = 'failed';
+        } else {
+            task.status = 'cancelled';
+        }
         task.updated = new Date();
+        tasks.Notify(task);
     }
 }
 
