@@ -1001,6 +1001,8 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    */
   private buildPerTaskParams(params: AIPromptParams, task: ExecutionTask): AIPromptParams {
     const perTaskParams: AIPromptParams = Object.assign(Object.create(Object.getPrototypeOf(params)), params);
+    // A failover inside the task re-renders the prompt for its own tool-calling path through this copy.
+    this.ShareNativeRerender(params, perTaskParams);
 
     if (task.modelParameters) {
       perTaskParams.additionalParameters = { ...(params.additionalParameters ?? {}), ...task.modelParameters };
