@@ -1,4 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createPublicKey } from 'node:crypto';
+import jwt from 'jsonwebtoken';
+import { Metadata, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
+import { BuildWidgetGuestClaims } from '../realtimeWidget/widgetCore.js';
 
 // WidgetSessionService is the imperative shell for public widget sessions — importing it pulls in
 // config.ts (which eagerly validates DB env vars at module load) plus the full magic-link /
@@ -33,7 +39,7 @@ vi.mock('../realtimeWidget/visitorIdentity.js', () => ({
     get forgetVisitor() { return this.ForgetVisitor; },
 }));
 
-import { WidgetSessionService } from '../realtimeWidget/WidgetSessionService.js';
+import { REFRESH_GRACE_SECONDS, WidgetSessionService } from '../realtimeWidget/WidgetSessionService.js';
 import type { WidgetConfig } from '../config.js';
 
 /**
@@ -99,5 +105,174 @@ describe('WidgetSessionService — ResolvePerInstanceRateLimit', () => {
     await service.ResolvePerInstanceRateLimit('  pk_live_padded  ');
     await service.ResolvePerInstanceRateLimit('pk_live_padded');
     expect(service.RateLimitCacheSize).toBe(1);
+  });
+});
+
+describe('WidgetSessionService — RefreshGuestSession preserves sessionId (issue #4931)', () => {
+  const PUBLIC_URL = 'https://mj.example.com';
+  const WIDGET_ID = '11111111-1111-4111-8111-111111111111';
+  const OTHER_WIDGET_ID = '22222222-2222-4222-8222-222222222222';
+  const APP_ID = '33333333-3333-4333-8333-333333333333';
+  const AGENT_ID = '44444444-4444-4444-8444-444444444444';
+  const ROLE_ID = '55555555-5555-4555-8555-555555555555';
+  const WIDGET_KEY = 'pk_live_test_widget';
+  const ALLOWED_ORIGIN = 'https://customer.example.com';
+  let originalProvider: IMetadataProvider;
+
+  beforeEach(() => {
+    MagicLinkKeyManager.Instance.Initialize();
+    (UserCache.Instance.Users as unknown[]) = [
+      {
+        ID: 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E',
+        Name: 'System',
+        Email: 'not.set@nowhere.com',
+        Type: 'Owner',
+        IsActive: true,
+      } as unknown as UserInfo,
+    ];
+    originalProvider = Metadata.Provider;
+    Metadata.Provider = {
+      Roles: [{ ID: ROLE_ID, Name: 'Widget Guest' }],
+    } as unknown as IMetadataProvider;
+    vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue({
+      Success: true,
+      Results: [
+        {
+          ID: WIDGET_ID,
+          PublicKey: WIDGET_KEY,
+          Status: 'Active',
+          AllowedOrigins: JSON.stringify([ALLOWED_ORIGIN]),
+          Modality: 'Both',
+          GuestRoleID: ROLE_ID,
+          ApplicationID: APP_ID,
+          PinnedAgentID: AGENT_ID,
+          AuthStrategy: 'Anonymous',
+          SessionTTLMinutes: 15,
+          RememberReturningVisitors: false,
+          EnabledChannels: null,
+          VoiceMaxSessionMinutes: 10,
+        },
+      ],
+      RowCount: 1,
+      TotalRowCount: 1,
+      ExecutionTime: 1,
+      ErrorMessage: '',
+    });
+  });
+
+  afterEach(() => {
+    (UserCache.Instance.Users as unknown[]) = [];
+    Metadata.Provider = originalProvider;
+    vi.restoreAllMocks();
+  });
+
+  function decodeToken(token: string): jwt.JwtPayload {
+    const publicKey = createPublicKey({ key: MagicLinkKeyManager.Instance.GetJWKS().keys[0] as JsonWebKey, format: 'jwk' });
+    return jwt.verify(token, publicKey, { algorithms: ['RS256'], audience: 'mj-magic-link' }) as jwt.JwtPayload;
+  }
+
+  it('exports REFRESH_GRACE_SECONDS = 300', () => {
+    expect(REFRESH_GRACE_SECONDS).toBe(300);
+  });
+
+  it('preserves sessionId (mj_sid and mj_scope.resourceId) when refreshing with a valid bearer token', async () => {
+    const service = new WidgetSessionService(PUBLIC_URL, makeConfig());
+    const minted = await service.MintGuestSession({ widgetKey: WIDGET_KEY, origin: ALLOWED_ORIGIN });
+    expect(minted.success).toBe(true);
+    expect(minted.sessionId).toBeTruthy();
+
+    const refreshed = await service.RefreshGuestSession({
+      widgetKey: WIDGET_KEY,
+      origin: ALLOWED_ORIGIN,
+      bearerToken: minted.token,
+    });
+
+    expect(refreshed.success).toBe(true);
+    expect(refreshed.sessionId).toBe(minted.sessionId);
+    const decoded = decodeToken(refreshed.token!);
+    expect(decoded.mj_sid).toBe(minted.sessionId);
+    expect((decoded.mj_scopes as Array<{ resourceId?: string }> | undefined)?.[0]?.resourceId).toBe(minted.sessionId);
+  });
+
+  it('accepts a token expired within REFRESH_GRACE_SECONDS and preserves its sessionId', async () => {
+    const service = new WidgetSessionService(PUBLIC_URL, makeConfig());
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    // Token expired 120s ago (within the 300s grace window).
+    const recentlyExpiredClaims = BuildWidgetGuestClaims({
+      issuer: PUBLIC_URL,
+      audience: 'mj-magic-link',
+      widgetId: WIDGET_ID,
+      sessionId: 'visitor-sid-keep-me',
+      anonymousEmail: 'anonymous@magic-link.local',
+      applicationId: APP_ID,
+      guestRoleName: 'Widget Guest',
+      nowSeconds: nowSeconds - 1020,
+      ttlSeconds: 900,
+    });
+    const expiredToken = MagicLinkKeyManager.Instance.Sign(recentlyExpiredClaims);
+
+    const refreshed = await service.RefreshGuestSession({
+      widgetKey: WIDGET_KEY,
+      origin: ALLOWED_ORIGIN,
+      bearerToken: expiredToken,
+    });
+
+    expect(refreshed.success).toBe(true);
+    expect(refreshed.sessionId).toBe('visitor-sid-keep-me');
+    const decoded = decodeToken(refreshed.token!);
+    expect(decoded.mj_sid).toBe('visitor-sid-keep-me');
+  });
+
+  it('refuses refresh with no bearer token, a bad signature, a wrong mj_widget_id, or a token expired past REFRESH_GRACE_SECONDS', async () => {
+    const service = new WidgetSessionService(PUBLIC_URL, makeConfig());
+    const nowSeconds = Math.floor(Date.now() / 1000);
+
+    // 1. No bearer token
+    await expect(
+      service.RefreshGuestSession({ widgetKey: WIDGET_KEY, origin: ALLOWED_ORIGIN }),
+    ).resolves.toMatchObject({ success: false, errorCode: 'not_found' });
+
+    // 2. Bad signature
+    const minted = await service.MintGuestSession({ widgetKey: WIDGET_KEY, origin: ALLOWED_ORIGIN });
+    const tampered = `${minted.token!.slice(0, -4)}AAAA`;
+    await expect(
+      service.RefreshGuestSession({ widgetKey: WIDGET_KEY, origin: ALLOWED_ORIGIN, bearerToken: tampered }),
+    ).resolves.toMatchObject({ success: false, errorCode: 'not_found' });
+
+    // 3. Wrong mj_widget_id
+    const wrongWidgetToken = MagicLinkKeyManager.Instance.Sign(
+      BuildWidgetGuestClaims({
+        issuer: PUBLIC_URL,
+        audience: 'mj-magic-link',
+        widgetId: OTHER_WIDGET_ID,
+        sessionId: 'visitor-sid-wrong-widget',
+        anonymousEmail: 'anonymous@magic-link.local',
+        applicationId: APP_ID,
+        guestRoleName: 'Widget Guest',
+        nowSeconds,
+        ttlSeconds: 900,
+      }),
+    );
+    await expect(
+      service.RefreshGuestSession({ widgetKey: WIDGET_KEY, origin: ALLOWED_ORIGIN, bearerToken: wrongWidgetToken }),
+    ).resolves.toMatchObject({ success: false, errorCode: 'not_found' });
+
+    // 4. Expired past REFRESH_GRACE_SECONDS (expired 310s ago)
+    const staleToken = MagicLinkKeyManager.Instance.Sign(
+      BuildWidgetGuestClaims({
+        issuer: PUBLIC_URL,
+        audience: 'mj-magic-link',
+        widgetId: WIDGET_ID,
+        sessionId: 'visitor-sid-too-old',
+        anonymousEmail: 'anonymous@magic-link.local',
+        applicationId: APP_ID,
+        guestRoleName: 'Widget Guest',
+        nowSeconds: nowSeconds - 900 - REFRESH_GRACE_SECONDS - 10,
+        ttlSeconds: 900,
+      }),
+    );
+    await expect(
+      service.RefreshGuestSession({ widgetKey: WIDGET_KEY, origin: ALLOWED_ORIGIN, bearerToken: staleToken }),
+    ).resolves.toMatchObject({ success: false, errorCode: 'not_found' });
   });
 });

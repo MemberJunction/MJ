@@ -45,7 +45,7 @@ export type WidgetChannelClass = new () => BaseRealtimeChannelClient;
 /** The slice of the guest-session client the controller uses (the real one is `WidgetKeyClient`). */
 export interface WidgetGuestSessionSource {
   Mint(): Promise<WidgetGuestSession>;
-  Refresh(): Promise<WidgetGuestSession>;
+  Refresh(token: string): Promise<WidgetGuestSession>;
 }
 
 export interface WidgetControllerDeps {
@@ -460,7 +460,7 @@ export class WidgetController {
       throw new LaunchFailure('A widget-key needs the api-url of the server that issued it.', 'no-credential');
     }
     this.guestSource = this.deps.createGuestSessions(apiUrl, widgetKey);
-    const guest = await this.mintGuest(this.guestSource, 'Mint');
+    const guest = await this.mintGuest(this.guestSource);
     if (guest.modality === 'Text') {
       throw new LaunchFailure('This widget is not enabled for voice.', 'voice-not-enabled');
     }
@@ -474,9 +474,9 @@ export class WidgetController {
     return { agentId: guest.pinnedAgentId, applicationId: guest.applicationId, deadline, guestChannels: guest.enabledChannels };
   }
 
-  private async mintGuest(source: WidgetGuestSessionSource, op: 'Mint' | 'Refresh'): Promise<WidgetGuestSession> {
+  private async mintGuest(source: WidgetGuestSessionSource, refreshToken?: string): Promise<WidgetGuestSession> {
     try {
-      return await source[op]();
+      return refreshToken !== undefined ? await source.Refresh(refreshToken) : await source.Mint();
     } catch (error) {
       if (error instanceof WidgetKeyError) {
         throw new LaunchFailure(error.message, 'auth-failed');
@@ -487,10 +487,10 @@ export class WidgetController {
 
   /** The provider's way to renew a guest token: ask the server's refresh path and hand back the new one. */
   private async renewGuestToken(): Promise<string> {
-    if (this.guestSource === null) {
+    if (this.guestSource === null || this.guest === null) {
       throw new Error(SESSION_EXPIRED_MESSAGE);
     }
-    const next = await this.mintGuest(this.guestSource, 'Refresh');
+    const next = await this.mintGuest(this.guestSource, this.guest.token);
     this.guest = next;
     return next.token;
   }

@@ -44,10 +44,10 @@ export class WidgetSessionClient {
         return this.call('/widget/session', visitorKey);
     }
 
-    /** Refreshes the guest session (server re-mints by the same key). Carries the visitor anchor so the
-     *  refreshed session keeps the same returning-visitor identity. */
-    public async Refresh(visitorKey?: string): Promise<WidgetSession> {
-        return this.call('/widget/session/refresh', visitorKey);
+    /** Refreshes the guest session (server re-mints by the same key). Carries the current token and visitor
+     *  anchor so the refreshed session keeps the same `sessionId` (`mj_sid`) and returning-visitor identity. */
+    public async Refresh(token: string, visitorKey?: string): Promise<WidgetSession> {
+        return this.call('/widget/session/refresh', visitorKey, token);
     }
 
     /**
@@ -127,10 +127,14 @@ export class WidgetSessionClient {
         return Math.max(0, session.expiresAtMs - nowMs - REFRESH_LEAD_MS);
     }
 
-    private async call(path: string, visitorKey?: string): Promise<WidgetSession> {
+    private async call(path: string, visitorKey?: string, bearerToken?: string): Promise<WidgetSession> {
+        const headers: Record<string, string> = { 'content-type': 'application/json' };
+        if (bearerToken) {
+            headers['authorization'] = `Bearer ${bearerToken}`;
+        }
         const res = await this.fetchImpl(`${this.trimmedApiUrl()}${path}`, {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers,
             body: JSON.stringify(visitorKey ? { widgetKey: this.widgetKey, visitorKey } : { widgetKey: this.widgetKey }),
         });
         const body = (await res.json()) as WidgetSessionResponse;

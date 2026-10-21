@@ -193,10 +193,20 @@ async function handleMint(service: WidgetSessionService, req: Request, res: Resp
     origin,
     hostAssertion: typeof body.hostAssertion === 'string' ? body.hostAssertion : undefined,
     visitorKey: typeof body.visitorKey === 'string' ? body.visitorKey : undefined,
+    bearerToken: refresh ? extractBearerToken(req.get('authorization')) : undefined,
     audit: { ipAddress: req.ip, userAgent: req.get('user-agent') ?? undefined, origin },
   };
   const result = refresh ? await service.RefreshGuestSession(input) : await service.MintGuestSession(input);
   res.status(statusForResult(result)).json(result);
+}
+
+/** Extracts the raw JWT from an `Authorization: Bearer <token>` header, or `undefined` when absent/malformed. */
+function extractBearerToken(authorizationHeader: string | undefined): string | undefined {
+  if (!authorizationHeader) {
+    return undefined;
+  }
+  const match = /^Bearer\s+(\S+)$/i.exec(authorizationHeader.trim());
+  return match ? match[1] : undefined;
 }
 
 /**

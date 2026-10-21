@@ -51,6 +51,39 @@ describe('mountWidget', () => {
         const el = await MountWidget({ widgetKey: 'pk', apiUrl: 'https://api.test' }, deps(new MockWidgetTransport(), []));
         expect(el.parentElement).toBe(document.body);
     });
+
+    it('passes the current session token as Bearer credential when the scheduled refresh fires', async () => {
+        const calls: Array<{ url: string; init?: RequestInit }> = [];
+        const fetchImpl: FetchLike = async (url, init) => {
+            calls.push({ url, init });
+            return {
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    ...sessionBody,
+                    token: calls.length === 1 ? 'initial-guest-jwt' : 'refreshed-guest-jwt',
+                }),
+            };
+        };
+        const scheduledCallbacks: Array<() => void> = [];
+        const transport = new MockWidgetTransport();
+        await MountWidget(
+            { widgetKey: 'pk', apiUrl: 'https://api.test' },
+            {
+                sessionClientFactory: (apiUrl: string, widgetKey: string) => new WidgetSessionClient(apiUrl, widgetKey, fetchImpl),
+                transportFactory: () => transport,
+                scheduler: (cb: () => void) => {
+                    scheduledCallbacks.push(cb);
+                },
+            },
+        );
+        expect(scheduledCallbacks).toHaveLength(1);
+        scheduledCallbacks[0]();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        expect(calls).toHaveLength(2);
+        expect(calls[1].url).toBe('https://api.test/widget/session/refresh');
+        expect((calls[1].init?.headers as Record<string, string>)?.authorization).toBe('Bearer initial-guest-jwt');
+    });
 });
 
 describe('mountWidget — returning-visitor cookie (RV1, gated)', () => {

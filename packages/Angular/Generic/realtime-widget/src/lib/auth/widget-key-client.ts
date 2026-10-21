@@ -65,17 +65,21 @@ export class WidgetKeyClient {
     return this.call('/widget/session');
   }
 
-  /** Re-mints by the same key (the server's refresh path). Throws {@link WidgetKeyError}. */
-  public Refresh(): Promise<WidgetGuestSession> {
-    return this.call('/widget/session/refresh');
+  /** Re-mints by the same key (the server's refresh path), presenting the current token so `sessionId` is preserved. Throws {@link WidgetKeyError}. */
+  public Refresh(token: string): Promise<WidgetGuestSession> {
+    return this.call('/widget/session/refresh', token);
   }
 
-  private async call(path: string): Promise<WidgetGuestSession> {
+  private async call(path: string, bearerToken?: string): Promise<WidgetGuestSession> {
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (bearerToken) {
+      headers['authorization'] = `Bearer ${bearerToken}`;
+    }
     let response: Awaited<ReturnType<FetchLike>>;
     try {
       response = await this.fetchImpl(`${this.baseUrl}${path}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers,
         body: JSON.stringify({ widgetKey: this.widgetKey })
       });
     } catch (error) {

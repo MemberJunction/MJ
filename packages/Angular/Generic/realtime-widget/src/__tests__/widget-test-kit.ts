@@ -184,6 +184,7 @@ export function guestSession(overrides: Partial<WidgetGuestSession> = {}): Widge
 export class FakeGuestSessions implements WidgetGuestSessionSource {
   public Mints = 0;
   public Refreshes = 0;
+  public RefreshTokens: string[] = [];
   public Next: WidgetGuestSession | Error = guestSession();
   public async Mint(): Promise<WidgetGuestSession> {
     this.Mints++;
@@ -192,8 +193,9 @@ export class FakeGuestSessions implements WidgetGuestSessionSource {
     }
     return this.Next;
   }
-  public async Refresh(): Promise<WidgetGuestSession> {
+  public async Refresh(token: string): Promise<WidgetGuestSession> {
     this.Refreshes++;
+    this.RefreshTokens.push(token);
     if (this.Next instanceof Error) {
       throw this.Next;
     }

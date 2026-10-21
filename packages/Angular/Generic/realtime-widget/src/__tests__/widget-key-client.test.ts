@@ -3,13 +3,14 @@ import { WidgetKeyClient, WidgetKeyError, DescribeMintFailure, type FetchLike } 
 
 interface Call {
   url: string;
+  headers: Record<string, string>;
   body: unknown;
 }
 
 function client(answer: { ok?: boolean; status?: number; json?: unknown | (() => Promise<unknown>); throws?: Error }) {
   const calls: Call[] = [];
   const fetchImpl: FetchLike = async (url, init) => {
-    calls.push({ url, body: JSON.parse(init?.body ?? 'null') });
+    calls.push({ url, headers: init?.headers ?? {}, body: JSON.parse(init?.body ?? 'null') });
     if (answer.throws) {
       throw answer.throws;
     }
@@ -35,16 +36,24 @@ const GOOD = {
 };
 
 describe('WidgetKeyClient', () => {
-  it('mints through the existing /widget/session endpoint, sending only the key', async () => {
+  it('mints through the existing /widget/session endpoint, sending only the key and no Authorization header', async () => {
     const { api, calls } = client({ json: GOOD });
     await api.Mint();
-    expect(calls).toEqual([{ url: 'https://api.example.com/widget/session', body: { widgetKey: 'pk_live_abc' } }]);
+    expect(calls).toEqual([
+      {
+        url: 'https://api.example.com/widget/session',
+        headers: { 'content-type': 'application/json' },
+        body: { widgetKey: 'pk_live_abc' }
+      }
+    ]);
+    expect(calls[0].headers['authorization']).toBeUndefined();
   });
 
-  it('refreshes through /widget/session/refresh', async () => {
+  it('refreshes through /widget/session/refresh with Authorization: Bearer <token>', async () => {
     const { api, calls } = client({ json: GOOD });
-    await api.Refresh();
+    await api.Refresh('current.jwt.token');
     expect(calls[0].url).toBe('https://api.example.com/widget/session/refresh');
+    expect(calls[0].headers['authorization']).toBe('Bearer current.jwt.token');
   });
 
   it('returns what the SERVER decided: the pinned agent, the application, the voice ceiling, the enabled channels', async () => {
