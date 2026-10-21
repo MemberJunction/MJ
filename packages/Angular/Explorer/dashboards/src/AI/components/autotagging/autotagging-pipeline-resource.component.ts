@@ -332,7 +332,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         ]);
         this.loadClassifyPreferences();
         this.applyIncomingConfiguration();
-        await Promise.all([this.LoadPipelineData(), this.loadEntityRecordDocCache(), this.loadInboxPendingCount(), this.loadHealthPendingCount()]);
+        await Promise.all([this.LoadPipelineData(), this.loadInboxPendingCount(), this.loadHealthPendingCount()]);
+        await this.loadEntityRecordDocCache();
         this.tabDataLoaded.add('pipeline');
         this.buildNavItems();
 
@@ -659,7 +660,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             EntityName: 'MJ: Tag Suggestions',
             ExtraFilter: `Status='Pending' AND Reason NOT IN ('MergeCandidate','LowUsage','WideNode')`,
             Fields: ['ID'],
-            ResultType: 'simple',
+            ResultType: 'count_only',
         });
         this.InboxPendingCount = result.Success ? result.TotalRowCount : 0;
     }
@@ -690,7 +691,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             EntityName: 'MJ: Tag Suggestions',
             ExtraFilter: `Status='Pending' AND Reason IN ('MergeCandidate','LowUsage','WideNode')`,
             Fields: ['ID'],
-            ResultType: 'simple',
+            ResultType: 'count_only',
         });
         this.HealthPendingCount = result.Success ? result.TotalRowCount : 0;
     }
@@ -794,8 +795,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             const [sourcesResult, itemsResult, runsResult, tagsResult, sourceTypesResult, contentTypesResult] = await rv.RunViews([
                 { EntityName: 'MJ: Content Sources', OrderBy: 'Name', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Items', OrderBy: '__mj_UpdatedAt DESC', MaxRows: this.contentItemsPageSize, StartRow: 0, ResultType: 'simple', Fields: ['ID', 'Name', 'Description', 'ContentSourceID', 'ContentSourceTypeID', 'ContentSource', 'ContentSourceType', 'ContentType', 'ContentFileType', 'URL', 'Text', 'Checksum', 'EntityRecordDocumentID', '__mj_CreatedAt', '__mj_UpdatedAt'] },
-                { EntityName: 'MJ: Content Process Runs', OrderBy: 'StartTime DESC', MaxRows: 100, ResultType: 'simple' },
-                { EntityName: 'MJ: Content Item Tags', ResultType: 'simple', Fields: ['ID', 'ItemID', 'Item', 'Tag', 'TagID', 'Weight', '__mj_CreatedAt'] },
+                { EntityName: 'MJ: Content Process Runs', OrderBy: 'StartTime DESC', MaxRows: 100, ResultType: 'simple', Fields: ['ID', 'SourceID', 'Source', 'Status', 'StartTime', 'EndTime', 'ProcessedItems', 'ErrorCount'] },
+                { EntityName: 'MJ: Content Item Tags', MaxRows: 2000, ResultType: 'simple', Fields: ['ID', 'ItemID', 'Item', 'Tag', 'TagID', 'Weight', '__mj_CreatedAt'] },
                 { EntityName: 'MJ: Content Source Types', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Types', ResultType: 'simple' }
             ]);
@@ -1853,12 +1854,23 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     /** Cache: EntityRecordDocument ID → RecordID */
     private entityRecordDocCache = new Map<string, string>();
 
-    /** Load ERD RecordIDs for entity-sourced content items */
+    /** Load ERD RecordIDs for entity-sourced content items referenced by loaded items */
     private async loadEntityRecordDocCache(): Promise<void> {
-        if (this.entityRecordDocCache.size > 0) return;
+        const erdIds = Array.from(
+            new Set(
+                this.contentItemsRaw
+                    .map(item => item['EntityRecordDocumentID'] as string | null)
+                    .filter((id): id is string => !!id)
+                    .map(id => NormalizeUUID(id))
+                    .filter(id => !this.entityRecordDocCache.has(id))
+            )
+        );
+        if (erdIds.length === 0) return;
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const filter = erdIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
         const result = await rv.RunView<{ ID: string; RecordID: string }>({
             EntityName: 'MJ: Entity Record Documents',
+            ExtraFilter: `ID IN (${filter})`,
             ResultType: 'simple',
             Fields: ['ID', 'RecordID'],
         });
