@@ -74,6 +74,18 @@ describe('UserInfo', () => {
         expect(user.FirstName).toBe('Jane');
         expect(user.LastName).toBe('Smith');
     });
+
+    it('should default AnonymousVisitorID to undefined and keep accessor non-enumerable', () => {
+        const user = new UserInfo(null, { ID: 'u-anon' });
+        expect(user.AnonymousVisitorID).toBeUndefined();
+
+        user.AnonymousVisitorID = 'sid-visitor-1';
+        expect(user.AnonymousVisitorID).toBe('sid-visitor-1');
+        expect(Object.keys(user)).not.toContain('AnonymousVisitorID');
+
+        user.AnonymousVisitorID = undefined;
+        expect(user.AnonymousVisitorID).toBeUndefined();
+    });
 });
 
 describe('UserRoleInfo', () => {
