@@ -445,6 +445,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             const smartFilterPromptField = this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterprompt');
             if (!this.IsSaved ||
                 options?.IgnoreDirtyState || 
+                this.smartFilterPending ||
                 filterStateField?.Dirty ||
                 smartFilterEnabledField?.Dirty ||
                 smartFilterPromptField?.Dirty) {
@@ -545,9 +546,9 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
                 // if the SmartFilterPrompt has changed, then we need to update the SmartFilterWhereClause using AI
                 // otherwise, we don't need to do anything other than just use the SmartFilterWhereClause as it is.
                 // A new record (IsSaved === false — see the note in Save() on why the ID can't be used for this) or a
-                // record that has never had its SmartFilterWhereClause generated also needs the AI pass.
+                // record whose SmartFilterWhereClause is missing or blank (see smartFilterWhereClauseBlank) also needs the AI pass.
                 const smartFilterPromptDirty = this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterprompt')?.Dirty === true;
-                if (!this.IsSaved || ignoreDirtyState || smartFilterPromptDirty || this.SmartFilterWhereClause == null) {
+                if (!this.IsSaved || ignoreDirtyState || smartFilterPromptDirty || this.smartFilterWhereClauseBlank) {
                     // the prompt has changed (or is newly populated, either way it is dirty) so use the AI to figure this out
                     const result = await this.GenerateSmartFilterWhereClause(this.SmartFilterPrompt, this.ViewEntityInfo);
                     this.SmartFilterWhereClause = result.whereClause;
@@ -589,6 +590,25 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      */
     protected get SmartFilterImplemented(): boolean {
         return false; // stub function returns false. Sub-Class will do this.
+    }
+
+    /**
+     * True when no Smart Filter WHERE clause has been generated. Null and blank are the same state: the
+     * server's generator can return '' (or a model's whitespace), and `WhereClause = SmartFilterWhereClause`
+     * then makes the view return EVERY row.
+     */
+    private get smartFilterWhereClauseBlank(): boolean {
+        return (this.SmartFilterWhereClause ?? '').trim().length === 0;
+    }
+
+    /**
+     * True when the view has a Smart Filter to apply (enabled, with a prompt) but no clause. A re-save of the same
+     * prompt leaves no field dirty, so without this Save() would never retry, and the view would return every row
+     * until someone edited the prompt. With it, the view's next save regenerates the clause.
+     */
+    private get smartFilterPending(): boolean {
+        const hasPrompt = (this.SmartFilterPrompt ?? '').trim().length > 0;
+        return !!this.SmartFilterEnabled && hasPrompt && this.smartFilterWhereClauseBlank;
     }
 
     public override Set(FieldName: string, Value: any): void {
