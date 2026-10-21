@@ -1579,6 +1579,17 @@ const setupComplete$ = new ReplaySubject(1);
     LogStatus(`[ServerRole] Running in '${serverRole}' mode — background worker services are disabled on this replica.`);
   }
 
+  // Close out run artifacts a dead process left open, BEFORE anything below can start a new run.
+  //
+  // A killed process (OOM killer, SIGKILL, host reboot) never writes its run's terminal result, so
+  // the run reads as in-flight forever: the wizard spins, the active-operations panel shows a step
+  // that will never advance, and no failure is reported anywhere. Sound only before the first new
+  // run: artifacts are process-local, so anything still in flight as THIS process starts belongs
+  // to a process that no longer exists. That is why it runs here, ahead of the scheduler, the
+  // integration sync worker (its Start() polls immediately), the HTTP listener (a request can
+  // start a discovery) and pending RSU work, and why it is awaited. It needs none of them.
+  await SweepInterruptedRuns(undefined, msg => console.warn(msg));
+
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;
   if (runBackgroundWorkers && configInfo.scheduledJobs?.enabled) {
@@ -1632,16 +1643,6 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.SetScheduledJobCount(scheduledJobsService.GetStatus().activeJobs);
   }
   startupLog.PrintSummary();
-
-  // Close out run artifacts a dead process left open, BEFORE anything below starts a new run.
-  //
-  // A killed process (OOM killer, SIGKILL, host reboot) never writes its run's terminal result, so
-  // the run reads as in-flight forever: the wizard spins, the active-operations panel shows a step
-  // that will never advance, and no failure is reported anywhere. Sound only here, and only before
-  // the first new run: artifacts are process-local, so anything still in flight as THIS process
-  // starts belongs to a process that no longer exists. Awaited for exactly that reason —
-  // processRSUPendingWork() below starts syncs, and those are runs this sweep must not see.
-  await SweepInterruptedRuns(undefined, msg => console.warn(msg));
 
   const resumeUser = UserCache.Instance.GetSystemUser();
 
