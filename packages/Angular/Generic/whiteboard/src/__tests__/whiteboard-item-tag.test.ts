@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { NormalizeWhiteboardTag, WhiteboardState, WhiteboardTagClass, WHITEBOARD_TAG_MAX_CHARS } from '../lib/whiteboard-state';
 import { ApplyWhiteboardAgentTool, WHITEBOARD_TOOL_DEFINITIONS, WHITEBOARD_TOOL_NAMES } from '../lib/whiteboard-tools';
 
@@ -80,7 +80,9 @@ describe('WhiteboardState — Tag on items', () => {
     expect(NormalizeWhiteboardTag(' x ')).toBe('x');
   });
 
-  it('the class helper is memoized per tag (the board calls it per item per change-detection pass)', () => {
+  // The helper is memoized per tag because the board calls it per item on every change-detection
+  // pass. The memo is module-private, so this case pins only the observable contract.
+  it('returns the same class for the same tag on every call', () => {
     const first = WhiteboardTagClass('memo-check');
     const second = WhiteboardTagClass('memo-check');
     expect(second).toBe(first);
@@ -160,10 +162,12 @@ describe('agent tools — the optional tag argument', () => {
       expect(JSON.parse(ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.SetTag, JSON.stringify({ itemId: 'nope-1', tag: 'x' }))).success).toBe(false);
     });
 
-    it('is one undo step', () => {
+    it('runs as one RunBatch, so it is one undo step', () => {
       const state = new WhiteboardState();
       const note = state.AddItem({ Kind: 'sticky', X: 0, Y: 0, Text: 'x' }, 'user')!;
+      const batch = vi.spyOn(state, 'RunBatch');
       ApplyWhiteboardAgentTool(state, WHITEBOARD_TOOL_NAMES.SetTag, JSON.stringify({ itemId: note.ID, tag: 'slot' }));
+      expect(batch).toHaveBeenCalledTimes(1);
       expect(state.GetItem(note.ID)?.Tag).toBe('slot');
       state.Undo();
       expect(state.GetItem(note.ID)?.Tag).toBeUndefined();

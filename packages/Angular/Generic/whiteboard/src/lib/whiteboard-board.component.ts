@@ -12,9 +12,8 @@ import {
   WHITEBOARD_DEFAULTS, WhiteboardBounds, WhiteboardConnectorItem, WhiteboardFontFamily,
   WhiteboardHighlightItem, WhiteboardHtmlItem, WhiteboardImageItem, WhiteboardInkItem,
   WhiteboardItem, WhiteboardItemPatch, WhiteboardMarkdownItem, WhiteboardPageInfo,
-  WhiteboardPoint, WhiteboardShapeItem, WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem
+  WhiteboardPoint, WhiteboardShapeItem, WhiteboardState, WhiteboardStickyItem, WhiteboardTagClass, WhiteboardTextItem
 } from './whiteboard-state';
-import { WhiteboardTagClass } from './whiteboard-state';
 import { WhiteboardTextStyleEvent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import {
   EvaluateWidgetInteractionMessage, EvaluateWidgetSubmitMessage,
