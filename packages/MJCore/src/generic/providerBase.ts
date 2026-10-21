@@ -1510,7 +1510,37 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private async executeRunViewsPipeline<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         // Pre-processing for batch
         const preResult = await this.PreRunViews(params, contextUser);
+        const refused = preResult.refusedResults;
+        if (!refused) {
+            return this.runAdmittedViews<T>(params, preResult, contextUser);
+        }
+        // Every later stage works on the admitted views only — the same subset, in the same
+        // order, that PreRunViews built its cache maps and smart-cache-check params from.
+        const admitted = params.filter((_, i) => !refused.has(i));
+        const admittedResults = await this.runAdmittedViews<T>(admitted, preResult, contextUser);
+        return ProviderBase.interleaveRefusedResults(admittedResults, refused, params.length);
+    }
 
+    /**
+     * Puts each refused view's result back at its own index of the caller's batch, with the
+     * admitted views' results filling the remaining indexes in order.
+     */
+    private static interleaveRefusedResults<T>(admittedResults: RunViewResult<T>[], refused: Map<number, RunViewResult>, batchSize: number): RunViewResult<T>[] {
+        const merged: RunViewResult<T>[] = [];
+        let next = 0;
+        for (let i = 0; i < batchSize; i++) {
+            const refusal = refused.get(i);
+            merged.push(refusal ? refusal as RunViewResult<T> : admittedResults[next++]);
+        }
+        return merged;
+    }
+
+    /**
+     * The cache, database and post-processing stages of a RunViews batch, for the views the
+     * field-security predicate gate admitted. `params` and every index map in `preResult`
+     * describe the same admitted views.
+     */
+    private async runAdmittedViews<T>(params: RunViewParams[], preResult: typeof this._preRunViewsResultType, contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         // Check for smart cache check mode
         if (preResult.useSmartCacheCheck && preResult.smartCacheCheckParams) {
             return this.executeSmartCacheCheck<T>(params, preResult, contextUser);
@@ -2856,6 +2886,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
          * already-parsed results for 'current' items without a second IndexedDB read.
          */
         preResolvedCache?: Map<string, CachedRunViewResult | null>;
+        /**
+         * Views the field-security predicate gate refused, keyed by their index in the caller's
+         * batch, each with its `Success: false` result. Present only when at least one view was
+         * refused. Every other field of this result — the index maps, `cachedResults`,
+         * `uncachedParams`, `smartCacheCheckParams` — then describes the ADMITTED views only,
+         * indexed by their position among them.
+         */
+        refusedResults?: Map<number, RunViewResult>;
     };
 
     /**
@@ -3584,9 +3622,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Pre-processing hook for RunViews (batch).
      * Handles telemetry, validation, and cache lookup for multiple views.
+     * A view the field-security predicate gate refuses is left out of every later stage and
+     * reported in `refusedResults`; the cache status describes the admitted views only.
      * @param params - Array of view parameters
      * @param contextUser - Optional user context
-     * @returns Pre-processing result with cache status for each view
+     * @returns Pre-processing result with cache status for each admitted view
      */
     protected async PreRunViews(params: RunViewParams[], contextUser?: UserInfo): Promise<typeof this._preRunViewsResultType> {
         // Resolve any PlatformSQL values to plain strings for the active platform
@@ -3594,14 +3634,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             this.ResolvePlatformSQLInParams(p);
         }
 
-        // Run registered PreRunView hooks on each param in the batch
-        for (let i = 0; i < params.length; i++) {
-            params[i] = await this.RunPreRunViewHooks(params[i], contextUser);
-            // Field-level security predicate gate, same contract as the single-view path.
-            // One bad view rejects the whole batch — a batch is one caller request, and
-            // silently returning partial results would hide the denial.
-            this.AssertPredicatesRespectFieldSecurity(params[i], contextUser);
-        }
+        // Run registered PreRunView hooks on each param in the batch, then the field-security
+        // predicate gate (after the hooks, so injected filters are scanned too).
+        const refusedResults = await this.runBatchHooksAndPredicateGate(params, contextUser);
 
         // Start telemetry tracking for batch operation
         const fromEngine = params.some(p => p._fromEngine);
@@ -3643,6 +3678,53 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             contextUser?.ID
         );
 
+        // A refused view never reaches a cache lookup, the smart cache check or the database.
+        const admitted = refusedResults ? params.filter((_, i) => !refusedResults.has(i)) : params;
+        const preResult = await this.lookUpAdmittedViews(admitted, telemetryEventId, contextUser);
+        return refusedResults ? { ...preResult, refusedResults } : preResult;
+    }
+
+    /**
+     * Runs each view's PreRunView hooks, replacing `params[i]` with the hooked params, then the
+     * field-security predicate gate — the same contract as the single-view path, except that a
+     * refusal fails only its own view: it becomes that view's `Success: false` result, carrying
+     * the refusal's ambiguous message, so the views batched with it still run. A batch is often
+     * several independent reads (a dashboard's panels), and one unreadable column in one of them
+     * must not blank the rest; the refusal is still reported, at the refused view's index. Any
+     * other error from the gate is thrown and fails the batch.
+     * @returns The refused views' results keyed by batch index, or `undefined` when none was refused.
+     */
+    private async runBatchHooksAndPredicateGate(params: RunViewParams[], contextUser?: UserInfo): Promise<Map<number, RunViewResult> | undefined> {
+        let refused: Map<number, RunViewResult> | undefined;
+        for (let i = 0; i < params.length; i++) {
+            params[i] = await this.RunPreRunViewHooks(params[i], contextUser);
+            try {
+                this.AssertPredicatesRespectFieldSecurity(params[i], contextUser);
+            } catch (error: unknown) {
+                refused ??= new Map<number, RunViewResult>();
+                refused.set(i, ProviderBase.fieldSecurityRefusalAsResult(error));
+            }
+        }
+        return refused;
+    }
+
+    /** `error` as a failed view result when it is a field-security refusal; otherwise rethrows it. */
+    private static fieldSecurityRefusalAsResult(error: unknown): RunViewResult {
+        if (!(error instanceof Error) || (!(error instanceof FieldSecurityError) && error.name !== FieldSecurityError.ErrorName)) {
+            throw error;
+        }
+        return { Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, UserViewRunID: '', ErrorMessage: error.message };
+    }
+
+    /**
+     * The cache stage of PreRunViews for the views the predicate gate admitted. An empty batch
+     * (every view refused) is reported as fully cached, so the pipeline returns without a
+     * database call and still ends the batch's telemetry event.
+     */
+    private async lookUpAdmittedViews(params: RunViewParams[], telemetryEventId: string, contextUser?: UserInfo): Promise<typeof this._preRunViewsResultType> {
+        if (params.length === 0) {
+            return { telemetryEventId, allCached: true, cachedResults: [] };
+        }
         // Client-side providers route any CacheLocal params through smart-cache-check:
         // a single batched GraphQL call sends fingerprints (hashes + counts) per view,
         // the server confirms current vs stale, and only stale views return data.
@@ -3654,7 +3736,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
             }
         }
+        return this.lookUpBatchCache(params, telemetryEventId, contextUser);
+    }
 
+    /** The server's trusted-cache lookup for a batch: serves hits, and lists the misses to run. */
+    private async lookUpBatchCache(params: RunViewParams[], telemetryEventId: string, contextUser?: UserInfo): Promise<typeof this._preRunViewsResultType> {
         // Traditional caching flow
         const cacheStatusMap = new Map<number, { status: 'hit' | 'miss' | 'disabled' | 'expired'; result?: RunViewResult }>();
         const callerFieldsMap = new Map<number, string[]>();
