@@ -462,11 +462,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    public async GetPreferredUUID(forceRefreshSessionId?: boolean): Promise<string> {
-        // Try to get the stored session ID
-        const oldUUID = await this.GetStoredSessionID();
-        const UUID = forceRefreshSessionId || !oldUUID ? this.GenerateUUID() : oldUUID;
-        return UUID;
+    public async GetPreferredUUID(_forceRefreshSessionId?: boolean): Promise<string> {
+        // Always generate a fresh per-tab/runtime UUID rather than reusing a shared
+        // localStorage sessionId across browser tabs. Sharing a single sessionId in
+        // localStorage caused other tabs in the same browser to treat remote
+        // CacheInvalidation events as self-originated (OriginSessionID === this.sessionId)
+        // and silently drop cross-tab updates.
+        return this.GenerateUUID();
     }
 
 
@@ -540,8 +542,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // Update the singleton instance
             GraphQLDataProvider.Instance._configData = configData;
 
-            if (GraphQLDataProvider.Instance._sessionId === undefined) {
-                GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
+            if (GraphQLDataProvider.Instance._sessionId === undefined || forceRefreshSessionId) {
+                GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);
             }
 
             // Create the client if there is none, or rebuild it (same session id) when this config

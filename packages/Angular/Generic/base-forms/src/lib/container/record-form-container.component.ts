@@ -4,8 +4,8 @@ import {
   ContentChildren, QueryList, AfterContentInit, DoCheck, OnDestroy,
   ViewChild, ViewEncapsulation, ElementRef
 } from '@angular/core';
-import { BaseEntity, CompositeKey, EntityInfo, LogError, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
-import { EscapeSQLString, UUIDsEqual, type ValidationErrorInfo } from '@memberjunction/global';
+import { BaseEntity, BaseEntityEvent, CompositeKey, EntityInfo, LogError, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
+import { EscapeSQLString, MJGlobal, UUIDsEqual, type ValidationErrorInfo } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
@@ -187,6 +187,15 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private chromeRulesForEntityId: string | null = null;
   /** The form whose duplicate-check answers this container already re-renders on. */
   private duplicateNoticeWiredFor: BaseFormComponent | null = null;
+
+  // ---- Cross-tab / remote live update state ----
+  public RemoteUpdatePill: {
+    Kind: 'refreshed' | 'stale-while-editing';
+    Summary: string;
+    ChangedFields: string[];
+  } | null = null;
+  private remoteUpdatePillTimer: ReturnType<typeof setTimeout> | null = null;
+  private remoteRefreshInFlight = false;
 
   // ---- Internal State ----
 
@@ -793,6 +802,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.watchRecordChanges();
 
     this.wireDuplicateEntryCheck();
+    this.wireRemoteRecordInvalidation();
   }
 
   /**
@@ -834,6 +844,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (this.chromeResolveTimer) {
       clearTimeout(this.chromeResolveTimer);
       this.chromeResolveTimer = null;
+    }
+    if (this.remoteUpdatePillTimer) {
+      clearTimeout(this.remoteUpdatePillTimer);
+      this.remoteUpdatePillTimer = null;
     }
     this.panelNavReset$.next();
     this.panelNavReset$.complete();
@@ -2256,6 +2270,160 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.recordChangesDrawer.Refresh();
     }
     this.recordRefresh.Notify(record);
+  }
+
+  /**
+   * Listens for cross-tab (`remote-invalidate`) and cross-instance (`save`) BaseEntity events
+   * for the currently open record.
+   *
+   * - When NOT in Edit Mode (and clean): auto-refreshes the record in place, highlights any
+   *   changed fields via {@link FormRecordRefreshCoordinator.NotifyRemoteUpdate}, and displays
+   *   a non-intrusive slide-in pill that auto-dismisses after a few seconds.
+   * - When IN Edit Mode (or dirty): never overwrites unsaved work; shows a non-intrusive notice
+   *   pill offering a one-click Reload action.
+   */
+  private wireRemoteRecordInvalidation(): void {
+    MJGlobal.Instance.GetEventListener(false)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((e) => {
+        if (this.destroyed || e.eventCode !== BaseEntity.BaseEventCode) return;
+        const entityEvt = e.args as BaseEntityEvent | undefined;
+        if (!entityEvt) return;
+
+        const record = this.EffectiveRecord;
+        if (!record || !record.IsSaved || !record.EntityInfo) return;
+
+        let matchesCurrentRecord = false;
+        if (entityEvt.type === 'remote-invalidate') {
+          const payload = entityEvt.payload as {
+            action?: 'save' | 'delete';
+            entityName?: string;
+            primaryKeyValues?: string;
+          } | undefined;
+          if (!payload || payload.action !== 'save' || !payload.entityName || !payload.primaryKeyValues) return;
+          if (payload.entityName.trim().toLowerCase() !== record.EntityInfo.Name.trim().toLowerCase()) return;
+          const incomingKey = CompositeKey.FromURLSegment(record.EntityInfo, payload.primaryKeyValues);
+          matchesCurrentRecord =
+            incomingKey.Equals(record.PrimaryKey) ||
+            UUIDsEqual(payload.primaryKeyValues, record.PrimaryKey.ToConcatenatedString()) ||
+            UUIDsEqual(payload.primaryKeyValues, String(record.PrimaryKey.Values()));
+        } else if (entityEvt.type === 'save' && entityEvt.baseEntity && entityEvt.baseEntity !== record) {
+          if (entityEvt.baseEntity.EntityInfo?.Name === record.EntityInfo.Name) {
+            matchesCurrentRecord = entityEvt.baseEntity.PrimaryKey.Equals(record.PrimaryKey);
+          }
+        }
+
+        if (!matchesCurrentRecord || this.IsSaving || this.remoteRefreshInFlight) return;
+
+        this.ngZone.run(() => {
+          if (this.EffectiveEditMode || this.EffectiveIsDirty) {
+            this.showRemoteUpdatePill({
+              Kind: 'stale-while-editing',
+              Summary: 'Updated in another session',
+              ChangedFields: [],
+            }, false);
+          } else {
+            void this.performLiveRemoteRefresh(record);
+          }
+        });
+      });
+  }
+
+  private async performLiveRemoteRefresh(record: BaseEntity): Promise<void> {
+    if (this.remoteRefreshInFlight || this.destroyed) return;
+    this.remoteRefreshInFlight = true;
+    try {
+      const beforeValues: Record<string, unknown> = { ...record.GetAll() };
+      const refreshed = await record.Refresh();
+      if (!refreshed || this.destroyed) return;
+
+      const afterValues: Record<string, unknown> = record.GetAll();
+      const changedFieldSet = new Set<string>();
+      const changedLabels: string[] = [];
+
+      for (const field of record.EntityInfo.Fields) {
+        const beforeVal = beforeValues[field.Name];
+        const afterVal = afterValues[field.Name];
+        const beforeStr = beforeVal instanceof Date ? beforeVal.toISOString() : String(beforeVal ?? '');
+        const afterStr = afterVal instanceof Date ? afterVal.toISOString() : String(afterVal ?? '');
+        if (beforeStr !== afterStr) {
+          changedFieldSet.add(field.Name.toLowerCase());
+          if (!field.Name.startsWith('__mj_')) {
+            changedLabels.push(field.DisplayNameOrName);
+          }
+        }
+      }
+
+      this.badgeCountsLoaded = false;
+      this.loadBadgeCounts();
+      if (this.ShowRecordChanges && this.recordChangesDrawer) {
+        this.recordChangesDrawer.Refresh();
+      }
+      this.recordRefresh.NotifyRemoteUpdate(record, changedFieldSet);
+
+      const summary =
+        changedLabels.length === 1
+          ? `Updated live · ${changedLabels[0]} changed`
+          : changedLabels.length > 1
+            ? `Updated live · ${changedLabels.slice(0, 2).join(', ')}${changedLabels.length > 2 ? ` +${changedLabels.length - 2} more` : ''} changed`
+            : 'Updated live';
+
+      this.showRemoteUpdatePill(
+        {
+          Kind: 'refreshed',
+          Summary: summary,
+          ChangedFields: changedLabels,
+        },
+        true,
+      );
+
+      this.Fc?.cdr?.markForCheck();
+      this.cdr.markForCheck();
+    } catch (err) {
+      LogError(`Live form auto-refresh failed for ${record.EntityInfo.Name}: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      this.remoteRefreshInFlight = false;
+    }
+  }
+
+  private showRemoteUpdatePill(
+    pill: { Kind: 'refreshed' | 'stale-while-editing'; Summary: string; ChangedFields: string[] },
+    autoDismiss: boolean,
+  ): void {
+    if (this.remoteUpdatePillTimer) {
+      clearTimeout(this.remoteUpdatePillTimer);
+      this.remoteUpdatePillTimer = null;
+    }
+    this.RemoteUpdatePill = pill;
+    this.cdr.markForCheck();
+    if (autoDismiss) {
+      this.remoteUpdatePillTimer = setTimeout(() => {
+        this.remoteUpdatePillTimer = null;
+        if (!this.destroyed) {
+          this.RemoteUpdatePill = null;
+          this.cdr.markForCheck();
+        }
+      }, 4500);
+    }
+  }
+
+  public OnDismissRemoteUpdatePill(): void {
+    if (this.remoteUpdatePillTimer) {
+      clearTimeout(this.remoteUpdatePillTimer);
+      this.remoteUpdatePillTimer = null;
+    }
+    this.RemoteUpdatePill = null;
+    this.cdr.markForCheck();
+  }
+
+  public async OnReloadFromRemotePill(): Promise<void> {
+    this.OnDismissRemoteUpdatePill();
+    const record = this.EffectiveRecord;
+    if (!record) return;
+    if (this.Fc && this.EffectiveEditMode) {
+      this.Fc.EndEditMode();
+    }
+    await this.performLiveRemoteRefresh(record);
   }
 
   /**
