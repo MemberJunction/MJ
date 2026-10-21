@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/global
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 81aea34: Enable full-conversation artifact manifest visibility (`artifactId`, `versionId`, `versionNumber`, `description`, `title`, and table/row summaries), `artifactDirective` forwarding across `LoopAgentResponse`/`LoopAgentType`/`BaseAgent` (including alpha-ID resolution to UUIDs and clean base payloads for `create-new`), `Data` artifact extract rules and payload title/description fallback on `MJ: Artifacts` and `MJ: Artifact Versions`, `QueryBuilderAgent` single-table vs. multi-table normalization on `Chat` and `Success` steps, and conversation artifact panel auto-opening on active branch paths.
+- 2274f42: perf(graphql-dataprovider,server): request and return delta-only fields on Update mutations and transaction groups
+  - On `GraphQLDataProvider.Save()` `Update` (when `IgnoreDirtyState` is not set), narrow the GraphQL response selection set to primary keys, dirty fields, special date fields (`IsSpecialDateField`), and (when any foreign key field was dirtied) virtual fields, merging the delta response over `entity.GetAll()`.
+  - On `TransactionResolver.ExecuteTransactionGroup()`, return delta-only `ResultsJSON` for `Update` items containing primary keys, sent fields, transaction variables, special date fields, and any fields whose post-save value changed from the pre-update DB snapshot (using `ValuesEqual` from `@memberjunction/global`).
+
+- 17a4137: Security: the SQL screens now read quotes, identifiers and comments the way the database does. A new dialect-aware scanner, `ScanSQLForScreening` in `@memberjunction/global`, replaces the regex behind `StripSQLStringLiterals`. It understands T-SQL `[…]` identifiers, double-quoted identifiers, `''` escapes, PostgreSQL `E'…'` and dollar-quoted strings, and `--` and nested block comments. It rejects text it cannot classify, such as an unterminated literal. Before this change, a quote inside a bracket identifier, a comment, or a PostgreSQL string opened a literal the database never saw, so `ValidateUserProvidedSQLClause` and `SQLExpressionValidator` accepted a stacked statement hidden behind it. Providers now pass their dialect to the clause, aggregate and ad-hoc query screens. `SQLValidationOptions.Dialect` and the optional `dialect` argument of `ValidateFullQuery` and `StripSQLStringLiterals` let other callers do the same. Without a dialect, SQL must pass under both SQL Server and PostgreSQL rules. A full query must open with the unquoted keyword `SELECT` or `WITH`, compared in ASCII. The GetData resolver screens exactly the text it runs: it trims the query, and it no longer screens a copy in which literal `\n`, `\r` and `\t` sequences are rewritten. A query that passed only because of that rewriting, such as one whose first real line follows a `--` comment ending in a literal `\n`, is now refused.
+
 ## 6.2.0-edge.4
 
 ### Patch Changes

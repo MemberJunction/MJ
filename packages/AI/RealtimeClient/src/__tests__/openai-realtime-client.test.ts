@@ -715,6 +715,24 @@ describe('OpenAIRealtimeClient', () => {
             expect(log.indexOf('userSpeechStart')).toBeLessThan(log.indexOf('state:listening'));
         });
 
+        it('forwards item_id from input_audio_buffer.speech_started to OnUserSpeechStart and carries it as ItemId on the completed user transcript', () => {
+            const startedIds: Array<string | undefined> = [];
+            const { transcripts } = collect(client);
+            client.OnUserSpeechStart((itemId) => startedIds.push(itemId));
+
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started', item_id: 'item_abc' });
+            channel.EmitServer({
+                type: 'conversation.item.input_audio_transcription.completed',
+                transcript: 'Hello from item abc',
+                item_id: 'item_abc',
+            });
+
+            expect(startedIds).toEqual(['item_abc']);
+            expect(transcripts).toEqual([
+                { Role: 'User', Text: 'Hello from item abc', IsFinal: true, Kind: 'normal', ItemId: 'item_abc' },
+            ]);
+        });
+
         it('should NOT emit on the cleared frame that follows a self-initiated cancel', () => {
             const { interruptions } = collect(client);
             channel.EmitServer({ type: 'response.created' });

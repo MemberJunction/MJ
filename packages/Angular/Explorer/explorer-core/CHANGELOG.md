@@ -1,5 +1,222 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- 1cb1d52: Login Studio: design the Explorer sign-in page on the default theme.
+  - **Schema:** `MJ: Themes` gains `LoginScreen` (published) and `LoginScreenDraft`. `MJThemeEntityExtended`
+    refuses a design the login screen cannot draw safely (`StoredLoginDesignProblems` in
+    `@memberjunction/theme-engine`, the same contract the editor checks).
+  - **App:** Login Studio (`LoginStudioResource`) edits blocks, layout, background and colors, saves a draft
+    and publishes it.
+  - **Public route:** `GET /auth/login-screen` serves the default Active theme's published design, logos and
+    seeds, sanitized (`SanitizePublicLoginScreen`) on the server and again in the browser. Drafts are never
+    served to anonymous visitors; signed-in users who can read themes can read them.
+  - **Login screen:** `<mj-explorer-app>` draws a published design through `<mj-login-region>` and wears the
+    default theme's brand colors before sign-in. A host's `mjLoginSlot` templates still win;
+    `UsePublishedLoginScreen = false` keeps the screen as the host's own inputs and CSS draw it.
+
+### Patch Changes
+
+- 39b35f1: Real-time task graph workflow UX, continuation synthesis with step outputs and artifacts, single-step delegation folding, per-user runnable agent directory & task graph validation, and a redesigned AI Agent Workflows & Tasks Command Center (#5878).
+  - **Single-step task graph folding (`@memberjunction/ai-agents`).** `LoopAgentType.DetermineNextStep` automatically folds single-node `Tasks` emissions with no dependencies into an in-turn `Sub-Agent` step (`terminateAfter: false`) so single-agent delegations complete in a single conversation turn without spawning a background task graph, while preserving durable `Tasks` execution for multi-step (`2+` node) workflows. When an orchestrator with `ArtifactCreationMode = 'Never'` or `'System Only'` delegates a folded step to a specialist agent that produces artifacts, `AgentRunner.ProcessAgentArtifacts` resolves the specialist's `DefaultArtifactTypeID` and creation mode so deliverables are persisted and attached to the conversation message.
+  - **Per-user runnable agent directory, pre-submission task graph validation, and sub-agent workflow propagation (`@memberjunction/ai-engine-base`, `@memberjunction/aiengine`, `@memberjunction/ai-core-plus`, `@memberjunction/ai-agents`, `@memberjunction/task-graph`, `@memberjunction/server`).** `AIEngineBase.GetUserRunnableAgentDirectory(user)` caches a per-user directory of active top-level agents permitted by `CanUserRunAgent`, invalidated on agent and permission changes. `BaseAgent` preloads `availableAgentCount` / `availableAgentDetails` into prompt templates, validates `Tasks` step targets before submission (converting unknown or restricted agent/action references into a self-correcting `Retry` step with the user's permitted agent list), propagates `conversationDetailId` and `Paused` workflow-awaiting state from sub-agents (`Workflow Planner`) to parent runs (`Sage`), includes `agentRun.Message` in sub-agent result markdown, and settles/reinvokes ancestor runs along `ParentRunID` in `TaskGraphDispatcher` and `TaskGraphContinuationDeliverer`.
+  - **Live task graph telemetry, isolated step artifact persistence, and adaptive continuation delivery (`@memberjunction/server`, `@memberjunction/ai-agents`, `@memberjunction/conversations-runtime`).** `TaskGraphAgentRunner` resolves the originating `ConversationDetailID`, passes `inputArtifacts: []` to isolate task-graph step runs from earlier conversation turn artifacts, and forces `behavior: 'create-new'` when persisting step deliverables so sibling/prior artifacts are never overwritten as `v2`. `AgentRunner.ProcessAgentArtifacts` infers `Research Content` (`report.html`) and extracts `report.name` / `report.description` / `synthesis.executiveSummary` for report-producing specialist steps. `TaskGraphContinuationDeliverer` strips inherited upstream keys from merged `OutputPayload`s, updates the originating workflow message in-place when no intervening messages were sent (`origin.IsLatest`), or posts a bottom continuation reply linked via `ConversationDetail.ParentID` when intervening messages were sent while the workflow ran.
+  - **First-class inline Workflow Execution Card, Workflow Context Header, & real-time chat reconciliation (`@memberjunction/ng-conversations`).** `ConversationChatAreaComponent` and `MessageItemComponent` reconcile live `TaskGraphProgress` frames in place, deduplicate parent container tasks from executable step rows, strip inherited upstream payload keys from step summaries, and render a relational `.workflow-continuation-banner` (`Completed workflow · <Name> · View workflow ↑`) on bottom continuation replies that scrolls to and highlights the originating workflow turn.
+  - **AI Agent Workflows & Tasks Command Center (`@memberjunction/ng-conversations`, `@memberjunction/ng-tasks`, `@memberjunction/ng-explorer-core`).** Redesigned `TasksFullViewComponent` with a 5-metric KPI telemetry ribbon, instant search and status/agent filters, a **Workflow Cards** DAG view, a second-resolution **Execution Timeline & DAG** waterfall view, and a slide-over **Step Inspector Drawer** with one-click navigation back to the originating conversation.
+
+- c159e2f: MJAPI can now live under a path prefix without per-route CDN patches (#5674). A new setting, `MJAPI_BASE_PATH` (default `/`), is the prefix MJAPI mounts every route under. `GRAPHQL_ROOT_PATH` stays only where Apollo listens, and `MJAPI_PUBLIC_URL` stays where the world reaches MJAPI.
+  - **`ApiRoute(subpath, { absolute? })`** (new, `@memberjunction/server`): the mount path under `MJAPI_BASE_PATH`, or with `absolute` the public URL (`MJAPI_PUBLIC_URL` + subpath). Also exports `ApiRootPath()`, `ConfiguredPublicUrl()`, `JoinApiRoute()` and `NormalizeApiRootPath()`.
+  - **Core mounts** (`/healthcheck`, `/oauth`, `/esignature`, `/media`, `/realtime/sdp-exchange`, `/magic-link`, `/widget`, `/realtime/verify`, `/health/extensions`, `/auth`) are composed under the base path, as are the magic-link and realtime-verify form actions, `CreateMediaAccessToken`'s URL and `CreateUploadStageToken`'s `Url`.
+  - **Server extensions:** every `RootPath` is relative to the base path. `PrepareServerExtensionConfigs({ apiRootPath })` composes the mount path (new `ComposeServerExtensionMountPath`), and `ServerExtensionInitContext.apiRootPath` carries it. `graphqlRootPath` is no longer a reserved root, and `CoreReservedServerExtensionRoots()` no longer takes it.
+  - **Explorer is told where MJAPI is.** New optional `MJAPI_URI` environment value (`MJEnvironmentConfig`, `WorkspaceEnvironment`, `GraphQLProviderConfigData.MJAPIURL`) and `ResolveMJAPIURL(mjapiUrl)` in `@memberjunction/core`. When set, the auth-provider catalog, the Login Studio sign-in page, the healthcheck poll, the OAuth code exchange and the upload-stage POST use it as given. When unset, each keeps exactly its previous behaviour.
+  - Default config changes nothing: with `MJAPI_BASE_PATH` and `MJAPI_URI` unset, every mount path, emitted URL and Explorer request is unchanged, whatever `GRAPHQL_ROOT_PATH` is. REST stays at the origin-absolute `/api/v1`.
+
+  **Opting in (`MJAPI_BASE_PATH=/api`, e.g. behind MJ Central's CloudFront, which forwards `/api/*` unstripped).** Every route moves under the prefix, and nothing on the MJ side reports a caller still using the old address. In the same change:
+  - Set `MJAPI_PUBLIC_URL` to the prefixed address (`https://host/api`) so links MJAPI hands out carry it, and set Explorer's `MJAPI_URI` to the same. Server and Explorer switch together: either one alone leaves the login-provider catalog and the healthcheck pointing at the wrong place.
+  - Re-register every URL an outside party holds, or keep a temporary edge redirect from the old path: provider webhooks (Open App extensions such as Orders' `/webhooks/payments` and `/webhooks/billcom`, telephony `/telephony/*` and `/meetings/teams`, Slack/Teams messaging, core `/esignature/webhook/:driverKey`), OAuth redirect URIs (`/oauth/callback`), and links already emailed (magic-link invites, realtime-verify links). Carrier URLs MJ registers itself (`BuildCallbackUrl`) follow automatically.
+  - Remove CDN behaviors added per route for the old root paths once nothing calls them.
+  - **Update your own MJExplorer app.** `packages/MJExplorer` is a starter template, not a published package, so this release does not change your copy. Its `src/main.ts` preloads the sign-in data before Angular starts and must pass `MJAPI_URI` through itself. Add `MJAPI_URI` to your `environment.ts` files, then change the two preload calls:
+
+    ```ts
+    AuthProviderCatalog.Preload(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    LoginScreenLoader.Load(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    ```
+
+    If your `environment.ts` is a plain object literal without `MJAPI_URI`, type it as `MJEnvironmentConfig` from `@memberjunction/ng-bootstrap` so the property exists. Everything after bootstrap (healthcheck, OAuth exchange, uploads, the login screen) reads `MJAPI_URI` from the environment you already pass to `MJExplorerAppModule.forRoot()`; no other change is needed. Skipping this step does not break sign-in. The provider list and the Login Studio design just fall back to the compiled defaults.
+
+  Telephony media WebSocket URLs (`/telephony/*/media`) and `/realtime-proxy` do not move.
+
+- 95c7682: The chat overlay's top boundary no longer throws NG0100 when the connectivity banner appears
+
+  `MJExplorerAppComponent.ChatOverlayTopBoundaryPx` read the banner height from the
+  `--mj-connectivity-banner-height` custom property with `getComputedStyle`. The banner publishes that
+  height from its `@slideDown.done` listener, which runs inside the animation flush while views are
+  still refreshing. Explorer is zoneless, so that listener only marks the shell view dirty, and a
+  targeted pass never re-reads the shell's binding — but dev-mode check-no-changes does, so every
+  later change-detection pass reported:
+
+      NG0100: ExpressionChangedAfterItHasBeenCheckedError ... Previous value: '60'. Current value: '95'.
+
+  The banner now also exposes its height as a `HeightPx` signal (CSS consumers keep using the
+  property), and the shell reads it through a `viewChild` query of the banner. The write marks the shell
+  view as a stale consumer, so Angular re-refreshes it in the same pass. Dev-mode only — the overlay was
+  positioned correctly either way.
+
+- c7418dc: Deleting a record in Explorer no longer leaves its form open on a blank record.
+  - **The record's tab closes and you go back to where you opened it from**: the view (with its filters and position), the parent record, or the page you came from. A record loaded straight from a URL, with nowhere to go back to, lands on the Home dashboard (or the app's landing page when there is no Home app).
+  - **The Data Explorer's preview panel closes and its grid reloads.** The deleted row drops out without losing your page or sort, and returning from the deleted record's tab can't reopen the preview on it.
+  - **The Recycle Bin count updates** on any grid showing that entity, whether the record was deleted in this session or by someone else.
+  - **Every other tab showing the record closes too**, however it was deleted: its form, a custom form, a grid row, or any other `BaseEntity.Delete()` in the session.
+  - **Browser Back doesn't reopen it.** The deleted record's history entry is replaced.
+  - **No crumb leads back to it.** A record opened from inside the deleted one now returns to where the deleted record itself came from.
+  - **Deleted by someone else**: the tab stays open with a banner saying so, and a Close button, rather than vanishing while you read it.
+
+  New exports: `NavigationService.OpenHomeDashboard()`; `ViewWorkspaceComponent.RefreshInPlace()`; `TabService.MarkRecordUrlForReplacement` / `ConsumeRecordUrlReplacement`; and `GetDeletedRecordFromEvent`, `RecordTabShowsRecord`, `RecordIdentityMatches`, `NormalizeRecordIdForMatch`, `RemoveDeletedRecordFromOrigin`, `OriginHasReturnTarget` and `OriginToTabConfiguration` from `@memberjunction/ng-shared`.
+
+- 0c634ba: Fix Explorer console errors: grant UI role create/update permissions on MJ: User Record Logs and guard RecentAccessService.LogAccess, emit Conversations$ synchronously on optimistic SaveConversation updates and run change detection on conversation rename/creation callbacks to prevent NG0100, fall back to user-settings persistence in EntityViewerComponent when UserCanEdit is false on a loaded UserView, and hide/omit Deprecated and Disabled entity fields in MjFormFieldComponent and AngularClientGeneratorBase.
+- b73e3bc: Five fixes found while building and testing the BizApps Voting Open App:
+  - **IS-A lookups and other Info-class lookups now use the entity's own provider.** Info objects keep the provider that built them (`BaseInfo.OwningProvider`). `EntityInfo.ChildEntities` / `ParentEntityInfo`, RLS filter lookups, `QueryInfo` sibling getters and `AuthorizationInfo.Roles` resolve through that provider and fall back to the global one only when there is none. `EnsureISAChild` no longer throws "not a declared IsA child entity" in a process with several providers and no global provider. The constructors take an optional provider, so existing callers still compile.
+  - **Server-side writes clear the client's RunView dedup-linger cache.** There is a new `ProviderBase.InvalidateRunViewDedupCache(entityNames?)`. `RouteOperation` calls it after every Remote Operation, and the GraphQL client calls it after every mutation (Actions, agent runs and saves included). Both run on failure too. An identical RunView no longer returns pre-operation rows for up to 5 s.
+  - **Server extensions can own CORS.** A new `OwnsCORS` option on a server extension config makes global CORS skip that extension's `RootPath`, so the extension's own origin policy and `OPTIONS` handler apply. `X-Powered-By` is now disabled app-wide.
+  - **Explorer deep links beat the saved workspace on a full load.** When the URL carries query params for an open tab, they replace that tab's saved params. Workspace changes are also written to localStorage synchronously and flushed on `pagehide` / `visibilitychange`, so a quick refresh no longer comes back one step behind.
+  - **Magic-link sessions no longer get an uncaught `PermissionConstrainedError` at boot.** `UserInfoEngine` adds `UserNotificationsIfPermitted`, and `GetSetting` returns "not set" for a user who can't read settings. It logs once per property. Notifications and `ApplicationManager` use the safe paths.
+
+- 08be974: Review follow-ups to the multi-provider / cache / CORS / deep-link fixes:
+  - `QueryFieldInfo.QueryInfo` matches the parent query by `QueryID` (it compared the field's own ID and always returned undefined). Query Info getters no longer throw when no provider is bound.
+  - The IS-A SubtypeSelector lookup memo is partitioned per provider, so one provider never receives a row (or a miss) recorded through another.
+  - Entity `Save()`/`Delete()` and transaction groups clear only their own entities' RunView dedup-linger entries (`ExecuteGQL` takes `{ AffectedEntityNames }`). Other mutations still clear everything. `IsGraphQLMutation` reads only top-level tokens, so a fragment field named `query` can no longer hide a mutation. A failed coalesced RunView no longer evicts a newer request's entry.
+  - A host `serverExtensions[]` entry may be a partial overlay: only `DriverClass` is required. An overlay without `Enabled` inherits the published value; a host-only entry without it is enabled.
+  - Explorer: a startup deep link waits for the app list before it is resolved. A permission-constrained magic-link session gets its scoped app (plus default apps when access can be judged) instead of "No Applications Available". Workspace saves run one at a time, and a save that lands after the page unloads no longer wins over newer journaled changes. A brand-new user's first boot also runs the deep-link hook.
+  - `UserInfoEngine.UserFavorites`, `NotificationPreferences` and `NotificationTypes` read empty for a session that cannot read them.
+
+- 1214eca: Renames `ConversationChatAreaComponent.openConversationArtifactForCommand` to `OpenConversationArtifactForCommand`, as MJ's naming standard requires for public members. The method came in with #5896 and hasn't been released, so there's no deprecated alias. Its callers in `ChatConversationsResource` are updated. This clears the MJ standards check that has failed on every PR since #5896.
+- 130cc7e: Opening a record from the Tasks Command Center now builds its key from the entity's real primary key, so a record whose key isn't a single `ID` column opens, and composite keys work. Opening a workflow step's agent run uses `CompositeKey.FromID` for the `MJ: AI Agent Runs` core entity. This clears the Primary Key Compliance gate that #5878 broke.
+- 0cc6b08: Three search trust fixes. Each changes behaviour.
+
+  **External-index hits are always verified against the entity they name.** The permission pass used to skip its ownership check for any result labelled `SourceType: 'entity'` or `'fulltext'` when no row filter applied. Every shipped external-index provider (Azure AI Search, Typesense, Elasticsearch, OpenSearch) labels its hits `'fulltext'`, with the index name as `EntityName` and the document's own id as `RecordID`. So a document in an index named after an entity the user can read was admitted as that entity's row without being checked. A third-party provider could also label its hits `'entity'`. Trust now follows the provider the engine stamped on the result (`ProviderId`), never the label. The new `BaseSearchProvider.ResultsAreRowsOfLabelledEntity` flag (default `false`) is set only by `EntitySearchProvider` and `FullTextSearchProvider`, which read the entity through `RunView`. Every other result is verified, including one with no `ProviderId` and one whose `ProviderId` names no configured provider. Fusion and dedup keep each result's `ProviderId` paired with its own `EntityName`, `RecordID` and `SourceType`, so a merge never upgrades an external hit to trusted. A merge can still lend a result another item's scores: dedup merges items sharing `EntityName` + `RecordID`, but per-scope RRF merges `ScoreBreakdown` across items that share only a `RecordID`, of any entity. A `MJ: Content Items` hit promoted to its origin record is always verified: its provider never read that row. Cost: one `PK IN (...)` read per labelled entity for each search that returns external-index hits. Hits whose document id is not the MJ primary key of the labelled entity are dropped. The entity and full-text lanes cost nothing extra.
+
+  **Naming a scope that cannot be resolved no longer widens the search to a global one.** An inactive, expired or missing scope in `SearchParams.ScopeIDs` used to be skipped. A search whose scopes were all skipped then ran with no scope at all. The GraphQL paths let a caller with a grant on a dead scope do this, because the scope permission check does not look at scope status. Now, if any named scope cannot be resolved, the search is refused: `Success: false`, an error naming the scope, a `LogError`, a `Failure` row in `MJ: Search Execution Logs`, and no provider runs. One dead scope among several also refuses the search, because dropping it silently would change what the caller asked for. The check runs before the result cache. `ExplainScope` agrees with the search. It now reports an inactive or expired scope as unreachable, by name; before, it explained one as searchable. When one requested scope cannot be resolved, it reports every scope in that dry run as unreachable, with the reason.
+
+  **Streamed `provider` events carry counts only.** `streamSearch` used to put each provider's hits on its `provider` event, before the permission pass. That included rows the caller's row filters would drop, unverified external-index hits, and content whose origin record the caller may not read. `SearchKnowledgeStreamResolver` published those hits to the client. A `provider` event now carries `providerName`, `durationMs` and a new `resultCount` (the provider's hit count, capped at `MaxResults`). `results` is always `[]` and is deprecated. Results arrive only in `fused` and `final`. The GraphQL `SearchStreamNotification` gains `ResultCount` and always sends `Results: []` on a provider event, whatever the engine hands it. `GraphQLSearchClient.StreamSearch` requests `ResultCount` (new exported type `SearchStreamClientEvent`). `SearchService.StreamSearch` forwards it. The search overlay, the search results page and the scope form preview now show each provider's count from it, and render rows from `final` only. Pre-execution RAG's streaming trace and the Scoped Search action's `ProgressEvents` report `resultCount`. Like `SourceCounts`, `resultCount` is counted before the permission and audience passes, so don't show it to a room. This replaces the audience-only withholding of partials. Because a newer client requests `ResultCount`, its stream subscription fails against an older server. The reverse also shows: an older client counts each provider's `Results`, which a newer server always sends empty, so its per-provider chips show 0 until the client is upgraded. Search results themselves are unaffected.
+
+  New deterministic integration bundle `IT118 - Search Provider Trust and Unresolvable Scopes` (`search-provider-trust`, SPT1–SPT2).
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [b4e2ceb]
+- Updated dependencies [9898079]
+- Updated dependencies [189b702]
+- Updated dependencies [5465489]
+- Updated dependencies [83486cf]
+- Updated dependencies [c6b4b85]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [8b62f8c]
+- Updated dependencies [c30593a]
+- Updated dependencies [c7418dc]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [60bb4b5]
+- Updated dependencies [2274f42]
+- Updated dependencies [35ed364]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [c271ddf]
+- Updated dependencies [542795b]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [fcc3f03]
+- Updated dependencies [1214eca]
+- Updated dependencies [7e72c86]
+- Updated dependencies [130cc7e]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [2a7a098]
+- Updated dependencies [8420f36]
+- Updated dependencies [b1e628e]
+- Updated dependencies [1d29837]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [c7d1170]
+- Updated dependencies [a750fa5]
+- Updated dependencies [5f707d1]
+- Updated dependencies [d1b1958]
+- Updated dependencies [e1f2583]
+- Updated dependencies [0bee327]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai-core-plus@6.2.0-edge.5
+  - @memberjunction/ai-engine-base@6.2.0-edge.5
+  - @memberjunction/conversations-runtime@6.2.0-edge.5
+  - @memberjunction/ng-conversations@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.5
+  - @memberjunction/ng-auth-services@6.2.0-edge.5
+  - @memberjunction/ng-file-storage@6.2.0-edge.5
+  - @memberjunction/ng-dashboards@6.2.0-edge.5
+  - @memberjunction/communication-types@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ng-composer@6.2.0-edge.5
+  - @memberjunction/ng-shared-generic@6.2.0-edge.5
+  - @memberjunction/theme-engine@6.2.0-edge.5
+  - @memberjunction/ng-ui-components@6.2.0-edge.5
+  - @memberjunction/ng-shared@6.2.0-edge.5
+  - @memberjunction/ng-base-application@6.2.0-edge.5
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.5
+  - @memberjunction/ng-base-forms@6.2.0-edge.5
+  - @memberjunction/ng-markdown@6.2.0-edge.5
+  - @memberjunction/ng-notifications@6.2.0-edge.5
+  - @memberjunction/templates-base-types@6.2.0-edge.5
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.5
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.5
+  - @memberjunction/ng-search@6.2.0-edge.5
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.5
+  - @memberjunction/ng-entity-form-dialog@6.2.0-edge.5
+  - @memberjunction/ng-entity-permissions@6.2.0-edge.5
+  - @memberjunction/ng-list-detail-grid@6.2.0-edge.5
+  - @memberjunction/ng-artifacts@6.2.0-edge.5
+  - @memberjunction/ng-base-types@6.2.0-edge.5
+  - @memberjunction/ng-list-management@6.2.0-edge.5
+  - @memberjunction/ng-mj-livekit-room@6.2.0-edge.5
+  - @memberjunction/ng-query-viewer@6.2.0-edge.5
+  - @memberjunction/ng-react@6.2.0-edge.5
+  - @memberjunction/ng-record-changes@6.2.0-edge.5
+  - @memberjunction/ng-record-selector@6.2.0-edge.5
+  - @memberjunction/ng-record-tags@6.2.0-edge.5
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.5
+  - @memberjunction/ng-user-avatar@6.2.0-edge.5
+  - @memberjunction/entity-communications-client@6.2.0-edge.5
+  - @memberjunction/ng-realtime-media@6.2.0-edge.5
+  - @memberjunction/ng-container-directives@6.2.0-edge.5
+  - @memberjunction/ng-conversation-offers@6.2.0-edge.5
+  - @memberjunction/ng-feedback@6.2.0-edge.5
+  - @memberjunction/interactive-component-types@6.2.0-edge.5
+  - @memberjunction/ng-generic-dialog@6.2.0-edge.5
+  - @memberjunction/ng-export-service@6.2.0-edge.5
+  - @memberjunction/ng-word-cloud@6.2.0-edge.5
+  - @memberjunction/ng-pagination@6.2.0-edge.5
+  - @memberjunction/lists-base@6.2.0-edge.5
+  - @memberjunction/export-engine@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Minor Changes

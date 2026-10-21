@@ -221,9 +221,9 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
 
     /**
      * Compiled templates per environment, then per template content ID, so a raw compile is never served to an
-     * escaping render.
+     * escaping render. Tracks `sourceText` so in-place `AutoRefresh` updates to `TemplateText` recompile automatically.
      */
-    private _templateCache = new WeakMap<nunjucks.Environment, Map<string, nunjucks.Template>>();
+    private _templateCache = new WeakMap<nunjucks.Environment, Map<string, { template: nunjucks.Template; sourceText: string }>>();
 
     /**
      * Bounded LRU cache for ad-hoc templates rendered via {@link RenderTemplateSimple}.
@@ -401,14 +401,18 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         if (templateContentId && cacheTemplate) {
             let envCache = this._templateCache.get(env);
             if (!envCache) {
-                envCache = new Map<string, nunjucks.Template>();
+                envCache = new Map<string, { template: nunjucks.Template; sourceText: string }>();
                 this._templateCache.set(env, envCache);
             }
-            let template = envCache.get(templateContentId);
-            if (!template) {
-                template = this.createNunjucksTemplate(templateText, env);
-                envCache.set(templateContentId, template);
+            const cached = envCache.get(templateContentId);
+            if (cached && cached.sourceText === templateText) {
+                return cached.template;
             }
+            if (cached && cached.sourceText !== templateText) {
+                this._referencedVariablesCache.clear();
+            }
+            const template = this.createNunjucksTemplate(templateText, env);
+            envCache.set(templateContentId, { template, sourceText: templateText });
             return template;
         }
         else {
@@ -454,7 +458,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
 
     /** Clears the compiled-template cache and the cached {@link GetReferencedVariables} results. */
     public ClearTemplateCache() {
-        this._templateCache = new WeakMap<nunjucks.Environment, Map<string, nunjucks.Template>>();
+        this._templateCache = new WeakMap<nunjucks.Environment, Map<string, { template: nunjucks.Template; sourceText: string }>>();
         this._simpleTemplateCache.clear();
         this._referencedVariablesCache.clear();
     }
