@@ -12,9 +12,10 @@
 
 import { BaseEmbeddings } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
+import { ResolveCallTimeoutMs, WithCallDeadline } from '../utils/call-deadline.js';
 
 /** Provider names that map to a registered `BaseEmbeddings` driver class. */
-export type EmbeddingProviderName = 'openai' | 'mistral' | 'azure' | 'bedrock' | 'ollama' | 'local';
+export type EmbeddingProviderName = 'openai' | 'gemini' | 'mistral' | 'azure' | 'bedrock' | 'ollama' | 'local';
 
 export interface EmbeddingProviderConfig {
     provider: EmbeddingProviderName;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
@@ -23,6 +24,11 @@ export interface EmbeddingProviderConfig {
     Dimensions?: number;
     BatchSize?: number;
     Endpoint?: string;
+    /**
+     * Wall-clock ceiling on each embedding batch, in ms: `AIConfig.callTimeoutMs`, resolved the
+     * same way (absent = the 120s default, 0 = unbounded).
+     */
+    CallTimeoutMs?: number;
 }
 
 export interface EmbeddingProvider {
@@ -33,6 +39,7 @@ export interface EmbeddingProvider {
 /** Provider name → registered MJ embedding driver class (see `@RegisterClass(BaseEmbeddings, ...)`). */
 const PROVIDER_TO_DRIVER_CLASS: Record<EmbeddingProviderName, string> = {
     openai: 'OpenAIEmbedding',
+    gemini: 'GeminiEmbedding',
     mistral: 'MistralEmbedding',
     azure: 'AzureEmbedding',
     bedrock: 'BedrockEmbedding',
@@ -45,6 +52,10 @@ const PROVIDER_TO_DRIVER_CLASS: Record<EmbeddingProviderName, string> = {
  * `local` uses a small HuggingFace sentence-transformer (downloaded on first use) so
  * organic-key clustering can run with no API key. `azure`/`bedrock` are intentionally
  * absent — their models are deployment-specific and must be set explicitly.
+ *
+ * `gemini` is absent for a different reason: `GeminiEmbedding` already defaults its own model, and
+ * that default moves with the model generation. Naming it here would pin a second copy that has to
+ * be remembered on every bump.
  */
 const PROVIDER_DEFAULT_MODEL: Partial<Record<EmbeddingProviderName, string>> = {
     openai: 'text-embedding-3-small',
@@ -73,9 +84,11 @@ class MJEmbeddingProvider implements EmbeddingProvider {
     private readonly embeddings: BaseEmbeddings;
     private readonly model: string;
     private readonly batchSize: number;
+    private readonly callTimeoutMs: number;
 
     constructor(config: EmbeddingProviderConfig, driverClass: string) {
         this.provider = config.provider;
+        this.callTimeoutMs = ResolveCallTimeoutMs(config.CallTimeoutMs);
         this.model = config.model || PROVIDER_DEFAULT_MODEL[config.provider] || '';
         this.batchSize = config.BatchSize ?? 100;
 
@@ -105,7 +118,14 @@ class MJEmbeddingProvider implements EmbeddingProvider {
     }
 
     private async embedBatch(texts: string[]): Promise<Float32Array[]> {
-        const result = await this.embeddings.EmbedTexts({ texts, model: this.model });
+        // Bounded like the LLM calls: a stalled embedding request otherwise parks the organic-key
+        // pass after every normalization call has been paid for. With the bound disabled no token is
+        // passed, so the request is exactly what it was before.
+        const result = await WithCallDeadline(
+            this.callTimeoutMs,
+            `embedding batch of ${texts.length} via ${this.provider}`,
+            (signal) => this.embeddings.EmbedTexts({ texts, model: this.model, ...(signal ? { CancellationToken: signal } : {}) }),
+        );
         const vectors = result?.vectors;
         if (!vectors || vectors.length !== texts.length) {
             throw new Error(
