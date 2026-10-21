@@ -5,7 +5,6 @@ import {
     EntityInfo,
     EntitySaveOptions,
     IMetadataProvider,
-    IsRestrictingFieldRule,
     Metadata,
     UserInfo,
     ValidationErrorInfo,
@@ -15,6 +14,12 @@ import {
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJUserRoleEntity } from '@memberjunction/core-entities';
 import { FindSystemUserFieldAccessViolations, UserCache } from '@memberjunction/generic-database-provider';
+import { IsRestrictingFieldRuleAnyCase } from './fieldPermissionAccess';
+
+const UNDETERMINED_PRIOR_ASSIGNMENT_MESSAGE =
+    'Could not determine which user and role this assignment granted before the edit, so the change cannot be ' +
+    "checked against the MJ system user's field access. Refusing to save rather than risk removing a role the " +
+    'server depends on. Reload the record and try again.';
 
 /**
  * Server-side `MJ: User Roles` entity. It carries TWO independent guards that happen to protect the
@@ -126,6 +131,9 @@ import { FindSystemUserFieldAccessViolations, UserCache } from '@memberjunction/
  *   short of its entity-level access. Removal is the opposite shape: it drops rules OUT of the
  *   aggregate, so what matters is not what the departing role said but whether an `Allow` survives
  *   without it.
+ * - **Re-pointing** ({@link Save}) — an UPDATE that changes `UserID` or `RoleID` on an existing
+ *   row takes its OLD (user, role) pair apart exactly as a delete would, so the removal check runs
+ *   against the pair being vacated. `Validate()` already checks the new pair as an assignment.
  *
  * Why the system user must stay unrestricted: the server runs background work as that account.
  * It pre-warms the shared engine caches at startup, and in task mode — which job and agent
@@ -191,7 +199,61 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
                 'validation, which is where this entity\'s role-elevation invariants are enforced.'
             );
         }
+        if (this.IsSaved) {
+            // Guard B on the update path. Not in Validate(): a ReplayOnly save skips Validate(), and
+            // an Owner may replay — this check has no Owner exemption, so it must run either way.
+            const rejection = this.vacatedPairRemovalReason();
+            if (rejection) {
+                return this.refuse('update', rejection);
+            }
+        }
         return super.Save(options);
+    }
+
+    /**
+     * Why re-pointing this assignment away from its stored (user, role) pair would cost the MJ
+     * system user field access, or null when it would not.
+     *
+     * Evaluated as a removal of the OLD pair with nothing added in its place. When `RoleID` moves
+     * between two roles on the system user that is conservative — the incoming role might hold the
+     * very `Allow` the outgoing one is taking away — but assigning the new role first and then
+     * deleting the old one reaches the same state through checks that can each see the whole
+     * picture.
+     *
+     * A re-pointed column whose prior value cannot be established fails CLOSED while there is a
+     * system user to protect: the vacated pair might be one of its roles.
+     */
+    private vacatedPairRemovalReason(): string | null {
+        const priorUserID = this.priorValue('UserID', this.UserID);
+        const priorRoleID = this.priorValue('RoleID', this.RoleID);
+        const known = priorUserID !== undefined && priorRoleID !== undefined;
+        if (known && UUIDsEqual(priorUserID, this.UserID) && UUIDsEqual(priorRoleID, this.RoleID)) {
+            return null; // not a re-point — at most a change of casing
+        }
+        return this.storedPairRemovalReason();
+    }
+
+    /**
+     * Why removing this row's STORED (user, role) pair would cost the system user field access,
+     * or null. Shared by the delete path and the re-point path, which take the same pair apart.
+     */
+    private storedPairRemovalReason(): string | null {
+        const priorUserID = this.priorValue('UserID', this.UserID);
+        const priorRoleID = this.priorValue('RoleID', this.RoleID);
+        if (priorUserID === undefined || priorRoleID === undefined) {
+            return UserCache.Instance?.GetSystemUser?.() ? UNDETERMINED_PRIOR_ASSIGNMENT_MESSAGE : null;
+        }
+        return this.systemUserRoleRemovalReason(priorUserID, priorRoleID);
+    }
+
+    /** A column's stored value; undefined when it is dirty and its old value is not a usable ID. */
+    private priorValue(fieldName: 'UserID' | 'RoleID', current: string | null): string | null | undefined {
+        const field = this.GetFieldByName(fieldName);
+        if (!field?.Dirty) {
+            return current;
+        }
+        const old = field.OldValue;
+        return typeof old === 'string' && old.length > 0 ? old : undefined;
     }
 
     /**
@@ -225,7 +287,9 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
             );
         }
 
-        const rejection = this.systemUserRoleRemovalReason();
+        // Judged against the STORED pair: a delete removes the row by ID, whatever unsaved edits
+        // this object carries.
+        const rejection = this.storedPairRemovalReason();
         if (rejection) {
             return this.refuse('delete', rejection);
         }
@@ -329,17 +393,20 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
     }
 
     /**
-     * Why this role may not be taken off this user, or null when it may.
-     * Only ever rejects for the system user; every other user is unaffected.
+     * Why taking `roleID` off `userID` would cost the system user field access, or null when it
+     * would not. Only ever rejects for the system user; every other user is unaffected.
+     *
+     * Parameterized because the delete path and the re-point path both ask about the pair as
+     * STORED, which on a re-point is only available from the dirty fields' old values.
      */
-    private systemUserRoleRemovalReason(): string | null {
+    private systemUserRoleRemovalReason(userID: string | null, roleID: string | null): string | null {
         const systemUser = UserCache.Instance?.GetSystemUser?.();
-        if (!systemUser || !this.UserID || !this.RoleID || !UUIDsEqual(systemUser.ID, this.UserID)) {
+        if (!systemUser || !userID || !roleID || !UUIDsEqual(systemUser.ID, userID)) {
             return null; // not the system user — nothing to guard
         }
 
         const provider = this.ProviderToUse as unknown as IMetadataProvider;
-        const lost = FindSystemUserFieldAccessViolations(provider, systemUser, { WithoutRoleID: this.RoleID });
+        const lost = FindSystemUserFieldAccessViolations(provider, systemUser, { WithoutRoleID: roleID });
         if (lost.length === 0) {
             return null;
         }
@@ -384,7 +451,8 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
 
     /**
      * Names of entities where this role carries at least one RESTRICTING field rule — a `Deny`
-     * on any verb. Walks cached metadata only — no database access. Runs only when the system
+     * on any verb, under any spelling (the column's collation stores `'deny'` too, and enforcement
+     * honors it). Walks cached metadata only — no database access. Runs only when the system
      * user is the save target, which is rare.
      *
      * Grants and neutrals are ignored, and must be: the system user holds the standard roles
@@ -408,7 +476,7 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
             const hit = entity.Fields.some(
                 f =>
                     f.HasFieldPermissions &&
-                    f.FieldPermissions.some(fp => UUIDsEqual(fp.RoleID, roleID) && IsRestrictingFieldRule(fp))
+                    f.FieldPermissions.some(fp => UUIDsEqual(fp.RoleID, roleID) && IsRestrictingFieldRuleAnyCase(fp))
             );
             if (hit) {
                 names.push(entity.Name);
