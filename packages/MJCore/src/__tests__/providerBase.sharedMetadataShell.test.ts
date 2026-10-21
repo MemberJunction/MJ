@@ -45,7 +45,7 @@ describe('ProviderBase shared metadata shell (reuse-global fast path)', () => {
         Metadata.Provider = previousGlobalProvider;
     });
 
-    test('a provider reusing global metadata shares the Info INSTANCES but owns its array containers', async () => {
+    test('a provider reusing global metadata shares the Info INSTANCES and delegates arrays via prototype', async () => {
         const perRequestProvider = new TestMetadataProvider();
         const result = await perRequestProvider.Config(reuseGlobalConfig());
 
@@ -54,26 +54,24 @@ describe('ProviderBase shared metadata shell (reuse-global fast path)', () => {
         // The whole point of #3083: the same EntityInfo instances — never a
         // re-instantiated copy of the 617-entity graph...
         expect(perRequestProvider.Entities[0]).toBe(globalProvider.Entities[0]);
-        // ...but the array CONTAINER is per-instance (shallow copy), so an in-place
-        // sort/push/splice by request-scoped code stays request-local instead of
-        // reordering the global graph for every other in-flight request.
-        expect(perRequestProvider.Entities).not.toBe(globalProvider.Entities);
-        expect(perRequestProvider.Entities).toEqual(globalProvider.Entities);
+        // Zero-copy prototype delegation: the shell delegates array lookups directly
+        // to the shared AllMetadata prototype without copying 19 array containers.
+        expect(Object.getPrototypeOf(perRequestProvider.AllMetadata)).toBe(globalProvider.AllMetadata);
+        expect(perRequestProvider.Entities).toBe(globalProvider.Entities);
     });
 
-    test('in-place array mutation on a reusing provider cannot corrupt the global graph', async () => {
+    test('own-property assignment on a reusing provider shell does not corrupt the global graph', async () => {
         const perRequestProvider = new TestMetadataProvider();
         await perRequestProvider.Config(reuseGlobalConfig());
 
         const globalOrder = [...globalProvider.Entities];
-        perRequestProvider.Entities.reverse();
-        perRequestProvider.Entities.push(globalProvider.Entities[0]);
+        perRequestProvider.AllMetadata.AllEntities = [...globalProvider.Entities].reverse();
 
         expect(globalProvider.Entities).toEqual(globalOrder);
         expect(globalProvider.Entities.length).toBe(globalOrder.length);
     });
 
-    test('every metadata collection is shared — a newly added collection cannot silently regress', async () => {
+    test('every metadata collection is shared via prototype delegation — a newly added collection cannot silently regress', async () => {
         const perRequestProvider = new TestMetadataProvider();
         await perRequestProvider.Config(reuseGlobalConfig());
 
@@ -81,7 +79,7 @@ describe('ProviderBase shared metadata shell (reuse-global fast path)', () => {
         const source = globalProvider.AllMetadata as unknown as Record<string, unknown[]>;
         for (const m of AllMetadataArrays) {
             expect(source[m.key], `global provider is missing ${m.key}`).toBeDefined();
-            expect(shell[m.key], `shell must have its own ${m.key} container`).not.toBe(source[m.key]);
+            expect(shell[m.key], `shell must delegate ${m.key} to source`).toBe(source[m.key]);
             expect(shell[m.key].length, `shell ${m.key} must carry the global's items`).toBe(source[m.key].length);
             for (let i = 0; i < source[m.key].length; i++) {
                 expect(shell[m.key][i], `shell ${m.key}[${i}] must be the SAME instance`).toBe(source[m.key][i]);

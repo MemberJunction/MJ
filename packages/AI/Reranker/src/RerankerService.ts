@@ -94,6 +94,11 @@ export interface RerankObservabilityOptions {
      * the rerank.
      */
     OnStepCreated?: (step: MJAIAgentRunStepEntityExtended) => void;
+
+    /**
+     * Optional request-scoped metadata provider used to create the observability step entity.
+     */
+    provider?: IMetadataProvider;
 }
 
 /** A rerank step's `InputData`: the request, and how many candidates it reranks. */
@@ -604,7 +609,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
         }
         let step: MJAIAgentRunStepEntityExtended | null = null;
         try {
-            step = await this.createRerankRunStep(options, contextUser, start(), startTime);
+            step = await this.createRerankRunStep(options, contextUser, start(), startTime, options.provider);
             options.OnStepCreated?.(step);
         } catch (e) {
             // Don't fail the reranking operation if step creation fails
@@ -748,7 +753,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
         // Store the candidates in PayloadAtStart for observability
         stepEntity.PayloadAtStart = JSON.stringify(start.PayloadAtStart);
 
-        if (!await stepEntity.Save()) {
+        if (!await stepEntity.Save({ SaveReturnMode: 'datestamps_only' })) {
             LogError(`RerankerService: Failed to create run step: ${JSON.stringify(stepEntity.LatestResult)}`);
         }
 
@@ -789,7 +794,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
                 stepEntity.PayloadAtEnd = JSON.stringify(output.payloadAtEnd);
             }
 
-            if (!await stepEntity.Save()) {
+            if (!await stepEntity.Save({ SaveReturnMode: 'datestamps_only' })) {
                 LogError(`RerankerService: Failed to finalize run step: ${JSON.stringify(stepEntity.LatestResult)}`);
             }
         } catch (e) {
