@@ -1,5 +1,22 @@
 # @memberjunction/livekit-room-core
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [3080e83]
+- Updated dependencies [81aea34]
+- Updated dependencies [2274f42]
+- Updated dependencies [230cdad]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [72dd65c]
+- Updated dependencies [7fb8598]
+- Updated dependencies [17a4137]
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ai-realtime-client@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Patch Changes

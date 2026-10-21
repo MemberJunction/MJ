@@ -22,7 +22,7 @@ import {
 import {
   WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent, WhiteboardWidgetSubmittingEventArgs
 } from './whiteboard-widget-bridge';
-import { RealtimeWhiteboardToolbarComponent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
+import { NormalizeWhiteboardPenPalette, RealtimeWhiteboardToolbarComponent, SameWhiteboardPenColor, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import { RealtimeWhiteboardZoomComponent } from './whiteboard-zoom.component';
 import { RealtimeWhiteboardAgentSeesPopoverComponent } from './whiteboard-agent-sees-popover.component';
 
@@ -255,6 +255,32 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   }
   private _tool: WhiteboardTool = 'select';
   public PenColor: string = WHITEBOARD_PEN_COLORS[0];
+  /**
+   * The user pen palette (LXP P14.3), threaded to the toolbar's swatches. `null` (default) is
+   * {@link WHITEBOARD_PEN_COLORS}. An input rather than CSS custom properties on purpose: ink
+   * items persist the chosen hex, so a `var()` palette would make saved boards theme-dependent.
+   * When a palette arrives that excludes the current pen color, the pen moves to the palette's
+   * first entry, so the swatch that is "selected" is always one the user can see. Blank,
+   * non-string and non-hex entries are dropped ({@link NormalizeWhiteboardPenPalette}); a
+   * palette with nothing usable reads as no palette.
+   *
+   * A setter rather than `ngOnChanges`, for the same reason as {@link ToolRoster}: a channel's
+   * `BindSurface` assigns inputs directly on a dynamically-created component.
+   */
+  @Input()
+  set PenPalette(value: readonly string[] | null | undefined) {
+    const next = NormalizeWhiteboardPenPalette(value);
+    this._penPalette = next;
+    const palette = next ?? WHITEBOARD_PEN_COLORS;
+    // Hex is case-insensitive: a host's "#1D4ED8" must not reset a pen holding "#1d4ed8".
+    if (!palette.some((c) => SameWhiteboardPenColor(c, this.PenColor))) {
+      this.PenColor = palette[0];
+    }
+  }
+  get PenPalette(): readonly string[] | null {
+    return this._penPalette;
+  }
+  private _penPalette: readonly string[] | null = null;
   public PenWidth = 4;
   public ShapeKind: 'rect' | 'ellipse' | 'diamond' = 'rect';
   public TextSize = 12;

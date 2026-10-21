@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-charts",
-  "version": "6.2.0-edge.4",
+  "version": "6.2.0-edge.5",
   "description": "MemberJunction: Token-themed bar, donut and area chart widgets for Angular, built on d3.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,7 +25,7 @@
   "devDependencies": {
     "@angular/compiler": "21.2.22",
     "@angular/compiler-cli": "21.2.22",
-    "@memberjunction/ng-test-utils": "6.2.0-edge.4",
+    "@memberjunction/ng-test-utils": "6.2.0-edge.5",
     "@types/d3": "^7.4.3",
     "vitest": "^4.0.18"
   },
@@ -35,7 +35,7 @@
     "@angular/core": "^21.2.22"
   },
   "dependencies": {
-    "@memberjunction/core": "6.2.0-edge.4",
+    "@memberjunction/core": "6.2.0-edge.5",
     "d3": "^7.9.0",
     "tslib": "^2.8.1"
   },
