@@ -13,7 +13,10 @@ export interface OperationParameters {
 }
 
 export class EntityOperations {
-    private contextUser: UserInfo;
+    /** The configured user every entity operation runs as; null when none is configured or it does not resolve. */
+    private contextUser: UserInfo | null;
+    /** Why {@link contextUser} is null; returned by every entity operation in that case. */
+    private identityError: string | null = null;
     /** The metadata provider used for all entity operations on this instance. */
     private provider: IMetadataProvider;
 
@@ -23,23 +26,36 @@ export class EntityOperations {
      *   `Metadata.Provider`) and passes it down — when A2AServer gains an `AppContext`-style
      *   per-request provider model, only the server's request handler changes; this class is
      *   already correct.
+     *
+     * Entity operations run as the user named by `a2aServerSettings.userEmail`. When that setting
+     * is missing or names no known user, the instance still constructs, but every entity operation
+     * refuses with an explanatory error: running as an arbitrary user would apply the wrong row-
+     * and field-level permissions.
      */
     constructor(provider: IMetadataProvider) {
         this.provider = provider;
-        // Find the user by email if configured, otherwise use the first user in the cache
-        if (a2aServerSettings?.userEmail) {
-            const user = UserCache.Instance.Users.find((u: UserInfo) =>
-                u.Email && u.Email.toLowerCase() === a2aServerSettings?.userEmail?.toLowerCase());
+        this.contextUser = this.resolveConfiguredUser();
+    }
 
-            if (user) {
-                this.contextUser = user;
-            } else {
-                LogError('EntityOperations', 'Constructor', `User with email ${a2aServerSettings?.userEmail} not found. Using first user in cache.`);
-                this.contextUser = UserCache.Instance.Users[0];
-            }
-        } else {
-            this.contextUser = UserCache.Instance.Users[0];
+    /** Finds the user named by the `userEmail` setting, recording why when there is none. */
+    private resolveConfiguredUser(): UserInfo | null {
+        const email = a2aServerSettings?.userEmail?.trim();
+        if (!email) {
+            this.identityError = 'A2A entity operations require a2aServerSettings.userEmail to name the user they run as; none is configured.';
+            return null;
         }
+        const user = UserCache.Instance.Users.find((u: UserInfo) => u.Email?.toLowerCase() === email.toLowerCase());
+        if (!user) {
+            this.identityError = `A2A entity operations are disabled: the configured user ${email} was not found.`;
+            LogError('EntityOperations', 'Constructor', this.identityError);
+            return null;
+        }
+        return user;
+    }
+
+    /** The result every entity operation returns when no configured user is available. */
+    private noUserResult(): OperationResult {
+        return { success: false, errorMessage: this.identityError ?? 'A2A entity operations have no user to run as.' };
     }
 
     /**
@@ -111,6 +127,10 @@ export class EntityOperations {
      * @returns The operation result
      */
     public async GetEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+        const contextUser = this.contextUser;
+        if (!contextUser) {
+            return this.noUserResult();
+        }
         try {
             const entity = this.FindEntity(entityName);
             if (!entity) {
@@ -120,7 +140,7 @@ export class EntityOperations {
                 };
             }
 
-            const record = await this.provider.GetEntityObject(entity.Name, this.contextUser);
+            const record = await this.provider.GetEntityObject(entity.Name, contextUser);
             const keyPairs = this.createKeyPairsForLoading(entity, parameters);
             
             const loaded = await record.InnerLoad(new CompositeKey(keyPairs));
@@ -150,6 +170,10 @@ export class EntityOperations {
      * @returns The operation result
      */
     public async CreateEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+        const contextUser = this.contextUser;
+        if (!contextUser) {
+            return this.noUserResult();
+        }
         try {
             const entity = this.FindEntity(entityName);
             if (!entity) {
@@ -159,7 +183,7 @@ export class EntityOperations {
                 };
             }
 
-            const record = await this.provider.GetEntityObject(entity.Name, this.contextUser);
+            const record = await this.provider.GetEntityObject(entity.Name, contextUser);
             record.SetMany(parameters, true);
             
             const success = await record.Save();
@@ -189,6 +213,10 @@ export class EntityOperations {
      * @returns The operation result
      */
     public async UpdateEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+        const contextUser = this.contextUser;
+        if (!contextUser) {
+            return this.noUserResult();
+        }
         try {
             const entity = this.FindEntity(entityName);
             if (!entity) {
@@ -198,7 +226,7 @@ export class EntityOperations {
                 };
             }
 
-            const record = await this.provider.GetEntityObject(entity.Name, this.contextUser);
+            const record = await this.provider.GetEntityObject(entity.Name, contextUser);
             const keyPairs = this.createKeyPairsForLoading(entity, parameters);
             
             const loaded = await record.InnerLoad(new CompositeKey(keyPairs));
@@ -241,6 +269,10 @@ export class EntityOperations {
      * @returns The operation result
      */
     public async DeleteEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+        const contextUser = this.contextUser;
+        if (!contextUser) {
+            return this.noUserResult();
+        }
         try {
             const entity = this.FindEntity(entityName);
             if (!entity) {
@@ -250,7 +282,7 @@ export class EntityOperations {
                 };
             }
 
-            const record = await this.provider.GetEntityObject(entity.Name, this.contextUser);
+            const record = await this.provider.GetEntityObject(entity.Name, contextUser);
             const keyPairs = this.createKeyPairsForLoading(entity, parameters);
             
             const loaded = await record.InnerLoad(new CompositeKey(keyPairs));
@@ -285,6 +317,10 @@ export class EntityOperations {
      * @returns The operation result
      */
     public async QueryEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+        const contextUser = this.contextUser;
+        if (!contextUser) {
+            return this.noUserResult();
+        }
         try {
             const entity = this.FindEntity(entityName);
             if (!entity) {
@@ -300,7 +336,7 @@ export class EntityOperations {
                 ExtraFilter: parameters.extraFilter,
                 OrderBy: parameters.orderBy,
                 Fields: parameters.fields,
-            }, this.contextUser);
+            }, contextUser);
             
             return { success: true, result: queryResult };
         } catch (error) {
