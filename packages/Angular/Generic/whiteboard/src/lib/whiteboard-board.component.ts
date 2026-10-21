@@ -12,7 +12,7 @@ import {
   WHITEBOARD_DEFAULTS, WhiteboardBounds, WhiteboardConnectorItem, WhiteboardFontFamily,
   WhiteboardHighlightItem, WhiteboardHtmlItem, WhiteboardImageItem, WhiteboardInkItem,
   WhiteboardItem, WhiteboardItemPatch, WhiteboardMarkdownItem, WhiteboardPageInfo,
-  WhiteboardPoint, WhiteboardShapeItem, WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem
+  WhiteboardPoint, WhiteboardShapeItem, WhiteboardState, WhiteboardStickyItem, WhiteboardTagClass, WhiteboardTextItem
 } from './whiteboard-state';
 import { WhiteboardTextStyleEvent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import {
@@ -668,6 +668,11 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   public StickyRotation(item: WhiteboardStickyItem): string {
     return `rotate(${item.Rotation ?? 0}deg)`;
+  }
+
+  /** The `wb-tag-<slug>` wrapper class for a tagged item, '' otherwise (see {@link WhiteboardTagClass}). */
+  public TagClass(item: WhiteboardItem): string {
+    return WhiteboardTagClass(item.Tag);
   }
 
   public StickyTintClass(item: WhiteboardStickyItem): string {

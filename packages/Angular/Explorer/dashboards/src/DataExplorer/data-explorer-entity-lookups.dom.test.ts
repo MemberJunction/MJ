@@ -57,8 +57,8 @@ describe('DataExplorerDashboardComponent entity lookups', () => {
         expect(flat2).toBe(flat1);
 
         d.RecentRecords = [
-            { entityId: ids[0], entityName: 'E1', compositeKeyString: 'ID|1', recordName: 'R1', latestAt: new Date(), totalOpens: 1 },
-            { entityId: ids[1], entityName: 'E2', compositeKeyString: 'ID|2', recordName: 'R2', latestAt: new Date(), totalOpens: 2 },
+            { entityId: ids[0], entityName: 'E1', recordId: '1', recordName: 'R1', latestAt: new Date(), totalCount: 1 },
+            { entityId: ids[1], entityName: 'E2', recordId: '2', recordName: 'R2', latestAt: new Date(), totalCount: 2 },
         ];
         d.RecentRecordsEntityFilter = ids[0];
         const rec1 = d.FilteredRecentRecords;

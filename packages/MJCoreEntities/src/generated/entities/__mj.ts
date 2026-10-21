@@ -12672,34 +12672,34 @@ export const MJCompanyIntegrationObjectFieldSchema = z.object({
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Freeform JSON for connector-specific field configuration`),
-    Status: z.string().describe(`
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
         * * Description: Active, Deprecated, or Disabled. Mirrors EntityField status values.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
     IsCustom: z.boolean().describe(`
         * * Field Name: IsCustom
         * * Display Name: Is Custom
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
-    MetadataSource: z.string().describe(`
+    MetadataSource: z.union([z.literal('Custom'), z.literal('Declared'), z.literal('Discovered')]).describe(`
         * * Field Name: MetadataSource
         * * Display Name: Metadata Source
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Declared
-        * * Description: Provenance of this IntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.`),
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+        * * Description: Provenance of this CompanyIntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.`),
     CompanyIntegrationObjectID: z.string().describe(`
         * * Field Name: CompanyIntegrationObjectID
         * * Display Name: Company Integration Object ID
@@ -12762,6 +12762,16 @@ export const MJCompanyIntegrationObjectFieldSchema = z.object({
         * * Display Name: Last Sampled At
         * * SQL Data Type: datetimeoffset
         * * Description: When sampling last streamed records for this item. Distinct from LastSeenAt: an item can be listed by an endpoint without ever being sampled, and unsampled items are exactly the ones whose widths and keys came from the declared catalog rather than from data.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
     CompanyIntegrationObject: z.string().describe(`
         * * Field Name: CompanyIntegrationObject
         * * Display Name: Company Integration Object
@@ -12790,7 +12800,9 @@ export const MJCompanyIntegrationObjectSchema = z.object({
     IntegrationID: z.string().describe(`
         * * Field Name: IntegrationID
         * * Display Name: Integration ID
-        * * SQL Data Type: uniqueidentifier`),
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
+        * * Description: The integration (connector) this object belongs to. Always the IntegrationID of the owning CompanyIntegration, copied onto the row by the catalog writer so the per-connection catalog can be read through the same projection as the shared IntegrationObject catalog.`),
     Name: z.string().describe(`
         * * Field Name: Name
         * * Display Name: Name
@@ -12867,22 +12879,17 @@ export const MJCompanyIntegrationObjectSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Processing and display order. Lower numbers are processed first.`),
-    Status: z.string().describe(`
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
         * * Description: Active, Deprecated, or Disabled. Mirrors EntityField status values.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
     WriteAPIPath: z.string().nullable().describe(`
         * * Field Name: WriteAPIPath
         * * Display Name: Write API Path
@@ -12971,12 +12978,17 @@ export const MJCompanyIntegrationObjectSchema = z.object({
         * * Display Name: Incremental Watermark Field
         * * SQL Data Type: nvarchar(255)
         * * Description: Vendor field name marking "last changed" — drives incremental sync filter when SupportsIncrementalSync=1. The exact filter syntax (e.g., $filter=Modified gt {value} or modified_since={value}) lives in Configuration.incrementalFilterFormat. Provable-only: leave NULL if docs do not name a watermark field.`),
-    MetadataSource: z.string().describe(`
+    MetadataSource: z.union([z.literal('Custom'), z.literal('Declared'), z.literal('Discovered')]).describe(`
         * * Field Name: MetadataSource
         * * Display Name: Metadata Source
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Declared
-        * * Description: Provenance of this IntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync.`),
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+        * * Description: Provenance of this CompanyIntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync.`),
     SupportsCreate: z.boolean().describe(`
         * * Field Name: SupportsCreate
         * * Display Name: Supports Create
@@ -13063,6 +13075,20 @@ export const MJCompanyIntegrationObjectSchema = z.object({
         * * Display Name: Last Sampled At
         * * SQL Data Type: datetimeoffset
         * * Description: When sampling last streamed records for this item. Distinct from LastSeenAt: an item can be listed by an endpoint without ever being sampled, and unsampled items are exactly the ones whose widths and keys came from the declared catalog rather than from data.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Integration: z.string().describe(`
+        * * Field Name: Integration
+        * * Display Name: Integration
+        * * SQL Data Type: nvarchar(100)`),
     CompanyIntegration: z.string().describe(`
         * * Field Name: CompanyIntegration
         * * Display Name: Company Integration
@@ -77022,33 +77048,18 @@ export class MJCompanyIntegrationObjectFieldEntity extends BaseEntity<MJCompanyI
     * * Display Name: Status
     * * SQL Data Type: nvarchar(25)
     * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
     * * Description: Active, Deprecated, or Disabled. Mirrors EntityField status values.
     */
-    get Status(): string {
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' {
         return this.Get('Status');
     }
-    set Status(value: string) {
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
         this.Set('Status', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
     }
 
     /**
@@ -77070,12 +77081,17 @@ export class MJCompanyIntegrationObjectFieldEntity extends BaseEntity<MJCompanyI
     * * Display Name: Metadata Source
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Declared
-    * * Description: Provenance of this IntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+    * * Description: Provenance of this CompanyIntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.
     */
-    get MetadataSource(): string {
+    get MetadataSource(): 'Custom' | 'Declared' | 'Discovered' {
         return this.Get('MetadataSource');
     }
-    set MetadataSource(value: string) {
+    set MetadataSource(value: 'Custom' | 'Declared' | 'Discovered') {
         this.Set('MetadataSource', value);
     }
 
@@ -77230,6 +77246,26 @@ export class MJCompanyIntegrationObjectFieldEntity extends BaseEntity<MJCompanyI
     }
 
     /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
     * * Field Name: CompanyIntegrationObject
     * * Display Name: Company Integration Object
     * * SQL Data Type: nvarchar(255)
@@ -77305,6 +77341,8 @@ export class MJCompanyIntegrationObjectEntity extends BaseEntity<MJCompanyIntegr
     * * Field Name: IntegrationID
     * * Display Name: Integration ID
     * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
+    * * Description: The integration (connector) this object belongs to. Always the IntegrationID of the owning CompanyIntegration, copied onto the row by the catalog writer so the per-connection catalog can be read through the same projection as the shared IntegrationObject catalog.
     */
     get IntegrationID(): string {
         return this.Get('IntegrationID');
@@ -77506,33 +77544,18 @@ export class MJCompanyIntegrationObjectEntity extends BaseEntity<MJCompanyIntegr
     * * Display Name: Status
     * * SQL Data Type: nvarchar(25)
     * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
     * * Description: Active, Deprecated, or Disabled. Mirrors EntityField status values.
     */
-    get Status(): string {
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' {
         return this.Get('Status');
     }
-    set Status(value: string) {
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
         this.Set('Status', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
     }
 
     /**
@@ -77764,12 +77787,17 @@ export class MJCompanyIntegrationObjectEntity extends BaseEntity<MJCompanyIntegr
     * * Display Name: Metadata Source
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Declared
-    * * Description: Provenance of this IntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync.
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+    * * Description: Provenance of this CompanyIntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync.
     */
-    get MetadataSource(): string {
+    get MetadataSource(): 'Custom' | 'Declared' | 'Discovered' {
         return this.Get('MetadataSource');
     }
-    set MetadataSource(value: string) {
+    set MetadataSource(value: 'Custom' | 'Declared' | 'Discovered') {
         this.Set('MetadataSource', value);
     }
 
@@ -77977,6 +78005,35 @@ export class MJCompanyIntegrationObjectEntity extends BaseEntity<MJCompanyIntegr
     }
     set LastSampledAt(value: Date | null) {
         this.Set('LastSampledAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Integration
+    * * Display Name: Integration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Integration(): string {
+        return this.Get('Integration');
     }
 
     /**

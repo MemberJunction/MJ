@@ -1684,11 +1684,15 @@ import {
     WorkQueueValidateBindingsServerOperation,
 } from '@memberjunction/work-queue-engine';
 
-// @memberjunction/server (3 classes)
+// @memberjunction/server (7 classes)
 import {
+    AWSIoTCoreBroadcastProvider,
+    AzureWebPubSubBroadcastProvider,
+    GCPPubSubBroadcastProvider,
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
+    SequencedRoleBucketBroadcastProvider,
 } from '@memberjunction/server';
 
 // @memberjunction/work-queue-samples (1 classes)
@@ -2907,9 +2911,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     WorkQueueListPartitionsServerOperation,
     WorkQueueReplayDeadLetterServerOperation,
     WorkQueueValidateBindingsServerOperation,
+    AWSIoTCoreBroadcastProvider,
+    AzureWebPubSubBroadcastProvider,
+    GCPPubSubBroadcastProvider,
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
+    SequencedRoleBucketBroadcastProvider,
     HelloWorldHandler,
     WorkQueueServerExtension,
 ];
@@ -2928,7 +2936,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1182;
+export const CLASS_REGISTRATIONS_COUNT = 1186;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
