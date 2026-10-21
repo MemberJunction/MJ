@@ -1,0 +1,48 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mj-bg-overlay);
+  backdrop-filter: blur(2px);
+  z-index: 10;
+}
+
+.overlay__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 36px;
+  border-radius: 14px;
+  background: var(--mj-bg-surface);
+  box-shadow: var(--mj-shadow-xl);
+  text-align: center;
+}
+
+.overlay__icon {
+  font-size: 1.8rem;
+  color: var(--mj-brand-primary);
+}
+
+.overlay__icon--error {
+  color: var(--mj-status-error);
+}
+
+.overlay__title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.overlay__sub {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--mj-text-muted);
+  max-width: 280px;
+}
+
+.overlay__action {
+  margin-top: 6px;
+}

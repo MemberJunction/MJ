@@ -134,6 +134,14 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="TemplateDataCapture"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -1107,6 +1115,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJFeatureValueCaches', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Feature Pipeline Versions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJFeaturePipelineVersions"
+        SectionName="Feature Pipeline Versions"
+        Icon="fa fa-code-branch"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJFeaturePipelineVersions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Feature Pipeline Versions','PromptID')"
+                [NewRecordValues]="NewRecordValues('MJ: Feature Pipeline Versions','PromptID')"
+                [AllowLoad]="IsSectionExpanded('mJFeaturePipelineVersions')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJFeaturePipelineVersions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

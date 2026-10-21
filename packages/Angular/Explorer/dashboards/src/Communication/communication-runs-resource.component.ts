@@ -262,32 +262,33 @@ export class CommunicationRunsResourceComponent extends BaseResourceComponent im
             yesterday.setDate(yesterday.getDate() - 1);
             const yesterdayIso = yesterday.toISOString();
 
-            const [runsResult, activeResult, completedResult, failedResult] = await Promise.all([
-                rv.RunView<MJCommunicationRunEntity>({
+            const [runsResult, activeResult, completedResult, failedResult] = await rv.RunViews([
+                {
                     EntityName: 'MJ: Communication Runs',
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 50,
-                    ResultType: 'entity_object'
-                }),
-                rv.RunView({
+                    Fields: ['ID', 'Status', 'Direction', 'StartedAt', 'EndedAt', 'NumMessagesProcessed', 'Comments', 'User'],
+                    ResultType: 'simple'
+                },
+                {
                     EntityName: 'MJ: Communication Runs',
                     ExtraFilter: `Status = 'In-Progress'`,
                     ResultType: 'count_only'
-                }),
-                rv.RunView({
+                },
+                {
                     EntityName: 'MJ: Communication Runs',
                     ExtraFilter: `EndedAt >= '${yesterdayIso}' AND Status = 'Complete'`,
                     ResultType: 'count_only'
-                }),
-                rv.RunView({
+                },
+                {
                     EntityName: 'MJ: Communication Runs',
                     ExtraFilter: `EndedAt >= '${yesterdayIso}' AND Status = 'Failed'`,
                     ResultType: 'count_only'
-                })
+                }
             ]);
 
             if (runsResult.Success) {
-                this.Runs = runsResult.Results;
+                this.Runs = runsResult.Results as MJCommunicationRunEntity[];
             }
 
             if (activeResult.Success) this.Summary.active = activeResult.TotalRowCount;

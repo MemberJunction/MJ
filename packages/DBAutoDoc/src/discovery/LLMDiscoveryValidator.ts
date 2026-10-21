@@ -5,9 +5,11 @@
  */
 
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
-import { MJGlobal } from '@memberjunction/global';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
+import { CreateLLMInstance } from '../utils/llm-factory.js';
+import { BuildIndexHints, FormatIndexHint } from '../utils/index-hints.js';
+import { SeedContextExcerpt, SeedContextText } from '../utils/seed-context.js';
 import { SchemaDefinition } from '../types/state.js';
 import {
   PKCandidate,
@@ -26,22 +28,14 @@ export class LLMDiscoveryValidator {
     private config: RelationshipDiscoveryConfig,
     private aiConfig: AIConfig,
     private statsCache: ColumnStatsCache,
-    private schemas: SchemaDefinition[]
+    private schemas: SchemaDefinition[],
+    /** The operator's seed context; paragraphs naming the target table are added to the prompt. */
+    private seedContext?: SeedContextText
   ) {
-    // Create LLM instance using MJ ClassFactory
-    const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
-      BaseLLM,
-      aiConfig.provider,
-      aiConfig.apiKey
-    );
-
-    if (!llm) {
-      throw new Error(
-        `Failed to create LLM instance for provider: ${aiConfig.provider}. Check that the provider name matches a registered BaseLLM subclass.`
-      );
-    }
-
-    this.llm = llm;
+    // Resolve the provider name (e.g. 'gemini') to its driver class (e.g. 'GeminiLLM'), as the rest
+    // of DBAutoDoc does. Using the raw provider name as the registration key resolved to nothing and
+    // left a bare BaseLLM, so every validation call failed.
+    this.llm = CreateLLMInstance(aiConfig.provider, aiConfig.apiKey);
   }
 
   /**
@@ -227,8 +221,15 @@ export class LLMDiscoveryValidator {
       TargetTable: targetTable,
       RelatedTables: relatedTables,
       pkCandidates: pkContext,
-      fkCandidates: fkContext
+      fkCandidates: fkContext,
+      ExistingIndexes: this.indexHintLines(schemaName, tableName)
     };
+  }
+
+  /** Existing indexes on the table as prompt lines, from the introspected schema. */
+  private indexHintLines(schemaName: string, tableName: string): string[] {
+    const table = this.schemas.find(s => s.name === schemaName)?.tables.find(t => t.name === tableName);
+    return BuildIndexHints(table).map(FormatIndexHint);
   }
 
   /**
@@ -520,6 +521,20 @@ export class LLMDiscoveryValidator {
     return reasons.join(', ');
   }
 
+  /** The operator's notes on the target table, as a prompt section, or an empty string when there are none. */
+  protected seedNotes(tableName: string): string {
+    const excerpt = SeedContextExcerpt(this.seedContext, [tableName]);
+    if (!excerpt) {
+      return '';
+    }
+    return `## Notes from the operator about this data
+Written by the person running the analysis. Treat them as evidence about how tables relate and which columns are keys; they do not override what the data and constraints show.
+
+${excerpt}
+
+`;
+  }
+
   /**
    * Build LLM validation prompt
    */
@@ -560,6 +575,15 @@ ${context.RelatedTables
     : ''
 }
 
+${
+  context.ExistingIndexes && context.ExistingIndexes.length > 0
+    ? `### Existing Indexes (declared in the database):
+${context.ExistingIndexes.map(line => `- ${line}`).join('\n')}
+
+Indexes are evidence, not proof: a UNIQUE index or PRIMARY KEY on non-null columns strongly supports a PK candidate on exactly those columns; a non-unique index led by an ID-like column often marks a foreign key. "(expression)" is a computed key part.
+`
+    : ''
+}
 ### Statistical Analysis Found:
 
 **Primary Key Candidates:**
@@ -590,7 +614,7 @@ ${
     : 'None'
 }
 
-## Your Task:
+${this.seedNotes(context.TargetTable.table)}## Your Task:
 Analyze the statistical findings and provide validation:
 
 1. **Validate Primary Keys**: Are the PK candidates correct? Should any be removed?

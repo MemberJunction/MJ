@@ -369,6 +369,27 @@ describe('PayloadManager', () => {
             // No warning about reasoning being stray
             expect(result.warnings.every(w => !w.includes('reasoning'))).toBe(true);
         });
+
+        it('should unwrap LLM wrapper aliases like setFields into newElements/updateElements', () => {
+            const result = pm.applyAgentChangeRequest(
+                {} as Record<string, unknown>,
+                {
+                    setFields: {
+                        name: 'Migration Sequence Validator',
+                        description: 'Validates EntityField sequence numbers',
+                        skillMd: '---\nname: migration-sequence-validator\n---',
+                    },
+                } as Record<string, unknown>,
+                {
+                    allowedPaths: ['name', 'description', 'skillMd', 'scripts', 'references', 'assets'],
+                },
+            );
+            expect(result.result.name).toBe('Migration Sequence Validator');
+            expect(result.result.description).toBe('Validates EntityField sequence numbers');
+            expect(result.result.skillMd).toContain('migration-sequence-validator');
+            expect('setFields' in result.result).toBe(false);
+            expect(result.blockedOperations ?? []).toHaveLength(0);
+        });
     });
 
     // ════════════════════════════════════════════════════════════════════
@@ -639,6 +660,100 @@ describe('PayloadManager', () => {
             const merged = pm.mergeUpstreamPayload<MixedPayload>('sub', parent, subAgent, ['rows.*']);
 
             expect(merged.result.untouched).toEqual([{ real: 1 }]);
+        });
+
+        it('accurately counts additions, updates, and deletions against parentPayload rather than upstreamPaths', () => {
+            interface AccountingPayload {
+                existingUpdated: string;
+                existingUnchanged: string;
+                existingRemoved?: string;
+                newlyAdded?: string;
+                nested: {
+                    count: number;
+                    addedNested?: boolean;
+                };
+            }
+            const parent: AccountingPayload = {
+                existingUpdated: 'before',
+                existingUnchanged: 'same',
+                existingRemoved: 'to-delete',
+                nested: {
+                    count: 1,
+                },
+            };
+            const subAgent: Partial<AccountingPayload> = {
+                existingUpdated: 'after',
+                existingUnchanged: 'same',
+                newlyAdded: 'brand-new',
+                nested: {
+                    count: 2,
+                    addedNested: true,
+                },
+            };
+
+            const merged = pm.mergeUpstreamPayload<AccountingPayload>(
+                'sub',
+                parent,
+                subAgent,
+                ['existingUpdated', 'existingUnchanged', 'existingRemoved', 'newlyAdded', 'nested.*']
+            );
+
+            // 2 additions: newlyAdded + nested.addedNested
+            // 2 updates: existingUpdated + nested.count (existingUnchanged was not modified)
+            // 1 deletion: existingRemoved
+            expect(merged.applied.additions).toBe(2);
+            expect(merged.applied.updates).toBe(2);
+            expect(merged.applied.deletions).toBe(1);
+            expect(merged.result).toEqual({
+                existingUpdated: 'after',
+                existingUnchanged: 'same',
+                newlyAdded: 'brand-new',
+                nested: {
+                    count: 2,
+                    addedNested: true,
+                },
+            });
+        });
+
+        it('reuses cached pattern regexes and parsed path specs across repeated path/operation checks', () => {
+            interface SpecPayload {
+                metrics: {
+                    revenue: number;
+                    forecast?: number;
+                };
+                notes?: string;
+            }
+            const initial: SpecPayload = {
+                metrics: { revenue: 100 },
+            };
+
+            const allowedSpecs = ['metrics.*:add,update', 'notes:add,update'];
+
+            const first = pm.applyAgentChangeRequest<SpecPayload>(
+                initial,
+                {
+                    newElements: { metrics: { forecast: 120 } as SpecPayload['metrics'], notes: 'Q1' },
+                    updateElements: { metrics: { revenue: 110 } },
+                },
+                { allowedPaths: allowedSpecs }
+            );
+            expect(first.result).toEqual({
+                metrics: { revenue: 110, forecast: 120 },
+                notes: 'Q1',
+            });
+
+            // Second call hits the static caches for the same specs and enforces blocked delete on metrics.revenue
+            const second = pm.applyAgentChangeRequest<SpecPayload>(
+                first.result,
+                {
+                    removeElements: { metrics: { revenue: '__DELETE__' as unknown as number } },
+                    updateElements: { notes: 'Q2' },
+                },
+                { allowedPaths: allowedSpecs }
+            );
+            expect(second.result.metrics.revenue).toBe(110);
+            expect(second.result.notes).toBe('Q2');
+            expect(second.blockedOperations?.some((b) => b.path === 'metrics.revenue' && b.operation === 'delete')).toBe(true);
         });
     });
 });

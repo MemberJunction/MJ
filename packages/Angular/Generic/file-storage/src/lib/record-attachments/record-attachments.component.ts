@@ -1516,8 +1516,12 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       let uploadUrl = '/media/upload-stage';
-      const gqlUrl = GraphQLDataProvider.Instance?.ConfigData?.URL;
-      if (gqlUrl && gqlUrl.startsWith('http')) {
+      // The configured MJAPI URL (MJAPI_URI, MJ #5674); otherwise the pre-#5674 derivation from the GraphQL URL.
+      const configData = GraphQLDataProvider.Instance?.ConfigData;
+      const gqlUrl = configData?.URL;
+      if (configData?.MJAPIURL) {
+        uploadUrl = `${configData.MJAPIURL}/media/upload-stage`;
+      } else if (gqlUrl && gqlUrl.startsWith('http')) {
         uploadUrl = gqlUrl.replace(/\/graphql\/?$/i, '').replace(/\/+$/, '') + '/media/upload-stage';
       }
 

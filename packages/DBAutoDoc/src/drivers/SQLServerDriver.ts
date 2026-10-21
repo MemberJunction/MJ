@@ -5,7 +5,9 @@
 
 import sql from 'mssql';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseAutoDocDriver } from './BaseAutoDocDriver.js';
+import { BaseAutoDocDriver, DriverProbeOutcome, ProbeNormalization, ProbeNormalizationPair } from './BaseAutoDocDriver.js';
+import { DescribeProbeFailure, ExtractSqlState } from './probeErrors.js';
+import { BuildSQLServerIndexQuery, SQLServerIndexRow, MapSQLServerIndexRows } from './IndexCatalog.js';
 import {
   AutoDocSchema,
   AutoDocTable,
@@ -19,8 +21,32 @@ import {
   AutoDocTableFilter,
   AutoDocColumnStatistics,
   AutoDocValueDistribution,
-  AutoDocExistingDescription
+  AutoDocExistingDescription,
+  AutoDocIndex
 } from '../types/driver.js';
+
+/** Sentinel returned by {@link withDeadline} when the wait elapsed. */
+const TIMED_OUT = Symbol('probe-timed-out');
+
+/**
+ * Resolve `p`, or {@link TIMED_OUT} if it has not settled within `ms`.
+ *
+ * Bounds the CALLER's wait, not the server's work — the statement keeps running. Used
+ * only where the driver offers no statement-level timeout.
+ */
+async function withDeadline<T>(p: Promise<T>, ms: number): Promise<T | typeof TIMED_OUT> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      p,
+      new Promise<typeof TIMED_OUT>((resolve) => {
+        timer = setTimeout(() => resolve(TIMED_OUT), ms);
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 /**
  * SQL Server driver implementation
@@ -277,10 +303,22 @@ export class SQLServerDriver extends BaseAutoDocDriver {
       isForeignKey: row.is_foreign_key,
       checkConstraint: row.check_constraint || undefined,
       defaultValue: row.default_value || undefined,
-      maxLength: row.max_length > 0 ? row.max_length : undefined,
+      // sys.columns.max_length is in bytes (-1 for max); nchar/nvarchar store two bytes per character.
+      maxLength: row.max_length > 0 ? (/^n(var)?char$/i.test(row.data_type) ? row.max_length / 2 : row.max_length) : undefined,
       precision: row.precision > 0 ? row.precision : undefined,
       scale: row.scale > 0 ? row.scale : undefined
     }));
+  }
+
+  /**
+   * Get every existing index on the tables of one schema (primary-key indexes included).
+   */
+  public async GetIndexes(schemaName: string): Promise<AutoDocIndex[]> {
+    const result = await this.executeQuery<SQLServerIndexRow>(BuildSQLServerIndexQuery(schemaName));
+    if (!result.success) {
+      throw new Error(`Failed to read indexes for schema ${schemaName}: ${result.errorMessage}`);
+    }
+    return MapSQLServerIndexRows(result.data ?? []);
   }
 
   public async getExistingDescriptions(
@@ -838,6 +876,100 @@ export class SQLServerDriver extends BaseAutoDocDriver {
   }
 
   /**
+   * Probe whether a candidate key's child values exist in the parent column.
+   *
+   * Returns two integers and nothing else. Both sides are cast to `NVARCHAR(4000)`
+   * so the comparison works across the type pairs soft keys actually use (a
+   * `uniqueidentifier` parent against a `varchar` child, an `int` parent against a
+   * `nvarchar` child) instead of relying on SQL Server's implicit conversion, which
+   * differs from PostgreSQL's and would make the same schema probe differently on
+   * the two engines. `LOCK_TIMEOUT` plus a query-level `OPTION (MAXDOP 1)` keep one
+   * probe from becoming the run's dominant cost.
+   *
+   * Each side is normalized as the key will be at match time (see {@link probeValueExpression}).
+   */
+  public async ProbeJoinContainment(
+    child: { Schema: string; Table: string; Column: string },
+    parent: { Schema: string; Table: string; Column: string },
+    sampleSize: number,
+    timeoutMs: number,
+    normalization: ProbeNormalizationPair = { Child: 'ExactMatch', Parent: 'ExactMatch' }
+  ): Promise<DriverProbeOutcome> {
+    try {
+      if (!this.pool) {
+        await this.connect();
+      }
+      if (!this.pool) {
+        return { Ok: false, Reason: 'no SQL Server connection pool available' };
+      }
+
+      const childCol = this.escapeIdentifier(child.Column);
+      const parentCol = this.escapeIdentifier(parent.Column);
+      const query = `
+        SET LOCK_TIMEOUT ${Math.max(1, Math.floor(timeoutMs))};
+        WITH ChildSample AS (
+          SELECT DISTINCT TOP ${Math.max(1, Math.floor(sampleSize))}
+            ${this.probeValueExpression(childCol, normalization.Child)} AS v
+          FROM ${this.escapeIdentifier(child.Schema)}.${this.escapeIdentifier(child.Table)}
+          WHERE ${childCol} IS NOT NULL
+        ),
+        ParentValues AS (
+          SELECT DISTINCT ${this.probeValueExpression(parentCol, normalization.Parent)} AS v
+          FROM ${this.escapeIdentifier(parent.Schema)}.${this.escapeIdentifier(parent.Table)}
+          WHERE ${parentCol} IS NOT NULL
+        )
+        SELECT COUNT(*) AS sampled_values,
+               COUNT(p.v) AS matched_values
+        FROM ChildSample c
+        LEFT JOIN ParentValues p ON c.v = p.v
+        OPTION (MAXDOP 1)
+      `;
+
+      // `mssql` exposes no per-request statement timeout (only a pool-level
+      // `requestTimeout`), so the wait is bounded client-side. Note the difference from
+      // the PostgreSQL driver, where `statement_timeout` aborts the query server-side:
+      // here a probe that overruns stops being waited on, but the statement continues
+      // on the server until it finishes. `SET LOCK_TIMEOUT` above caps the common case
+      // — blocking on someone else's lock — which is the one worth bounding.
+      const bound = Math.max(1, Math.floor(timeoutMs));
+      const result = await withDeadline(
+        this.pool.request().query<{ sampled_values: number; matched_values: number }>(query),
+        bound
+      );
+      if (result === TIMED_OUT) {
+        return { Ok: false, Reason: 'probe exceeded its timeout' };
+      }
+      const row = result.recordset && result.recordset.length > 0 ? result.recordset[0] : undefined;
+      if (!row) {
+        return { Ok: false, Reason: 'probe returned no rows' };
+      }
+      return {
+        Ok: true,
+        SampledValues: Number(row.sampled_values),
+        MatchedValues: Number(row.matched_values)
+      };
+    } catch (error) {
+      return { Ok: false, Reason: DescribeProbeFailure(error), Code: ExtractSqlState(error) };
+    }
+  }
+
+  /**
+   * A probe side's value as `NVARCHAR(4000)`, with the key's match-time normalization applied.
+   * `LTRIM(RTRIM())` rather than `TRIM()`, which needs SQL Server 2017.
+   */
+  private probeValueExpression(column: string, normalization: ProbeNormalization): string {
+    const asText = `CAST(${column} AS NVARCHAR(4000))`;
+    switch (normalization) {
+      case 'LowerCaseTrim':
+        return `LOWER(LTRIM(RTRIM(${asText})))`;
+      case 'Trim':
+        return `LTRIM(RTRIM(${asText}))`;
+      case 'ExactMatch':
+        return asText;
+    }
+  }
+
+  /**
    * Check if combination of columns is unique
    */
   public async checkColumnCombinationUniqueness(
@@ -898,3 +1030,4 @@ export class SQLServerDriver extends BaseAutoDocDriver {
     return [parts[0], parts[1]];
   }
 }
+

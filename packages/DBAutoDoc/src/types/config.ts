@@ -1,6 +1,31 @@
+import type { AutoDocPluginConfigEntry } from '../plugins/types.js';
+
 /**
  * Configuration types for DBAutoDoc
  */
+
+/** Bounds and thresholds for key verification. Every field has a documented default. */
+export interface KeyVerificationConfig {
+    /** Run the probe at all. Default true — `false` makes every key Unprobed, not Verified. */
+    enabled?: boolean;
+    /** Distinct child values sampled per probe. Default 1000. */
+    sampleSize?: number;
+    /** Hard cap on probes per run. Default 500. Past it, candidates are Unprobed. */
+    maxProbes?: number;
+    /** Per-probe timeout in ms. Default 5000. A slow probe is Unprobed, not Refuted. */
+    probeTimeoutMs?: number;
+    /**
+     * Containment floor for Verified. Default 0.05.
+     *
+     * Deliberately far below FKDetector's 75% GATE 6: that gate decides whether a
+     * *statistically discovered* FK is real, where near-perfect containment is the
+     * evidence. This floor answers a much weaker question — "does this join match
+     * anything at all?" — whose whole point is to catch the 0% case (a namespaced
+     * parent key, a type-mismatched cross-schema guess) without discarding a
+     * genuinely sparse soft key in a connector schema full of orphans.
+     */
+    minContainment?: number;
+}
 
 export interface DBAutoDocConfig {
   version: string;
@@ -12,6 +37,11 @@ export interface DBAutoDocConfig {
   tables: TableFilterConfig;
   seedContext?: SeedContextConfig;
   groundTruth?: GroundTruthConfig;
+  /**
+   * Plugins to run. Built-in plugins run by default unless listed here with `Enabled: false`;
+   * external plugins are listed with a `Module` (npm package or file path) to load.
+   */
+  plugins?: AutoDocPluginConfigEntry[];
 }
 
 /**
@@ -19,10 +49,17 @@ export interface DBAutoDocConfig {
  * This is injected into prompts to guide analysis but does NOT override AI output.
  */
 export interface SeedContextConfig {
+  file?: string;
+  files?: string[];
   overallPurpose?: string;
   businessDomains?: string[];
   customInstructions?: string;
   industryContext?: string;
+  /**
+   * Cap, in characters, on the customInstructions text sent to each PK/FK inference prompt. A per-table
+   * prompt gets only the paragraphs that name its table. Default 6000; 0 sends none.
+   */
+  keyPassMaxChars?: number;
 }
 
 /**
@@ -151,6 +188,7 @@ export interface AnalysisConfig {
   sampleSize: number;
   includeStatistics: boolean;
   includePatternAnalysis: boolean;
+  skipSampling?: boolean;
   convergence: ConvergenceConfig;
   backpropagation: BackpropagationConfig;
   sanityChecks: SanityCheckConfig;
@@ -158,6 +196,18 @@ export interface AnalysisConfig {
   relationshipDiscovery?: RelationshipDiscoveryConfig;
   sampleQueryGeneration?: SampleQueryGenerationConfig;
   organicKeyDetection?: OrganicKeyDetectionConfig;
+  /**
+   * Bounds and thresholds for verifying a proposed key against the data before it is
+   * emitted. See `KeyVerificationConfig` in `discovery/JoinProbe.ts` for the defaults
+   * and the reasoning behind each one. Omitted means "use the defaults" — NOT "skip
+   * verification"; set `keyVerification.enabled: false` for that.
+   */
+  keyVerification?: KeyVerificationConfig;
+  /**
+   * Read the existing indexes on every table and show them to the LLM as evidence for keys and
+   * important columns (default true). Indexes often exist where no PK/FK is declared.
+   */
+  useExistingIndexes?: boolean;
 }
 
 /**
@@ -207,6 +257,14 @@ export interface OrganicKeyDetectionConfig {
   minDistinctTables?: number;
   /** Number of sample values per column to include in the embedding input and refiner prompt. Default: 5. */
   sampleValueCount?: number;
+  /**
+   * Set `AutoCreateRelatedViewOnForm` on every emitted organic key. Default FALSE.
+   *
+   * Was a hardcoded `true`: each emitted key auto-created one related-record grid per
+   * spoke — around 22 per key on a real run — each grid a value-join on a column the
+   * detector had never verified. A machine-proposed key should be opted into.
+   */
+  autoCreateRelatedViewOnForm?: boolean;
 
   // ─── LLM Refinement ──────────────────────────────────────────────────
   /** Concurrency for per-cluster LLM refinement calls. Default: 4. */
@@ -360,6 +418,48 @@ export interface OutputConfig {
   outputDir?: string; // Base output directory for numbered runs
   sqlFile: string;
   markdownFile: string;
+  /** Entity-relationship diagram options for `export --mermaid` (see ErdConfig). */
+  erd?: ErdConfig;
+}
+
+/**
+ * How `export --mermaid` draws the schema. The default (`full`) is one diagram of every table,
+ * which Mermaid refuses above ~50,000 characters of source; `clusters` splits the FK graph into
+ * hub-centred subject areas that each fit. Every value can be overridden per run by an export flag.
+ */
+/** `full`: one schema-wide diagram. `clusters`: one diagram per subject area. `both`: write both. */
+export type ErdMode = 'full' | 'clusters' | 'both';
+
+/** Columns drawn in each ERD entity: every column, primary and foreign keys only, or none. */
+export type ErdColumnMode = 'all' | 'keys' | 'none';
+
+/** Defaults for the numeric `ErdConfig` settings; the single source the CLI flag help and the docs quote. */
+export const ERD_DEFAULTS = {
+  hubMinInbound: 8,
+  lookupMaxRows: 5000,
+  pageSize: 50,
+  minClusterSize: 4,
+} as const;
+
+export interface ErdConfig {
+  /** Default `full`. */
+  mode?: ErdMode;
+  /** Default `all` for the full diagram and `keys` for subject-area diagrams. */
+  columns?: ErdColumnMode;
+  /** A table referenced by at least this many other tables becomes a cluster hub (default `ERD_DEFAULTS.hubMinInbound`). */
+  hubMinInbound?: number;
+  /** A table that references nothing and has fewer rows than this is a reference (lookup) table, listed rather than drawn (default `ERD_DEFAULTS.lookupMaxRows`). */
+  lookupMaxRows?: number;
+  /** Tables per diagram page beyond the hub; a larger cluster is paginated (default `ERD_DEFAULTS.pageSize`). */
+  pageSize?: number;
+  /** A hub whose cluster is smaller than this is folded into the neighbouring cluster it links to most (default `ERD_DEFAULTS.minClusterSize`). */
+  minClusterSize?: number;
+  /** Table names always treated as hubs, in addition to those found by hubMinInbound. */
+  hubs?: string[];
+  /** Table names left out of every diagram (still listed on the index). */
+  excludeTables?: string[];
+  /** Table names always treated as reference tables regardless of row count. */
+  lookupTables?: string[];
 }
 
 export interface SchemaFilterConfig {

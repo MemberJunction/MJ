@@ -10,7 +10,7 @@
      (wheel)="OnWheel($event)"
      (paste)="OnPaste($event)">
 
-  <div class="board-viewport" [style.transform]="ViewportTransform">
+  <div class="board-viewport" [class.board-viewport--stepping]="ViewportStepping" [style.transform]="ViewportTransform">
 
     <!-- ink + connectors -->
     <svg class="ink-layer">

@@ -17,6 +17,7 @@ import {
     CheckScopeObjectFilter,
     CheckScopeJsonFilter,
     CheckRenderedTemplate,
+    CheckRenderedFolderPath,
 } from '../generic/ScopeFilterGuard';
 
 describe('CheckScopeStringFilter (Azure OData / Typesense filter_by lanes)', () => {
@@ -167,5 +168,47 @@ describe('CheckRenderedTemplate (restricting fields: ExtraFilter / MetadataFilte
         for (const rendered of ['', '   ', undefined, null, '{% if x %}']) {
             expect(CheckRenderedTemplate('{{ something }}', rendered).Status).not.toBe('absent');
         }
+    });
+});
+
+describe('CheckRenderedFolderPath (storage lane FolderPath restricts the lane to one folder)', () => {
+    const TEMPLATE = 'clients/{{ context.SecondaryScopes.Client }}';
+
+    it('reports absent when no FolderPath was authored — the lane covers the whole account', () => {
+        expect(CheckRenderedFolderPath(null, undefined).Status).toBe('absent');
+        expect(CheckRenderedFolderPath('', '').Status).toBe('absent');
+    });
+
+    it('reports usable for a path that rendered every segment', () => {
+        const check = CheckRenderedFolderPath(TEMPLATE, 'clients/acme');
+        expect(check).toEqual({ Status: 'usable', Value: 'clients/acme' });
+    });
+
+    it('reports UNUSABLE when the whole path rendered empty — that would be the whole account', () => {
+        expect(CheckRenderedFolderPath('{{ context.SecondaryScopes.Client }}', '').Status).toBe('unusable');
+    });
+
+    it('reports UNUSABLE when an interpolated segment rendered empty — `clients/` is every client\'s folder', () => {
+        const check = CheckRenderedFolderPath(TEMPLATE, 'clients/');
+        expect(check.Status).toBe('unusable');
+        if (check.Status === 'unusable') expect(check.Reason).toMatch(/empty segment/);
+        expect(CheckRenderedFolderPath('{{ a }}/docs', '/docs').Status).toBe('unusable');
+        expect(CheckRenderedFolderPath('clients/{{ a }}/docs', 'clients//docs').Status).toBe('unusable');
+    });
+
+    it('reports UNUSABLE for a ".." segment, templated or not', () => {
+        expect(CheckRenderedFolderPath(TEMPLATE, 'clients/..').Status).toBe('unusable');
+        expect(CheckRenderedFolderPath('clients/../other', 'clients/../other').Status).toBe('unusable');
+    });
+
+    it('keeps a separator the author wrote, and a static path as written', () => {
+        expect(CheckRenderedFolderPath('/clients/{{ a }}/', '/clients/acme/').Status).toBe('usable');
+        expect(CheckRenderedFolderPath('/', '/').Status).toBe('usable');
+        expect(CheckRenderedFolderPath('archive/2026', 'archive/2026').Status).toBe('usable');
+        expect(CheckRenderedFolderPath(TEMPLATE, 'clients/a..b').Status).toBe('usable');
+    });
+
+    it('reports UNUSABLE when raw template syntax survived a render error', () => {
+        expect(CheckRenderedFolderPath(TEMPLATE, TEMPLATE).Status).toBe('unusable');
     });
 });

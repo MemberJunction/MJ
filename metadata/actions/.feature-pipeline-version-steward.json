@@ -1,0 +1,137 @@
+[
+  {
+    "fields": {
+      "Name": "Steward Feature Pipeline Version",
+      "Description": "Stewards a single Active Infer Record Process through unattended golden-set evaluation and version backfill via FeaturePipelineVersionSteward. Evaluates an unevaluated candidate version once per version and golden-set content, and runs the one on-demand backfill for a changed activated version.",
+      "DriverClass": "Steward Feature Pipeline Version",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-code-branch",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordProcessID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "ID of the MJ: Record Processes definition (WorkType=Infer) to steward."
+          },
+          "primaryKey": {
+            "ID": "D7E7BA13-094D-45DB-A537-D09DADAEC048"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Outcomes",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Array of per-step version stewardship outcomes produced for this pipeline."
+          },
+          "primaryKey": {
+            "ID": "CF55B482-AA09-4F11-A0D4-7CC475515161"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Version",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The pipeline version evaluated or backfilled (or null if none)."
+          },
+          "primaryKey": {
+            "ID": "2229DA80-E4DD-4470-922B-618B9FF9868F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LastAction",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The final stewardship action taken (evaluated, backfilled, skipped, or error)."
+          },
+          "primaryKey": {
+            "ID": "FA399D08-C2C8-4615-946B-E3D28D5FA26F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Detail",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Human-readable summary of all stewardship outcomes for this pipeline."
+          },
+          "primaryKey": {
+            "ID": "6CE85DEB-E5BA-494A-94CF-61A39F46ED82"
+          }
+        }
+      ],
+      "MJ: Action Authorizations": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "AuthorizationID": "@lookup:MJ: Authorizations.Name=Run Record Processes",
+            "Comments": "Holders of Run Record Processes (or Record Processing) may run this action."
+          },
+          "primaryKey": {
+            "ID": "72CD49DF-DD66-4BAE-8C82-E72D8FF273E5"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Version stewardship completed without error."
+          },
+          "primaryKey": {
+            "ID": "B8914D55-A07A-4B33-A62D-BED631FA108B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "STEWARD_ERROR",
+            "IsSuccess": false,
+            "Description": "One or more stewardship steps reported an error."
+          },
+          "primaryKey": {
+            "ID": "2B110243-F103-4994-9159-22F17B5FE41B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETERS",
+            "IsSuccess": false,
+            "Description": "RecordProcessID was not supplied."
+          },
+          "primaryKey": {
+            "ID": "6C1F6F36-09CA-4104-BF00-2A7219319F3A"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8C4E9A12-3B7D-4F6E-9A2C-5D8E1B4F7A90"
+    }
+  }
+]

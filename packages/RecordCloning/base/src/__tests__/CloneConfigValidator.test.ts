@@ -266,4 +266,24 @@ describe('CloneConfigValidator', () => {
             ]);
         });
     });
+
+    describe('template presets', () => {
+        const user = (presetField: string | undefined, type = 'bit') => CloneConfigValidator.Validate({
+            Name: 'MJ: Users',
+            Fields: [{ Name: 'ID', IsPrimaryKey: true }, { Name: 'IsTemplate', IsPrimaryKey: false, Type: type }],
+            CloneConfiguration: { Enabled: true, Presets: [{ Key: 'template', Label: 'Template', TemplateSourceField: presetField }] },
+        }).filter((e) => e.PropertyPath === 'Presets[template].TemplateSourceField');
+
+        it('accepts a yes/no TemplateSourceField', () => {
+            expect(user('IsTemplate')).toEqual([]);
+        });
+
+        it('rejects a TemplateSourceField the entity does not have', () => {
+            expect(user('IsTemplat').map((e) => e.Severity)).toEqual(['Error']);
+        });
+
+        it('rejects a TemplateSourceField that is not yes/no', () => {
+            expect(user('IsTemplate', 'nvarchar')[0]?.Message).toContain('must be a yes/no');
+        });
+    });
 });

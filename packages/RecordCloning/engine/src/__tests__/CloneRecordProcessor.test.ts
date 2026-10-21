@@ -66,7 +66,7 @@ describe('CloneRecordProcessor', () => {
 
         const result = await processor.ProcessRecord(
             { EntityID: 'ent-1', RecordID: 'rec-1' },
-            { provider: mockProvider, contextUser: mockUser } as RecordProcessorContext
+            { Provider: mockProvider, ContextUser: mockUser } as RecordProcessorContext
         );
 
         expect(result.Status).toBe('Succeeded');
@@ -101,7 +101,7 @@ describe('CloneRecordProcessor', () => {
 
         const result = await processor.ProcessRecord(
             { EntityID: 'ent-1', RecordID: 'rec-1' },
-            { provider: mockProvider, contextUser: mockUser } as RecordProcessorContext
+            { Provider: mockProvider, ContextUser: mockUser } as RecordProcessorContext
         );
 
         expect(result.Status).toBe('Succeeded');
@@ -124,7 +124,7 @@ describe('CloneRecordProcessor', () => {
         const noBatch = { ...mockProvider, Authorizations: GrantedCloneAuthorizations(false) } as unknown as IMetadataProvider;
         const result = await new CloneRecordProcessor().ProcessRecord(
             { EntityID: 'ent-1', RecordID: 'rec-1' } as never,
-            { provider: noBatch, contextUser: mockUser } as unknown as RecordProcessorContext
+            { Provider: noBatch, ContextUser: mockUser } as unknown as RecordProcessorContext
         );
         expect(result.Status).toBe('Failed');
         expect(result.ErrorMessage).toContain('Clone Records: Batch');
