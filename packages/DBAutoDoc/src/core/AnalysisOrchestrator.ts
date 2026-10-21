@@ -211,6 +211,7 @@ export class AnalysisOrchestrator {
             Config: this.config.analysis.relationshipDiscovery,
             AiConfig: this.config.ai,
             schemas: state.schemas,
+            SeedContext: state.seedContext ?? this.config.seedContext,
             OnProgress: this.onProgress,
             OnCheckpoint: async (phase) => {
               state.phases.keyDetection = phase;
