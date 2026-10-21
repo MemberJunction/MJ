@@ -14807,17 +14807,17 @@ export const MJContentSourceSchema = z.object({
         * * Display Name: Force Discovery
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Sources selected for a Discover run are always walked; ForceDiscovery guarantees selection for filters that key off it.`),
+        * * Description: Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Scheduling is deployment-owned and the shipped Discover process selects ForceDiscovery = 1, which is why there is no discovery status column to re-arm.`),
     LastDiscoveredAt: z.date().nullable().describe(`
         * * Field Name: LastDiscoveredAt
         * * Display Name: Last Discovered At
         * * SQL Data Type: datetimeoffset
-        * * Description: When this source was last walked by the Discover stage.`),
+        * * Description: When this source was last walked by the Discover stage. Stamped with the time a completed walk started, and passed back as Since on subsequent incremental walks.`),
     LastSyncedAt: z.date().nullable().describe(`
         * * Field Name: LastSyncedAt
         * * Display Name: Last Synced At
         * * SQL Data Type: datetimeoffset
-        * * Description: When this source last completed an exhaustive Sync discovery walk that reconciled removed items.`),
+        * * Description: When this source last completed a full Sync walk (reconciling removals). Stamped with the time a completed sync walk started. The shipped Sync Record Process selects sources by LastSyncedAt (LastSyncedAt IS NULL OR LastSyncedAt < DATEADD(day, -30, GETUTCDATE())), never by ForceDiscovery; to force a sync, set LastSyncedAt back or to NULL.`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type Name
@@ -82338,7 +82338,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     * * Display Name: Force Discovery
     * * SQL Data Type: bit
     * * Default Value: 0
-    * * Description: Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Sources selected for a Discover run are always walked; ForceDiscovery guarantees selection for filters that key off it.
+    * * Description: Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Scheduling is deployment-owned and the shipped Discover process selects ForceDiscovery = 1, which is why there is no discovery status column to re-arm.
     */
     get ForceDiscovery(): boolean {
         return this.Get('ForceDiscovery');
@@ -82351,7 +82351,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     * * Field Name: LastDiscoveredAt
     * * Display Name: Last Discovered At
     * * SQL Data Type: datetimeoffset
-    * * Description: When this source was last walked by the Discover stage.
+    * * Description: When this source was last walked by the Discover stage. Stamped with the time a completed walk started, and passed back as Since on subsequent incremental walks.
     */
     get LastDiscoveredAt(): Date | null {
         return this.Get('LastDiscoveredAt');
@@ -82364,7 +82364,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     * * Field Name: LastSyncedAt
     * * Display Name: Last Synced At
     * * SQL Data Type: datetimeoffset
-    * * Description: When this source last completed an exhaustive Sync discovery walk that reconciled removed items.
+    * * Description: When this source last completed a full Sync walk (reconciling removals). Stamped with the time a completed sync walk started. The shipped Sync Record Process selects sources by LastSyncedAt (LastSyncedAt IS NULL OR LastSyncedAt < DATEADD(day, -30, GETUTCDATE())), never by ForceDiscovery; to force a sync, set LastSyncedAt back or to NULL.
     */
     get LastSyncedAt(): Date | null {
         return this.Get('LastSyncedAt');

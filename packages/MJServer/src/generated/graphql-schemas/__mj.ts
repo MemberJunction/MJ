@@ -36945,13 +36945,13 @@ export class MJContentSource_ {
     @Field({nullable: true, description: "Per-field provenance for the pipeline: for each well-known field, the confidence the winning stage had and which stage set it."}) 
     FieldConfidence?: string;
         
-    @Field(() => Boolean, {nullable: true, description: "Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes, while scheduled runs select active pipeline sources directly."}) 
+    @Field(() => Boolean, {nullable: true, description: "Walk this source on the next pass regardless of its schedule. A one-shot: the Discover stage clears it when the walk completes. Scheduling is deployment-owned and the shipped Discover process selects ForceDiscovery = 1, which is why there is no discovery status column to re-arm."}) 
     ForceDiscovery?: boolean;
         
-    @Field({nullable: true, description: "When this source was last walked by the Discover stage."}) 
+    @Field({nullable: true, description: "When this source was last walked by the Discover stage. Stamped with the time a completed walk started, and passed back as Since on subsequent incremental walks."}) 
     LastDiscoveredAt?: Date;
-
-    @Field({nullable: true, description: "When this source was last walked by a full Sync pass to reconcile removed items."}) 
+        
+    @Field({nullable: true, description: "When this source last completed a full Sync walk (reconciling removals). Stamped with the time a completed sync walk started. The shipped Sync Record Process selects sources by LastSyncedAt (LastSyncedAt IS NULL OR LastSyncedAt < DATEADD(day, -30, GETUTCDATE())), never by ForceDiscovery; to force a sync, set LastSyncedAt back or to NULL."}) 
     LastSyncedAt?: Date;
         
     @Field({nullable: true}) 
