@@ -98,13 +98,19 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
         if (explicitlySet) {
             return;
         }
-        const scheduleChanged = ['CronExpression', 'Timezone', 'StartAt']
+        const scheduleChanged = ['CronExpression', 'Timezone', 'StartAt', 'ScheduleMode']
             .some(fieldName => this.GetFieldByName(fieldName)?.Dirty === true);
         if (this.NextRunAt != null && !scheduleChanged) {
             return;
         }
         try {
-            this.NextRunAt = ComputeRoutineNextRunAt(this.CronExpression, this.Timezone, new Date(), this.StartAt);
+            this.NextRunAt = ComputeRoutineNextRunAt(
+                this.CronExpression,
+                this.Timezone,
+                new Date(),
+                this.StartAt,
+                this.ScheduleMode ?? 'Recurring'
+            );
         } catch {
             // Invalid cron/timezone — leave NextRunAt untouched; Validate() reports the
             // problem and fails the save with a meaningful message.
@@ -113,13 +119,29 @@ export class MJUserRoutineEntityServer extends MJUserRoutineEntity {
 
     /** Reject invalid cron expressions and cron/timezone combinations that cannot compute a next occurrence. */
     private validateSchedule(result: ValidationResult): void {
-        const cronResult = CronExpressionHelper.ValidateExpression(this.CronExpression);
+        const mode: MJUserRoutineEntity['ScheduleMode'] = this.ScheduleMode ?? 'Recurring';
+        const hasCron = this.CronExpression != null && this.CronExpression.trim().length > 0;
+
+        if (!hasCron) {
+            if (mode === 'OneShot' || (mode === 'Adaptive' && this.RoutineType === 'AgentWake')) {
+                return;
+            }
+            result.Errors.push(new ValidationErrorInfo(
+                'CronExpression',
+                `CronExpression is required when ScheduleMode is '${mode}'.`,
+                this.CronExpression,
+                ValidationErrorType.Failure
+            ));
+            return;
+        }
+
+        const cronResult = CronExpressionHelper.ValidateExpression(this.CronExpression!);
         if (!cronResult.Success) {
             result.Errors.push(...cronResult.Errors);
             return;
         }
         try {
-            ComputeRoutineNextRunAt(this.CronExpression, this.Timezone, new Date(), this.StartAt);
+            ComputeRoutineNextRunAt(this.CronExpression, this.Timezone, new Date(), this.StartAt, mode);
         } catch (error) {
             result.Errors.push(new ValidationErrorInfo(
                 'CronExpression',

@@ -253,13 +253,31 @@ export class RecordCloneOperationsHandler {
             };
         });
 
+        // A template preset is offered only for a record flagged as a template; the planner refuses it otherwise.
+        const presets: string[] = [];
+        for (const preset of NormalizeClonePresets(config.Presets)) {
+            if (!preset.TemplateSourceField || (input.Key && (await this.isFlagged(entity, input.Key, preset.TemplateSourceField, contextUser)))) {
+                presets.push(preset.Key);
+            }
+        }
+
         return {
             ...base,
             CanClone: true,
-            Presets: NormalizeClonePresets(config.Presets).map((p) => p.Key),
+            Presets: presets,
             UserEditable: config.UserEditable ?? 'all',
             Relationships: relationships,
         };
+    }
+
+    /** Whether the record has the yes/no field `field` set, as `contextUser` can read it. */
+    private async isFlagged(entity: EntityInfo, key: RecordCloneKey, field: string, contextUser: UserInfo): Promise<boolean> {
+        const res = await RunView.FromMetadataProvider(this.Provider).RunView<Record<string, unknown>>(
+            { EntityName: entity.Name, Fields: [field], ExtraFilter: toCompositeKey(entity, key).ToWhereClause(), ResultType: 'simple', MaxRows: 1 },
+            contextUser
+        );
+        const value = res?.Success ? res.Results?.[0]?.[field] : undefined;
+        return value === true || value === 1 || value === '1' || value === 'true';
     }
 
     /** Computes a dry-run plan. Writes nothing. */

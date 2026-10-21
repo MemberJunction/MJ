@@ -5,11 +5,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /* ------------------------------------------------------------------ */
 const mockFetch = vi.hoisted(() => vi.fn());
 
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@memberjunction/global')>()),
   RegisterClass: () => (_target: unknown) => {},
 }));
 
-vi.mock('@memberjunction/ai', () => {
+vi.mock('@memberjunction/ai', async (importOriginal) => {
+  // The cancellation helpers are the real ones, so the abort paths run the code that ships.
+  const actual = await importOriginal<typeof import('@memberjunction/ai')>();
   class MockGeneratedImage {
     data: Buffer | null = null;
     base64: string = '';
@@ -61,6 +64,9 @@ vi.mock('@memberjunction/ai', () => {
     ImageModelInfo: class {},
     GeneratedImage: MockGeneratedImage,
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
+    AbortableDelay: actual.AbortableDelay,
+    IsRequestAborted: actual.IsRequestAborted,
+    ThrowIfAborted: actual.ThrowIfAborted,
   };
 });
 

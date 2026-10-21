@@ -52,6 +52,47 @@ describe('RealTwilioRestClient', () => {
             expect(createSpy.mock.calls[0][0]).not.toHaveProperty('statusCallback');
         });
 
+        it('forwards status-callback events as statusCallbackEvent', async () => {
+            const { loader, createSpy } = makeFakeTwilio();
+            const rest = new RealTwilioRestClient({ AccountSid: 'AC1', AuthToken: 'tok' }, loader);
+
+            await rest.CreateCall({
+                To: '+1',
+                From: '+2',
+                Twiml: '<x/>',
+                StatusCallback: 'https://x/cb',
+                StatusCallbackEvents: ['initiated', 'ringing', 'answered', 'completed'],
+            });
+
+            expect(createSpy.mock.calls[0][0]).toMatchObject({
+                statusCallback: 'https://x/cb',
+                statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
+            });
+        });
+
+        it('maps async AMD onto machineDetection + asyncAmd + asyncAmdStatusCallback', async () => {
+            const { loader, createSpy } = makeFakeTwilio();
+            const rest = new RealTwilioRestClient({ AccountSid: 'AC1', AuthToken: 'tok' }, loader);
+
+            await rest.CreateCall({ To: '+1', From: '+2', Twiml: '<x/>', AsyncAmd: true, AsyncAmdStatusCallback: 'https://x/amd' });
+
+            expect(createSpy.mock.calls[0][0]).toMatchObject({
+                machineDetection: 'Enable',
+                asyncAmd: 'true',
+                asyncAmdStatusCallback: 'https://x/amd',
+            });
+        });
+
+        it('does not send AMD params unless AMD is requested with a callback', async () => {
+            const { loader, createSpy } = makeFakeTwilio();
+            const rest = new RealTwilioRestClient({ AccountSid: 'AC1', AuthToken: 'tok' }, loader);
+
+            await rest.CreateCall({ To: '+1', From: '+2', Twiml: '<x/>', AsyncAmd: true }); // no callback URL
+
+            expect(createSpy.mock.calls[0][0]).not.toHaveProperty('machineDetection');
+            expect(createSpy.mock.calls[0][0]).not.toHaveProperty('asyncAmd');
+        });
+
         it('throws when the SDK returns no SID', async () => {
             const { loader, createSpy } = makeFakeTwilio('');
             createSpy.mockResolvedValueOnce({ sid: '' });

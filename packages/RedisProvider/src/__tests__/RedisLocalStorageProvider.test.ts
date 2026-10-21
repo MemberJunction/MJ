@@ -18,6 +18,24 @@ vi.mock('@memberjunction/global', () => ({
 
 const MOCK_PROCESS_UUID = 'test-server-00000000-0000-4000-a000-000000000001';
 
+/** Translates a Redis MATCH glob (with backslash escapes) into an anchored RegExp. */
+function globToRegExp(glob: string): RegExp {
+    let out = '';
+    for (let i = 0; i < glob.length; i++) {
+        const ch = glob[i];
+        if (ch === '\\' && i + 1 < glob.length) {
+            out += glob[++i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        } else if (ch === '*') {
+            out += '.*';
+        } else if (ch === '?') {
+            out += '.';
+        } else {
+            out += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+    }
+    return new RegExp(`^${out}$`);
+}
+
 /**
  * Helper: create a mock Redis instance with an in-memory store.
  * Returned object quacks like an ioredis `Redis` instance.
@@ -26,6 +44,8 @@ function createMockRedisInstance() {
     const store = new Map<string, string>();
     const sets = new Map<string, Set<string>>();
     const ttls = new Map<string, number>();
+    /** TTL argument passed with the most recent index-group add, per group set. */
+    const groupTTLs = new Map<string, number>();
 
     const instance = {
         get: vi.fn((key: string) => Promise.resolve(store.get(key) ?? null)),
@@ -42,11 +62,42 @@ function createMockRedisInstance() {
             ttls.set(key, ttl);
             return Promise.resolve('OK');
         }),
-        del: vi.fn((key: string) => {
-            store.delete(key);
-            return Promise.resolve(1);
+        del: vi.fn((...keys: string[]) => {
+            let removed = 0;
+            for (const key of keys) {
+                if (store.delete(key) || sets.delete(key)) removed++;
+            }
+            return Promise.resolve(removed);
+        }),
+        // Single-page SCAN over both value keys and set keys (the real server pages; one page is enough here).
+        scan: vi.fn((_cursor: string, _matchToken: string, pattern: string) => {
+            const re = globToRegExp(pattern);
+            const keys = [...store.keys(), ...sets.keys()].filter(k => re.test(k));
+            return Promise.resolve(['0', keys]);
         }),
         exists: vi.fn((key: string) => Promise.resolve(store.has(key) ? 1 : 0)),
+        // Client-level EVAL: the index-group prune runs as one Lua script (it must be atomic, so a
+        // peer's SADD cannot land mid-prune and be dropped unseen). The mock reproduces its
+        // semantics: live members returned, dead ones removed, an emptied set deleted.
+        eval: vi.fn((script: string, _numKeys: number, setKey: string, memberPrefix: string) => {
+            if (!script.includes('SMEMBERS')) {
+                return Promise.resolve(0); // not the prune script (lock scripts are asserted elsewhere)
+            }
+            const members = Array.from(sets.get(setKey) ?? []);
+            if (members.length === 0) {
+                return Promise.resolve([]);
+            }
+            const alive = members.filter(m => store.has(`${memberPrefix}${m}`));
+            const dead = members.filter(m => !store.has(`${memberPrefix}${m}`));
+            if (dead.length > 0) {
+                if (alive.length === 0) {
+                    sets.delete(setKey);
+                } else {
+                    for (const m of dead) sets.get(setKey)?.delete(m);
+                }
+            }
+            return Promise.resolve(alive);
+        }),
         ttl: vi.fn((key: string) => {
             if (!store.has(key)) return Promise.resolve(-2);
             return Promise.resolve(ttls.get(key) ?? -1);
@@ -59,16 +110,16 @@ function createMockRedisInstance() {
             sets.get(setKey)!.add(member);
             return Promise.resolve(1);
         }),
-        srem: vi.fn((setKey: string, member: string) => {
-            sets.get(setKey)?.delete(member);
-            return Promise.resolve(1);
+        srem: vi.fn((setKey: string, ...members: string[]) => {
+            for (const member of members) sets.get(setKey)?.delete(member);
+            return Promise.resolve(members.length);
         }),
         smembers: vi.fn((setKey: string) => {
             const s = sets.get(setKey);
             return Promise.resolve(s ? Array.from(s) : []);
         }),
         pipeline: vi.fn(() => {
-            const ops: Array<() => void> = [];
+            const ops: Array<() => unknown> = [];
             const pipe = {
                 set: vi.fn((key: string, value: string) => {
                     ops.push(() => { store.set(key, value); });
@@ -96,13 +147,38 @@ function createMockRedisInstance() {
                     ops.push(() => { sets.get(setKey)?.delete(member); });
                     return pipe;
                 }),
+                exists: vi.fn((key: string) => {
+                    ops.push(() => (store.has(key) ? 1 : 0));
+                    return pipe;
+                }),
+                // Records the index-group add the provider's Lua script performs (membership +
+                // the TTL argument). The script's own expiry logic is exercised against a real
+                // Redis in integration-two-servers.test.ts.
+                eval: vi.fn((script: string, _numKeys: number, setKey: string, member: string, ttl: number) => {
+                    ops.push(() => {
+                        if (!sets.has(setKey)) sets.set(setKey, new Set());
+                        sets.get(setKey)!.add(member);
+                        groupTTLs.set(setKey, ttl);
+                        return 1;
+                    });
+                    return pipe;
+                }),
                 exec: vi.fn(() => {
-                    for (const op of ops) op();
+                    const results = ops.map(op => [null, op() ?? 'OK'] as [null, unknown]);
                     ops.length = 0;
-                    return Promise.resolve([]);
+                    return Promise.resolve(results);
                 }),
             };
             return pipe;
+        }),
+        // A real counter, not a stub: the provider INCRs the shared epoch before publishing, and
+        // tests assert on the value the event carries.
+        incr: vi.fn((key: string) => {
+            // Number(), not a cast: the store holds strings, so `'1' + 1` would concatenate and the
+            // mock would report 11, 111, … while the provider ignored it as a non-number.
+            const next = Number(store.get(key) ?? '0') + 1;
+            store.set(key, String(next));
+            return Promise.resolve(next);
         }),
         publish: vi.fn().mockResolvedValue(1),
         subscribe: vi.fn().mockResolvedValue('OK'),
@@ -122,6 +198,7 @@ function createMockRedisInstance() {
         _store: store,
         _sets: sets,
         _ttls: ttls,
+        _groupTTLs: groupTTLs,
         _eventHandlers: new Map<string, Array<(...args: unknown[]) => void>>(),
         /** Helper to simulate receiving a pub/sub message */
         _simulateMessage(channel: string, message: string) {
@@ -149,8 +226,18 @@ vi.mock('ioredis', () => {
     return { default: MockRedis };
 });
 
-import { RedisLocalStorageProvider } from '../RedisLocalStorageProvider.js';
+import { RedisLocalStorageProvider, KeyLockLostError } from '../RedisLocalStorageProvider.js';
 import { LogError } from '@memberjunction/core';
+
+/**
+ * Lets the provider's fire-and-forget publish chain settle. `publishChange` INCRs before it
+ * publishes, so the publish lands a tick after the mutation's own promise resolves.
+ */
+async function flushPublishChain(): Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+}
 
 describe('RedisLocalStorageProvider', () => {
     let provider: RedisLocalStorageProvider;
@@ -189,6 +276,10 @@ describe('RedisLocalStorageProvider', () => {
                 enableLogging: false,
             });
             expect(p).toBeDefined();
+        });
+
+        it('declares a store that outlives the process, so the metadata snapshot is saved to it', () => {
+            expect(provider.SupportsCrossProcessPersistence).toBe(true);
         });
     });
 
@@ -256,13 +347,24 @@ describe('RedisLocalStorageProvider', () => {
             await expect(provider.SetItem('key1', 'value1')).resolves.not.toThrow();
         });
 
-        it('should store with default TTL from config', () => {
+        it('should store with default TTL from config', async () => {
             const p = new RedisLocalStorageProvider({
                 defaultTTLSeconds: 300,
                 enableLogging: false,
             });
-            // Verify construction doesn't throw — TTL path is exercised via pipeline.setex
-            expect(p).toBeDefined();
+            await p.SetItem('k', 'v', 'cat');
+            expect((p.Client as unknown as { _ttls: Map<string, number> })._ttls.get('mj:cat:k')).toBe(300);
+        });
+
+        it('expires entries after one hour when no default is configured', async () => {
+            await provider.SetItem('k', 'v', 'cat');
+            expect((provider.Client as unknown as { _ttls: Map<string, number> })._ttls.get('mj:cat:k')).toBe(3600);
+        });
+
+        it('stores without expiry when the configured default is 0', async () => {
+            const p = new RedisLocalStorageProvider({ defaultTTLSeconds: 0, enableLogging: false });
+            await p.SetItem('k', 'v', 'cat');
+            expect((p.Client as unknown as { _ttls: Map<string, number> })._ttls.has('mj:cat:k')).toBe(false);
         });
     });
 
@@ -280,11 +382,7 @@ describe('RedisLocalStorageProvider', () => {
 
         it('should not throw on error', async () => {
             const client = provider.Client;
-            (client.pipeline as ReturnType<typeof vi.fn>).mockReturnValueOnce({
-                del: vi.fn().mockReturnThis(),
-                srem: vi.fn().mockReturnThis(),
-                exec: vi.fn().mockRejectedValueOnce(new Error('Delete failed')),
-            });
+            (client.del as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Delete failed'));
 
             await expect(provider.Remove('key1')).resolves.not.toThrow();
         });
@@ -319,9 +417,32 @@ describe('RedisLocalStorageProvider', () => {
 
         it('should not throw on error', async () => {
             const client = provider.Client;
-            (client.smembers as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Read failed'));
+            (client.scan as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Read failed'));
 
             await expect(provider.ClearCategory('myCat')).resolves.not.toThrow();
+        });
+
+        it('removes the category\'s index-group sets and the legacy category set', async () => {
+            await provider.SetItem('Users|a', 'v1', 'RunViewCache', { IndexGroup: 'Users' });
+            const sets = (provider.Client as unknown as { _sets: Map<string, Set<string>> })._sets;
+            sets.set('mj:__categories__:RunViewCache', new Set(['Users|a']));   // written by older versions
+            sets.set('mj:__group__:Other:Users', new Set(['x']));                // another category's group
+
+            await provider.ClearCategory('RunViewCache');
+
+            expect(sets.has('mj:__group__:RunViewCache:Users')).toBe(false);
+            expect(sets.has('mj:__categories__:RunViewCache')).toBe(false);
+            expect(sets.has('mj:__group__:Other:Users')).toBe(true);
+        });
+
+        it('treats glob characters in the category literally', async () => {
+            await provider.SetItem('k', 'v', 'cat*');
+            await provider.SetItem('k', 'v', 'catalog');
+
+            await provider.ClearCategory('cat*');
+
+            expect(await provider.GetItem('k', 'cat*')).toBeNull();
+            expect(await provider.GetItem('k', 'catalog')).toBe('v');
         });
     });
 
@@ -343,10 +464,80 @@ describe('RedisLocalStorageProvider', () => {
 
         it('should return empty array on error', async () => {
             const client = provider.Client;
-            (client.smembers as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Read failed'));
+            (client.scan as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Read failed'));
 
             const result = await provider.GetCategoryKeys('myCat');
             expect(result).toEqual([]);
+        });
+
+        it('does not keep a category-wide set (it would grow for ever once keys expire)', async () => {
+            await provider.SetItem('key1', 'v1', 'myCat');
+            const sets = (provider.Client as unknown as { _sets: Map<string, Set<string>> })._sets;
+            expect(sets.has('mj:__categories__:myCat')).toBe(false);
+        });
+    });
+
+    describe('index groups', () => {
+        type MockInternals = { _sets: Map<string, Set<string>>; _store: Map<string, string>; _groupTTLs: Map<string, number>; _ttls: Map<string, number> };
+        const internals = (p: RedisLocalStorageProvider) => p.Client as unknown as MockInternals;
+
+        it('records a key under its IndexGroup and returns it from GetIndexGroupKeys', async () => {
+            await provider.SetItem('Users|f1', 'v1', 'RunViewCache', { IndexGroup: 'Users' });
+            await provider.SetItem('Users|f2', 'v2', 'RunViewCache', { IndexGroup: 'Users' });
+            await provider.SetItem('Roles|f1', 'v3', 'RunViewCache', { IndexGroup: 'Roles' });
+
+            const keys = await provider.GetIndexGroupKeys('RunViewCache', 'Users');
+            expect(keys.sort()).toEqual(['Users|f1', 'Users|f2']);
+        });
+
+        it('does not index a key written without an IndexGroup', async () => {
+            await provider.SetItem('Users|f1', 'v1', 'RunViewCache');
+            expect(await provider.GetIndexGroupKeys('RunViewCache', 'Users')).toEqual([]);
+        });
+
+        it('drops members whose key no longer exists, and returns only live keys', async () => {
+            await provider.SetItem('Users|live', 'v1', 'RunViewCache', { IndexGroup: 'Users' });
+            await provider.SetItem('Users|gone', 'v2', 'RunViewCache', { IndexGroup: 'Users' });
+            internals(provider)._store.delete('mj:RunViewCache:Users|gone');   // expired
+
+            expect(await provider.GetIndexGroupKeys('RunViewCache', 'Users')).toEqual(['Users|live']);
+            expect([...internals(provider)._sets.get('mj:__group__:RunViewCache:Users')!]).toEqual(['Users|live']);
+        });
+
+        it('keeps a member whose EXISTS check failed rather than hiding a live key', async () => {
+            await provider.SetItem('Users|f1', 'v1', 'RunViewCache', { IndexGroup: 'Users' });
+            (provider.Client.pipeline as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+                exists: vi.fn().mockReturnThis(),
+                exec: vi.fn().mockResolvedValueOnce([[new Error('timeout'), null]]),
+            });
+
+            expect(await provider.GetIndexGroupKeys('RunViewCache', 'Users')).toEqual(['Users|f1']);
+        });
+
+        it('returns an empty array when Redis fails', async () => {
+            (provider.Client.smembers as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('down'));
+            expect(await provider.GetIndexGroupKeys('RunViewCache', 'Users')).toEqual([]);
+        });
+
+        it('passes the entry TTL to the group script: default, per-call, and none', async () => {
+            const withDefault = new RedisLocalStorageProvider({ enableLogging: false, defaultTTLSeconds: 3600 });
+            await withDefault.SetItem('A|1', 'v', 'RunViewCache', { IndexGroup: 'A' });
+            await withDefault.SetItem('B|1', 'v', 'RunViewCache', { IndexGroup: 'B', TTLSeconds: 60 });
+            await withDefault.SetItem('C|1', 'v', 'RunViewCache', { IndexGroup: 'C', TTLSeconds: 0 });
+
+            const m = internals(withDefault);
+            expect(m._groupTTLs.get('mj:__group__:RunViewCache:A')).toBe(3600);
+            expect(m._ttls.get('mj:RunViewCache:A|1')).toBe(3600);
+            expect(m._groupTTLs.get('mj:__group__:RunViewCache:B')).toBe(60);
+            expect(m._ttls.get('mj:RunViewCache:B|1')).toBe(60);
+            expect(m._groupTTLs.get('mj:__group__:RunViewCache:C')).toBe(0);
+            expect(m._ttls.has('mj:RunViewCache:C|1')).toBe(false);   // stored with SET, no expiry
+            await withDefault.Disconnect();
+        });
+
+        it('still accepts a bare number as the TTL (legacy signature)', async () => {
+            await provider.SetItem('k', 'v', 'cat', 90);
+            expect(internals(provider)._ttls.get('mj:cat:k')).toBe(90);
         });
     });
 
@@ -452,6 +643,7 @@ describe('RedisLocalStorageProvider', () => {
 
         it('should publish a "set" event when SetItem is called', async () => {
             await pubsubProvider.SetItem('myKey', 'myValue', 'testCat');
+            await flushPublishChain();
 
             const client = pubsubProvider.Client;
             expect(client.publish).toHaveBeenCalled();
@@ -474,6 +666,7 @@ describe('RedisLocalStorageProvider', () => {
             (pubsubProvider.Client.publish as ReturnType<typeof vi.fn>).mockClear();
 
             await pubsubProvider.Remove('myKey', 'testCat');
+            await flushPublishChain();
 
             const client = pubsubProvider.Client;
             expect(client.publish).toHaveBeenCalled();
@@ -496,6 +689,36 @@ describe('RedisLocalStorageProvider', () => {
             const event = JSON.parse(message);
             expect(event.Category).toBe('myCat');
             expect(event.Action).toBe('category_cleared');
+        });
+
+        describe('publish modes', () => {
+            const published = (p: RedisLocalStorageProvider) =>
+                (p.Client.publish as ReturnType<typeof vi.fn>).mock.calls.map(([, m]) => JSON.parse(m as string));
+
+            it('full: the event carries the value (the default)', async () => {
+                await pubsubProvider.SetItem('k', { big: true }, 'RunViewCache');
+                expect(published(pubsubProvider)[0].Data).toBe(JSON.stringify({ big: true }));
+            });
+
+            it('notice: the event names the key but carries no value', async () => {
+                const p = new RedisLocalStorageProvider({ enablePubSub: true, enableLogging: false, publishModes: { default: 'notice' } });
+                await p.SetItem('___MJCore_Metadata_Timestamps', 'x'.repeat(1000));
+                const [event] = published(p);
+                expect(event).toMatchObject({ CacheKey: '___MJCore_Metadata_Timestamps', Category: 'default', Action: 'set' });
+                expect(event.Data).toBeUndefined();
+                expect(typeof event.Timestamp).toBe('number');
+                await p.Disconnect();
+            });
+
+            it('none: sets and removals publish nothing, but a category clear still does', async () => {
+                const p = new RedisLocalStorageProvider({ enablePubSub: true, enableLogging: false, publishModes: { RunViewCache: 'full' }, defaultPublishMode: 'none' });
+                await p.SetItem('ds', 1, 'DatasetCache');
+                await p.Remove('ds', 'DatasetCache');
+                await p.SetItem('rv', 1, 'RunViewCache');
+                await p.ClearCategory('DatasetCache');
+                expect(published(p).map(e => `${e.Category}/${e.Action}`)).toEqual(['RunViewCache/set', 'DatasetCache/category_cleared']);
+                await p.Disconnect();
+            });
         });
 
         it('should NOT publish when pubsub is disabled', async () => {
@@ -919,6 +1142,198 @@ describe('RedisLocalStorageProvider', () => {
             expect(() => unsubscribe()).not.toThrow();
             await p.Disconnect();
         });
+
+        it('reports whether pub/sub is enabled', async () => {
+            const on = new RedisLocalStorageProvider({ enablePubSub: true, enableLogging: false });
+            const off = new RedisLocalStorageProvider({ enablePubSub: false, enableLogging: false });
+
+            expect(on.IsPubSubEnabled).toBe(true);
+            expect(off.IsPubSubEnabled).toBe(false);
+            await on.Disconnect();
+            await off.Disconnect();
+        });
+
+        it('refuses the channel reserved for cache invalidation', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+
+            expect(() => p.PublishMessage('__pubsub__', 'forged')).toThrow(/reserved/);
+            await expect(p.PublishMessageAndWait('__pubsub__', 'forged')).rejects.toThrow(/reserved/);
+            await expect(p.SubscribeToChannel('__pubsub__', vi.fn())).rejects.toThrow(/reserved/);
+            expect(p.Client.publish).not.toHaveBeenCalled();
+            await p.Disconnect();
+        });
+
+        describe('PublishMessageAndWait', () => {
+            it('resolves to the number of subscribers that received the message', async () => {
+                const p = new RedisLocalStorageProvider({
+                    enablePubSub: true,
+                    enableLogging: false,
+                    keyPrefix: 'app1',
+                });
+                (p.Client.publish as ReturnType<typeof vi.fn>).mockResolvedValueOnce(3);
+
+                const received = await p.PublishMessageAndWait('abort', 'payload');
+
+                expect(received).toBe(3);
+                expect(p.Client.publish).toHaveBeenCalledWith('app1:abort', 'payload');
+                await p.Disconnect();
+            });
+
+            it('rejects when pub/sub is disabled, rather than reporting a delivery', async () => {
+                const p = new RedisLocalStorageProvider({ enablePubSub: false, enableLogging: false });
+
+                await expect(p.PublishMessageAndWait('abort', 'payload')).rejects.toThrow(/enablePubSub/);
+                expect(p.Client.publish).not.toHaveBeenCalled();
+                await p.Disconnect();
+            });
+
+            it('rejects when Redis rejects the publish', async () => {
+                const p = new RedisLocalStorageProvider({ enablePubSub: true, enableLogging: false });
+                (p.Client.publish as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('redis down'));
+
+                await expect(p.PublishMessageAndWait('abort', 'payload')).rejects.toThrow('redis down');
+                await p.Disconnect();
+            });
+        });
+
+        describe('releasing a channel', () => {
+            type MockSubscriber = {
+                subscribe: ReturnType<typeof vi.fn>;
+                unsubscribe: ReturnType<typeof vi.fn>;
+                disconnect: ReturnType<typeof vi.fn>;
+                _simulateMessage: (channel: string, message: string) => void;
+            };
+            const subscriberOf = (p: RedisLocalStorageProvider): MockSubscriber =>
+                (p as unknown as { _subscriber: MockSubscriber })._subscriber;
+
+            it('unsubscribes from Redis only when the last handler leaves, and only once', async () => {
+                const p = new RedisLocalStorageProvider({
+                    enablePubSub: true,
+                    enableLogging: false,
+                    keyPrefix: 'mj',
+                });
+                const first = await p.SubscribeToChannel('abort', vi.fn());
+                const second = await p.SubscribeToChannel('abort', vi.fn());
+                const subscriber = subscriberOf(p);
+
+                first();
+                expect(subscriber.unsubscribe).not.toHaveBeenCalledWith('mj:abort');
+
+                second();
+                second();
+                const released = subscriber.unsubscribe.mock.calls.filter((c: unknown[]) => c[0] === 'mj:abort');
+                expect(released).toHaveLength(1);
+                await p.Disconnect();
+            });
+
+            it('subscribes again when a handler arrives after the channel was released', async () => {
+                const p = new RedisLocalStorageProvider({
+                    enablePubSub: true,
+                    enableLogging: false,
+                    keyPrefix: 'mj',
+                });
+                const unsubscribe = await p.SubscribeToChannel('abort', vi.fn());
+                unsubscribe();
+
+                const handler = vi.fn();
+                await p.SubscribeToChannel('abort', handler);
+                const subscriber = subscriberOf(p);
+                subscriber._simulateMessage('mj:abort', 'payload');
+
+                const subscribes = subscriber.subscribe.mock.calls.filter((c: unknown[]) => c[0] === 'mj:abort');
+                expect(subscribes).toHaveLength(2);
+                expect(handler).toHaveBeenCalledWith('payload');
+                await p.Disconnect();
+            });
+
+            it('starts a fresh subscriber when the first one failed to subscribe', async () => {
+                // A subscriber left behind by a failed start reads as "already listening" to every
+                // later caller, and has no message listener, so their handlers never fire.
+                const p = new RedisLocalStorageProvider({
+                    enablePubSub: true,
+                    enableLogging: false,
+                    keyPrefix: 'mj',
+                });
+                const internals = p as unknown as { createSubscriberClient: () => MockSubscriber };
+                const createSubscriber = internals.createSubscriberClient.bind(p);
+                let created = 0;
+                internals.createSubscriberClient = () => {
+                    const client = createSubscriber();
+                    if (created++ === 0) {
+                        client.subscribe.mockRejectedValueOnce(new Error('redis down'));
+                    }
+                    return client;
+                };
+
+                await expect(p.SubscribeToChannel('abort', vi.fn())).rejects.toThrow('redis down');
+                const handler = vi.fn();
+                await p.SubscribeToChannel('abort', handler);
+                subscriberOf(p)._simulateMessage('mj:abort', 'payload');
+
+                expect(handler).toHaveBeenCalledWith('payload');
+                await p.Disconnect();
+            });
+
+            /**
+             * A subscriber whose first subscribe failed must be DISCONNECTED, not just abandoned.
+             *
+             * Retrying is not what is at stake: StartListening tracks its own in-flight promise and
+             * resets it on failure, so a later call opens a fresh subscriber either way (the test
+             * above). What only `discardSubscriber` does is close the failed client. Left open, that
+             * ioredis client keeps reconnecting in the background for good — retries are unlimited by
+             * default — and when it does get back in it resubscribes its channels, so this process
+             * then hears every cache invalidation twice: once per client.
+             */
+            it('disconnects the subscriber that failed to start, instead of leaking it', async () => {
+                const p = new RedisLocalStorageProvider({ enablePubSub: true, enableLogging: false, keyPrefix: 'mj' });
+                const internals = p as unknown as { createSubscriberClient: () => MockSubscriber };
+                const createSubscriber = internals.createSubscriberClient.bind(p);
+                const clients: MockSubscriber[] = [];
+                internals.createSubscriberClient = () => {
+                    const client = createSubscriber();
+                    if (clients.length === 0) {
+                        client.subscribe.mockRejectedValueOnce(new Error('redis down'));
+                    }
+                    clients.push(client);
+                    return client;
+                };
+
+                await expect(p.StartListening()).rejects.toThrow('redis down');
+                await p.StartListening();
+
+                expect(clients).toHaveLength(2);
+                expect(clients[0].disconnect).toHaveBeenCalledTimes(1);   // the failed one is closed
+                expect(clients[1].disconnect).not.toHaveBeenCalled();     // the working one is kept
+                expect(subscriberOf(p)).toBe(clients[1]);
+                expect(clients[1].subscribe).toHaveBeenCalledWith('mj:__pubsub__');
+                await p.Disconnect();
+            });
+        });
+
+        it('contains a rejected promise from an async handler and logs it', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            const good = vi.fn();
+            await p.SubscribeToChannel('abort', async () => {
+                throw new Error('async handler blew up');
+            });
+            await p.SubscribeToChannel('abort', good);
+
+            (p as unknown as { dispatchChannelMessage: (c: string, m: string) => void })
+                .dispatchChannelMessage('mj:abort', 'payload');
+            await new Promise(resolve => setImmediate(resolve));
+
+            expect(good).toHaveBeenCalledWith('payload');
+            expect(LogError).toHaveBeenCalledWith(expect.stringContaining('async handler blew up'));
+            await p.Disconnect();
+        });
     });
 
     // ────────────────────────────────────────────────────────────────────────
@@ -1154,6 +1569,163 @@ describe('RedisLocalStorageProvider', () => {
                 expect(out.get(`k-${i}`)).toBe(i);
             }
             expect(client.mget).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    /**
+     * Found in review. Neither is visible to a happy-path test: the first
+     * needs the pipeline reply to come back unusable, the second needs two keys written in order
+     * and then compared for expiry.
+     */
+    describe('index pruning is atomic', () => {
+        it('prunes a member whose key is gone and keeps the live ones', async () => {
+            await provider.SetItem('Users|f1', 'v1', 'RunViewCache', { IndexGroup: 'Users' });
+            await provider.SetItem('Users|f2', 'v2', 'RunViewCache', { IndexGroup: 'Users' });
+            await provider.Remove('Users|f2', 'RunViewCache');
+
+            expect(await provider.GetIndexGroupKeys('RunViewCache', 'Users')).toEqual(['Users|f1']);
+        });
+
+        it('reads and prunes in ONE round trip, so a peer\'s add cannot be dropped unseen', async () => {
+            await provider.SetItem('Users|f1', 'v1', 'RunViewCache', { IndexGroup: 'Users' });
+            const client = provider.Client;
+            (client.smembers as ReturnType<typeof vi.fn>).mockClear();
+            (client.srem as ReturnType<typeof vi.fn>).mockClear();
+            (client.del as ReturnType<typeof vi.fn>).mockClear();
+
+            await provider.GetIndexGroupKeys('RunViewCache', 'Users');
+
+            // Every step happens inside the script: no client-side SMEMBERS/SREM/DEL, which is what
+            // opened the window a peer's SADD could fall into.
+            expect(client.eval).toHaveBeenCalled();
+            expect(client.smembers).not.toHaveBeenCalled();
+            expect(client.srem).not.toHaveBeenCalled();
+            expect(client.del).not.toHaveBeenCalled();
+        });
+
+        it('deletes a set whose every member is gone, rather than leaving an empty one', async () => {
+            await provider.SetItem('Users|f1', 'v1', 'RunViewCache', { IndexGroup: 'Users' });
+            await provider.Remove('Users|f1', 'RunViewCache');
+
+            expect(await provider.GetIndexGroupKeys('RunViewCache', 'Users')).toEqual([]);
+            expect(provider.Client._sets.has('mj:__group__:RunViewCache:Users')).toBe(false);
+        });
+    });
+
+    describe('holding the key lock while Redis stops answering', () => {
+        beforeEach(() => { vi.useFakeTimers(); });
+        afterEach(() => { vi.useRealTimers(); });
+
+        /** Makes every lock command fail, as a dropped connection does. */
+        function connectionDrops(p: RedisLocalStorageProvider): void {
+            const client = p.Client as unknown as { get: ReturnType<typeof vi.fn>; eval: ReturnType<typeof vi.fn> };
+            client.get.mockRejectedValue(new Error('Connection is closed'));
+            client.eval.mockRejectedValue(new Error('Connection is closed'));
+        }
+
+        it('reports the lock lost when the connection has been down longer than the lock could live', async () => {
+            // The post-work check reads the lock back. When THAT read fails, the connection is
+            // down — and the renewals ran over the same connection, so they have been failing
+            // silently too. Answering "still mine" is then exactly backwards: it is most likely
+            // gone, and another process is writing the same key. The clock can answer when Redis
+            // cannot — the lock cannot outlive its TTL measured from the last confirmed renewal.
+            let finishWork!: () => void;
+            const working = new Promise<void>(resolve => { finishWork = resolve; });
+            const held = provider.WithKeyLock('slot', 'RunViewCache', async () => { await working; return 'wrote'; });
+
+            await vi.advanceTimersByTimeAsync(0);   // the lock is acquired
+            connectionDrops(provider);
+            await vi.advanceTimersByTimeAsync(11_000); // past the 10 s TTL with no renewal landing
+            finishWork();
+
+            await expect(held).rejects.toBeInstanceOf(KeyLockLostError);
+        });
+
+        it('still trusts the lock when the read fails but it cannot have expired yet', async () => {
+            // Same unreadable check, different facts: the connection dropped a moment ago, well
+            // inside the TTL, so the lock IS still ours and refusing the write would be a
+            // needless failure.
+            let finishWork!: () => void;
+            const working = new Promise<void>(resolve => { finishWork = resolve; });
+            const held = provider.WithKeyLock('slot', 'RunViewCache', async () => { await working; return 'wrote'; });
+
+            await vi.advanceTimersByTimeAsync(0);
+            connectionDrops(provider);
+            await vi.advanceTimersByTimeAsync(500);
+            finishWork();
+
+            await expect(held).resolves.toBe('wrote');
+        });
+    });
+
+    describe('per-category expiry', () => {
+        it('does not expire the default category, where keys vouch for other keys', async () => {
+            const ttlProvider = new RedisLocalStorageProvider({ defaultTTLSeconds: 60, enableLogging: false });
+            try {
+                await ttlProvider.SetItem('___MJCore_Metadata_AllMetadata', 'payload', 'default');
+                await ttlProvider.SetItem('___MJCore_Metadata_Timestamps', 'claim', 'default');
+                await ttlProvider.SetItem('Users|f1', 'rows', 'RunViewCache');
+
+                // -1 = stored without expiry. The proxy key must never outlive its payload, and the
+                // cheapest way to guarantee that is for neither to expire on its own.
+                expect(await ttlProvider.GetTTL('___MJCore_Metadata_AllMetadata', 'default')).toBe(-1);
+                expect(await ttlProvider.GetTTL('___MJCore_Metadata_Timestamps', 'default')).toBe(-1);
+                expect(await ttlProvider.GetTTL('Users|f1', 'RunViewCache')).toBe(60);
+            } finally {
+                await ttlProvider.Disconnect();
+            }
+        });
+
+        it('keeps the default category unexpiring when a host configures some OTHER category', async () => {
+            // The invariant belongs to the `default` category, not to the act of writing a config:
+            // a host that only wants a dataset TTL must not silently reinstate the proxy-key bug.
+            // The test above passes `default: 0` explicitly, so it cannot see a config that
+            // REPLACES the built-in map instead of merging over it.
+            const ttlProvider = new RedisLocalStorageProvider({
+                defaultTTLSeconds: 60,
+                categoryTTLSeconds: { DatasetCache: 30 },
+                enableLogging: false,
+            });
+            try {
+                await ttlProvider.SetItem('___MJCore_Metadata_Timestamps', 'claim', 'default');
+                await ttlProvider.SetItem('ds', 'v', 'DatasetCache');
+
+                expect(await ttlProvider.GetTTL('___MJCore_Metadata_Timestamps', 'default')).toBe(-1);
+                expect(await ttlProvider.GetTTL('ds', 'DatasetCache')).toBe(30);
+            } finally {
+                await ttlProvider.Disconnect();
+            }
+        });
+
+        it('lets a host override the default category deliberately', async () => {
+            const ttlProvider = new RedisLocalStorageProvider({
+                defaultTTLSeconds: 60,
+                categoryTTLSeconds: { default: 15 },
+                enableLogging: false,
+            });
+            try {
+                await ttlProvider.SetItem('k', 'v', 'default');
+                expect(await ttlProvider.GetTTL('k', 'default')).toBe(15);
+            } finally {
+                await ttlProvider.Disconnect();
+            }
+        });
+
+        it('honours an explicit per-write TTL and a configured per-category override', async () => {
+            const ttlProvider = new RedisLocalStorageProvider({
+                defaultTTLSeconds: 60,
+                categoryTTLSeconds: { default: 0, DatasetCache: 30 },
+                enableLogging: false,
+            });
+            try {
+                await ttlProvider.SetItem('ds', 'v', 'DatasetCache');
+                await ttlProvider.SetItem('explicit', 'v', 'default', { TTLSeconds: 5 });
+
+                expect(await ttlProvider.GetTTL('ds', 'DatasetCache')).toBe(30);
+                expect(await ttlProvider.GetTTL('explicit', 'default')).toBe(5);
+            } finally {
+                await ttlProvider.Disconnect();
+            }
         });
     });
 });

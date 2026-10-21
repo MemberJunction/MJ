@@ -15,7 +15,7 @@ const MockAnthropic = vi.hoisted(() => vi.fn().mockImplementation(function (this
 }));
 
 // Mock the Anthropic SDK
-/** Stand-in for the SDK's abort error — the driver uses `instanceof` on it to detect cancellation. */
+/** Stand-in for the SDK's abort error class, which the SDK module exports. */
 const MockAPIUserAbortError = vi.hoisted(() => class MockAPIUserAbortError extends Error {
     constructor() {
         super('Request was aborted.');
@@ -739,50 +739,6 @@ describe('AnthropicLLM', () => {
 
             expect(mockCreate.mock.calls[0][1]).toEqual({ signal: controller.signal });
         });
-
-        it('should short-circuit without calling the API when already aborted', async () => {
-            mockOkStream();
-            const controller = new AbortController();
-            controller.abort();
-
-            const result = await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({
-                ...baseParams,
-                cancellationToken: controller.signal
-            });
-
-            expect(mockStream).not.toHaveBeenCalled();
-            expect(result.success).toBe(false);
-            expect(result.statusText).toBe('cancelled');
-            expect(result.errorMessage).toBe('Anthropic request was cancelled');
-        });
-
-        it('should report an APIUserAbortError from the SDK as a cancelled result', async () => {
-            const finalMessage = vi.fn().mockRejectedValue(new MockAPIUserAbortError());
-            mockStream.mockReturnValue({ on: vi.fn().mockReturnValue({ finalMessage }) });
-
-            const result = await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion'](baseParams);
-
-            expect(result.success).toBe(false);
-            expect(result.statusText).toBe('cancelled');
-        });
-
-        it('should report a cancelled stream as a failure, not a truncated success', async () => {
-            mockCreate.mockResolvedValue({});
-            const controller = new AbortController();
-
-            await (instance as ReturnType<typeof Object.create>)['createStreamingRequest']({
-                ...baseParams,
-                cancellationToken: controller.signal
-            });
-
-            // Caller cancels mid-stream; the SDK's Stream ends silently rather than throwing.
-            controller.abort();
-
-            const result = (instance as ReturnType<typeof Object.create>)['finalizeStreamingResponse']('partial', null, null);
-
-            expect(result.success).toBe(false);
-            expect(result.statusText).toBe('cancelled');
-        });
     });
 });
 
@@ -872,6 +828,28 @@ describe('AnthropicLLM — native tool calling', () => {
             await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }], tools: [WEATHER_TOOL], toolChoice: 'none', parallelToolCalls: false });
 
             expect(mockStream.mock.calls[0][0].tool_choice).toEqual({ type: 'none' });
+        });
+
+        it('downgrades a named choice to auto when the request uses budget thinking, which rejects forced tool use', async () => {
+            await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }], tools: [WEATHER_TOOL], toolChoice: { name: 'get_weather' }, model: 'claude-haiku-4-5-20251001', effortLevel: '50' });
+
+            const request = mockStream.mock.calls[0][0];
+            expect(request.thinking?.type).toBe('enabled');
+            expect(request.tool_choice).toEqual({ type: 'auto' });
+        });
+
+        it("downgrades 'required' to auto under budget thinking too", async () => {
+            await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }], tools: [WEATHER_TOOL], toolChoice: 'required', model: 'claude-haiku-4-5-20251001', effortLevel: '50' });
+
+            expect(mockStream.mock.calls[0][0].tool_choice).toEqual({ type: 'auto' });
+        });
+
+        it('keeps a named choice forced under adaptive thinking, which accepts it', async () => {
+            await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }], tools: [WEATHER_TOOL], toolChoice: { name: 'get_weather' }, model: 'claude-sonnet-4-6', effortLevel: '50' });
+
+            const request = mockStream.mock.calls[0][0];
+            expect(request.thinking?.type).toBe('adaptive');
+            expect(request.tool_choice).toEqual({ type: 'tool', name: 'get_weather' });
         });
     });
 

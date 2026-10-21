@@ -16,6 +16,20 @@ export type RunIntegrityCheck = {
 }
 
 /**
+ * What a set of integrity-check results means. Three outcomes, not two: an empty result array is
+ * its own case and must never be collapsed into 'passed'.
+ *
+ * `RunIntegrityChecks(pool, true)` runs only the checks whose `Enabled` is true, so it returns `[]`
+ * when the checks are configured off. Reporting that as a pass is the same defect as discarding the
+ * results entirely — a green tick over nothing measured — and it is the likelier one, because
+ * turning a check off is the obvious way to quiet it.
+ */
+export type IntegrityCheckOutcome =
+    | { Kind: 'none-ran' }
+    | { Kind: 'passed'; Count: number }
+    | { Kind: 'failed'; Failures: IntegrityCheckResult[] };
+
+/**
  * Returns a quoted identifier appropriate for the current database platform.
  * SQL Server uses [brackets], PostgreSQL uses "double quotes".
  */
@@ -200,5 +214,23 @@ export class SystemIntegrityBase {
             logError(message);
             return { Success: false, Message: message, Name: 'entityFieldsSequenceCheck' };
         }
+    }
+
+    /**
+     * Classifies the output of {@link RunIntegrityChecks}. Pure: it decides, it does not report.
+     *
+     * This lives here rather than inline in the caller so the decision can be tested without
+     * standing up the CodeGen pipeline. The case that needs the test is `none-ran`: it is
+     * indistinguishable from a pass by every signal except the array's length, so a caller that
+     * forgets it looks correct and is not.
+     */
+    public static ClassifyResults(results: IntegrityCheckResult[]): IntegrityCheckOutcome {
+        if (results.length === 0) {
+            return { Kind: 'none-ran' };
+        }
+        const failures = results.filter((r) => !r.Success);
+        return failures.length > 0
+            ? { Kind: 'failed', Failures: failures }
+            : { Kind: 'passed', Count: results.length };
     }
 }

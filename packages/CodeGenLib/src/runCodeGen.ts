@@ -302,7 +302,7 @@ export class RunCodeGenBase {
         // rows for newly-discovered entities. Skipping Refresh here causes the SQL-gen entity
         // loop to use stale snapshots and silently drop CRUD for those entities — Bug 1 in the
         // 3-bug chain, observed first-run on PG for entities like SystemEvent.
-        await provider.Refresh();
+        await this.refreshMetadataAfterManageMetadata(provider);
         if (!metadataSuccess) {
           FailSpinner('ERROR managing metadata (refresh applied; downstream will use latest available state)');
           pipelineSuccess = false;
@@ -539,19 +539,48 @@ export class RunCodeGenBase {
       }
 
       StartSpinner('Running system integrity checks...');
-      const integrityResults = await SystemIntegrityBase.RunIntegrityChecks(conn, true);
-      const integrityFailures = integrityResults.filter((r) => !r.Success);
-      if (integrityFailures.length > 0) {
-        FailSpinner(`System integrity checks FAILED: ${integrityFailures.length} check(s) failed`);
-        pipelineSuccess = false;
-        for (const failure of integrityFailures) {
-          const msg = `Integrity check '${failure.Name}' failed: ${failure.Message}`;
-          logError(msg);
+      // Three outcomes, not two. `SystemIntegrityBase.ClassifyResults` owns the distinction and is
+      // unit-tested; this block only reports it. The third case is `none-ran`: `RunIntegrityChecks`
+      // runs only the checks whose `Enabled` is true, so it returns `[]` when they are configured
+      // off, and ticking green there is a green tick over nothing measured — the same defect as
+      // discarding the results, one line further along, and the likelier one, since turning a check
+      // off is the obvious way to quiet it.
+      const integrityOutcome = SystemIntegrityBase.ClassifyResults(
+        await SystemIntegrityBase.RunIntegrityChecks(conn, true),
+      );
+      switch (integrityOutcome.Kind) {
+        case 'none-ran': {
+          // A warning, not a failure: disabling the checks is a legitimate, deliberate
+          // configuration and failing on it would break every repo that has made that choice. The
+          // `reporter.note` is what carries it into the structured run report, which a spinner line
+          // does not reach.
+          const msg =
+            'No system integrity checks ran — integrityChecks.enabled / integrityChecks.entityFieldsSequenceCheck is false. Nothing was verified.';
+          WarnSpinner(msg);
           reporter.note(msg);
-          this.commandFailures.push({ context: 'INTEGRITY_CHECK', message: msg });
+          break;
         }
-      } else {
-        SucceedSpinner('System integrity checks completed');
+        case 'failed': {
+          // Name the failing checks in the spinner line rather than counting them: the spinner is
+          // what survives in non-verbose output, and a bare "2 check(s) failed" sends the reader
+          // back to the full log to learn which two.
+          FailSpinner(
+            `System integrity checks FAILED: ${integrityOutcome.Failures.map((f) => f.Name).join(', ')}`,
+          );
+          pipelineSuccess = false;
+          for (const failure of integrityOutcome.Failures) {
+            const msg = `Integrity check '${failure.Name}' failed: ${failure.Message}`;
+            logError(msg);
+            reporter.note(msg);
+            this.commandFailures.push({ context: 'INTEGRITY_CHECK', message: msg });
+          }
+          break;
+        }
+        case 'passed':
+          SucceedSpinner(
+            `System integrity checks completed (${integrityOutcome.Count} check${integrityOutcome.Count === 1 ? '' : 's'})`,
+          );
+          break;
       }
 
       const afterCommands = Commands('AFTER');
@@ -609,6 +638,27 @@ export class RunCodeGenBase {
   }
 
   /**
+   * Refreshes every metadata provider the rest of the pipeline reads, once `manageMetadata` has written to
+   * the database.
+   *
+   * There can be two. `provider` is the one this pipeline was handed, but SQL generation reads entities
+   * through `new MJ.Metadata()` — the process's GLOBAL provider. The CLI creates one provider and makes it the
+   * global one, so they are the same object and one refresh covers both. In-process (`RunInProcess`, the
+   * runtime schema-update path) the host hands the pipeline a SEPARATE CodeGen-credential provider, and
+   * refreshing only that one left SQL generation on whatever snapshot the host's timed refresh last took. The
+   * entities `manageMetadata` had just given their soft primary keys still had none there, so every one of them
+   * was skipped as "no primary key field in metadata" — tables and entity rows, but no base view and no CRUD
+   * routines. Observed on a SQL Server tenant for 348 of 884 entities, on two consecutive runs.
+   */
+  private async refreshMetadataAfterManageMetadata(provider: MJ.IMetadataProvider): Promise<void> {
+    await provider.Refresh();
+    const hostProvider = MJ.Metadata.Provider; // global-provider-ok: SQL generation reads `new MJ.Metadata()`, which is this provider; in-process it is the host's, not `provider`
+    if (hostProvider && hostProvider !== provider) {
+      await hostProvider.Refresh();
+    }
+  }
+
+  /**
    * Resolve dirty-schema emit options for one generator call.
    * `--skipdb` (files only) and `fileEmit.dirtySchemaOnly === false` rebuild
    * every schema; write-if-changed still keeps mtimes stable. A full run with
@@ -620,7 +670,7 @@ export class RunCodeGenBase {
     return {
       dirtySchemas: ResolveDirtySchemasForEmit(
         entities,
-        [...ManageMetadataBase.newEntityList, ...ManageMetadataBase.modifiedEntityList],
+        [...ManageMetadataBase.newEntityList, ...ManageMetadataBase.modifiedEntityList, ...ManageMetadataBase.EntitiesWithNewJSONValidators],
         skipDB,
         fileEmit?.dirtySchemaOnly !== false,
         ManageMetadataBase.deletedEntitySchemaList,

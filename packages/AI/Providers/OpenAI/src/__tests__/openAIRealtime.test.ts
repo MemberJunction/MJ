@@ -27,7 +27,9 @@ vi.mock('@memberjunction/ai', async () => {
     // top-level-usage bug survived: the sibling xAI test asserted against a hand-written
     // OpenAI-shaped frame and passed while real Grok sessions recorded nothing.
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
-    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage };
+    // Same for RealtimeDroppedInputReporter: dependency-free, and the drop tests assert its real once-per-type report.
+    const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
+    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, RealtimeDroppedInputReporter };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -334,11 +336,32 @@ describe('OpenAIRealtime', () => {
         it('SendInput appends base64 audio', async () => {
             const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
             const bytes = new Uint8Array([1, 2, 3, 4]);
-            session.SendInput(bytes.buffer);
+            session.SendInput({ Data: bytes.buffer, Kind: 'audio' });
             const append = driver.Fake.Sent.find((e) => e.type === 'input_audio_buffer.append');
             expect(append).toBeDefined();
             if (append?.type === 'input_audio_buffer.append') {
                 expect(append.audio).toBe(Buffer.from(bytes).toString('base64'));
+            }
+        });
+
+        it('SendInput drops a video frame instead of appending it as audio, reports it once, and still appends audio (#5091)', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            try {
+                const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
+                driver.Fake.Sent = [];
+                const jpeg = new Uint8Array([0xff, 0xd8, 0xff]);
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+                session.SendInput({ Data: jpeg.buffer, Kind: 'video', MimeType: 'image/jpeg' });
+
+                expect(driver.Fake.Sent).toEqual([]);
+                const drops = warn.mock.calls.filter((call) => String(call[0]).startsWith('[openaiRealtime] Dropped video input of type image/jpeg'));
+                expect(drops).toHaveLength(1);
+
+                const audio = new Uint8Array([1, 2, 3, 4]);
+                session.SendInput({ Data: audio.buffer, Kind: 'audio' });
+                expect(driver.Fake.Sent).toEqual([{ type: 'input_audio_buffer.append', audio: Buffer.from(audio).toString('base64') }]);
+            } finally {
+                warn.mockRestore();
             }
         });
 
@@ -388,7 +411,7 @@ describe('OpenAIRealtime', () => {
             expect(driver.Fake.Sent.some((e) => e.type === 'response.create')).toBe(false);
         });
 
-        it('RequestSpokenUpdate sends response.create with per-response instructions when idle', async () => {
+        it('RequestSpokenUpdate sends response.create carrying the session prompt AHEAD of the direction', async () => {
             const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
             driver.Fake.Sent = [];
             session.RequestSpokenUpdate('Briefly say the report agent is drafting.');
@@ -396,7 +419,43 @@ describe('OpenAIRealtime', () => {
             const respond = driver.Fake.Sent[0];
             expect(respond.type).toBe('response.create');
             if (respond.type === 'response.create') {
-                expect(respond.response?.instructions).toBe('Briefly say the report agent is drafting.');
+                expect(respond.response?.instructions).toBe('sys\n\nBriefly say the report agent is drafting.');
+            }
+        });
+
+        /**
+         * #4591 · bizapps-caliber#397 — the identity half of the rule the BLANK case already knew.
+         *
+         * `response.instructions` is a full override of the session prompt, so a non-blank direction
+         * wipes the co-agent identity exactly as `''` would. The visible symptom downstream was an
+         * interviewer opening a hiring assessment as "ChatGPT" on the one turn that rides this method,
+         * while every other turn in the same session gave her configured name.
+         */
+        it('RequestSpokenUpdate never sends a direction that would wipe the session identity', async () => {
+            const session = (await driver.StartSession({
+                Model: 'gpt-realtime',
+                SystemPrompt: 'You are Sam Rivera, Support Team Lead.',
+            })) as OpenAIRealtimeSession;
+            driver.Fake.Sent = [];
+            session.RequestSpokenUpdate('Open the conversation: greet them and introduce yourself.');
+            const respond = driver.Fake.Sent[0];
+            expect(respond.type).toBe('response.create');
+            if (respond.type === 'response.create') {
+                expect(respond.response?.instructions).toContain('Sam Rivera');
+                // The direction stays LAST — the most recent line is the one the model weights hardest.
+                expect(respond.response?.instructions).toMatch(/Sam Rivera[\s\S]*Open the conversation/);
+            }
+        });
+
+        it('RequestSpokenUpdate sends the direction alone when the session carried no prompt', async () => {
+            const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: '' })) as OpenAIRealtimeSession;
+            driver.Fake.Sent = [];
+            session.RequestSpokenUpdate('progress update');
+            const respond = driver.Fake.Sent[0];
+            expect(respond.type).toBe('response.create');
+            if (respond.type === 'response.create') {
+                // Nothing to preserve, so nothing is prepended — a leading blank line would be noise.
+                expect(respond.response?.instructions).toBe('progress update');
             }
         });
 
@@ -1075,11 +1134,17 @@ describe('OpenAIRealtime config extraction hardening', () => {
         expect((blank.audio as { output?: unknown }).output).toBeUndefined();
     });
 
-    it('scrubs MJ-side transport keys (endpoint/sampleRate/proxyBaseUrl) even on OpenAI', async () => {
-        const session = await startAndGetSession({ endpoint: 'ws://x:1/v1/realtime', sampleRate: 24000, proxyBaseUrl: 'https://p' });
+    it('scrubs MJ-side transport keys (endpoint/sampleRate/proxyBaseUrl/brokerBaseUrl) even on OpenAI', async () => {
+        const session = await startAndGetSession({
+            endpoint: 'ws://x:1/v1/realtime',
+            sampleRate: 24000,
+            proxyBaseUrl: 'https://p',
+            brokerBaseUrl: 'https://b',
+        });
         expect(session.endpoint).toBeUndefined();
         expect(session.sampleRate).toBeUndefined();
         expect(session.proxyBaseUrl).toBeUndefined();
+        expect(session.brokerBaseUrl).toBeUndefined();
     });
 
     it('honors a per-session inputTranscriptionModel override from the Config bag', async () => {
@@ -1454,6 +1519,7 @@ describe('SEAM-4: config-tuning bag → driver session payload (end-to-end shape
             parallelToolCalls: true,
             mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }],
             inputTranscriptionModel: 'whisper-1',
+            transcriptionLanguages: ['en-US'],
         };
         const driver = new TestableOpenAIRealtime('k');
         await driver.StartSession({
@@ -1471,7 +1537,8 @@ describe('SEAM-4: config-tuning bag → driver session payload (end-to-end shape
             expect(tools).toHaveLength(2); // function + mcp
             expect(tools[1]).toMatchObject({ type: 'mcp', server_label: 'kb' });
             const audio = session.audio as { input?: { transcription?: { model?: string } } };
-            expect(audio.input?.transcription?.model).toBe('whisper-1');
+            expect(audio.input?.transcription).toEqual({ model: 'whisper-1' });
+            expect(session.transcriptionLanguages).toBeUndefined(); // not mapped for this family; never sent raw
         } else {
             throw new Error('expected realtime session.update');
         }

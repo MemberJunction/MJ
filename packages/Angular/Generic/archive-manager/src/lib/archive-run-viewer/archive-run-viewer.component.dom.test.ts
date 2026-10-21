@@ -11,8 +11,8 @@ import { ArchiveRunViewerComponent } from './archive-run-viewer.component';
  * `new RunView()` against the global provider. We cover three things: the initial loading
  * branch, the settled empty branch, and — via `useFakeGlobalProvider` feeding canned rows +
  * a forced detectChanges() — the loaded run list + metrics (the "data path" block below).
- * The pure formatting/status helpers are asserted directly. The drawer (per-run detail)
- * remains out of scope. See guides/ANGULAR_TESTING_GUIDE.md §6.
+ * The pure formatting/status helpers are asserted directly. Of the drawer (per-run detail),
+ * only the record-count label is covered. See guides/ANGULAR_TESTING_GUIDE.md §6.
  */
 describe('ArchiveRunViewerComponent (DOM)', () => {
   it('shows the loading indicator on initial render', () => {
@@ -103,6 +103,39 @@ describe('ArchiveRunViewerComponent (DOM)', () => {
       const f = await renderLoaded([]);
       expect(query(f, '.run-empty')).not.toBeNull();
       expect(queryAll(f, '.run-card').length).toBe(0);
+    });
+
+    it('marks purge runs with a Purge badge', async () => {
+      const f = await renderLoaded([
+        { ...RUNS[0], StorageMode: 'Purge' },
+        { ...RUNS[1], StorageMode: 'Store' },
+      ]);
+      expect(queryAll(f, '.run-purge-badge').length).toBe(1);
+    });
+
+    it('says purged on a Purge run card and archived on a Store run card', async () => {
+      const f = await renderLoaded([
+        { ...RUNS[0], StorageMode: 'Purge' },
+        { ...RUNS[1], StorageMode: 'Store' },
+      ]);
+      const recordStats = queryAll(f, '.run-card').map((card) => card.querySelector('.run-stat')?.textContent?.trim());
+      expect(recordStats).toEqual(['10 purged', '5 archived']);
+    });
+
+    it('labels the drawer record count Purged for a Purge run and Archived for a Store run', async () => {
+      const f = await renderLoaded([
+        { ...RUNS[0], StorageMode: 'Purge' },
+        { ...RUNS[1], StorageMode: 'Store' },
+      ]);
+      const [purgeRun, storeRun] = f.componentInstance.Runs;
+
+      await f.componentInstance.OpenRunDrawer(purgeRun);
+      f.detectChanges();
+      expect(text(f, '.drawer-stat-label')).toBe('Purged');
+
+      await f.componentInstance.OpenRunDrawer(storeRun);
+      f.detectChanges();
+      expect(text(f, '.drawer-stat-label')).toBe('Archived');
     });
   });
 
