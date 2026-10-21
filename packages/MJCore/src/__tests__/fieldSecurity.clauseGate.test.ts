@@ -31,7 +31,7 @@ import { CompositeKey } from '../generic/compositeKey';
 import { TransactionGroupBase } from '../generic/transactionGroup';
 import { RunViewParams } from '../views/runView';
 import { BaseEntity } from '../generic/baseEntity';
-import { FieldSecuritySQLGate } from '../generic/fieldSecuritySQLGate';
+import { FieldSecuritySQLGate, FieldSecurityUnresolvableSQLMessage, FoldIdentifier } from '../generic/fieldSecuritySQLGate';
 
 const HR_ROLE_ID = 'A0000000-0000-0000-0000-000000000001';
 const INTERN_ROLE_ID = 'A0000000-0000-0000-0000-000000000003';
@@ -326,8 +326,15 @@ describe('the refusal for a denied column and for a nonexistent one is the same'
         expect(performance.now() - started).toBeLessThan(250);
     });
 
-    it('reports a PostgreSQL unquoted denied name in lower case, as PostgreSQL reports an unknown one', () => {
-        expect(refusal({ ExtraFilter: 'Salary > 1' }, intern, 'postgresql')).toBe(FieldSecurityDenialMessage('salary', 'Employees'));
+    it('reports a PostgreSQL denied name as PostgreSQL reports an unknown one after MJ quotes the SQL', () => {
+        // MJ quotes a capitalized or dot-qualified word before PostgreSQL sees it, so an unknown
+        // `Salry` is reported as "Salry"; a word left bare folds to lower case.
+        expect(refusal({ ExtraFilter: 'Salary > 1' }, intern, 'postgresql')).toBe(FieldSecurityDenialMessage('Salary', 'Employees'));
+        expect(refusal({ ExtraFilter: 'e.sAlary > 1' }, intern, 'postgresql')).toBe(FieldSecurityDenialMessage('sAlary', 'Employees'));
+        expect(refusal({ ExtraFilter: 'salary > 1' }, intern, 'postgresql')).toBe(FieldSecurityDenialMessage('salary', 'Employees'));
+        expect(refusal({ ExtraFilter: 'sAlary > 1' }, intern, 'postgresql')).toBe(FieldSecurityDenialMessage('salary', 'Employees'));
+        expect(FieldSecuritySQLGate.ErrorForInvalidColumn(new Error('column "Salry" does not exist'), employees(), intern)?.message)
+            .toBe(FieldSecurityDenialMessage('Salry', 'Employees'));
     });
 
     it('leaves the database error alone for a user denied nothing, and for other errors', () => {
@@ -377,5 +384,142 @@ describe('FieldSecuritySQLGate.AssertStatementAllowed (saved-query SQL)', () => 
 
     it('checks only entities the SQL reads', () => {
         expect(check('SELECT * FROM vwAccounts')).toBeNull();
+    });
+});
+
+/** Invisible characters SQL Server's collations give no weight to, or that a database may drop. */
+const INVISIBLE_CHARACTERS = [
+    '\u200D', '\u2060', '\uFEFF', '\u200E', '\u200F', '\u034F', '\u180B', '\uFE0F', '\u2063', '\u202A', '\u180E',
+    '\u00AD', '\u200B', '\u200C', '\u0001',
+];
+
+describe('invisible characters inside a name, for a user carrying denials', () => {
+    it.each(INVISIBLE_CHARACTERS.map(c => [`U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`, c]))(
+        'refuses %s inside a bracketed or quoted column name in ExtraFilter and OrderBy',
+        (_label, c) => {
+            expect(refusal({ ExtraFilter: `[Sal${c}ary] > 100000` })).not.toBeNull();
+            expect(refusal({ ExtraFilter: `[Salary${c}] > 100000` })).not.toBeNull();
+            expect(refusal({ OrderBy: `[Sal${c}ary] DESC` })).not.toBeNull();
+            expect(refusal({ ExtraFilter: `"Sal${c}ary" > 1` }, intern, 'postgresql')).not.toBeNull();
+        },
+    );
+
+    it.each(INVISIBLE_CHARACTERS.map(c => [`U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`, c]))(
+        'refuses %s inside a view name in a subquery',
+        (_label, c) => {
+            expect(refusal({ EntityName: 'Accounts', ExtraFilter: `OwnerID IN (SELECT e.ID FROM [vwEmploy${c}ees] e WHERE e.Name = 'x')` })).not.toBeNull();
+            expect(refusal({ EntityName: 'Accounts', ExtraFilter: `EXISTS (SELECT * FROM [vwEmploy${c}ees] WHERE 1=1)` })).not.toBeNull();
+        },
+    );
+
+    it('still lets a user denied nothing use such a name, and keeps them in string literals', () => {
+        expect(refusal({ ExtraFilter: '[Sal\u2060ary] > 1' }, hr)).toBeNull();
+        expect(refusal({ ExtraFilter: "Name = 'Ada\u200D'" })).toBeNull();
+    });
+
+    it('folds them away when comparing names', () => {
+        expect(FoldIdentifier('Sal\u2060ary\u00AD')).toBe('salary');
+    });
+});
+
+describe('set operations make SELECT * a whole-row comparison', () => {
+    it.each([
+        ["EXISTS (SELECT * FROM vwEmployees x WHERE x.ID = vwEmployees.ID INTERSECT SELECT x2.ID, x2.Name, n.v, 'A', x2.ManagerID FROM vwEmployees x2 CROSS JOIN (VALUES (1),(2)) n(v))"],
+        ["EXISTS (SELECT * FROM vwEmployees WHERE ID='k' EXCEPT SELECT ID, Name, 1, 'A', ManagerID FROM vwEmployees)"],
+        ["EXISTS (SELECT * FROM vwEmployees WHERE ID='k' UNION ALL SELECT 1,2,3,4,5)"],
+        ["EXISTS (SELECT * FROM vwEmployees WHERE ID='k' UNION SELECT 1,2,3,4,5)"],
+        ["NOT EXISTS (SELECT * FROM vwEmployees WHERE ID='k' EXCEPT SELECT 'k','Bob',1,'A',NULL)"],
+        ["EXISTS (SELECT\n* FROM vwEmployees WHERE ID='k' INTERSECT SELECT 'k','Bob',1,'A',NULL)"],
+        ["EXISTS ( /*c*/ SELECT * FROM vwEmployees WHERE ID='k' INTERSECT (SELECT 'k','Bob',1,'A',NULL))"],
+        ['EXISTS (SELECT * FROM vwEmployees e WHERE e.ID = vwEmployees.ID ORDER BY 3 DESC OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY)'],
+    ])('refuses %s', (clause) => {
+        expect(refusal({ ExtraFilter: clause })).not.toBeNull();
+    });
+
+    it('refuses the PostgreSQL form', () => {
+        const clause = `EXISTS (SELECT * FROM vwEmployees WHERE "ID" = 'k' INTERSECT SELECT e."ID", e."Name", n, 'A', e."ManagerID" FROM vwEmployees e, generate_series(50000,100000) n WHERE e."ID" = 'k')`;
+        expect(refusal({ ExtraFilter: clause }, intern, 'postgresql')).not.toBeNull();
+    });
+
+    it('refuses the cross-entity form from an entity without field security', () => {
+        const clause = 'EXISTS (SELECT * FROM vwEmployees s WHERE s.ManagerID = vwAccounts.OwnerID INTERSECT SELECT s2.ID, s2.Name, n.v, 1, 2, 3, 4 FROM vwEmployees s2 CROSS JOIN (VALUES (100000)) n(v))';
+        expect(refusal({ EntityName: 'Accounts', ExtraFilter: clause })).not.toBeNull();
+    });
+
+    it('keeps EXISTS (SELECT * …) working when the set operation is inside a nested subquery', () => {
+        expect(refusal({ ExtraFilter: 'EXISTS (SELECT * FROM vwEmployees e WHERE e.ManagerID IN (SELECT 1 UNION SELECT 2))' })).toBeNull();
+    });
+
+    it('lets a user denied nothing use them', () => {
+        expect(refusal({ ExtraFilter: "EXISTS (SELECT * FROM vwEmployees WHERE ID='k' EXCEPT SELECT 'k','Bob',1,'A',NULL)" }, hr)).toBeNull();
+    });
+});
+
+describe('PostgreSQL U&"…" identifiers are read as the name PostgreSQL resolves', () => {
+    it.each([
+        ['U&"\\0053alary" > 1'],
+        ['u&"S\\0061lary" > 1'],
+        ["U&\"S!0061lary\" UESCAPE '!' > 1"],
+        ['U&"S\\+000061lary" > 1'],
+    ])('refuses %s as the denied column', (clause) => {
+        expect(refusal({ ExtraFilter: clause }, intern, 'postgresql')).toBe(FieldSecurityDenialMessage('Salary', 'Employees'));
+    });
+
+    it('fails closed on one PostgreSQL would not decode', () => {
+        expect(refusal({ ExtraFilter: 'U&"\\00zzalary" > 1' }, intern, 'postgresql')).not.toBeNull();
+    });
+
+    it("does not read a name inside an E'…' string", () => {
+        expect(refusal({ ExtraFilter: "Notes = E'Salary'" }, intern, 'postgresql')).toBeNull();
+    });
+});
+
+describe('saved-query SQL that reads a relation the catalog does not know', () => {
+    const catalog = [employees(), accounts()];
+    const check = (sql: string, user: UserInfo = intern, dialect: 'sqlserver' | 'postgresql' = 'sqlserver'): string | null => {
+        try {
+            FieldSecuritySQLGate.AssertStatementAllowed(sql, user, catalog, dialect);
+            return null;
+        } catch (e: unknown) {
+            return e instanceof Error ? e.message : String(e);
+        }
+    };
+
+    it.each([
+        ['a custom view', 'SELECT Salary FROM __mj.vwPeopleSummary'],
+        ['SELECT * from a custom view', 'SELECT * FROM vwPeopleSummary'],
+        ['a table-valued function', 'SELECT x.Name FROM dbo.fnPeople(1) x'],
+        ['an APPLY of a function', 'SELECT a.Name FROM vwAccounts a CROSS APPLY OPENJSON(a.Name) j'],
+        ['a temp table', 'SELECT t.Name FROM #people t'],
+        ['a cross-database name', 'SELECT e.Name FROM OtherDb.dbo.vwEmployees e'],
+        ['a linked-server name', 'SELECT e.Name FROM Srv.OtherDb.dbo.vwAccounts e'],
+        ['an entity view name in another schema', 'SELECT a.Name FROM reporting.vwAccounts a'],
+        ['a system catalog view', 'SELECT o.name FROM sys.objects o'],
+        ['a join to a custom view', 'SELECT a.Name FROM vwAccounts a JOIN vwPeopleSummary p ON p.ID = a.ID'],
+        ['a custom view in a parenthesized join', 'SELECT a.Name FROM (vwAccounts a CROSS JOIN vwPeopleSummary p)'],
+    ])('refuses %s for a user carrying denials, with the ambiguous message', (_label, sql) => {
+        expect(check(sql)).toBe(FieldSecurityUnresolvableSQLMessage('query'));
+        expect(check(sql, hr)).toBeNull();
+    });
+
+    it('refuses an unknown relation on PostgreSQL, including FROM ONLY and a set-returning function', () => {
+        expect(check('SELECT p."Name" FROM ONLY __mj.vwPeopleSummary p', intern, 'postgresql')).not.toBeNull();
+        expect(check('SELECT n FROM generate_series(1, 10) n', intern, 'postgresql')).not.toBeNull();
+    });
+
+    it.each([
+        ['entity views, schema-qualified or not', 'SELECT a.Name, e.Name FROM dbo.vwAccounts a JOIN [dbo].[vwEmployees] e ON e.ID = a.OwnerID'],
+        ['an entity base table', 'SELECT a.Name FROM dbo.Account a'],
+        ['CTEs, with a column list and several of them', 'WITH x (n) AS (SELECT e.Name FROM vwEmployees e), y AS (SELECT a.Name FROM vwAccounts a) SELECT x.n FROM x JOIN y ON y.Name = x.n'],
+        ['a derived table and a VALUES list', 'SELECT z.Name, v.k FROM (SELECT a.Name FROM vwAccounts a) z CROSS JOIN (VALUES (1)) v(k)'],
+        ['FROM inside EXTRACT and TRIM', "SELECT EXTRACT(YEAR FROM a.Created), TRIM(' ' FROM a.Name) FROM vwAccounts a"],
+        ['IS DISTINCT FROM', 'SELECT a.Name FROM vwAccounts a WHERE a.Name IS DISTINCT FROM a.OwnerID'],
+        ['a parenthesized join of entity views', 'SELECT a.Name FROM (vwAccounts a CROSS JOIN vwEmployees e)'],
+    ])('allows %s', (_label, sql) => {
+        expect(check(sql)).toBeNull();
+    });
+
+    it('allows a LATERAL subquery on PostgreSQL', () => {
+        expect(check('SELECT a."Name" FROM vwAccounts a CROSS JOIN LATERAL (SELECT e."Name" FROM vwEmployees e) l', intern, 'postgresql')).toBeNull();
     });
 });
