@@ -68,6 +68,7 @@ flowchart TD
 - **Transition Filters** — Filters see the values on *both* sides of a save, so a gate can express "when Status *becomes* Approved" rather than only "when Status *is* Approved"
 - **Durable Dispatch** — An `After*` binding can opt into surviving a process restart (`EntityAction.RunMode = 'Durable'`)
 - **Execution-Log Retention** — Each log row is stamped with the retention its action declared, and a scheduled purge enforces it
+- **Zero-Overhead Disabled Logging & Single-Instance Dispatch** — When an action disables execution logging (`LogActionExecution === false` or `ExecutionLogRetentionDays === 0` without `Verbose`), `SnapshotInputParams` short-circuits in $O(1)$ without cloning or serializing parameters, and `GetOrCreateActionInstance` reuses a single `ClassFactory` action instance across `ValidateInputs` and `InternalRunAction` within the same run.
 
 ## Usage
 

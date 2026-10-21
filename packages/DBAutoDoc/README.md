@@ -196,6 +196,11 @@ Long-form context (a data dictionary, an engineering assessment) can live in fil
 Paths are relative to `config.json`. The text is sent with every table prompt, so keep it to what the
 model needs for descriptions rather than a full specification.
 
+The primary- and foreign-key passes (discovery validation and PK/FK pruning) also get it, trimmed. A per-table
+pass gets only the paragraphs that name its table, and the whole-schema passes get the full text. Both are capped at
+`seedContext.keyPassMaxChars` characters (default 6000; `0` sends none). Name tables in your paragraphs so they
+reach the right pass.
+
 ### 3. Generate Sample Queries (Optional)
 
 Generate reference SQL queries for AI agent training:
