@@ -39,10 +39,19 @@
 
   <ng-container #messageContainer></ng-container>
 
-  @if (messages.length === 0 && showEmptyFill) {
-    <mj-empty-state
-      class="messages-empty-fill"
-      Icon="fa-solid fa-comments"
-      Title="No messages yet. Start a conversation!" />
+  @if (messages.length === 0) {
+    @if (EmptyViewMarkerText) {
+      <!-- A draft fork with no earlier rows: the fork marker, not the new-conversation empty state -->
+      <div class="fork-marker" role="note">
+        <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
+        <span class="fork-marker-text">{{ EmptyViewMarkerText }}</span>
+        <span class="fork-marker-line" aria-hidden="true"></span>
+      </div>
+    } @else if (showEmptyFill) {
+      <mj-empty-state
+        class="messages-empty-fill"
+        Icon="fa-solid fa-comments"
+        Title="No messages yet. Start a conversation!" />
+    }
   }
 </div>

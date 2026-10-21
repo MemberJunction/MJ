@@ -19,6 +19,8 @@ export default class Test extends Command {
     this.log('  mj test suite <suite-id>        - Execute a test suite');
     this.log('  mj test list                    - List available tests');
     this.log('  mj test validate                - Validate test definitions');
+    this.log('  mj test promote-criteria <test> - Copy inline criteria into a Draft rubric');
+    this.log('  mj test report <run-id>        - Print the per-criterion rubric breakdown');
     this.log('  mj test history                 - View test execution history');
     this.log('  mj test compare                 - Compare test runs for regressions');
     this.log('');

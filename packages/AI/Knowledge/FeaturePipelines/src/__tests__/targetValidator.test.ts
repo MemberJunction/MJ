@@ -642,3 +642,36 @@ describe('validateMaterializationTargets (P1-4)', () => {
     expect(issues3.filter((i) => i.Severity === 'error')).toHaveLength(0);
   });
 });
+
+describe('validateMaterializationTargets with a feature-value-only output', () => {
+  const people: EntityInfoLike = {
+    ID: 'people-uuid',
+    Name: 'People',
+    Fields: [
+      { Name: 'ID', TSType: 'string', IsPrimaryKey: true, IsVirtual: false },
+      { Name: 'Score', Type: 'decimal', Precision: 5, Scale: 4, TSType: 'number', IsVirtual: false },
+    ],
+  };
+  const provider: TargetValidationMetadataProvider = {
+    EntityByID: (id: string) => (id === people.ID ? people : undefined),
+    EntityByName: (name: string) => (name.toLowerCase() === 'people' ? people : undefined),
+    Entities: [people],
+  };
+
+  it('validates only the field output; nothing mentions the target-less one', () => {
+    const spec: DataFeatureSpec = {
+      Name: 'Mixed',
+      Description: 'One field output and one feature-value-only output',
+      Context: { Fields: ['ID'] },
+      PromptID: 'prompt-1',
+      Outputs: [
+        { Ref: '$.Years', Name: 'Years', Constraint: { Type: 'numeric', Min: 0, Max: 60, OnViolation: 'null' } },
+        { Ref: '$.Score', Name: 'Score', Target: { Mode: 'field', EntityFieldName: 'Score' }, Constraint: { Type: 'numeric', Min: 0, Max: 1, OnViolation: 'fail' } },
+      ],
+      Caching: { Cacheable: false },
+    };
+    const issues = validateMaterializationTargets(spec, provider, 'People');
+    expect(issues.filter((i) => i.Severity === 'error')).toEqual([]);
+    expect(issues.filter((i) => i.Path.startsWith('Outputs[0]') || i.Message.includes("'Years'"))).toEqual([]);
+  });
+});

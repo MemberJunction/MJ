@@ -17,6 +17,7 @@ import { MagicLinkKeyManager } from './MagicLinkKeys.js';
 import { MagicLinkService } from './MagicLinkService.js';
 import { BuildRedeemLandingHtml } from './redeemLanding.js';
 import type { CreateMagicLinkInviteParams, RedeemMagicLinkResult } from './types.js';
+import { ApiRoute } from '../../apiRoot.js';
 
 /** The mount path for both routers (`/magic-link`). */
 export const MAGIC_LINK_MOUNT_PATH = '/magic-link';
@@ -107,13 +108,13 @@ export function CreateMagicLinkHandler(publicUrl: string, config: MagicLinkConfi
     }
     // API callers must POST — GET never redeems.
     if (req.query.format === 'json') {
-      res.status(405).json({ success: false, error: 'Redemption requires POST.', method: 'POST', path: `${MAGIC_LINK_MOUNT_PATH}/redeem` });
+      res.status(405).json({ success: false, error: 'Redemption requires POST.', method: 'POST', path: ApiRoute(`${MAGIC_LINK_MOUNT_PATH}/redeem`) });
       return;
     }
     res
       .status(200)
       .type('html')
-      .send(BuildRedeemLandingHtml(token, `${MAGIC_LINK_MOUNT_PATH}/redeem`));
+      .send(BuildRedeemLandingHtml(token, ApiRoute(`${MAGIC_LINK_MOUNT_PATH}/redeem`)));
   });
 
   // POST /redeem performs the actual (side-effectful) redemption. Token arrives

@@ -598,59 +598,80 @@ LANGUAGE plpgsql AS $func$
 DECLARE
   v_has_include BOOLEAN := FALSE;
 BEGIN
-  -- NO TEMP TABLES HERE, BY DESIGN. A fixed-name "DROP TABLE IF EXISTS x;
-  -- CREATE TEMP TABLE x AS ..." pair kills this routine on a reused pooled
-  -- connection — PL/pgSQL's session-lifetime plan cache still holds the dropped
+  -- TEMP-TABLE LIFECYCLE: CREATE-ONCE + TRUNCATE, exactly as in
+  -- spUpdateExistingEntityFieldsFromSchema (see the full note there). Never
+  -- "DROP TABLE IF EXISTS x; CREATE TEMP TABLE x AS ...": on a reused pooled
+  -- connection PL/pgSQL's session-lifetime plan cache still holds the dropped
   -- relation's OID and the call aborts with "could not open relation with OID
-  -- <n>" (see the full lifecycle note in spUpdateExistingEntityFieldsFromSchema).
-  -- Unlike that routine this one had NO ANALYZE to preserve — it joins two small
-  -- metadata views, it never needed materialization — so the temp tables are
-  -- removed outright instead of worked around.
-  --
-  -- The single data-modifying CTE below is exactly equivalent to the old
-  -- three-step form: a data-modifying WITH arm is executed exactly once and
-  -- always to completion whether or not the outer query reads its output, and
-  -- every arm sees the SAME snapshot — so "current_description" is still the
-  -- pre-UPDATE value, precisely as when the rows were parked in a temp table
-  -- before the UPDATE ran.
-  v_has_include := EXISTS (
-    SELECT 1 FROM unnest(string_to_array(COALESCE(p_IncludedSchemaNames, ''), ',')) AS s
-    WHERE TRIM(s) <> ''
+  -- <n>". Creating each table once per session keeps its OID stable, and keeps
+  -- the ANALYZE calls below, which the planner needs on a large schema.
+  CREATE TEMP TABLE IF NOT EXISTS _ues_included (schema_name TEXT);
+  TRUNCATE _ues_included;
+  INSERT INTO _ues_included (schema_name)
+    SELECT TRIM(s)
+    FROM unnest(string_to_array(COALESCE(p_IncludedSchemaNames, ''), ',')) AS s
+    WHERE TRIM(s) <> '';
+  v_has_include := EXISTS (SELECT 1 FROM _ues_included);
+
+  -- [Large Schema Series] vwSQLTablesAndEntities is a function-based scan over pg_catalog
+  -- (obj_description/pg_class/pg_namespace per table), so the planner has NO row statistics
+  -- for it and estimates every join against it at rows=1 -> a nested loop that re-scans the
+  -- catalog per Entity row. This is the same defect that was fixed in
+  -- spUpdateExistingEntityFieldsFromSchema and spDeleteUnneededEntityFields (materialise the
+  -- introspection view exactly once, then ANALYZE so the reconciliation join hash-joins);
+  -- this proc was the one that kept joining the view directly.
+  CREATE TEMP TABLE IF NOT EXISTS _ues_tables AS SELECT * FROM __mj."vwSQLTablesAndEntities" WITH NO DATA;
+  TRUNCATE _ues_tables;
+  INSERT INTO _ues_tables SELECT * FROM __mj."vwSQLTablesAndEntities";
+  ANALYZE _ues_tables;
+
+  CREATE TEMP TABLE IF NOT EXISTS _ues_filtered (
+    entity_id UUID,
+    entity_name TEXT,
+    current_description TEXT,
+    new_description TEXT,
+    entity_description TEXT,
+    schema_name TEXT
   );
+  TRUNCATE _ues_filtered;
+  INSERT INTO _ues_filtered (entity_id, entity_name, current_description, new_description, entity_description, schema_name)
+  SELECT
+    e."ID",
+    e."Name",
+    e."Description",
+    CASE WHEN e."AutoUpdateDescription" THEN sq."EntityDescription" ELSE e."Description" END,
+    sq."EntityDescription",
+    sq."SchemaName"::text
+  FROM __mj."Entity" e
+  INNER JOIN _ues_tables sq ON e."ID" = sq."EntityID"
+  LEFT JOIN unnest(string_to_array(COALESCE(p_ExcludedSchemaNames, ''), ',')) AS ex(v)
+    ON sq."SchemaName"::text = TRIM(ex.v)
+  WHERE e."VirtualEntity" = FALSE
+    AND ex.v IS NULL
+    AND (NOT v_has_include OR sq."SchemaName"::text IN (SELECT i.schema_name FROM _ues_included i))
+    AND COALESCE(CASE WHEN e."AutoUpdateDescription" THEN sq."EntityDescription" ELSE e."Description" END, '')
+        <> COALESCE(e."Description", '');
+  -- [Large Schema Series] ANALYZE before the UPDATE ... FROM below, for the same reason:
+  -- without stats the planner estimates this temp table at rows=1 and nested-loops the
+  -- update against __mj."Entity".
+  ANALYZE _ues_filtered;
+
+  UPDATE __mj."Entity" tgt SET
+    "Description" = fr.new_description,
+    "__mj_UpdatedAt" = now()
+  FROM _ues_filtered fr
+  WHERE tgt."ID" = fr.entity_id;
 
   RETURN QUERY
-  WITH filtered AS MATERIALIZED (
-    SELECT
-      e."ID" AS entity_id,
-      e."Name" AS entity_name,
-      e."Description" AS current_description,
-      CASE WHEN e."AutoUpdateDescription" THEN sq."EntityDescription" ELSE e."Description" END AS new_description,
-      sq."EntityDescription" AS entity_description,
-      sq."SchemaName"::text AS schema_name
-    FROM __mj."Entity" e
-    INNER JOIN __mj."vwSQLTablesAndEntities" sq ON e."ID" = sq."EntityID"
-    LEFT JOIN unnest(string_to_array(COALESCE(p_ExcludedSchemaNames, ''), ',')) AS ex(v)
-      ON sq."SchemaName"::text = TRIM(ex.v)
-    WHERE e."VirtualEntity" = FALSE
-      AND ex.v IS NULL
-      AND (NOT v_has_include OR sq."SchemaName"::text IN (
-             SELECT TRIM(i.v) FROM unnest(string_to_array(COALESCE(p_IncludedSchemaNames, ''), ',')) AS i(v)
-             WHERE TRIM(i.v) <> ''
-           ))
-      AND COALESCE(CASE WHEN e."AutoUpdateDescription" THEN sq."EntityDescription" ELSE e."Description" END, '')
-          <> COALESCE(e."Description", '')
-  ),
-  upd AS (
-    UPDATE __mj."Entity" tgt SET
-      "Description" = fr.new_description,
-      "__mj_UpdatedAt" = now()
-    FROM filtered fr
-    WHERE tgt."ID" = fr.entity_id
-    RETURNING tgt."ID"
-  )
   SELECT fr.entity_id, fr.entity_name::text, fr.current_description::text,
          fr.new_description::text, fr.entity_description::text, fr.schema_name
-  FROM filtered fr;
+  FROM _ues_filtered fr;
+
+  -- Hand the storage back but KEEP the relations (and their OIDs) so the plans
+  -- cached above stay valid for the next call on this connection.
+  TRUNCATE _ues_filtered;
+  TRUNCATE _ues_tables;
+  TRUNCATE _ues_included;
 END;
 $func$;
 
@@ -663,10 +684,14 @@ $func$;
 DROP FUNCTION IF EXISTS __mj."spDeleteUnneededEntityFields"(TEXT);
 DROP FUNCTION IF EXISTS __mj."spDeleteUnneededEntityFields"(TEXT, TEXT);
 DROP FUNCTION IF EXISTS __mj."spDeleteUnneededEntityFields"(TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS __mj."spDeleteUnneededEntityFields"(TEXT, TEXT, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION __mj."spDeleteUnneededEntityFields"(
   p_ExcludedSchemaNames TEXT,
   p_EntityIDs TEXT DEFAULT NULL,
-  p_IncludedSchemaNames TEXT DEFAULT NULL
+  p_IncludedSchemaNames TEXT DEFAULT NULL,
+  -- Comma-delimited field names that must NEVER be pruned, whatever the catalog says.
+  -- See the _del_protected note below for why this parameter has to exist.
+  p_ProtectedFieldNames TEXT DEFAULT NULL
 )
 RETURNS TABLE(
   "ID" UUID,
@@ -724,6 +749,24 @@ BEGIN
   -- NOTE (parity): the ENTITY-level prune (vwEntitiesWithMissingBaseTables + the ExternalDataSourceID
   -- guard in manage-metadata) is likewise inert on PG until that same migration also recreates
   -- vwEntitiesWithMissingBaseTables as SELECT e.* (mirroring SQL Server migration V202607031201).
+  -- PROTECTED FIELD NAMES. The orphan join below is "an EntityField with no column in
+  -- vwSQLColumnsAndEntityFields", and that view resolves columns VIEW-FIRST
+  -- (COALESCE(e.view_object_id, e.object_id)). So for any entity that has a base view, the
+  -- prune's real question is "is this column in the BASE VIEW?" — not "is it in the base table?".
+  -- That makes the prune and a deliberate base-view column exclusion directly incompatible:
+  -- exclude a physical column from the view and the very next CodeGen run deletes its EntityField
+  -- row, taking the sync writes that go through it with it, silently. A field named here is held
+  -- back from the prune so an exclusion cannot destroy metadata.
+  --
+  -- It is a NAME list, not an id list, because the caller's exclusions are declared by name and
+  -- apply across entities. Matched case-insensitively for the same reason.
+  CREATE TEMP TABLE IF NOT EXISTS _del_protected (field_name TEXT);
+  TRUNCATE _del_protected;
+  INSERT INTO _del_protected (field_name)
+    SELECT LOWER(TRIM(s))
+    FROM unnest(string_to_array(COALESCE(p_ProtectedFieldNames, ''), ',')) AS s
+    WHERE TRIM(s) <> '';
+
   CREATE TEMP TABLE IF NOT EXISTS _del_ext_entities (entity_id UUID);
   TRUNCATE _del_ext_entities;
   IF EXISTS (
@@ -746,6 +789,7 @@ BEGIN
   WHERE e."VirtualEntity" = FALSE
     AND ef."EntityID" NOT IN (SELECT entity_id FROM _del_ext_entities) -- exclude external-data-source entities (see note above)
     AND ex.v IS NULL
+    AND LOWER(TRIM(ef."Name"::text)) NOT IN (SELECT pr.field_name FROM _del_protected pr) -- see _del_protected
     AND (NOT v_has_include OR e."SchemaName"::text IN (SELECT i.schema_name FROM _del_included i))
     AND (NOT v_is_scoped OR ef."EntityID" IN (SELECT s.entity_id FROM _del_scope s));
   -- [Large Schema Series] ANALYZE so the planner has real cardinalities for the
@@ -792,6 +836,7 @@ BEGIN
   TRUNCATE _del_actual;
   TRUNCATE _del_ef;
   TRUNCATE _del_ext_entities;
+  TRUNCATE _del_protected;
   TRUNCATE _del_scope;
   TRUNCATE _del_included;
 END;
@@ -1003,4 +1048,121 @@ BEGIN
         AND NOT a.attisdropped;
 END;
 $spgetpk$ LANGUAGE plpgsql;
+
+-- ----------------------------------------------------------------------------
+-- 9. spRecompileAllViews — the PostgreSQL counterpart of the SQL Server proc
+--    R__RefreshMetadata calls first.
+--
+-- WHAT SQL SERVER DOES AND WHY PG CANNOT. SQL Server caches a view's column
+-- list at create time and sp_refreshview re-resolves it in place, so
+-- spRecompileAllViews can walk the catalog in dependency order and heal
+-- every stale SELECT * view without knowing any view's source. PostgreSQL
+-- freezes a view's targetlist at creation too, but has NO in-place refresh:
+-- CREATE OR REPLACE VIEW may only APPEND columns and must keep the existing
+-- ones identical, and pg_get_viewdef returns the already-expanded
+-- definition — so replaying it re-freezes exactly the same stale list. The
+-- only repair is DROP + CREATE from the ORIGINAL source, which lives in
+-- CodeGen, not in the database.
+--
+-- SO THIS FUNCTION DETECTS, AND SAYS SO. The harm CodeGen's SQL Server side
+-- prevents is not "a view is stale" — it is that a stale view is SILENT until
+-- something reads it and fails with column "X" does not exist, taking
+-- BaseEngine loads and mj sync push down with it. On the migrate-only
+-- deploy path (mj migrate with no mj codegen) nothing on PostgreSQL said
+-- anything at all. This reports every base view whose column list has drifted
+-- from its base table, RAISEs a WARNING per view so a migrate log carries it,
+-- and returns the rows so a caller can act.
+--
+-- THE REPAIR IS mj codegen (or mj codegen with forceRegeneration for a
+-- broad drift): CodeGen holds each view's source and regenerates it.
+--
+-- Scope/parameters mirror the other R__RefreshMetadata routines: exclude
+-- always wins, a NULL/empty include list means every remaining schema.
+-- Virtual entities are skipped (no physical base table to compare against).
+-- ----------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS __mj."spRecompileAllViews"();
+DROP FUNCTION IF EXISTS __mj."spRecompileAllViews"(TEXT);
+DROP FUNCTION IF EXISTS __mj."spRecompileAllViews"(TEXT, TEXT);
+CREATE OR REPLACE FUNCTION __mj."spRecompileAllViews"(
+  p_ExcludedSchemaNames TEXT DEFAULT 'sys,information_schema',
+  p_IncludedSchemaNames TEXT DEFAULT NULL
+)
+RETURNS TABLE(
+  "SchemaName" TEXT,
+  "ViewName" TEXT,
+  "EntityName" TEXT,
+  "MissingColumns" TEXT
+)
+LANGUAGE plpgsql AS $rav$
+DECLARE
+  v_has_include BOOLEAN := FALSE;
+  v_row RECORD;
+BEGIN
+  -- Create-once + TRUNCATE, never DROP + CREATE on a fixed name: see the
+  -- temp-table lifecycle note in spUpdateExistingEntityFieldsFromSchema.
+  CREATE TEMP TABLE IF NOT EXISTS _rav_included (schema_name TEXT);
+  TRUNCATE _rav_included;
+  INSERT INTO _rav_included (schema_name)
+    SELECT TRIM(s)
+    FROM unnest(string_to_array(COALESCE(p_IncludedSchemaNames, ''), ',')) AS s
+    WHERE TRIM(s) <> '';
+  v_has_include := EXISTS (SELECT 1 FROM _rav_included);
+
+  CREATE TEMP TABLE IF NOT EXISTS _rav_drift (schema_name TEXT, view_name TEXT, entity_name TEXT, missing_columns TEXT);
+  TRUNCATE _rav_drift;
+  INSERT INTO _rav_drift (schema_name, view_name, entity_name, missing_columns)
+  WITH scoped AS (
+    SELECT
+      e."ID"          AS entity_id,
+      e."Name"::text  AS entity_name,
+      e."SchemaName"::text AS schema_name,
+      e."BaseTable"::text  AS base_table,
+      e."BaseView"::text   AS base_view
+    FROM __mj."vwEntities" e
+    LEFT JOIN unnest(string_to_array(COALESCE(p_ExcludedSchemaNames, ''), ',')) AS ex(v)
+      ON e."SchemaName"::text = TRIM(ex.v)
+    WHERE e."VirtualEntity" = FALSE
+      AND ex.v IS NULL
+      AND COALESCE(e."BaseView", '') <> ''
+      AND (NOT v_has_include OR e."SchemaName"::text IN (SELECT i.schema_name FROM _rav_included i))
+  ),
+  resolved AS (
+    SELECT
+      sc.*,
+      bt.oid AS base_table_oid,
+      vw.oid AS view_oid
+    FROM scoped sc
+    JOIN pg_catalog.pg_namespace ns ON ns.nspname = sc.schema_name
+    JOIN pg_catalog.pg_class bt ON bt.relnamespace = ns.oid AND bt.relname = sc.base_table AND bt.relkind IN ('r', 'p', 'f')
+    JOIN pg_catalog.pg_class vw ON vw.relnamespace = ns.oid AND vw.relname = sc.base_view AND vw.relkind IN ('v', 'm')
+  )
+  SELECT
+    r.schema_name,
+    r.base_view AS view_name,
+    r.entity_name,
+    string_agg(bt_a.attname::text, ', ' ORDER BY bt_a.attnum) AS missing_columns
+  FROM resolved r
+  JOIN pg_catalog.pg_attribute bt_a
+    ON bt_a.attrelid = r.base_table_oid AND bt_a.attnum > 0 AND NOT bt_a.attisdropped
+  WHERE NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_attribute v_a
+    WHERE v_a.attrelid = r.view_oid AND v_a.attnum > 0 AND NOT v_a.attisdropped
+      AND v_a.attname = bt_a.attname
+  )
+  GROUP BY r.schema_name, r.base_view, r.entity_name;
+
+  FOR v_row IN SELECT * FROM _rav_drift ORDER BY schema_name, view_name LOOP
+    RAISE WARNING 'spRecompileAllViews: base view %.% (entity %) is missing base-table column(s): %. PostgreSQL cannot refresh a view in place, so run mj codegen to regenerate it from source.',
+      v_row.schema_name, v_row.view_name, v_row.entity_name, v_row.missing_columns;
+  END LOOP;
+
+  RETURN QUERY
+  SELECT d.schema_name, d.view_name, d.entity_name, d.missing_columns
+  FROM _rav_drift d
+  ORDER BY d.schema_name, d.view_name;
+
+  TRUNCATE _rav_drift;
+  TRUNCATE _rav_included;
+END;
+$rav$;
 `;

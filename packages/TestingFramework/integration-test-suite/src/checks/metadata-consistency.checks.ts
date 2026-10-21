@@ -318,9 +318,9 @@ function foreignKeyIndexName(entity: EntityInfo, field: EntityFieldInfo): string
     return name.length > 128 ? name.substring(0, 128) : name;
 }
 
-/** Physical FK columns on an entity — CodeGen indexes exactly these (`RelatedEntity` non-empty). */
+/** Physical non-PK FK columns on an entity — CodeGen indexes exactly these (`RelatedEntity` non-empty, `!IsPrimaryKey`, `!IsVirtual`). */
 function indexableForeignKeys(entity: EntityInfo): EntityFieldInfo[] {
-    return entity.Fields.filter(f => !!f.RelatedEntity && f.RelatedEntity.length > 0 && !f.IsVirtual);
+    return entity.Fields.filter(f => !!f.RelatedEntity && f.RelatedEntity.length > 0 && !f.IsPrimaryKey && !f.IsVirtual);
 }
 
 // ── MC5 helpers ─────────────────────────────────────────────────────────────────────────────

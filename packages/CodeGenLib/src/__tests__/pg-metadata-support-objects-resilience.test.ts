@@ -119,9 +119,11 @@ const DDL = stripSqlComments(RAW_DDL);
 function routine(name: string): string {
     const start = DDL.indexOf(`CREATE OR REPLACE FUNCTION __mj."${name}"`);
     expect(start, `routine ${name} not found in the DDL`).toBeGreaterThan(-1);
-    const end = DDL.indexOf('$func$;', start);
-    expect(end, `routine ${name} has no $func$ terminator`).toBeGreaterThan(start);
-    return DDL.slice(start, end + '$func$;'.length);
+    // the body's dollar-quote tag ($func$, $rav$, ...) closes it
+    const tag = DDL.slice(start).match(/LANGUAGE plpgsql AS (\$\w*\$)/)?.[1] ?? '$func$';
+    const end = DDL.indexOf(`${tag};`, start);
+    expect(end, `routine ${name} has no ${tag} terminator`).toBeGreaterThan(start);
+    return DDL.slice(start, end + `${tag};`.length);
 }
 
 /** Slices out the vwSQLColumnsAndEntityFields definition, comment-stripped. */
@@ -237,6 +239,7 @@ describe('Fix 2 — fixed-name temp tables cannot pick up a stale cached plan', 
         ['spUpdateExistingEntitiesFromSchema'],
         ['spDeleteUnneededEntityFields'],
         ['spUpdateSchemaInfoFromDatabase'],
+        ['spRecompileAllViews'],
     ])('%s does no DROP TABLE IF EXISTS + CREATE TEMP TABLE on a fixed name', (name) => {
         const body = routine(name);
         expect(body).not.toContain('DROP TABLE IF EXISTS');
@@ -320,28 +323,33 @@ describe('Fix 2 — fixed-name temp tables cannot pick up a stale cached plan', 
         });
     });
 
-    describe('spUpdateExistingEntitiesFromSchema — temp tables removed outright', () => {
+    describe('spUpdateExistingEntitiesFromSchema — create-once + TRUNCATE, ANALYZE preserved', () => {
         const body = routine('spUpdateExistingEntitiesFromSchema');
 
-        it('references no temp table at all', () => {
-            expect(body).not.toContain('CREATE TEMP TABLE');
-            expect(body).not.toContain('_ues_filtered');
-            expect(body).not.toContain('_ues_included');
-        });
+        it.each(['_ues_included', '_ues_tables', '_ues_filtered'])(
+            '%s is created once with IF NOT EXISTS and TRUNCATEd, never dropped',
+            (t) => {
+                expect(body).toContain(`CREATE TEMP TABLE IF NOT EXISTS ${t}`);
+                expect(body).toContain(`TRUNCATE ${t};`);
+                expect(body).not.toContain(`DROP TABLE IF EXISTS ${t}`);
+            }
+        );
 
-        it('uses a single data-modifying CTE that both UPDATEs and returns the same snapshot', () => {
-            expect(body).toMatch(/RETURN QUERY\s*WITH filtered AS MATERIALIZED \(/);
-            expect(body).toMatch(/upd AS \(\s*UPDATE __mj\."Entity" tgt SET/);
-            expect(body).toContain('FROM filtered fr');
+        it('keeps both ANALYZE calls, after their tables are populated', () => {
+            for (const t of ['_ues_tables', '_ues_filtered']) {
+                expect(body).toContain(`ANALYZE ${t};`);
+                expect(body.indexOf(`ANALYZE ${t};`)).toBeGreaterThan(body.indexOf(`INSERT INTO ${t}`));
+            }
         });
 
         it('still writes Description and __mj_UpdatedAt, and still returns the pre-UPDATE description', () => {
             expect(body).toContain('"Description" = fr.new_description');
             expect(body).toContain('"__mj_UpdatedAt" = now()');
             expect(body).toContain('fr.current_description::text');
+            expect(body.indexOf('INSERT INTO _ues_filtered')).toBeLessThan(body.indexOf('UPDATE __mj."Entity" tgt SET'));
         });
 
-        it('preserves the included/excluded schema filters inline', () => {
+        it('preserves the included/excluded schema filters', () => {
             expect(body).toContain('p_ExcludedSchemaNames');
             expect(body).toContain('p_IncludedSchemaNames');
             expect(body).toContain('NOT v_has_include OR');
@@ -351,7 +359,7 @@ describe('Fix 2 — fixed-name temp tables cannot pick up a stale cached plan', 
     describe('spDeleteUnneededEntityFields — create-once + TRUNCATE, ANALYZE preserved', () => {
         const body = routine('spDeleteUnneededEntityFields');
 
-        it.each(['_del_scope', '_del_included', '_del_ext_entities', '_del_ef', '_del_actual', '_del_deleted'])(
+        it.each(['_del_scope', '_del_included', '_del_protected', '_del_ext_entities', '_del_ef', '_del_actual', '_del_deleted'])(
             '%s is created once with IF NOT EXISTS and TRUNCATEd, never dropped',
             (t) => {
                 expect(body).toContain(`CREATE TEMP TABLE IF NOT EXISTS ${t}`);
@@ -378,7 +386,7 @@ describe('Fix 2 — fixed-name temp tables cannot pick up a stale cached plan', 
         });
     });
 
-    it('every ANALYZE in the file still survives the rewrite (6 total)', () => {
-        expect([...DDL.matchAll(/^\s*ANALYZE\s+_\w+;/gm)].length).toBe(6);
+    it('every ANALYZE in the file still survives the rewrite (8 total)', () => {
+        expect([...DDL.matchAll(/^\s*ANALYZE\s+_\w+;/gm)].length).toBe(8);
     });
 });
