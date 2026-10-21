@@ -1705,11 +1705,15 @@ import {
     WorkQueueValidateBindingsServerOperation,
 } from '@memberjunction/work-queue-engine';
 
-// @memberjunction/server (3 classes)
+// @memberjunction/server (7 classes)
 import {
+    AWSIoTCoreBroadcastProvider,
+    AzureWebPubSubBroadcastProvider,
+    GCPPubSubBroadcastProvider,
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
+    SequencedRoleBucketBroadcastProvider,
 } from '@memberjunction/server';
 
 // @memberjunction/work-queue-samples (1 classes)
@@ -2945,9 +2949,17 @@ const CLASS_REGISTRATIONS_5: any[] = [
     WorkQueueListPartitionsServerOperation,
     WorkQueueReplayDeadLetterServerOperation,
     WorkQueueValidateBindingsServerOperation,
+    AWSIoTCoreBroadcastProvider,
+    AzureWebPubSubBroadcastProvider,
+    GCPPubSubBroadcastProvider,
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
+    SequencedRoleBucketBroadcastProvider,
     HelloWorldHandler,
     WorkQueueServerExtension,
 ];
@@ -2960,13 +2972,14 @@ export const CLASS_REGISTRATIONS: any[] = [
     ...CLASS_REGISTRATIONS_3,
     ...CLASS_REGISTRATIONS_4,
     ...CLASS_REGISTRATIONS_5,
+    ...CLASS_REGISTRATIONS_6,
 ];
 
 /** Marker constant indicating the manifest has been loaded. */
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1199;
+export const CLASS_REGISTRATIONS_COUNT = 1203;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

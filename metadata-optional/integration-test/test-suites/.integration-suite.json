@@ -1533,7 +1533,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT124 - Content Pipeline Lifecycle",
+            "TestID": "@lookup:MJ: Tests.Name=IT130 - Content Pipeline Lifecycle",
             "Sequence": 49,
             "Status": "Active"
           },

@@ -1,6 +1,5 @@
 [
   {
-    "entity": "MJ: Record Processes",
     "fields": {
       "Name": "Content Pipeline \u2014 Discover",
       "Description": "Walks each Content Source selected by the Record Process filter and records what it found as Content Items. Sources selected for a Discover run are always walked; a completed walk clears ForceDiscovery and stamps LastDiscoveredAt.",
@@ -27,7 +26,6 @@
     }
   },
   {
-    "entity": "MJ: Record Processes",
     "fields": {
       "Name": "Content Pipeline \u2014 Sync",
       "Description": "Exhaustively walks each selected Content Source (ignoring LastDiscoveredAt), reconciles top-level items that were removed from the source by marking them DeleteStatus = 'Pending' for the Delete stage, and stamps both LastDiscoveredAt and LastSyncedAt on completion. Selects sources by LastSyncedAt (never by ForceDiscovery, which belongs to Discover); to force a sync on a source, set its LastSyncedAt back or to NULL. Unscheduled by default.",
@@ -60,7 +58,6 @@
     }
   },
   {
-    "entity": "MJ: Record Processes",
     "fields": {
       "Name": "Content Pipeline \u2014 Extract",
       "Description": "Fetches each pending Content Item and reads its text, opening a session first when its source needs one. An artifact that is not text keeps its bytes as an MJ File and routes to the multi-modal path instead.",
@@ -94,7 +91,6 @@
     }
   },
   {
-    "entity": "MJ: Record Processes",
     "fields": {
       "Name": "Content Pipeline \u2014 Tag",
       "Description": "Classifies each pending Content Item through the managed Content Autotagging prompt and saves the result to MJ: Content Item Tags, promoting each tag through the governed taxonomy.",
@@ -121,7 +117,6 @@
     }
   },
   {
-    "entity": "MJ: Record Processes",
     "fields": {
       "Name": "Content Pipeline \u2014 Segment",
       "Description": "Splits each pending Content Item's text into Content Item Chunks using the segmenter its source or content type names. A re-segmentation mints a fresh set of chunks and marks the previous set for deletion, so a chunk always means the text it was created with.",
@@ -148,7 +143,6 @@
     }
   },
   {
-    "entity": "MJ: Record Processes",
     "fields": {
       "Name": "Content Pipeline \u2014 Embed",
       "Description": "Embeds each pending Content Item Chunk and stores the vector in the index its source or content type names, recording VectorRecordID so the vector can be removed later. Batched: one model call and one store call per page.",
@@ -175,7 +169,6 @@
     }
   },
   {
-    "entity": "MJ: Record Processes",
     "fields": {
       "Name": "Content Pipeline \u2014 Delete",
       "Description": "Removes everything a Content Item marked for deletion produced \u2014 its vector, its kept bytes \u2014 then marks its chunks and expanded children for removal. Its chunks are removed by the Delete Chunks process, its child items by this one in turn. A record whose removal could not be attempted stays Pending rather than being marked Deleted.",
@@ -202,7 +195,6 @@
     }
   },
   {
-    "entity": "MJ: Record Processes",
     "fields": {
       "Name": "Content Pipeline \u2014 Delete Chunks",
       "Description": "Removes the vector of each Content Item Chunk marked for deletion \u2014 a deleted item's chunks, and the chunks a re-segmentation replaced. A chunk nothing references is then removed outright; one that something references (usage history, a citation) is kept as a tombstone so that history still points at real text.",
@@ -229,7 +221,6 @@
     }
   },
   {
-    "entity": "MJ: Record Processes",
     "fields": {
       "Name": "Content Pipeline \u2014 Test (Discover then Extract)",
       "Description": "A chained dry run over a single source: walks it, then extracts what the walk produced, and commits nothing. The produced items exist only in memory, which is what makes this a test of the chain rather than of two stages that happen to have run.",

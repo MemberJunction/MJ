@@ -135,7 +135,10 @@ export class PipelineProcessor implements IRecordProcessor {
                 const persisted = await this.persistChildren(working, record, context);
                 children = persisted.Committed;
                 if (persisted.Failed > 0) {
-                    outcome = Outcome.Retry(`${persisted.Failed} of ${working.Children.length} produced record(s) could not be committed`);
+                    const detail = persisted.FirstError ? `: ${persisted.FirstError}` : '';
+                    outcome = Outcome.Retry(
+                        `${persisted.Failed} of ${working.Children.length} produced record(s) could not be committed${detail}`,
+                    );
                 } else if (syncOrphans.length > 0 && !this.config.IsTest) {
                     await this.markOrphansForDeletion(syncOrphans, context);
                 }
@@ -218,7 +221,7 @@ export class PipelineProcessor implements IRecordProcessor {
         let last: StageOutcome = Outcome.Complete();
         let current: WorkingRecord[] = [working];
         for (const stage of this.stages) {
-            const targets = current.filter((c) => c.Entity === stage.Entity);
+            const targets = current.filter((c) => c.Entity === stage.Entity && !c.IsComplete);
             if (targets.length === 0) {
                 return last; // nothing of this entity was produced — not a failure
             }
@@ -313,7 +316,7 @@ export class PipelineProcessor implements IRecordProcessor {
         working: WorkingRecord,
         record: RecordRef,
         context: RecordProcessorContext,
-    ): Promise<{ Committed: number; Failed: number }> {
+    ): Promise<{ Committed: number; Failed: number; FirstError?: string }> {
         if (working.Children.length === 0) {
             await this.sweepOrphans(working, context);
             return { Committed: 0, Failed: 0 };
@@ -322,10 +325,12 @@ export class PipelineProcessor implements IRecordProcessor {
         const defaults = this.childDefaults(working);
         let committed = 0;
         let failed = 0;
+        let firstError: string | undefined;
         for (const child of working.Children) {
             const outcome = await this.persistOneChild(child, working, defaults, committer);
             if (outcome.Status === 'Failed') {
                 failed++;
+                firstError ??= outcome.ErrorMessage;
             } else if (!this.config.IsTest) {
                 committed++;
             }
@@ -337,13 +342,14 @@ export class PipelineProcessor implements IRecordProcessor {
                 const nested = await this.persistChildren(child, record, context);
                 committed += nested.Committed;
                 failed += nested.Failed;
+                firstError ??= nested.FirstError;
             }
         }
         if (failed === 0) {
             // Only a complete set of children says what no longer exists.
             await this.sweepOrphans(working, context);
         }
-        return { Committed: committed, Failed: failed };
+        return { Committed: committed, Failed: failed, FirstError: firstError };
     }
 
     /**

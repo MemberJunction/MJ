@@ -733,16 +733,20 @@ export class WorkingRecordCommitter {
     }
 
     /**
-     * The completion signal: every other status still Pending becomes Skipped so no later stage picks the
-     * record up. A stage that ran and recorded Failed keeps that.
+     * The completion signal: every other status still Pending (or unset) becomes Skipped so no later stage
+     * picks the record up. A stage that ran and recorded Failed or Complete keeps that.
      */
     private applyCompletionSignal(record: WorkingRecord, entityObject: BaseEntity, statusField: string | null, written: string[]): void {
         if (!record.IsComplete) {
             return;
         }
-        const pending = GetStatusFields(record.Entity).filter(
-            (f) => f !== statusField && this.hasField(entityObject, f) && this.readColumn(entityObject, f) === 'Pending',
-        );
+        const pending = GetStatusFields(record.Entity).filter((f) => {
+            if (f === statusField || !this.hasField(entityObject, f)) {
+                return false;
+            }
+            const current = this.readColumn(entityObject, f);
+            return current === 'Pending' || current == null;
+        });
         written.push(...this.applyValues(entityObject, Object.fromEntries(pending.map((f) => [f, 'Skipped']))));
     }
 

@@ -615,13 +615,19 @@ export const ContentPipelineChecks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             if (guardSkip('CP9')) return;
+            const prevDocA = Documents.get(URL_A)!;
             const olderThanWindow = new Date(Date.now() - 120_000);
             Documents.set(URL_A, { Text: SENTENCE.repeat(3), ModifiedAt: olderThanWindow });
             Documents.delete(URL_B);
             Documents.set(URL_OLD, { Text: SENTENCE.repeat(4), ModifiedAt: olderThanWindow });
             Documents.set(URL_C, { Text: SENTENCE.repeat(8), ModifiedAt: new Date() });
 
-            await run(ctx, ['Discover'], [S.SourceID]);
+            try {
+                await run(ctx, ['Discover'], [S.SourceID]);
+            } finally {
+                Documents.set(URL_A, prevDocA);
+                Documents.delete(URL_OLD);
+            }
             const allItems = await items(ctx);
             AssertEqual(allItems.some((i) => i.URL === URL_OLD), false, 'item older than LastDiscoveredAt - ClockSkewOverlapMs is filtered out by Since');
             const a = await itemByURL(ctx, URL_A);
@@ -629,7 +635,6 @@ export const ContentPipelineChecks: NamedCheck[] = [
 
             const c = await itemByURL(ctx, URL_C);
             AssertEqual(c.ExtractionStatus, 'Pending', 'new item C modified after Since is discovered as Pending');
-            Documents.delete(URL_OLD);
 
             await run(ctx, ['Extract'], [c.ID]);
             await run(ctx, ['Segment'], [c.ID]);
@@ -721,15 +726,17 @@ export const ContentPipelineChecks: NamedCheck[] = [
                 Columns: { ExtractionStatus: 'Complete' },
             });
 
-            const p = processor(['Discover']);
-            const res = await p.ProcessRecord({ RecordID: S.SourceID } as never, { Provider: ctx.Provider, ContextUser: ctx.User });
-            AssertEqual(res.Status, 'Failed', 'Discover fails when driver Columns attempts to overwrite a framework-owned column');
-            Assert(
-                (res.ErrorMessage ?? '').includes('owned by the pipeline framework'),
-                `expected framework-owned column refusal message, got: ${res.ErrorMessage}`,
-            );
-
-            Documents.set(URL_C, prevDoc);
+            try {
+                const p = processor(['Discover']);
+                const res = await p.ProcessRecord({ RecordID: S.SourceID } as never, { Provider: ctx.Provider, ContextUser: ctx.User });
+                AssertEqual(res.Status, 'Failed', 'Discover fails when driver Columns attempts to overwrite a framework-owned column');
+                Assert(
+                    (res.ErrorMessage ?? '').includes('owned by the pipeline framework'),
+                    `expected framework-owned column refusal message, got: ${res.ErrorMessage}`,
+                );
+            } finally {
+                Documents.set(URL_C, prevDoc);
+            }
             console.log('      → CP12: framework-owned column in Columns refused');
         },
     },
@@ -742,24 +749,30 @@ export const ContentPipelineChecks: NamedCheck[] = [
             const nestedGzip = gzipSync(gzipSync(Buffer.from('deeply nested archive payload', 'utf8')));
             Documents.set(URL_ARCHIVE, { Bytes: new Uint8Array(nestedGzip), ModifiedAt: new Date() });
 
-            await run(ctx, ['Discover'], [S.SourceID]);
-            const archiveItem = await itemByURL(ctx, URL_ARCHIVE);
+            let archiveItemID: string | undefined;
+            try {
+                await run(ctx, ['Discover'], [S.SourceID]);
+                const archiveItem = await itemByURL(ctx, URL_ARCHIVE);
+                archiveItemID = archiveItem.ID;
 
-            const p = processor(['Extract'], {
-                ExtractorKey: 'Archive',
-                Tuning: { MaxArchiveDepth: 1, MaxArchiveMembers: 10, MaxArchiveBytes: 1024 * 1024 },
-            });
-            const res = await p.ProcessRecord({ RecordID: archiveItem.ID } as never, { Provider: ctx.Provider, ContextUser: ctx.User });
-            AssertEqual(res.Status, 'Failed', 'nested archive exceeding MaxArchiveDepth fails closed');
-            Assert(
-                (res.ErrorMessage ?? '').includes('archive nesting depth'),
-                `expected archive nesting depth refusal, got: ${res.ErrorMessage}`,
-            );
-
-            Documents.delete(URL_ARCHIVE);
-            const reloaded = (await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ID='${archiveItem.ID}'`))[0];
-            if (reloaded) {
-                await reloaded.Delete();
+                const p = processor(['Extract'], {
+                    ExtractorKey: 'Archive',
+                    Tuning: { MaxArchiveDepth: 1, MaxArchiveMembers: 10, MaxArchiveBytes: 1024 * 1024 },
+                });
+                const res = await p.ProcessRecord({ RecordID: archiveItem.ID } as never, { Provider: ctx.Provider, ContextUser: ctx.User });
+                AssertEqual(res.Status, 'Failed', 'nested archive exceeding MaxArchiveDepth fails closed');
+                Assert(
+                    (res.ErrorMessage ?? '').includes('archive nesting depth'),
+                    `expected archive nesting depth refusal, got: ${res.ErrorMessage}`,
+                );
+            } finally {
+                Documents.delete(URL_ARCHIVE);
+                if (archiveItemID) {
+                    const reloaded = (await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ID='${archiveItemID}'`))[0];
+                    if (reloaded) {
+                        await reloaded.Delete();
+                    }
+                }
             }
             console.log('      → CP13: nested archive exceeding MaxArchiveDepth refused');
         },

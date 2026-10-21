@@ -211,17 +211,37 @@ export class AutotagCloudStorage extends AutotagBase {
 
     /** Read a listed object through the same provider, confined to `PathPrefix` when configured. */
     public async Fetch(request: LocatorFetchRequest): Promise<LocatorFetchResponse> {
-        const objectPath = request.URL.replace(/^\/+/, '');
+        const objectPath = this.trimLeadingSlashes(request.URL);
         if (!objectPath || objectPath.split('/').some((seg) => seg === '..' || seg === '.')) {
             throw new Error(`'${request.URL}' is not a valid cloud storage object key`);
         }
-        const prefix = (request.Parameters.PathPrefix ?? '').replace(/^\/+|\/+$/g, '');
+        const prefix = this.trimSlashes(request.Parameters.PathPrefix ?? '');
         if (prefix && objectPath !== prefix && !objectPath.startsWith(`${prefix}/`)) {
             throw new Error(`'${request.URL}' is outside the source's PathPrefix '${request.Parameters.PathPrefix}'`);
         }
         const driver = await this.ResolveStorageDriver(this.providerKeyOf(request), request.ContextUser, request.Provider);
         const bytes = await driver.GetObject({ fullPath: request.URL });
         return { Content: new Uint8Array(bytes), ResolvedURL: request.URL };
+    }
+
+    private trimLeadingSlashes(value: string): string {
+        let start = 0;
+        while (start < value.length && value.charCodeAt(start) === 47) {
+            start++;
+        }
+        return start === 0 ? value : value.slice(start);
+    }
+
+    private trimTrailingSlashes(value: string): string {
+        let end = value.length;
+        while (end > 0 && value.charCodeAt(end - 1) === 47) {
+            end--;
+        }
+        return end === value.length ? value : value.slice(0, end);
+    }
+
+    private trimSlashes(value: string): string {
+        return this.trimTrailingSlashes(this.trimLeadingSlashes(value));
     }
 
     /** `FileStorageProviderKey`, the field the Cloud Storage type declares. */
@@ -252,13 +272,13 @@ export class AutotagCloudStorage extends AutotagBase {
         const objects: StorageObjectMetadata[] = [];
         const seen = new Set<string>();
         const walk = async (current: string, depth: number): Promise<void> => {
-            const key = current.replace(/\/+$/, '');
+            const key = this.trimTrailingSlashes(current);
             if (seen.has(key) || depth > AutotagCloudStorage.MAX_LIST_DEPTH) return;
             seen.add(key);
             const result = await driver.ListObjects(current);
             objects.push(...result.objects);
             for (const child of result.prefixes ?? []) {
-                if (child.replace(/\/+$/, '') === key) continue; // provider echoed the folder itself
+                if (this.trimTrailingSlashes(child) === key) continue; // provider echoed the folder itself
                 await walk(child, depth + 1);
             }
         };
