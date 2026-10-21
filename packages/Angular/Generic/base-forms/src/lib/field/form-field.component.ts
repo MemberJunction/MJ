@@ -7,7 +7,7 @@ import { FormContext } from '../types/form-types';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { FORM_SECTION_FIELD_HOST, SectionRelevantFormContextChanged } from '../section-indicators/form-section-field-host';
 import { FormFieldEditCoordinator } from '../form-field-edit.coordinator';
-import { FormatFKCell, FilterCachedFKRows, QuoteSqlIdList } from './fk-search-utils';
+import { FormatFKCell, FilterCachedFKRows, QuoteSqlIdList, FKSearchTimeoutError, WithFKSearchTimeout } from './fk-search-utils';
 import { LinkedFieldOptionsStore } from './linked-field-options';
 import {
   FKLookupStrategy,
@@ -26,6 +26,16 @@ import { CombineFilters, DefaultFKLookupStrategy } from './default-fk-lookup-str
  * initializer runs before the component's own statics are available.
  */
 const FK_DB_SEARCH_LIMIT = 20;
+
+/**
+ * How long the dropdown waits on a lookup before it shows an error with Retry. A lookup normally
+ * answers in well under a second; this bounds the wait when a request is never answered at all
+ * (a gateway timeout, a dropped connection), which otherwise left the field on "Searching…".
+ */
+const FK_SEARCH_TIMEOUT_MS = 20_000;
+
+/** What one lookup produced: rows to render, or the message for the error row. */
+type FKLookupOutcome = { Groups: FKLookupGroup[]; Recent: FKLookupRow[] } | { Failure: string };
 
 /**
  * How a field's value should be rendered/edited beyond a plain input.
@@ -808,6 +818,12 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   @Input() FKMaxRows = FK_DB_SEARCH_LIMIT;
 
   /**
+   * Milliseconds a lookup may take before the dropdown shows an error with Retry. Zero or less
+   * waits indefinitely.
+   */
+  @Input() FKSearchTimeoutMs = FK_SEARCH_TIMEOUT_MS;
+
+  /**
    * Opaque options handed to the resolved {@link FKLookupStrategy} — e.g.
    * `{ ScopeField: 'BillToOrganizationID' }` to tell a person picker which organization's
    * people to offer first. Each strategy documents its own keys.
@@ -979,6 +995,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.FKActiveIndex = -1;
     this.FKLoading = false;
     this.FKNoMatches = false;
+    this.FKSearchError = null;
     this._portaledDropdownEl = null;
     this.ShowValueListDropdown = false;
     this.ShowSelectDropdown = false;
@@ -1064,6 +1081,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** True when a search completed with zero results (drives the "No matches" row). */
   FKNoMatches = false;
+
+  /**
+   * Set when the last lookup failed or timed out (drives the error row with Retry). Kept apart
+   * from {@link FKNoMatches}: "No matches" tells the user the record does not exist, which a
+   * failed request does not establish.
+   */
+  FKSearchError: string | null = null;
 
   /** Index of the keyboard-highlighted active suggestion (-1 = none). */
   FKActiveIndex = -1;
@@ -1561,6 +1585,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.FKHasIconColumn = (this.FKSelectedSuggestion?.Icon != null) || suggestions.some(s => s.Icon != null);
     this.FKSuggestions = this.sortSuggestions(suggestions);
     this.FKActiveIndex = this.FKSuggestions.length > 0 ? 0 : -1;
+    this.FKSearchError = null;
     this.FKNoMatches = suggestions.length === 0 && !this.FKSelectedSuggestion;
 
     // Show the dropdown for rows, a "no matches" state, or just the pinned selection.
@@ -2210,6 +2235,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.ShowFKDropdown = false;
     this.FKLoading = false;
     this.FKNoMatches = false;
+    this.FKSearchError = null;
     this.FKActiveIndex = -1;
     this.FKSelectedSuggestion = null;
     this._portaledDropdownEl = null;
@@ -2231,6 +2257,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const seq = ++this._fkSearchSeq;
     this.FKLoading = true;
     this.FKNoMatches = false;
+    this.FKSearchError = null;
     this.ShowFKDropdown = true;
     if (this._lastFKInputEl) {
       this.updateDropdownPosition(this._lastFKInputEl);
@@ -2242,37 +2269,17 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const context = this.buildLookupContext(plan, query);
     if (!context) { this.FKLoading = false; return; }
 
-    const strategy = this.resolveStrategy();
-
-    // Everything from here to the results is third-party code: this seam exists so an app can
-    // supply its own lookup. A strategy that throws must not leave the field spinning forever on
-    // an unhandled rejection, so contain it, say so, and fall back to MJ's own rows.
-    let groups: FKLookupGroup[];
-    let recent: FKLookupRow[];
-    try {
-      this.FKScopeLabels = strategy.ScopeLabels(context);
-
-      // Recent picks only make sense on the browse list; once the user types, what they typed is
-      // the better signal than what they picked last week.
-      [groups, recent] = await Promise.all([
-        strategy.Lookup(context),
-        query.trim() ? Promise.resolve<FKLookupRow[]>([]) : this.loadRecentPicks(context),
-      ]);
-    } catch (err) {
-      // Stale: a newer keystroke fired, or the panel was dismissed while this was in flight.
-      if (seq !== this._fkSearchSeq) return;
-      LogError(
-        `FK lookup strategy failed for ${this.Record?.EntityInfo?.Name ?? '?'}.${this.FieldName}: ` +
-          `${err instanceof Error ? err.message : String(err)}`
-      );
-      [groups, recent] = [await this.fallbackLookup(context), []];
-      this.FKScopeLabels = null;
-    }
+    const outcome = await this.runLookup(context, query, seq);
 
     // Stale: a newer keystroke fired, or the panel was dismissed while this was in flight. A
     // dismissed panel stays dismissed — this result must not reopen it.
-    if (seq !== this._fkSearchSeq) return;
+    if (!outcome || seq !== this._fkSearchSeq) return;
     this.FKLoading = false;
+    if ('Failure' in outcome) {
+      this.showFKSearchFailure(outcome.Failure);
+      return;
+    }
+    const { Groups: groups, Recent: recent } = outcome;
 
     // A recent pick the strategy also returned renders once, in the strategy's group.
     const pkOf = (r: FKLookupRow): string => String(r.Values[plan.PkFieldName] ?? '').toLowerCase();
@@ -2292,17 +2299,80 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   /**
+   * Run the resolved strategy under the field's timeout. Everything inside is third-party code:
+   * the seam exists so an app can supply its own lookup. A registered strategy that throws falls
+   * back to MJ's own rows; a timeout, or a failure of MJ's own lookup, becomes the error row.
+   * Null when a newer lookup superseded this one before it failed.
+   */
+  private async runLookup(context: FKLookupContext, query: string, seq: number): Promise<FKLookupOutcome | null> {
+    const strategy = this.resolveStrategy();
+    try {
+      this.FKScopeLabels = strategy.ScopeLabels(context);
+      // Recent picks only make sense on the browse list; once the user types, what they typed is
+      // the better signal than what they picked last week.
+      const [groups, recent] = await WithFKSearchTimeout(
+        Promise.all([
+          strategy.Lookup(context),
+          query.trim() ? Promise.resolve<FKLookupRow[]>([]) : this.loadRecentPicks(context),
+        ]),
+        this.FKSearchTimeoutMs
+      );
+      return { Groups: groups, Recent: recent };
+    } catch (err) {
+      if (seq !== this._fkSearchSeq) return null;
+      LogError(
+        `FK lookup failed for ${this.Record?.EntityInfo?.Name ?? '?'}.${this.FieldName}: ` +
+          `${err instanceof Error ? err.message : String(err)}`
+      );
+      if (err instanceof FKSearchTimeoutError || !this.hasCustomStrategy()) {
+        return { Failure: this.describeFKSearchFailure(err) };
+      }
+      this.FKScopeLabels = null;
+      return this.fallbackLookup(context);
+    }
+  }
+
+  /** The error row's text: a timeout says so, anything else is a plain failure. */
+  private describeFKSearchFailure(err: unknown): string {
+    return err instanceof FKSearchTimeoutError ? 'The search took too long.' : 'The search failed.';
+  }
+
+  /** Replace the dropdown's rows with the error row. The pinned current selection stays. */
+  private showFKSearchFailure(message: string): void {
+    this.FKSuggestions = [];
+    this.FKGroups = [];
+    this.FKNoMatches = false;
+    this.FKActiveIndex = -1;
+    this.FKSearchError = message;
+    this.ShowFKDropdown = true;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Re-run the query that failed. `mousedown` with `preventDefault`, like the clear button, so
+   * the input keeps focus and the blur grace period never closes the panel under the click.
+   */
+  OnFKRetryClick(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.cancelPendingFKBlur();
+    void this.searchRelatedEntity(this._fkQuery);
+  }
+
+  /**
    * MJ's own rows, used when a registered strategy threw. Contained in turn: if the default
    * cannot answer either, the dropdown shows "no matches" rather than propagating.
    */
-  private async fallbackLookup(context: FKLookupContext): Promise<FKLookupGroup[]> {
+  private async fallbackLookup(context: FKLookupContext): Promise<FKLookupOutcome> {
     try {
-      return await new DefaultFKLookupStrategy().Lookup(context);
+      const groups = await WithFKSearchTimeout(new DefaultFKLookupStrategy().Lookup(context), this.FKSearchTimeoutMs);
+      return { Groups: groups, Recent: [] };
     } catch (err) {
       LogError(`Default FK lookup also failed for ${this.FieldName}: ${err instanceof Error ? err.message : String(err)}`);
-      return [];
+      return { Failure: this.describeFKSearchFailure(err) };
     }
   }
+
 
   /**
    * Hydrate the user's last picks for this field into rows. Run through the related entity's
@@ -2681,6 +2751,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         this.FKActiveIndex = -1;
         this.FKLoading = false;
         this.FKNoMatches = false;
+        this.FKSearchError = null;
         this.FKColumnHeaders = [];
         this.FKColumnFields = [];
         this.FKSortField = null;

@@ -20,6 +20,7 @@
     "src/lib/field/form-field.component.ts",
     "src/lib/field/form-field.component.dom.test.ts",
     "src/lib/field/form-field.fk-strategy.dom.test.ts",
+    "src/lib/field/form-field.fk-search-error.dom.test.ts",
     "src/lib/base-form-component.ts",
     "src/lib/base-form-component.validation.dom.test.ts",
     "src/lib/base-form-component.section-order.dom.test.ts",

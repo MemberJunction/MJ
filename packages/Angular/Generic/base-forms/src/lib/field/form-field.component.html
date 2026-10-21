@@ -267,6 +267,16 @@
                     <span>Searching…</span>
                   </div>
                 }
+                @if (!FKLoading && FKSearchError) {
+                  <div class="mj-fk-status mj-fk-status--error" role="alert">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span class="mj-fk-status-text">{{ FKSearchError }}</span>
+                    <button type="button" class="mj-fk-retry" (mousedown)="OnFKRetryClick($event)">
+                      <i class="fa-solid fa-rotate-right"></i>
+                      Retry
+                    </button>
+                  </div>
+                }
                 @if (!FKLoading && FKNoMatches) {
                   <div class="mj-fk-status mj-fk-status--empty">
                     <i class="fa-solid fa-magnifying-glass"></i>
