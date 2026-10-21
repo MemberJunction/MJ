@@ -110,6 +110,17 @@ Anything that does not reduce its access saves normally — including `Allow` an
 on those roles, which is the mechanism the server's own access depends on. Rules aimed at any
 other role are untouched by all of this.
 
+**The guards judge stored state, one write at a time.** Each guard reads the system user's roles
+and the relevant field rules from the database, not from the user cache or loaded metadata, so two
+quick saves (give the system user a role, then deny a field on it) cannot each pass against a cache
+the other has not reached yet. They run on every save, `ReplayOnly` included. Re-pointing a rule's
+`RoleID` or `EntityFieldID`, or a role assignment's `UserID` or `RoleID`, is judged against the
+target it leaves as well as the one it lands on. Taking a role off the system user is judged on
+entities with field security switched off too, so "disable, remove the role, re-enable" cannot
+strip a field. **A transaction group holding more than one guarded write that concerns the system
+user is refused**: the items of a group are checked before any of them is written, so no check
+could see the others' changes. Save such changes one at a time.
+
 > **Why the guard looks at the whole field, not the rule you are editing.** Whether a change
 > restricts someone is a property of the **aggregate across every role they hold**, never of one
 > rule on its own. `No Access` cannot take away what another role granted — but set *every* one of
@@ -120,7 +131,9 @@ other role are untouched by all of this.
 
 A **startup check** sweeps FLS-enabled entities and logs any field the system user has lost access
 to. It is the backstop for states the save path never saw — direct SQL, a migration, a role taken
-off the account. It warns rather than refusing to boot: bad configuration should be loud, but a
+off the account outside the entity layer. **It runs only when the server boots**: a state written
+by direct SQL while the server is running is not reported until the next restart. It warns rather
+than refusing to boot: bad configuration should be loud, but a
 server that will not start is worse, not least because the application is usually how an
 administrator would fix the rows. Cost is negligible (entities without the flag are skipped on a
 boolean read; no queries at all).
@@ -271,6 +284,9 @@ That is why the serializers need no field-security code of their own. `GetAll()`
 
 Three details matter in practice:
 
+- **It holds for new records.** `NewRecord()` leaves a restricted user's denied fields `NotLoaded`
+  instead of holding their defaults, so a new record's payload never names them (the server would
+  refuse it, §2.7) and the insert leaves those columns to their database defaults.
 - **It holds after a save.** The provider re-reads the row after an insert or update, then marks
   the user's denied fields `NotLoaded` before handing the object back. A restricted user's saved
   object is exactly as wide as their loaded one.
@@ -283,6 +299,28 @@ Three details matter in practice:
 The object's user is the `contextUser` it was created with (`GetEntityObject(name, contextUser)`).
 An object created **as the system user**, or **with no user** on a server, holds every column. That
 is the case to watch for: see §2.4 and §6.
+
+**The precise contract.** "An object built for a restricted user never holds a denied value" holds
+under these conditions:
+
+- **The user is set before the object is filled, or the change narrows it.** Setting
+  `ContextCurrentUser` on an object that already holds a record narrows it to the new user: values
+  the new user may not read become `NotLoaded` on the object, its IS-A parent and its embedded
+  records, which get the same user. Nothing is widened — a field the old user could not read stays
+  `NotLoaded` for a new user who could, because its value was never loaded. Set the user first
+  wherever you can (pass it to `GetEntityObject`), so the record is loaded at the right width.
+- **The source is a plain row.** `LoadFromData`, `Hydrate` and the other entry points narrow the
+  keys of the row they are given. Given an entity object instead of a row, `LoadFromData` reads that
+  object's own `GetAll()` (what *its* user may read) rather than its typed getters. `CopyFrom`
+  copies from another entity object and skips every field the target's user may not read.
+- **Something holds a user.** With no user, the object holds every column.
+
+The helpers that project or gate values follow the same "no user" rule:
+`ProjectEntityValuesForUser`, `ProjectEntityValueRowsForUser` and
+`AssertClientInputWritableForUser` **pass their input through unchanged when no user is given**.
+That is what a browser needs (the client has no user to project for; the server enforces), but on a
+server it means a missing user silently disables the projection. Always pass the user the output
+is for.
 
 ### 2.4 Work done on behalf of a user runs as that user
 
@@ -302,7 +340,10 @@ What that means today:
   sender (§3.7).
 - **A2A** runs entity work as the authenticated caller, and refuses to run when no user can be
   resolved, instead of falling back to an arbitrary user. Tasks belong to their caller.
-- **Templates** render with the user of that render. Concurrent renders each see their own user.
+- **Templates** render with the user of that render. Concurrent renders each see their own user,
+  and every server call site passes it. A render with no user runs its extensions (for example the
+  AI prompt extension) with no user; they never fall back to whichever caller first configured the
+  process-wide engine.
 - **Engines** (`BaseEngine`) load their shared caches as the system user (§3.4). Anything taken
   from an engine cache and handed to a person is projected first; on a server, an engine that
   loads an entity with field security logs a one-time reminder of this.
@@ -312,8 +353,12 @@ What that means today:
 in-process cache that stores it must include the user in its key, or the first caller's rows are
 handed to everyone after them. `UserScopedCacheKey(userID, ...parts)` from `@memberjunction/global`
 builds that key; it returns `null` when there is no user, which means "do not cache". The agent
-data-source cache, the Entity Document placeholder cache, the in-memory vector index cache and the
-IS-A subtype lookup cache all use it. The RunView cache has its own permission fingerprint (§3.4).
+data-source cache, the Entity Document placeholder cache and the IS-A subtype lookup cache all use
+it. The in-memory vector index is cached per **permission class** instead: users who agree on
+entity read, the effective row filter and the vector columns they are denied share one loaded
+index, the cache is bounded and evicts least-recently-used, and a saved row reaches a row-filtered
+class's index only after that class re-reads it. The RunView cache has its own permission
+fingerprint (§3.4).
 
 ### 2.5 Every transport projects its output
 
@@ -325,7 +370,7 @@ Changes payload projection (§3.2).
 
 The transports that use it:
 
-- **GraphQL** entity resolvers (read, create, update, delete), transaction groups (including the
+- **GraphQL** entity resolvers (read, create, update, and the row a delete returns), transaction groups (including the
   update delta, which is computed from projected values), `SaveEntityGraph`, the File, Query and
   User View resolvers, entity-action results, and the agent-run and test-run streams.
 - **REST** CRUD and view endpoints. REST always returns `simple` results; a request for
@@ -333,9 +378,13 @@ The transports that use it:
 - **MCP** entity tools and the agent-run-step export. View queries return `simple` results.
 - **A2A** entity operations.
 - **Cache-invalidation broadcasts** over websockets never carry row data for an entity with field
-  security; receivers re-read under their own permissions.
+  security, or for `MJ: Record Changes` (whose payloads hold other entities' values); receivers
+  re-read under their own permissions.
+- **Entity status messages** over websockets go only to the session whose user owns the object
+  that raised them, and never carry a record payload for a delete, for an entity with field
+  security, or for Record Changes.
 - **CloudEvents** and the debug log carry only the primary key and the changed field *names* for an
-  entity with field security, never values.
+  entity with field security, never values. Record Changes rows are not sent to CloudEvents.
 
 ### 2.6 The filter, sort and aggregate gate
 
@@ -354,14 +403,29 @@ agents, actions), not only to client requests.
   `CHECKSUM(*)`, `NATURAL JOIN`, and using a table as a value. Each would read the denied column
   without naming it. A caller who is denied nothing is not scanned at all.
 - **It refuses what it cannot read.** SQL the scanner cannot read the way the database does, or
-  dynamic SQL, is refused for a caller who carries a denial on an entity it could read.
+  dynamic SQL, is refused for a caller who carries a denial on an entity it could read. So is a
+  name holding a control, format or default-ignorable character (a zero-width joiner, a word
+  joiner, a direction mark): SQL Server collations can give such characters no weight, so
+  `[Salary]` with a U+2060 word joiner typed after `Sal` still resolves to the real column.
+- **Row comparisons count as reads.** `SELECT *` inside `EXISTS (…)` is allowed only when the
+  subquery has no set operation (`UNION`, `INTERSECT`, `EXCEPT`) and no row-picking `ORDER BY`,
+  `OFFSET`, `FETCH` or `LIMIT`; with one, the `*` compares whole rows, denied column included.
+- **PostgreSQL Unicode identifiers are decoded.** `U&"…"` (any case, with or without `UESCAPE`) is
+  read as one identifier and checked as the name it spells. A malformed escape makes the text
+  unreadable, so it is refused.
 - **"Denied" and "does not exist" look the same.** For a caller carrying denials, a column that
   does not exist produces the same error as a denied one, including when the database is the one
   that rejects it.
 
 A field-security refusal **throws** a `FieldSecurityError` from the provider's RunView path rather
-than coming back as an ordinary `Success: false` result. In a batch (`RunViews`), only the refused
-item fails.
+than coming back as an ordinary `Success: false` result. One refused view in a `RunViews` batch
+fails only that view: it comes back `Success: false` with the refusal's message, and the other
+views run.
+
+**Every transport also runs the client clause screen.** GraphQL, REST, MCP `Run_*_View` and A2A
+`QueryEntity` pass caller-supplied filters and sorts through `ClientClauseScreen` before the
+provider gate. In-process callers (agents, actions) get the provider gate alone, which has to stand
+on its own.
 
 ### 2.7 Client input naming a field the caller cannot read is rejected
 
@@ -385,8 +449,8 @@ clients: under §2.3 a client never received a denied value, so it never sends o
 a field the caller could not read can only be fabricated.
 
 The rejection applies on GraphQL create and update (including `OldValues___` keys), transaction
-groups (including transaction variables that name a field), REST, the File and Query resolvers, MCP
-and A2A. Callers who are denied nothing on the entity are unaffected.
+groups (including transaction variables that name a field), embedded-record input, the field maps
+of `MergeRecords`, REST, the File and Query resolvers, MCP and A2A. Callers who are denied nothing on the entity are unaffected.
 
 ### 2.8 The update rejection depends on hydrating from the database
 
@@ -604,15 +668,21 @@ How a run is decided:
    permissions are role-based, like granting EXECUTE on a stored procedure. **Review a query's SQL
    against your field rules before giving it a role list.**
 2. **Otherwise, the entities come from the SQL.** Every entity whose base view or table the
-   rendered SQL reads must be readable by the user. They are found by parsing the SQL, not taken
-   from the query's `QueryEntities` rows, so a query whose rows are missing or stale is still
-   checked.
+   rendered SQL reads must be readable by the user (entity-level Read), for every caller, whether or
+   not field security is involved. They are found by parsing the SQL, not taken from the query's
+   `QueryEntities` rows, so a query whose rows are missing or stale is still checked. SQL the
+   parser cannot read is refused for a user who cannot read every entity.
 3. **Every column reference is checked.** The select list, `WHERE`, `JOIN`, `GROUP BY`,
    `ORDER BY` and `HAVING`, inside expressions and aggregates (`UPPER(Salary)`, `SUM(Salary)`). A
    predicate on a denied column leaks as surely as selecting it.
 4. **It fails closed.** `SELECT *` / `alias.*` over an entity the user is denied something on, a
    column that cannot be traced through a CTE or derived table, and SQL that cannot be parsed are
-   all refused for that user.
+   all refused for that user. So is any relation that is **not a CTE or an entity's base view or
+   base table** — a custom reporting view, a synonym, a table-valued function, a temp table, a name
+   in another database, `EXEC`/`CALL` — for a user who carries any field denial, because what
+   such an object reads cannot be checked. Existing saved queries over custom reporting views stop
+   running for restricted users; review the SQL and grant the query through its role list (step 1)
+   if it is safe for them.
 5. **Users denied nothing are not scanned.** When no entity the query reads has field security for
    this user, the check costs nothing.
 
@@ -630,9 +700,18 @@ Two things this does **not** do:
   RunView, single-record and transport paths. If you expose the audit trail through a saved query,
   review it the way you would any other.
 
-The same reasoning covers ad-hoc SQL that runs inside the server: an agent re-running a SQL-backed
-artifact, and Data Context SQL items, go through the same ad-hoc SQL authorizer as client ad-hoc
-queries, on the read-only connection.
+The SQL that is checked is the SQL that runs. Query templates refuse the `random` filter, the Nunjucks
+built-in that can render differently twice, because the check and the execution render the
+template separately.
+
+**Ad-hoc SQL** is stricter than a saved query, and the check sits in the provider, so every
+in-process caller is covered: an agent re-running a SQL-backed artifact, Data Context SQL items,
+`ExecuteQueryFromSpec` (and so `TestQuerySQL`), as well as client ad-hoc queries. For any caller
+except the system user, **every table the statement reads must be an entity base view the caller
+can read with no row-level filter and no denied field**, on any entity, because raw SQL applies
+neither row-level nor field-level security. The system user is exempt only when passed explicitly;
+ad-hoc SQL with no user is refused rather than run as the process user. It runs on the read-only
+connection.
 
 ### 3.4 What stays in server memory
 
@@ -661,9 +740,12 @@ that user as `contextUser`, and they will never hold a value the user is denied.
 
 ### 3.5 Datasets and data contexts
 
-**Datasets** follow the RunView rules: an item never selects the caller's denied columns, item
-rows are projected on cache hits and misses, Record Changes items get the payload projection, and a
-dataset's item filters go through the provider gate (§2.6). The metadata dataset that clients boot
+**Datasets** do not segment their cache the way RunView does. Each item has one **shared,
+full-width** server cache slot: a caller denied fields never has them selected, such a narrowed
+read is never written to the shared slot, and rows are projected for the caller on every hit and
+miss. Record Changes items get the payload projection, and a dataset's item filters go through the
+provider gate (§2.6). A row filter does key the slot, so one user's filtered rows are never served
+to another. The metadata dataset that clients boot
 from is not narrowed; see the first residual in §5.
 
 **Data Context items** can carry a saved copy of their rows (`DataJSON`), captured under the
@@ -680,8 +762,12 @@ everyone. Field security handles that in two layers:
 
 - **At index time, restricted fields are left out.** On an entity where field security applies,
   any field that is **not readable by every role** — it has a `Deny` or `No Access` read rule for
-  any role, or no rules at all — is left out of Entity Document template data, vector display
-  metadata, Entity Record Document text, duplicate-detection text and autotagging content. IS-A
+  any role, no rules at all, or no `Allow` read rule for a role that can read the entity — is left
+  out of Entity Document template data, vector display metadata, Entity Record Document text,
+  duplicate-detection text and match reasoning, the record-process inference default mapping and
+  autotagging content. The rule is `GetIndexRestrictedFieldNames` in `@memberjunction/core`, shared
+  by every consumer. ("A role that can read the entity" is one with an entity-level `Allow` granting
+  Read and no entity-level `Deny`; roles that cannot read the entity are not counted.) IS-A
   children leave out their mirrors of a parent's restricted fields. An embedding cannot be
   projected after the fact, so this is the only way to keep a restricted value out of the vectors.
   The cost is accepted: semantic search does not match on restricted fields.
@@ -721,7 +807,10 @@ their own permissions.
 
 An agent runs as the conversation user (§2.4). Its `entity_object` data sources produce objects
 narrowed for that user, its `RunQuery` data sources go through the saved-query check (§3.3), its
-tool actions run with that user as `ContextUser`, and its data-source cache keys on the user.
+tool actions run with that user as `ContextUser`, and its data-source cache keys on the user. Agent
+notes and examples injected into its prompts come from the shared engine cache and are projected
+for the run's user. Public web-widget guests and anonymous sessions are the exception: see the
+residual in §5.
 
 Prompt runs store the **rendered** system prompt, which includes any data preloaded into it. That
 data was loaded for the user the agent acted for, but the stored prompt run can be read by others:
@@ -824,6 +913,16 @@ Until it runs, only the API tier reflects the change.
 - **Re-index after restricting a field** (§3.6). Embeddings, vector metadata, document text and
   tags built before a `Deny` or `No Access` read rule still contain the restricted text until you
   re-vectorize and re-tag.
+- **Flush RunView cache keys in a persistent shared cache (Redis) when you upgrade.** Before this
+  release, a restricted user's cache miss could write narrowed rows into the slot unrestricted users
+  read. Unrestricted users' slot keys do not change, so those rows would keep being served, missing
+  columns, until a save or eviction cleared them; during a rolling deploy older servers keep writing
+  them. Flush once every server runs the new release. Browser (IndexedDB) slots for restricted users
+  re-key on their own.
+- **Upgrade clients with the server.** Older client libraries send every field, denied ones at
+  their defaults, when a transaction group creates a record, and the server refuses that input for
+  a restricted user (§2.7). Reload open browser tabs, and move pinned consumers to the matching
+  client release.
 - **Test as the restricted user.** The fastest check: run a RunView with the denied field in
   `ExtraFilter` (expect the §2.9 rejection message), then load a record and confirm the field is
   absent from the payload.
@@ -871,11 +970,62 @@ restriction should know them before relying on it.
   this guide was validated against application entities. Restricting a field on a core `__mj` entity
   is the highest-risk configuration available — it is the one that can strip the system user, which
   runs background work and shares one engine cache across all users — and it was deliberately not
-  tested. The mechanism that makes it survivable *is* covered: the system-user access guard, the
-  five configuration guards, and the unrestrictable-field rules are all exercised by the IT91
-  lifecycle checks (§1.4). What has never been run is the whole path on a real core entity. Treat
+  tested. The mechanism that makes it survivable *is* covered. The IT91 lifecycle checks exercise the
+  `No Access`, delete, `Deny` and role-removal guards and the startup sweep (§1.4); IT130's
+  mutation-tier checks cover a lowercase `deny` on a system-user role and re-pointing a rule's
+  `RoleID` or a system-user role assignment. The stored-state reads, the refusal of transaction
+  groups with several guarded writes, and re-pointing a rule's `EntityFieldID` are covered by unit
+  tests only. What has never been run is the whole path on a real core entity. Treat
   that configuration as unproven, try it on a non-production database first, and expect to need
   §4.3 (turning it back off) close at hand.
+
+- **Public web-widget guests and anonymous sessions run agents as the system user.** A widget guest
+  or a scoped anonymous (magic-link) session has no MJ user of its own, so the pinned agent runs
+  elevated, and its data sources, tools and notes read with no field-level or row-level security.
+  This is tracked as a security advisory. Until it is fixed, **pin only agents whose data sources
+  and tools read public data** to a widget or anonymous session.
+
+- **Database constraint errors may echo denied values.** A unique-index violation reports the
+  duplicate key, and the provider returns the database's message to the caller. With a unique index
+  over `(Email, SSN)` and `SSN` denied, a collision on `Email` can show the SSN
+  ([#5981](https://github.com/MemberJunction/MJ/issues/5981)). Avoid unique indexes and constraints
+  that include a restricted column, or keep their messages away from restricted users.
+
+- **Related rows loaded with an entity are not narrowed.** `InnerLoad` with
+  `EntityRelationshipsToLoad` reads related records without the user's field, row-level or entity
+  checks and attaches them to the object unprojected
+  ([#5982](https://github.com/MemberJunction/MJ/issues/5982)). No transport returns them today
+  (REST `?include=` leaves related data out of its response), but do not serialize such an object
+  to a restricted user.
+
+- **Shared conversations and artifacts can hold rows loaded for another user.** An agent's answer,
+  and any artifact it produced, holds what its user could read. Sharing that conversation or
+  artifact shows it to whoever it is shared with, whatever their own rules.
+
+- **Agent run steps and action execution logs store what passed through them.** Action execution
+  log `Params` and `ResultParams` are projected for the user the action ran for, but agent-run-step
+  `InputData`/`OutputData` store what the agent saw, as free-form text that cannot be projected
+  (MCP's `Get_Agent_Run_Step_Detail` returns them as stored to anyone who may read the step).
+  Anyone who can read another user's run steps or logs can read that data; grant those entities
+  accordingly.
+
+- **Slack and Teams can fall back to a service account.** When a messaging adapter cannot map the
+  person messaging to an MJ user, it can run as its configured service account, so the reply holds
+  what that account can read. Give that account only the access every channel member may have.
+
+- **System-only resolvers hand full-width data to their caller.** `GetData` and
+  `RunAIAgentSystemUser` require a system-level caller and return what the system user reads. A
+  service that calls them and passes the result to a person has to project it for that person.
+
+- **The action-output projection is a backstop, not a guarantee.** `RunAction` output projects
+  entity objects precisely, but a plain object is recognised as an entity row only when it carries
+  the entity's primary key and at least 80% of its keys are that entity's fields. Rows without
+  their primary key, rows enriched with many extra keys, JSON strings and `ActionResult.Message`
+  are not projected. An action must load as its `ContextUser` (§6), which is the real control.
+
+- **Memory Manager can promote a user's conversation content to a shared note.** A company- or
+  global-scope agent note promoted from one user's conversation can carry what that user could read
+  to every user the note reaches. Review promoted notes on agents that work with restricted data.
 
 ## 6. Building on field-level security
 
@@ -891,11 +1041,14 @@ rules come from §2; this is the checklist form.
    `RunView`, `RunQuery` and actions. Never fall back to the system user, `Metadata.CurrentUser` or
    the first user in a cache when the caller is unknown: refuse instead.
 3. **Width follows the user.** An object built for the user holds only what they may read, after
-   `Save()` too. An object built as the system user, taken from an engine, or built with no user
-   holds everything.
+   `Save()` and on `NewRecord()` too. Set the user before filling the object (changing it later
+   narrows, never widens), and fill it from a plain row or another entity object (§2.3). An object
+   built as the system user, taken from an engine, or built with no user holds everything.
 4. **Project at the boundary.** Anything not built for the receiving user goes through
    `ProjectEntityValuesForUser` / `ProjectEntityValueRowsForUser` before it leaves. Transports
-   project even values that were built for the user, as defence in depth.
+   project even values that were built for the user, as defence in depth. These helpers, and the
+   input gate below, pass their input through unchanged when the user is missing, so on a server
+   always pass one.
 5. **Gate client input.** Before `SetMany` on input from a client, call
    `AssertClientInputWritableForUser(entityInfo, values, user)`. It refuses denied and unknown keys
    with the same message.
@@ -912,17 +1065,20 @@ rules come from §2; this is the checklist form.
 |---|---|
 | **An action** | Load with `params.ContextUser`. Return values from objects built for that user, or project them. Output parameters are also stored in the action execution log, so the same applies to anything you put there. |
 | **A transport or resolver** | Gate client input (rule 5). Project every returned record, including post-save responses, deltas and companions. Do not return `entity_object` results over the wire: return `simple` rows. Do not put row values in broadcasts or events for an entity where field security applies. |
-| **A cache** | If it holds data loaded under a user's permissions, key it on the user (rule 6) or on a complete permission fingerprint. If it holds full-width system data, project every read for the reader. |
+| **A cache** | If it holds data loaded under a user's permissions, key it on the user (rule 6) or on a complete permission fingerprint. If it holds full-width system data, project every read for the reader. A server path that reads or fills a RunView cache slot builds its key with `ProviderBase.ComputeRunViewCacheFingerprint(params, contextUser)`, the one key builder, which carries the request, the connection, the user's row-level clause and the user's field-security segment. Never assemble a RunView fingerprint by hand. |
 | **An agent data source or tool** | The agent's user is the principal. Load as that user; never pre-load as the system user and filter later. Remember the model can repeat anything in its context, and run steps store it. |
 | **A template or communication** | Render with the sender's user. Strip fields the sender cannot read before merging, so they render empty. |
-| **An index** (vectors, tags, document text, search provider) | Leave out fields not readable by every role at index time (`GetIndexRestrictedFieldNames` in the vector sync package), and project results per reader at read time. Document that existing indexes need rebuilding. |
-| **SQL that a user influences** | Run filters, sorts and aggregates through the provider (it applies the §2.6 gate). For whole statements, use the ad-hoc SQL authorizer and the read-only connection; `FieldSecuritySQLGate.AssertStatementAllowed` checks a statement against a user's denials. |
+| **An index** (vectors, tags, document text, search provider, or LLM input built once and stored) | Leave out fields not readable by every role at index time (`GetIndexRestrictedFieldNames` in `@memberjunction/core`), and project results per reader at read time. Document that existing indexes need rebuilding. |
+| **SQL that a user influences** | Run filters, sorts and aggregates through the provider (it applies the §2.6 gate). A transport that accepts filters from a client also runs `ClientClauseScreen.ScreenViewClauses`, as GraphQL, REST, MCP and A2A do. For whole statements, use the provider's ad-hoc SQL path with the user passed explicitly, on the read-only connection; `FieldSecuritySQLGate.AssertStatementAllowed` checks a statement against a user's denials. |
 
 ### 6.3 The source guard
 
-`check:guards` (and the CI "Source guards" job) runs a scanner over GraphQL resolvers, REST
-handlers, the MCP and A2A servers and every action package. It flags `.GetAll(`,
-`.GetDataObject(`, `.GetDataObjectJSON(` and `JSON.stringify(<entity>)`. A flagged line passes when
+`check:guards` (and the CI "Source guards" job) runs a scanner over MJServer (resolvers, REST,
+`generic`, agent sessions, realtime, services and `index.ts`), the MCP and A2A servers, `AI/Agents`,
+and every package under `Actions`, `Communication`, `Templates`, `SearchEngine` and
+`MessagingAdapters`. It flags `.GetAll(`, `.GetDataObject(`, `.GetDataObjectJSON(`, `.To(`,
+`JSON.stringify(<entity or rows>)`, `.Fields.map(f => f.Value)` and view results written straight
+to an HTTP response. A flagged line passes when
 it, or the line above it, carries `// fls-guard: <reason>` — for example "projected by
 ProjectEntityValuesForUser below", "loaded as the caller; width follows its user", or
 "system-user-only resolver". The scanner is a reminder, not a proof: it cannot see types, so it
@@ -943,6 +1099,19 @@ appears in what your feature produces:
   assert the denied value's text is absent, rather than checking one property.
 - **Cover both sides.** The unrestricted user still sees the value; the restricted user does not;
   a key that does not exist and a denied key produce the same error.
-- **Run the integration bundles** against a private database: `IT90 - Field-Level Security
-  Enforcement`, `IT91 - FLS Lifecycle and System-User Guards` and `IT92 - FLS Over-The-Wire (client
-  transport)`, which runs as a genuinely restricted wire identity.
+- **Run the integration bundles** against a private database (see the `bootstrap-clean-db` skill):
+  - `IT90 - Field-Level Security Enforcement`;
+  - `IT91 - FLS Lifecycle and System-User Guards` (mutation tier, `RUN_MUTATION_TESTS=1`);
+  - `IT92 - FLS Over-The-Wire (client transport)`, which runs as a genuinely restricted wire
+    identity;
+  - `IT130 - FLS Close-out (server)`: object width, the clause gate, datasets, Record Changes, the
+    configuration guards (CO14–CO16 are mutation tier) and the consumers that deliver onward;
+  - `IT131 - FLS Close-out Over-The-Wire (client transport)`: client-input rejection and transport
+    projection over GraphQL and REST, as restricted users with their own API keys. Its REST checks
+    need `MJ_REST_API_ENABLED=true` on MJAPI;
+  - `IT132 - FLS Close-out Pending Behaviour (cache segmentation, RunQuery)`: cache segmentation
+    and saved-query enforcement.
+- **A missing precondition is a skip, not a pass.** In an integration check, call `SkipCheck(reason)`
+  from `@memberjunction/testing-integration` when a fixture is not seeded or a transport is off; it
+  throws, and the runners record the check as Skipped. Returning early scores the check as Passed
+  and reports coverage the run did not have. Read the skip counts in the results.

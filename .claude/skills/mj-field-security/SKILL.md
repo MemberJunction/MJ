@@ -36,9 +36,13 @@ any role (see Step 5, indexes).
   `RunQuery(params, contextUser)`, actions' `ContextUser`.
 - When the user is unknown, **refuse**. Never fall back to the system user, `Metadata.CurrentUser`,
   `UserCache.Users[0]` or a configured service account.
-- An object built for a restricted user **never holds a denied value**, after `Save()` too. Its
-  `GetAll()`, `GetDataObject()`, `Fields[i].Value` and `JSON.stringify` are safe for **that same
-  user**.
+- An object built for a restricted user **never holds a denied value**, after `Save()` and on
+  `NewRecord()` too. Its `GetAll()`, `GetDataObject()`, `Fields[i].Value` and `JSON.stringify` are
+  safe for **that same user**.
+- That holds when the user is set **before** the object is filled (pass it to `GetEntityObject`).
+  Setting `ContextCurrentUser` on a loaded object narrows it to the new user, but never widens it.
+  Fill from a plain row or another entity object: `LoadFromData` reads an entity source through its
+  own `GetAll()`, and `CopyFrom` skips fields the target's user may not read.
 - An object built as the system user, read from a `BaseEngine` cache, or built with no user holds
   **every column**. Treat its values as unprojected.
 
@@ -56,7 +60,9 @@ const rows = ProjectEntityValueRowsForUser(provider, entityInfo, plainRows, user
 ```
 
 It drops denied keys by Name and CodeName in any case, projects Record Changes payloads per row,
-and can add `ReadableFields___` for MJ clients (`{ includeReadableFields: true }`).
+and can add `ReadableFields___` for MJ clients (`{ includeReadableFields: true }`). **With no user
+it returns its input unchanged** (the browser has no user to project for), so on a server always
+pass the user the output is for.
 
 Wire transports project **everything** they return, as defence in depth, and return `simple`
 rows, never `entity_object`. Broadcasts and events for an entity where FLS applies carry keys and
@@ -82,17 +88,23 @@ Pass transport-only keys through `additionalAllowedKeys`.
 
 - **Caches** of user-scoped data: key with `UserScopedCacheKey(userID, ...parts)` from
   `@memberjunction/global`; a `null` key means do not cache. A cache of full-width system data must
-  project every read for the reader.
+  project every read for the reader. RunView cache slots are keyed only by
+  `ProviderBase.ComputeRunViewCacheFingerprint(params, contextUser)`; never build one by hand.
 - **Agent data sources and tools:** load as the agent's user. Do not preload as the system user and
   filter afterwards; the model can repeat anything in its context.
 - **Templates and communications:** render as the sender; strip fields the sender cannot read so
   they render empty.
-- **Indexes:** leave out `GetIndexRestrictedFieldNames(entity)` (`@memberjunction/ai-vector-sync`)
-  at index time, project results per reader at read time, and tell admins existing indexes need
-  rebuilding.
+- **Indexes** (and LLM input built once and stored): leave out
+  `GetIndexRestrictedFieldNames(entity)` (`@memberjunction/core`) at index time, project results per
+  reader at read time, and tell admins existing indexes need rebuilding. The rule excludes a field
+  with a `Deny` or `No Access` read rule, no rules at all, or no `Allow` read rule for a role that
+  can read the entity.
 - **SQL a user influences:** let the provider run filters, sorts and aggregates (it applies the
-  parse-based gate). For whole statements use the ad-hoc SQL authorizer and the read-only
-  connection; `FieldSecuritySQLGate.AssertStatementAllowed` checks a statement against a user.
+  parse-based gate). A transport taking client filters also runs
+  `ClientClauseScreen.ScreenViewClauses`, as GraphQL, REST, MCP and A2A do. For whole statements use
+  the provider's ad-hoc SQL path with the user passed explicitly (no user is refused) and the
+  read-only connection; `FieldSecuritySQLGate.AssertStatementAllowed` checks a statement against a
+  user.
 - **IS-A:** check `EntityInfo.FieldLevelSecurityApplies`, not `EnableFieldLevelSecurity`, at runtime.
 
 ## Step 6 — Satisfy the source guard
@@ -102,8 +114,10 @@ pnpm run check:guards
 ```
 
 The `FieldSecurityEgressCompliance` scanner flags `.GetAll(`, `.GetDataObject(`,
-`.GetDataObjectJSON(` and `JSON.stringify(<entity>)` in MJServer resolvers and REST, the MCP and
-A2A servers, and actions. For each flagged line, either project the value or mark the line (or the
+`.GetDataObjectJSON(`, `.To(`, `JSON.stringify(<entity or rows>)`, `.Fields.map(f => f.Value)` and
+view results written to an HTTP response, in MJServer (resolvers, REST, `generic`, agent sessions,
+realtime, services), the MCP and A2A servers, `AI/Agents`, and the Actions, Communication,
+Templates, SearchEngine and MessagingAdapters packages. For each flagged line, either project the value or mark the line (or the
 line above) with a short reason:
 
 ```typescript
@@ -129,9 +143,18 @@ A test only counts once you have **seen it fail** against the code without your 
    the case where a denied key and an unknown key produce the same error.
 4. **Run the package's whole suite**: `cd packages/<Package> && pnpm test`.
 5. **Run the integration bundles** on a private database (see the `bootstrap-clean-db` skill):
-   `IT90 - Field-Level Security Enforcement`, `IT91 - FLS Lifecycle and System-User Guards`, and
-   `IT92 - FLS Over-The-Wire (client transport)`, which runs as a genuinely restricted wire identity:
+   - `IT90 - Field-Level Security Enforcement`
+   - `IT91 - FLS Lifecycle and System-User Guards` (mutation tier, `RUN_MUTATION_TESTS=1`)
+   - `IT92 - FLS Over-The-Wire (client transport)`, as a genuinely restricted wire identity
+   - `IT130 - FLS Close-out (server)` (CO14–CO16 are mutation tier)
+   - `IT131 - FLS Close-out Over-The-Wire (client transport)`; its REST checks need
+     `MJ_REST_API_ENABLED=true` on MJAPI
+   - `IT132 - FLS Close-out Pending Behaviour (cache segmentation, RunQuery)`
 
    ```bash
-   pnpm mj test run "IT92 - FLS Over-The-Wire (client transport)"
+   pnpm mj test run "IT131 - FLS Close-out Over-The-Wire (client transport)"
    ```
+6. **A missing precondition is a skip, not a pass.** In an integration check, end with
+   `SkipCheck(reason)` (`@memberjunction/testing-integration`) when a fixture is not seeded or a
+   transport is off. It throws, and the runners record the check as Skipped; an early `return`
+   scores as Passed. Check the skip counts before you report coverage.
