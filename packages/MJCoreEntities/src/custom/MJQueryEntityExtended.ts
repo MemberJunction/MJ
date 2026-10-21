@@ -266,9 +266,12 @@ export class MJQueryEntityExtended extends MJQueryEntity {
 
     /** The catalog entities this query's `QueryEntities` rows name; stale rows are left out. */
     private declaredEntities(catalog: readonly EntityInfo[]): EntityInfo[] {
+        const queryEntities = this.QueryEntities ?? [];
+        if (queryEntities.length === 0) return [];
+        const byID = IndexByUUID(catalog);
         const declared: EntityInfo[] = [];
-        for (const qe of this.QueryEntities ?? []) {
-            const entity = catalog.find(e => UUIDsEqual(e.ID, qe.EntityID));
+        for (const qe of queryEntities) {
+            const entity = byID.Get(qe.EntityID);
             if (entity) declared.push(entity);
         }
         return declared;
