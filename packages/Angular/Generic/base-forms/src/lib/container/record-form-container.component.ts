@@ -4,7 +4,7 @@ import {
   ContentChildren, QueryList, AfterContentInit, DoCheck, OnDestroy,
   ViewChild, ViewEncapsulation, ElementRef
 } from '@angular/core';
-import { BaseEntity, BaseEntityEvent, CompositeKey, EntityInfo, LogError, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, CompositeKey, EntityInfo, KeyValuePair, LogError, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
 import { EscapeSQLString, MJGlobal, UUIDsEqual, type ValidationErrorInfo } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -196,6 +196,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   } | null = null;
   private remoteUpdatePillTimer: ReturnType<typeof setTimeout> | null = null;
   private remoteRefreshInFlight = false;
+  private lastLocalSaveAt = 0;
 
   // ---- Internal State ----
 
@@ -2187,11 +2188,14 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.cdr.markForCheck();
 
       try {
+        this.lastLocalSaveAt = Date.now();
         await this.Fc.SaveRecord(true);
+        this.lastLocalSaveAt = Date.now();
 
         // After successful save, refresh version count badge and record changes drawer
         this.refreshAfterSave();
       } finally {
+        this.lastLocalSaveAt = Date.now();
         // Use microtask timing to avoid ExpressionChangedAfterItHasBeenCheckedError
         await Promise.resolve();
         this.ngZone.run(() => {
@@ -2293,20 +2297,25 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         const record = this.EffectiveRecord;
         if (!record || !record.IsSaved || !record.EntityInfo) return;
 
+        if (entityEvt.type === 'save' && entityEvt.baseEntity === record) {
+          this.lastLocalSaveAt = Date.now();
+          return;
+        }
+
         let matchesCurrentRecord = false;
         if (entityEvt.type === 'remote-invalidate') {
+          // Ignore server echo from a save that just occurred on this form instance
+          if (Date.now() - this.lastLocalSaveAt < 2000) return;
+
           const payload = entityEvt.payload as {
             action?: 'save' | 'delete';
             entityName?: string;
             primaryKeyValues?: string;
           } | undefined;
-          if (!payload || payload.action !== 'save' || !payload.entityName || !payload.primaryKeyValues) return;
-          if (payload.entityName.trim().toLowerCase() !== record.EntityInfo.Name.trim().toLowerCase()) return;
-          const incomingKey = CompositeKey.FromURLSegment(record.EntityInfo, payload.primaryKeyValues);
-          matchesCurrentRecord =
-            incomingKey.Equals(record.PrimaryKey) ||
-            UUIDsEqual(payload.primaryKeyValues, record.PrimaryKey.ToConcatenatedString()) ||
-            UUIDsEqual(payload.primaryKeyValues, String(record.PrimaryKey.Values()));
+          const eventEntityName = entityEvt.entityName || payload?.entityName;
+          if (!payload || payload.action !== 'save' || !eventEntityName || !payload.primaryKeyValues) return;
+          if (eventEntityName.trim().toLowerCase() !== record.EntityInfo.Name.trim().toLowerCase()) return;
+          matchesCurrentRecord = this.matchesRemotePrimaryKey(record, payload.primaryKeyValues);
         } else if (entityEvt.type === 'save' && entityEvt.baseEntity && entityEvt.baseEntity !== record) {
           if (entityEvt.baseEntity.EntityInfo?.Name === record.EntityInfo.Name) {
             matchesCurrentRecord = entityEvt.baseEntity.PrimaryKey.Equals(record.PrimaryKey);
@@ -2329,6 +2338,37 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       });
   }
 
+  private matchesRemotePrimaryKey(record: BaseEntity, primaryKeyValuesRaw: string): boolean {
+    const trimmed = primaryKeyValuesRaw.trim();
+    if (!trimmed) return false;
+    // MJServer serializes primaryKeyValues as JSON.stringify(entityObject.PrimaryKey.KeyValuePairs)
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed) as Array<{ FieldName?: string; Value?: unknown }>;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const pairs = parsed
+            .filter((kv): kv is { FieldName: string; Value: unknown } => typeof kv?.FieldName === 'string')
+            .map((kv) => new KeyValuePair(kv.FieldName, kv.Value));
+          if (pairs.length > 0) {
+            const incomingKey = CompositeKey.FromKeyValuePairs(pairs);
+            if (incomingKey.Equals(record.PrimaryKey)) return true;
+            if (pairs.length === 1 && UUIDsEqual(String(pairs[0].Value ?? ''), String(record.PrimaryKey.Values()))) {
+              return true;
+            }
+          }
+        }
+      } catch {
+        // Fall through to URL segment / string comparisons below
+      }
+    }
+    const incomingFromSegment = CompositeKey.FromURLSegment(record.EntityInfo, trimmed);
+    return (
+      incomingFromSegment.Equals(record.PrimaryKey) ||
+      UUIDsEqual(trimmed, record.PrimaryKey.ToConcatenatedString()) ||
+      UUIDsEqual(trimmed, String(record.PrimaryKey.Values()))
+    );
+  }
+
   private async performLiveRemoteRefresh(record: BaseEntity): Promise<void> {
     if (this.remoteRefreshInFlight || this.destroyed) return;
     this.remoteRefreshInFlight = true;
@@ -2348,6 +2388,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         const afterStr = afterVal instanceof Date ? afterVal.toISOString() : String(afterVal ?? '');
         if (beforeStr !== afterStr) {
           changedFieldSet.add(field.Name.toLowerCase());
+          if (field.CodeName) {
+            changedFieldSet.add(field.CodeName.toLowerCase());
+          }
           if (!field.Name.startsWith('__mj_')) {
             changedLabels.push(field.DisplayNameOrName);
           }
@@ -2360,6 +2403,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         this.recordChangesDrawer.Refresh();
       }
       this.recordRefresh.NotifyRemoteUpdate(record, changedFieldSet);
+      this.scheduleChromeResolve();
 
       const summary =
         changedLabels.length === 1
@@ -2377,8 +2421,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         true,
       );
 
-      this.Fc?.cdr?.markForCheck();
-      this.cdr.markForCheck();
+      this.Fc?.cdr?.detectChanges();
+      this.cdr.detectChanges();
     } catch (err) {
       LogError(`Live form auto-refresh failed for ${record.EntityInfo.Name}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {

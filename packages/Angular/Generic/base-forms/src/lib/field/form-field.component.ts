@@ -244,15 +244,18 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
           this._resolvedFKValue = undefined;
           this._resolvedFKEntityRef = undefined;
           this._detectCacheValue = null;
+          this.sectionHost?.NotifyFieldChanged(this);
           const ownFieldLower = (this.FieldName || '').trim().toLowerCase();
+          const fieldInfoNameLower = (this.FieldInfo?.Name || '').trim().toLowerCase();
           const siblingEntityFieldLower = (this.FieldInfo?.EntityIDFieldName || '').trim().toLowerCase();
           if (
             (ownFieldLower && evt.changedFieldNames.has(ownFieldLower)) ||
+            (fieldInfoNameLower && evt.changedFieldNames.has(fieldInfoNameLower)) ||
             (siblingEntityFieldLower && evt.changedFieldNames.has(siblingEntityFieldLower))
           ) {
             this.triggerRemoteUpdateHighlight();
           } else {
-            this.cdr.markForCheck();
+            this.cdr.detectChanges();
           }
         })
       );
@@ -935,12 +938,12 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       clearTimeout(this._remoteHighlightTimer);
     }
     this.IsRemotelyUpdated = true;
-    this.cdr.markForCheck();
+    this.cdr.detectChanges();
     this._remoteHighlightTimer = setTimeout(() => {
       this._remoteHighlightTimer = null;
       if (!this._destroyed) {
         this.IsRemotelyUpdated = false;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       }
     }, 2600);
   }
