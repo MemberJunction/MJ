@@ -47,6 +47,39 @@ export function OmitDeniedFieldKeys<T extends object>(values: T, denied: Readonl
     return (copy ?? values) as T;
 }
 
+/** What {@link OmitFieldsUnreadableByActiveUser} asks of an entity object: whether its own user may read a field. */
+export type ActiveUserFieldReadability = {
+    IsFieldReadableByActiveUser(fieldName: string): boolean;
+};
+
+/**
+ * Returns `values` without the keys `entity`'s own user may not read, for a payload built from
+ * that entity and sent to another tier (a graph save, a companion's wire form).
+ *
+ * The object already holds no denied value (its hydration points and `NewRecord` leave such
+ * fields not loaded), so `GetAll()` normally omits them by itself. This is the backstop for a key
+ * put back on the object without the readability check, which `SetMany` permits: the receiving
+ * tier refuses a restricted caller's input that names a field they may not read, so sending one
+ * fails the whole save.
+ *
+ * Returns the original object when nothing was removed, and a shallow copy otherwise.
+ */
+export function OmitFieldsUnreadableByActiveUser<T extends object>(entity: ActiveUserFieldReadability, values: T): T {
+    if (!values || typeof values !== 'object') {
+        return values;
+    }
+    const source = values as Record<string, unknown>;
+    let copy: Record<string, unknown> | null = null;
+    for (const key of Object.keys(source)) {
+        if (entity.IsFieldReadableByActiveUser(key)) {
+            continue;
+        }
+        copy ??= { ...source };
+        delete copy[key];
+    }
+    return (copy ?? values) as T;
+}
+
 /**
  * The denied-READ set for `user` on `entityInfo`, or null when field security does not apply:
  * it applies to neither the entity nor an IS-A ancestor, there is no user, or the user is denied nothing.
@@ -104,8 +137,13 @@ function narrowRow<T extends object>(row: T, denied: ReadonlySet<string>, readab
  * @param provider Metadata source, used to resolve the per-row target entity for Record Changes.
  * @param entityInfo The entity the values belong to. When absent the values are returned unchanged.
  * @param values The field values. Never modified.
- * @param user The caller. When absent this is server-internal code, which field security trusts
- *             with full values, and the values are returned unchanged.
+ * **Fails open on a missing user.** With no `user` the values are returned unchanged, full width.
+ * That is deliberate: a browser or other single-user client has no per-call user to pass, and
+ * server-internal code running without one is trusted with full values. It also means a
+ * server-side transport that forgets to pass the caller sends everything, so every request-path
+ * caller must pass the requesting user.
+ *
+ * @param user The caller. When absent the values are returned unchanged (see above).
  * @param options See {@link ProjectEntityValuesOptions}.
  */
 export function ProjectEntityValuesForUser<T extends object>(
@@ -128,7 +166,8 @@ export function ProjectEntityValuesForUser<T extends object>(
  * per-entity lookups for its own lifetime, and a denied set walks every field of the entity, so
  * building either per row turns a per-request cost into a per-row one.
  *
- * Returns the ORIGINAL array when no row needed changing.
+ * Returns the ORIGINAL array when no row needed changing. Fails open on a missing user, as
+ * {@link ProjectEntityValuesForUser} does.
  */
 export function ProjectEntityValueRowsForUser<T extends object>(
     provider: RecordChangeMetadataSource,
@@ -218,8 +257,12 @@ function knownFieldKeys(entityInfo: EntityInfo): Set<string> {
  * so `SetMany`'s ordinary handling of unknown keys still applies to them.
  *
  * @param entityInfo The entity the input will be applied to.
+ * **Fails open on a missing user.** With no `user` the gate does nothing, so server-internal
+ * code, and a client with no per-call user, are unaffected. A server-side transport applying a
+ * request's input must therefore pass the requesting user, or nothing is checked.
+ *
  * @param values The client input. Never modified.
- * @param user The caller. When absent the gate does nothing (server-internal code).
+ * @param user The caller. When absent the gate does nothing (see above).
  * @param options See {@link ClientInputGateOptions}.
  */
 export function AssertClientInputWritableForUser(

@@ -281,6 +281,22 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
  * Implements common functionality for metadata caching, refresh, and dataset management.
  * Subclasses must implement abstract methods for provider-specific operations.
  */
+/**
+ * How the field-security row projection treats every row with one key shape: `Keys` is the shape
+ * (the row's own keys, in order), and `Keep` the keys to copy, or null when the shape carries no
+ * denied key and such a row is returned as is.
+ */
+type RowProjectionPlan = {
+    Keys: string[];
+    Keep: string[] | null;
+};
+
+/** The plans one projection pass has built: the last one used, and every one by its joined key list. */
+type RowProjectionPlans = {
+    Last: RowProjectionPlan | null;
+    BySignature: Map<string, RowProjectionPlan>;
+};
+
 export abstract class ProviderBase implements IMetadataProvider, IRunViewProvider, IRunQueryProvider, IRemoteOperationProvider {
     /**
      * Whether this provider can execute a multi-record unit of work atomically, in-process.
@@ -3384,12 +3400,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * rows written by different paths), so no row stands in for the others. A row carrying no
      * denied key is kept as is, and when none do the input array itself is returned.
      *
+     * The per-key work (trim, lowercase, set lookup) is done once per key SHAPE rather than once
+     * per row: rows with the same keys in the same order share one {@link RowProjectionPlan}. A
+     * result is almost always a single shape, so a restricted user's 10k-row result pays for one
+     * row's worth of key matching plus a copy per row.
+     *
      * @param deniedLowercase field names to omit, already lowercased
      */
     private static omitFieldsFromRows<T>(rows: T[], deniedLowercase: Set<string>): T[] {
+        const plans: RowProjectionPlans = { Last: null, BySignature: new Map() };
         let changed = false;
         const projected = rows.map((row) => {
-            const narrowed = ProviderBase.omitFieldsFromRow(row, deniedLowercase);
+            const narrowed = ProviderBase.omitFieldsFromRow(row, deniedLowercase, plans);
             changed = changed || narrowed !== row;
             return narrowed;
         });
@@ -3397,22 +3419,56 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /** One row of {@link omitFieldsFromRows}: the row itself when it carries no denied key, else a copy without them. */
-    private static omitFieldsFromRow<T>(row: T, deniedLowercase: Set<string>): T {
+    private static omitFieldsFromRow<T>(row: T, deniedLowercase: Set<string>, plans: RowProjectionPlans): T {
         if (!row || typeof row !== 'object') {
             return row;
         }
         const source = row as Record<string, unknown>;
         const keys = Object.keys(source);
-        if (!keys.some(k => deniedLowercase.has(k.trim().toLowerCase()))) {
+        const plan = ProviderBase.rowProjectionPlanFor(keys, deniedLowercase, plans);
+        if (!plan.Keep) {
             return row;
         }
         const filtered: Record<string, unknown> = {};
-        for (const key of keys) {
-            if (!deniedLowercase.has(key.trim().toLowerCase())) {
-                filtered[key] = source[key];
-            }
+        for (const key of plan.Keep) {
+            filtered[key] = source[key];
         }
         return filtered as T;
+    }
+
+    /**
+     * The plan for a row with exactly these keys, built on first sight of the shape. The last plan
+     * used is tried first; otherwise plans are found by the joined key list. Either way the plan's
+     * own key list is compared with the row's before it is used, so two different shapes can
+     * never share a plan.
+     */
+    private static rowProjectionPlanFor(keys: string[], deniedLowercase: Set<string>, plans: RowProjectionPlans): RowProjectionPlan {
+        if (plans.Last && ProviderBase.sameKeys(plans.Last.Keys, keys)) {
+            return plans.Last; // consecutive rows nearly always share a shape: no signature to build
+        }
+        const signature = keys.join('\u0000');
+        let plan = plans.BySignature.get(signature);
+        if (!plan || !ProviderBase.sameKeys(plan.Keys, keys)) {
+            const keep = keys.some(k => deniedLowercase.has(k.trim().toLowerCase()))
+                ? keys.filter(k => !deniedLowercase.has(k.trim().toLowerCase()))
+                : null;
+            plan = { Keys: keys, Keep: keep };
+            plans.BySignature.set(signature, plan);
+        }
+        plans.Last = plan;
+        return plan;
+    }
+
+    private static sameKeys(a: string[], b: string[]): boolean {
+        if (a.length !== b.length) {
+            return false;
+        }
+        for (let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -3536,8 +3592,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const entityCheckTime = performance.now() - entityCheckStart;
 
         // Save the caller's original Fields request for post-cache filtering.
-        // We always fetch ALL fields from the DB so the cache entry is a universal superset
-        // that satisfies any future query for the same entity+filter regardless of field subset.
+        // We fetch every field this user's permission class may read, so the cache entry is a
+        // superset for that class: it satisfies any later query for the same entity+filter, by
+        // any user of the same class, regardless of field subset. Slots are keyed per class (the
+        // fls: segment), so no slot is shared between classes at different widths.
         const entityLookupStart = performance.now();
         let callerRequestedFields = params.Fields && params.Fields.length > 0
             ? params.Fields.map(f => f.trim().toLowerCase())
@@ -4334,8 +4392,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
 
         // Project cache-miss DB results back down to the caller's originally requested
-        // fields. PreRunView widened params.Fields to ALL entity fields so the cache
-        // entry (written above) is a universal superset — but the caller must receive
+        // fields. PreRunView widened params.Fields to ALL entity fields (less the columns this
+        // user's permission class may not read) so the cache entry written above is a superset
+        // for that class — but the caller must receive
         // the same shape on a miss as they do on a hit (which projects from cache).
         // Must run AFTER the cache writes (cache keeps the superset) and only for
         // plain-object results (entity objects need all fields).
@@ -4461,7 +4520,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // Project cache-miss DB results back down to each caller's originally
         // requested fields. PreRunViews widened those params' Fields to ALL entity
-        // fields so the cache entries (written above) are universal supersets — but
+        // fields (less what each user's permission class may not read) so the cache entries
+        // written above are supersets for that class — but
         // callers must receive the same shape on a miss as on a hit (which projects
         // from cache). Skip hits (already projected) and entity_object results
         // (need all fields).

@@ -3754,7 +3754,28 @@ export class EntityInfo extends BaseInfo {
         if (!this.ParentID) {
             return false; // one boolean for every entity outside an IS-A chain
         }
-        return this.ParentChain.some(p => p.EnableFieldLevelSecurity);
+        return this.anyLiveAncestorEnablesFieldSecurity();
+    }
+
+    /**
+     * Whether an IS-A ancestor has field security on, walking {@link ParentEntityInfo} as it
+     * resolves NOW rather than the cached {@link ParentChain}. The denied walk
+     * ({@link addFieldsDeniedOnParent}) and the memo key ({@link fieldSecurityGenerationKey})
+     * follow the live parent, so this gate must too: read from a chain cached before a metadata
+     * refresh replaced an ancestor, it could answer "no" while the ancestor now in place has
+     * rules, and every enforcement point would skip them.
+     */
+    private anyLiveAncestorEnablesFieldSecurity(): boolean {
+        const visited = new Set<EntityInfo>([this]);
+        let ancestor = this.ParentEntityInfo;
+        while (ancestor && !visited.has(ancestor)) {
+            if (ancestor.EnableFieldLevelSecurity) {
+                return true;
+            }
+            visited.add(ancestor);
+            ancestor = ancestor.ParentID ? ancestor.ParentEntityInfo : null;
+        }
+        return false;
     }
 
     /**
