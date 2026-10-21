@@ -26,7 +26,7 @@ import {
     SEED_CONFIRM_INPUT,
     SEED_SCRIPT_PATH,
     NPM_MEMBERS_URL,
-    NPM_ESCALATION_HANDLE,
+    NPM_SETUP_GITHUB_HANDLES,
 } from '../check-new-npm-packages.mjs';
 
 // --- fixtures ---------------------------------------------------------------
@@ -341,14 +341,22 @@ describe('formatGateFailure', () => {
     it('includes an escalation path for authors without npm access', () => {
         expect(message).toContain('IF YOU DO NOT HAVE NPM ACCESS');
         expect(message).toContain(NPM_MEMBERS_URL);
-        expect(message).toContain(NPM_ESCALATION_HANDLE);
-        expect(message).toContain('one working day');
+        expect(message).toContain(SEED_SCRIPT_PATH);
     });
 
-    it('tags a real GitHub handle, not an invented team', () => {
-        // The @memberjunction org has exactly one GitHub team (bc-labs), so a plausible
-        // -sounding team handle here would silently notify nobody.
-        expect(message).not.toContain('npm-admins');
+    it('does not tell authors to tag a fixed person', () => {
+        // Any npm org member can do the setup; a hardcoded handle turned one person into
+        // the pager for every new package.
+        expect(message).not.toMatch(/@[A-Za-z0-9-]+ — new package/);
+        expect(message).not.toContain('@cadam11');
+    });
+
+    it('lists the members who can do the setup, without pinging them', () => {
+        for (const handle of NPM_SETUP_GITHUB_HANDLES) {
+            expect(message).toContain(handle);
+            expect(message).not.toContain(`@${handle}`);
+        }
+        expect(NPM_SETUP_GITHUB_HANDLES).not.toContain('cadam11');
     });
 
     it('warns against silencing the gate with private: true', () => {

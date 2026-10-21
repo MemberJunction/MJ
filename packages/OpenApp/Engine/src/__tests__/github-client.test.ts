@@ -42,6 +42,7 @@ vi.mock('@octokit/rest', () => ({
         repos = { getContent: mocks.getContent, listTags: mocks.listTags, listReleases: mocks.listReleases };
         git = { getRef: mocks.getRef, getBlob: mocks.getBlob };
         paginate = fakePaginate;
+        hook = { wrap: () => undefined };
         constructor(opts: { auth?: string; userAgent?: string }) {
             mocks.ctor(opts);
         }

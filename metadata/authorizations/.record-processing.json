@@ -1,0 +1,26 @@
+[
+  {
+    "fields": {
+      "Name": "Record Processing",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Root authorization for all record processing operations. Users or roles must hold this authorization (or a descendant) to run a record process through the Run Record Process action."
+    },
+    "primaryKey": {
+      "ID": "46691D1E-9C18-41D8-A722-8BD089F5D056"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Run Record Processes",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Record Processing",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants permission to run a record process against a scope of records, as a dry-run or for real, through the Run Record Process action. Evaluated with ancestors."
+    },
+    "primaryKey": {
+      "ID": "B2D8C3D6-F6F5-4303-BD3D-CB88D2AF9121"
+    }
+  }
+]

@@ -1761,9 +1761,16 @@ export class MemoryManagerAgent extends BaseAgent {
             return 0;
         }
 
-        for (const extracted of extractedNotes) {
-            try {
+        // Pre-warm source run scope cache in parallel for all distinct sourceAgentRunIds
+        const uniqueRunIds = Array.from(
+            new Set(extractedNotes.map(n => n.sourceAgentRunId).filter((id): id is string => Boolean(id)))
+        );
+        if (uniqueRunIds.length > 0) {
+            await Promise.all(uniqueRunIds.map(id => this.loadSourceRunScope(id, runCache, contextUser)));
+        }
 
+        await Promise.all(extractedNotes.map(async (extracted) => {
+            try {
                 // Load source agent run for scope inheritance (if available)
                 let sourceRun: SourceRunScope | null = null;
                 if (extracted.sourceAgentRunId) {
@@ -1774,7 +1781,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 let createNewNote = !extracted.mergeWithExistingIds?.length;
 
                 if (extracted.mergeWithExistingIds?.length) {
-                    for (const mergeTargetId of extracted.mergeWithExistingIds) {
+                    await Promise.all(extracted.mergeWithExistingIds.map(async (mergeTargetId) => {
                         const existingNote = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
                         if (await existingNote.Load(mergeTargetId)) {
                             // Honor protection tiers — Immutable and Protected notes must NEVER be
@@ -1792,7 +1799,7 @@ export class MemoryManagerAgent extends BaseAgent {
                                 if (this._verbose) {
                                     LogStatus(`Memory Manager: Skipped revocation of ${tier} note ${existingNote.ID} flagged as merge target`);
                                 }
-                                continue;
+                                return;
                             }
                             existingNote.Status = 'Revoked';
                             existingNote.Comments = `Superseded: contradiction detected, replaced by new note from conversation ${extracted.sourceConversationId || 'unknown'}`;
@@ -1805,7 +1812,7 @@ export class MemoryManagerAgent extends BaseAgent {
                         } else {
                             LogStatus(`Memory Manager: Merge target ${mergeTargetId} not found, skipping revocation`);
                         }
-                    }
+                    }));
                     createNewNote = true;
                 }
 
@@ -1871,7 +1878,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 failed++;
                 LogError('Memory Manager: Exception creating note:', error);
             }
-        }
+        }));
 
         // Finalize Step 7
         await this.finalizeRunStep(step7, failed === 0 || created > 0 || merged > 0, {
@@ -1942,7 +1949,7 @@ export class MemoryManagerAgent extends BaseAgent {
         const uniquenessByNoteId = await this.precomputeUniqueness(allNotes);
         const p95Threshold = this.computeUniquenessP95(uniquenessByNoteId);
 
-        for (const note of allNotes) {
+        await Promise.all(allNotes.map(async (note) => {
             const uniquenessInfo = uniquenessByNoteId.get(note.ID);
             const signals = this.gatherImportanceSignals(note, uniquenessInfo);
             const importanceScore = this.computeWeightedImportanceScore(signals);
@@ -1983,7 +1990,7 @@ export class MemoryManagerAgent extends BaseAgent {
                     LogError(`Memory Manager: Failed to update ImportanceScore for note ${note.ID}`);
                 }
             }
-        }
+        }));
 
         return {
             notesScored,
@@ -2001,15 +2008,15 @@ export class MemoryManagerAgent extends BaseAgent {
         notes: MJAIAgentNoteEntity[]
     ): Promise<Map<string, { value: number; available: boolean }>> {
         const map = new Map<string, { value: number; available: boolean }>();
-        for (const note of notes) {
+        await Promise.all(notes.map(async (note) => {
             if (!note.Note) {
                 map.set(note.ID, { value: 0.5, available: false });
-                continue;
+                return;
             }
             const similar = await AIEngine.Instance.FindSimilarAgentNotes(note.Note, note.AgentID, undefined, undefined, 1, 0.0);
             const uniqueness = similar.length > 0 ? 1.0 - similar[0].similarity : 1.0;
             map.set(note.ID, { value: uniqueness, available: true });
-        }
+        }));
         return map;
     }
 
@@ -2755,13 +2762,13 @@ export class MemoryManagerAgent extends BaseAgent {
         contextUser: UserInfo
     ): Promise<void> {
         const flagComment = `[Contradiction flagged: conflicts with note ${llmResult.revokeNoteId && UUIDsEqual(noteA.ID, llmResult.revokeNoteId) ? llmResult.keepNoteId : llmResult.revokeNoteId}. ${llmResult.reason}]`;
-        for (const flagNote of [noteA, noteB]) {
+        await Promise.all([noteA, noteB].map(async (flagNote) => {
             const noteToFlag = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
             if (await noteToFlag.Load(flagNote.ID)) {
                 noteToFlag.Comments = `${noteToFlag.Comments || ''} ${flagComment}`.trim();
                 await noteToFlag.Save();
             }
-        }
+        }));
         if (this._verbose) {
             const bothHighImportance = (noteA.ImportanceScore || 0) >= CONTRADICTION_CONFIG.highImportanceThreshold &&
                                         (noteB.ImportanceScore || 0) >= CONTRADICTION_CONFIG.highImportanceThreshold;
@@ -3081,13 +3088,21 @@ export class MemoryManagerAgent extends BaseAgent {
         const caches = await this.buildReferenceExistenceCache(notes, contextUser);
         const md = this.ProviderToUse;
 
+        const toArchive: Array<{ id: string; reasons: string[] }> = [];
         for (const note of notes) {
-            if (result.notesArchived >= maxPerCycle) break;
+            if (toArchive.length >= maxPerCycle) break;
 
             const orphanReasons = this.detectOrphanReasons(note, caches, result);
-            if (orphanReasons.length > 0 && await this.archiveOrphanedNote(note.ID, orphanReasons, md, contextUser)) {
-                result.notesArchived++;
+            if (orphanReasons.length > 0) {
+                toArchive.push({ id: note.ID, reasons: orphanReasons });
             }
+        }
+
+        if (toArchive.length > 0) {
+            const archivedResults = await Promise.all(
+                toArchive.map(item => this.archiveOrphanedNote(item.id, item.reasons, md, contextUser))
+            );
+            result.notesArchived = archivedResults.filter(Boolean).length;
         }
 
         return result;
@@ -3332,15 +3347,15 @@ export class MemoryManagerAgent extends BaseAgent {
         const nowISO = new Date().toISOString();
 
         const [expiredNotes, expiredExamples] = this.loadExpiredItems(nowISO);
+        const eligibleNotes = expiredNotes.filter(n => (n.ProtectionTier || 'Standard') !== 'Immutable');
 
-        for (const note of expiredNotes) {
-            if ((note.ProtectionTier || 'Standard') === 'Immutable') continue;
-            if (await this.archiveExpiredNote(note, md, contextUser)) result.notesExpired++;
-        }
+        const [noteResults, exampleResults] = await Promise.all([
+            Promise.all(eligibleNotes.map(note => this.archiveExpiredNote(note, md, contextUser))),
+            Promise.all(expiredExamples.map(example => this.archiveExpiredExample(example, md, contextUser)))
+        ]);
 
-        for (const example of expiredExamples) {
-            if (await this.archiveExpiredExample(example, md, contextUser)) result.examplesExpired++;
-        }
+        result.notesExpired = noteResults.filter(Boolean).length;
+        result.examplesExpired = exampleResults.filter(Boolean).length;
 
         return result;
     }
@@ -3430,13 +3445,10 @@ export class MemoryManagerAgent extends BaseAgent {
 
         const [activeNotes, activeExamples] = this.loadDecayCandidates();
 
-        for (const note of activeNotes) {
-            await this.decayOneNote(note, archiveEnabledAgentIds, md, contextUser, result, stats);
-        }
-
-        for (const example of activeExamples) {
-            await this.decayOneExample(example, archiveEnabledAgentIds, md, contextUser, result, stats);
-        }
+        await Promise.all([
+            Promise.all(activeNotes.map(note => this.decayOneNote(note, archiveEnabledAgentIds, md, contextUser, result, stats))),
+            Promise.all(activeExamples.map(example => this.decayOneExample(example, archiveEnabledAgentIds, md, contextUser, result, stats)))
+        ]);
 
         return { ...result, stats };
     }
@@ -3517,6 +3529,9 @@ export class MemoryManagerAgent extends BaseAgent {
         const decayFactor = this.computeDecayFactor(note);
         stats.decayFactors.push(decayFactor);
         const newScore = Math.round(note.ImportanceScore * decayFactor * 100) / 100;
+        if (newScore >= DECAY_CONFIG.archivalFloor && decayFactor >= 0.99) {
+            return;
+        }
 
         const noteToUpdate = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
         if (!(await noteToUpdate.Load(note.ID))) return;
@@ -3904,8 +3919,14 @@ export class MemoryManagerAgent extends BaseAgent {
 
         // Cache source agent runs (scope fields only) to avoid repeated lookups
         const runCache = new Map<string, SourceRunScope | null>();
+        const uniqueRunIds = Array.from(
+            new Set(extractedExamples.map(e => e.sourceAgentRunId).filter((id): id is string => Boolean(id)))
+        );
+        if (uniqueRunIds.length > 0) {
+            await Promise.all(uniqueRunIds.map(id => this.loadSourceRunScope(id, runCache, contextUser)));
+        }
 
-        for (const extracted of extractedExamples) {
+        await Promise.all(extractedExamples.map(async (extracted) => {
             try {
                 // Load source agent run for scope inheritance (if available)
                 let sourceRun: SourceRunScope | null = null;
@@ -3921,7 +3942,7 @@ export class MemoryManagerAgent extends BaseAgent {
                     if (this._verbose) {
                         LogStatus(`Memory Manager: Skipping example - no source run to inherit AgentID from`);
                     }
-                    continue;
+                    return;
                 }
                 example.AgentID = sourceRun.AgentID;
                 example.UserID = extracted.userId || null;
@@ -3969,7 +3990,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 failed++;
                 LogError('Memory Manager: Exception creating example:', error);
             }
-        }
+        }));
 
         // Finalize Step 8
         await this.finalizeRunStep(step8, failed === 0 || created > 0, {

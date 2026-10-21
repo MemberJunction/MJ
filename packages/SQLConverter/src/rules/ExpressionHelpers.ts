@@ -1000,14 +1000,24 @@ export function ConvertBooleanLiteralComparisons(
   const boolNames = CollectBooleanColumnNames(tableColumns);
   if (boolNames.size === 0) return sql;
 
+  const asBool = (v: string): string => (v === '1' ? 'TRUE' : 'FALSE');
+
   // `(?![\w.])` guards against matching inside a larger number/identifier
   // (e.g. `= 10`, `= 1.5`).
-  return sql.replace(
+  const bare = sql.replace(
     /"(\w+)"\s*(=|<>|!=)\s*([01])(?![\w.])/g,
     (match, col: string, op: string, val: string) =>
-      boolNames.has(col.toLowerCase())
-        ? `"${col}" ${op} ${val === '1' ? 'TRUE' : 'FALSE'}`
-        : match,
+      boolNames.has(col.toLowerCase()) ? `"${col}" ${op} ${asBool(val)}` : match,
+  );
+
+  // SQL Server `ISNULL(f.IsPrimaryKey, 0) = 0` transpiles to `COALESCE("f"."IsPrimaryKey", 0) = 0`,
+  // which PostgreSQL rejects with `COALESCE types boolean and integer cannot be matched`. CodeGen's
+  // search-flag hygiene block writes exactly this, so both literals are rewritten when the wrapped
+  // column (optionally alias-qualified) is boolean.
+  return bare.replace(
+    /COALESCE\(\s*((?:"\w+"\.)?"(\w+)")\s*,\s*([01])\s*\)\s*(=|<>|!=)\s*([01])(?![\w.])/gi,
+    (match, ref: string, col: string, dflt: string, op: string, val: string) =>
+      boolNames.has(col.toLowerCase()) ? `COALESCE(${ref}, ${asBool(dflt)}) ${op} ${asBool(val)}` : match,
   );
 }
 
@@ -1143,12 +1153,18 @@ function convertNamedJsonCall(
  * rewriting only the first would silently leave the rest as integer literals.
  * Each statement's VALUES region is bounded by its own top-level `;`, so an
  * intervening statement can never be rewritten with the wrong table's positions.
+ *
+ * The `INSERT INTO table (...) SELECT <list> [FROM/WHERE ...]` form is rewritten too, in the
+ * select list only. CodeGen writes its EntityPermission grants that way
+ * (`SELECT <EntityID>, <RoleID>, 'Allow', 1, 0, 0, 0, ... WHERE NOT EXISTS (...)`), and before
+ * this every migration registering a new entity failed on apply with
+ * `column "CanRead" is of type boolean but expression is of type integer`.
  */
 export function CastBooleanInsertValues(
   sql: string,
   tableColumns: Map<string, Map<string, string>>,
 ): string {
-  const re = /INSERT\s+INTO\s+(?:\w+\.)?"?(\w+)"?\s*\(([^)]*)\)\s*VALUES/gi;
+  const re = /INSERT\s+INTO\s+(?:\w+\.)?"?(\w+)"?\s*\(([^)]*)\)\s*(VALUES|SELECT)\b/gi;
   let out = '';
   let cursor = 0;
   let m: RegExpExecArray | null;
@@ -1160,7 +1176,9 @@ export function CastBooleanInsertValues(
 
     const body = sql.slice(headEnd, valuesEnd);
     const boolPos = booleanColumnPositions(m[1], m[2], tableColumns);
-    out += boolPos.size > 0 ? rewriteValuesTuples(body, boolPos) : body;
+    const isSelect = m[3].toUpperCase() === 'SELECT';
+    if (boolPos.size === 0) out += body;
+    else out += isSelect ? rewriteSelectList(body, boolPos) : rewriteValuesTuples(body, boolPos);
 
     cursor = valuesEnd;
     re.lastIndex = valuesEnd;
@@ -1234,12 +1252,48 @@ function rewriteValuesTuples(text: string, boolPos: Set<number>): string {
 
 /** Rewrite `0`/`1` → `FALSE`/`TRUE` at boolean positions within one `(...)` tuple. */
 function rewriteTuple(tuple: string, boolPos: Set<number>): string {
-  const vals = splitTopLevelValues(tuple.slice(1, -1));
+  return '(' + rewriteListItems(tuple.slice(1, -1), boolPos) + ')';
+}
+
+/** Rewrite `0`/`1` → `FALSE`/`TRUE` at boolean positions in a comma-separated value list. */
+function rewriteListItems(list: string, boolPos: Set<number>): string {
+  const vals = splitTopLevelValues(list);
   for (let k = 0; k < vals.length; k++) {
     if (!boolPos.has(k)) continue;
     vals[k] = vals[k].replace(/^(\s*)0(\s*)$/, '$1FALSE$2').replace(/^(\s*)1(\s*)$/, '$1TRUE$2');
   }
-  return '(' + vals.join(',') + ')';
+  return vals.join(',');
+}
+
+/** Rewrite the select list of an `INSERT ... SELECT`; the FROM/WHERE tail passes through untouched. */
+function rewriteSelectList(body: string, boolPos: Set<number>): string {
+  const listEnd = selectListEnd(body);
+  return rewriteListItems(body.slice(0, listEnd), boolPos) + body.slice(listEnd);
+}
+
+/**
+ * Index where a select list ends: the first top-level FROM / WHERE / GROUP / ORDER / UNION /
+ * LIMIT keyword, or the statement's `;`. String-, comment- and paren-aware, so a keyword inside
+ * a subquery, a quoted value or a comment never ends the list early.
+ */
+function selectListEnd(body: string): number {
+  const keyword = /^(FROM|WHERE|GROUP|ORDER|UNION|LIMIT)\b/i;
+  let depth = 0, inStr = false;
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (inStr) {
+      if (c === "'") { if (body[i + 1] === "'") i++; else inStr = false; }
+      continue;
+    }
+    if (c === '/' && body[i + 1] === '*') { const e = body.indexOf('*/', i + 2); i = e === -1 ? body.length : e + 1; continue; }
+    if (c === '-' && body[i + 1] === '-') { const e = body.indexOf('\n', i); i = e === -1 ? body.length : e; continue; }
+    if (c === "'") inStr = true;
+    else if (c === '(') depth++;
+    else if (c === ')') depth--;
+    else if (c === ';' && depth <= 0) return i;
+    else if (depth === 0 && /\s/.test(body[i - 1] ?? ' ') && keyword.test(body.slice(i))) return i;
+  }
+  return body.length;
 }
 
 /**

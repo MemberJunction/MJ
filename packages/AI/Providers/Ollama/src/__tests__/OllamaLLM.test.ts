@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { getEventListeners } from 'node:events';
+import { CreateCancellableOllamaClient } from '../models/cancellable-client';
 
 /* ------------------------------------------------------------------ */
 /*  Hoisted mocks                                                     */
@@ -51,6 +53,8 @@ vi.mock('@memberjunction/ai', () => {
       this._additionalSettings = { ...this._additionalSettings, ...settings };
     }
     protected resetStreamingState() {}
+    // Cancellation itself is covered against the real BaseLLM in ollama.conformance.test.ts.
+    protected IsCancellationError(_error: unknown, signal?: AbortSignal | null): boolean { return signal?.aborted === true; }
     protected initializeThinkingStreamState() {}
     protected processStreamChunkWithThinking(content: string) { return content; }
     protected extractThinkingFromContent(content: string) {
@@ -75,6 +79,10 @@ vi.mock('@memberjunction/ai', () => {
     constructor(_apiKey: string) {}
     public SetAdditionalSettings(settings: Record<string, unknown>) {
       this._additionalSettings = { ...this._additionalSettings, ...settings };
+    }
+    // Embedding cancellation itself is covered against the real BaseEmbeddings in ollamaEmbedding.test.ts.
+    protected ThrowIfRequestAborted(error: unknown, signal?: AbortSignal | null): void {
+      if (signal?.aborted) { throw error; }
     }
   }
   class MockChatResult {
@@ -121,6 +129,9 @@ vi.mock('@memberjunction/ai', () => {
     EmbedTextResult: class {},
     EmbedTextsResult: class {},
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
+    ThrowIfAborted: (signal?: AbortSignal | null) => {
+      if (signal?.aborted) { throw new Error('cancelled'); }
+    },
     parseBase64DataUrl: vi.fn().mockImplementation((input: string) => {
       const match = input.match(/^data:([^;]+);base64,(.+)$/);
       if (match) return { mediaType: match[1], data: match[2] };
@@ -506,7 +517,8 @@ describe('OllamaLLM', () => {
       expect(configFetch).toBeTypeOf('function');
 
       await configFetch!('http://localhost:11434/api/chat', { method: 'POST' });
-      expect(fetchSpy.mock.calls[0][1]?.signal).toBe(controller.signal);
+      // Forwarding to the token is covered below; the call has finished (and detached) by now
+      expect(fetchSpy.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
       fetchSpy.mockRestore();
     });
 
@@ -521,29 +533,6 @@ describe('OllamaLLM', () => {
       expect(mockOllamaConfigs).toHaveLength(0);
     });
 
-    it('returns a cancelled ChatResult without calling the SDK when pre-aborted', async () => {
-      const controller = new AbortController();
-      controller.abort();
-
-      const result = await callNonStreaming(controller.signal);
-
-      expect(mockChat).not.toHaveBeenCalled();
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('Cancelled');
-    });
-
-    it('maps a mid-flight AbortError to a cancelled ChatResult', async () => {
-      const abortError = new Error('The operation was aborted');
-      abortError.name = 'AbortError';
-      mockChat.mockRejectedValueOnce(abortError);
-
-      const result = await callNonStreaming(new AbortController().signal);
-
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('Cancelled');
-      expect(result.exception).toBe(abortError);
-    });
-
     it('still reports non-cancellation failures as normal errors', async () => {
       mockChat.mockRejectedValueOnce(new Error('connection refused'));
 
@@ -553,37 +542,89 @@ describe('OllamaLLM', () => {
       expect(result.statusText).toBe('Error');
     });
 
-    it('finalizeStreamingResponse reports cancellation when the stream was aborted mid-flight', () => {
-      const controller = new AbortController();
-      (llm as unknown as Record<string, AbortSignal | null>)['_streamingCancellationToken'] = controller.signal;
-      controller.abort();
+    it('aborts the request when EITHER the caller token or the SDK signal fires', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}'));
+      // The request is still in flight (not yet disposed) while the abort fires
+      const send = async (token: AbortSignal, sdk: AbortSignal): Promise<AbortSignal> => {
+        CreateCancellableOllamaClient('http://localhost:11434', token);
+        const config = mockOllamaConfigs[mockOllamaConfigs.length - 1];
+        await (config!['fetch'] as (i: string, init?: RequestInit) => Promise<Response>)('http://x', { signal: sdk });
+        return fetchSpy.mock.calls[fetchSpy.mock.calls.length - 1][1]?.signal as AbortSignal;
+      };
 
-      const fn = (llm as unknown as Record<string, (...a: unknown[]) => ChatResultLike>)['finalizeStreamingResponse'].bind(llm);
-      const result = fn('partial text', null, null);
-
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('Cancelled');
-    });
-
-    it('combineSignals aborts when EITHER the caller token or the SDK signal fires', () => {
-      const combine = (llm as unknown as Record<string, (a: AbortSignal, b?: AbortSignal | null) => AbortSignal>)['combineSignals'].bind(llm);
+      const sdk = new AbortController();
+      const sent1 = await send(new AbortController().signal, sdk.signal);
+      sdk.abort();
+      expect(sent1.aborted).toBe(true);
 
       const caller = new AbortController();
-      const sdk = new AbortController();
-      const combined = combine(caller.signal, sdk.signal);
-      expect(combined.aborted).toBe(false);
-      sdk.abort();
-      expect(combined.aborted).toBe(true);
+      const sent2 = await send(caller.signal, new AbortController().signal);
+      caller.abort();
+      expect(sent2.aborted).toBe(true);
+      fetchSpy.mockRestore();
+    });
 
-      const caller2 = new AbortController();
-      const sdk2 = new AbortController();
-      const combined2 = combine(caller2.signal, sdk2.signal);
-      caller2.abort();
-      expect(combined2.aborted).toBe(true);
+    it('leaves no abort listener on the caller token once a non-streaming call finishes', async () => {
+      const controller = new AbortController();
+      await callNonStreaming(controller.signal);
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
+    });
 
-      // With no SDK signal the caller's token is passed straight through
-      const caller3 = new AbortController();
-      expect(combine(caller3.signal, undefined)).toBe(caller3.signal);
+    it('leaves no abort listener on the caller token once a stream is consumed or abandoned', async () => {
+      const chunks = [{ message: { content: 'a' } }, { message: { content: 'b' }, done: true }];
+      const makeStream = () => (async function* () { for (const c of chunks) { yield c; } })();
+
+      const consumed = new AbortController();
+      mockChat.mockResolvedValueOnce(makeStream());
+      const s1 = await callCreateStream(consumed.signal) as AsyncIterable<unknown>;
+      expect(getEventListeners(consumed.signal, 'abort')).toHaveLength(1);
+      for await (const _ of s1) { /* drain */ }
+      expect(getEventListeners(consumed.signal, 'abort')).toHaveLength(0);
+
+      const abandoned = new AbortController();
+      mockChat.mockResolvedValueOnce(makeStream());
+      const s2 = await callCreateStream(abandoned.signal) as AsyncIterable<unknown>;
+      for await (const _ of s2) { break; }
+      expect(getEventListeners(abandoned.signal, 'abort')).toHaveLength(0);
+    });
+
+    it('detaches from the token when starting the stream fails', async () => {
+      const controller = new AbortController();
+      mockChat.mockRejectedValueOnce(new Error('boom'));
+      await expect(callCreateStream(controller.signal)).rejects.toThrow('boom');
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
+    });
+
+    it('detaches from the token when iterator.return() rejects on early break or when stream throws mid-flight', async () => {
+      const earlyBreak = new AbortController();
+      const throwingReturnStream: AsyncIterable<unknown> = {
+        [Symbol.asyncIterator]: () => ({
+          next: async () => ({ value: { message: { content: 'a' } }, done: false }),
+          return: async () => {
+            throw new Error('return failed');
+          },
+        }),
+      };
+      mockChat.mockResolvedValueOnce(throwingReturnStream);
+      const s1 = await callCreateStream(earlyBreak.signal) as AsyncIterable<unknown>;
+      for await (const _ of s1) { break; }
+      expect(getEventListeners(earlyBreak.signal, 'abort')).toHaveLength(0);
+
+      const midFlight = new AbortController();
+      const returnSpy = vi.fn().mockRejectedValue(new Error('return failed'));
+      const failingStream: AsyncIterable<unknown> = {
+        [Symbol.asyncIterator]: () => ({
+          next: async () => {
+            throw new Error('stream aborted');
+          },
+          return: returnSpy,
+        }),
+      };
+      mockChat.mockResolvedValueOnce(failingStream);
+      const s2 = await callCreateStream(midFlight.signal) as AsyncIterable<unknown>;
+      await expect((async () => { for await (const _ of s2) { /* drain */ } })()).rejects.toThrow('stream aborted');
+      expect(returnSpy).not.toHaveBeenCalled();
+      expect(getEventListeners(midFlight.signal, 'abort')).toHaveLength(0);
     });
   });
 });

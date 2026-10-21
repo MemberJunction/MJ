@@ -1,0 +1,99 @@
+{
+  "fields": {
+    "Name": "Agent evaluation",
+    "Status": "Active",
+    "Description": "Accuracy is a gate at 0.6. Sourcing and completeness are equal weights. Pass threshold 0.6. See guides/RUBRICS_GUIDE.md."
+  },
+  "primaryKey": {
+    "ID": "AC774799-E132-4070-9C2E-FAE155B52797"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Draft",
+          "PassThreshold": 0.6,
+          "NotApplicablePolicy": "NotAllowed",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ChangeSummary": "Initial agent evaluation tree. Not published."
+        },
+        "primaryKey": {
+          "ID": "ACAF9EDB-57A4-415D-84B4-24A6F9DA46AB"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "accuracy",
+                "Name": "Accuracy",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": true,
+                "GateMinimumScore": 0.6,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "4B49EC56-3B88-4CAB-BCF1-4FBAC7EC0055"
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:22.197Z",
+                "checksum": "927083f85d73770a61f16a766f7e479c621f8c53622bd83f2adf9df6ad681ebd"
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "sourcing",
+                "Name": "Sourcing",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "1236BD7A-5C95-4613-87B4-FF2A433EE3E1"
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:22.212Z",
+                "checksum": "f30bc85ca26143939d352e76c9fc856d6f9682e451783e43bf4c5c2ddcd7b3ab"
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "completeness",
+                "Name": "Completeness",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "2DEE3DED-5E1B-4D3A-B4A7-8FC0F8F437DF"
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:22.226Z",
+                "checksum": "a06f64c5426529fcabb8c77d00077062055dffedf1d532242c9d09d107a3995b"
+              }
+            }
+          ]
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:22.173Z",
+          "checksum": "e1f74097cb0809f0707ed4bc7bfcd018a421593e51d321be40f2dfacb81e6e92"
+        }
+      }
+    ]
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:22.159Z",
+    "checksum": "dd3e4d690e7990bbf25859e50464fcbb7ceabbb8e95a69738b450e85336c9168"
+  }
+}

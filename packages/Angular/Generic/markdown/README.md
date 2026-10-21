@@ -83,6 +83,7 @@ export class YourModule {}
 |---------|---------|-------------|
 | Syntax highlighting | Enabled | Prism.js with Okaidia theme |
 | Mermaid diagrams | Enabled | Render mermaid code blocks as diagrams |
+| Math | Enabled | TeX (`$…$` / `\(…\)` inline, `$$…$$` / `\[…\]` display), typeset as MathML by KaTeX (loaded on first use), and MathML markup, including JATS-style `<mml:math>` |
 | Code copy button | Enabled | Copy-to-clipboard on hover |
 | GitHub-style alerts | Enabled | `[!NOTE]`, `[!TIP]`, `[!WARNING]` blockquotes |
 | Smartypants typography | Enabled | Curly quotes, em/en dashes, ellipsis |
@@ -98,6 +99,7 @@ export class YourModule {}
 | `data` | `string` | `''` | Markdown content to render |
 | `enableHighlight` | `boolean` | `true` | Prism.js syntax highlighting |
 | `enableMermaid` | `boolean` | `true` | Mermaid diagram rendering |
+| `EnableMath` | `boolean` | `true` | TeX math, and keeping markdown out of MathML markup (`<mml:math>` needs it; unprefixed `<math>` renders either way, since the sanitizer allows MathML). Single dollars follow Pandoc's rule, so `$5 and $10` stays text; `\$` is a literal dollar. PascalCase only: unlike the older inputs above, it has no lowercase alias |
 | `enableCodeCopy` | `boolean` | `true` | Copy button on code blocks |
 | `enableCollapsibleHeadings` | `boolean` | `false` | Collapsible heading sections |
 | `collapsibleHeadingLevel` | `1-6` | `2` | Heading level to start collapsing |
@@ -138,6 +140,7 @@ export class YourModule {}
 - `marked-smartypants` -- Typography improvements
 - `prismjs` -- Syntax highlighting
 - `mermaid` -- Diagram rendering
+- `katex` -- TeX math typesetting (MathML output, so no KaTeX stylesheet or fonts are needed)
 
 ## Related Packages
 

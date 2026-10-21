@@ -151,7 +151,58 @@ function normalizeRepoUrl(url: string): string {
  * appropriate token from the client options.
  */
 function CreateOctokit(repoUrl: string, options: GitHubClientOptions): Octokit {
-    return new Octokit({ auth: ResolveToken(repoUrl, options), userAgent: 'open-app-engine' });
+    const octokit = new Octokit({ auth: ResolveToken(repoUrl, options), userAgent: 'open-app-engine' });
+    // An install chain makes hundreds of GitHub calls (manifests, tags, every migration file of
+    // every dependency). One dropped connection used to fail the whole chain mid-way with
+    // `read ECONNRESET`, rolling back the app being installed. Retry the transient ones.
+    octokit.hook.wrap('request', (request, requestOptions) => RequestWithRetry(async () => request(requestOptions)));
+    return octokit;
+}
+
+/** Delays between attempts for a transient GitHub failure; its length is the retry count. */
+export const GITHUB_RETRY_DELAYS_MS: readonly number[] = [1000, 3000, 9000];
+
+const TRANSIENT_NETWORK_CODES = new Set(['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EPIPE', 'EAI_AGAIN', 'ENETUNREACH', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT']);
+
+/**
+ * True for a failure worth retrying: a network-level error (reset, timeout, DNS blip) or a
+ * gateway status GitHub returns while it is briefly unavailable. Never a 4xx — those are
+ * answers (not found, forbidden, rate limited) and retrying cannot change them.
+ */
+export function IsTransientGitHubError(error: unknown): boolean {
+    const status = OctokitStatus(error);
+    if (status === 502 || status === 503 || status === 504) return true;
+    if (status !== undefined && status !== 500) return false;
+    for (let e: unknown = error, depth = 0; e && typeof e === 'object' && depth < 4; depth++) {
+        const code = (e as { code?: unknown }).code;
+        if (typeof code === 'string' && TRANSIENT_NETWORK_CODES.has(code)) return true;
+        const message = (e as { message?: unknown }).message;
+        if (typeof message === 'string' && /ECONNRESET|ETIMEDOUT|socket hang up|other side closed|fetch failed/i.test(message)) return true;
+        e = (e as { cause?: unknown }).cause;
+    }
+    return false;
+}
+
+/**
+ * Runs a GitHub request, retrying transient failures with backoff.
+ *
+ * @param attempt - Issues the request once.
+ * @param delaysMs - Wait before each retry; defaults to {@link GITHUB_RETRY_DELAYS_MS}.
+ * @param sleep - Injected for tests.
+ */
+export async function RequestWithRetry<T>(
+    attempt: () => Promise<T>,
+    delaysMs: readonly number[] = GITHUB_RETRY_DELAYS_MS,
+    sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+): Promise<T> {
+    for (let i = 0; ; i++) {
+        try {
+            return await attempt();
+        } catch (error: unknown) {
+            if (i >= delaysMs.length || !IsTransientGitHubError(error)) throw error;
+            await sleep(delaysMs[i]);
+        }
+    }
 }
 
 /**

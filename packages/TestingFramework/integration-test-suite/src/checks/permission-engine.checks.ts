@@ -149,7 +149,18 @@ async function configuredAIEngine(ctx: IntegrationCheckContext): Promise<AIEngin
  * fixture can never make them fail (and so they still hard-fail on a genuine product regression).
  */
 function realDomains(engine: PermissionEngine): MJPermissionDomainEntity[] {
-    return engine.Domains.filter(d => !d.Name.startsWith(FIXTURE_DOMAIN_PREFIX));
+    return engine.Domains.filter(d => {
+        if (d.Name.startsWith(FIXTURE_DOMAIN_PREFIX)) {
+            return false;
+        }
+        // Core MJ permission providers always use the 'MJ*' class prefix and must always resolve.
+        // External OpenApp permission domains (e.g. 'CollaborationSpacePermissionProvider') are only
+        // in-scope when their OpenApp engine package is loaded in the current process.
+        if (!d.ProviderClassName.startsWith('MJ')) {
+            return MJGlobal.Instance.ClassFactory.GetRegistration(PermissionProviderBase, d.ProviderClassName) != null;
+        }
+        return true;
+    });
 }
 
 /** Split a comma-delimited catalog column into trimmed, non-empty tokens. */
@@ -888,9 +899,9 @@ export async function CheckPe11UnresolvableProviderIsContained(ctx: IntegrationC
         AssertEqual(engine.Domains.some(d => d.Name === name), true, 'the throwaway unresolvable domain row was not loaded into the catalog');
 
         // Every REAL domain still resolved — one bad row did not cascade.
-        const realDomains = engine.Domains.filter(d => !d.Name.startsWith(FIXTURE_DOMAIN_PREFIX));
-        Assert(realDomains.length > 0, 'no real domains remained in the catalog to verify against');
-        const broken = realDomains.filter(d => !engine.GetProvider(d.Name)).map(d => d.Name);
+        const domains = realDomains(engine);
+        Assert(domains.length > 0, 'no real domains remained in the catalog to verify against');
+        const broken = domains.filter(d => !engine.GetProvider(d.Name)).map(d => d.Name);
         AssertEqual(broken.length, 0, `one bad catalog row broke real domain(s): ${broken.join(', ')}`);
 
         // The bogus domain never ALLOWS anything (throwing is acceptable here; allowing is not).
@@ -913,7 +924,7 @@ export async function CheckPe11UnresolvableProviderIsContained(ctx: IntegrationC
                 `see PE13 for the consequence.`
             );
         }
-        console.log(`      → unresolvable domain contained: ${realDomains.length} real domain(s) intact, nothing granted`);
+        console.log(`      → unresolvable domain contained: ${domains.length} real domain(s) intact, nothing granted`);
     });
 }
 

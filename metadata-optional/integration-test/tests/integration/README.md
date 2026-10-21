@@ -31,7 +31,7 @@ mj test validate --dir=metadata-optional/integration-test/tests/integration
 | File | `MJ: Tests.Name` | Bundle(s) | Transport | Notes |
 |---|---|---|---|---|
 | `.IT01-server-cache.json` | IT01 - Server RunView Cache Integrity | `server-cache` (S1–S26) | server (SQL) | 23 default checks; `runMutationTests` adds S17/S23/S24 |
-| `.IT02-runquery-cache.json` | IT02 - RunQuery Cache Integrity | `runquery-cache` (Q1–Q9) | server (SQL) | Whole bundle mutates the DB; creates/tears down Query+Category fixtures |
+| `.IT02-runquery-cache.json` | IT02 - RunQuery Cache Integrity | `runquery-cache` (Q1–Q21) | server (SQL) | Whole bundle mutates the DB; creates/tears down Query+Category fixtures; Q13–Q21 cover query definition changes |
 | `.IT03-client-cache.json` | IT03 - Client GraphQL Cache Integrity | `client-cache` (C1–C12) | client (GraphQL) | Requires a running MJAPI + `MJ_API_KEY`; seeded **Skip** on the DB-only suite until Phase 5 |
 
 ## Anatomy of an integration Test
