@@ -1,5 +1,5 @@
 export { PostgreSQLDataProvider, POSTGRESQL_PROCEDURE_PARAM_LIMIT } from './PostgreSQLDataProvider.js';
-export { PGConnectionManager, PGConnectionConfig } from './pgConnectionManager.js';
+export { PGConnectionManager, PGConnectionConfig, IsAuroraDSQLHost, AURORA_DSQL_MAX_LIFETIME_SECONDS } from './pgConnectionManager.js';
 export { MJPostgresTypes, ParseInt8, parseInt8, ParseNumeric, parseNumeric, PG_INT8_OID, PG_NUMERIC_OID } from './pgTypeParsers.js';
 export { PGQueryParameterProcessor } from './queryParameterProcessor.js';
 export { PostgreSQLProviderConfigData, PostgreSQLProviderConfigOptions } from './types.js';

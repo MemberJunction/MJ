@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PGConnectionManager } from '../pgConnectionManager.js';
+import { PGConnectionManager, IsAuroraDSQLHost } from '../pgConnectionManager.js';
 
 // Mock the pg module
 vi.mock('pg', () => {
@@ -181,5 +181,18 @@ describe('PGConnectionManager', () => {
             const result = await manager.Query('SELECT 1');
             expect(result.rows).toBeDefined();
         });
+    });
+});
+
+describe('IsAuroraDSQLHost', () => {
+    it('recognises DSQL cluster endpoints', () => {
+        expect(IsAuroraDSQLHost('azufqcce6fhu26hddwm7idymku.dsql.us-east-1.on.aws')).toBe(true);
+        expect(IsAuroraDSQLHost('abc.dsql-fnh4.us-east-1.on.aws')).toBe(true);
+    });
+
+    it('rejects plain PostgreSQL hosts', () => {
+        expect(IsAuroraDSQLHost('localhost')).toBe(false);
+        expect(IsAuroraDSQLHost('mydb.cluster-xyz.us-east-1.rds.amazonaws.com')).toBe(false);
+        expect(IsAuroraDSQLHost(undefined)).toBe(false);
     });
 });

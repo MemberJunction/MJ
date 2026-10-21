@@ -2,6 +2,22 @@ import pg from 'pg';
 import { MJPostgresTypes } from './pgTypeParsers.js';
 
 /**
+ * Whether a host is an Aurora DSQL cluster endpoint (`<id>.dsql.<region>.on.aws`). DSQL speaks the
+ * PostgreSQL wire protocol but rejects some session features MJ uses on plain PostgreSQL: the
+ * `statement_timeout` / `idle_in_transaction_session_timeout` startup parameters, `SET LOCAL
+ * statement_timeout`, advisory locks and savepoints. It also requires TLS.
+ */
+export function IsAuroraDSQLHost(host: string | undefined): boolean {
+    return /\.dsql(-[a-z0-9]+)?\.[a-z0-9-]+\.on\.aws$/i.test(host ?? '');
+}
+
+/**
+ * How long a pooled connection to Aurora DSQL lives before the pool replaces it. DSQL closes every
+ * connection after 60 minutes, so pools retire theirs first rather than have one cut off mid-query.
+ */
+export const AURORA_DSQL_MAX_LIFETIME_SECONDS = 50 * 60;
+
+/**
  * Configuration for establishing a PostgreSQL connection pool.
  */
 export interface PGConnectionConfig {
@@ -98,6 +114,7 @@ export class PGConnectionManager {
 
         this._config = config;
         this._ownsPool = true;
+        const dsql = IsAuroraDSQLHost(config.Host);
         this._pool = new pg.Pool({
             host: config.Host,
             port: config.Port ?? 5432,
@@ -108,7 +125,7 @@ export class PGConnectionManager {
             // Aurora with rds.force_ssl=1, the AWS default) is not rejected or silently downgraded to an
             // unencrypted channel. Dev/local stays OFF unless explicitly enabled. For Aurora, pass an SSL
             // object (e.g. { rejectUnauthorized: true, ca: <Aurora CA bundle> }) via config.SSL.
-            ssl: config.SSL ?? (process.env.NODE_ENV === 'production'),
+            ssl: config.SSL ?? (dsql || process.env.NODE_ENV === 'production'),
             max: config.MaxConnections ?? 20,
             min: config.MinConnections ?? 2,
             idleTimeoutMillis: config.IdleTimeoutMillis ?? 30000,
@@ -120,7 +137,12 @@ export class PGConnectionManager {
             // Optional libpq startup options (e.g. `-c statement_timeout=30000`) — applied
             // by every backend from connection #1, including the verify-SELECT-1 below.
             ...(config.Options ? { options: config.Options } : {}),
-            ...PGConnectionManager.serverTimeouts(config),
+            // DSQL refuses connections that send these startup parameters.
+            ...(dsql ? { maxLifetimeSeconds: AURORA_DSQL_MAX_LIFETIME_SECONDS } : PGConnectionManager.serverTimeouts(config)),
+        });
+        // An idle connection the server drops is emitted on the pool; without a listener Node exits.
+        this._pool.on('error', (err) => {
+            console.error('[PGConnectionManager] Idle connection error (connection evicted):', err.message);
         });
 
         // An idle connection the server drops is emitted on the pool; without a listener Node exits.

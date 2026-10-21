@@ -80,6 +80,15 @@ describe('ToPGPoolConfig', () => {
         expect(pool).not.toHaveProperty('statement_timeout');
         expect(pool).not.toHaveProperty('idle_in_transaction_session_timeout');
     });
+
+    it('turns on TLS, retires connections before the hour, and leaves out the timeouts for an Aurora DSQL host', () => {
+        const dsql = { ...endpoint, Host: 'abc123.dsql.us-east-1.on.aws' };
+        const pool = ToPGPoolConfig(BuildPostgreSQLConnectionConfig(dsql, defaults, 'api'));
+        expect(pool.ssl).toBe(true);
+        expect(pool.maxLifetimeSeconds).toBeLessThan(3600);
+        expect(pool).not.toHaveProperty('statement_timeout');
+        expect(pool).not.toHaveProperty('idle_in_transaction_session_timeout');
+    });
 });
 
 describe('ResolvePostgreSQLEndpoint', () => {

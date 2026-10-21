@@ -24,7 +24,7 @@
  *   where SQL Server opens one pool (and a read-only one). PostgreSQL's default `max_connections`
  *   is 100, so the read-only and CodeGen pools are kept small.
  */
-import type { PGConnectionConfig } from '@memberjunction/postgresql-dataprovider';
+import { AURORA_DSQL_MAX_LIFETIME_SECONDS, IsAuroraDSQLHost, type PGConnectionConfig } from '@memberjunction/postgresql-dataprovider';
 import type { Pool, PoolConfig } from 'pg';
 import { BaseSingleton } from '@memberjunction/global';
 import type { DatabaseSettingsInfo } from './config.js';
@@ -115,6 +115,13 @@ export function ToPGPoolConfig(config: PGConnectionConfig): PoolConfig {
     if (config.MinConnections !== undefined) pool.min = config.MinConnections;
     if (config.IdleTimeoutMillis !== undefined) pool.idleTimeoutMillis = config.IdleTimeoutMillis;
     if (config.ConnectionTimeoutMillis !== undefined) pool.connectionTimeoutMillis = config.ConnectionTimeoutMillis;
+    // Aurora DSQL requires TLS and refuses connections that send the timeout startup parameters,
+    // and closes every connection after an hour.
+    if (IsAuroraDSQLHost(config.Host)) {
+        pool.ssl = true;
+        pool.maxLifetimeSeconds = AURORA_DSQL_MAX_LIFETIME_SECONDS;
+        return pool;
+    }
     if (config.StatementTimeoutMs) pool.statement_timeout = config.StatementTimeoutMs;
     if (config.IdleInTransactionSessionTimeoutMs) pool.idle_in_transaction_session_timeout = config.IdleInTransactionSessionTimeoutMs;
     return pool;

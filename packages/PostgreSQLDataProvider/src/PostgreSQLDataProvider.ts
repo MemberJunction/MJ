@@ -31,12 +31,33 @@ import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFrag
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import { BytesToBase64, EscapeSQLString, IsByteArray, TryBase64ToBytes } from '@memberjunction/global';
 import { PostgreSQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
-import { PGConnectionManager } from './pgConnectionManager.js';
+import { PGConnectionManager, IsAuroraDSQLHost } from './pgConnectionManager.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
 import { PostgreSQLProviderConfigData } from './types.js';
 import { PostgreSQLTransactionGroup } from './PostgreSQLTransactionGroup.js';
 
 const pgDialect = new PostgreSQLDialect();
+
+/**
+ * The PostgreSQL dialect for Aurora DSQL, which has no savepoints. A nested transaction joins its
+ * parent: creating and releasing it are no-ops, and rolling it back throws, which dooms the whole
+ * transaction rather than silently undoing only part of it.
+ */
+class AuroraDSQLDialect extends PostgreSQLDialect {
+    override CreateSavepointSQL(): string {
+        return 'SELECT 1';
+    }
+
+    override ReleaseSavepointSQL(): string {
+        return '';
+    }
+
+    override RollbackToSavepointSQL(name: string): string {
+        throw new Error(`Aurora DSQL has no savepoints, so savepoint ${name} cannot be rolled back on its own`);
+    }
+}
+
+const dsqlDialect = new AuroraDSQLDialect();
 
 /**
  * Escape every regex metacharacter in `literal` so it can be interpolated into a
@@ -262,7 +283,12 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
 
     get Dialect(): PostgreSQLDialect {
-        return pgDialect;
+        return this.isAuroraDSQL ? dsqlDialect : pgDialect;
+    }
+
+    /** Whether this provider is connected to Aurora DSQL rather than plain PostgreSQL. */
+    private get isAuroraDSQL(): boolean {
+        return IsAuroraDSQLHost(this._configData?.ConnectionConfig?.Host);
     }
 
     protected getDialect(): PostgreSQLDialect {
@@ -465,7 +491,10 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      */
     private async releaseOwnConnection(client: pg.PoolClient): Promise<void> {
         try {
-            await client.query('SELECT pg_advisory_unlock_all()');
+            // DSQL has no advisory locks, so a statement there can't have left one behind.
+            if (!this.isAuroraDSQL) {
+                await client.query('SELECT pg_advisory_unlock_all()');
+            }
             client.release();
         } catch (err) {
             client.release(err instanceof Error ? err : new Error(String(err)));
@@ -492,7 +521,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         try {
             await client.query(readOnly ? 'BEGIN READ ONLY' : 'BEGIN');
             try {
-                if (timeoutMs !== undefined) {
+                // ponytail: DSQL rejects statement_timeout, so the per-call limit is not enforced there;
+                // a client-side timer is the upgrade path if DSQL support goes beyond a POC.
+                if (timeoutMs !== undefined && !this.isAuroraDSQL) {
                     await client.query(`SET LOCAL statement_timeout = ${timeoutMs}`);
                 }
                 const result = await client.query(sql, params);
