@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Integration Object Fields') // Tell MemberJunction about this class
 @Component({
