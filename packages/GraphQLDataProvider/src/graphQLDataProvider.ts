@@ -462,11 +462,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    public async GetPreferredUUID(forceRefreshSessionId?: boolean): Promise<string> {
-        // Try to get the stored session ID
-        const oldUUID = await this.GetStoredSessionID();
-        const UUID = forceRefreshSessionId || !oldUUID ? this.GenerateUUID() : oldUUID;
-        return UUID;
+    public async GetPreferredUUID(_forceRefreshSessionId?: boolean): Promise<string> {
+        // Always generate a fresh per-tab/runtime UUID rather than reusing a shared
+        // localStorage sessionId across browser tabs. Sharing a single sessionId in
+        // localStorage caused other tabs in the same browser to treat remote
+        // CacheInvalidation events as self-originated (OriginSessionID === this.sessionId)
+        // and silently drop cross-tab updates.
+        return this.GenerateUUID();
     }
 
 
@@ -540,8 +542,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // Update the singleton instance
             GraphQLDataProvider.Instance._configData = configData;
 
-            if (GraphQLDataProvider.Instance._sessionId === undefined) {
-                GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
+            if (GraphQLDataProvider.Instance._sessionId === undefined || forceRefreshSessionId) {
+                GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);
             }
 
             // Create the client if there is none, or rebuild it (same session id) when this config
@@ -1175,11 +1177,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 // Log aggregate request for debugging
                 if (innerParams.Aggregates?.length > 0) {
-                    console.log('[GraphQLDataProvider] Sending RunView with aggregates:', {
-                        entityName: entity,
-                        queryName: qName,
-                        aggregateCount: innerParams.Aggregates.length,
-                        aggregates: innerParams.Aggregates
+                    LogStatusEx({
+                        message: '[GraphQLDataProvider] Sending RunView with aggregates:',
+                        verboseOnly: true,
+                        additionalArgs: [{
+                            entityName: entity,
+                            queryName: qName,
+                            aggregateCount: innerParams.Aggregates.length,
+                            aggregates: innerParams.Aggregates
+                        }]
                     });
                 }
 
@@ -1188,11 +1194,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // Log aggregate response for debugging
                     const responseAggregates = viewData[qName].AggregateResults;
                     if (innerParams.Aggregates?.length > 0) {
-                        console.log('[GraphQLDataProvider] Received aggregate results:', {
-                            entityName: entity,
-                            aggregateResultCount: responseAggregates?.length || 0,
-                            aggregateResults: responseAggregates,
-                            aggregateExecutionTime: viewData[qName].AggregateExecutionTime
+                        LogStatusEx({
+                            message: '[GraphQLDataProvider] Received aggregate results:',
+                            verboseOnly: true,
+                            additionalArgs: [{
+                                entityName: entity,
+                                aggregateResultCount: responseAggregates?.length || 0,
+                                aggregateResults: responseAggregates,
+                                aggregateExecutionTime: viewData[qName].AggregateExecutionTime
+                            }]
                         });
                     }
 
@@ -2310,9 +2320,36 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const shouldMergeDeltaResponse = filterToDirtyOnly || effectiveReturnMode === 'datestamps_only';
             const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
             const isDeniedRead = (fieldName: string) => deniedReadFields.has(fieldName.trim().toLowerCase());
+            // Exclude non-Active (Deprecated / Disabled) fields from Save() unless the caller
+            // explicitly modified them, avoiding false-positive BaseEntity.Get / BaseEntity.SetMany
+            // deprecation warnings on Create or forced full saves.
+            const isNonActiveField = (f: EntityField) =>
+                Boolean(f.EntityFieldInfo.Status && f.EntityFieldInfo.Status !== 'Active');
+            const isFieldWrittenForSave = (f: EntityField): boolean => {
+                if (this.isFieldDirtyOnChain(entity, f)) {
+                    return true;
+                }
+                if (!isUpdate) {
+                    if (!f.NeverSet) {
+                        return true;
+                    }
+                    if (entity.ISAParent && entity.EntityInfo.ParentEntityFieldNames?.has(f.Name)) {
+                        const parentField = entity.ISAParent.Fields.find(pf => pf.Name === f.Name);
+                        if (parentField && !parentField.NeverSet) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            };
             const filteredFields = entity.Fields.filter(f =>
                 (!f.ReadOnly || (f.IsPrimaryKey && (entity.IsSaved || isaPromotionCreate))) &&
-                (f.IsPrimaryKey || (!f.NotLoaded && !isDeniedRead(f.Name) && (!filterToDirtyOnly || this.isFieldDirtyOnChain(entity, f)))));
+                (f.IsPrimaryKey || (
+                    !f.NotLoaded &&
+                    !isDeniedRead(f.Name) &&
+                    (!isNonActiveField(f) || isFieldWrittenForSave(f)) &&
+                    (!filterToDirtyOnly || this.isFieldDirtyOnChain(entity, f))
+                )));
             const returnFields = entity.Fields.filter(f => {
                 if (isDeniedRead(f.Name)) {
                     return false;
@@ -2903,7 +2940,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         // Batch: use GetMultipleDatasetStatusByName
         const names = queue.map(q => q.datasetName);
-        LogStatus(`⚡ [Coalesce] Batching ${names.length} dataset status checks into 1 request: [${names.join(', ')}]`);
+        LogStatusEx({
+            message: `⚡ [Coalesce] Batching ${names.length} dataset status checks into 1 request: [${names.join(', ')}]`,
+            verboseOnly: true
+        });
 
         try {
             const batchQuery = gql`query GetMultipleDatasetStatusByName($DatasetNames: [String!]!) {
@@ -3411,7 +3451,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
 
         // Start a new refresh
-        console.log('[GraphQL] Starting token refresh...');
+        LogStatusEx({ message: '[GraphQL] Starting token refresh...', verboseOnly: true });
         this._refreshPromise = this.performTokenRefresh();
 
         // Also store on singleton if in singleton mode
@@ -3421,7 +3461,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         try {
             await this._refreshPromise;
-            console.log('[GraphQL] Token refresh completed successfully');
+            LogStatusEx({ message: '[GraphQL] Token refresh completed successfully', verboseOnly: true });
         } finally {
             // Clear the promise when done
             this._refreshPromise = null;
@@ -3554,7 +3594,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             headers['x-api-key'] = userAPIKey;
 
         const client = new GraphQLClient(url, {
-            headers
+            headers,
+            responseMiddleware: (response) => {
+                this.inspectResponseCacheHeaders(response);
+            },
         });
 
         // Re-apply any dynamic headers so they survive client re-creation (e.g., token refresh)
@@ -3911,10 +3954,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     timeSinceEmission >= this.SUBSCRIPTION_IDLE_TIMEOUT_MS;
 
                 if (shouldCleanup) {
-                    console.log(`[GraphQLDataProvider] Marking session ${sessionId} for cleanup: ` +
-                        `activeSubscribers=${value.activeSubscribers}, ` +
-                        `timeSinceRequested=${Math.round(timeSinceRequested/1000)}s, ` +
-                        `timeSinceEmission=${Math.round(timeSinceEmission/1000)}s`);
+                    LogStatusEx({
+                        message: `[GraphQLDataProvider] Marking session ${sessionId} for cleanup: ` +
+                            `activeSubscribers=${value.activeSubscribers}, ` +
+                            `timeSinceRequested=${Math.round(timeSinceRequested/1000)}s, ` +
+                            `timeSinceEmission=${Math.round(timeSinceEmission/1000)}s`,
+                        verboseOnly: true
+                    });
                     toRemove.push(sessionId);
                 }
             });
@@ -3927,7 +3973,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         entry.subject.complete(); // Completes for ALL subscribers
                         entry.subscription.unsubscribe(); // Closes WebSocket subscription
                         this._pushStatusSubjects.delete(sessionId);
-                        console.log(`[GraphQLDataProvider] Cleaned up stale subscription for session: ${sessionId}`);
+                        LogStatusEx({ message: `[GraphQLDataProvider] Cleaned up stale subscription for session: ${sessionId}`, verboseOnly: true });
                     } catch (e) {
                         console.error(`[GraphQLDataProvider] Error cleaning up subscription for ${sessionId}:`, e);
                     }
@@ -3935,14 +3981,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             });
 
             if (toRemove.length > 0) {
-                console.log(`[GraphQLDataProvider] Cleaned up ${toRemove.length} stale subscription(s)`);
+                LogStatusEx({ message: `[GraphQLDataProvider] Cleaned up ${toRemove.length} stale subscription(s)`, verboseOnly: true });
             }
 
             // If no subscriptions remain and client is old, dispose of it
             if (this._pushStatusSubjects.size === 0 && this._wsClient && this._wsClientCreatedAt) {
                 const clientAge = now - this._wsClientCreatedAt;
                 if (clientAge > this.WS_CLIENT_MAX_AGE_MS) {
-                    console.log('[GraphQLDataProvider] Disposing of idle WebSocket client');
+                    LogStatusEx({ message: '[GraphQLDataProvider] Disposing of idle WebSocket client', verboseOnly: true });
                     this.disposeWSClient();
                 }
             }
@@ -3977,7 +4023,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             errorObj?.message?.includes('JWT_EXPIRED');
 
                         if (isTokenExpired) {
-                            console.log('[GraphQLDataProvider] WebSocket JWT token expired, refreshing and reconnecting...');
+                            LogStatusEx({ message: '[GraphQLDataProvider] WebSocket JWT token expired, refreshing and reconnecting...', verboseOnly: true });
                             try {
                                 // Refresh the token
                                 await this.RefreshToken();
@@ -4084,7 +4130,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                 errorObj?.message?.includes('JWT_EXPIRED');
 
                             if (isTokenExpired) {
-                                console.log('[GraphQLDataProvider] PushStatusUpdates JWT token expired, refreshing and reconnecting...');
+                                LogStatusEx({ message: '[GraphQLDataProvider] PushStatusUpdates JWT token expired, refreshing and reconnecting...', verboseOnly: true });
                                 try {
                                     // Refresh the token
                                     await this.RefreshToken();
@@ -4318,16 +4364,219 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      **************************************************************************/
 
     private _cacheInvalidationSubscription: Subscription | null = null;
+    private _lastCacheInvalidationSequence = 0;
+    private _lastCacheServerProcessId: string | null = null;
+    private _catchUpInFlight: Promise<boolean> | null = null;
 
     /**
-     * Subscribes to server-side cache invalidation events and raises MJGlobal
-     * BaseEntityEvent with type='remote-invalidate' for each notification.
-     * This enables BaseEngine instances to automatically re-fetch stale data
-     * when another server modifies entities.
-     *
-     * Call this after the provider is configured and WebSocket URL is available.
-     * Safe to call multiple times — subsequent calls are no-ops if already subscribed.
+     * Latest monotonic cache invalidation sequence number observed from the server.
      */
+    public get LastCacheInvalidationSequence(): number {
+        return this._lastCacheInvalidationSequence;
+    }
+
+    /**
+     * Server process ID (`X-MJ-Server-ID`) associated with {@link LastCacheInvalidationSequence}.
+     */
+    public get LastCacheServerProcessId(): string | null {
+        return this._lastCacheServerProcessId;
+    }
+
+    /**
+     * Inspects `X-MJ-Cache-Seq` and `X-MJ-Server-ID` HTTP response headers returned by MJServer.
+     */
+    private inspectResponseCacheHeaders(response: unknown): void {
+        if (!response || typeof response !== 'object' || response instanceof Error) {
+            return;
+        }
+        const headers = (response as { headers?: { get?: (name: string) => string | null } }).headers;
+        if (!headers || typeof headers.get !== 'function') {
+            return;
+        }
+        const seqHeader = headers.get('x-mj-cache-seq');
+        const serverIdHeader = headers.get('x-mj-server-id');
+        if (seqHeader !== null && seqHeader !== undefined) {
+            const parsedSeq = parseInt(seqHeader, 10);
+            if (!Number.isNaN(parsedSeq) && parsedSeq >= 0) {
+                this.ProcessServerCacheSequenceHeader(parsedSeq, serverIdHeader);
+            }
+        }
+    }
+
+    /**
+     * Resets the client-side cache invalidation sequence watermarks and server process ID.
+     * Useful when reconnecting to a new server endpoint or resetting state in tests.
+     */
+    public ResetCacheSequenceState(): void {
+        this._lastCacheInvalidationSequence = 0;
+        this._lastCacheServerProcessId = null;
+        this._catchUpInFlight = null;
+    }
+
+    /**
+     * Processes a server cache invalidation sequence number and server process ID observed
+     * from an `X-MJ-Cache-Seq` / `X-MJ-Server-ID` HTTP header. When a sequence gap is detected
+     * on the same server process, triggers {@link CatchUpCacheInvalidations} in the background.
+     */
+    public ProcessServerCacheSequenceHeader(
+        serverSequence: number,
+        serverProcessId?: string | null
+    ): void {
+        if (serverProcessId && this._lastCacheServerProcessId && this._lastCacheServerProcessId !== serverProcessId) {
+            // Server process changed (restart or different replica): adopt the new baseline
+            this._lastCacheServerProcessId = serverProcessId;
+            this._lastCacheInvalidationSequence = serverSequence;
+            return;
+        }
+        if (serverProcessId && !this._lastCacheServerProcessId) {
+            this._lastCacheServerProcessId = serverProcessId;
+        }
+        if (this._lastCacheInvalidationSequence === 0) {
+            this._lastCacheInvalidationSequence = serverSequence;
+            return;
+        }
+        if (serverSequence > this._lastCacheInvalidationSequence) {
+            void this.CatchUpCacheInvalidations(this._lastCacheInvalidationSequence);
+        }
+    }
+
+    /**
+     * Queries `GetCacheInvalidationsSince` on the server to replay any cache invalidation events
+     * missed between `sinceSequence` and the server's current sequence number.
+     *
+     * @returns `true` if the delta was replayed cleanly, or `false` if the server indicated
+     *          `RequiresFullRefresh = true` (e.g., sequence fell off the ring buffer).
+     */
+    public async CatchUpCacheInvalidations(sinceSequence?: number): Promise<boolean> {
+        if (this._catchUpInFlight) {
+            return this._catchUpInFlight;
+        }
+        const targetSince = sinceSequence ?? this._lastCacheInvalidationSequence;
+        const promise = this.performCacheInvalidationCatchUp(targetSince);
+        this._catchUpInFlight = promise;
+        try {
+            return await promise;
+        } finally {
+            this._catchUpInFlight = null;
+        }
+    }
+
+    private async performCacheInvalidationCatchUp(sinceSequence: number): Promise<boolean> {
+        if (!this._client) {
+            return false;
+        }
+        const query = gql`
+            query GetCacheInvalidationsSince($sinceSequence: Int!) {
+                GetCacheInvalidationsSince(sinceSequence: $sinceSequence) {
+                    RequiresFullRefresh
+                    CurrentSequence
+                    ServerProcessID
+                    Events {
+                        EntityName
+                        PrimaryKeyValues
+                        Action
+                        SourceServerID
+                        Timestamp
+                        OriginSessionID
+                        RecordData
+                        Sequence
+                    }
+                }
+            }
+        `;
+        try {
+            const response = await this._client.request<{
+                GetCacheInvalidationsSince?: {
+                    RequiresFullRefresh: boolean;
+                    CurrentSequence: number;
+                    ServerProcessID: string;
+                    Events: Array<{
+                        EntityName: string;
+                        PrimaryKeyValues: string | null;
+                        Action: string;
+                        SourceServerID: string;
+                        Timestamp: string;
+                        OriginSessionID?: string;
+                        RecordData?: string;
+                        Sequence?: number;
+                    }>;
+                };
+            }>(query, { sinceSequence });
+            const catchUp = response?.GetCacheInvalidationsSince;
+            if (!catchUp) {
+                return false;
+            }
+            this._lastCacheServerProcessId = catchUp.ServerProcessID;
+            if (catchUp.CurrentSequence > this._lastCacheInvalidationSequence) {
+                this._lastCacheInvalidationSequence = catchUp.CurrentSequence;
+            }
+            if (catchUp.RequiresFullRefresh) {
+                return false;
+            }
+            for (const event of catchUp.Events) {
+                this.dispatchCacheInvalidationEvent(event);
+            }
+            return true;
+        } catch (err) {
+            if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
+                console.warn('[GraphQLDataProvider] CatchUpCacheInvalidations failed:', err);
+            }
+            return false;
+        }
+    }
+
+    private dispatchCacheInvalidationEvent(event: {
+        EntityName: string;
+        PrimaryKeyValues: string | null;
+        Action: string;
+        SourceServerID: string;
+        Timestamp: string;
+        OriginSessionID?: string;
+        RecordData?: string;
+        Sequence?: number;
+    }): void {
+        if (typeof event.Sequence === 'number' && event.Sequence > this._lastCacheInvalidationSequence) {
+            this._lastCacheInvalidationSequence = event.Sequence;
+        }
+
+        // Skip events that originated from this browser session — we already
+        // handled the cache update locally via the BaseEntity.Save()/Delete() event.
+        if (event.OriginSessionID && event.OriginSessionID === this.sessionId) {
+            if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
+                console.debug(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
+            }
+            return;
+        }
+
+        if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
+            console.debug(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
+        }
+
+        // Raise a MJGlobal event so BaseEngine instances can react
+        const baseEntityEvent: BaseEntityEvent = {
+            type: 'remote-invalidate',
+            entityName: event.EntityName,
+            baseEntity: null,
+            // Attach the publishing provider so multi-provider client setups can resolve
+            // entity metadata against the correct server (instead of the global default).
+            provider: this,
+            payload: {
+                primaryKeyValues: event.PrimaryKeyValues,
+                action: event.Action,
+                sourceServerId: event.SourceServerID,
+                timestamp: event.Timestamp,
+                recordData: event.RecordData,
+            },
+        };
+
+        MJGlobal.Instance.RaiseEvent({
+            event: MJEventType.ComponentEvent,
+            eventCode: BaseEntity.BaseEventCode,
+            args: baseEntityEvent,
+            component: this,
+        });
+    }
+
     /**
      * Subscribe to client tool requests for a specific agent session.
      * The returned Observable emits ClientToolRequestNotification objects
@@ -4371,57 +4620,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 Timestamp
                 OriginSessionID
                 RecordData
+                Sequence
             }
         }`;
 
         const observable = this.Subscribe(CACHE_INVALIDATION_SUB);
 
         this._cacheInvalidationSubscription = observable.subscribe({
-            next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string; RecordData?: string }>) => {
+            next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string; RecordData?: string; Sequence?: number }>) => {
                 const event = data?.cacheInvalidation;
                 if (!event) return;
-
-                // Skip events that originated from this browser session — we already
-                // handled the cache update locally via the BaseEntity.Save()/Delete() event.
-                if (event.OriginSessionID && event.OriginSessionID === this.sessionId) {
-                    if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
-                        console.debug(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
-                    }
-                    return;
-                }
-
-                if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
-                    console.debug(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
-                }
-
-                // Raise a MJGlobal event so BaseEngine instances can react
-                const baseEntityEvent: BaseEntityEvent = {
-                    type: 'remote-invalidate',
-                    entityName: event.EntityName,
-                    baseEntity: null,
-                    // Attach the publishing provider so multi-provider client setups can resolve
-                    // entity metadata against the correct server (instead of the global default).
-                    provider: this,
-                    payload: {
-                        primaryKeyValues: event.PrimaryKeyValues,
-                        action: event.Action,
-                        sourceServerId: event.SourceServerID,
-                        timestamp: event.Timestamp,
-                        recordData: event.RecordData,
-                    },
-                };
-
-                // The event drives BaseEngine caches directly, AND — because this provider
-                // registers the entities its metadata is built from (the MJ_Metadata dataset's
-                // items) with ProviderBase's static event fan-out — it also schedules a debounced
-                // metadata staleness check when the written entity is one of them. See
-                // ProviderBase.handleMetadataMemberEntityEvent; no entity names are listed here.
-                MJGlobal.Instance.RaiseEvent({
-                    event: MJEventType.ComponentEvent,
-                    eventCode: BaseEntity.BaseEventCode,
-                    args: baseEntityEvent,
-                    component: this,
-                });
+                this.dispatchCacheInvalidationEvent(event);
             },
             error: (error: unknown) => {
                 console.error('[GraphQLDataProvider] Cache invalidation subscription error:', error);
@@ -4429,7 +4638,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 this._cacheInvalidationSubscription = null;
             },
             complete: () => {
-                console.log('[GraphQLDataProvider] Cache invalidation subscription completed, will re-establish on next WebSocket creation');
+                LogStatusEx({ message: '[GraphQLDataProvider] Cache invalidation subscription completed, will re-establish on next WebSocket creation', verboseOnly: true });
                 this._cacheInvalidationSubscription = null;
             },
         });
