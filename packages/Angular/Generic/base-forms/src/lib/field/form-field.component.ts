@@ -875,7 +875,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (this.IsPolymorphicFK) {
       pk = CompositeKey.FromURLSegment(relatedEntity, String(fkValue));
     } else {
-      const pkFieldName = fieldInfo.RelatedEntityFieldName || relatedEntity?.FirstPrimaryKey?.Name;
+      const pkFieldName = fieldInfo.RelatedEntityFieldName || relatedEntity?.FirstPrimaryKey?.Name; // first-pk-ok: foreign-key target, single-column by design (polymorphic FKs take the FromURLSegment branch)
       if (!pkFieldName) return;
       pk = new CompositeKey([{
         FieldName: pkFieldName,
@@ -2996,7 +2996,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (this.IsPolymorphicFK) {
       targetKey = CompositeKey.FromURLSegment(relatedEntity, String(fkValue));
     } else {
-      const relatedFieldName = this.FieldInfo.RelatedEntityFieldName || relatedEntity?.FirstPrimaryKey?.Name || 'ID';
+      const relatedFieldName = this.FieldInfo.RelatedEntityFieldName || relatedEntity?.FirstPrimaryKey?.Name || 'ID'; // first-pk-ok: foreign-key target, single-column by design (polymorphic FKs take the FromURLSegment branch)
       targetKey = new CompositeKey([new KeyValuePair(relatedFieldName, fkValue)]);
     }
 
