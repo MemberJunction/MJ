@@ -72,16 +72,16 @@ A change is not done until **both** test tiers pass. Report results — pass/fai
 ```bash
 cd packages/PackageName && pnpm test
 ```
-If tests fail because of your change, **update them**. If they fail for other reasons, **fix them**. Never leave broken tests behind. Never assume tests still pass after changing signatures, renaming methods, changing return values, or altering behavior.
+If tests fail because of your change, **update them**. If they fail for other reasons, **fix them**. Never leave broken tests behind. Never assume tests still pass after changing signatures, names, return values, or behavior.
 
 **Integration tests** — the deterministic tier must be run headless and pass:
 ```bash
 pnpm run test:integration    # = MJ_INTEGRATION_TEST=1 pnpm mj test suite "Integration Tests — Deterministic"
 pnpm mj test run "IT30 - Conversation Compaction (assembly layer)"   # single bundle while iterating
 ```
-Unit tests passing is necessary but **not sufficient** — the integration tier catches the seams between packages that unit tests mock away. Run it after migrations + CodeGen have been applied. Full details, authoring rules, and the client-first transport doctrine: [`guides/INTEGRATION_TESTING_QUICKSTART.md`](guides/INTEGRATION_TESTING_QUICKSTART.md).
+Unit tests passing is **not sufficient** — the integration tier catches the seams between packages that unit tests mock away. Run it after migrations + CodeGen. Details, authoring rules, and the client-first transport doctrine: [`guides/INTEGRATION_TESTING_QUICKSTART.md`](guides/INTEGRATION_TESTING_QUICKSTART.md).
 
-**Repo-wide gates** — `npm run check:guards` and `npm run check:standards` must pass. Neither is a required check, so a red one merges and breaks `next` for every later PR. A hook runs both before `git push` / `gh pr create`.
+**Repo-wide gates**: `check:guards` and `check:standards` must pass. Neither is a required check, so a red one merges and breaks `next`; a hook runs both before `git push` / `gh pr create`.
 
 ---
 
@@ -99,7 +99,7 @@ Unit tests passing is necessary but **not sufficient** — the integration tier 
 
 **One database per agent.** A git worktree isolates the filesystem, **not** the database — before `mj migrate` / `mj codegen` / `mj sync push`, confirm no other session is using your `DB_DATABASE`. Interleaved CodeGen runs corrupt metadata while both report success. Details: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 
-**Build commands** — this is a **pnpm** workspace (`packageManager` in `package.json` pins the version; the lockfile is `pnpm-lock.yaml`). Never run `npm install` here — it would create a `package-lock.json` the repo no longer uses and resolve a different tree:
+**Build commands** — this is a **pnpm** workspace (`packageManager` pins the version; lockfile `pnpm-lock.yaml`). Never run `npm install` here — it creates a `package-lock.json` the repo doesn't use and resolves a different tree:
 ```bash
 pnpm run build            # all packages, from repo root
 pnpm run watch            # watch mode
@@ -111,11 +111,11 @@ After making code changes, **always compile the affected package** and fix all T
 
 **pnpm workspace**: add dependencies to the individual package's `package.json`, then run `pnpm install` **at the repository root**. Never run it inside a package directory. pnpm enforces declared dependencies strictly — a package that imports something it doesn't declare fails to resolve rather than falling through to a hoisted copy, so declare every import.
 
-**Multi-repo dev (MJ + Open App repos side by side)**: `mj dev workspace` generates a pnpm workspace over a plain parent folder of sibling clones — never hand-link repos (`pnpm link`, per-package `node_modules` symlinks, copying another worktree's `dist/`) or run installs inside a member. A hand link duplicates `type-graphql` (MJAPI: `CannotDetermineGraphQLTypeError`) — undo it and reinstall at the workspace root; never patch `dist/`. Setup, daily loop, and recovery: [`guides/DEV_WORKSPACE_QUICKSTART.md`](guides/DEV_WORKSPACE_QUICKSTART.md).
+**Multi-repo dev (MJ + Open App repos)**: `mj dev workspace` builds a pnpm workspace over a parent folder of sibling clones — never hand-link repos (`pnpm link`, `node_modules` symlinks, copying another worktree's `dist/`) or install inside a member. A hand link duplicates `type-graphql` (MJAPI: `CannotDetermineGraphQLTypeError`) — undo it and reinstall at the workspace root; never patch `dist/`. Setup, daily loop, recovery: [`guides/DEV_WORKSPACE_QUICKSTART.md`](guides/DEV_WORKSPACE_QUICKSTART.md).
 
-**Migration folder**: the `migrations/v*/` folder must match **the major version in the migration's own filename** — `V…__v6.1.x__Name.sql` belongs in `migrations/v6/`, a `v5.x` file in `migrations/v5/`. Read the folder off the name you just chose, never off a number written down here. A misfiled migration still runs, but it strands its PostgreSQL counterpart (paired per folder: `migrations/vN` ↔ `migrations-pg/vN`).
+**Migration folder**: the `migrations/v*/` folder must match **the major version in the migration's own filename** — `V…__v6.1.x__Name.sql` belongs in `migrations/v6/`, a `v5.x` file in `migrations/v5/`. Read the folder off the name you chose, never off a number written here. A misfiled migration still runs but strands its PostgreSQL counterpart (paired per folder: `migrations/vN` ↔ `migrations-pg/vN`).
 
-**PostgreSQL: a feature PR ships the T-SQL migration only.** Never hand-write a `migrations-pg/**` counterpart, and never build a script that checks, generates, or gates PG parity — the build engineer transpiles at release time (`mj migrate convert`, `/pg-migrate-v2`). If conversion looks wrong, fix the converter. Details: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
+**PostgreSQL: a feature PR ships the T-SQL migration only.** Never hand-write a `migrations-pg/**` file, and never build a script that checks, generates, or gates PG parity — the build engineer transpiles at release time (`mj migrate convert`, `/pg-migrate-v2`). If conversion looks wrong, fix the converter. Details: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 
 **MJAPI routes go through `ApiRoute()`** from `@memberjunction/server` — never `app.use('/x')` or a hand-built `${publicUrl}/x`. The API isn't always at `/`: `MJAPI_BASE_PATH`, `GRAPHQL_ROOT_PATH` and `MJAPI_PUBLIC_URL` are independent, so never derive one from another. CI-gated. Rules: [`packages/MJAPI/CLAUDE.md`](packages/MJAPI/CLAUDE.md).
 
@@ -164,7 +164,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 
 ### Guides — the complete index is [`guides/README.md`](guides/README.md)
 
-41 cross-cutting "read this before you build that" guides, categorized. **Consult the index before starting work in an unfamiliar area** — these capture patterns already litigated. Frequently needed: [Dev Workspace Quickstart](guides/DEV_WORKSPACE_QUICKSTART.md), [UI Layering](guides/UI_LAYERING_GUIDE.md), [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
+41 cross-cutting "read this before you build that" guides, categorized. **Consult the index before working in an unfamiliar area** — they capture patterns already litigated. Frequently needed: [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
 
 **UI work is layered — L0 runtime → L1 widget → L2 composite → L3 Explorer surface.** Nothing below L3 imports `@angular/router` or an Explorer package; nothing at L3 holds domain logic. Read [`guides/UI_LAYERING_GUIDE.md`](guides/UI_LAYERING_GUIDE.md) before building any UI, in this repo or any MJ app repo.
 
@@ -180,13 +180,13 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 ### Local CI mirrors
 
 ```bash
-npm run check:ui          # design-token + button gates on changed CSS/SCSS (mirrors the PR gate)
+npm run check:ui          # design-token + button gates on changed CSS/SCSS (as the PR gate)
 npm run check:standards   # every adopted MJ standard (see .mj-standards.json)
 npm run check:guards      # UUID, global-provider and primary-key source scanners (CI "Source guards")
 npm run check:esm         # native-ESM import guard for "type": "module" packages
-npm run check:claude-md   # instruction-file budget, link validity, and routing-table coverage
-npm run check:changeset   # changeset bump levels (local only — no CI gate enforces this one)
-npm run check:codegen-tail # new-table migrations ship their generated entity (same command CI runs)
+npm run check:claude-md   # instruction-file budget, links, routing-table coverage
+npm run check:changeset   # changeset bump levels (local only — no CI gate)
+npm run check:codegen-tail # new-table migrations ship their generated entity (as CI runs it)
 ```
 
 ---
