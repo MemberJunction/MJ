@@ -25,6 +25,7 @@ export function BuildAgentRunStepExportData(
 ): Record<string, unknown> {
     const stepsById = IndexByUUID(steps);
     const data: Record<string, unknown> = {
+        // fls-guard: projected by ProjectEntityValuesForUser below
         ...step.GetAll(),
         PayloadAtStart: ResolvePayloadAtStart(step, stepsById),
         PayloadAtEnd: ResolvePayloadAtEnd(step, stepsById),

@@ -174,8 +174,10 @@ export class TransactionResolver extends ResolverBase {
                         if (item.OperationType === "Update") {
                             await entity.InnerLoad(pkey);
                             if (typeof entity.GetDataObject === 'function') {
+                                // fls-guard: pre-update snapshot; projected before the delta is built
                                 preUpdateValues.set(index, await entity.GetDataObject());
                             } else if (typeof entity.GetAll === 'function') {
+                                // fls-guard: pre-update snapshot; projected before the delta is built
                                 preUpdateValues.set(index, { ...(entity.GetAll() as Record<string, unknown>) });
                             }
                         }
@@ -200,6 +202,7 @@ export class TransactionResolver extends ResolverBase {
                         // Awaiting costs nothing here — DataObjectParams defaults
                         // includeRelatedEntityData to false, which guards the method's only awaited
                         // work, so with no params this is GetAll() plus a filter loop.
+                        // fls-guard: projected in PrepareReturnValue
                         objectValues.push(await entity.GetDataObject());
                         entity.TransactionGroup = tg;
                         if (!await entity.Delete()) {
@@ -317,6 +320,7 @@ export class TransactionResolver extends ResolverBase {
             }
             else {
                 // create, return what is in the database, as the caller may read it
+                // fls-guard: projected by project()
                 jsonResults.push(JSON.stringify(project(await entityObjects[i].GetDataObject())));
             }
         }
@@ -352,8 +356,9 @@ export class TransactionResolver extends ResolverBase {
         project: (values: Record<string, unknown>) => Record<string, unknown>
     ): Promise<string> {
         const rawDataObj: Record<string, unknown> | null = typeof entity.GetDataObject === 'function'
+            // fls-guard: projected by project() below
             ? (await entity.GetDataObject() as Record<string, unknown>)
-            : SafeJSONParse<Record<string, unknown>>(await entity.GetDataObjectJSON());
+            : SafeJSONParse<Record<string, unknown>>(await entity.GetDataObjectJSON()); // fls-guard: projected by project() below
         if (!rawDataObj || typeof rawDataObj !== 'object') {
             return JSON.stringify(rawDataObj);
         }

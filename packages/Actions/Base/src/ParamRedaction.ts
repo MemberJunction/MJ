@@ -251,6 +251,7 @@ function describeShape(value: unknown, record: RedactedParam): void {
         return;
     }
 
+    // fls-guard: measures shape only; no value leaves
     const described = value instanceof BaseEntity ? value.GetAll() : value;
     record.ByteLength = utf8ByteLength(described);
 

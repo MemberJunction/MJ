@@ -7,7 +7,7 @@ import { UserCache } from "@memberjunction/generic-database-provider";
 import { Field, InputType, ObjectType } from "type-graphql";
 import { KeyValuePairInput } from "../generic/KeyValuePairInput.js";
 import { AppContext, ProviderInfo } from "../types.js";
-import { CopyScalarsAndArrays, EscapeSQLString, UUIDsEqual } from "@memberjunction/global";
+import { CopyScalarsAndArrays, EscapeSQLString, IndexByUUID, UUIDsEqual } from "@memberjunction/global";
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IsScopeLimitedPrincipal } from "../auth/scopeLimitedPrincipal.js";
@@ -561,9 +561,10 @@ export class ActionResolver extends ResolverBase {
       return undefined;
     }
     const names = new Set<string>();
-    for (const eap of entityAction?.Params ?? []) {
-      if (eap.ValueType !== 'Entity Object Data') continue;
-      const param = ActionEngineServer.Instance.ActionParams.find(ap => UUIDsEqual(ap.ID, eap.ActionParamID));
+    const dataParams = (entityAction?.Params ?? []).filter(eap => eap.ValueType === 'Entity Object Data');
+    const actionParamsById = dataParams.length > 0 ? IndexByUUID(ActionEngineServer.Instance.ActionParams) : null;
+    for (const eap of dataParams) {
+      const param = actionParamsById?.Get(eap.ActionParamID);
       if (param?.Name) names.add(param.Name.trim().toLowerCase());
     }
     return names.size > 0 ? { EntityInfo: entityInfo, ParamNames: names } : undefined;

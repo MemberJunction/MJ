@@ -848,6 +848,7 @@ export async function GetOrBuildCompiledToolConfigs(
                     suggestion: "Use Get_Entity_List to see available entity names"
                 });
             }
+            // fls-guard: EntityInfo metadata, not record values
             return JSON.stringify(entity, null, 2);
         }
     });

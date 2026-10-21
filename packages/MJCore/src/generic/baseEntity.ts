@@ -5754,8 +5754,9 @@ export abstract class BaseEntity<T = unknown> {
      * entity was hydrated FROM THE DATABASE on every FLS entity. Two distinct resolver behaviours
      * carry that premise, and BOTH are load-bearing:
      *
-     * 1. `StripDeniedReadFieldsFromClientInput` removes client-sent values for fields the caller
-     *    cannot READ, which `SetMany` would otherwise make genuinely dirty with fabricated data.
+     * 1. `AssertClientInputFieldSecurity` (through `AssertClientInputWritableForUser`) rejects
+     *    client input naming a field the caller cannot READ, or no field at all, which `SetMany`
+     *    would otherwise make genuinely dirty with fabricated data.
      * 2. `entityInfo.FieldLevelSecurityApplies` forces the truth-load branch, so the entity's
      *    non-dirty baseline is the real stored row rather than the client's `OldValues___`.
      *
@@ -5763,7 +5764,7 @@ export abstract class BaseEntity<T = unknown> {
      * EntityField setter as the field's INITIAL value, so it is not dirty — and this check would
      * never see it, while `GenerateSaveSQL` sends it anyway (it filters on `NotLoaded`, never on
      * `Dirty`). Without the forced truth-load, a caller with Read Allow + Update Deny — the
-     * canonical FLS configuration, and one that leaves (1) with nothing to strip — could write an
+     * canonical FLS configuration, and one that leaves (1) with nothing to reject — could write an
      * update-denied field just by pinning its value in `OldValues___` and never naming it in the
      * mutation. If you are considering relaxing that branch condition, this check is what breaks.
      *

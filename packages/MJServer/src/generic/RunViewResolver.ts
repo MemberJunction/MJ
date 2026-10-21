@@ -605,6 +605,12 @@ export class RunViewCacheStatusInput {
 
   @Field(() => Int, { description: 'The number of rows in cached results' })
   rowCount: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
+
+  @Field(() => String, {
+    nullable: true,
+    description: "A hash of the client's field-security key for this view ('' when the user is denied nothing). When it differs from the server's for the same user, the server answers stale with fresh rows. Omitted by older clients.",
+  })
+  fieldSecurityKey?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name, matching its siblings
 }
 
 @InputType()
@@ -1280,6 +1286,7 @@ export class RunViewResolver extends ResolverBase {
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
           rowCount: item.cacheStatus.rowCount,
+          fieldSecurityKey: item.cacheStatus.fieldSecurityKey ?? undefined,
         } : undefined,
       }));
 
