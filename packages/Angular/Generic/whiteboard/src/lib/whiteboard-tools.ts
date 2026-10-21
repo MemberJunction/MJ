@@ -1,5 +1,5 @@
 import {
-  WHITEBOARD_FONT_SIZES, WhiteboardBounds, WhiteboardFontFamily, WhiteboardItem,
+  IsWhiteboardHexColor, WHITEBOARD_FONT_SIZES, WhiteboardBounds, WhiteboardFontFamily, WhiteboardItem,
   WhiteboardItemPatch, WhiteboardPoint, WhiteboardShapeKind, WhiteboardState
 } from './whiteboard-state';
 
@@ -349,9 +349,6 @@ const HIGHLIGHT_PAD = 18;
 /** The font family keys accepted by the style tool params. */
 const WHITEBOARD_FONT_FAMILIES: readonly WhiteboardFontFamily[] = ['sans', 'serif', 'mono'];
 
-/** Hex colors accepted for text color ("#abc" / "#aabbcc"). */
-const HEX_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
-
 function ok(itemId: string | undefined, summary: string): string {
   const result: WhiteboardToolResult = { success: true, itemId, summary };
   return JSON.stringify(result);
@@ -408,7 +405,7 @@ function textStylePatch(args: Record<string, unknown>, allowColor: boolean): { p
       return { error: '"color" only applies to text labels.' };
     }
     const color = args['color'];
-    if (typeof color !== 'string' || !HEX_COLOR.test(color)) {
+    if (typeof color !== 'string' || !IsWhiteboardHexColor(color)) {
       return { error: '"color" must be a hex color like "#fbbf24".' };
     }
     patch.Color = color;

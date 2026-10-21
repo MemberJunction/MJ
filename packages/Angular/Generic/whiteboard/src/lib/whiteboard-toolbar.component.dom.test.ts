@@ -170,6 +170,21 @@ describe('RealtimeWhiteboardToolbarComponent (DOM)', () => {
       expect(nothing.componentInstance.PenColors.length).toBe(5);
     });
 
+    it('drops entries that are not hex colors, so a url() can never reach a swatch background', () => {
+      const f = renderComponentFixture(RealtimeWhiteboardToolbarComponent, {
+        inputs: {
+          ActiveTool: 'pen',
+          PenColors: ['url(https://tracker.example/pixel.gif)', 'rgb(0, 0, 0)', 'red', '#1d4ed8', '#ABC', '#12345'],
+        },
+      });
+      expect(f.componentInstance.PenColors).toEqual(['#1d4ed8', '#ABC']);
+      expect(swatchBackgrounds(f).some((bg) => bg.includes('url('))).toBe(false);
+      const nothing = renderComponentFixture(RealtimeWhiteboardToolbarComponent, {
+        inputs: { ActiveTool: 'pen', PenColors: ['url(https://tracker.example/pixel.gif)', 'red'] },
+      });
+      expect(nothing.componentInstance.PenColors.length).toBe(5);
+    });
+
     it('keeps a frozen copy: mutating the bound array afterwards does not reach the toolbar', () => {
       const palette = ['#111111', '#222222'];
       const f = renderComponentFixture(RealtimeWhiteboardToolbarComponent, {
