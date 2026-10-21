@@ -55,6 +55,11 @@ export interface SeedContextConfig {
   businessDomains?: string[];
   customInstructions?: string;
   industryContext?: string;
+  /**
+   * Cap, in characters, on the customInstructions text sent to each PK/FK inference prompt. A per-table
+   * prompt gets only the paragraphs that name its table. Default 6000; 0 sends none.
+   */
+  keyPassMaxChars?: number;
 }
 
 /**
