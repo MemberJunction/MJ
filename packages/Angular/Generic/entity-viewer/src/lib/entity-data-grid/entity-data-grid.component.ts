@@ -21,7 +21,15 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { BuildPkString, CanonicalizeColumnFields, ComputeFieldsList } from '../utils/record.util';
+import {
+  BuildPkString,
+  CanonicalizeColumnFields,
+  ComputeFieldsList,
+  ResolvePolymorphicTargetEntity,
+  BuildPolymorphicCompositeKey,
+  PolymorphicCacheKey,
+  BatchResolvePolymorphicRecordNames
+} from '../utils/record.util';
 import { AggregateField } from '../utils/aggregate-field.util';
 import {
   MJUserViewEntityExtended,
@@ -3317,6 +3325,34 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         return linkHtml;
       }
 
+      // Polymorphic FK rendering (driven by hard metadata link EntityField.EntityIDFieldName)
+      if (!customFormat && field?.EntityIDFieldName && params.data) {
+        const rawRecordId = String(params.value ?? '').trim();
+        if (rawRecordId) {
+          const targetEntity = ResolvePolymorphicTargetEntity(params.data, field, this.ProviderToUse);
+          if (targetEntity) {
+            const compositeKey = BuildPolymorphicCompositeKey(rawRecordId, targetEntity);
+            const resolvedName = compositeKey
+              ? this._polymorphicRecordNames.get(PolymorphicCacheKey(targetEntity.Name, compositeKey))
+              : undefined;
+            const labelToDisplay = resolvedName || rawRecordId;
+            const escapedLabel = HighlightUtil.escapeHtml(labelToDisplay);
+            const escapedFieldName = HighlightUtil.escapeHtml(field.Name);
+            const escapedRelatedEntityId = HighlightUtil.escapeHtml(targetEntity.ID);
+            const escapedRelatedEntityName = HighlightUtil.escapeHtml(targetEntity.Name);
+            const escapedRawRecordId = HighlightUtil.escapeHtml(rawRecordId);
+            const titleAttr = resolvedName
+              ? ` title="${HighlightUtil.escapeHtml(`${targetEntity.DisplayNameOrName}: ${resolvedName} (${rawRecordId})`)}"`
+              : '';
+            const dataAttrs = `data-related-entity-id="${escapedRelatedEntityId}" data-record-id="${escapedRawRecordId}" data-field-name="${escapedFieldName}" data-related-entity-name="${escapedRelatedEntityName}"${titleAttr}`;
+            const displayText = this._filterText
+              ? HighlightUtil.highlight(labelToDisplay, this._filterText, true)
+              : escapedLabel;
+            return `<a href="javascript:void(0)" class="cell-link cell-fk-link" ${dataAttrs}>${displayText}</a>`;
+          }
+        }
+      }
+
       let displayValue = '';
       let extraClass = '';
       let inlineStyle = '';
@@ -4040,7 +4076,31 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       return row;
     });
 
+    if (this._entityInfo && this.RowData.length > 0) {
+      void this.resolvePolymorphicNamesForCurrentRows(this.RowData);
+    }
+
     this.cdr.detectChanges();
+  }
+
+  /** Cache of resolved polymorphic target record display names (`entityName::compositeKey` -> name). */
+  private _polymorphicRecordNames = new Map<string, string>();
+
+  private async resolvePolymorphicNamesForCurrentRows(rows: readonly Record<string, unknown>[]): Promise<void> {
+    if (!this._entityInfo) return;
+    const sizeBefore = this._polymorphicRecordNames.size;
+    await BatchResolvePolymorphicRecordNames(
+      rows,
+      this._entityInfo,
+      this.ProviderToUse,
+      this._polymorphicRecordNames,
+    );
+    if (this._polymorphicRecordNames.size !== sizeBefore) {
+      if (this.gridApi && !this.gridApi.isDestroyed()) {
+        this.gridApi.refreshCells({ force: true });
+      }
+      this.cdr.detectChanges();
+    }
   }
 
   /**

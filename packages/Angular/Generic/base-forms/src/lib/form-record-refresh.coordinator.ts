@@ -15,17 +15,39 @@ import { BaseEntity } from '@memberjunction/core';
  * waiting on `DeferLoadUntilVisible`). Parent refresh is not a license to
  * fan out RunView across every collapsed section.
  */
+export interface FormRemoteUpdateEvent {
+    record: BaseEntity;
+    changedFieldNames: ReadonlySet<string>;
+}
+
 @Injectable()
 export class FormRecordRefreshCoordinator {
     private readonly refreshed$ = new Subject<BaseEntity>();
+    private readonly remoteUpdated$ = new Subject<FormRemoteUpdateEvent>();
 
     /** Emits the live parent record after a successful `RefreshRecord()`. */
     public readonly Refreshed$ = this.refreshed$.asObservable();
 
     /**
+     * Emits when the parent record was auto-refreshed due to a remote/cross-tab
+     * update, carrying the set of field names (lowercased and original) whose
+     * values changed so `<mj-form-field>` instances can briefly highlight them
+     * and refresh any cached FK labels.
+     */
+    public readonly RemoteUpdated$ = this.remoteUpdated$.asObservable();
+
+    /**
      * Push a successful parent-record refresh to in-form listeners.
      */
     public Notify(record: BaseEntity): void {
+        this.refreshed$.next(record);
+    }
+
+    /**
+     * Push a remote/cross-tab update notification with the set of changed field names.
+     */
+    public NotifyRemoteUpdate(record: BaseEntity, changedFieldNames: ReadonlySet<string>): void {
+        this.remoteUpdated$.next({ record, changedFieldNames });
         this.refreshed$.next(record);
     }
 }
