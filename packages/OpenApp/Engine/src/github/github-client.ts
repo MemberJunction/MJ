@@ -641,6 +641,10 @@ export async function ListGitHubTags(
 
     const candidates = ScopedTagCandidates(subpath ?? parsed.Subpath, appName);
     const prefix = candidates.length > 0 ? candidates[0] : undefined;
+    // A multi-app repo is one whose app lives in a folder; only there does a repo-wide `v` tag belong
+    // to nobody in particular. A single-app repo keeps its repo-wide `v<semver>` tags even when the
+    // caller passes the app's name (which makes `prefix` truthy) — otherwise it resolves zero versions.
+    const isMultiAppRepo = ScopedTagPrefix(subpath ?? parsed.Subpath) !== undefined;
     // Named to avoid shadowing the imported `semver` library below. Kept as a regex rather than
     // delegating to `semver.valid` because this also has to LOCATE the version inside a scoped tag
     // (`<prefix>@1.2.3`); `SemverCore` then normalizes whatever it captures.
@@ -650,9 +654,12 @@ export async function ListGitHubTags(
     // `(?:@[^/]+/)?` tolerates the npm scope the real tag carries
     // (`@memberjunction/connector-pheedloop@1.4.6`) without the caller having to know it — the
     // scope is a publishing detail, the app's own name is the identity.
-    const pattern = prefix
+    const scopedPattern = prefix
         ? new RegExp(`^(?:@[^/]+/)?(?:${candidates.map(EscapeForRegExp).join('|')})@(${SEMVER_PATTERN})$`)
-        : new RegExp(`^(v?${SEMVER_PATTERN})$`);
+        : null;
+    const repoWidePattern = isMultiAppRepo ? null : new RegExp(`^(v?${SEMVER_PATTERN})$`);
+    const matchVersion = (name: string): string | undefined =>
+        (scopedPattern ? name.match(scopedPattern)?.[1] : undefined) ?? (repoWidePattern ? name.match(repoWidePattern)?.[1] : undefined);
 
     try {
         // Returns the matched TAG TEXT (`v1.0.7`), unchanged from before — callers and
@@ -661,7 +668,7 @@ export async function ListGitHubTags(
         // core will not parse are dropped rather than left to poison the sort, which is what the old
         // NaN-returning comparator did.
         return (await FetchRepoTagNames(repoUrl, parsed, options))
-            .map(name => name.match(pattern)?.[1])
+            .map(name => matchVersion(name))
             .filter((v): v is string => v != null)
             .map(tag => ({ Tag: tag, Core: SemverCore(tag) }))
             .filter((t): t is { Tag: string; Core: string } => t.Core !== null)

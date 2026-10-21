@@ -491,6 +491,29 @@ describe('tag listing — prerelease sorting and pagination', () => {
     });
 });
 
+describe('tag listing — a single-app repo resolves its versions when an app name is passed', () => {
+    // A single-app repo has no folder, so ScopedTagCandidates(undefined, appName) yields [appName].
+    // That used to switch the matcher to the scoped `<name>@<semver>` form ONLY, so a repo tagged
+    // `v2.0.0` resolved zero versions the moment a caller passed the app's name. Single-app repos
+    // accept both forms; multi-app repos stay scoped-only (a repo-wide `v` tag there belongs to
+    // nobody in particular).
+
+    it('a single-app repo tagged v<semver> resolves when the app name is passed', async () => {
+        stubTags(['v2.0.0', 'v1.5.0', 'not-semver']);
+        expect(await ListGitHubTags('https://github.com/Acme/PheedLoop', {}, undefined, 'PheedLoop')).toEqual(['v2.0.0', 'v1.5.0']);
+    });
+
+    it('a single-app repo tagged <name>@<semver> still resolves when the app name is passed', async () => {
+        stubTags(['PheedLoop@1.4.6', '@acme/PheedLoop@1.4.5']);
+        expect(await ListGitHubTags('https://github.com/Acme/PheedLoop', {}, undefined, 'PheedLoop')).toEqual(['1.4.6', '1.4.5']);
+    });
+
+    it('a multi-app repo stays scoped-only: a repo-wide v<semver> tag is not this app\'s version', async () => {
+        stubTags(['v9.9.9', 'CRM-HubSpot@1.1.2']);
+        expect(await ListGitHubTags('https://github.com/MemberJunction/Integrations', {}, 'CRM/HubSpot')).toEqual(['1.1.2']);
+    });
+});
+
 describe('tag listing — one paginated fetch per repository, not per app', () => {
     /**
      * Pagination is required for correctness, but the fetch is per-REPOSITORY while the filtering
