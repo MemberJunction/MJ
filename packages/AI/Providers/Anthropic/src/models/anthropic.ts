@@ -1,11 +1,11 @@
 import { Anthropic, APIUserAbortError } from "@anthropic-ai/sdk";
-import { ContentBlock, MessageCreateParams, MessageParam, Tool, ToolChoice } from "@anthropic-ai/sdk/resources/messages";
+import { ContentBlock, MessageCreateParams, MessageParam, RedactedThinkingBlockParam, ThinkingBlockParam, Tool, ToolChoice } from "@anthropic-ai/sdk/resources/messages";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageContentBlock, ChatParams, ChatResult, ClassifyParams, ClassifyResult,
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams,
     SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities,
-    ChatToolCall, CHAT_FINISH_REASON_TOOL_CALLS } from "@memberjunction/ai";
+    ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
-import { BuildAnthropicThinking, UsesAdaptiveThinking } from "./thinking-config";
+import { BuildAnthropicThinking, UsesAdaptiveThinking, type AnthropicThinkingRequest } from "./thinking-config";
 
 /**
  * Sentinel a prompt can embed to tell the Anthropic adapter WHERE the stable, cacheable prefix ends
@@ -23,6 +23,12 @@ import { BuildAnthropicThinking, UsesAdaptiveThinking } from "./thinking-config"
  * they should strip the marker from outgoing content.
  */
 export const ANTHROPIC_CACHE_BREAKPOINT = '<<<MJ_CACHE_BREAKPOINT>>>';
+
+/** The `provider` this driver stamps on the {@link ChatReasoningBlock}s it produces, and replays. */
+const ANTHROPIC_REASONING_PROVIDER = 'anthropic';
+
+/** Beta that lets budget-form thinking models think between tool calls, not only on the first turn. */
+export const ANTHROPIC_INTERLEAVED_THINKING_BETA = 'interleaved-thinking-2025-05-14';
 
 /** Anthropic allows at most 4 cache_control breakpoints per request. */
 const MAX_CACHE_BREAKPOINTS = 4;
@@ -346,7 +352,7 @@ export class AnthropicLLM extends BaseLLM {
      * @param enableCaching Whether to enable caching
      * @returns Formatted messages
      */
-    protected formatMessagesWithCaching(messages: ChatMessage[], enableCaching: boolean = true): any[] {
+    protected formatMessagesWithCaching(messages: ChatMessage[], enableCaching: boolean = true, replayReasoning: boolean = false): any[] {
         const result: any[] = [];
         // Compare ANTHROPIC roles, not MJ roles: `tool` and `user` both become `user` here, and it
         // is the wire role that has to alternate. For conversations without tool turns the two are
@@ -358,22 +364,37 @@ export class AnthropicLLM extends BaseLLM {
         for (let i = 0; i < coalesced.length; i++) {
             const role = this.ConvertMJToAnthropicRole(coalesced[i].role);
 
-            // If we have two messages with the same role back-to-back, insert an assistant message
-            if (role === lastRole) {
+            // Apply caching only to the last message
+            const isLastMessage = i === (coalesced.length - 1);
+
+            // Format the content - now returns an array of content blocks. An assistant turn's own
+            // thinking goes first, ahead of its text and tool_use blocks, as Anthropic requires.
+            const contentBlocks = [
+                ...(replayReasoning && role === 'assistant' ? AnthropicLLM.reasoningBlocksForReplay(coalesced[i]) : []),
+                ...this.formatContentWithCaching(coalesced[i].content, enableCaching && isLastMessage)
+            ];
+
+            // A user message right after tool results joins their turn. An assistant "OK" between
+            // them would read as the model's own reply, and closes the tool loop: Anthropic only
+            // keeps the turn's thinking while the loop stays open.
+            if (role === 'user' && lastRole === 'user' && AnthropicLLM.appendToToolResultTurn(result[result.length - 1], contentBlocks)) {
+                continue;
+            }
+
+            // If we have two messages with the same role back-to-back, insert a message of the other
+            // role. Two assistant turns in a row get a user filler: an assistant one would merge
+            // into the next turn and put text ahead of its replayed thinking, which must come first.
+            if (role === lastRole && role === 'assistant' && result.length > 0) {
+                result.push({
+                    role: "user",
+                    content: [{ type: "text", text: "Continue." }]
+                });
+            } else if (role === lastRole) {
                 result.push({
                     role: "assistant",
                     content: [{ type: "text", text: "OK" }]
                 });
             }
-
-            // Apply caching only to the last message
-            const isLastMessage = i === (coalesced.length - 1);
-
-            // Format the content - now returns an array of content blocks
-            const contentBlocks = this.formatContentWithCaching(
-                coalesced[i].content,
-                enableCaching && isLastMessage
-            );
 
             // An assistant turn that called tools must replay those calls as `tool_use` blocks, or
             // Anthropic rejects the `tool_result` blocks that answer them as orphaned.
@@ -400,6 +421,39 @@ export class AnthropicLLM extends BaseLLM {
         }
 
         return result;
+    }
+
+    /**
+     * Adds content to a formatted user turn that carries tool results, after them — Anthropic
+     * wants a turn's `tool_result` blocks first. Returns false, changing nothing, when the turn
+     * carries no tool results.
+     */
+    private static appendToToolResultTurn(turn: { role?: string; content?: Array<{ type: string; text?: string }> } | undefined, blocks: Array<{ type: string; text?: string }>): boolean {
+        if (turn?.role !== 'user' || !Array.isArray(turn.content) || !turn.content.some((b) => b.type === 'tool_result')) {
+            return false;
+        }
+        turn.content.push(...blocks.filter((b) => b.type !== 'text' || (b.text ?? '').length > 0));
+        return true;
+    }
+
+    /**
+     * The thinking setting this history can be sent with.
+     *
+     * With thinking on, Anthropic requires the last tool-call turn of an open tool loop to start
+     * with its own thinking block. A turn made with thinking off, by another provider before a
+     * failover, or on a path that kept no signatures has none to replay, and the request is
+     * rejected. Thinking is turned off for that one request; the effort setting stays.
+     */
+    private static thinkingForHistory(thinking: AnthropicThinkingRequest, messages: ChatMessage[]): AnthropicThinkingRequest {
+        if (!thinking.thinking) {
+            return thinking;
+        }
+        const lastAssistant = [...messages].reverse().find((m) => m.role === ChatMessageRole.assistant);
+        if (!lastAssistant?.toolCalls?.length || AnthropicLLM.reasoningBlocksForReplay(lastAssistant).length > 0) {
+            return thinking;
+        }
+        const { thinking: _omitted, ...rest } = thinking;
+        return rest;
     }
 
     /**
@@ -563,6 +617,64 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
+     * The turn's thinking and redacted-thinking blocks, in order, as replayable reasoning.
+     *
+     * Anthropic asks for a tool-use turn's thinking to come back unchanged — each block with its
+     * signature, redacted blocks with their encrypted data — or the model continues the tool loop
+     * without the reasoning that led to its calls.
+     *
+     * @param content The response's content blocks
+     * @returns The blocks, or undefined when the turn had none
+     */
+    private extractReasoning(content: ContentBlock[]): ChatReasoningBlock[] | undefined {
+        const blocks: ChatReasoningBlock[] = [];
+        for (const block of content ?? []) {
+            if (block?.type === 'thinking') {
+                blocks.push({ provider: ANTHROPIC_REASONING_PROVIDER, kind: 'thinking', text: block.thinking, signature: block.signature });
+            } else if (block?.type === 'redacted_thinking') {
+                blocks.push({ provider: ANTHROPIC_REASONING_PROVIDER, kind: 'redacted_thinking', data: block.data });
+            }
+        }
+        return blocks.length > 0 ? blocks : undefined;
+    }
+
+    /**
+     * An assistant message's own Anthropic reasoning, back in wire form. Blocks another provider
+     * produced are skipped: their signatures would not validate here.
+     */
+    private static reasoningBlocksForReplay(message: ChatMessage): Array<ThinkingBlockParam | RedactedThinkingBlockParam> {
+        const out: Array<ThinkingBlockParam | RedactedThinkingBlockParam> = [];
+        for (const block of message.reasoning ?? []) {
+            if (block.provider !== ANTHROPIC_REASONING_PROVIDER) {
+                continue;
+            }
+            if (block.kind === 'thinking' && block.signature) {
+                out.push({ type: 'thinking', thinking: block.text ?? '', signature: block.signature });
+            } else if (block.kind === 'redacted_thinking' && block.data) {
+                out.push({ type: 'redacted_thinking', data: block.data });
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Request options that let a budget-thinking model think between tool calls.
+     *
+     * Budget-form models (Claude 4.x before 4.6) think only on the first turn of a tool loop unless
+     * the request carries the interleaved-thinking beta. Adaptive models interleave natively and
+     * use the `adaptive` form, so the header is never sent to them.
+     *
+     * @param createParams The request being sent
+     * @returns The `headers` option, or an empty object when it does not apply
+     */
+    protected interleavedThinkingOptions(createParams: MessageCreateParams): { headers?: Record<string, string> } {
+        if (!createParams.tools?.length || createParams.thinking?.type !== 'enabled') {
+            return {};
+        }
+        return { headers: { 'anthropic-beta': ANTHROPIC_INTERLEAVED_THINKING_BETA } };
+    }
+
+    /**
      * Pulls the `tool_use` blocks out of an Anthropic response and normalizes them.
      *
      * @param content The response's content blocks
@@ -659,12 +771,18 @@ export class AnthropicLLM extends BaseLLM {
             // Append assistant prefill message if specified
             const messagesForApi = this.appendPrefillMessage(nonSystemMsgs, params.assistantPrefill);
 
+            // Thinking, in whichever form the model accepts, if an effort level is set. Resolved before
+            // the messages are formatted: earlier turns' thinking blocks are replayed only when this
+            // request thinks too.
+            const thinking = AnthropicLLM.thinkingForHistory(
+                BuildAnthropicThinking({ model: params.model, effortLevel: params.effortLevel, budgetTokens: thinkingBudget }), messagesForApi);
+
             // Create the request parameters
             const createParams: MessageCreateParams = {
                 model: params.model,
                 max_tokens: maxTokens,
                 stream: true, // even for non-streaming, we set stream to true as Anthropic prefers it for any decent sized response
-                messages: this.formatMessagesWithCaching(messagesForApi, params.enableCaching || true)
+                messages: this.formatMessagesWithCaching(messagesForApi, params.enableCaching || true, thinking.thinking !== undefined)
             };
 
             // Add temperature if specified. Note that Claude 4.5 Opus doesn't support temperature changes when extended thinking is enabled.
@@ -710,8 +828,6 @@ export class AnthropicLLM extends BaseLLM {
                 );
             }
 
-            // Add thinking, in whichever form the model accepts, if an effort level is set
-            const thinking = BuildAnthropicThinking({ model: params.model, effortLevel: params.effortLevel, budgetTokens: thinkingBudget });
             if (thinking.thinking) {
                 createParams.thinking = thinking.thinking;
             }
@@ -746,7 +862,7 @@ export class AnthropicLLM extends BaseLLM {
             // leaving it streaming into an abandoned promise; `finalMessage()` then rejects with
             // APIUserAbortError.
             const stream = this.AnthropicClient.messages
-                .stream(createParams, { signal: params.cancellationToken })
+                .stream(createParams, { signal: params.cancellationToken, ...this.interleavedThinkingOptions(createParams) })
                 .on('text', (chunk: any) => {
                     // too noisy to log this -- console.log('stream chunk', chunk);
                 });
@@ -755,16 +871,19 @@ export class AnthropicLLM extends BaseLLM {
             
             // Extract thinking and text content from response
             let content: string = '';
-            let thinkingContent: string | undefined = undefined;
+            const thinkingTexts: string[] = [];
 
-            // Process content blocks - can contain both thinking and text blocks
+            // Process content blocks - can contain both thinking and text blocks. With interleaved
+            // thinking a turn carries several thinking blocks; keep them all.
             for (const block of result.content) {
                 if (block.type === 'thinking') {
-                    thinkingContent = block.thinking;
+                    thinkingTexts.push(block.thinking);
                 } else if (block.type === 'text') {
                     content += block.text;
                 }
             }
+            let thinkingContent: string | undefined = thinkingTexts.length > 0 ? thinkingTexts.join('\n\n') : undefined;
+            const reasoning = this.extractReasoning(result.content);
 
             // Fallback: check for old-style thinking tags in content (for backward compatibility)
             if (!thinkingContent && content.startsWith('<thinking>') && content.includes('</thinking>')) {
@@ -801,7 +920,8 @@ export class AnthropicLLM extends BaseLLM {
                                 role: "assistant",
                                 content: content,
                                 thinking: thinkingContent,
-                                toolCalls: toolCalls
+                                toolCalls: toolCalls,
+                                ...(reasoning ? { reasoning } : {})
                             },
                             // Only the tool-call case gets a normalized reason; everything else keeps
                             // this driver's long-standing "completed" so existing consumers are
