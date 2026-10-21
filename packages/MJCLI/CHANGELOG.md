@@ -1,5 +1,92 @@
 # Change Log - @memberjunction/cli
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 766eabc: DBAutoDoc for large databases:
+  - `export --erd-mode clusters` draws the schema as hub-centred subject areas, one Mermaid diagram per area, for databases too large for a single ERD (Mermaid refuses sources above ~50,000 characters). Reference tables are listed beside each diagram instead of drawn, large areas are paginated, and `documentation.html` gains a Subject Areas section linking to them. Thresholds and manual overrides (`hubs`, `lookupTables`, `excludeTables`) live in `config.json` under `output.erd` and can be overridden per run by the new `--erd-*` flags, which `mj dbdoc export` passes through. The Mermaid generator also gains a `columns` option (`all`, `keys`, `none`).
+  - `analyze --skip-sampling` (and `analysis.skipSampling`) skips the table data sampling pass. Sampling reports per-table progress, saves state every 25 tables, and a `--resume` samples only the tables that have no statistics yet, so an interrupted pass on a large database continues where it stopped. Organic-key detection is skipped with a warning when no table carries column statistics, since its cardinality gate needs them; a resume of a previously sampled run keeps its statistics and still runs it. A sampling pass with failed tables records `partial` rather than `completed` in `state.json`, and the subject-area planner warns about any area left below `minClusterSize`.
+  - `seedContext.file` / `seedContext.files` read one or more context documents into `customInstructions`; a file that cannot be read is reported by setting name. `ai.model` is trimmed.
+
+- Updated dependencies [3b0e8db]
+- Updated dependencies [0d81c53]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [8443fd2]
+- Updated dependencies [2ed72d8]
+- Updated dependencies [832c63c]
+- Updated dependencies [d26183d]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [a9344ad]
+- Updated dependencies [d1a5833]
+- Updated dependencies [6e93bd9]
+- Updated dependencies [766eabc]
+- Updated dependencies [29013dc]
+- Updated dependencies [426af00]
+- Updated dependencies [7cb8e8f]
+- Updated dependencies [217bba3]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [a0db1fb]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [e38710c]
+- Updated dependencies [006a5e7]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [2ca8690]
+- Updated dependencies [c7d1170]
+- Updated dependencies [79d4f27]
+- Updated dependencies [5f707d1]
+- Updated dependencies [091e7ea]
+- Updated dependencies [dc38250]
+  - @memberjunction/generic-database-provider@6.2.0-edge.5
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.5
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/aiengine@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.5
+  - @memberjunction/codegen-lib@6.2.0-edge.5
+  - @memberjunction/db-auto-doc@6.2.0-edge.5
+  - @memberjunction/open-app-engine@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/metadata-sync@6.2.0-edge.5
+  - @memberjunction/record-cloning@6.2.0-edge.5
+  - @memberjunction/ai-cli@6.2.0-edge.5
+  - @memberjunction/query-gen@6.2.0-edge.5
+  - @memberjunction/testing-cli@6.2.0-edge.5
+  - @memberjunction/work-queue-engine@6.2.0-edge.5
+  - @memberjunction/redis-provider@6.2.0-edge.5
+  - @memberjunction/cli-core@6.2.0-edge.5
+  - @memberjunction/sql-converter@6.2.0-edge.5
+  - @memberjunction/config@6.2.0-edge.5
+  - @memberjunction/dynamic-packages@6.2.0-edge.5
+  - @memberjunction/installer@6.2.0-edge.5
+  - @memberjunction/sqlglot-ts@6.2.0-edge.5
+  - @memberjunction/standards@6.2.0-edge.5
+  - @memberjunction/work-queue-core@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Minor Changes
