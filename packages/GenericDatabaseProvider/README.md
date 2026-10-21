@@ -40,8 +40,8 @@ DatabaseProviderBase (@memberjunction/core — no heavy deps, abstract)
 | `DisposeAllSqlLoggingSessions()` | Disposes all active logging sessions (used on shutdown) |
 | `LogSQLStatement()` | Static method to log SQL from external sources (e.g., transaction groups) |
 | `RenderViewWhereClause()` | Resolves `{%UserView "id"%}` templates in saved view WHERE clauses |
-| `InternalRunView()` | Shared view execution engine: view resolution, permissions, field selection, WHERE clause, ORDER BY, OFFSET *or* keyset (`AfterKey`) pagination, aggregates, audit logging, and single-flight in-flight query coalescing |
-| `InternalRunViews()` | Bounded-concurrency (`MaxConcurrentViewsPerBatch = 8`) parallel wrapper for multiple `InternalRunView` calls with single-flight deduplication |
+| `InternalRunView()` | Shared view execution engine: view resolution, permissions, field selection, WHERE clause, ORDER BY, OFFSET *or* keyset (`AfterKey`) pagination, aggregates, audit logging |
+| `InternalRunViews()` | Parallel wrapper for multiple InternalRunView calls |
 | `getRunTimeViewFieldString()` | Builds dialect-neutral field list string for view queries |
 | `getRunTimeViewFieldArray()` | Resolves EntityFieldInfo list from params/view/entity |
 | `createViewUserSearchSQL()` | Builds full-text search and LIKE-based user search SQL |
