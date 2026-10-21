@@ -79,25 +79,86 @@ ORDER BY "Name"`;
 // ════════════════════════════════════════════════════
 
 describe('ExtractColumnRefs (PostgreSQL)', () => {
-    it('should extract column references from double-quoted SQL', () => {
-        // Note: ExtractColumnRefs uses walkASTForExtraction which has the same
-        // double_quote_string unwrapping gap as ExtractSelectColumns had (now fixed).
-        // walkASTForExtraction needs the same unwrapIdentifier treatment — tracked
-        // as a follow-up. For now, qualified column refs (with aliases) do work.
-        const columns = extractColumnRefs('SELECT u."Name", u."Email" FROM "Users" u');
-        expect(columns.length).toBeGreaterThanOrEqual(0); // may be 0 until walkAST is fixed
+    const refs = (sql: string) => extractColumnRefs(sql).map(c => ({ ColumnName: c.ColumnName, TableQualifier: c.TableQualifier }));
+
+    it('returns the alias for a qualified star', () => {
+        expect(refs('SELECT c.* FROM x.t c')).toEqual([{ ColumnName: '*', TableQualifier: 'c' }]);
     });
 
-    it('should extract qualified column references with aliases', () => {
-        const columns = extractColumnRefs(
-            'SELECT u."Name", r."Title" FROM "Users" u JOIN "Roles" r ON u."RoleID" = r."ID"'
-        );
-        const qualified = columns.filter(c => c.TableQualifier !== null);
-        expect(qualified.length).toBeGreaterThan(0);
+    it('returns the column name for a qualified unquoted column', () => {
+        expect(refs('SELECT c.cst_key FROM x.t c')).toEqual([{ ColumnName: 'cst_key', TableQualifier: 'c' }]);
+    });
+
+    it('returns the column name for a qualified double-quoted column', () => {
+        expect(refs('SELECT "c"."Name" FROM x.t c')).toEqual([{ ColumnName: 'Name', TableQualifier: 'c' }]);
+    });
+
+    it('returns one entry per column read through the same alias', () => {
+        expect(refs('SELECT c.a FROM x.t c WHERE c.b = 0')).toEqual([
+            { ColumnName: 'a', TableQualifier: 'c' },
+            { ColumnName: 'b', TableQualifier: 'c' }
+        ]);
+    });
+
+    it('returns unqualified columns with a null qualifier', () => {
+        expect(refs('SELECT cst_key FROM x.t c')).toEqual([{ ColumnName: 'cst_key', TableQualifier: null }]);
+        expect(refs('SELECT a FROM t WHERE b = 1')).toEqual([
+            { ColumnName: 'a', TableQualifier: null },
+            { ColumnName: 'b', TableQualifier: null }
+        ]);
+    });
+
+    it('extracts double-quoted columns through an alias', () => {
+        expect(refs('SELECT u."Name", u."Email" FROM "Users" u')).toEqual([
+            { ColumnName: 'Name', TableQualifier: 'u' },
+            { ColumnName: 'Email', TableQualifier: 'u' }
+        ]);
+    });
+
+    it('extracts columns from the select list, the join condition and both aliases', () => {
+        const columns = refs('SELECT u."Name", r."Title" FROM "Users" u JOIN "Roles" r ON u."RoleID" = r."ID"');
+        expect(columns).toHaveLength(4);
+        expect(columns).toEqual(expect.arrayContaining([
+            { ColumnName: 'Name', TableQualifier: 'u' },
+            { ColumnName: 'Title', TableQualifier: 'r' },
+            { ColumnName: 'RoleID', TableQualifier: 'u' },
+            { ColumnName: 'ID', TableQualifier: 'r' }
+        ]));
+    });
+
+    it('extracts the columns named in a JOIN … USING list', () => {
+        const columns = refs('SELECT a.x FROM a JOIN b USING (id, "Code")');
+        expect(columns).toContainEqual({ ColumnName: 'id', TableQualifier: null });
+        expect(columns).toContainEqual({ ColumnName: 'Code', TableQualifier: null });
+    });
+
+    it('never returns [object Object] for any PostgreSQL input', () => {
+        const inputs = [
+            'SELECT c.* FROM x.t c',
+            'SELECT c.cst_key, "c"."Name", cst_key FROM x.t c WHERE c.b = 0 ORDER BY c.cst_key',
+            'SELECT a.x FROM a JOIN b USING (id) GROUP BY a.x HAVING COUNT(*) > 1',
+            'SELECT x FROM t WHERE y IN (SELECT z FROM u WHERE u.w = t.v)'
+        ];
+        for (const sql of inputs) {
+            expect(JSON.stringify(extractColumnRefs(sql))).not.toContain('[object Object]');
+        }
+    });
+
+    it('matches the SQL Server dialect for the same unquoted input', () => {
+        const sql = 'SELECT c.a, c.b, d FROM t c WHERE c.e = 1';
+        expect(refs(sql)).toEqual(SQLParser.ExtractColumnRefs(sql, tsqlDialect).map(c => ({ ColumnName: c.ColumnName, TableQualifier: c.TableQualifier })));
     });
 
     it('should return empty for empty SQL', () => {
         expect(extractColumnRefs('')).toEqual([]);
+    });
+});
+
+describe('Parse (PostgreSQL)', () => {
+    it('returns real column names and never throws on identifier nodes', () => {
+        const result = SQLParser.Parse('SELECT cst_key, c."Name" FROM x.t c WHERE c.b = 0', pgDialect);
+        expect(result.Columns.map(c => `${c.TableQualifier ?? ''}.${c.ColumnName}`)).toEqual(['.cst_key', 'c.Name', 'c.b']);
+        expect(JSON.stringify(result)).not.toContain('[object Object]');
     });
 });
 

@@ -68,6 +68,16 @@ Discovery-only plus the seeded principals (see above). No lifecycle Setup/Teardo
 
 Every discovery-gated check (RLS1–RLS5) and every seed-gated check (RLS8–RLS10) **skips-as-pass with a loud console warning** naming exactly what was missing and, for the seeded checks, printing the seed command. RLS6 is the deliberate always-asserts backstop.
 
+#### Role filter edits (RF1–RF3, `src/checks/rolerowfilter.checks.ts`)
+
+Registered into `rls-isolation` after the KF checks and **mutation-gated** (`RUN_MUTATION_TESTS=1`). Each check builds its own fixture — a throwaway role, two users whose ONLY role it is, a membership-subquery filter stamped as `ReadRLSFilterID` on `MJ: Query Categories` and `MJ: User Settings`, and one row per user per entity — and removes it in its own `finally`. They pin the save-time validation in `MJRowLevelSecurityFilterEntityServer`: a filter referenced only by role permission rows is compiled against each referencing entity's base view; a filter any API-key or API-application scope rule references keeps the strict API-key rules.
+
+| Check | What it proves | Assertion | Failure it catches |
+|---|---|---|---|
+| `rls-isolation.RF1` | A subquery role filter shared by two entities is editable | Edit succeeds and is stored; both users are genuinely scoped (one role, non-empty clause) and see only their own row on both entities before AND after; the runtime clause is the new text | Role filters that can be created but never edited (#5712) |
+| `rls-isolation.RF2` | Broken role filter edits are still refused for the right reason | A bad column inside the subquery is refused with the database's invalid-column error naming the entity; a system-catalog reference is refused by the SQL screen; stored text unchanged | The role path accepting text that would fail every read |
+| `rls-isolation.RF3` | API-key filters keep the strict rules | With an API-key scope rule AND a role permission referencing the filter, a bad column is refused by the plain-column check and a subquery by the subquery ban | The role path loosening a filter an API key depends on |
+
 ### Known gaps / cross-references
 
 - **V14/V15 in the `view-execution` bundle are omitted, not stubbed** (bug-register "Coverage caveats" table): RLS AND-combination and per-user view isolation are two-identity invariants a single-identity `GraphQLDataProvider` could never fail, so those invariants are deliberately routed HERE — to RLS8–RLS10 with the seeded two-user scenario — rather than faked on the client transport.

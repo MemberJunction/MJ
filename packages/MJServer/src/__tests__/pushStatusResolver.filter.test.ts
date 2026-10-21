@@ -53,4 +53,11 @@ describe('statusUpdatesFilter (B49 session-hijack gate)', () => {
   it('matches identity case-insensitively (SQL Server upper vs PostgreSQL lower UUIDs)', () => {
     expect(StatusUpdatesFilter({ payload: push({ ownerUserId: OWNER.toUpperCase() }), args: { sessionId: SESSION }, context: ctxFor(OWNER.toLowerCase()) })).toBe(true);
   });
+
+  it('delivers server-originated wildcard sessionId ("*") pushes ONLY when ownerUserId matches the connection user', () => {
+    expect(StatusUpdatesFilter({ payload: push({ sessionId: '*', ownerUserId: OWNER }), args: { sessionId: SESSION }, context: ctxFor(OWNER) })).toBe(true);
+    expect(StatusUpdatesFilter({ payload: push({ sessionId: '*', ownerUserId: OWNER }), args: { sessionId: SESSION }, context: ctxFor(ATTACKER) })).toBe(false);
+    expect(StatusUpdatesFilter({ payload: push({ sessionId: '*', ownerUserId: '' }), args: { sessionId: SESSION }, context: ctxFor(OWNER) })).toBe(false);
+  });
 });
+

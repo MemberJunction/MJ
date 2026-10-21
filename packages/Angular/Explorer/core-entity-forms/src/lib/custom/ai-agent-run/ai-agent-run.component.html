@@ -181,9 +181,11 @@
                 <mj-ai-agent-run-step-detail
                   [selectedTimelineItem]="selectedTimelineItem"
                   [Provider]="ProviderToUse"
+                  [SavingWorkflow]="SavingWorkflow"
                   (closePanel)="closeJsonPanel()"
                   (navigateToActionLog)="navigateToActionLog($event)"
-                  (copyToClipboard)="copyToClipboard($event)">
+                  (copyToClipboard)="copyToClipboard($event)"
+                  (SaveAsWorkflowRequested)="OnSaveAsWorkflowRequested($event)">
                 </mj-ai-agent-run-step-detail>
               </as-split-area>
             }
@@ -393,7 +395,7 @@
               </div>
             </div>
           </mj-accordion-panel>
-          @if (record.Result) {
+          @if (ShowResultPanel) {
             <mj-accordion-panel [Expanded]="false">
               <ng-template mjAccordionTitle>
                 <i class="fas fa-code"></i> Result

@@ -1,0 +1,40 @@
+<!--
+  The widget's surface. One @switch on the phase; the live phase hands the whole screen to MJ's realtime
+  overlay (voice orb, live thread, channel surfaces, mute, end), which reads its streams from the shared
+  runtime service the controller started the call on.
+-->
+<mj-realtime-widget-global-styles />
+
+@switch (phase()) {
+  @case ('idle') {
+    <div class="mjw-center">
+      <button type="button" mjButton variant="primary" class="mjw-start" (click)="onStart()">
+        <i class="fa-solid fa-microphone" aria-hidden="true"></i>
+        <span>{{ startLabel() }}</span>
+      </button>
+    </div>
+  }
+  @case ('consent') {
+    <mj-realtime-widget-consent-gate
+      [Strings]="strings()"
+      [AgentName]="displayName()"
+      (Accepted)="onConsentAccepted()"
+      (Declined)="onConsentDeclined()" />
+  }
+  @case ('live') {
+    <mj-realtime-session-overlay
+      class="mjw-overlay"
+      [AgentName]="displayName()"
+      [Chrome]="effectiveChrome()"
+      (Ended)="onOverlayEnded()" />
+  }
+  @default {
+    <mj-realtime-widget-status
+      [Phase]="phase()"
+      [Strings]="strings()"
+      [AgentName]="displayName()"
+      [Message]="phase() === 'error' ? errorMessage() : null"
+      (Retry)="onStart()"
+      (Restart)="onStart()" />
+  }
+}

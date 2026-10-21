@@ -23,6 +23,11 @@ export interface ExecuteSQLOptions {
   /** Simple SQL fallback for loggers with logRecordChangeMetadata=false (only for Save/Delete operations) */
   simpleSQLFallback?: string;
   /**
+   * The statement with its parameter values written in as literals. Set for saves and deletes,
+   * which run with typed parameters: logged in place of the query, and shown in error messages.
+   */
+  literalSQL?: string;
+  /**
    * Optional connection source to use instead of the default pool.
    * Used by IS-A chain orchestration to execute SPs on a shared transaction.
    * Should be a sql.Transaction or sql.ConnectionPool instance.
@@ -34,6 +39,12 @@ export interface ExecuteSQLOptions {
    * the transaction's connection beside its COMMIT. A pool read sees committed data only (#4514).
    */
   ignoreAmbientTransaction?: boolean;
+  /**
+   * The longest the statement may run, in milliseconds. When it is exceeded the request is
+   * cancelled on the server and the call rejects with `Query timeout exceeded`. Ignored inside a
+   * transaction.
+   */
+  timeoutMs?: number;
 }
 
 /**
@@ -70,8 +81,12 @@ export interface InternalSQLOptions {
   isMutation?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Simple SQL fallback for loggers */
   simpleSQLFallback?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** The statement with its parameter values written in; logged and shown in errors instead of the query */
+  literalSQL?: string;  // case-violation-ok-legacy-back-compat: sits beside simpleSQLFallback in the same lower-case options shape
   /** User context for logging */
   contextUser?: UserInfo;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** The longest the statement may run, in milliseconds, before it is cancelled on the server */
+  timeoutMs?: number;  // case-violation-ok-legacy-back-compat: matches the lower-case members of this options shape and of ExecuteSQLOptions, which it mirrors
 }
 
 /**

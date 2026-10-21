@@ -22,7 +22,8 @@ export class MJAIBridgeProviderFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentSessionBridges', sectionName: 'AI Agent Session Bridges', isExpanded: false },
             { sectionKey: 'mJAIBridgeProviderChannels', sectionName: 'AI Bridge Provider Channels', isExpanded: false },
-            { sectionKey: 'mJAIBridgeAgentIdentities', sectionName: 'AI Bridge Agent Identities', isExpanded: false }
+            { sectionKey: 'mJAIBridgeAgentIdentities', sectionName: 'AI Bridge Agent Identities', isExpanded: false },
+            { sectionKey: 'mJPhoneNumbers', sectionName: 'Phone Numbers', isExpanded: false }
         ]);
     }
 }
