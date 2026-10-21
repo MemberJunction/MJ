@@ -3839,7 +3839,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /** `error` as a failed view result when it is a field-security refusal; otherwise rethrows it. */
-    private static fieldSecurityRefusalAsResult(error: unknown): RunViewResult {
+    protected static fieldSecurityRefusalAsResult<T = unknown>(error: unknown): RunViewResult<T> {
         if (!(error instanceof Error) || (!(error instanceof FieldSecurityError) && error.name !== FieldSecurityError.ErrorName)) {
             throw error;
         }
