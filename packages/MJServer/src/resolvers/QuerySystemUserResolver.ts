@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType, Resolver, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, UserInfo, CompositeKey, DatabaseProviderBase, LogStatus } from '@memberjunction/core';
+import { AssertClientInputWritableForUser, LogError, UserInfo, CompositeKey, DatabaseProviderBase, LogStatus } from '@memberjunction/core';
 import { MJQueryCategoryEntity, MJQueryPermissionEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryEntityEntity, QueryEngine } from '@memberjunction/core-entities';
 import { MJQueryResolver, MJQuery_, MJQueryField_, MJQueryParameter_, MJQueryEntity_, MJQueryPermission_ } from '../generated/generated.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -301,6 +301,8 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 CacheMaxSize: input.CacheMaxSize || null
             };
 
+            // Field-level security: refuse a key the caller may not read, or that names no field
+            AssertClientInputWritableForUser(record.EntityInfo, fieldsToSet, context.userPayload.userRecord);
             record.SetMany(fieldsToSet, true);
 
             // Pass caller-provided parameter sample values to override LLM guesses
@@ -324,7 +326,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 }
 
 
-                return await this.buildSuccessResult(record);
+                return await this.buildSuccessResult(record, context.userPayload.userRecord, provider);
             }
             else {
                 // Save failed - check if another request created the same query (race condition)
@@ -337,7 +339,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                     LogStatus(`[CreateQuery] Unique constraint detected for query '${input.Name}'. Using existing query (ID: ${existingQuery.ID}) created by concurrent request.`);
                     const existingEntity = await provider.GetEntityObject<MJQueryEntityServer>('MJ: Queries', context.userPayload.userRecord);
                     if (await existingEntity.Load(existingQuery.ID)) {
-                        return await this.buildSuccessResult(existingEntity);
+                        return await this.buildSuccessResult(existingEntity, context.userPayload.userRecord, provider);
                     }
                     // Entity load failed after confirming the row exists — extremely rare
                     return {
@@ -367,11 +369,15 @@ export class MJQueryResolverExtended extends MJQueryResolver {
      * Maps an MJQueryEntityServer (with loaded related metadata) to a QueryMutationResultType.
      * Uses entity.GetAll() for scalar fields so that new CodeGen-generated fields are included
      * automatically without manual updates. Related entity arrays are mapped explicitly.
+     *
+     * @param contextUser The caller the result is for. Field security projects the record for them.
      */
-    private async buildSuccessResult(entity: MJQueryEntityServer): Promise<QueryMutationResultType> {
+    private async buildSuccessResult(entity: MJQueryEntityServer, contextUser: UserInfo, provider: DatabaseProviderBase): Promise<QueryMutationResultType> {
         return {
             Success: true,
-            Query: await this.MapFieldNamesToCodeNames('MJ: Queries', entity.GetAll()) as MJQuery_,
+            // Mapped for the caller, so the field-security projection applies: the record was just
+            // saved, and a save re-reads the whole row.
+            Query: await this.MapFieldNamesToCodeNames('MJ: Queries', entity.GetAll(), contextUser, provider) as MJQuery_,
             Fields: this.mapFields(entity.QueryFields),
             Parameters: this.mapParameters(entity.QueryParameters),
             Entities: this.mapEntities(entity.QueryEntities),
@@ -523,6 +529,8 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             if (input.CacheTTLMinutes !== undefined) updateFields.CacheTTLMinutes = input.CacheTTLMinutes;
             if (input.CacheMaxSize !== undefined) updateFields.CacheMaxSize = input.CacheMaxSize;
 
+            // Field-level security: refuse a key the caller may not read
+            AssertClientInputWritableForUser(queryEntity.EntityInfo, updateFields, context.userPayload.userRecord);
             // Use SetMany to update all fields at once
             queryEntity.SetMany(updateFields);
 
@@ -554,7 +562,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 await this.createPermissions(provider, input.Permissions, queryID, context.userPayload.userRecord);
             }
 
-            return await this.buildSuccessResult(queryEntity);
+            return await this.buildSuccessResult(queryEntity, context.userPayload.userRecord, provider);
 
         } catch (err) {
             LogError(err);

@@ -8,6 +8,7 @@ import {
   ReadIsRowFiltered,
   ShapeCacheInvalidationEvent,
 } from '../generic/CacheInvalidationResolver.js';
+import { EmployeeEntity } from './fieldSecurityFixtures.js';
 
 /**
  * The cache-invalidation subscription is delivered to every connected client with no per-user
@@ -59,6 +60,33 @@ describe('MayBroadcastRecordData', () => {
     ConfigureRecordDataBroadcast(['*']);
     expect(MayBroadcastRecordData('Users')).toBe(true);
     expect(MayBroadcastRecordData('Organization Person Roles')).toBe(true);
+  });
+});
+
+/**
+ * An entity under field-level security never broadcasts its row, whatever the allowlist says.
+ *
+ * The event reaches every signed-in session that may read the entity, with no per-user
+ * projection, so a row of an entity whose fields are restricted per role would hand every
+ * session the columns it may not read. The check is the IS-A-aware one: a child whose parent has
+ * field security carries the parent's restricted fields as its own.
+ */
+describe('MayBroadcastRecordData: entities under field-level security', () => {
+  afterEach(() => ConfigureRecordDataBroadcast([]));
+
+  it("REGRESSION: refuses an FLS entity even under an explicit '*'", () => {
+    ConfigureRecordDataBroadcast(['*']);
+    expect(MayBroadcastRecordData('Employees', EmployeeEntity(true))).toBe(false);
+  });
+
+  it('REGRESSION: refuses an FLS entity that is named in the allowlist', () => {
+    ConfigureRecordDataBroadcast(['Employees']);
+    expect(MayBroadcastRecordData('Employees', EmployeeEntity(true))).toBe(false);
+  });
+
+  it('still allows the same entity with field security off', () => {
+    ConfigureRecordDataBroadcast(['Employees']);
+    expect(MayBroadcastRecordData('Employees', EmployeeEntity(false))).toBe(true);
   });
 });
 

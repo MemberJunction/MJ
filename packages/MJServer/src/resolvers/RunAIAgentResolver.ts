@@ -9,6 +9,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AgentRunStatusPublisher } from './AgentRunStatusPublisher.js';
+import { ProjectEntityObjectForCaller } from '../generic/fieldSecurityTransport.js';
 import { StartLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -173,7 +174,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Sanitize ExecuteAgentResult for JSON serialization
      * Removes circular references and non-serializable objects
      */
-    private sanitizeAgentResult(result: ExecuteAgentResult): any {
+    private sanitizeAgentResult(result: ExecuteAgentResult, recipient?: UserInfo): any {
         const sanitized: any = {
             success: result.success,
             payload: result.payload,
@@ -189,8 +190,9 @@ export class RunAIAgentResolver extends ResolverBase {
 
         // Safely extract agent run data using GetAll() for proper serialization
         if (result.agentRun && typeof result.agentRun.GetAll === 'function') {
-            // Use GetAll() to get the full serialized object including extended properties
-            sanitized.agentRun = result.agentRun.GetAll();
+            // GetAll() for the full serialized object including extended properties, projected for
+            // the recipient: the run comes from the agent engine, not from a load bound to them
+            sanitized.agentRun = ProjectEntityObjectForCaller(result.agentRun, recipient);
         }
         else {
             // shouldn't ever get here
@@ -450,7 +452,7 @@ export class RunAIAgentResolver extends ResolverBase {
             }
 
             // Create sanitized payload for JSON serialization
-            const sanitizedResult = this.sanitizeAgentResult(result);
+            const sanitizedResult = this.sanitizeAgentResult(result, currentUser);
             const returnResult = JSON.stringify(sanitizedResult);
 
             // Publish final events with enriched result data for fire-and-forget clients
