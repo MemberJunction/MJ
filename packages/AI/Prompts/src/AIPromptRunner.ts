@@ -14,7 +14,7 @@ import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResul
 import { MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { TemplateEngineServer, type ReferencedVariablesResult } from '@memberjunction/templates';
-import { TemplateRenderResult } from '@memberjunction/templates-base-types';
+import { TemplateRenderResult, type TemplateRenderOptions } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
 import { ParseManifestEntryMime, TrimSpacesAndTabs } from './linearTextScan';
@@ -164,6 +164,11 @@ interface ResolvedScalarInferenceParams {
 }
 
 export class AIPromptRunner extends BaseModelRunner {
+  /** The render options a prompt asks for: a raw render when `templateAutoescape` is false, else the engine's default. */
+  public static RenderOptions(params: AIPromptParams): TemplateRenderOptions | undefined {
+    return params.templateAutoescape === false ? { autoescape: false } : undefined;
+  }
+
   /**
    * The model type this runner requires. Returns 'LLM' for AIPromptRunner.
    */
@@ -1325,11 +1330,14 @@ export class AIPromptRunner extends BaseModelRunner {
       }
 
       // Render the template with the full params context
-      // We already have system placeholders resolved, so we'll render directly
+      // We already have system placeholders resolved, so we'll render directly.
       const renderedPrompt = await this._templateEngine.RenderTemplate(
-        template, 
-        template.GetHighestPriorityContent()!, 
-        mergedData
+        template,
+        template.GetHighestPriorityContent()!,
+        mergedData,
+        undefined,
+        undefined,
+        AIPromptRunner.RenderOptions(params)
       );
       
       if (!renderedPrompt.Success) {
@@ -1783,7 +1791,7 @@ export class AIPromptRunner extends BaseModelRunner {
       // almost always what the author meant. If real param validation is
       // needed (e.g., catching typos at template-author time), it should
       // live in the authoring tools, not in the runtime render path.
-      return await this._templateEngine.RenderTemplate(template, templateContent, mergedData, true, false);
+      return await this._templateEngine.RenderTemplate(template, templateContent, mergedData, true, false, AIPromptRunner.RenderOptions(params));
     } catch (error) {
       this.logError(error, {
         category: 'TemplateRendering',
@@ -2366,12 +2374,69 @@ export class AIPromptRunner extends BaseModelRunner {
       // place streaming is configured for prompt execution, so the single-model path and the parallel
       // path (which bridges its per-task callbacks into params.onStreaming) stream through identical
       // code — no second streaming implementation that can drift.
+      // Coalesce rapid token chunks within a 35ms window (~28 fps) to avoid flooding WebSocket/PubSub
+      // while emitting the first chunk immediately and flushing synchronously on completion.
+      let flushStreamingBuffer: (() => void) | undefined;
       if (params.onStreaming) {
         const onStreaming = params.onStreaming;
+        const coalesceIntervalMs = 35;
+        let bufferedContent = '';
+        let lastEmitMs = 0;
+        let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const clearTimer = (): void => {
+          if (flushTimer !== null) {
+            clearTimeout(flushTimer);
+            flushTimer = null;
+          }
+        };
+
+        const emitNow = (content: string, isComplete: boolean): void => {
+          clearTimer();
+          lastEmitMs = Date.now();
+          onStreaming({ content, isComplete, modelName: model.Name });
+        };
+
+        flushStreamingBuffer = (): void => {
+          clearTimer();
+          if (bufferedContent.length > 0) {
+            const pending = bufferedContent;
+            bufferedContent = '';
+            lastEmitMs = Date.now();
+            onStreaming({ content: pending, isComplete: false, modelName: model.Name });
+          }
+        };
+
         chatParams.streaming = true;
         chatParams.streamingCallbacks = {
-          OnContent: (chunk: string, isComplete: boolean) =>
-            onStreaming({ content: chunk, isComplete, modelName: model.Name }),
+          OnContent: (chunk: string, isComplete: boolean) => {
+            if (isComplete) {
+              const combined = bufferedContent + chunk;
+              bufferedContent = '';
+              emitNow(combined, true);
+              return;
+            }
+            const now = Date.now();
+            if (lastEmitMs === 0 || now - lastEmitMs >= coalesceIntervalMs) {
+              const combined = bufferedContent + chunk;
+              bufferedContent = '';
+              emitNow(combined, false);
+              return;
+            }
+            bufferedContent += chunk;
+            if (flushTimer === null) {
+              const delay = Math.max(1, coalesceIntervalMs - (now - lastEmitMs));
+              flushTimer = setTimeout(() => {
+                flushTimer = null;
+                if (bufferedContent.length > 0) {
+                  const pending = bufferedContent;
+                  bufferedContent = '';
+                  lastEmitMs = Date.now();
+                  onStreaming({ content: pending, isComplete: false, modelName: model.Name });
+                }
+              }, delay);
+            }
+          },
         };
       }
 
@@ -2384,7 +2449,11 @@ export class AIPromptRunner extends BaseModelRunner {
       // for gpt-5.6-luna in /v1/chat/completions`. Both shapes get the same one-shot retry.
       let chatResult: ChatResult;
       try {
-        chatResult = await this.runChatCompletionBounded(llm, chatParams, executionBound);
+        try {
+          chatResult = await this.runChatCompletionBounded(llm, chatParams, executionBound);
+        } finally {
+          flushStreamingBuffer?.();
+        }
       } catch (error) {
         if (!chatParams.tools?.length || !this.isToolSpecificFailureText(error instanceof Error ? error.message : String(error ?? ''))) {
           throw error;

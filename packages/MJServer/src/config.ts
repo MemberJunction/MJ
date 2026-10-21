@@ -5,6 +5,7 @@ import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
+import { ResolveServerRole, type ServerRole } from './serverRoleConfigUnits.js';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -247,6 +248,14 @@ const cacheSettingsSchema = z.object({
   maxMemoryMB: z.number().optional().default(150),
   /** Maximum percentage of total cache memory that any single entity can occupy. Default: 50. Set to 0 to disable. */
   maxPercentOfCachePerEntity: z.number().optional().default(50),
+  /**
+   * Ceiling on any ONE cache entry. 'auto' (the default) derives it from maxMemoryMB, so the
+   * largest entity the server caches scales with the memory the cache was given; a number is an
+   * explicit stricter percentage of maxMemoryMB; 0 removes the ceiling. Leave it on 'auto' unless
+   * a specific entry must be kept out of the cache — an entry declined by the ceiling is re-read
+   * from the database on every call, and the server logs which maxMemoryMB would admit it.
+   */
+  maxEntryPercentOfCache: z.union([z.number(), z.literal('auto')]).optional().default('auto'),
   /** Default TTL in seconds. 0 = no TTL, rely on event-based invalidation. Default: 0. */
   defaultTTLSeconds: z.number().optional().default(0),
   /** Interval in seconds for periodic eviction sweep. 0 = disabled. Default: 300 (5 minutes). */
@@ -308,6 +317,45 @@ const cacheSettingsSchema = z.object({
    * for it. 0 disables the turn-taking. Default: 30.
    */
   startupWarmupLeaseSeconds: z.number().int().nonnegative().optional().default(30),
+  /**
+   * Pluggable cache invalidation broadcast topology configuration.
+   * Defaults to `'SequencedRoleBucket'` (Topology 1 Monotonic Sequence Ring Buffer + Topology 2
+   * Role-Fingerprint $O(\text{Roles})$ evaluation & shaping memoizer).
+   */
+  broadcast: z
+    .object({
+      provider: z.string().optional().default('SequencedRoleBucket'),
+      ringBufferSize: z.number().int().positive().optional().default(5000),
+      excludedEntities: z.array(z.string()).optional().default([]),
+      azureWebPubSub: z
+        .object({
+          endpoint: z.string().optional(),
+          hubName: z.string().optional(),
+          accessKey: z.string().optional(),
+          tokenTtlMinutes: z.number().positive().optional(),
+        })
+        .optional(),
+      awsIoTCore: z
+        .object({
+          endpoint: z.string().optional(),
+          region: z.string().optional(),
+          topicPrefix: z.string().optional(),
+          accessKeyId: z.string().optional(),
+          secretAccessKey: z.string().optional(),
+          tokenTtlSeconds: z.number().positive().optional(),
+        })
+        .optional(),
+      gcpPubSub: z
+        .object({
+          projectId: z.string().optional(),
+          topicPrefix: z.string().optional(),
+          gatewayUrl: z.string().optional(),
+          signingSecret: z.string().optional(),
+          tokenTtlSeconds: z.number().positive().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 const loggingSettingsSchema = z.object({
@@ -897,7 +945,17 @@ const configInfoSchema = z.object({
     .transform((val) => z.record(z.string()).parse(JSON.parse(val)))
     .optional(),
   mjCoreSchema: z.string(),
+  /**
+   * Server execution role for horizontal scaling:
+   * - `'all'` (default): runs both interactive HTTP/GraphQL/WebSocket handlers and background worker loops.
+   * - `'api'`: runs interactive HTTP/GraphQL/WebSocket handlers only; background worker loops are skipped.
+   * - `'worker'`: runs background worker loops (`ScheduledJobsService`, `IntegrationSyncWorkerService`,
+   *   `StartTaskGraphDispatcher`, `StartWorkQueueHost`, `SessionJanitor`, reconcilers).
+   */
+  serverRole: z.enum(['all', 'api', 'worker']).optional().default('all'),
 });
+
+export type { ServerRole };
 
 export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
 export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
@@ -968,6 +1026,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
   enableIntrospection: process.env.ENABLE_INTROSPECTION === 'true',
   apiKey: process.env.MJ_API_KEY,
   websiteRunFromPackage: process.env.WEBSITE_RUN_FROM_PACKAGE ? parseInt(process.env.WEBSITE_RUN_FROM_PACKAGE, 10) : undefined,
+  serverRole: ResolveServerRole(process.env.MJ_SERVER_ROLE),
 
   // User handling defaults
   userHandling: {
@@ -1079,6 +1138,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
   cacheSettings: {
     maxMemoryMB: 150,
     maxPercentOfCachePerEntity: 50,
+    maxEntryPercentOfCache: 'auto',
     defaultTTLSeconds: 0,
     evictionSweepIntervalSeconds: 300,
     verboseLogging: false,
