@@ -259,7 +259,7 @@ describe('EntityDataGridComponent — template getter memoization (MJ-NG-4)', ()
         const vis1 = grid.EffectiveVisualConfig;
         const vis2 = grid.EffectiveVisualConfig;
         expect(vis2).toBe(vis1);
-        grid.VisualConfig = { alternateRowBackground: false };
+        grid.VisualConfig = { alternateRows: false };
         const vis3 = grid.EffectiveVisualConfig;
         expect(vis3).not.toBe(vis1);
         expect(grid.EffectiveVisualConfig).toBe(vis3);
