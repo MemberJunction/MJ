@@ -1,5 +1,5 @@
 import { CompositeKey, IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, UserScopedCacheKey } from '@memberjunction/global';
 import { TemplateEngineServer } from '@memberjunction/templates';
 
 /**
@@ -11,8 +11,13 @@ export abstract class EntityDocumentTemplateParserBase {
     EntityDocumentTemplateParserBase.__cache = {};
   }
 
-  public static CreateCacheKey(EntityID: string, EntityRecordPrimaryKey: string, Content: string): string {
-    return `${EntityID}___${EntityRecordPrimaryKey}___${Content}`;
+  /**
+   * Builds the key a resolved placeholder is cached under. Placeholders such as `Relationship()` load
+   * rows under the caller's permissions, so the key includes the user. Returns null when there is no
+   * user ID, in which case the placeholder is resolved without caching.
+   */
+  public static CreateCacheKey(EntityID: string, EntityRecordPrimaryKey: string, Content: string, UserID: string | null | undefined): string | null {
+    return UserScopedCacheKey(UserID, `${EntityID}___${EntityRecordPrimaryKey}___${Content}`);
   }
 
   protected static __cache: Record<string, string> = {};
@@ -82,7 +87,10 @@ export abstract class EntityDocumentTemplateParserBase {
     // Pass 2: Replace ${} placeholders (variables, dotted paths like __Parent.Field, and function calls)
     const replacements = Array.from(matches).map(async (match) => {
       const content = match[1]; // The captured group from regex
-      const cacheKey = EntityDocumentTemplateParserBase.CreateCacheKey(EntityID, compositeKey.ToString(), content);
+      const cacheKey = EntityDocumentTemplateParserBase.CreateCacheKey(EntityID, compositeKey.ToString(), content, ContextUser.ID);
+      if (cacheKey === null) {
+        return { old: match[0], new: await this.evalSingleArgument(content, EntityID, EntityRecord, ContextUser) };
+      }
 
       if (!EntityDocumentTemplateParserBase._cache[cacheKey]) {
         EntityDocumentTemplateParserBase._cache[cacheKey] = await this.evalSingleArgument(
