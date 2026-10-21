@@ -219,11 +219,11 @@ describe('RealtimeSessionVerificationWorkflow', () => {
         it('refuses another anonymous guest sharing the Anonymous user (scope mismatch) and a scope-less anonymous caller', async () => {
             ports.AddSession({ ConversationExternalID: 'scope-A' });
             expect(
-                await workflow.RequestVerification(REQUEST, principal({ IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'scope-B' } })),
+                await workflow.RequestVerification(REQUEST, principal({ IsMagicLinkAnonymous: true, AnonymousVisitorID: 'scope-B', MagicLinkScope: { ResourceID: 'scope-B' } })),
             ).toMatchObject({ ErrorCode: 'session_not_found' });
             expect(await workflow.RequestVerification(REQUEST, principal({ IsMagicLinkAnonymous: true }))).toMatchObject({ ErrorCode: 'session_not_found' });
             expect(
-                await workflow.RequestVerification(REQUEST, principal({ IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'scope-A' } })),
+                await workflow.RequestVerification(REQUEST, principal({ IsMagicLinkAnonymous: true, AnonymousVisitorID: 'scope-A', MagicLinkScope: { ResourceID: 'scope-A' } })),
             ).toMatchObject({ Success: true });
         });
 
@@ -362,7 +362,7 @@ describe('RealtimeSessionVerificationWorkflow', () => {
 
         it('routes the event with the session scope so an anonymous guest\'s event reaches only that guest', async () => {
             ports.AddSession({ ConversationExternalID: 'scope-A' });
-            const guest = principal({ IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'scope-A' } });
+            const guest = principal({ IsMagicLinkAnonymous: true, AnonymousVisitorID: 'scope-A', MagicLinkScope: { ResourceID: 'scope-A' } });
             await workflow.RequestVerification(REQUEST, guest);
             await workflow.SubmitCode({ AgentSessionID: SESSION_ID, Code: secretsFrom(ports).code }, guest);
             expect(ports.Published[0].routing.ScopeKey).toBe('scope-A');
@@ -445,7 +445,7 @@ describe('RealtimeSessionVerificationWorkflow', () => {
             expect(await workflow.SubmitCode({ AgentSessionID: SESSION_ID, Code: code }, principal({ ID: STRANGER }))).toMatchObject({ ErrorCode: 'session_not_found' });
             ports.AddSession({ ConversationExternalID: 'scope-A', ConfigRaw: ports.Sessions.get(SESSION_ID.toLowerCase())?.ConfigRaw ?? null });
             expect(
-                await workflow.SubmitCode({ AgentSessionID: SESSION_ID, Code: code }, principal({ IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'scope-B' } })),
+                await workflow.SubmitCode({ AgentSessionID: SESSION_ID, Code: code }, principal({ IsMagicLinkAnonymous: true, AnonymousVisitorID: 'scope-B', MagicLinkScope: { ResourceID: 'scope-B' } })),
             ).toMatchObject({ ErrorCode: 'session_not_found' });
             expect(ports.Published).toHaveLength(0);
         });

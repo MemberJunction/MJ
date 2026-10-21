@@ -261,9 +261,11 @@ describe('realtime recording REST routes', () => {
             ResolveCaller: req => {
                 const id = req.header('x-test-user');
                 const scope = req.header('x-test-scope');
+                const isAnon = req.header('x-test-anonymous') === 'true';
                 const user = {
                     ID: id,
-                    IsMagicLinkAnonymous: req.header('x-test-anonymous') === 'true',
+                    IsMagicLinkAnonymous: isAnon,
+                    AnonymousVisitorID: isAnon ? scope : undefined,
                     MagicLinkScope: scope ? { ResourceID: scope } : undefined,
                 };
                 return id ? { ContextUser: user as unknown as UserInfo, Provider: {} as unknown as DatabaseProviderBase } : null;

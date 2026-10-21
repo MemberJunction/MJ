@@ -468,12 +468,16 @@ export class SessionManager {
         conversation.NewRecord();
         conversation.UserID = input.userID;
         conversation.Name = 'Agent Session';
-        // For a magic-link-anonymous principal (e.g. a public web-widget voice guest), stamp the
-        // session's conversation with the signed per-session scope so the Widget Guest RLS filters
-        // ({{ScopeResourceID}}) isolate this session — and everything chained to it (AI Agent
-        // Sessions via ConversationID, Session Channels via the session) — from other guests
-        // sharing the Anonymous UserID. No-op for named principals (no scope → default ExternalID).
-        if (contextUser.MagicLinkScope?.ResourceID) {
+        // For a magic-link-anonymous principal (widget guest or anonymous magic-link visitor), stamp the
+        // session's conversation with the per-visitor AnonymousVisitorID (`mj_sid`) so each visitor's
+        // session and conversation are isolated from other visitors sharing the Anonymous UserID (even
+        // when the link has no ResourceID or is redeemed more than once). For a named resource-scoped
+        // magic-link session, stamp MagicLinkScope.ResourceID. No-op for named unscoped principals.
+        if (contextUser.IsMagicLinkAnonymous) {
+            if (contextUser.AnonymousVisitorID) {
+                conversation.ExternalID = contextUser.AnonymousVisitorID;
+            }
+        } else if (contextUser.MagicLinkScope?.ResourceID) {
             conversation.ExternalID = contextUser.MagicLinkScope.ResourceID;
         }
 

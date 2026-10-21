@@ -276,6 +276,11 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
     sessionUser.WidgetGuestContext = widgetGuestContext;
   }
   if (isAnon) {
+    const sid = typeof payload['mj_sid'] === 'string' ? payload['mj_sid'].trim() : '';
+    if (!sid) {
+      throw new Error('Anonymous magic-link session token is missing required mj_sid claim.');
+    }
+    sessionUser.AnonymousVisitorID = sid;
     // Mark the session so the CurrentUser field resolver serves these synthesized roles
     // (the shared Anonymous principal holds none in the DB). See UserInfo.IsMagicLinkAnonymous.
     sessionUser.IsMagicLinkAnonymous = true;

@@ -186,6 +186,47 @@ describe('SessionManager.CreateSession', () => {
         expect(result.HostInstanceID).toBeTypeOf('string');
     });
 
+    it('stamps conversation.ExternalID with AnonymousVisitorID for an anonymous principal', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const conversation = makeSessionEntity({ ID: 'conv-anon' });
+        const session = makeSessionEntity({ ID: 'session-anon' });
+        const { provider } = makeProvider((name) =>
+            name === 'MJ: Conversations' ? conversation : session,
+        );
+        const mgr = new SessionManager();
+        const anonUser = {
+            ID: 'anon-1',
+            Email: 'anonymous@magic-link.local',
+            IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: 'visitor-sid-42',
+            MagicLinkScope: { ResourceID: 'shared-invite-resource' },
+        } as unknown as UserInfo;
+
+        await mgr.CreateSession({ agentID: 'agent-1', userID: 'anon-1' }, anonUser, provider);
+
+        expect(conversation.ExternalID).toBe('visitor-sid-42');
+    });
+
+    it('stamps conversation.ExternalID with MagicLinkScope.ResourceID for a non-anonymous scoped principal', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const conversation = makeSessionEntity({ ID: 'conv-scoped' });
+        const session = makeSessionEntity({ ID: 'session-scoped' });
+        const { provider } = makeProvider((name) =>
+            name === 'MJ: Conversations' ? conversation : session,
+        );
+        const mgr = new SessionManager();
+        const scopedUser = {
+            ID: 'user-1',
+            Email: 'named@example.com',
+            IsMagicLinkAnonymous: false,
+            MagicLinkScope: { ResourceID: 'resource-share-99' },
+        } as unknown as UserInfo;
+
+        await mgr.CreateSession({ agentID: 'agent-1', userID: 'user-1' }, scopedUser, provider);
+
+        expect(conversation.ExternalID).toBe('resource-share-99');
+    });
+
     it('reuses a supplied conversation without creating a new one', async () => {
         hasPermissionMock.mockResolvedValue(true);
         const session = makeSessionEntity({ ID: 'session-x' });

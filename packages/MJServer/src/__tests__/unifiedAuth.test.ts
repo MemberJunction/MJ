@@ -435,4 +435,88 @@ describe('createUnifiedAuthMiddleware', () => {
       expect(next).toHaveBeenCalled();
     });
   });
+
+  describe('Magic-link anonymous visitor identity (mj_sid -> AnonymousVisitorID)', () => {
+    beforeEach(() => {
+      setupSuccessfulAuth();
+    });
+
+    it('stamps AnonymousVisitorID from mj_sid on an anonymous magic-link token', async () => {
+      const claims = {
+        iss: 'https://test-issuer.com',
+        sub: 'magic-link|invite-1',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        mj_magic_link: true,
+        mj_anon: true,
+        mj_sid: 'sid-visitor-1',
+      };
+      mockJwtDecode.mockReturnValue(claims);
+      mockJwtVerify.mockImplementation(
+        (_t: string, _k: unknown, _o: unknown, cb: (err: Error | null, d: unknown) => void) => {
+          cb(null, claims);
+        },
+      );
+      const req = makeMockReq({ headers: { authorization: 'Bearer anon-token' } });
+      const res = makeMockRes();
+      const next = vi.fn();
+
+      await middleware(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(req.userPayload?.userRecord?.IsMagicLinkAnonymous).toBe(true);
+      expect(req.userPayload?.userRecord?.AnonymousVisitorID).toBe('sid-visitor-1');
+    });
+
+    it('rejects an anonymous magic-link token when mj_sid is missing or blank', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const claims = {
+        iss: 'https://test-issuer.com',
+        sub: 'magic-link|invite-1',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        mj_magic_link: true,
+        mj_anon: true,
+      };
+      mockJwtDecode.mockReturnValue(claims);
+      mockJwtVerify.mockImplementation(
+        (_t: string, _k: unknown, _o: unknown, cb: (err: Error | null, d: unknown) => void) => {
+          cb(null, claims);
+        },
+      );
+      const req = makeMockReq({ headers: { authorization: 'Bearer anon-missing-sid' } });
+      const res = makeMockRes();
+      const next = vi.fn();
+
+      await middleware(req, res, next);
+
+      expect(next).not.toHaveBeenCalled();
+      expect(res._status).toBe(401);
+      errorSpy.mockRestore();
+    });
+
+    it('leaves AnonymousVisitorID undefined on a named magic-link token', async () => {
+      const claims = {
+        iss: 'https://test-issuer.com',
+        sub: 'magic-link|invite-1',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        mj_magic_link: true,
+        mj_scopes: [{ inviteId: 'invite-1', appId: 'app-1', role: 'Guest', resourceId: 'res-1' }],
+      };
+      mockJwtDecode.mockReturnValue(claims);
+      mockJwtVerify.mockImplementation(
+        (_t: string, _k: unknown, _o: unknown, cb: (err: Error | null, d: unknown) => void) => {
+          cb(null, claims);
+        },
+      );
+      const req = makeMockReq({ headers: { authorization: 'Bearer named-token' } });
+      const res = makeMockRes();
+      const next = vi.fn();
+
+      await middleware(req, res, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(req.userPayload?.userRecord?.IsMagicLinkAnonymous).toBe(false);
+      expect(req.userPayload?.userRecord?.AnonymousVisitorID).toBeUndefined();
+      expect(req.userPayload?.userRecord?.MagicLinkScope?.ResourceID).toBe('res-1');
+    });
+  });
 });

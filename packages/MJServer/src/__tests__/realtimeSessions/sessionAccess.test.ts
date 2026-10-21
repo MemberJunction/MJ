@@ -27,38 +27,53 @@ describe('AuthorizeSessionAccess', () => {
         expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: null }, { ID: '' })).toEqual({ Allowed: false, Reason: 'not_owner' });
     });
 
-    describe('anonymous widget guests (one shared Anonymous user)', () => {
-        const guest = (scope?: string) => ({ ID: OWNER, IsMagicLinkAnonymous: true, MagicLinkScope: scope ? { ResourceID: scope } : undefined });
-
-        it('allows a guest whose signed scope matches the conversation ExternalID', () => {
-            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest('scope-1'))).toEqual({ Allowed: true });
+    describe('anonymous visitors (one shared Anonymous user, distinguished by AnonymousVisitorID)', () => {
+        const guest = (visitorId?: string, resourceId?: string) => ({
+            ID: OWNER,
+            IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: visitorId,
+            MagicLinkScope: resourceId ? { ResourceID: resourceId } : undefined,
         });
 
-        it('refuses a different guest (same Anonymous user id, different scope) — the cross-guest leak', () => {
-            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest('scope-2'))).toEqual({
+        it('allows a guest whose AnonymousVisitorID matches the conversation ExternalID', () => {
+            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'visitor-1' }, guest('visitor-1'))).toEqual({ Allowed: true });
+        });
+
+        it('refuses a different guest (same Anonymous user id and even same MagicLinkScope.ResourceID, different AnonymousVisitorID)', () => {
+            expect(
+                AuthorizeSessionAccess(
+                    { SessionUserID: OWNER, ConversationExternalID: 'visitor-1' },
+                    guest('visitor-2', 'shared-resource'),
+                ),
+            ).toEqual({
                 Allowed: false,
                 Reason: 'scope_mismatch',
             });
         });
 
-        it('refuses an anonymous principal with no scope at all', () => {
-            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest())).toEqual({
+        it('refuses an anonymous principal with no AnonymousVisitorID even if MagicLinkScope.ResourceID matches', () => {
+            expect(
+                AuthorizeSessionAccess(
+                    { SessionUserID: OWNER, ConversationExternalID: 'shared-resource' },
+                    guest(undefined, 'shared-resource'),
+                ),
+            ).toEqual({
                 Allowed: false,
                 Reason: 'scope_missing',
             });
         });
 
         it('refuses when the conversation carries no scope id (unreadable or unscoped)', () => {
-            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: null }, guest('scope-1'))).toEqual({ Allowed: false, Reason: 'scope_mismatch' });
-            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: undefined }, guest('scope-1'))).toEqual({ Allowed: false, Reason: 'scope_mismatch' });
+            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: null }, guest('visitor-1'))).toEqual({ Allowed: false, Reason: 'scope_mismatch' });
+            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: undefined }, guest('visitor-1'))).toEqual({ Allowed: false, Reason: 'scope_mismatch' });
         });
 
-        it('compares scope ids exactly — they are case-significant opaque strings, not UUIDs', () => {
+        it('compares visitor ids exactly — they are case-significant opaque strings, not UUIDs', () => {
             expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'AbC' }, guest('abc'))).toEqual({ Allowed: false, Reason: 'scope_mismatch' });
         });
 
         it('still requires the owner to match', () => {
-            expect(AuthorizeSessionAccess({ SessionUserID: OTHER, ConversationExternalID: 'scope-1' }, guest('scope-1'))).toEqual({ Allowed: false, Reason: 'not_owner' });
+            expect(AuthorizeSessionAccess({ SessionUserID: OTHER, ConversationExternalID: 'visitor-1' }, guest('visitor-1'))).toEqual({ Allowed: false, Reason: 'not_owner' });
         });
     });
 
