@@ -36,6 +36,7 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
         Instance: {
             Config: vi.fn().mockResolvedValue(undefined),
             Agents: hoisted.agents,
+            ReadableAgents: hoisted.agents,
         },
     },
     AIAgentPermissionHelper: {

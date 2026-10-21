@@ -92,7 +92,7 @@ export const RecordProcessChecks: NamedCheck[] = [
             const processor = new FunctionRecordProcessor(async () => ({ Status: 'Succeeded' as const, ResultPayload: { ok: true } }));
 
             const result = await RecordSetProcessor.Instance.Process({
-                source, processor, contextUser: user, entityID, triggeredBy: 'OnDemand',
+                Source: source, Processor: processor, ContextUser: user, EntityID: entityID, TriggeredBy: 'OnDemand',
             });
 
             Assert(result.ProcessRunID != null, 'No Process Run was created');
@@ -131,7 +131,7 @@ export const RecordProcessChecks: NamedCheck[] = [
             });
 
             const result = await RecordSetProcessor.Instance.Process({
-                source, processor, contextUser: user, entityID, triggeredBy: 'OnDemand',
+                Source: source, Processor: processor, ContextUser: user, EntityID: entityID, TriggeredBy: 'OnDemand',
             });
             AssertEqual(result.Processed, 3, 'processed');
             AssertEqual(result.Success, 1, 'success');
@@ -162,7 +162,7 @@ export const RecordProcessChecks: NamedCheck[] = [
             });
 
             const result = await RecordSetProcessor.Instance.Process({
-                source, processor, contextUser: user, entityID, triggeredBy: 'OnDemand',
+                Source: source, Processor: processor, ContextUser: user, EntityID: entityID, TriggeredBy: 'OnDemand',
             });
             AssertEqual(result.Processed, 3, 'all records were attempted (no abort on the throw)');
             AssertEqual(result.Success, 2, 'two succeeded');
@@ -188,8 +188,8 @@ export const RecordProcessChecks: NamedCheck[] = [
             const processor = new FunctionRecordProcessor(async () => ({ Status: 'Failed' as const, ErrorMessage: 'always fails' }));
 
             const result = await RecordSetProcessor.Instance.Process({
-                source, processor, contextUser: user, entityID, triggeredBy: 'OnDemand',
-                batchSize: 1, errorThresholdPercent: 50,
+                Source: source, Processor: processor, ContextUser: user, EntityID: entityID, TriggeredBy: 'OnDemand',
+                BatchSize: 1, ErrorThresholdPercent: 50,
             });
             AssertEqual(result.Status, 'Failed', 'run failed via circuit breaker');
             Assert(result.Processed < 10, `circuit breaker stopped early (processed ${result.Processed} of 10)`);
@@ -208,7 +208,7 @@ export const RecordProcessChecks: NamedCheck[] = [
             const processor = new FunctionRecordProcessor(async () => ({ Status: 'Succeeded' as const }));
 
             const result = await RecordSetProcessor.Instance.Process({
-                source, processor, contextUser: user, entityID, triggeredBy: 'OnDemand', batchSize: 2,
+                Source: source, Processor: processor, ContextUser: user, EntityID: entityID, TriggeredBy: 'OnDemand', BatchSize: 2,
             });
             AssertEqual(result.Status, 'Completed', 'completed across batches');
             AssertEqual(result.Processed, 5, 'all 5 records processed (3 batches of 2/2/1)');
@@ -236,7 +236,7 @@ export const RecordProcessChecks: NamedCheck[] = [
             });
 
             const result = await RecordSetProcessor.Instance.Process({
-                source, processor, contextUser: user, entityID, triggeredBy: 'OnDemand', batchSize: 6, maxConcurrency: 3,
+                Source: source, Processor: processor, ContextUser: user, EntityID: entityID, TriggeredBy: 'OnDemand', BatchSize: 6, MaxConcurrency: 3,
             });
             AssertEqual(result.Processed, 6, 'all processed');
             Assert(maxActive > 1, 'records genuinely ran concurrently');
@@ -255,7 +255,7 @@ export const RecordProcessChecks: NamedCheck[] = [
             const processor = new FunctionRecordProcessor(async () => ({ Status: 'Succeeded' as const }));
 
             const result = await RecordSetProcessor.Instance.Process({
-                source, processor, contextUser: user, entityID, triggeredBy: 'OnDemand', dryRun: true,
+                Source: source, Processor: processor, ContextUser: user, EntityID: entityID, TriggeredBy: 'OnDemand', DryRun: true,
             });
             Assert(result.ProcessRunID != null, 'No Process Run was created');
 
@@ -278,7 +278,7 @@ export const RecordProcessChecks: NamedCheck[] = [
 
             // dryRun omitted entirely — the default must persist as DryRun=0, not null.
             const result = await RecordSetProcessor.Instance.Process({
-                source, processor, contextUser: user, entityID, triggeredBy: 'OnDemand',
+                Source: source, Processor: processor, ContextUser: user, EntityID: entityID, TriggeredBy: 'OnDemand',
             });
             Assert(result.ProcessRunID != null, 'No Process Run was created');
 
@@ -301,9 +301,9 @@ export const RecordProcessChecks: NamedCheck[] = [
             // Leg 1: pause after the checkpoint where >=4 records are processed (batchSize 2 → offset 4).
             const t1 = new InMemoryRunTracker({ pauseAtProcessed: 4 });
             const r1 = await RecordSetProcessor.Instance.Process({
-                source: new ArraySource(all, entityID),
-                processor: new FunctionRecordProcessor(async (rec) => { firstLeg.push(String(rec.RecordID)); return { Status: 'Succeeded' as const }; }),
-                tracker: t1, contextUser: ctx.User, batchSize: 2,
+                Source: new ArraySource(all, entityID),
+                Processor: new FunctionRecordProcessor(async (rec) => { firstLeg.push(String(rec.RecordID)); return { Status: 'Succeeded' as const }; }),
+                Tracker: t1, ContextUser: ctx.User, BatchSize: 2,
             });
             AssertEqual(r1.Status, 'Paused', 'AP1 leg 1 must pause at the checkpoint');
             AssertEqual(r1.Processed, 4, 'AP1 leg 1 processed exactly to the pause boundary');
@@ -312,9 +312,9 @@ export const RecordProcessChecks: NamedCheck[] = [
             // Leg 2: resume from leg 1's cursor — the engine asks the tracker for the resume cursor.
             const t2 = new InMemoryRunTracker({ resumeCursor: t1.LastCursor });
             const r2 = await RecordSetProcessor.Instance.Process({
-                source: new ArraySource(all, entityID),
-                processor: new FunctionRecordProcessor(async (rec) => { secondLeg.push(String(rec.RecordID)); return { Status: 'Succeeded' as const }; }),
-                tracker: t2, contextUser: ctx.User, batchSize: 2, resume: true,
+                Source: new ArraySource(all, entityID),
+                Processor: new FunctionRecordProcessor(async (rec) => { secondLeg.push(String(rec.RecordID)); return { Status: 'Succeeded' as const }; }),
+                Tracker: t2, ContextUser: ctx.User, BatchSize: 2, Resume: true,
             });
             AssertEqual(r2.Status, 'Completed', 'AP1 leg 2 must run to completion');
 
@@ -335,10 +335,10 @@ export const RecordProcessChecks: NamedCheck[] = [
 
             // Leg A: the gate vetoes after the first batch → Paused with the stamped reason.
             const rA = await RecordSetProcessor.Instance.Process({
-                source: new ArraySource(makeRecordRefs(entityID, 'ap9a', 6), entityID),
-                processor: new FunctionRecordProcessor(async () => ({ Status: 'Succeeded' as const })),
-                tracker: new InMemoryRunTracker(), contextUser: ctx.User, batchSize: 2,
-                onAfterBatch: async () => ({ continue: false, reason: 'it-budget-cap' }),
+                Source: new ArraySource(makeRecordRefs(entityID, 'ap9a', 6), entityID),
+                Processor: new FunctionRecordProcessor(async () => ({ Status: 'Succeeded' as const })),
+                Tracker: new InMemoryRunTracker(), ContextUser: ctx.User, BatchSize: 2,
+                OnAfterBatch: async () => ({ Continue: false, Reason: 'it-budget-cap' }),
             });
             AssertEqual(rA.Status, 'Paused', 'AP9: a vetoing budget gate must pause the run');
             AssertEqual(rA.Processed, 2, 'AP9: the veto lands AFTER the first batch (2 of 6 processed)');
@@ -347,10 +347,10 @@ export const RecordProcessChecks: NamedCheck[] = [
 
             // Leg B: a THROWING gate must be isolated (safeAfterBatch) — the run completes.
             const rB = await RecordSetProcessor.Instance.Process({
-                source: new ArraySource(makeRecordRefs(entityID, 'ap9b', 6), entityID),
-                processor: new FunctionRecordProcessor(async () => ({ Status: 'Succeeded' as const })),
-                tracker: new InMemoryRunTracker(), contextUser: ctx.User, batchSize: 2,
-                onAfterBatch: async () => { throw new Error('it-hook-explosion'); },
+                Source: new ArraySource(makeRecordRefs(entityID, 'ap9b', 6), entityID),
+                Processor: new FunctionRecordProcessor(async () => ({ Status: 'Succeeded' as const })),
+                Tracker: new InMemoryRunTracker(), ContextUser: ctx.User, BatchSize: 2,
+                OnAfterBatch: async () => { throw new Error('it-hook-explosion'); },
             });
             AssertEqual(rB.Status, 'Completed', 'AP9: a throwing budget hook must be swallowed, not fail the run');
             AssertEqual(rB.Processed, 6, 'AP9: all records processed despite the throwing hook');
@@ -363,10 +363,10 @@ export const RecordProcessChecks: NamedCheck[] = [
             const entityID = await resolveEntityID(ctx.User);
             const processedIds: string[] = [];
             const result = await RecordSetProcessor.Instance.Process({
-                source: new ArraySource(makeRecordRefs(entityID, 'ap10', 10), entityID),
-                processor: new FunctionRecordProcessor(async (rec) => { processedIds.push(String(rec.RecordID)); return { Status: 'Succeeded' as const }; }),
-                tracker: new InMemoryRunTracker(), contextUser: ctx.User,
-                batchSize: 3, maxRecords: 7,
+                Source: new ArraySource(makeRecordRefs(entityID, 'ap10', 10), entityID),
+                Processor: new FunctionRecordProcessor(async (rec) => { processedIds.push(String(rec.RecordID)); return { Status: 'Succeeded' as const }; }),
+                Tracker: new InMemoryRunTracker(), ContextUser: ctx.User,
+                BatchSize: 3, MaxRecords: 7,
             });
             AssertEqual(result.Status, 'Completed', 'AP10: a capped run terminates Completed, not Paused/Failed');
             AssertEqual(result.Processed, 7, `AP10: the cap must trim mid-batch to EXACTLY 7 (3+3+1), got ${result.Processed}`);
@@ -385,9 +385,9 @@ export const RecordProcessChecks: NamedCheck[] = [
             // handshake is graceful (finish the in-flight batch) rather than abortive.
             const tracker = new InMemoryRunTracker({ pauseAtProcessed: 5 });
             const result = await RecordSetProcessor.Instance.Process({
-                source: new ArraySource(makeRecordRefs(entityID, 'ap11', 12), entityID),
-                processor: new FunctionRecordProcessor(async () => ({ Status: 'Succeeded' as const })),
-                tracker, contextUser: ctx.User, batchSize: 3,
+                Source: new ArraySource(makeRecordRefs(entityID, 'ap11', 12), entityID),
+                Processor: new FunctionRecordProcessor(async () => ({ Status: 'Succeeded' as const })),
+                Tracker: tracker, ContextUser: ctx.User, BatchSize: 3,
             });
             AssertEqual(result.Status, 'Paused', 'AP11: the tracker veto must pause the run');
             AssertEqual(result.Processed, 6, `AP11: halt lands at the NEXT batch boundary (6, not 5) — got ${result.Processed}`);

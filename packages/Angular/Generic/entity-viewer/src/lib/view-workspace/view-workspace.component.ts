@@ -8,7 +8,7 @@ import {
   ViewChild
 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityFieldInfo, EntityInfo, LogError } from '@memberjunction/core';
+import { EntityFieldInfo, EntityInfo, LogError, ToPlainJSON } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   MJUserViewEntityExtended,
@@ -366,6 +366,15 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
 
   /** Reference to the config panel (for building summaries + canEdit checks). */
   @ViewChild(ViewConfigPanelComponent) protected viewConfigPanelRef?: ViewConfigPanelComponent;
+
+  /**
+   * Reload the grid's rows without moving the user off their page or sort — for a
+   * host that learns its data changed elsewhere (e.g. a row was deleted from a form).
+   * See `EntityViewerComponent.RefreshInPlace`.
+   */
+  public RefreshInPlace(): void {
+    this.entityViewerRef?.RefreshInPlace();
+  }
 
   // ========================================
   // INTERNAL STATE (plain fields — no state service)
@@ -1906,7 +1915,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       return null;
     }
     try {
-      const parsed = view.GridStateObject;
+      // Detached copy: the grid and config panel edit this state in place (e.g. aggregate reorder),
+      // and edits through the live accessor would dirty the view even when the user cancels.
+      const parsed = ToPlainJSON(view.GridStateObject);
       if (parsed && Array.isArray(parsed.columnSettings)) {
         const validColumns = this._entity
           ? parsed.columnSettings.filter(

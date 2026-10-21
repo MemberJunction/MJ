@@ -1,0 +1,20 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Branches",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Conversation Branches&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T19:00:10.743Z",
+      "checksum": "94b77694cbf637bc05f922de9afc6119d2ba3025226d777c53de50462d1e1aa9"
+    }
+  }
+]

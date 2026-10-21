@@ -184,6 +184,7 @@
             <div class="mj-forms-chrome-rail-item"
                  role="button"
                  tabindex="0"
+                 [attr.data-rail-key]="group.Key"
                  [class.is-active]="ChromeActiveGroupKey === group.Key"
                  [attr.aria-current]="ChromeActiveGroupKey === group.Key ? 'page' : null"
                  [class.is-drag-over]="RailDragOverKey === group.Key"
@@ -270,6 +271,12 @@
                       [attr.aria-label]="RailWarningTitle(moreIndicators.WarningCount, more.Title)">
                   <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>{{ moreIndicators.WarningCount }}
                 </span>
+              }
+              @if (!MoreExpanded) {
+                @let moreRowCount = ChromeMoreRowCount;
+                @if (moreRowCount != null && moreRowCount > 0) {
+                  <span class="mj-forms-chrome-rail-count" title="Rows across the sections in More">{{ moreRowCount }}</span>
+                }
               }
               <i class="fa-solid mj-forms-chrome-rail-more-toggle"
                  [class.fa-minus]="MoreExpanded"
@@ -394,6 +401,12 @@
               @if (!MoreExpanded && MorePreview) {
                 <span class="mj-forms-more-overflow-preview">{{ MorePreview }}</span>
               }
+              @if (!MoreExpanded) {
+                @let accordionMoreCount = ChromeMoreRowCount;
+                @if (accordionMoreCount != null && accordionMoreCount > 0) {
+                  <span class="mj-forms-chrome-rail-count" title="Rows across the sections in More">{{ accordionMoreCount }}</span>
+                }
+              }
               <i class="fa-solid"
                  [class.fa-chevron-down]="MoreExpanded"
                  [class.fa-chevron-right]="!MoreExpanded"></i>
@@ -504,3 +517,23 @@
   (ResetRequested)="OnSectionManagerReset()"
   (Closed)="OnSectionManagerClosed()">
 </mj-section-manager>
+
+<!-- ============================================
+     PANEL MANAGER DRAWER — what is registered on this form, and the switches for it
+     ============================================ -->
+<mj-panel-manager
+  [Visible]="ShowPanelManager"
+  [Entity]="EffectiveEntityInfo"
+  [Compiled]="PanelManagerCompiled"
+  [StockGrids]="PanelManagerStockGrids"
+  [FullCustomForm]="!!fc?.OwnsEntireFormBody"
+  [TitleByKey]="PanelManagerTitles"
+  [Related]="PanelManagerRelated"
+  [Provider]="ProviderToUse"
+  [Variants]="EffectiveVariants"
+  [CurrentFormID]="EffectiveCurrentVariantID"
+  [RecordKey]="PanelManagerRecordKey"
+  (Changed)="OnPanelManagerChanged()"
+  (FormChosen)="OnPanelManagerFormChosen($event)"
+  (Closed)="OnPanelManagerClosed()">
+</mj-panel-manager>

@@ -5,8 +5,9 @@
  */
 
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
-import { LogError, IMetadataProvider } from '@memberjunction/core';
+import { LogError } from '@memberjunction/core';
 import { TelephonyResolverContext, GetUserFromPayload, GetReadWriteProvider } from '../types.js';
+import { OutboundCallRefusedError } from '../telephony/outboundCallPolicy.js';
 import { GetRingCentralTelephonyService } from '../telephony/ringcentral-runtime.js';
 
 /** Result of an outbound RingCentral place-call attempt. */
@@ -52,7 +53,9 @@ export class RingCentralTelephonyResolver {
             return { Success: true, SessionId: sessionId };
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
-            LogError(`PlaceRingCentralCall failed: ${msg}`);
+            if (!(error instanceof OutboundCallRefusedError)) {
+                LogError(`PlaceRingCentralCall failed: ${msg}`); // a refusal was already logged (masked) by the outbound gate
+            }
             return failure(msg);
         }
     }

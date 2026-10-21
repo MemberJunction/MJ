@@ -1,0 +1,397 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Telephony & Interaction Operations"
+    Subtitle="Real-time metrics, volume breakdown, answer rates, and cost analysis across channels"
+    Icon="fa-solid fa-chart-line"
+  >
+    <div meta>
+      <mj-stat-badge
+        [Count]="Metrics.LiveCallsCount"
+        [Total]="Metrics.TotalVolume"
+        Label="live now"
+        [Variant]="Metrics.LiveCallsCount > 0 ? 'success' : 'default'"
+      />
+    </div>
+
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="LoadData()" />
+    </div>
+
+    <div toolbar>
+      <div class="toolbar-controls">
+        <mj-page-search [Value]="SearchQuery" (ValueChange)="OnSearchQueryChange($event)" />
+
+        <div class="time-range-pills" role="radiogroup" aria-label="Time Range">
+          <button
+            type="button"
+            class="range-pill"
+            [class.active]="SelectedTimeRange === '24h'"
+            (click)="SetTimeRange('24h')"
+          >
+            24h
+          </button>
+          <button
+            type="button"
+            class="range-pill"
+            [class.active]="SelectedTimeRange === '7d'"
+            (click)="SetTimeRange('7d')"
+          >
+            7d
+          </button>
+          <button
+            type="button"
+            class="range-pill"
+            [class.active]="SelectedTimeRange === '30d'"
+            (click)="SetTimeRange('30d')"
+          >
+            30d
+          </button>
+          <button
+            type="button"
+            class="range-pill"
+            [class.active]="SelectedTimeRange === 'all'"
+            (click)="SetTimeRange('all')"
+          >
+            All Time
+          </button>
+        </div>
+
+        <div class="channel-filter-pills" role="radiogroup" aria-label="Channel Filter">
+          <button
+            type="button"
+            class="channel-pill"
+            [class.active]="SelectedChannelFilter === 'all'"
+            (click)="SetChannelFilter('all')"
+          >
+            All Channels
+          </button>
+          <button
+            type="button"
+            class="channel-pill"
+            [class.active]="SelectedChannelFilter === 'Phone'"
+            (click)="SetChannelFilter('Phone')"
+          >
+            <i class="fa-solid fa-phone"></i> Phone
+          </button>
+          <button
+            type="button"
+            class="channel-pill"
+            [class.active]="SelectedChannelFilter === 'Web'"
+            (click)="SetChannelFilter('Web')"
+          >
+            <i class="fa-solid fa-globe"></i> Web
+          </button>
+          <button
+            type="button"
+            class="channel-pill"
+            [class.active]="SelectedChannelFilter === 'Meeting'"
+            (click)="SetChannelFilter('Meeting')"
+          >
+            <i class="fa-solid fa-users"></i> Meeting
+          </button>
+        </div>
+      </div>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    @if (ErrorMessage) {
+      <div class="error-banner" role="alert">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span>{{ ErrorMessage }}</span>
+      </div>
+    }
+
+    <!-- KPI Metric Cards Grid -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-icon-wrap primary">
+          <i class="fa-solid fa-headset"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Total Volume</span>
+          <span class="kpi-value">{{ Metrics.TotalVolume }}</span>
+          <span class="kpi-subtext">in selected window</span>
+        </div>
+      </div>
+
+      <div class="kpi-card" [class.live-active]="Metrics.LiveCallsCount > 0">
+        <div class="kpi-icon-wrap success">
+          <span class="live-dot-ping"></span>
+          <i class="fa-solid fa-phone-volume"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Live Now</span>
+          <span class="kpi-value">{{ Metrics.LiveCallsCount }}</span>
+          <span class="kpi-subtext">active sessions</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon-wrap success">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Answer Rate</span>
+          <span class="kpi-value">{{ Metrics.AnswerRate | number:'1.0-1' }}%</span>
+          <span class="kpi-subtext">{{ Metrics.AnsweredCount }} answered</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon-wrap warning">
+          <i class="fa-solid fa-phone-slash"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Abandonment Rate</span>
+          <span class="kpi-value">{{ Metrics.AbandonmentRate | number:'1.0-1' }}%</span>
+          <span class="kpi-subtext">{{ Metrics.AbandonedCount }} caller abandons</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon-wrap info">
+          <i class="fa-solid fa-clock"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Avg Handle Time</span>
+          <span class="kpi-value">{{ Metrics.AverageHandleTimeFormatted }}</span>
+          <span class="kpi-subtext">ASA: {{ Metrics.AverageSpeedToAnswerFormatted }}</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon-wrap accent">
+          <i class="fa-solid fa-arrows-split-up-and-left"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Transfers & Esc.</span>
+          <span class="kpi-value">{{ Metrics.TransferCount }} / {{ Metrics.EscalationCount }}</span>
+          <span class="kpi-subtext">transfers / escalations</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon-wrap cost">
+          <i class="fa-solid fa-dollar-sign"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Total Cost Est.</span>
+          <span class="kpi-value">{{ Metrics.TotalCostFormatted }}</span>
+          <span class="kpi-subtext">usage & carrier minutes</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Live Calls Section -->
+    <div class="dashboard-section live-section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="live-pulse-badge"></span>
+          <h2>Active Live Sessions</h2>
+          <span class="count-pill">{{ FilteredLiveInteractions.length }}</span>
+        </div>
+      </div>
+
+      @if (FilteredLiveInteractions.length === 0) {
+        <div class="empty-feed">
+          <i class="fa-solid fa-phone-slash empty-icon"></i>
+          <p>No active live interactions at this moment.</p>
+        </div>
+      } @else {
+        <div class="live-table-container">
+          <table class="ops-table">
+            <thead>
+              <tr>
+                <th>Remote Address</th>
+                <th>Channel</th>
+                <th>Direction</th>
+                <th>Status</th>
+                <th>Started</th>
+                <th>Elapsed</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (live of FilteredLiveInteractions; track live.ID) {
+                <tr class="live-row">
+                  <td class="address-col">
+                    <i class="fa-solid fa-user-circle address-icon"></i>
+                    <span class="address-text">{{ live.RemoteAddress || 'Unknown' }}</span>
+                  </td>
+                  <td>
+                    <span class="badge channel-badge {{ live.Channel.toLowerCase() }}">
+                      {{ live.Channel }}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="badge direction-badge {{ live.Direction.toLowerCase() }}">
+                      {{ live.Direction }}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="status-indicator active">
+                      <span class="dot"></span>
+                      {{ live.Status }}
+                    </span>
+                  </td>
+                  <td>{{ FormatTime(live.StartedAt) }}</td>
+                  <td class="elapsed-col">
+                    <span class="elapsed-badge">{{ live.ElapsedLabel }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+
+    <!-- Middle Row: Volume Breakdown Cards -->
+    <div class="two-col-grid">
+      <!-- Volume by Channel & Direction -->
+      <div class="dashboard-card">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-layer-group"></i> Volume Distribution</h3>
+        </div>
+        <div class="card-body">
+          <div class="distribution-group">
+            <h4>By Channel</h4>
+            <div class="bars-container">
+              @for (item of Metrics.VolumeByChannel; track item.Channel) {
+                <div class="bar-row">
+                  <div class="bar-info">
+                    <span class="bar-label">{{ item.Channel }}</span>
+                    <span class="bar-stats">{{ item.Count }} ({{ item.Percentage }}%)</span>
+                  </div>
+                  <div class="bar-track">
+                    <div class="bar-fill channel-{{ item.Channel.toLowerCase() }}" [style.width.%]="item.Percentage"></div>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="distribution-group">
+            <h4>By Direction</h4>
+            <div class="bars-container">
+              @for (item of Metrics.VolumeByDirection; track item.Direction) {
+                <div class="bar-row">
+                  <div class="bar-info">
+                    <span class="bar-label">{{ item.Direction }}</span>
+                    <span class="bar-stats">{{ item.Count }} ({{ item.Percentage }}%)</span>
+                  </div>
+                  <div class="bar-track">
+                    <div class="bar-fill direction-{{ item.Direction.toLowerCase() }}" [style.width.%]="item.Percentage"></div>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cost by Number -->
+      <div class="dashboard-card">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-money-bill-wave"></i> Cost by Phone Number</h3>
+        </div>
+        <div class="card-body">
+          @if (Metrics.CostByNumber.length === 0) {
+            <div class="empty-feed">
+              <p>No phone number cost records in this window.</p>
+            </div>
+          } @else {
+            <div class="cost-table-container">
+              <table class="ops-table compact">
+                <thead>
+                  <tr>
+                    <th>Phone Number / Target</th>
+                    <th>Calls</th>
+                    <th class="text-right">Est. Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (num of Metrics.CostByNumber; track num.PhoneNumber) {
+                    <tr>
+                      <td class="font-medium">{{ num.PhoneNumber }}</td>
+                      <td>{{ num.Count }}</td>
+                      <td class="text-right font-semibold">{{ FormatCost(num.Cost) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Row: Recent Interactions Audit Table -->
+    <div class="dashboard-section">
+      <div class="section-header">
+        <div class="section-title">
+          <i class="fa-solid fa-list-check"></i>
+          <h2>Recent Interactions</h2>
+          <span class="count-pill">{{ FilteredRecentInteractions.length }}</span>
+        </div>
+      </div>
+
+      @if (FilteredRecentInteractions.length === 0) {
+        <div class="empty-feed">
+          <p>No interactions found matching criteria.</p>
+        </div>
+      } @else {
+        <div class="table-container">
+          <table class="ops-table">
+            <thead>
+              <tr>
+                <th>Date / Time</th>
+                <th>Remote Party</th>
+                <th>Channel</th>
+                <th>Direction</th>
+                <th>Status</th>
+                <th>Duration</th>
+                <th>End Reason</th>
+                <th class="text-right">Est. Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of FilteredRecentInteractions; track row.ID) {
+                <tr>
+                  <td>
+                    <div class="datetime-cell">
+                      <span class="date">{{ FormatDate(row.StartedAt) }}</span>
+                      <span class="time">{{ FormatTime(row.StartedAt) }}</span>
+                    </div>
+                  </td>
+                  <td class="address-col">
+                    <span>{{ row.RemoteAddress || 'Unknown' }}</span>
+                  </td>
+                  <td>
+                    <span class="badge channel-badge {{ row.Channel.toLowerCase() }}">
+                      {{ row.Channel }}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="badge direction-badge {{ row.Direction.toLowerCase() }}">
+                      {{ row.Direction }}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="status-indicator {{ row.Status.toLowerCase() }}">
+                      <span class="dot"></span>
+                      {{ row.Status }}
+                    </span>
+                  </td>
+                  <td>{{ ComputeDuration(row.StartedAt, row.EndedAt) }}</td>
+                  <td class="end-reason-cell">{{ row.EndReason || '-' }}</td>
+                  <td class="text-right">{{ FormatCost(row.CostEstimate) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  </mj-page-body>
+</mj-page-layout>

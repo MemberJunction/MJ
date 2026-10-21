@@ -380,4 +380,102 @@ describe('GraphQLTransactionGroup', () => {
     expect(vars.group.Variables[0].FieldName).toBe('TargetID');
     expect(vars.group.Variables[0].Type).toBe('output');
   });
+
+  it('excludes clean, read-only, and NotLoaded non-PK fields from EntityObjectJSON on Update', async () => {
+    const mockResults = {
+      ExecuteTransactionGroup: {
+        Success: true,
+        ErrorMessages: [],
+        ResultsJSON: [JSON.stringify({ ID: 'act-1', Name: 'Action 1', Description: 'Updated' })],
+      },
+    };
+    mockProvider.ExecuteGQL.mockResolvedValue(mockResults);
+
+    const getDataObjectJSON = vi.fn().mockImplementation(async (params?: { excludeFields?: string[] }) => {
+      const full: Record<string, unknown> = {
+        ID: 'act-1',
+        Name: 'Action 1',
+        Description: 'Updated',
+        DriverClass: 'MyDriver',
+        __mj_UpdatedAt: '2026-04-20T00:00:00Z',
+      };
+      for (const excluded of params?.excludeFields ?? []) {
+        delete full[excluded];
+      }
+      return JSON.stringify(full);
+    });
+
+    const group = new GraphQLTransactionGroup(mockProvider as never);
+    group.PendingTransactions = [
+      {
+        BaseEntity: {
+          EntityInfo: { Name: 'MJ: Actions' },
+          Fields: [
+            { Name: 'ID', IsPrimaryKey: true, ReadOnly: true, NotLoaded: false, Dirty: false },
+            { Name: 'Name', IsPrimaryKey: false, ReadOnly: false, NotLoaded: false, Dirty: false },
+            { Name: 'Description', IsPrimaryKey: false, ReadOnly: false, NotLoaded: false, Dirty: true },
+            { Name: 'DriverClass', IsPrimaryKey: false, ReadOnly: false, NotLoaded: false, Dirty: false },
+            { Name: '__mj_UpdatedAt', IsPrimaryKey: false, ReadOnly: true, NotLoaded: false, Dirty: false },
+          ],
+          GetDataObjectJSON: getDataObjectJSON,
+          RegisterResultHistoryEntry: vi.fn(),
+        },
+        OperationType: 'Update',
+      },
+    ] as unknown as typeof group.PendingTransactions;
+
+    const handleSubmit = (group as Record<string, Function>)['HandleSubmit'].bind(group);
+    await handleSubmit();
+
+    expect(getDataObjectJSON).toHaveBeenCalledWith(
+      expect.objectContaining({
+        excludeFields: ['Name', 'DriverClass', '__mj_UpdatedAt'],
+      })
+    );
+    const callArgs = mockProvider.ExecuteGQL.mock.calls[0];
+    const sentItem = callArgs[1].group.Items[0];
+    expect(JSON.parse(sentItem.EntityObjectJSON)).toEqual({
+      ID: 'act-1',
+      Description: 'Updated',
+    });
+  });
+
+  it('sends all loaded fields on Update when ExtraData.ignoreDirtyState is true', async () => {
+    const mockResults = {
+      ExecuteTransactionGroup: {
+        Success: true,
+        ErrorMessages: [],
+        ResultsJSON: [JSON.stringify({ ID: 'act-1', Name: 'Action 1', Description: 'Updated' })],
+      },
+    };
+    mockProvider.ExecuteGQL.mockResolvedValue(mockResults);
+
+    const getDataObjectJSON = vi.fn().mockResolvedValue(
+      JSON.stringify({ ID: 'act-1', Name: 'Action 1', Description: 'Updated' })
+    );
+
+    const group = new GraphQLTransactionGroup(mockProvider as never);
+    group.PendingTransactions = [
+      {
+        BaseEntity: {
+          EntityInfo: { Name: 'MJ: Actions' },
+          Fields: [
+            { Name: 'ID', IsPrimaryKey: true, ReadOnly: true, NotLoaded: false, Dirty: false },
+            { Name: 'Name', IsPrimaryKey: false, ReadOnly: false, NotLoaded: false, Dirty: false },
+            { Name: 'Description', IsPrimaryKey: false, ReadOnly: false, NotLoaded: false, Dirty: true },
+          ],
+          GetDataObjectJSON: getDataObjectJSON,
+          RegisterResultHistoryEntry: vi.fn(),
+        },
+        OperationType: 'Update',
+        ExtraData: { ignoreDirtyState: true },
+      },
+    ] as unknown as typeof group.PendingTransactions;
+
+    const handleSubmit = (group as Record<string, Function>)['HandleSubmit'].bind(group);
+    await handleSubmit();
+
+    expect(getDataObjectJSON).toHaveBeenCalledWith();
+  });
 });
+

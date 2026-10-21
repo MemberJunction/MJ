@@ -137,3 +137,31 @@
 :host(.mj-list-host-scrolled) .message-list-container {
   overflow: visible;
 }
+
+/* The fork marker of a view with no rows; the same look as the marker under a row (message-item) */
+.fork-marker {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-4) var(--mj-space-6) var(--mj-space-2);
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-secondary);
+}
+.fork-marker i {
+  color: var(--mj-status-info);
+}
+.fork-marker-line {
+  flex: 1;
+  height: 1px;
+  background: var(--mj-border-default);
+}
+@media (max-width: 768px) {
+  .fork-marker {
+    padding: var(--mj-space-3) var(--mj-space-3) var(--mj-space-2);
+  }
+}
+@media (max-width: 480px) {
+  .fork-marker {
+    padding: var(--mj-space-2);
+  }
+}

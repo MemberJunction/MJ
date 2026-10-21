@@ -2,6 +2,7 @@ import { RegisterClass, ParseJSONRecursive, ParseJSONOptions } from '@memberjunc
 import { BaseEntity } from '@memberjunction/core';
 import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
+import { IsTemplateDataCaptureMode, type TemplateDataCaptureMode, type TemplateDataShape } from './prompt-run-messages.types';
 
 /**
  * Tracks how a malformed JSON response was repaired during prompt execution.
@@ -29,6 +30,31 @@ export interface JSONRepairInfo {
     repairedOffsets?: number[];
 }
 
+/** The template-data capture fields of a stored `Messages` object. */
+interface TemplateDataCaptureFields {
+    dataCapture: TemplateDataCaptureMode | null;
+    dataShape: TemplateDataShape | null;
+    dataCaptureNote: string | null;
+}
+
+/**
+ * Reads the capture fields from the plain `JSON.parse` result of `Messages`, so a note that ends in JSON
+ * stays as written. The shape and note count only with a known capture marker.
+ */
+function readTemplateDataCaptureFields(parsed: unknown): TemplateDataCaptureFields {
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        return { dataCapture: null, dataShape: null, dataCaptureNote: null };
+    }
+    const stored = parsed as Record<string, unknown>;
+    const marker = typeof stored.dataCapture === 'string' ? stored.dataCapture : null;
+    const dataCapture = IsTemplateDataCaptureMode(marker) ? marker : null;
+    return {
+        dataCapture,
+        dataShape: dataCapture && stored.dataShape && typeof stored.dataShape === 'object' ? stored.dataShape as TemplateDataShape : null,
+        dataCaptureNote: dataCapture && typeof stored.dataCaptureNote === 'string' ? stored.dataCaptureNote : null,
+    };
+}
+
 /**
  * Extended MJAIPromptRunEntity class with helper methods for extracting
  * conversation messages and data from the stored JSON.
@@ -45,13 +71,20 @@ export class MJAIPromptRunEntityExtended extends MJAIPromptRunEntity {
     /**
      * Parses and extracts all message data from the Messages field.
      * This uses the exact logic from the AI Prompt Run form component.
-     * @returns Object containing chatMessages, inputData, and formattedMessages
+     * @returns Object containing chatMessages, inputData, formattedMessages, formattedData,
+     * and the stored template-data capture fields dataCapture, dataShape and dataCaptureNote
      */
     public ParseMessagesData(): {
         chatMessages: ChatMessage[];
         inputData: any | null;
         formattedMessages: string;
         formattedData: string;
+        /** Capture mode stored with the run; null for runs saved before capture modes existed. */
+        dataCapture: TemplateDataCaptureMode | null;
+        /** Key sizes of the template inputs, stored in `None` mode. */
+        dataShape: TemplateDataShape | null;
+        /** Why a `Referenced` run stored `Full`, or why a run stored no template data (its capture step failed). */
+        dataCaptureNote: string | null;
     } {
         const parseOptions: ParseJSONOptions = {
             extractInlineJson: true,
@@ -63,6 +96,9 @@ export class MJAIPromptRunEntityExtended extends MJAIPromptRunEntity {
         let inputData: any = null;
         let formattedMessages: string = '';
         let formattedData: string = '';
+        let dataCapture: TemplateDataCaptureMode | null = null;
+        let dataShape: TemplateDataShape | null = null;
+        let dataCaptureNote: string | null = null;
 
         // Format messages with recursive JSON parsing
         if (this.Messages) {
@@ -95,25 +131,36 @@ export class MJAIPromptRunEntityExtended extends MJAIPromptRunEntity {
                         inputData = null;
                         formattedData = '';
                     }
+
+                    ({ dataCapture, dataShape, dataCaptureNote } = readTemplateDataCaptureFields(parsed));
                 }
             } catch {
                 formattedMessages = this.Messages;
                 chatMessages = [];
                 inputData = null;
                 formattedData = '';
+                dataCapture = null;
+                dataShape = null;
+                dataCaptureNote = null;
             }
         } else {
             formattedMessages = '';
             chatMessages = [];
             inputData = null;
             formattedData = '';
+            dataCapture = null;
+            dataShape = null;
+            dataCaptureNote = null;
         }
 
         return {
             chatMessages,
             inputData,
             formattedMessages,
-            formattedData
+            formattedData,
+            dataCapture,
+            dataShape,
+            dataCaptureNote
         };
     }
     

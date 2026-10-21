@@ -6,6 +6,7 @@
       "ParentID": null,
       "ContentType": "application/vnd.mj.data",
       "DriverClass": "DataArtifactViewerPlugin",
+      "ExtractRules": "@file:extract-rules/data-artifact.json",
       "IsEnabled": true,
       "Icon": "fa-solid fa-table"
     },

@@ -87,7 +87,7 @@ describe('Multi-Tenancy Hooks', () => {
 
       const result = hook(params, user);
       expect((result as RunViewParams).ExtraFilter).toBe(
-        "(Status = 'Active') AND [OrganizationID] = 'tenant-abc'"
+        "(Status = 'Active') AND ([OrganizationID] = 'tenant-abc')"
       );
     });
 
