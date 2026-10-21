@@ -134,4 +134,49 @@ describe('RealtimeWhiteboardToolbarComponent (DOM)', () => {
     expect(undoSpy).toHaveBeenCalledTimes(1);
     expect(redoSpy).toHaveBeenCalledTimes(1);
   });
+
+  // ── PenColors input (LXP P14.3) ────────────────────────────────────────────────────
+  describe('PenColors input', () => {
+    const swatchBackgrounds = (f: Fix): string[] =>
+      (Array.from(f.nativeElement.querySelectorAll('.pen-flyout .pen-c')) as HTMLElement[]).map((s) => s.style.background);
+
+    it('renders the host palette as the pen swatches, in order', () => {
+      const f = renderComponentFixture(RealtimeWhiteboardToolbarComponent, {
+        inputs: { ActiveTool: 'pen', PenColors: ['#111111', '#222222'] },
+      });
+      expect(f.componentInstance.PenColors).toEqual(['#111111', '#222222']);
+      expect(swatchBackgrounds(f)).toHaveLength(2);
+    });
+
+    it('falls back to the default palette for a non-array or empty value', () => {
+      const asString = renderComponentFixture(RealtimeWhiteboardToolbarComponent, {
+        inputs: { ActiveTool: 'pen', PenColors: '#111,#222' as unknown as string[] },
+      });
+      expect(asString.componentInstance.PenColors.length).toBe(5);
+      const empty = renderComponentFixture(RealtimeWhiteboardToolbarComponent, {
+        inputs: { ActiveTool: 'pen', PenColors: [] },
+      });
+      expect(empty.componentInstance.PenColors.length).toBe(5);
+    });
+
+    it('drops blank and non-string entries, trims the rest, and falls back when nothing survives', () => {
+      const dirty = renderComponentFixture(RealtimeWhiteboardToolbarComponent, {
+        inputs: { ActiveTool: 'pen', PenColors: ['', '  #111111 ', 42, null, '#222222'] as unknown as string[] },
+      });
+      expect(dirty.componentInstance.PenColors).toEqual(['#111111', '#222222']);
+      const nothing = renderComponentFixture(RealtimeWhiteboardToolbarComponent, {
+        inputs: { ActiveTool: 'pen', PenColors: ['', '   ', 7] as unknown as string[] },
+      });
+      expect(nothing.componentInstance.PenColors.length).toBe(5);
+    });
+
+    it('keeps a frozen copy: mutating the bound array afterwards does not reach the toolbar', () => {
+      const palette = ['#111111', '#222222'];
+      const f = renderComponentFixture(RealtimeWhiteboardToolbarComponent, {
+        inputs: { ActiveTool: 'pen', PenColors: palette },
+      });
+      palette.push('#333333');
+      expect(f.componentInstance.PenColors).toEqual(['#111111', '#222222']);
+    });
+  });
 });
