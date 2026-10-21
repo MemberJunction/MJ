@@ -27,6 +27,8 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/generic-database-provider', () => ({
+  // The clause screen has its own tests; identity tests send no clauses.
+  ClientClauseScreen: { ScreenViewClauses: () => undefined, DialectFor: () => undefined },
   UserCache: { Instance: { Users: cachedUsers } },
 }));
 

@@ -1,6 +1,6 @@
 import { CommunicationEngine } from "@memberjunction/communication-engine";
 import { MJCommunicationProviderEntityExtended, Message, MessageRecipient } from "@memberjunction/communication-types";
-import { EntityInfo, LogStatus, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
+import { EntityInfo, IMetadataProvider, IRunViewProvider, LogStatus, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJListDetailEntityType, MJListEntityType, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
 import { MJEntityCommunicationMessageTypeEntityExtended, EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationResultItem, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
@@ -18,10 +18,23 @@ export type EntityCommunicationRecipient = { Recipient: MessageRecipient; SkipRe
  */
 export const RECIPIENT_ADDRESS_UNREADABLE_MESSAGE = 'Recipient skipped: the sender cannot read the address field';
 
+/** The provider of the request a communication serves: metadata lookups and reads both go through it. */
+export type RequestProvider = IMetadataProvider & IRunViewProvider;
+
 /**
  * Server-side implementation of the entity communications engine
  */
 export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
+
+    /** A RunView on the request's provider, or on the process default for an in-process caller that passed none. */
+    protected RunViewFor(provider?: RequestProvider): RunView {
+        return new RunView(provider); // global-provider-ok: falls back to the default only when no request provider was passed
+    }
+
+    /** Entity metadata from the request's provider, or from the process default for an in-process caller that passed none. */
+    protected EntityLookupFor(provider?: RequestProvider): Pick<IMetadataProvider, 'Entities' | 'EntityByName'> {
+        return provider ?? new Metadata(); // global-provider-ok: falls back to the default only when no request provider was passed
+    }
 
     public static get Instance(): EntityCommunicationsEngine {
         return super.getInstance<EntityCommunicationsEngine>();
@@ -41,8 +54,8 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             if (!contextUser)
                 throw new Error('EntityCommunicationParams.ContextUser is required: entity communications run as the acting user');
 
-            const md = new Metadata(); // global-provider-ok: server bootstrap, single-provider context
-            const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, params.EntityID));
+            const provider = params.Provider;
+            const entityInfo = this.EntityLookupFor(provider).Entities.find(e => UUIDsEqual(e.ID, params.EntityID));
             if (!entityInfo)
                 throw new Error(`Entity ${params.EntityID} not found`);
             if (!this.EntitySupportsCommunication(params.EntityID))
@@ -50,8 +63,8 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
 
             await CommunicationEngine.Instance.Config(false, contextUser);
             const entityMessageType = this.ResolveEntityMessageType(params);
-            const records = await this.RunRecipientView(entityInfo, params.RunViewParams, contextUser);
-            const recipients = await this.PopulateRecipientContextData(entityInfo, entityMessageType, params.Message, records, contextUser);
+            const records = await this.RunRecipientView(entityInfo, params.RunViewParams, contextUser, provider);
+            const recipients = await this.PopulateRecipientContextData(entityInfo, entityMessageType, params.Message, records, contextUser, provider);
             return await this.SendToRecipients(params, recipients, contextUser);
         }
         catch (e) {
@@ -135,14 +148,14 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
      * entity. The provider narrows that list to the fields the user may read; the rows are stripped
      * again here so a denied field can never reach a message.
      */
-    protected async RunRecipientView(entityInfo: EntityInfo, runViewParams: RunViewParams, contextUser: UserInfo): Promise<EntityCommunicationRecord[]> {
+    protected async RunRecipientView(entityInfo: EntityInfo, runViewParams: RunViewParams, contextUser: UserInfo, provider?: RequestProvider): Promise<EntityCommunicationRecord[]> {
         const rvParams: RunViewParams = {
             ...runViewParams,
             EntityName: entityInfo.Name,
             Fields: entityInfo.Fields.map(f => f.Name),
             ResultType: 'simple'
         };
-        const result = await new RunView().RunView<EntityCommunicationRecord>(rvParams, contextUser);
+        const result = await this.RunViewFor(provider).RunView<EntityCommunicationRecord>(rvParams, contextUser);
         if (!result || !result.Success)
             throw new Error(`Failed to run view ${runViewParams.ViewName ?? runViewParams.ViewID ?? entityInfo.Name}: ${result?.ErrorMessage}`);
         return this.StripDeniedReadFields(entityInfo, result.Results, contextUser);
@@ -166,7 +179,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
      * the acting user; related-entity data is read as that user. A record whose address field the
      * acting user cannot read is returned as a skipped recipient, with no address and no context data.
      */
-    protected async PopulateRecipientContextData(entityInfo: EntityInfo, entityMessageType: MJEntityCommunicationMessageTypeEntityExtended, message: Message, records: any[], contextUser?: UserInfo): Promise<EntityCommunicationRecipient[]> {
+    protected async PopulateRecipientContextData(entityInfo: EntityInfo, entityMessageType: MJEntityCommunicationMessageTypeEntityExtended, message: Message, records: any[], contextUser?: UserInfo, provider?: RequestProvider): Promise<EntityCommunicationRecipient[]> {
         // we have now validated we are good on the message type requested...
         // next up we will figure out which field to use for the entity, starting at the entity level and then going to the record level, IF the entity has
         // a PreferredCommunicationField we will flag that here as recordLevelPref = true
@@ -177,7 +190,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         if (hasTemplates) {
             this.ValidateTemplateContextParamAlignment(message);
         }
-        const relatedData = await this.GetRelatedData(message, records, entityInfo.FirstPrimaryKey.Name, entityInfo.FirstPrimaryKey.NeedsQuotes, contextUser); // first-pk-ok: the recipient key is the FK target of each Entity-param's LinkedParameterField; FK targets are single-column by design
+        const relatedData = await this.GetRelatedData(message, records, entityInfo.FirstPrimaryKey.Name, entityInfo.FirstPrimaryKey.NeedsQuotes, contextUser, provider); // first-pk-ok: the recipient key is the FK target of each Entity-param's LinkedParameterField; FK targets are single-column by design
         // assume that the template(s) if there are multiple, ALL use the same parameters for their contexts, that is validated above
         const templates: MJTemplateEntityExtended[] = [];
         if (message.BodyTemplate) {
@@ -278,7 +291,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
      * @param records 
      * @param contextUser the acting user; required, the read never falls back to the engine's own user
      */
-    protected async GetRelatedData(message: Message, recipients: any[], recipientPrimaryKeyFieldName: string, recipientPrimaryKeyNeedsQuotes: boolean, contextUser?: UserInfo): Promise<{paramName: string, data: any[]}[]> {
+    protected async GetRelatedData(message: Message, recipients: any[], recipientPrimaryKeyFieldName: string, recipientPrimaryKeyNeedsQuotes: boolean, contextUser?: UserInfo, provider?: RequestProvider): Promise<{paramName: string, data: any[]}[]> {
         if (!contextUser)
             throw new Error('GetRelatedData requires the acting user');
         // First, get a distinct list of params of type Entity
@@ -317,9 +330,9 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
                 ExtraFilter: finalFilter,
                 ResultType: 'simple'
             }
-            const result = await new RunView().RunView<EntityCommunicationRecord>(params, contextUser);
+            const result = await this.RunViewFor(provider).RunView<EntityCommunicationRecord>(params, contextUser);
             if (result && result.Success) {
-                const relatedEntityInfo = new Metadata().EntityByName(relatedEntity); // global-provider-ok: server bootstrap, single-provider context
+                const relatedEntityInfo = this.EntityLookupFor(provider).EntityByName(relatedEntity);
                 data.push({
                     paramName: p.Name,
                     data: relatedEntityInfo ? this.StripDeniedReadFields(relatedEntityInfo, result.Results, contextUser) : result.Results

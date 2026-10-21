@@ -18,6 +18,7 @@ import {
     RunView,
     UserInfo
 } from "@memberjunction/core";
+import { ClientClauseScreen } from '@memberjunction/generic-database-provider';
 import { z } from "zod";
 import type { AddToolFn } from '../Server.js';
 
@@ -42,20 +43,45 @@ export function AddEntityRunViewTool(addToolWithFilter: AddToolFn, entity: Entit
         scopeInfo: { scopePath: 'view:run', resource: entity.Name },
         async execute(props, sessionContext) {
             const sessionUser = sessionContext.user;
+            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
+            const extraFilter = props.extraFilter ? props.extraFilter as string : undefined;
+            const orderBy = props.orderBy ? props.orderBy as string : undefined;
+            const refusal = clientClauseRefusal(md, extraFilter, orderBy, sessionUser);
+            if (refusal) {
+                return JSON.stringify({ Success: false, Results: [], ErrorMessage: refusal });
+            }
             const rv = new RunView();
             // Plain rows, never entity objects: what goes on the wire is the row, projected below.
             const result = await rv.RunView<Record<string, unknown>>({
                 EntityName: entity.Name,
-                ExtraFilter: props.extraFilter ? props.extraFilter as string : undefined,
-                OrderBy: props.orderBy ? props.orderBy as string : undefined,
+                ExtraFilter: extraFilter,
+                OrderBy: orderBy,
                 Fields: props.fields ? props.fields as string[] : undefined,
                 ResultType: 'simple',
             }, sessionUser);
-            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
             const rows = ProjectEntityValueRowsForUser(md, entity, result.Results, sessionUser);
             return JSON.stringify({ ...result, Results: rows });
         }
     });
+}
+
+/**
+ * Screens a caller's filter and sort the way the GraphQL and REST view routes do: every relation a
+ * clause reads must be an entity base view the caller may read unscoped, and the text must parse
+ * as a read-only fragment. Returns the refusal message, or null when both clauses pass.
+ */
+function clientClauseRefusal(md: Metadata, extraFilter: string | undefined, orderBy: string | undefined, user: UserInfo): string | null {
+    try {
+        ClientClauseScreen.ScreenViewClauses(
+            { ExtraFilter: extraFilter, OrderBy: orderBy },
+            md.Entities,
+            ClientClauseScreen.DialectFor(Metadata.Provider), // global-provider-ok: MCP server bootstrap
+            user,
+        );
+        return null;
+    } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+    }
 }
 
 /**

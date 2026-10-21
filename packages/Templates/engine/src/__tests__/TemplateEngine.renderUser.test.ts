@@ -185,17 +185,28 @@ describe('TemplateEngineServer — the render user reaches extensions per render
         expect(b.Output).toBe('user=bob');
     });
 
-    it('without a render user, uses the engine context user current at render time, not the first one', async () => {
+    it('REGRESSION: without a render user, extensions act for no user, not whoever last configured the engine', async () => {
         await engine.Config(false, BOB);
         const result = await engine.RenderTemplate(TEMPLATE as never, CONTENT as never, {}, true, true);
-        expect(result.Output).toBe('user=bob');
+        expect(result.Output).toBe('user=none');
+    });
+
+    it('REGRESSION: without a render user, extensions do not fall back to the user they were built with', async () => {
+        const result = await engine.RenderTemplateSimple('user={% whoami "x" %}', {});
+        expect(result.Output).toBe('user=none');
     });
 
     it('a render user set for one render does not leak into the next render', async () => {
         await render(ALICE);
         await engine.Config(false, BOB);
         const result = await engine.RenderTemplate(TEMPLATE as never, CONTENT as never, {}, true, true);
-        expect(result.Output).toBe('user=bob');
+        expect(result.Output).toBe('user=none');
+    });
+
+    it('a nested render with no user of its own keeps the outer render user', async () => {
+        const { RunAsTemplateRenderUser } = await import('../TemplateRenderUser');
+        const result = await RunAsTemplateRenderUser(ALICE, () => engine.RenderTemplateSimple('user={% whoami "x" %}', {}));
+        expect(result.Output).toBe('user=alice');
     });
 
     it('applies the render user to RenderTemplateSimple', async () => {

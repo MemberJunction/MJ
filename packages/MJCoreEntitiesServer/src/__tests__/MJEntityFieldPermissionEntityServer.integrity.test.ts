@@ -43,10 +43,18 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    // The guards read the system user's role set and its rules from the database; this store is
+    // that database. The system user's stored roles are the ones `state.systemUser` holds.
     class MockRunView {
-        public async RunView(params: { ExtraFilter: string }) {
-            const id = /EntityFieldID = '([^']+)'/.exec(params.ExtraFilter)?.[1] ?? '';
-            const rows = state.rules.filter((r) => r.EntityFieldID.toLowerCase() === id.toLowerCase());
+        public async RunView(params: { EntityName: string; ExtraFilter: string }) {
+            if (params.EntityName === 'MJ: User Roles') {
+                return { Success: true, Results: (state.systemUser?.UserRoles ?? []).map((ur) => ({ ...ur })) };
+            }
+            const id = /EntityFieldID = '([^']+)'/.exec(params.ExtraFilter)?.[1];
+            const roleIDs = [...params.ExtraFilter.matchAll(/'([^']+)'/g)].map((m) => m[1].toLowerCase());
+            const rows = id
+                ? state.rules.filter((r) => r.EntityFieldID.toLowerCase() === id.toLowerCase())
+                : state.rules.filter((r) => roleIDs.includes(r.RoleID.toLowerCase()));
             return { Success: true, Results: rows.map((r) => ({ ...r })) };
         }
     }
@@ -67,15 +75,14 @@ vi.mock('@memberjunction/generic-database-provider', async () => {
         SystemUserFieldAccessLossReason: (
             _entity: unknown,
             field: { Name: string } | null,
-            projected: Parameters<typeof core.EntityFieldInfo.AggregateFieldRulesForUser>[0]
+            projected: Parameters<typeof core.EntityFieldInfo.AggregateFieldRulesForUser>[0],
+            systemUser?: Parameters<typeof core.EntityFieldInfo.AggregateFieldRulesForUser>[1] | null
         ): string | null => {
-            if (!field || !state.systemUser) {
+            const user = systemUser ?? (state.systemUser as unknown as Parameters<typeof core.EntityFieldInfo.AggregateFieldRulesForUser>[1]);
+            if (!field || !user) {
                 return null;
             }
-            const after = core.EntityFieldInfo.AggregateFieldRulesForUser(
-                projected,
-                state.systemUser as unknown as Parameters<typeof core.EntityFieldInfo.AggregateFieldRulesForUser>[1]
-            );
+            const after = core.EntityFieldInfo.AggregateFieldRulesForUser(projected, user);
             return after.CanRead ? null : `system user would lose read on ${field.Name}`;
         },
     };

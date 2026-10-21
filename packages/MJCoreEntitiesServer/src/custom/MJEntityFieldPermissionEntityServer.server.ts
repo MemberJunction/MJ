@@ -11,19 +11,21 @@ import {
     IMetadataProvider,
     LogError,
     RunView,
+    UserInfo,
     ValidationErrorInfo,
     ValidationErrorType,
     ValidationResult,
 } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJEntityFieldPermissionEntity } from '@memberjunction/core-entities';
-import { SystemUserFieldAccessLossReason, SystemUserHoldsRole, UserCache } from '@memberjunction/generic-database-provider';
+import { SystemUserFieldAccessLossReason, UserCache } from '@memberjunction/generic-database-provider';
 import {
     FieldPermissionAccessIs,
     FieldPermissionAccessVerbs,
     IsRestrictingFieldRuleAnyCase,
     NormalizeFieldPermissionAccess,
 } from './fieldPermissionAccess';
+import { GuardedTransactionGroupRefusal, LoadStoredSystemUser, UserHoldsRole } from './systemUserGuardState';
 
 /** Where a rule is bound: the (role, field) pair its row occupies. */
 type RuleBinding = { RoleID: string | null; EntityFieldID: string | null };
@@ -130,13 +132,46 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         this.normalizeAccessSpellings();
-        if (this.IsSaved) {
-            const rejection = await this.systemUserEditLossReason();
-            if (rejection) {
-                return this.refuse(rejection, 'save');
-            }
+        const rejection = await this.systemUserSaveRejection();
+        if (rejection) {
+            return this.refuse(rejection, 'save');
         }
         return super.Save(options);
+    }
+
+    /**
+     * The system-user checks for a save, on the role set as stored in the database (the cached one
+     * lags a role assigned a moment ago): a `Deny` on a role the system user holds; an edit that
+     * strips its last `Allow`; and a transaction group holding this and another guarded write that
+     * concerns it. An insert that restricts nothing needs none of these and reads nothing, which
+     * keeps reconciliation's bulk inserts free. A read that fails refuses the save.
+     */
+    private async systemUserSaveRejection(): Promise<string | null> {
+        const restricting = IsRestrictingFieldRuleAnyCase(this);
+        if (!this.IsSaved && !restricting) {
+            return null;
+        }
+        try {
+            const systemUser = await LoadStoredSystemUser(this.RunViewProviderToUse);
+            const prior = this.IsSaved ? this.priorBinding() : null;
+            const concerns = UserHoldsRole(systemUser, this.RoleID) || (prior === null && this.IsSaved) || UserHoldsRole(systemUser, prior?.RoleID);
+            const groupRefusal = GuardedTransactionGroupRefusal(this.TransactionGroup, concerns);
+            if (groupRefusal) {
+                return groupRefusal;
+            }
+            if (restricting && UserHoldsRole(systemUser, this.RoleID)) {
+                return MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(this.RoleID, this, systemUser);
+            }
+            return this.IsSaved ? await this.systemUserEditLossReason(systemUser) : null;
+        } catch (e) {
+            return MJEntityFieldPermissionEntityServer.unverifiableMessage(e);
+        }
+    }
+
+    /** The refusal when the system user's field access cannot be checked because a read failed. */
+    private static unverifiableMessage(error: unknown): string {
+        const detail = error instanceof Error ? error.message : String(error);
+        return `Could not check this field rule against the MJ system user's field access, so it was not saved. ${detail}`;
     }
 
     /**
@@ -152,11 +187,24 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
      * reconciler logs and skips such a refusal rather than aborting.
      */
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        const rejection = await this.systemUserDeleteLossReason();
+        const rejection = await this.systemUserDeleteRejection();
         if (rejection) {
             return this.refuse(rejection, 'delete');
         }
         return super.Delete(options);
+    }
+
+    /** The system-user checks for a delete, on the role set as stored in the database. */
+    private async systemUserDeleteRejection(): Promise<string | null> {
+        try {
+            const systemUser = await LoadStoredSystemUser(this.RunViewProviderToUse);
+            const prior = this.priorBinding();
+            const concerns = prior === null || UserHoldsRole(systemUser, prior.RoleID);
+            const groupRefusal = GuardedTransactionGroupRefusal(this.TransactionGroup, concerns);
+            return groupRefusal ?? (await this.systemUserDeleteLossReason(systemUser));
+        } catch (e) {
+            return MJEntityFieldPermissionEntityServer.unverifiableMessage(e);
+        }
     }
 
     /** Rewrites each Access value to its canonical spelling; unrecognized values are left for validation to report. */
@@ -203,35 +251,36 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
      * aggregation only consults rules bound to roles the user holds, so a change touching no such
      * role cannot move the system user's access at all.
      */
-    private async systemUserEditLossReason(): Promise<string | null> {
+    private async systemUserEditLossReason(systemUser: UserInfo | null): Promise<string | null> {
         const prior = this.priorBinding();
         if (!prior) {
             return UNDETERMINED_PRIOR_BINDING_MESSAGE;
         }
+        const holds = (roleID: string | null) => UserHoldsRole(systemUser, roleID);
         const fieldMoved = !UUIDsEqual(prior.EntityFieldID, this.EntityFieldID);
-        const touchesDestination = SystemUserHoldsRole(this.RoleID) || (!fieldMoved && SystemUserHoldsRole(prior.RoleID));
+        const touchesDestination = holds(this.RoleID) || (!fieldMoved && holds(prior.RoleID));
         if (touchesDestination) {
-            const rejection = await this.projectedLossReason(this.EntityFieldID, true);
+            const rejection = await this.projectedLossReason(this.EntityFieldID, true, systemUser);
             if (rejection) {
                 return rejection;
             }
         }
-        if (fieldMoved && SystemUserHoldsRole(prior.RoleID)) {
-            return this.projectedLossReason(prior.EntityFieldID, false);
+        if (fieldMoved && holds(prior.RoleID)) {
+            return this.projectedLossReason(prior.EntityFieldID, false, systemUser);
         }
         return null;
     }
 
     /** Why deleting this row would leave the system user short of its entity-level access, or null. */
-    private async systemUserDeleteLossReason(): Promise<string | null> {
+    private async systemUserDeleteLossReason(systemUser: UserInfo | null): Promise<string | null> {
         const prior = this.priorBinding();
         if (!prior) {
             return UNDETERMINED_PRIOR_BINDING_MESSAGE;
         }
-        if (!SystemUserHoldsRole(prior.RoleID)) {
+        if (!UserHoldsRole(systemUser, prior.RoleID)) {
             return null;
         }
-        return this.projectedLossReason(prior.EntityFieldID, false);
+        return this.projectedLossReason(prior.EntityFieldID, false, systemUser);
     }
 
     /**
@@ -241,8 +290,9 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
      * @param entityFieldID the field whose aggregate to evaluate
      * @param includeThisRow true to project this row in with its CURRENT values (it is on this
      *                       field after the change); false to project it out (it is leaving)
+     * @param systemUser the system user with its role set as stored
      */
-    private async projectedLossReason(entityFieldID: string | null, includeThisRow: boolean): Promise<string | null> {
+    private async projectedLossReason(entityFieldID: string | null, includeThisRow: boolean, systemUser: UserInfo | null): Promise<string | null> {
         const target = this.resolveTargetByFieldID(entityFieldID);
         if (!target) {
             return null;
@@ -255,7 +305,7 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
                   { RoleID: this.RoleID, ReadAccess: this.ReadAccess, UpdateAccess: this.UpdateAccess, CreateAccess: this.CreateAccess },
               ]
             : others;
-        return SystemUserFieldAccessLossReason(target.Entity, target.Field, projected);
+        return SystemUserFieldAccessLossReason(target.Entity, target.Field, projected, systemUser);
     }
 
     /**
@@ -346,8 +396,10 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
      * @param roleID the role the rule targets
      * @param rule the rule's three verbs; omitted only by callers that are pre-checking a role
      *             rather than a specific rule, which are answered as though the rule denied
+     * @param storedSystemUser the system user with its role set as stored in the database;
+     *             defaults to the user cache's system user
      */
-    public static SystemUserRoleRejectionReason(roleID: string | null, rule?: FieldPermissionRuleVerbs): string | null {
+    public static SystemUserRoleRejectionReason(roleID: string | null, rule?: FieldPermissionRuleVerbs, storedSystemUser?: UserInfo | null): string | null {
         if (!roleID) {
             return null;
         }
@@ -355,8 +407,9 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
             return null; // grants and neutrals are exactly what keep the system user working
         }
         // UserCache is populated on the server; a client-side save (or a cold cache) simply
-        // skips the check rather than blocking an administrator on missing state.
-        const systemUser = UserCache.Instance?.GetSystemUser?.();
+        // skips the check rather than blocking an administrator on missing state. `Save()` passes
+        // the system user with its role set as stored, which the cache may not show yet.
+        const systemUser = storedSystemUser ?? UserCache.Instance?.GetSystemUser?.();
         if (!systemUser?.UserRoles?.length) {
             return null;
         }

@@ -11,7 +11,7 @@ import {
     RunView,
     UserInfo
 } from "@memberjunction/core";
-import { UserCache } from "@memberjunction/generic-database-provider";
+import { ClientClauseScreen, UserCache } from "@memberjunction/generic-database-provider";
 import { a2aServerSettings } from './config.js';
 
 export interface OperationResult {
@@ -379,6 +379,14 @@ export class EntityOperations {
                 };
             }
 
+            // Screened as the GraphQL and REST view routes screen them: every relation a clause
+            // reads must be an entity base view this caller may read unscoped. Throws on refusal.
+            ClientClauseScreen.ScreenViewClauses(
+                { ExtraFilter: parameters.extraFilter, OrderBy: parameters.orderBy },
+                this.provider.Entities,
+                ClientClauseScreen.DialectFor(this.provider),
+                contextUser,
+            );
             const rv = new RunView();
             // Plain rows, never entity objects: what goes on the wire is the row, projected below.
             const queryResult = await rv.RunView<Record<string, unknown>>({

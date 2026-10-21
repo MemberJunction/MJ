@@ -881,23 +881,24 @@ export async function GetOrBuildCompiledToolConfigs(
 }
 
 /**
- * Registers all tools with the MCP server for a specific authenticated session.
- * This function is called per-connection to create user-scoped tool handlers.
+ * The function that registers one tool on a session's MCP server: it applies the tool filter,
+ * skips a duplicate name, advertises the input schema built for the session's user (a tool with
+ * `parametersForUser` omits the fields that user may not send), and checks the tool's scope on
+ * every call.
  *
- * @param server - The McpServer instance to register tools on
- * @param sessionContext - The authenticated session context with user info
- * @param systemUser - System user for server initialization tasks
+ * @param server - The McpServer instance of one authenticated session
+ * @param sessionContext - That session's context; its user selects each tool's input schema
+ * @param filterOptions - The tool include/exclude filter in force
  */
-async function registerAllTools(
+export function CreateSessionToolRegistrar(
     server: McpServer,
     sessionContext: MCPSessionContext,
-    systemUser: UserInfo
-): Promise<void> {
-    // Helper to register a tool with filter check and authorization
+    filterOptions: ToolFilterOptions
+): AddToolFn {
     // Track tools registered on THIS server instance to prevent SDK duplicate registration errors
     const registeredOnServer = new Set<string>();
-    const addToolWithFilter = (config: ToolConfig): void => {
-        if (!shouldIncludeTool(config.name, activeFilterOptions)) {
+    return (config: ToolConfig): void => {
+        if (!shouldIncludeTool(config.name, filterOptions)) {
             return;
         }
 
@@ -943,6 +944,23 @@ async function registerAllTools(
             }
         );
     };
+}
+
+/**
+ * Registers all tools with the MCP server for a specific authenticated session.
+ * This function is called per-connection to create user-scoped tool handlers.
+ *
+ * @param server - The McpServer instance to register tools on
+ * @param sessionContext - The authenticated session context with user info
+ * @param systemUser - System user for server initialization tasks
+ */
+async function registerAllTools(
+    server: McpServer,
+    sessionContext: MCPSessionContext,
+    systemUser: UserInfo
+): Promise<void> {
+    // Registers a tool with filter check and authorization
+    const addToolWithFilter = CreateSessionToolRegistrar(server, sessionContext, activeFilterOptions);
 
     const compiledTools = await GetOrBuildCompiledToolConfigs(systemUser, sessionContext);
     for (const toolConfig of compiledTools) {
@@ -2175,7 +2193,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
                 return JSON.stringify({ error: result.ErrorMessage });
             }
 
-            return JSON.stringify(result.Results);
+            return JSON.stringify(result.Results); // fls-guard: RunView as the session user; the provider drops the columns it is denied
         }
     });
 

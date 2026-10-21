@@ -21,7 +21,7 @@ vi.mock('type-graphql', () => {
     return Object.fromEntries(exportNames.map((name) => [name, decoratorFactory]));
 });
 
-const runViewCalls: Array<{ params: RunViewParams; contextUser: UserInfo | undefined }> = [];
+const runViewCalls: Array<{ params: RunViewParams; contextUser: UserInfo | undefined; provider: unknown }> = [];
 /** Each RunViews call, as the list of entity names it batched. */
 const runViewsBatches: string[][] = [];
 let runViewHandler: RunViewHandler = () => ({ Success: true, Results: [] });
@@ -29,8 +29,12 @@ let runViewHandler: RunViewHandler = () => ({ Success: true, Results: [] });
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     class MockRunView {
+        constructor(private readonly provider?: unknown) {}
+        static FromMetadataProvider(provider: unknown): MockRunView {
+            return new MockRunView(provider);
+        }
         async RunView(params: RunViewParams, contextUser?: UserInfo): Promise<ViewResult> {
-            runViewCalls.push({ params, contextUser });
+            runViewCalls.push({ params, contextUser, provider: this.provider });
             return runViewHandler(params, contextUser);
         }
         async RunViews(params: RunViewParams[], contextUser?: UserInfo): Promise<ViewResult[]> {
@@ -224,6 +228,21 @@ describe('FetchEntityVectorsResolver', () => {
             expect(vectorCall.params.Fields).toEqual(['ID', 'VectorJSON']);
             expect(vectorCall.params.ResultType).toBe('simple');
             expect(vectorCall.params.IgnoreMaxRows).toBe(true);
+        });
+
+        it("REGRESSION: runs every view on the request's provider", async () => {
+            useVectorDB(true);
+            routeViews('Members', {
+                'MJ: Entity Record Documents': erdView(storedRows),
+                Members: () => ({ Success: true, Results: memberRows }),
+            });
+            const context = appContext(membersEntity);
+
+            await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, undefined, undefined, context);
+
+            const requestProvider = context.providers[0].provider;
+            expect(callsFor('MJ: Entity Record Documents')).toHaveLength(2);
+            expect(runViewCalls.every((c) => c.provider === requestProvider)).toBe(true);
         });
 
         it('bypasses the server RunView cache for both Entity Record Documents views, so Fields is honoured', async () => {
@@ -514,6 +533,20 @@ describe('FetchEntityVectorsResolver', () => {
             expect(result.Results.map((r) => r.ID)).toEqual(['pc-0', 'pc-2']);
             expect(result.Results.map((r) => r.Values)).toEqual([[0, 0], [2, 2]]);
             expect(result.TotalCount).toBe(2);
+        });
+
+        it("REGRESSION: runs every view, the key check included, on the request's provider", async () => {
+            const { queryIndex } = useVectorDB(false);
+            queryIndex.mockResolvedValueOnce({ success: true, data: { matches: matchesFor(['ID|aaa']) } });
+            routeViews('Members', { Members: readableMembersView(['aaa']) });
+            const context = appContext(membersEntity);
+
+            await new FetchEntityVectorsResolver().FetchEntityVectors(DOC_ID, 50, undefined, context);
+
+            const requestProvider = context.providers[0].provider;
+            expect(callsFor('Members')).toHaveLength(1);
+            expect(runViewCalls.length).toBeGreaterThan(1);
+            expect(runViewCalls.every((c) => c.provider === requestProvider)).toBe(true);
         });
 
         it('checks the matched keys with a simple view of the primary key, as the caller', async () => {

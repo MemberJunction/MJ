@@ -13,7 +13,7 @@ const SENDER = { ID: 'sender-user', Name: 'Sender' };
 type Row = Record<string, string>;
 type CapturedRunView = { params: Record<string, unknown>; user: { ID: string } | undefined };
 
-const captured: { runViews: CapturedRunView[]; sendUser: { ID: string } | undefined } = { runViews: [], sendUser: undefined };
+const captured: { runViews: CapturedRunView[]; sendUser: { ID: string } | undefined; runViewProviders: unknown[]; metadataBuilt: number } = { runViews: [], sendUser: undefined, runViewProviders: [], metadataBuilt: 0 };
 
 /** What the database holds. A real provider narrows these per user; `narrowAtSource` toggles that. */
 const CUSTOMERS: Row[] = [{ ID: 'c1', Email: 'c1@example.com', Salary: '250000' }];
@@ -48,9 +48,11 @@ const ENTITIES = [fakeEntity('Customers', ['ID', 'Email', 'Salary']), fakeEntity
 vi.mock('@memberjunction/core', () => ({
     LogStatus: vi.fn(),
     Metadata: vi.fn().mockImplementation(function () {
+        captured.metadataBuilt++;
         return { Entities: ENTITIES, EntityByName: (n: string) => ENTITIES.find(e => e.Name === n) };
     }),
-    RunView: vi.fn().mockImplementation(function () {
+    RunView: vi.fn().mockImplementation(function (provider?: unknown) {
+        captured.runViewProviders.push(provider);
         return {
             RunView: async (params: Record<string, unknown>, user: { ID: string } | undefined) => {
                 captured.runViews.push({ params, user });
@@ -118,6 +120,8 @@ describe('EntityCommunicationsEngine — runs as the acting user', () => {
     beforeEach(() => {
         captured.runViews = [];
         captured.sendUser = undefined;
+        captured.runViewProviders = [];
+        captured.metadataBuilt = 0;
         state.narrowAtSource = true;
     });
 
@@ -150,6 +154,15 @@ describe('EntityCommunicationsEngine — runs as the acting user', () => {
         const serialized = JSON.stringify(result.Results);
         expect(serialized).not.toContain('250000');
         expect(serialized).not.toContain('40%');
+    });
+
+    it("REGRESSION: reads and looks up metadata through the request's provider when one is passed", async () => {
+        const requestProvider = { Entities: ENTITIES, EntityByName: (n: string) => ENTITIES.find(e => e.Name === n) };
+        const withProvider = { ...params(SENDER), Provider: requestProvider } as unknown as EntityCommunicationParams;
+        const result = await new EntityCommunicationsEngine().RunEntityCommunication(withProvider);
+        expect(result.Success).toBe(true);
+        expect(captured.runViewProviders).toEqual([requestProvider, requestProvider]);
+        expect(captured.metadataBuilt).toBe(0);
     });
 
     it('refuses to run without an acting user', async () => {

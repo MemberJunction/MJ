@@ -31,6 +31,19 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     return { ...actual, RegisterClass: () => (target: unknown) => target };
 });
 
+// The removal guard reads the system user's stored role set and rules; the verdict itself comes
+// from the stubbed sweep below, so the reads only need to succeed.
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    class MockRunView {
+        public async RunView(params: { EntityName: string }) {
+            const roles = params.EntityName === 'MJ: User Roles' ? state.systemUser?.UserRoles ?? [] : [];
+            return { Success: true, Results: roles.map((r) => ({ ...r })) };
+        }
+    }
+    return { ...actual, RunView: MockRunView };
+});
+
 vi.mock('@memberjunction/generic-database-provider', () => ({
     UserCache: {
         get Instance() {
