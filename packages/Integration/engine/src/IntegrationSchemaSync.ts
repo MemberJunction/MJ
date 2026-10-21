@@ -14,6 +14,7 @@
  */
 
 import { CompositeKey, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { NormalizeUUID } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import type {
   MJIntegrationObjectEntity,
@@ -756,6 +757,10 @@ export class IntegrationSchemaSync {
         }
       }
       let fieldsDeactivated = 0;
+      // Name each retired field's owner from the rows this run already read. The engine cache would
+      // answer for the SHARED catalog only, so on a per-connection run it would silently miss and the
+      // log line would carry a bare id.
+      const objectNameByID = new Map(existingObjects.map((o) => [NormalizeUUID(o.ID), o.Name]));
       for (const id of decision.FieldIDsToDeactivate) {
         const f = await writer.LoadField(id);
         if (f) {
@@ -764,10 +769,7 @@ export class IntegrationSchemaSync {
           const outcome = await writer.RetireField(f);
           if (outcome.ok) {
             fieldsDeactivated++;
-            // Name the owner from the rows this run already read. The engine cache would answer
-            // for the SHARED catalog only, so on a per-connection run it would silently miss and
-            // the log line would carry a bare id.
-            const owner = existingObjects.find((o) => o.ID === owner0)?.Name ?? owner0;
+            const owner = objectNameByID.get(NormalizeUUID(owner0)) ?? owner0;
             result.FieldsDeactivated.push(`${owner}.${fname}`);
           }
           else LogError(`[IntegrationSchemaSync] Failed to deactivate phantom field ${id}: ${f.LatestResult?.CompleteMessage ?? 'unknown'}`);
