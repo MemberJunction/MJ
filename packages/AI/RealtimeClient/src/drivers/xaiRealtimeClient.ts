@@ -88,6 +88,14 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  
      */
     private lastUserTranscript = '';
 
+    /**
+     * Provider item id of the transcript that set {@link userTurnTranscribed}, or `undefined` when the
+     * frame carried none. A late transcript for an EARLIER item can land after the next
+     * `speech_started` reset the flag; the next item's first transcript must not then read that flag as
+     * its own and replace the earlier turn (MJ#5940).
+     */
+    private userTurnItemId: string | undefined = undefined;
+
     /** @inheritdoc — used in the shared diagnostics + close messages. */
     protected override get providerDebugLabel(): string {
         return 'xAIRealtimeClient';
@@ -146,26 +154,29 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  
      * ReplacesPrevious, collapsing the stream into ONE in-place-updating user bubble. The
      * per-turn flag resets on the next `speech_started` ({@link onSpeechStartedFrame}).
      */
-    protected override onUserTranscriptFrame(transcript: string): void {
+    protected override onUserTranscriptFrame(transcript: string, itemId?: string): void {
         if (!transcript || transcript.trim().length === 0) {
             // An empty transcription (a VAD false positive) passes through as a plain final, like the
             // OpenAI base: the host releases the speech onset it stamped (MJ#5483). It is not part of
             // the streamed utterance, so the per-turn flags stay as they are.
-            super.onUserTranscriptFrame(transcript ?? '');
+            super.onUserTranscriptFrame(transcript ?? '', itemId);
             return;
         }
-        // Two ways this caption REPLACES rather than appends: another already landed in this turn,
-        // OR it continues the previous utterance (the provider re-emits the whole thing with more
-        // words). The second case rescues a mid-sentence pause — the VAD fires speech_started and
-        // clears the flag even though the user never stopped, which would otherwise split one
-        // spoken thought into several growing bubbles. Mirrors the server session exactly so both
-        // topologies collapse the stream identically.
-        const replacesPrevious = this.userTurnTranscribed || IsTranscriptContinuation(this.lastUserTranscript, transcript);
+        // Two ways this caption REPLACES rather than appends: another already landed in this turn
+        // (for the same item, when the frames name one), OR it continues the previous utterance (the
+        // provider re-emits the whole thing with more words). The second case rescues a mid-sentence
+        // pause — the VAD fires speech_started and clears the flag even though the user never
+        // stopped, which would otherwise split one spoken thought into several growing bubbles. The
+        // item check exists only here; the server session (packages/AI/Providers/xAI) does not have it.
+        const sameItem = itemId === undefined || this.userTurnItemId === undefined || itemId === this.userTurnItemId;
+        const replacesPrevious = (this.userTurnTranscribed && sameItem) || IsTranscriptContinuation(this.lastUserTranscript, transcript);
         this.emitTranscript({
             Role: 'User', Text: transcript, IsFinal: true, Kind: 'normal',
             ReplacesPrevious: replacesPrevious,
+            ...(itemId !== undefined ? { ItemId: itemId } : {}),
         });
         this.userTurnTranscribed = true;
+        this.userTurnItemId = itemId;
         this.lastUserTranscript = transcript;
     }
 

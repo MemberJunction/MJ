@@ -12717,6 +12717,535 @@ export const MJCompanyIntegrationFieldMapSchema = z.object({
 export type MJCompanyIntegrationFieldMapEntityType = z.infer<typeof MJCompanyIntegrationFieldMapSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Company Integration Object Fields
+ */
+export const MJCompanyIntegrationObjectFieldSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Field name as returned by the external API`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-friendly display label for the field`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of what this field represents`),
+    Category: z.string().nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(100)
+        * * Description: UI grouping category within the object`),
+    Type: z.string().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Data type of the field (e.g., nvarchar, int, datetime, decimal, bit). Uses same type vocabulary as EntityField.`),
+    Length: z.number().nullable().describe(`
+        * * Field Name: Length
+        * * Display Name: Length
+        * * SQL Data Type: int
+        * * Description: Maximum length for string types`),
+    Precision: z.number().nullable().describe(`
+        * * Field Name: Precision
+        * * Display Name: Precision
+        * * SQL Data Type: int
+        * * Description: Numeric precision`),
+    Scale: z.number().nullable().describe(`
+        * * Field Name: Scale
+        * * Display Name: Scale
+        * * SQL Data Type: int
+        * * Description: Numeric scale`),
+    AllowsNull: z.boolean().describe(`
+        * * Field Name: AllowsNull
+        * * Display Name: Allows Null
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether the field can contain NULL values`),
+    DefaultValue: z.string().nullable().describe(`
+        * * Field Name: DefaultValue
+        * * Display Name: Default Value
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Default value from the source system`),
+    IsPrimaryKey: z.boolean().describe(`
+        * * Field Name: IsPrimaryKey
+        * * Display Name: Is Primary Key
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this field is part of the object primary key`),
+    IsUniqueKey: z.boolean().describe(`
+        * * Field Name: IsUniqueKey
+        * * Display Name: Is Unique Key
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether values must be unique across all records`),
+    IsReadOnly: z.boolean().describe(`
+        * * Field Name: IsReadOnly
+        * * Display Name: Is Read Only
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this field cannot be written back to the source system`),
+    IsRequired: z.boolean().describe(`
+        * * Field Name: IsRequired
+        * * Display Name: Is Required
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this field is required for create/update operations`),
+    RelatedIntegrationObjectFieldName: z.string().nullable().describe(`
+        * * Field Name: RelatedIntegrationObjectFieldName
+        * * Display Name: Related Integration Object Field Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The field name on the related IntegrationObject that this FK points to (typically the PK field)`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display and processing order within the object. Lower numbers appear first.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Freeform JSON for connector-specific field configuration`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(25)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+        * * Description: Active, Deprecated, or Disabled. Mirrors EntityField status values.`),
+    IsCustom: z.boolean().describe(`
+        * * Field Name: IsCustom
+        * * Display Name: Is Custom
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
+    MetadataSource: z.union([z.literal('Custom'), z.literal('Declared'), z.literal('Discovered')]).describe(`
+        * * Field Name: MetadataSource
+        * * Display Name: Metadata Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+        * * Description: Provenance of this CompanyIntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.`),
+    CompanyIntegrationObjectID: z.string().describe(`
+        * * Field Name: CompanyIntegrationObjectID
+        * * Display Name: Company Integration Object ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Company Integration Objects (vwCompanyIntegrationObjects.ID)`),
+    RelatedCompanyIntegrationObjectID: z.string().nullable().describe(`
+        * * Field Name: RelatedCompanyIntegrationObjectID
+        * * Display Name: Related Company Integration Object ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Company Integration Objects (vwCompanyIntegrationObjects.ID)`),
+    IntegrationObjectFieldID: z.string().nullable().describe(`
+        * * Field Name: IntegrationObjectFieldID
+        * * Display Name: Integration Object Field ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Integration Object Fields (vwIntegrationObjectFields.ID)`),
+    ObservedMaxLength: z.number().nullable().describe(`
+        * * Field Name: ObservedMaxLength
+        * * Display Name: Observed Max Length
+        * * SQL Data Type: int
+        * * Description: The longest value sampling actually saw, kept SEPARATE from Length. Length carries the padded width the schema builder will use; this carries the evidence. Without both, a width cannot be audited and a truncation cannot be distinguished from a bad guess.`),
+    Provenance: z.union([z.literal('Declared'), z.literal('Endpoint'), z.literal('Sampled')]).describe(`
+        * * Field Name: Provenance
+        * * Display Name: Provenance
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Declared
+    *   * Endpoint
+    *   * Sampled
+        * * Description: Where this row came from: Declared (the connector shipped catalog), Endpoint (the source listed it) or Sampled (only streaming records revealed it). Answers "whose is this" for a connection whose catalog no longer matches the connector default.`),
+    ProvenanceDetail: z.string().nullable().describe(`
+        * * Field Name: ProvenanceDetail
+        * * Display Name: Provenance Detail
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The per-attribute merge log for this row: which side won each overlay decision and why. The persist already computes this and throws it away, so the operator has never been able to see why a width or a key looks the way it does.`),
+    IsSelected: z.boolean().describe(`
+        * * Field Name: IsSelected
+        * * Display Name: Is Selected
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this connection syncs this item. THE AXIS THAT MAKES THE CONTRACT SATISFIABLE: Status says whether the item is in the catalog at all, IsSelected says whether the customer chose it. Conflating the two is why a newly discovered object had to arrive ENABLED — a disabled object was excluded from schema introspection, so it never reached key inference and never reached a migration.`),
+    SelectedAt: z.date().nullable().describe(`
+        * * Field Name: SelectedAt
+        * * Display Name: Selected At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the selection last changed. Lets the UI distinguish "never chosen" from "deliberately deselected".`),
+    FirstSeenAt: z.date().nullable().describe(`
+        * * Field Name: FirstSeenAt
+        * * Display Name: First Seen At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this connection first observed this item. Set once and never updated, so a catalog can be read as a history of what the source exposed and when.`),
+    LastSeenAt: z.date().nullable().describe(`
+        * * Field Name: LastSeenAt
+        * * Display Name: Last Seen At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this connection most recently observed this item. A row whose LastSeenAt is older than the connection last discovery is what "absent from the source" means.`),
+    LastSampledAt: z.date().nullable().describe(`
+        * * Field Name: LastSampledAt
+        * * Display Name: Last Sampled At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When sampling last streamed records for this item. Distinct from LastSeenAt: an item can be listed by an endpoint without ever being sampled, and unsampled items are exactly the ones whose widths and keys came from the declared catalog rather than from data.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CompanyIntegrationObject: z.string().describe(`
+        * * Field Name: CompanyIntegrationObject
+        * * Display Name: Company Integration Object
+        * * SQL Data Type: nvarchar(255)`),
+    RelatedCompanyIntegrationObject: z.string().nullable().describe(`
+        * * Field Name: RelatedCompanyIntegrationObject
+        * * Display Name: Related Company Integration Object
+        * * SQL Data Type: nvarchar(255)`),
+    IntegrationObjectField: z.string().nullable().describe(`
+        * * Field Name: IntegrationObjectField
+        * * Display Name: Integration Object Field
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJCompanyIntegrationObjectFieldEntityType = z.infer<typeof MJCompanyIntegrationObjectFieldSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Company Integration Objects
+ */
+export const MJCompanyIntegrationObjectSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    IntegrationID: z.string().describe(`
+        * * Field Name: IntegrationID
+        * * Display Name: Integration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
+        * * Description: The integration (connector) this object belongs to. Always the IntegrationID of the owning CompanyIntegration, copied onto the row by the catalog writer so the per-connection catalog can be read through the same projection as the shared IntegrationObject catalog.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Internal/programmatic name of the external object (e.g., Members, Events)`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-friendly display label`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of what this external object represents`),
+    Category: z.string().nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(100)
+        * * Description: UI grouping category (e.g., Membership, Events, Finance)`),
+    APIPath: z.string().describe(`
+        * * Field Name: APIPath
+        * * Display Name: API Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: API endpoint path, may include template variables like {ProfileID} that are resolved at runtime from parent object records`),
+    ResponseDataKey: z.string().nullable().describe(`
+        * * Field Name: ResponseDataKey
+        * * Display Name: Response Data Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: JSON key used to extract the data array from the API response envelope. NULL means the response is a root-level array.`),
+    DefaultPageSize: z.number().describe(`
+        * * Field Name: DefaultPageSize
+        * * Display Name: Default Page Size
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Number of records to request per page from the API`),
+    SupportsPagination: z.boolean().describe(`
+        * * Field Name: SupportsPagination
+        * * Display Name: Supports Pagination
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this endpoint supports paginated fetching`),
+    PaginationType: z.string().describe(`
+        * * Field Name: PaginationType
+        * * Display Name: Pagination Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: PageNumber
+        * * Description: Pagination strategy: PageNumber (page index), Offset (record offset), Cursor (opaque token), or None`),
+    SupportsIncrementalSync: z.boolean().describe(`
+        * * Field Name: SupportsIncrementalSync
+        * * Display Name: Supports Incremental Sync
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this object supports watermark-based incremental sync`),
+    SupportsWrite: z.boolean().describe(`
+        * * Field Name: SupportsWrite
+        * * Display Name: Supports Write
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether data can be pushed back to this object via the API`),
+    DefaultQueryParams: z.string().nullable().describe(`
+        * * Field Name: DefaultQueryParams
+        * * Display Name: Default Query Params
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object of default query parameters to include with every API request for this object`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Freeform JSON for connector-specific configuration not covered by standard columns`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Processing and display order. Lower numbers are processed first.`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(25)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+        * * Description: Active, Deprecated, or Disabled. Mirrors EntityField status values.`),
+    WriteAPIPath: z.string().nullable().describe(`
+        * * Field Name: WriteAPIPath
+        * * Display Name: Write API Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: API path for create/update operations when different from the read APIPath. If NULL, the read APIPath is used for writes as well.`),
+    WriteMethod: z.string().nullable().describe(`
+        * * Field Name: WriteMethod
+        * * Display Name: Write Method
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: POST
+        * * Description: HTTP method for create operations. Defaults to POST.`),
+    DeleteMethod: z.string().nullable().describe(`
+        * * Field Name: DeleteMethod
+        * * Display Name: Delete Method
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: DELETE
+        * * Description: HTTP method for delete operations. Defaults to DELETE.`),
+    IsCustom: z.boolean().describe(`
+        * * Field Name: IsCustom
+        * * Display Name: Is Custom
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
+    CreateAPIPath: z.string().nullable().describe(`
+        * * Field Name: CreateAPIPath
+        * * Display Name: Create API Path
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: HTTP path template for create operations. Generic CRUD in BaseRESTIntegrationConnector substitutes parent IDs into {var} placeholders. NULL means create not supported via metadata-driven path.`),
+    CreateMethod: z.string().nullable().describe(`
+        * * Field Name: CreateMethod
+        * * Display Name: Create Method
+        * * SQL Data Type: nvarchar(20)
+        * * Description: HTTP method for create (typically POST). NULL means create not supported via metadata-driven path.`),
+    CreateBodyShape: z.string().nullable().describe(`
+        * * Field Name: CreateBodyShape
+        * * Display Name: Create Body Shape
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Request body shape for create: flat (top-level fields), wrapped (under CreateBodyKey), or literal (connector overrides CreateRecord and supplies own body).`),
+    CreateBodyKey: z.string().nullable().describe(`
+        * * Field Name: CreateBodyKey
+        * * Display Name: Create Body Key
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Wrapper key for create body when CreateBodyShape=wrapped. Example: 'member' for YourMembership which wraps body as {member:{...}}.`),
+    CreateIDLocation: z.string().nullable().describe(`
+        * * Field Name: CreateIDLocation
+        * * Display Name: Create ID Location
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Where the created record ID is found in the create response: path (URL of returned Location header), body (parsed from JSON response), header (specific named header).`),
+    UpdateAPIPath: z.string().nullable().describe(`
+        * * Field Name: UpdateAPIPath
+        * * Display Name: Update API Path
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: HTTP path template for update operations. Typically contains {ID} placeholder substituted with the record ExternalID at runtime.`),
+    UpdateMethod: z.string().nullable().describe(`
+        * * Field Name: UpdateMethod
+        * * Display Name: Update Method
+        * * SQL Data Type: nvarchar(20)
+        * * Description: HTTP method for update (typically PATCH or PUT).`),
+    UpdateBodyShape: z.string().nullable().describe(`
+        * * Field Name: UpdateBodyShape
+        * * Display Name: Update Body Shape
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Request body shape for update: flat | wrapped | literal. See CreateBodyShape.`),
+    UpdateBodyKey: z.string().nullable().describe(`
+        * * Field Name: UpdateBodyKey
+        * * Display Name: Update Body Key
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Wrapper key for update body when UpdateBodyShape=wrapped.`),
+    UpdateIDLocation: z.string().nullable().describe(`
+        * * Field Name: UpdateIDLocation
+        * * Display Name: Update ID Location
+        * * SQL Data Type: nvarchar(20)
+        * * Description: For update: where the target record ID is located in the request — typically 'path' (substituted into UpdateAPIPath URL template).`),
+    DeleteAPIPath: z.string().nullable().describe(`
+        * * Field Name: DeleteAPIPath
+        * * Display Name: Delete API Path
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: HTTP path template for delete operations. Typically contains {ID} placeholder. NULL means delete not supported via metadata-driven path. (Existing DeleteMethod column carries the verb.)`),
+    DeleteIDLocation: z.string().nullable().describe(`
+        * * Field Name: DeleteIDLocation
+        * * Display Name: Delete ID Location
+        * * SQL Data Type: nvarchar(20)
+        * * Description: For delete: where the target record ID is located — typically 'path'.`),
+    IncrementalWatermarkField: z.string().nullable().describe(`
+        * * Field Name: IncrementalWatermarkField
+        * * Display Name: Incremental Watermark Field
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Vendor field name marking "last changed" — drives incremental sync filter when SupportsIncrementalSync=1. The exact filter syntax (e.g., $filter=Modified gt {value} or modified_since={value}) lives in Configuration.incrementalFilterFormat. Provable-only: leave NULL if docs do not name a watermark field.`),
+    MetadataSource: z.union([z.literal('Custom'), z.literal('Declared'), z.literal('Discovered')]).describe(`
+        * * Field Name: MetadataSource
+        * * Display Name: Metadata Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+        * * Description: Provenance of this CompanyIntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync.`),
+    SupportsCreate: z.boolean().describe(`
+        * * Field Name: SupportsCreate
+        * * Display Name: Supports Create
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this object supports record creation in the external system (per-operation granularity beyond SupportsWrite). Drives whether the generic CreateRecord path is wired and whether the object is offered for write-back create.`),
+    SupportsUpdate: z.boolean().describe(`
+        * * Field Name: SupportsUpdate
+        * * Display Name: Supports Update
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this object supports record updates in the external system (per-operation granularity beyond SupportsWrite).`),
+    SupportsDelete: z.boolean().describe(`
+        * * Field Name: SupportsDelete
+        * * Display Name: Supports Delete
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this object supports record deletion/tombstoning in the external system (per-operation granularity beyond SupportsWrite).`),
+    SyncStrategy: z.string().nullable().describe(`
+        * * Field Name: SyncStrategy
+        * * Display Name: Sync Strategy
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Declared incremental sync strategy for this object (e.g. WatermarkIncremental, ContentHash, FullSnapshot). Informs how the engine narrows subsequent syncs.`),
+    ContentHashApplicable: z.boolean().describe(`
+        * * Field Name: ContentHashApplicable
+        * * Display Name: Content Hash Applicable
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether per-record content hashing is meaningful for this object (false for append-only/event streams where every row is new). Controls whether the engine uses content-hash to skip unchanged-row writes.`),
+    StableOrderingKey: z.string().nullable().describe(`
+        * * Field Name: StableOrderingKey
+        * * Display Name: Stable Ordering Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Stable, monotonic ordering column (usually the PK) used for keyset/no-watermark resume of a scan. Null when the object has no stable key.`),
+    CompanyIntegrationID: z.string().describe(`
+        * * Field Name: CompanyIntegrationID
+        * * Display Name: Company Integration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)`),
+    IntegrationObjectID: z.string().nullable().describe(`
+        * * Field Name: IntegrationObjectID
+        * * Display Name: Integration Object ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)`),
+    Provenance: z.union([z.literal('Declared'), z.literal('Endpoint'), z.literal('Sampled')]).describe(`
+        * * Field Name: Provenance
+        * * Display Name: Provenance
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Declared
+    *   * Endpoint
+    *   * Sampled
+        * * Description: Where this row came from: Declared (the connector shipped catalog), Endpoint (the source listed it) or Sampled (only streaming records revealed it). Answers "whose is this" for a connection whose catalog no longer matches the connector default.`),
+    ProvenanceDetail: z.string().nullable().describe(`
+        * * Field Name: ProvenanceDetail
+        * * Display Name: Provenance Detail
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The per-attribute merge log for this row: which side won each overlay decision and why. The persist already computes this and throws it away, so the operator has never been able to see why a width or a key looks the way it does.`),
+    IsSelected: z.boolean().describe(`
+        * * Field Name: IsSelected
+        * * Display Name: Is Selected
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this connection syncs this item. THE AXIS THAT MAKES THE CONTRACT SATISFIABLE: Status says whether the item is in the catalog at all, IsSelected says whether the customer chose it. Conflating the two is why a newly discovered object had to arrive ENABLED — a disabled object was excluded from schema introspection, so it never reached key inference and never reached a migration.`),
+    SelectedAt: z.date().nullable().describe(`
+        * * Field Name: SelectedAt
+        * * Display Name: Selected At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the selection last changed. Lets the UI distinguish "never chosen" from "deliberately deselected".`),
+    FirstSeenAt: z.date().nullable().describe(`
+        * * Field Name: FirstSeenAt
+        * * Display Name: First Seen At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this connection first observed this item. Set once and never updated, so a catalog can be read as a history of what the source exposed and when.`),
+    LastSeenAt: z.date().nullable().describe(`
+        * * Field Name: LastSeenAt
+        * * Display Name: Last Seen At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this connection most recently observed this item. A row whose LastSeenAt is older than the connection last discovery is what "absent from the source" means.`),
+    LastSampledAt: z.date().nullable().describe(`
+        * * Field Name: LastSampledAt
+        * * Display Name: Last Sampled At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When sampling last streamed records for this item. Distinct from LastSeenAt: an item can be listed by an endpoint without ever being sampled, and unsampled items are exactly the ones whose widths and keys came from the declared catalog rather than from data.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Integration: z.string().describe(`
+        * * Field Name: Integration
+        * * Display Name: Integration
+        * * SQL Data Type: nvarchar(100)`),
+    CompanyIntegration: z.string().describe(`
+        * * Field Name: CompanyIntegration
+        * * Display Name: Company Integration
+        * * SQL Data Type: nvarchar(255)`),
+    IntegrationObject: z.string().nullable().describe(`
+        * * Field Name: IntegrationObject
+        * * Display Name: Integration Object
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJCompanyIntegrationObjectEntityType = z.infer<typeof MJCompanyIntegrationObjectSchema>;
+
+/**
  * zod schema definition for the entity MJ: Company Integration Record Maps
  */
 export const MJCompanyIntegrationRecordMapSchema = z.object({
@@ -17700,6 +18229,12 @@ export const MJDuplicateRunSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When set to 1, duplicate detection stops after the current batch. Used for pause/cancel.`),
+    EntityDocumentID: z.string().describe(`
+        * * Field Name: EntityDocumentID
+        * * Display Name: Entity Document
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Documents (vwEntityDocuments.ID)
+        * * Description: The Entity Document this run used: its template, vectors, match thresholds and LLM reasoning settings produced the run's matches.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
@@ -17716,6 +18251,10 @@ export const MJDuplicateRunSchema = z.object({
         * * Field Name: ApprovedByUser
         * * Display Name: Approved By User
         * * SQL Data Type: nvarchar(100)`),
+    EntityDocument: z.string().describe(`
+        * * Field Name: EntityDocument
+        * * Display Name: Entity Document Name
+        * * SQL Data Type: nvarchar(250)`),
 });
 
 export type MJDuplicateRunEntityType = z.infer<typeof MJDuplicateRunSchema>;
@@ -76901,6 +77440,1289 @@ export class MJCompanyIntegrationFieldMapEntity extends BaseEntity<MJCompanyInte
 
 
 /**
+ * MJ: Company Integration Object Fields - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CompanyIntegrationObjectField
+ * * Base View: vwCompanyIntegrationObjectFields
+ * * @description A field of a CompanyIntegrationObject: the declared field definition rebased with this connection's own discovery and sampling (observed width, provenance), with selection separate from Status.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Company Integration Object Fields')
+export class MJCompanyIntegrationObjectFieldEntity extends BaseEntity<MJCompanyIntegrationObjectFieldEntityType> {
+    /**
+    * Loads the MJ: Company Integration Object Fields record from the database
+    * @param ID: string - primary key value to load the MJ: Company Integration Object Fields record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCompanyIntegrationObjectFieldEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Field name as returned by the external API
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-friendly display label for the field
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of what this field represents
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(100)
+    * * Description: UI grouping category within the object
+    */
+    get Category(): string | null {
+        return this.Get('Category');
+    }
+    set Category(value: string | null) {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Data type of the field (e.g., nvarchar, int, datetime, decimal, bit). Uses same type vocabulary as EntityField.
+    */
+    get Type(): string {
+        return this.Get('Type');
+    }
+    set Type(value: string) {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: Length
+    * * Display Name: Length
+    * * SQL Data Type: int
+    * * Description: Maximum length for string types
+    */
+    get Length(): number | null {
+        return this.Get('Length');
+    }
+    set Length(value: number | null) {
+        this.Set('Length', value);
+    }
+
+    /**
+    * * Field Name: Precision
+    * * Display Name: Precision
+    * * SQL Data Type: int
+    * * Description: Numeric precision
+    */
+    get Precision(): number | null {
+        return this.Get('Precision');
+    }
+    set Precision(value: number | null) {
+        this.Set('Precision', value);
+    }
+
+    /**
+    * * Field Name: Scale
+    * * Display Name: Scale
+    * * SQL Data Type: int
+    * * Description: Numeric scale
+    */
+    get Scale(): number | null {
+        return this.Get('Scale');
+    }
+    set Scale(value: number | null) {
+        this.Set('Scale', value);
+    }
+
+    /**
+    * * Field Name: AllowsNull
+    * * Display Name: Allows Null
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether the field can contain NULL values
+    */
+    get AllowsNull(): boolean {
+        return this.Get('AllowsNull');
+    }
+    set AllowsNull(value: boolean) {
+        this.Set('AllowsNull', value);
+    }
+
+    /**
+    * * Field Name: DefaultValue
+    * * Display Name: Default Value
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Default value from the source system
+    */
+    get DefaultValue(): string | null {
+        return this.Get('DefaultValue');
+    }
+    set DefaultValue(value: string | null) {
+        this.Set('DefaultValue', value);
+    }
+
+    /**
+    * * Field Name: IsPrimaryKey
+    * * Display Name: Is Primary Key
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this field is part of the object primary key
+    */
+    get IsPrimaryKey(): boolean {
+        return this.Get('IsPrimaryKey');
+    }
+    set IsPrimaryKey(value: boolean) {
+        this.Set('IsPrimaryKey', value);
+    }
+
+    /**
+    * * Field Name: IsUniqueKey
+    * * Display Name: Is Unique Key
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether values must be unique across all records
+    */
+    get IsUniqueKey(): boolean {
+        return this.Get('IsUniqueKey');
+    }
+    set IsUniqueKey(value: boolean) {
+        this.Set('IsUniqueKey', value);
+    }
+
+    /**
+    * * Field Name: IsReadOnly
+    * * Display Name: Is Read Only
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this field cannot be written back to the source system
+    */
+    get IsReadOnly(): boolean {
+        return this.Get('IsReadOnly');
+    }
+    set IsReadOnly(value: boolean) {
+        this.Set('IsReadOnly', value);
+    }
+
+    /**
+    * * Field Name: IsRequired
+    * * Display Name: Is Required
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this field is required for create/update operations
+    */
+    get IsRequired(): boolean {
+        return this.Get('IsRequired');
+    }
+    set IsRequired(value: boolean) {
+        this.Set('IsRequired', value);
+    }
+
+    /**
+    * * Field Name: RelatedIntegrationObjectFieldName
+    * * Display Name: Related Integration Object Field Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The field name on the related IntegrationObject that this FK points to (typically the PK field)
+    */
+    get RelatedIntegrationObjectFieldName(): string | null {
+        return this.Get('RelatedIntegrationObjectFieldName');
+    }
+    set RelatedIntegrationObjectFieldName(value: string | null) {
+        this.Set('RelatedIntegrationObjectFieldName', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display and processing order within the object. Lower numbers appear first.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Freeform JSON for connector-specific field configuration
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(25)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    * * Description: Active, Deprecated, or Disabled. Mirrors EntityField status values.
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: IsCustom
+    * * Display Name: Is Custom
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.
+    */
+    get IsCustom(): boolean {
+        return this.Get('IsCustom');
+    }
+    set IsCustom(value: boolean) {
+        this.Set('IsCustom', value);
+    }
+
+    /**
+    * * Field Name: MetadataSource
+    * * Display Name: Metadata Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+    * * Description: Provenance of this CompanyIntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.
+    */
+    get MetadataSource(): 'Custom' | 'Declared' | 'Discovered' {
+        return this.Get('MetadataSource');
+    }
+    set MetadataSource(value: 'Custom' | 'Declared' | 'Discovered') {
+        this.Set('MetadataSource', value);
+    }
+
+    /**
+    * * Field Name: CompanyIntegrationObjectID
+    * * Display Name: Company Integration Object ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Company Integration Objects (vwCompanyIntegrationObjects.ID)
+    */
+    get CompanyIntegrationObjectID(): string {
+        return this.Get('CompanyIntegrationObjectID');
+    }
+    set CompanyIntegrationObjectID(value: string) {
+        this.Set('CompanyIntegrationObjectID', value);
+    }
+
+    /**
+    * * Field Name: RelatedCompanyIntegrationObjectID
+    * * Display Name: Related Company Integration Object ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Company Integration Objects (vwCompanyIntegrationObjects.ID)
+    */
+    get RelatedCompanyIntegrationObjectID(): string | null {
+        return this.Get('RelatedCompanyIntegrationObjectID');
+    }
+    set RelatedCompanyIntegrationObjectID(value: string | null) {
+        this.Set('RelatedCompanyIntegrationObjectID', value);
+    }
+
+    /**
+    * * Field Name: IntegrationObjectFieldID
+    * * Display Name: Integration Object Field ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Integration Object Fields (vwIntegrationObjectFields.ID)
+    */
+    get IntegrationObjectFieldID(): string | null {
+        return this.Get('IntegrationObjectFieldID');
+    }
+    set IntegrationObjectFieldID(value: string | null) {
+        this.Set('IntegrationObjectFieldID', value);
+    }
+
+    /**
+    * * Field Name: ObservedMaxLength
+    * * Display Name: Observed Max Length
+    * * SQL Data Type: int
+    * * Description: The longest value sampling actually saw, kept SEPARATE from Length. Length carries the padded width the schema builder will use; this carries the evidence. Without both, a width cannot be audited and a truncation cannot be distinguished from a bad guess.
+    */
+    get ObservedMaxLength(): number | null {
+        return this.Get('ObservedMaxLength');
+    }
+    set ObservedMaxLength(value: number | null) {
+        this.Set('ObservedMaxLength', value);
+    }
+
+    /**
+    * * Field Name: Provenance
+    * * Display Name: Provenance
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Declared
+    *   * Endpoint
+    *   * Sampled
+    * * Description: Where this row came from: Declared (the connector shipped catalog), Endpoint (the source listed it) or Sampled (only streaming records revealed it). Answers "whose is this" for a connection whose catalog no longer matches the connector default.
+    */
+    get Provenance(): 'Declared' | 'Endpoint' | 'Sampled' {
+        return this.Get('Provenance');
+    }
+    set Provenance(value: 'Declared' | 'Endpoint' | 'Sampled') {
+        this.Set('Provenance', value);
+    }
+
+    /**
+    * * Field Name: ProvenanceDetail
+    * * Display Name: Provenance Detail
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The per-attribute merge log for this row: which side won each overlay decision and why. The persist already computes this and throws it away, so the operator has never been able to see why a width or a key looks the way it does.
+    */
+    get ProvenanceDetail(): string | null {
+        return this.Get('ProvenanceDetail');
+    }
+    set ProvenanceDetail(value: string | null) {
+        this.Set('ProvenanceDetail', value);
+    }
+
+    /**
+    * * Field Name: IsSelected
+    * * Display Name: Is Selected
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this connection syncs this item. THE AXIS THAT MAKES THE CONTRACT SATISFIABLE: Status says whether the item is in the catalog at all, IsSelected says whether the customer chose it. Conflating the two is why a newly discovered object had to arrive ENABLED — a disabled object was excluded from schema introspection, so it never reached key inference and never reached a migration.
+    */
+    get IsSelected(): boolean {
+        return this.Get('IsSelected');
+    }
+    set IsSelected(value: boolean) {
+        this.Set('IsSelected', value);
+    }
+
+    /**
+    * * Field Name: SelectedAt
+    * * Display Name: Selected At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the selection last changed. Lets the UI distinguish "never chosen" from "deliberately deselected".
+    */
+    get SelectedAt(): Date | null {
+        return this.Get('SelectedAt');
+    }
+    set SelectedAt(value: Date | null) {
+        this.Set('SelectedAt', value);
+    }
+
+    /**
+    * * Field Name: FirstSeenAt
+    * * Display Name: First Seen At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this connection first observed this item. Set once and never updated, so a catalog can be read as a history of what the source exposed and when.
+    */
+    get FirstSeenAt(): Date | null {
+        return this.Get('FirstSeenAt');
+    }
+    set FirstSeenAt(value: Date | null) {
+        this.Set('FirstSeenAt', value);
+    }
+
+    /**
+    * * Field Name: LastSeenAt
+    * * Display Name: Last Seen At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this connection most recently observed this item. A row whose LastSeenAt is older than the connection last discovery is what "absent from the source" means.
+    */
+    get LastSeenAt(): Date | null {
+        return this.Get('LastSeenAt');
+    }
+    set LastSeenAt(value: Date | null) {
+        this.Set('LastSeenAt', value);
+    }
+
+    /**
+    * * Field Name: LastSampledAt
+    * * Display Name: Last Sampled At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When sampling last streamed records for this item. Distinct from LastSeenAt: an item can be listed by an endpoint without ever being sampled, and unsampled items are exactly the ones whose widths and keys came from the declared catalog rather than from data.
+    */
+    get LastSampledAt(): Date | null {
+        return this.Get('LastSampledAt');
+    }
+    set LastSampledAt(value: Date | null) {
+        this.Set('LastSampledAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CompanyIntegrationObject
+    * * Display Name: Company Integration Object
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CompanyIntegrationObject(): string {
+        return this.Get('CompanyIntegrationObject');
+    }
+
+    /**
+    * * Field Name: RelatedCompanyIntegrationObject
+    * * Display Name: Related Company Integration Object
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RelatedCompanyIntegrationObject(): string | null {
+        return this.Get('RelatedCompanyIntegrationObject');
+    }
+
+    /**
+    * * Field Name: IntegrationObjectField
+    * * Display Name: Integration Object Field
+    * * SQL Data Type: nvarchar(255)
+    */
+    get IntegrationObjectField(): string | null {
+        return this.Get('IntegrationObjectField');
+    }
+}
+
+
+/**
+ * MJ: Company Integration Objects - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CompanyIntegrationObject
+ * * Base View: vwCompanyIntegrationObjects
+ * * @description One connection's (CompanyIntegration's) own copy of an integration object: the vendor's declared definition rebased with what THIS connection discovered and sampled, with provenance, and with selection (IsSelected) as an axis separate from Status. Replaces reading IntegrationObject directly so two connections of one connector no longer overwrite each other.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Company Integration Objects')
+export class MJCompanyIntegrationObjectEntity extends BaseEntity<MJCompanyIntegrationObjectEntityType> {
+    /**
+    * Loads the MJ: Company Integration Objects record from the database
+    * @param ID: string - primary key value to load the MJ: Company Integration Objects record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCompanyIntegrationObjectEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: IntegrationID
+    * * Display Name: Integration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
+    * * Description: The integration (connector) this object belongs to. Always the IntegrationID of the owning CompanyIntegration, copied onto the row by the catalog writer so the per-connection catalog can be read through the same projection as the shared IntegrationObject catalog.
+    */
+    get IntegrationID(): string {
+        return this.Get('IntegrationID');
+    }
+    set IntegrationID(value: string) {
+        this.Set('IntegrationID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Internal/programmatic name of the external object (e.g., Members, Events)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-friendly display label
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of what this external object represents
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(100)
+    * * Description: UI grouping category (e.g., Membership, Events, Finance)
+    */
+    get Category(): string | null {
+        return this.Get('Category');
+    }
+    set Category(value: string | null) {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: APIPath
+    * * Display Name: API Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: API endpoint path, may include template variables like {ProfileID} that are resolved at runtime from parent object records
+    */
+    get APIPath(): string {
+        return this.Get('APIPath');
+    }
+    set APIPath(value: string) {
+        this.Set('APIPath', value);
+    }
+
+    /**
+    * * Field Name: ResponseDataKey
+    * * Display Name: Response Data Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: JSON key used to extract the data array from the API response envelope. NULL means the response is a root-level array.
+    */
+    get ResponseDataKey(): string | null {
+        return this.Get('ResponseDataKey');
+    }
+    set ResponseDataKey(value: string | null) {
+        this.Set('ResponseDataKey', value);
+    }
+
+    /**
+    * * Field Name: DefaultPageSize
+    * * Display Name: Default Page Size
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Number of records to request per page from the API
+    */
+    get DefaultPageSize(): number {
+        return this.Get('DefaultPageSize');
+    }
+    set DefaultPageSize(value: number) {
+        this.Set('DefaultPageSize', value);
+    }
+
+    /**
+    * * Field Name: SupportsPagination
+    * * Display Name: Supports Pagination
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this endpoint supports paginated fetching
+    */
+    get SupportsPagination(): boolean {
+        return this.Get('SupportsPagination');
+    }
+    set SupportsPagination(value: boolean) {
+        this.Set('SupportsPagination', value);
+    }
+
+    /**
+    * * Field Name: PaginationType
+    * * Display Name: Pagination Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: PageNumber
+    * * Description: Pagination strategy: PageNumber (page index), Offset (record offset), Cursor (opaque token), or None
+    */
+    get PaginationType(): string {
+        return this.Get('PaginationType');
+    }
+    set PaginationType(value: string) {
+        this.Set('PaginationType', value);
+    }
+
+    /**
+    * * Field Name: SupportsIncrementalSync
+    * * Display Name: Supports Incremental Sync
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this object supports watermark-based incremental sync
+    */
+    get SupportsIncrementalSync(): boolean {
+        return this.Get('SupportsIncrementalSync');
+    }
+    set SupportsIncrementalSync(value: boolean) {
+        this.Set('SupportsIncrementalSync', value);
+    }
+
+    /**
+    * * Field Name: SupportsWrite
+    * * Display Name: Supports Write
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether data can be pushed back to this object via the API
+    */
+    get SupportsWrite(): boolean {
+        return this.Get('SupportsWrite');
+    }
+    set SupportsWrite(value: boolean) {
+        this.Set('SupportsWrite', value);
+    }
+
+    /**
+    * * Field Name: DefaultQueryParams
+    * * Display Name: Default Query Params
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object of default query parameters to include with every API request for this object
+    */
+    get DefaultQueryParams(): string | null {
+        return this.Get('DefaultQueryParams');
+    }
+    set DefaultQueryParams(value: string | null) {
+        this.Set('DefaultQueryParams', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Freeform JSON for connector-specific configuration not covered by standard columns
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Processing and display order. Lower numbers are processed first.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(25)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    * * Description: Active, Deprecated, or Disabled. Mirrors EntityField status values.
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: WriteAPIPath
+    * * Display Name: Write API Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: API path for create/update operations when different from the read APIPath. If NULL, the read APIPath is used for writes as well.
+    */
+    get WriteAPIPath(): string | null {
+        return this.Get('WriteAPIPath');
+    }
+    set WriteAPIPath(value: string | null) {
+        this.Set('WriteAPIPath', value);
+    }
+
+    /**
+    * * Field Name: WriteMethod
+    * * Display Name: Write Method
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: POST
+    * * Description: HTTP method for create operations. Defaults to POST.
+    */
+    get WriteMethod(): string | null {
+        return this.Get('WriteMethod');
+    }
+    set WriteMethod(value: string | null) {
+        this.Set('WriteMethod', value);
+    }
+
+    /**
+    * * Field Name: DeleteMethod
+    * * Display Name: Delete Method
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: DELETE
+    * * Description: HTTP method for delete operations. Defaults to DELETE.
+    */
+    get DeleteMethod(): string | null {
+        return this.Get('DeleteMethod');
+    }
+    set DeleteMethod(value: string | null) {
+        this.Set('DeleteMethod', value);
+    }
+
+    /**
+    * * Field Name: IsCustom
+    * * Display Name: Is Custom
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.
+    */
+    get IsCustom(): boolean {
+        return this.Get('IsCustom');
+    }
+    set IsCustom(value: boolean) {
+        this.Set('IsCustom', value);
+    }
+
+    /**
+    * * Field Name: CreateAPIPath
+    * * Display Name: Create API Path
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: HTTP path template for create operations. Generic CRUD in BaseRESTIntegrationConnector substitutes parent IDs into {var} placeholders. NULL means create not supported via metadata-driven path.
+    */
+    get CreateAPIPath(): string | null {
+        return this.Get('CreateAPIPath');
+    }
+    set CreateAPIPath(value: string | null) {
+        this.Set('CreateAPIPath', value);
+    }
+
+    /**
+    * * Field Name: CreateMethod
+    * * Display Name: Create Method
+    * * SQL Data Type: nvarchar(20)
+    * * Description: HTTP method for create (typically POST). NULL means create not supported via metadata-driven path.
+    */
+    get CreateMethod(): string | null {
+        return this.Get('CreateMethod');
+    }
+    set CreateMethod(value: string | null) {
+        this.Set('CreateMethod', value);
+    }
+
+    /**
+    * * Field Name: CreateBodyShape
+    * * Display Name: Create Body Shape
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Request body shape for create: flat (top-level fields), wrapped (under CreateBodyKey), or literal (connector overrides CreateRecord and supplies own body).
+    */
+    get CreateBodyShape(): string | null {
+        return this.Get('CreateBodyShape');
+    }
+    set CreateBodyShape(value: string | null) {
+        this.Set('CreateBodyShape', value);
+    }
+
+    /**
+    * * Field Name: CreateBodyKey
+    * * Display Name: Create Body Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Wrapper key for create body when CreateBodyShape=wrapped. Example: 'member' for YourMembership which wraps body as {member:{...}}.
+    */
+    get CreateBodyKey(): string | null {
+        return this.Get('CreateBodyKey');
+    }
+    set CreateBodyKey(value: string | null) {
+        this.Set('CreateBodyKey', value);
+    }
+
+    /**
+    * * Field Name: CreateIDLocation
+    * * Display Name: Create ID Location
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Where the created record ID is found in the create response: path (URL of returned Location header), body (parsed from JSON response), header (specific named header).
+    */
+    get CreateIDLocation(): string | null {
+        return this.Get('CreateIDLocation');
+    }
+    set CreateIDLocation(value: string | null) {
+        this.Set('CreateIDLocation', value);
+    }
+
+    /**
+    * * Field Name: UpdateAPIPath
+    * * Display Name: Update API Path
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: HTTP path template for update operations. Typically contains {ID} placeholder substituted with the record ExternalID at runtime.
+    */
+    get UpdateAPIPath(): string | null {
+        return this.Get('UpdateAPIPath');
+    }
+    set UpdateAPIPath(value: string | null) {
+        this.Set('UpdateAPIPath', value);
+    }
+
+    /**
+    * * Field Name: UpdateMethod
+    * * Display Name: Update Method
+    * * SQL Data Type: nvarchar(20)
+    * * Description: HTTP method for update (typically PATCH or PUT).
+    */
+    get UpdateMethod(): string | null {
+        return this.Get('UpdateMethod');
+    }
+    set UpdateMethod(value: string | null) {
+        this.Set('UpdateMethod', value);
+    }
+
+    /**
+    * * Field Name: UpdateBodyShape
+    * * Display Name: Update Body Shape
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Request body shape for update: flat | wrapped | literal. See CreateBodyShape.
+    */
+    get UpdateBodyShape(): string | null {
+        return this.Get('UpdateBodyShape');
+    }
+    set UpdateBodyShape(value: string | null) {
+        this.Set('UpdateBodyShape', value);
+    }
+
+    /**
+    * * Field Name: UpdateBodyKey
+    * * Display Name: Update Body Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Wrapper key for update body when UpdateBodyShape=wrapped.
+    */
+    get UpdateBodyKey(): string | null {
+        return this.Get('UpdateBodyKey');
+    }
+    set UpdateBodyKey(value: string | null) {
+        this.Set('UpdateBodyKey', value);
+    }
+
+    /**
+    * * Field Name: UpdateIDLocation
+    * * Display Name: Update ID Location
+    * * SQL Data Type: nvarchar(20)
+    * * Description: For update: where the target record ID is located in the request — typically 'path' (substituted into UpdateAPIPath URL template).
+    */
+    get UpdateIDLocation(): string | null {
+        return this.Get('UpdateIDLocation');
+    }
+    set UpdateIDLocation(value: string | null) {
+        this.Set('UpdateIDLocation', value);
+    }
+
+    /**
+    * * Field Name: DeleteAPIPath
+    * * Display Name: Delete API Path
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: HTTP path template for delete operations. Typically contains {ID} placeholder. NULL means delete not supported via metadata-driven path. (Existing DeleteMethod column carries the verb.)
+    */
+    get DeleteAPIPath(): string | null {
+        return this.Get('DeleteAPIPath');
+    }
+    set DeleteAPIPath(value: string | null) {
+        this.Set('DeleteAPIPath', value);
+    }
+
+    /**
+    * * Field Name: DeleteIDLocation
+    * * Display Name: Delete ID Location
+    * * SQL Data Type: nvarchar(20)
+    * * Description: For delete: where the target record ID is located — typically 'path'.
+    */
+    get DeleteIDLocation(): string | null {
+        return this.Get('DeleteIDLocation');
+    }
+    set DeleteIDLocation(value: string | null) {
+        this.Set('DeleteIDLocation', value);
+    }
+
+    /**
+    * * Field Name: IncrementalWatermarkField
+    * * Display Name: Incremental Watermark Field
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Vendor field name marking "last changed" — drives incremental sync filter when SupportsIncrementalSync=1. The exact filter syntax (e.g., $filter=Modified gt {value} or modified_since={value}) lives in Configuration.incrementalFilterFormat. Provable-only: leave NULL if docs do not name a watermark field.
+    */
+    get IncrementalWatermarkField(): string | null {
+        return this.Get('IncrementalWatermarkField');
+    }
+    set IncrementalWatermarkField(value: string | null) {
+        this.Set('IncrementalWatermarkField', value);
+    }
+
+    /**
+    * * Field Name: MetadataSource
+    * * Display Name: Metadata Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+    * * Description: Provenance of this CompanyIntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync.
+    */
+    get MetadataSource(): 'Custom' | 'Declared' | 'Discovered' {
+        return this.Get('MetadataSource');
+    }
+    set MetadataSource(value: 'Custom' | 'Declared' | 'Discovered') {
+        this.Set('MetadataSource', value);
+    }
+
+    /**
+    * * Field Name: SupportsCreate
+    * * Display Name: Supports Create
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this object supports record creation in the external system (per-operation granularity beyond SupportsWrite). Drives whether the generic CreateRecord path is wired and whether the object is offered for write-back create.
+    */
+    get SupportsCreate(): boolean {
+        return this.Get('SupportsCreate');
+    }
+    set SupportsCreate(value: boolean) {
+        this.Set('SupportsCreate', value);
+    }
+
+    /**
+    * * Field Name: SupportsUpdate
+    * * Display Name: Supports Update
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this object supports record updates in the external system (per-operation granularity beyond SupportsWrite).
+    */
+    get SupportsUpdate(): boolean {
+        return this.Get('SupportsUpdate');
+    }
+    set SupportsUpdate(value: boolean) {
+        this.Set('SupportsUpdate', value);
+    }
+
+    /**
+    * * Field Name: SupportsDelete
+    * * Display Name: Supports Delete
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this object supports record deletion/tombstoning in the external system (per-operation granularity beyond SupportsWrite).
+    */
+    get SupportsDelete(): boolean {
+        return this.Get('SupportsDelete');
+    }
+    set SupportsDelete(value: boolean) {
+        this.Set('SupportsDelete', value);
+    }
+
+    /**
+    * * Field Name: SyncStrategy
+    * * Display Name: Sync Strategy
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Declared incremental sync strategy for this object (e.g. WatermarkIncremental, ContentHash, FullSnapshot). Informs how the engine narrows subsequent syncs.
+    */
+    get SyncStrategy(): string | null {
+        return this.Get('SyncStrategy');
+    }
+    set SyncStrategy(value: string | null) {
+        this.Set('SyncStrategy', value);
+    }
+
+    /**
+    * * Field Name: ContentHashApplicable
+    * * Display Name: Content Hash Applicable
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether per-record content hashing is meaningful for this object (false for append-only/event streams where every row is new). Controls whether the engine uses content-hash to skip unchanged-row writes.
+    */
+    get ContentHashApplicable(): boolean {
+        return this.Get('ContentHashApplicable');
+    }
+    set ContentHashApplicable(value: boolean) {
+        this.Set('ContentHashApplicable', value);
+    }
+
+    /**
+    * * Field Name: StableOrderingKey
+    * * Display Name: Stable Ordering Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Stable, monotonic ordering column (usually the PK) used for keyset/no-watermark resume of a scan. Null when the object has no stable key.
+    */
+    get StableOrderingKey(): string | null {
+        return this.Get('StableOrderingKey');
+    }
+    set StableOrderingKey(value: string | null) {
+        this.Set('StableOrderingKey', value);
+    }
+
+    /**
+    * * Field Name: CompanyIntegrationID
+    * * Display Name: Company Integration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)
+    */
+    get CompanyIntegrationID(): string {
+        return this.Get('CompanyIntegrationID');
+    }
+    set CompanyIntegrationID(value: string) {
+        this.Set('CompanyIntegrationID', value);
+    }
+
+    /**
+    * * Field Name: IntegrationObjectID
+    * * Display Name: Integration Object ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
+    */
+    get IntegrationObjectID(): string | null {
+        return this.Get('IntegrationObjectID');
+    }
+    set IntegrationObjectID(value: string | null) {
+        this.Set('IntegrationObjectID', value);
+    }
+
+    /**
+    * * Field Name: Provenance
+    * * Display Name: Provenance
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Declared
+    *   * Endpoint
+    *   * Sampled
+    * * Description: Where this row came from: Declared (the connector shipped catalog), Endpoint (the source listed it) or Sampled (only streaming records revealed it). Answers "whose is this" for a connection whose catalog no longer matches the connector default.
+    */
+    get Provenance(): 'Declared' | 'Endpoint' | 'Sampled' {
+        return this.Get('Provenance');
+    }
+    set Provenance(value: 'Declared' | 'Endpoint' | 'Sampled') {
+        this.Set('Provenance', value);
+    }
+
+    /**
+    * * Field Name: ProvenanceDetail
+    * * Display Name: Provenance Detail
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The per-attribute merge log for this row: which side won each overlay decision and why. The persist already computes this and throws it away, so the operator has never been able to see why a width or a key looks the way it does.
+    */
+    get ProvenanceDetail(): string | null {
+        return this.Get('ProvenanceDetail');
+    }
+    set ProvenanceDetail(value: string | null) {
+        this.Set('ProvenanceDetail', value);
+    }
+
+    /**
+    * * Field Name: IsSelected
+    * * Display Name: Is Selected
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this connection syncs this item. THE AXIS THAT MAKES THE CONTRACT SATISFIABLE: Status says whether the item is in the catalog at all, IsSelected says whether the customer chose it. Conflating the two is why a newly discovered object had to arrive ENABLED — a disabled object was excluded from schema introspection, so it never reached key inference and never reached a migration.
+    */
+    get IsSelected(): boolean {
+        return this.Get('IsSelected');
+    }
+    set IsSelected(value: boolean) {
+        this.Set('IsSelected', value);
+    }
+
+    /**
+    * * Field Name: SelectedAt
+    * * Display Name: Selected At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the selection last changed. Lets the UI distinguish "never chosen" from "deliberately deselected".
+    */
+    get SelectedAt(): Date | null {
+        return this.Get('SelectedAt');
+    }
+    set SelectedAt(value: Date | null) {
+        this.Set('SelectedAt', value);
+    }
+
+    /**
+    * * Field Name: FirstSeenAt
+    * * Display Name: First Seen At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this connection first observed this item. Set once and never updated, so a catalog can be read as a history of what the source exposed and when.
+    */
+    get FirstSeenAt(): Date | null {
+        return this.Get('FirstSeenAt');
+    }
+    set FirstSeenAt(value: Date | null) {
+        this.Set('FirstSeenAt', value);
+    }
+
+    /**
+    * * Field Name: LastSeenAt
+    * * Display Name: Last Seen At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this connection most recently observed this item. A row whose LastSeenAt is older than the connection last discovery is what "absent from the source" means.
+    */
+    get LastSeenAt(): Date | null {
+        return this.Get('LastSeenAt');
+    }
+    set LastSeenAt(value: Date | null) {
+        this.Set('LastSeenAt', value);
+    }
+
+    /**
+    * * Field Name: LastSampledAt
+    * * Display Name: Last Sampled At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When sampling last streamed records for this item. Distinct from LastSeenAt: an item can be listed by an endpoint without ever being sampled, and unsampled items are exactly the ones whose widths and keys came from the declared catalog rather than from data.
+    */
+    get LastSampledAt(): Date | null {
+        return this.Get('LastSampledAt');
+    }
+    set LastSampledAt(value: Date | null) {
+        this.Set('LastSampledAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Integration
+    * * Display Name: Integration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Integration(): string {
+        return this.Get('Integration');
+    }
+
+    /**
+    * * Field Name: CompanyIntegration
+    * * Display Name: Company Integration
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CompanyIntegration(): string {
+        return this.Get('CompanyIntegration');
+    }
+
+    /**
+    * * Field Name: IntegrationObject
+    * * Display Name: Integration Object
+    * * SQL Data Type: nvarchar(255)
+    */
+    get IntegrationObject(): string | null {
+        return this.Get('IntegrationObject');
+    }
+}
+
+
+/**
  * MJ: Company Integration Record Maps - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: CompanyIntegrationRecordMap
@@ -90355,6 +92177,20 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
     }
 
     /**
+    * * Field Name: EntityDocumentID
+    * * Display Name: Entity Document
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Documents (vwEntityDocuments.ID)
+    * * Description: The Entity Document this run used: its template, vectors, match thresholds and LLM reasoning settings produced the run's matches.
+    */
+    get EntityDocumentID(): string {
+        return this.Get('EntityDocumentID');
+    }
+    set EntityDocumentID(value: string) {
+        this.Set('EntityDocumentID', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
@@ -90388,6 +92224,15 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
     */
     get ApprovedByUser(): string | null {
         return this.Get('ApprovedByUser');
+    }
+
+    /**
+    * * Field Name: EntityDocument
+    * * Display Name: Entity Document Name
+    * * SQL Data Type: nvarchar(250)
+    */
+    get EntityDocument(): string {
+        return this.Get('EntityDocument');
     }
 }
 
@@ -94830,41 +96675,6 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * MJ: Entity Documents - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
-    * @public
-    * @method
-    * @override
-    * @memberof MJEntityDocumentEntity
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
-            // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
-            
-            try {
-                await provider.BeginTransaction();
-                const result = await super.Delete(options);
-                
-                if (result) {
-                    await provider.CommitTransaction();
-                    return true;
-                } else {
-                    await provider.RollbackTransaction();
-                    return false;
-                }
-            } catch (error) {
-                await provider.RollbackTransaction();
-                throw error;
-            }
-        } else {
-            // For network providers, cascading deletes are handled server-side
-            return super.Delete(options);
-        }
     }
 
     /**

@@ -47,14 +47,16 @@
     <div class="banner__id banner__id--compact">
       <span class="banner__avatar" aria-hidden="true">{{ AgentName.charAt(0) }}</span>
       <span class="banner__name banner__name--compact">{{ AgentName }}</span>
-      <span class="banner__state-chip">
-        @if (IsBusy(State)) {
-          <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-        } @else {
-          <span class="banner__state-dot" [attr.data-state]="OrbState(State)" aria-hidden="true"></span>
-        }
-        <span class="banner__state-chip-label">{{ StateLabel(State) }}</span>
-      </span>
+      @if (!HideState) {
+        <span class="banner__state-chip">
+          @if (IsBusy(State)) {
+            <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+          } @else {
+            <span class="banner__state-dot" [attr.data-state]="OrbState(State)" aria-hidden="true"></span>
+          }
+          <span class="banner__state-chip-label">{{ StateLabel(State) }}</span>
+        </span>
+      }
     </div>
 
     @if (ShowMinimize) {
@@ -70,7 +72,9 @@
     <div class="banner__id">
       <span class="banner__name">Voice for {{ AgentName }}</span>
       <span class="pill pill--sage"><i class="fa-solid fa-feather" aria-hidden="true"></i> Co-Agent</span>
-      <span class="banner__for">speaking as <b>{{ AgentName }}</b></span>
+      @if (!HideState) {
+        <span class="banner__for">speaking as <b>{{ AgentName }}</b></span>
+      }
       @if (ModelName) {
         <span class="banner__model" [title]="'Realtime voice model: ' + ModelName">· {{ ModelName }}</span>
       }
@@ -83,17 +87,19 @@
       }
     </div>
 
-    <div class="banner__state" [class.banner__state--busy]="IsBusy(State)">
-      @if (IsBusy(State)) {
-        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-      } @else {
-        <div class="waveform" [class.waveform--idle]="State !== 'speaking'" aria-hidden="true">
-          <span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span>
-        </div>
-      }
-      <span class="banner__state-label">{{ StateLabel(State) }}</span>
-    </div>
+    @if (!HideState) {
+      <div class="banner__state" [class.banner__state--busy]="IsBusy(State)">
+        @if (IsBusy(State)) {
+          <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+        } @else {
+          <div class="waveform" [class.waveform--idle]="State !== 'speaking'" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span>
+          </div>
+        }
+        <span class="banner__state-label">{{ StateLabel(State) }}</span>
+      </div>
+    }
 
     <!-- Disclosure-gated app-bar action cluster: STATE + WINDOW-CHROME only. Call actions
          (Mute / Captions / Details / Type / End) live in the bottom dock — the single home for

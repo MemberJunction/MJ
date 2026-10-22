@@ -1,6 +1,6 @@
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage, FieldSecurityError, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IEntityDataProvider, IMetadataProvider, MetadataSweepResult, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
+import { IEntityDataProvider, IMetadataProvider, MetadataSweepResult, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, GetRecordDependenciesOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
 import { RecordChangeFieldSecurityProjector } from "./recordChangeFieldSecurity";
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
@@ -9,10 +9,10 @@ import type { CacheChangedEvent, QueryDefinitionSignature } from "./localCacheMa
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, MJEvent, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, EscapeSQLString, ordinalCompare } from "@memberjunction/global";
+import { MJGlobal, MJEvent, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, IndexByUUID, EscapeSQLString, ordinalCompare } from "@memberjunction/global";
 import { FindReferencedIdentifiers } from "@memberjunction/sql-dialect";
 import { TelemetryManager } from "./telemetryManager";
-import { LogDebug, LogError, LogStatus, LogStatusEx } from "./logging";
+import { LogDebug, LogError, LogStatus, LogStatusEx, LogWarning } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { LibraryInfo } from "./libraryInfo";
@@ -631,12 +631,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _metadataReadsJoinTransaction = false;
 
     /**
-     * The MJ_Metadata dataset items (code + entity name) as of the last full load. The remote
+     * The MJ_Metadata dataset items (code + entity name + row count) as of the last load. The remote
      * timestamps ({@link GetLatestMetadataUpdates}) are keyed by entity name while a dataset
      * read is scoped by item code, so this is the bridge that lets a staleness check be turned
-     * into a scoped reload (see {@link PartialRefreshItemCodes}).
+     * into a scoped reload (see {@link PartialRefreshItemCodes}) and lets {@link adoptServerMetadata}
+     * verify that the received dataset items' row counts match `_latestRemoteMetadataTimestamps`.
      */
-    private _metadataDatasetItems: ReadonlyArray<{ Code: string; EntityName: string }> | null = null;
+    private _metadataDatasetItems: ReadonlyArray<{
+        Code: string;
+        EntityName: string;
+        EntityID?: string;
+        RowCount?: number;
+        LatestUpdateDate?: Date;
+    }> | null = null;
 
     /**
      * MJ_Metadata item codes that may be reloaded on their own, without rebuilding the rest of
@@ -688,7 +695,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         this._metadataDatasetEntityNames = names;
         this._metadataDatasetItems = (dataset.Results ?? [])
             .filter(item => item.Code && item.EntityName)
-            .map(item => ({ Code: item.Code, EntityName: item.EntityName }));
+            .map(item => ({
+                Code: item.Code,
+                EntityName: item.EntityName,
+                EntityID: item.EntityID,
+                RowCount: Array.isArray(item.Results) ? item.Results.length : undefined,
+                LatestUpdateDate: item.LatestUpdateDate
+            }));
         this.ensureInflightViewInvalidation();
     }
 
@@ -3467,7 +3480,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         const totalPreTime = performance.now() - preViewStart;
         if (totalPreTime > 50) {
-            LogStatus(`[PERF-PRE] PreRunView ${params.EntityName}: ${totalPreTime.toFixed(1)}ms (telemetry=${telemetryTime.toFixed(1)}ms, entityCheck=${entityCheckTime.toFixed(1)}ms, entityLookup=${entityLookupTime.toFixed(1)}ms, cache=${cacheCheckTime.toFixed(1)}ms)`);
+            LogStatusEx({ message: `[PERF-PRE] PreRunView ${params.EntityName}: ${totalPreTime.toFixed(1)}ms (telemetry=${telemetryTime.toFixed(1)}ms, entityCheck=${entityCheckTime.toFixed(1)}ms, entityLookup=${entityLookupTime.toFixed(1)}ms, cache=${cacheCheckTime.toFixed(1)}ms)`, verboseOnly: true });
         }
 
         return {
@@ -5076,7 +5089,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (!this.TrustLocalCacheCompletely && !hardRefresh && !this._localMetadata?.AllEntities?.length) {
             await Promise.all([localCacheInitPromise, this.LoadLocalMetadataFromStorage()]);
             if (this._localMetadata?.AllEntities?.length) {
-                LogStatusEx({ message: `⚡ [Metadata Cache] Loaded ${this._localMetadata.AllEntities.length} entities from local cache — pre-validating before engine startup`, verboseOnly: false });
+                LogStatus(`⚡ [Metadata Cache] Loaded ${this._localMetadata.AllEntities.length} entities from local cache — pre-validating before engine startup`);
 
                 // Do NOT kick off background validation here — it writes to IndexedDB
                 // which contends with engine RunView cache reads during StartupManager.
@@ -5171,7 +5184,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     const start = new Date().getTime();
                     const res = await this.GetAllMetadata(providerToUse, effectiveHardRefresh);
                     const end = new Date().getTime();
-                    LogStatusEx({ message: `GetAllMetadata() took ${end - start} ms`, verboseOnly: true });
+                    LogStatus(`GetAllMetadata() took ${end - start} ms`);
                     if (res) {
                         await this.adoptServerMetadata(res);
                         this._configLoadedFromServer = true;
@@ -5201,7 +5214,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /**
      * Adopts a metadata snapshot just loaded from the server: swaps it in, records that the
-     * local copy now matches the server's timestamps, and persists it to local storage.
+     * local copy now matches the server's timestamps (verified per item against the received
+     * dataset row counts), and persists it to local storage.
      *
      * The swap goes through UpdateLocalMetadata — a single property assignment, atomic in
      * JavaScript, so readers see the old snapshot until the new one is complete — which keeps
@@ -5209,8 +5223,126 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     private async adoptServerMetadata(res: AllMetadata): Promise<void> {
         this.UpdateLocalMetadata(res);
-        this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps; // we just used the server to get all the stuff
+        this._latestLocalMetadataTimestamps = this.reconcileAdoptedMetadataTimestamps(res);
         await this.SaveLocalMetadataToStorage();
+    }
+
+    /**
+     * Verifies that each item in `_latestRemoteMetadataTimestamps` matches the row count actually
+     * received in the loaded `MJ_Metadata` dataset (or `AllMetadata` collections) before advancing
+     * `_latestLocalMetadataTimestamps`. If any item has a mismatched row count (e.g., because a
+     * server cache slot returned stale rows while the SQL status probe reported newer counts),
+     * logs a warning and preserves the unadvanced local timestamp for that item so the next
+     * staleness check (`LocalMetadataObsolete`) detects the discrepancy and self-heals.
+     */
+    private reconcileAdoptedMetadataTimestamps(res: AllMetadata): MetadataInfo[] {
+        const remote = this._latestRemoteMetadataTimestamps;
+        if (!remote || remote.length === 0) {
+            return remote;
+        }
+        const norm = (v: string | null | undefined) => (v ?? '').trim().toLowerCase();
+        const rollup = norm(ProviderBase._allMetadataTypeName);
+        const prevLocal = this._latestLocalMetadataTimestamps ?? [];
+        const datasetItems = this._metadataDatasetItems;
+        const resRecord = res as unknown as Record<string, unknown> | undefined;
+
+        let hasMismatch = false;
+        const reconciled: MetadataInfo[] = [];
+
+        const datasetItemsByEntityID = datasetItems && datasetItems.length > 0
+            ? IndexByUUID(datasetItems.filter(item => Boolean(item.EntityID)), item => item.EntityID)
+            : null;
+        const datasetItemsByNameOrCode = new Map<string, NonNullable<typeof datasetItems>[number]>();
+        if (datasetItems && datasetItems.length > 0) {
+            for (const item of datasetItems) {
+                if (item.EntityName) datasetItemsByNameOrCode.set(norm(item.EntityName), item);
+                if (item.Code) datasetItemsByNameOrCode.set(norm(item.Code), item);
+            }
+        }
+
+        for (const remoteEntry of remote) {
+            if (norm(remoteEntry.Type) === rollup) {
+                continue;
+            }
+
+            let receivedRowCount: number | undefined;
+            let receivedUpdateDate: Date | undefined;
+
+            if (datasetItems && datasetItems.length > 0) {
+                const match = (remoteEntry.ID ? datasetItemsByEntityID?.Get(remoteEntry.ID) : undefined)
+                    ?? datasetItemsByNameOrCode.get(norm(remoteEntry.Type));
+                if (match && match.RowCount !== undefined) {
+                    receivedRowCount = match.RowCount;
+                    receivedUpdateDate = match.LatestUpdateDate;
+                }
+            } else if (resRecord) {
+                // Fallback when adoptServerMetadata is invoked without a preceding dataset load
+                const arrayMatch = AllMetadataArrays.find(m => {
+                    const code = m.key.substring(3);
+                    return norm(code) === norm(remoteEntry.Type) ||
+                        norm(m.key) === norm(remoteEntry.Type) ||
+                        norm(`MJ: ${code}`) === norm(remoteEntry.Type);
+                });
+                if (arrayMatch) {
+                    const arr = resRecord[arrayMatch.key];
+                    if (Array.isArray(arr)) {
+                        receivedRowCount = arr.length;
+                    }
+                }
+            }
+
+            if (
+                receivedRowCount !== undefined &&
+                remoteEntry.RowCount !== undefined &&
+                receivedRowCount !== remoteEntry.RowCount
+            ) {
+                hasMismatch = true;
+                LogWarning(
+                    `[Metadata Cache] Row count mismatch when adopting server metadata for "${remoteEntry.Type}": ` +
+                    `received ${receivedRowCount} rows but remote status reported ${remoteEntry.RowCount} rows. ` +
+                    `Not advancing local timestamp for "${remoteEntry.Type}" so the next check self-heals.`,
+                    'Metadata'
+                );
+                const priorEntry = prevLocal.find(m => norm(m.Type) === norm(remoteEntry.Type));
+                if (priorEntry) {
+                    reconciled.push({
+                        ...priorEntry,
+                        RowCount: receivedRowCount
+                    });
+                } else {
+                    const fallbackDate =
+                        receivedUpdateDate &&
+                        remoteEntry.UpdatedAt &&
+                        new Date(receivedUpdateDate).getTime() !== new Date(remoteEntry.UpdatedAt).getTime()
+                            ? receivedUpdateDate
+                            : new Date(0);
+                    reconciled.push({
+                        ...remoteEntry,
+                        UpdatedAt: fallbackDate,
+                        RowCount: receivedRowCount
+                    });
+                }
+            } else {
+                reconciled.push(remoteEntry);
+            }
+        }
+
+        if (!hasMismatch) {
+            return remote;
+        }
+
+        const remoteRollup = remote.find(r => norm(r.Type) === rollup);
+        if (remoteRollup) {
+            const priorRollup = prevLocal.find(m => norm(m.Type) === rollup);
+            const totalReconciledRows = reconciled.reduce((sum, item) => sum + (item.RowCount ?? 0), 0);
+            reconciled.push({
+                ...remoteRollup,
+                UpdatedAt: priorRollup?.UpdatedAt ?? new Date(0),
+                RowCount: totalReconciledRows
+            });
+        }
+
+        return reconciled;
     }
 
     /**
@@ -5290,14 +5422,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const start = Date.now();
             const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, skipOthers, this.CurrentUser, providerToUse, true);
             if (!d?.Success) {
-                LogStatusEx({ message: `[Metadata] Scoped reload of ${codes.join(', ')} failed (${d?.Status ?? 'no result'}); running the full reload`, verboseOnly: false });
+                LogStatusEx({ message: `[Metadata] Scoped reload of ${codes.join(', ')} failed (${d?.Status ?? 'no result'}); running the full reload`, verboseOnly: true });
                 return false;
             }
             const simple: Record<string, unknown[]> = {};
             for (const code of codes) {
                 const item = d.Results?.find(r => r.Code === code);
                 if (!item || item.Success === false || !Array.isArray(item.Results)) {
-                    LogStatusEx({ message: `[Metadata] Scoped reload: item ${code} ${item ? `failed (${item.Status ?? 'no rows'})` : 'missing'}; running the full reload`, verboseOnly: false });
+                    LogStatusEx({ message: `[Metadata] Scoped reload: item ${code} ${item ? `failed (${item.Status ?? 'no rows'})` : 'missing'}; running the full reload`, verboseOnly: true });
                     return false;
                 }
                 simple[code] = item.Results;
@@ -5314,6 +5446,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             for (const m of AllMetadataArrays) {
                 target[m.key] = keep.has(m.key.substring(3)) ? fresh[m.key] : kept[m.key];
             }
+            this._metadataDatasetItems = items.map(existing => {
+                if (!keep.has(existing.Code)) {
+                    return existing;
+                }
+                const updated = d.Results?.find(r => r.Code === existing.Code);
+                return updated && Array.isArray(updated.Results)
+                    ? {
+                        ...existing,
+                        RowCount: updated.Results.length,
+                        LatestUpdateDate: updated.LatestUpdateDate ?? existing.LatestUpdateDate
+                    }
+                    : existing;
+            });
             // Adopted like every other server snapshot. _configLoadedFromServer is NOT set: this read
             // fetched no current user (the existing one is carried over), so the next pre-validation
             // must still run its check.
@@ -5337,16 +5482,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         try {
             const needsRefresh = await this.CheckToSeeIfRefreshNeeded(providerToUse);
             if (needsRefresh) {
-                LogStatusEx({ message: `⚡ [Metadata Cache] Background check: metadata is stale — refreshing...`, verboseOnly: false });
+                LogStatusEx({ message: `⚡ [Metadata Cache] Background check: metadata is stale — refreshing...`, verboseOnly: true });
                 const start = Date.now();
                 const res = await this.GetAllMetadata(providerToUse, false);
                 const elapsed = Date.now() - start;
                 if (res) {
                     await this.adoptServerMetadata(res);
-                    LogStatusEx({ message: `⚡ [Metadata Cache] Background refresh complete (${elapsed}ms) — metadata updated in place`, verboseOnly: false });
+                    LogStatusEx({ message: `⚡ [Metadata Cache] Background refresh complete (${elapsed}ms) — metadata updated in place`, verboseOnly: true });
                 }
             } else {
-                LogStatusEx({ message: `⚡ [Metadata Cache] Background check: metadata is current — no refresh needed`, verboseOnly: false });
+                LogStatusEx({ message: `⚡ [Metadata Cache] Background check: metadata is current — no refresh needed`, verboseOnly: true });
                 await this.RefreshCurrentUser();
             }
         } catch (e) {
@@ -5396,16 +5541,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 this.RefreshCurrentUser(),
             ]);
             if (needsRefresh) {
-                LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata is stale — refreshing before engine startup`, verboseOnly: false });
+                LogStatus(`⚡ [Metadata Cache] Pre-validation: metadata is stale — refreshing before engine startup`);
                 const start = Date.now();
                 const res = await this.GetAllMetadata(providerToUse, false);
                 const elapsed = Date.now() - start;
                 if (res) {
                     await this.adoptServerMetadata(res);
-                    LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation refresh complete (${elapsed}ms)`, verboseOnly: false });
+                    LogStatus(`⚡ [Metadata Cache] Pre-validation refresh complete (${elapsed}ms)`);
                 }
             } else {
-                LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata is current`, verboseOnly: false });
+                LogStatus(`⚡ [Metadata Cache] Pre-validation: metadata is current`);
             }
         } catch (e) {
             LogError(`[Metadata Cache] Pre-validation failed: ${e instanceof Error ? e.message : String(e)} — engines will smart-cache-check`);
@@ -6223,9 +6368,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
-     * @param KeyValuePairs the values of the primary key of the record to check
+     * @param CompositeKey the values of the primary key of the record to check
+     * @param contextUser optional user context (or options when called with 3 arguments)
+     * @param options optional filtering options for dependency discovery
      */
-    public abstract GetRecordDependencies(entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<RecordDependency[]> 
+    public abstract GetRecordDependencies(entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo | GetRecordDependenciesOptions, options?: GetRecordDependenciesOptions): Promise<RecordDependency[]> 
 
     /**
      * Returns a list of record IDs that are possible duplicates of the specified record. 
