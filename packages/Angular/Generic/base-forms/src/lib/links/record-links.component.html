@@ -220,56 +220,59 @@
                     </header>
                     <div class="mj-links-group__items">
                         @for (item of group.Items; track item.TrackKey) {
-                            <button
-                                type="button"
-                                class="mj-links-card"
-                                (click)="OnItemClick(item, $event)"
-                                (mouseenter)="OnCardMouseEnter(item, $event)"
-                                (mouseleave)="OnCardMouseLeave()">
-                                <div class="mj-links-card__main">
-                                    <div class="mj-links-card__title-row">
-                                        <span class="mj-links-card__title">{{ item.DisplayName }}</span>
-                                        @if (item.StatusLabel) {
-                                            <span class="mj-links-card__status">{{ item.StatusLabel }}</span>
-                                        }
+                            <div class="mj-links-card-row">
+                                <button
+                                    type="button"
+                                    class="mj-links-card"
+                                    [mjRecordLink]="Record"
+                                    [FieldName]="item.Direction === 'outgoing' ? (item.SourceFieldName ?? null) : null"
+                                    [EntityName]="item.EntityName"
+                                    [PrimaryKey]="item.PrimaryKey"
+                                    [DisplayName]="item.DisplayName"
+                                    [Provider]="ProviderToUse"
+                                    (Navigate)="OnItemNavigate(item, $event)"
+                                    (RecordUpdated)="OnItemQuickEdited(item, $event)">
+                                    <div class="mj-links-card__main">
+                                        <div class="mj-links-card__title-row">
+                                            <span class="mj-links-card__title">{{ item.DisplayName }}</span>
+                                            @if (item.StatusLabel) {
+                                                <span class="mj-links-card__status">{{ item.StatusLabel }}</span>
+                                            }
+                                        </div>
+                                        <div class="mj-links-card__meta">
+                                            <span class="mj-links-card__direction-pill" [class.mj-links-card__direction-pill--outgoing]="item.Direction === 'outgoing'">
+                                                <i [class]="item.Direction === 'outgoing' ? 'fa-solid fa-arrow-up-right-from-square' : 'fa-solid fa-arrow-turn-up'" aria-hidden="true"></i>
+                                                {{ item.DirectionLabel }}
+                                            </span>
+                                            <span class="mj-links-card__relationship">
+                                                <i [class]="item.IsSoftLink ? 'fa-solid fa-diagram-project' : 'fa-solid fa-link'"></i>
+                                                {{ item.RelationshipLabel }}
+                                            </span>
+                                            <span class="mj-links-card__type-pill" [class.mj-links-card__type-pill--soft]="item.IsSoftLink">
+                                                {{ item.LinkTypeLabel }}
+                                            </span>
+                                            @if (item.FormattedDate) {
+                                                <span class="mj-links-card__date">{{ item.FormattedDate }}</span>
+                                            }
+                                        </div>
                                     </div>
-                                    <div class="mj-links-card__meta">
-                                        <span class="mj-links-card__direction-pill" [class.mj-links-card__direction-pill--outgoing]="item.Direction === 'outgoing'">
-                                            <i [class]="item.Direction === 'outgoing' ? 'fa-solid fa-arrow-up-right-from-square' : 'fa-solid fa-arrow-turn-up'" aria-hidden="true"></i>
-                                            {{ item.DirectionLabel }}
-                                        </span>
-                                        <span class="mj-links-card__relationship">
-                                            <i [class]="item.IsSoftLink ? 'fa-solid fa-diagram-project' : 'fa-solid fa-link'"></i>
-                                            {{ item.RelationshipLabel }}
-                                        </span>
-                                        <span class="mj-links-card__type-pill" [class.mj-links-card__type-pill--soft]="item.IsSoftLink">
-                                            {{ item.LinkTypeLabel }}
-                                        </span>
-                                        @if (item.FormattedDate) {
-                                            <span class="mj-links-card__date">{{ item.FormattedDate }}</span>
-                                        }
-                                    </div>
-                                </div>
-                                <i class="fa-solid fa-chevron-right mj-links-card__chevron"></i>
-                            </button>
+                                    <i class="fa-solid fa-chevron-right mj-links-card__chevron"></i>
+                                </button>
+                                @if (AllowQuickUnlink && item.CanUnlink) {
+                                    <button
+                                        type="button"
+                                        class="mj-links-card__unlink-btn"
+                                        [disabled]="UnlinkingTrackKey === item.TrackKey"
+                                        [attr.aria-label]="'Unlink ' + item.DisplayName"
+                                        (click)="OnUnlinkItem(item, $event)">
+                                        <i [class]="UnlinkingTrackKey === item.TrackKey ? 'fa-solid fa-circle-notch fa-spin' : 'fa-solid fa-link-slash'" aria-hidden="true"></i>
+                                    </button>
+                                }
+                            </div>
                         }
                     </div>
                 </section>
             }
         </div>
-    }
-
-    @if (HoveredItem; as hovered) {
-        <mj-record-preview-popover
-            [Provider]="ProviderToUse"
-            [Visible]="true"
-            [EntityName]="hovered.EntityName"
-            [PrimaryKey]="hovered.PrimaryKey"
-            [DisplayName]="hovered.DisplayName"
-            [AnchorRect]="HoverAnchorRect"
-            (Navigate)="OnPreviewCardNavigate($event)"
-            (MouseEnterCard)="OnPreviewCardMouseEnter()"
-            (MouseLeaveCard)="OnPreviewCardMouseLeave()">
-        </mj-record-preview-popover>
     }
 </ng-template>
