@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { BaseEntity } from '@memberjunction/core';
-import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
+import {
+    FormRecordRefreshCoordinator,
+    type FormFieldConflict,
+    type FormRemoteUpdateEvent
+} from '../form-record-refresh.coordinator';
 
 describe('FormRecordRefreshCoordinator', () => {
     it('emits the record to every subscriber of Notify', () => {
@@ -39,5 +43,74 @@ describe('FormRecordRefreshCoordinator', () => {
 
         expect(remoteEvents).toEqual([{ record, changed: ['nickname'] }]);
         expect(refreshedRecords).toEqual([record]);
+    });
+
+    it('tracks autoMergedPreviousValues and conflicts via NotifyRemoteUpdate', () => {
+        const coordinator = new FormRecordRefreshCoordinator();
+        const remoteEvents: FormRemoteUpdateEvent[] = [];
+        const conflictSnapshots: Array<ReadonlyMap<string, FormFieldConflict>> = [];
+
+        coordinator.RemoteUpdated$.subscribe((evt) => remoteEvents.push(evt));
+        coordinator.ConflictsChanged$.subscribe((map) => conflictSnapshots.push(map));
+
+        const record = { ID: 'rec-2' } as unknown as BaseEntity;
+        const autoMerged = new Map<string, unknown>([['status', 'Pending']]);
+        const priceConflict: FormFieldConflict = {
+            fieldName: 'Price',
+            previousServerValue: 100,
+            incomingServerValue: 125,
+            localEditedValue: 110
+        };
+        const conflicts = new Map<string, FormFieldConflict>([['price', priceConflict]]);
+
+        coordinator.NotifyRemoteUpdate(record, new Set(['status', 'price']), autoMerged, conflicts);
+
+        expect(remoteEvents).toHaveLength(1);
+        expect(remoteEvents[0].autoMergedPreviousValues?.get('status')).toBe('Pending');
+        expect(remoteEvents[0].conflicts?.get('price')).toEqual(priceConflict);
+        expect(coordinator.ActiveConflicts.size).toBe(1);
+        expect(coordinator.ActiveConflicts.get('price')).toEqual(priceConflict);
+        expect(conflictSnapshots).toHaveLength(1);
+        expect(conflictSnapshots[0].get('price')).toEqual(priceConflict);
+    });
+
+    it('resolves individual conflicts case-insensitively and clears all conflicts', () => {
+        const coordinator = new FormRecordRefreshCoordinator();
+        const conflictCounts: number[] = [];
+        coordinator.ConflictsChanged$.subscribe((map) => conflictCounts.push(map.size));
+
+        const record = { ID: 'rec-3' } as unknown as BaseEntity;
+        const conflicts = new Map<string, FormFieldConflict>([
+            [
+                'name',
+                {
+                    fieldName: 'Name',
+                    previousServerValue: 'Alpha',
+                    incomingServerValue: 'Beta',
+                    localEditedValue: 'Gamma'
+                }
+            ],
+            [
+                'status',
+                {
+                    fieldName: 'Status',
+                    previousServerValue: 'Draft',
+                    incomingServerValue: 'Published',
+                    localEditedValue: 'Archived'
+                }
+            ]
+        ]);
+
+        coordinator.NotifyRemoteUpdate(record, new Set(['name', 'status']), undefined, conflicts);
+        expect(coordinator.ActiveConflicts.size).toBe(2);
+
+        coordinator.ResolveConflict('Name');
+        expect(coordinator.ActiveConflicts.size).toBe(1);
+        expect(coordinator.ActiveConflicts.has('name')).toBe(false);
+        expect(coordinator.ActiveConflicts.has('status')).toBe(true);
+
+        coordinator.ClearAllConflicts();
+        expect(coordinator.ActiveConflicts.size).toBe(0);
+        expect(conflictCounts).toEqual([2, 1, 0]);
     });
 });
