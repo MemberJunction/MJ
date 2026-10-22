@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { BaseEntity, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
-import { NormalizeUUID } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import {
     CATALOG_EDGE_COLUMNS,
     CATALOG_FIELD_COLUMNS,
@@ -10,7 +10,7 @@ import {
     ENTITY_COMPANY_INTEGRATION_OBJECTS,
     ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
     IntegrationEngineBase,
-    projectCatalogObjects,
+    ProjectCatalogObjects,
 } from '@memberjunction/integration-engine-base';
 import { CompanyIntegrationCatalogReadFailed } from './CatalogWriter.js';
 
@@ -105,10 +105,6 @@ const TELEMETRY: RunViewParams['Telemetry'] = {
     Reason: 'Per-connection catalog read for the catalog scope; a cached answer predates the writes it must observe',
 };
 
-function lit(value: string): string {
-    return value.replace(/'/g, "''");
-}
-
 function engineUser(): UserInfo {
     // BaseEngine keeps the user it was configured with. Scope entry has no user of its own unless
     // the caller passes one, and must not invent one: a catalog read before Config is a bug, not a
@@ -145,7 +141,7 @@ async function readRows<T>(params: RunViewParams, user: UserInfo): Promise<T[]> 
 async function readEdges(objectIDs: readonly string[], user: UserInfo): Promise<CatalogDependencyEdge[]> {
     const edges: CatalogDependencyEdge[] = [];
     for (let i = 0; i < objectIDs.length; i += EDGE_READ_CHUNK) {
-        const list = objectIDs.slice(i, i + EDGE_READ_CHUNK).map(id => `'${lit(id)}'`).join(',');
+        const list = objectIDs.slice(i, i + EDGE_READ_CHUNK).map(id => `'${EscapeSQLString(id)}'`).join(',');
         const rows = await readRows<CatalogDependencyEdge>({
             EntityName: ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
             // Only fields that point at another object. Every reader of the edge set skips the
@@ -171,7 +167,7 @@ async function readCatalog(companyIntegrationID: string, contextUser: UserInfo |
     const user = contextUser ?? engineUser();
     const Objects = await readRows<BaseEntity>({
         EntityName: ENTITY_COMPANY_INTEGRATION_OBJECTS,
-        ExtraFilter: `CompanyIntegrationID = '${lit(companyIntegrationID)}'`,
+        ExtraFilter: `CompanyIntegrationID = '${EscapeSQLString(companyIntegrationID)}'`,
         Fields: [...CATALOG_OBJECT_COLUMNS],
         ResultType: 'entity_object',
     }, user);
@@ -179,7 +175,7 @@ async function readCatalog(companyIntegrationID: string, contextUser: UserInfo |
     // generated subclass, so a loaded row has no `ID` property: `row.ID` is undefined, and an edge
     // filter built from it matches nothing — every dependency edge silently lost. Projecting here
     // also checks the column contract before anything reads the rows.
-    const Edges = await readEdges(projectCatalogObjects(Objects).map(o => o.ID), user);
+    const Edges = await readEdges(ProjectCatalogObjects(Objects).map(o => o.ID), user);
     return { Objects, Edges };
 }
 
@@ -248,7 +244,7 @@ function unpinOne(key: string): void {
 async function readFields(objectID: string, key: string, owner: string, contextUser: UserInfo | undefined): Promise<void> {
     const rows = await readRows<BaseEntity>({
         EntityName: ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
-        ExtraFilter: `CompanyIntegrationObjectID = '${lit(objectID)}'`,
+        ExtraFilter: `CompanyIntegrationObjectID = '${EscapeSQLString(objectID)}'`,
         Fields: [...CATALOG_FIELD_COLUMNS],
         ResultType: 'entity_object',
     }, contextUser ?? engineUser());

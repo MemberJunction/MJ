@@ -637,6 +637,10 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
                 // VectorBinary in Fields is what requests it — RunView omits binary columns otherwise.
                 Fields: ['ID', 'RecordID', 'VectorJSON', 'VectorBinary'],
                 ResultType: 'simple',
+                // The whole index, not the first page: without this the load stops at the
+                // entity's UserViewMaxRows (1,000 for Entity Record Documents) and every vector
+                // past it is invisible to search and duplicate detection.
+                IgnoreMaxRows: true,
             }, contextUser);
 
             if (!r.Success) {
@@ -685,7 +689,10 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
      * Run cosine search over the cached vector pool for the supplied
      * EntityDocumentID. Match objects surface the parent entity's RecordID
      * under `metadata.RecordID` so callers can map results back without
-     * a second lookup.
+     * a second lookup. Scores are standard cosine similarity, [-1, 1] (the
+     * `cosine-similarity` metric), as Pinecone, SQL Server and pgvector report it,
+     * so an Entity Document's match thresholds and search's MinScore mean the same
+     * thing on every store.
      */
     public async QueryIndex(params: QueryOptions, contextUser?: UserInfo): Promise<BaseResponse> {
         const p = params as { id?: string; vector?: number[]; topK?: number };
@@ -708,7 +715,7 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
             return { success: true, message: 'No embedded records yet', data: { matches: [] } };
         }
 
-        const matches = await loaded.service.FindNearestAsync(queryVector, topK, 0);
+        const matches = await loaded.service.FindNearestAsync(queryVector, topK, undefined, 'cosine-similarity');
         return {
             success: true,
             message: `Returned ${matches.length} match(es)`,

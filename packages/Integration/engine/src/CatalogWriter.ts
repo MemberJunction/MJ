@@ -1,5 +1,6 @@
 import { BaseEntity, CompositeKey, DatabaseProviderBase, IMetadataProvider, LogError, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import type { MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
 import {
     CATALOG_FIELD_COLUMNS,
     CATALOG_OBJECT_COLUMNS,
@@ -203,14 +204,6 @@ export interface CatalogWriter {
     RetireField(row: MJIntegrationObjectFieldEntity): Promise<{ ok: boolean; deleted: boolean }>;
 }
 
-/**
- * Escape a value for an ExtraFilter literal. These are UUIDs from our own tables, so this is
- * belt-and-braces rather than a live hazard — but the surrounding engine escapes its filter values
- * and an unescaped one here would be the odd exception a reader has to stop and think about.
- */
-function lit(value: string): string {
-    return value.replace(/'/g, "''");
-}
 
 /** Telemetry note on every catalog read below: each deliberately reads around the query cache. */
 const CATALOG_READ_TELEMETRY: RunViewParams['Telemetry'] = {
@@ -287,7 +280,7 @@ async function keyedOwnerIDs(
     for (let i = 0; i < ownerIDs.length; i += CHUNK) {
         const slice = ownerIDs.slice(i, i + CHUNK);
         if (slice.length === 0) continue;
-        const list = slice.map(id => `'${lit(String(id))}'`).join(',');
+        const list = slice.map(id => `'${EscapeSQLString(String(id))}'`).join(',');
         const rv = new RunView(provider as DatabaseProviderBase | undefined);
         // Bypasses the query cache for the reason viewRows does: this runs straight after Persist,
         // and the same objects produce byte-identical text on every re-discovery.
@@ -361,12 +354,12 @@ export class SharedCatalogWriter implements CatalogWriter {
     ) {}
 
     public ObjectsInScope(): Promise<MJIntegrationObjectEntity[]> {
-        return viewRows(SharedCatalogWriter.OBJECTS, `IntegrationID = '${lit(this.integrationID)}'`,
+        return viewRows(SharedCatalogWriter.OBJECTS, `IntegrationID = '${EscapeSQLString(this.integrationID)}'`,
                         this.contextUser, this.md, null, null);
     }
 
     public FieldsForObject(objectID: string): Promise<MJIntegrationObjectFieldEntity[]> {
-        return viewRows(SharedCatalogWriter.FIELDS, `IntegrationObjectID = '${lit(objectID)}'`,
+        return viewRows(SharedCatalogWriter.FIELDS, `IntegrationObjectID = '${EscapeSQLString(objectID)}'`,
                         this.contextUser, this.md, null, null);
     }
 
@@ -459,13 +452,13 @@ export class PerConnectionCatalogWriter implements CatalogWriter {
 
     public ObjectsInScope(): Promise<MJIntegrationObjectEntity[]> {
         return viewRows(ENTITY_COMPANY_INTEGRATION_OBJECTS,
-                        `CompanyIntegrationID = '${lit(this.companyIntegrationID)}'`,
+                        `CompanyIntegrationID = '${EscapeSQLString(this.companyIntegrationID)}'`,
                         this.contextUser, this.md, CATALOG_OBJECT_COLUMNS, null);
     }
 
     public FieldsForObject(objectID: string): Promise<MJIntegrationObjectFieldEntity[]> {
         return viewRows(ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
-                        `CompanyIntegrationObjectID = '${lit(objectID)}'`,
+                        `CompanyIntegrationObjectID = '${EscapeSQLString(objectID)}'`,
                         this.contextUser, this.md, CATALOG_FIELD_COLUMNS, FIELD_WRITE_ALIASES);
     }
 
@@ -592,7 +585,7 @@ export class PerConnectionCatalogWriter implements CatalogWriter {
     public async RetireObject(row: MJIntegrationObjectEntity): Promise<{ ok: boolean; deleted: boolean }> {
         const inbound = await viewRows<MJIntegrationObjectFieldEntity>(
             ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
-            `RelatedCompanyIntegrationObjectID = '${lit(row.ID)}'`,
+            `RelatedCompanyIntegrationObjectID = '${EscapeSQLString(row.ID)}'`,
             this.contextUser, this.md, CATALOG_FIELD_COLUMNS, FIELD_WRITE_ALIASES);
         for (const edge of inbound) {
             (edge as unknown as Record<string, unknown>).RelatedCompanyIntegrationObjectID = null;
@@ -607,7 +600,9 @@ export class PerConnectionCatalogWriter implements CatalogWriter {
                 return { ok: false, deleted: false };
             }
         }
-        return { ok: await row.Delete(), deleted: true };
+        // `deleted` follows the delete: a refused delete is neither, so the caller's counts stay true.
+        const ok = await row.Delete();
+        return { ok, deleted: ok };
     }
 
     /**

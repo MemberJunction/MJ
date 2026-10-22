@@ -350,4 +350,46 @@ describe('RecordChangesComponent (DOM) — date fields', () => {
     const values = queryAll(f, '.rc-val-new').map((e) => e.textContent?.trim());
     expect(values).toEqual(['rec-1', 'Oct 1, 2026']);
   });
+
+  it('renders Preview in Form only once inside the expanded card body and not in the card header', async () => {
+    const f = await renderExpanded([
+      change({
+        ID: 'latest',
+        ChangedAt: new Date('2026-10-02T14:00:00.000Z'),
+        FullRecordJSON: JSON.stringify({ ID: 'rec-1', Name: 'Acme V2' }),
+      }),
+      change({
+        ID: 'older',
+        ChangedAt: new Date('2026-10-01T14:00:00.000Z'),
+        FullRecordJSON: JSON.stringify({ ID: 'rec-1', Name: 'Acme V1' }),
+      }),
+    ]);
+    expect(queryAll(f, '.rc-card-preview-btn')).toHaveLength(0);
+    expect(queryAll(f, '.rc-preview-form-btn')).toHaveLength(1);
+  });
+
+  it('renders the activity over time spark-bar chart when multiple changes exist and filters by bucket click', async () => {
+    const f = await renderExpanded([
+      change({
+        ID: 'c-recent',
+        ChangedAt: new Date('2026-10-15T14:00:00.000Z'),
+        User: 'Alice Smith',
+      }),
+      change({
+        ID: 'c-old',
+        Type: 'Create',
+        ChangedAt: new Date('2026-09-01T10:00:00.000Z'),
+        User: 'Bob Jones',
+      }),
+    ]);
+    expect(query(f, '.rc-activity-chart')).not.toBeNull();
+    expect(f.componentInstance.ActivityBuckets).toHaveLength(12);
+    const nonEmptyBucket = f.componentInstance.ActivityBuckets.find((b) => b.TotalCount > 0)!;
+    f.componentInstance.ToggleBucketFilter(nonEmptyBucket.Key);
+    f.detectChanges();
+    expect(f.componentInstance.SelectedBucketKey).toBe(nonEmptyBucket.Key);
+    expect(f.componentInstance.FilteredData.length).toBe(nonEmptyBucket.TotalCount);
+    f.componentInstance.ClearBucketFilter();
+    expect(f.componentInstance.FilteredData.length).toBe(2);
+  });
 });
