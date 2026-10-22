@@ -1,4 +1,4 @@
-name: mj-citizen-builder
+name: ${COMPOSE_PROJECT_NAME:-mj-citizen-builder}
 
 services:
   sqlserver:
@@ -9,7 +9,7 @@ services:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${DB_PASSWORD:-TestPassword123!}"
     ports:
-      - "${DB_PORT:-1433}:1433"
+      - "127.0.0.1:${DB_PORT:-1433}:1433"
     healthcheck:
       test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -C -No
       interval: 10s
@@ -33,8 +33,8 @@ services:
       sqlserver:
         condition: service_healthy
     ports:
-      - "${API_PORT:-4000}:4000"
-      - "${EXPLORER_PORT:-4202}:4200"
+      - "127.0.0.1:${API_PORT:-4000}:4000"
+      - "127.0.0.1:${EXPLORER_PORT:-4202}:4200"
     environment:
       DB_HOST: "sqlserver"
       DB_PORT: "1433"
@@ -43,7 +43,8 @@ services:
       DB_DATABASE: "${DB_DATABASE:-MemberJunction}"
       # Tells the entrypoint which MemberJunction release `mj install` must fetch
       MJ_VERSION: "${MJ_VERSION}"
-      MJ_BASE_ENCRYPTION_KEY: "${MJ_BASE_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef}"
+      MJ_BASE_ENCRYPTION_KEY: "${MJ_BASE_ENCRYPTION_KEY:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}"
+      MJ_DEV_AUTH_ENABLED: "${MJ_DEV_AUTH_ENABLED:-true}"
       # LLM Provider API Keys
       AI_VENDOR_API_KEY__OpenAILLM: "${OPENAI_API_KEY:-}"
       AI_VENDOR_API_KEY__AnthropicLLM: "${ANTHROPIC_API_KEY:-}"

@@ -127,6 +127,13 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
 
     /** Custom-layout AI Agent form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
+
+    /**
+     * This form renders its own complete layout (header + custom accordion sections
+     * for Sub-Agents, Prompts, Actions, Execution History, and Configuration), so
+     * `<mj-record-form-container>` must not auto-append stock related-entity sections.
+     */
+    public override get OwnsEntireFormBody(): boolean { return true; }
     
     /** Subject for managing component lifecycle and cleaning up subscriptions */
     private destroy$ = new Subject<void>();

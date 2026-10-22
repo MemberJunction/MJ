@@ -127,4 +127,10 @@ describe('RealtimeAgentBannerComponent (DOM)', () => {
     expect(query(f, '.start-live-pill')).toBeNull();
     expect(query(f, '.bar-actions .iconb')).not.toBeNull();
   });
+
+  it('hides the redundant state pill when HideState is true (while the center hero orb shows the state)', () => {
+    const f = render({ State: 'speaking', AgentName: 'Sage', HideState: true });
+    expect(query(f, '.banner__state')).toBeNull();
+    expect(query(f, '.banner__for')).toBeNull();
+  });
 });

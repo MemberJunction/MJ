@@ -306,6 +306,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public CompositionSnapshot: FormCompositionSnapshot | null = null;
   @Output() CompositionChanged = new EventEmitter<FormCompositionSnapshot>();
 
+  /**
+   * Emitted when the user clicks the "Ask AI" action in the form toolbar to open the
+   * AI chat overlay with this record's live context.
+   */
+  @Output() AskAIRequested = new EventEmitter<void>();
+
   private readonly _formPanels = new Set<BaseFormPanel>();
 
   /** Slot hosts register every mounted panel so validation can include panel-owned checks. */
