@@ -66,7 +66,7 @@ describe('MJBurstClusterStripComponent (DOM)', () => {
                     ID: 'ActivityID',
                     Timestamp: 'OccurredAt',
                     Category: 'Kind',
-                    Tooltip: r => `${r.Kind}: ${r.Summary}`
+                    Tooltip: (r: SampleActivityRow) => `${r.Kind}: ${r.Summary}`
                 }
             }
         });
