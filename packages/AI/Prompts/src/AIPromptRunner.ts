@@ -8,6 +8,7 @@ import {
 } from './BaseModelRunner';
 import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling, ResolveToolChoiceForRequest } from './nativeToolCallingGate';
 import { AIModelRunner } from './AIModelRunner';
+import { RecordSentPrefixFingerprint, ReplayedReasoningPrefixFingerprint, WithoutReplayedReasoning } from './replayedReasoningPrefix';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo, PickPromptExecutionScope } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatus, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
 import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
@@ -2283,13 +2284,32 @@ export class AIPromptRunner extends BaseModelRunner {
     const envelopePrompt = await this.rerenderOrKeep(renderedPrompt, params,
       { ...(params.data ?? {}), _NATIVE_TOOL_CALLING: false, _NATIVE_CONTROL_FLOW: 'envelope' });
     chatParams.messages = this.replaceRenderedPrompt(chatParams.messages, renderedPrompt, envelopePrompt);
+    const sentPrefix = this.guardReplayedReasoningPrefix(chatParams, params, model);
     const fallbackResult = await this.runChatCompletionBounded(llm, chatParams, executionBound);
     RecordToolCallingMode(fallbackResult, 'NativeFallback');
+    RecordSentPrefixFingerprint(fallbackResult, sentPrefix);
     // The prompt run holds the first-rendered prompt; record what this retry sent whenever it differs.
     if (envelopePrompt !== firstRenderedPrompt) {
       this.recordRerenderedMessages(fallbackResult, prompt, params, model, vendorId, envelopePrompt);
     }
     return fallbackResult;
+  }
+
+  /**
+   * Sends a request without replayed reasoning when its system prompt or tools differ from the
+   * previous request's (`params.ReplayedReasoningPrefix`): a provider that binds reasoning to an
+   * unchanged prefix rejects it then — a skill that activated mid-run, a failover re-render.
+   *
+   * @returns This request's fingerprint, recorded on its result for the caller's next request
+   */
+  private guardReplayedReasoningPrefix(chatParams: ChatParams, params: AIPromptParams, model: MJAIModelEntityExtended): string {
+    const fingerprint = ReplayedReasoningPrefixFingerprint(chatParams);
+    const previous = params.ReplayedReasoningPrefix;
+    if (previous !== undefined && previous !== fingerprint && chatParams.messages.some((m) => m.reasoning)) {
+      this.logStatus(`   The system prompt or tools changed since the previous request to ${model.Name}; sending it without replayed reasoning`, true, params);
+      chatParams.messages = WithoutReplayedReasoning(chatParams.messages);
+    }
+    return fingerprint;
   }
 
   /** Scans provider prose for a tools marker. Shared by the thrown-error and failed-result paths. */
@@ -2573,6 +2593,8 @@ export class AIPromptRunner extends BaseModelRunner {
         };
       }
 
+      const sentPrefix = this.guardReplayedReasoningPrefix(chatParams, params, model);
+
       // Execute the model bounded by the composed abort signal (caller cancellation + prompt TimeoutMS)
       //
       // Layer 4 fallback, part one: some providers REJECT a tools payload instead of returning a
@@ -2620,6 +2642,7 @@ export class AIPromptRunner extends BaseModelRunner {
       if (renderedPrompt !== firstRenderedPrompt) {
         this.recordRerenderedMessages(chatResult, prompt, params, model, vendorId, renderedPrompt);
       }
+      RecordSentPrefixFingerprint(chatResult, sentPrefix);
       return chatResult;
     } catch (error) {
       const errorInfo = ErrorAnalyzer.analyzeError(error, driverClass)
