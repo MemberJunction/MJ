@@ -19,6 +19,7 @@ import type {
 import type { ExternalRecord } from '../types.js';
 import { IntegrationEngine, PositiveInt } from '../IntegrationEngine.js';
 import { ConnectorFactory } from '../ConnectorFactory.js';
+import { WatermarkService } from '../WatermarkService.js';
 
 // ---- Mock harness (same shape as IntegrationEngine.ratelimit-wiring.test.ts) ----
 //
@@ -435,5 +436,122 @@ describe('IntegrationEngine — an aborted, incomplete fetch is reported', () =>
         expect(errorLog).toBeDefined();
         expect(errorLog).toContain('INCOMPLETE');
         expect(errorLog).toContain('"Severity":"Warning"');
+    }, 30000);
+});
+
+/**
+ * MJ-MEM-2, reconciled: a TIMED-OUT page of a KEYSET scan suspends the object and resumes from its
+ * persisted keyset next run.
+ *
+ * Two rules met here. The fleet patch retried a timed-out page within the run, because abandoning
+ * the object cost sixteen NetSuite objects a whole run. This file pins the opposite rule: our own
+ * timeout is never retried, because WithTimeout does not CANCEL the attempt it abandons, so a retry
+ * stacks a second full page of vendor requests on a source already too slow to finish the first.
+ *
+ * Suspending satisfies both. A keyset scan knows exactly where it is — the last ordering key whose
+ * batch was applied — so stopping costs nothing that the next run cannot pick up: it seeks from that
+ * key, and the timed-out page is retried THERE, once the abandoned request is long gone.
+ *
+ * What it replaces for a keyset connector that also reports offsets (NetSuite's shape): the timeout
+ * fell into the offset page-skip path. Advancing an offset skips nothing in a keyset seek — the next
+ * request seeks the SAME key — so a "skipped" page was an immediate re-request, stacked on the
+ * abandoned one, up to 25 times in a row, reported as FETCH_PAGE_SKIPPED although nothing was skipped.
+ */
+describe('IntegrationEngine — a timed-out keyset page suspends the object and resumes next run', () => {
+    let orchestrator: IntegrationEngine;
+    let errorSpy: ReturnType<typeof vi.spyOn>;
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+    let saveKeyset: ReturnType<typeof vi.spyOn>;
+    let resolveOrig: typeof ConnectorFactory.Resolve;
+
+    beforeEach(() => {
+        orchestrator = new IntegrationEngine();
+        mockEntityInstances = new Map();
+        mockRunViewFn = vi.fn();
+        mockRunViewsFn = vi.fn(fanOutToRunView);
+        (IntegrationEngine as Record<string, unknown>)['activeSyncs'] = new Map();
+        errorSpy = vi.spyOn(console, 'error').mockImplementation(() => { /* silence */ });
+        warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { /* captured below */ });
+        saveKeyset = vi.spyOn(WatermarkService.prototype, 'SaveKeysetPosition').mockResolvedValue(undefined);
+        resolveOrig = ConnectorFactory.Resolve;
+    });
+
+    afterEach(() => {
+        errorSpy.mockRestore();
+        warnSpy.mockRestore();
+        saveKeyset.mockRestore();
+        ConnectorFactory.Resolve = resolveOrig;
+    });
+
+    /**
+     * NetSuite's shape: keyset seek on `id`, reporting the next key AND an offset. The first page
+     * succeeds and positions the scan at key '2'; every later page never settles.
+     */
+    function createKeysetConnector(): BaseIntegrationConnector {
+        const base = createHangingConnector(null) as unknown as Record<string, unknown>;
+        let calls = 0;
+        return {
+            ...base,
+            StableOrderingKey: () => 'id',
+            FetchChanges: vi.fn<[FetchContext], Promise<FetchBatchResult>>().mockImplementation(() => {
+                calls++;
+                if (calls === 1) {
+                    return Promise.resolve({ Records: [], HasMore: true, NextOffset: 2, NextAfterKeyValue: '2', NextCursor: '2' });
+                }
+                return new Promise<FetchBatchResult>(() => { /* never settles — the timeout must fire */ });
+            }),
+        } as unknown as BaseIntegrationConnector;
+    }
+
+    const warningsLogged = (): string[] =>
+        warnSpy.mock.calls.map(args => args.map(a => String(a)).join(' '));
+
+    it('suspends: the timed-out page is requested ONCE — no retry, and no page-skip re-request', async () => {
+        const connector = createKeysetConnector();
+        wireConfigMocks(createMockCompanyIntegration('{"fetchTimeoutMs": 30}'), buildIntegration());
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+
+        await orchestrator.RunSync('ci-1', contextUser);
+
+        const fetchChanges = connector.FetchChanges as unknown as ReturnType<typeof vi.fn>;
+        // Page 1, then the page at key '2' exactly once. Anything more is a request stacked on the
+        // abandoned one.
+        expect(fetchChanges).toHaveBeenCalledTimes(2);
+        expect(warningsLogged().some(l => l.includes('FETCH_PAGE_SKIPPED'))).toBe(false);
+    }, 30000);
+
+    it('persists the keyset, and says the object is suspended and where it resumes', async () => {
+        wireConfigMocks(createMockCompanyIntegration('{"fetchTimeoutMs": 30}'), buildIntegration());
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(createKeysetConnector());
+
+        await orchestrator.RunSync('ci-1', contextUser);
+
+        expect(saveKeyset).toHaveBeenCalledWith('em-1', '2', contextUser);
+        const suspended = warningsLogged().find(l => l.includes('FETCH_SUSPENDED_TIMEOUT'));
+        expect(suspended).toBeDefined();
+        expect(suspended).toContain("'2'");
+        // Still a qualified success, recorded where run history can see it (MJ-RUN-4).
+        const run = mockEntityInstances.get('MJ: Company Integration Runs');
+        expect(run!._data['Status']).toBe('Success');
+        expect(String(run!._data['ErrorLog'])).toContain('suspended');
+    }, 30000);
+
+    it('the next run resumes the scan from the persisted key — that is where the page is retried', async () => {
+        const connector = createKeysetConnector();
+        wireConfigMocks(createMockCompanyIntegration('{"fetchTimeoutMs": 30}'), buildIntegration());
+        const fieldMaps = mockRunViewFn.getMockImplementation();
+        mockRunViewFn.mockImplementation(async (params: Record<string, unknown>, u?: unknown) => {
+            if (params['EntityName'] === 'MJ: Company Integration Sync Watermarks') {
+                return { Success: true, Results: [{ ID: 'wm-1', EntityMapID: 'em-1', Direction: 'Pull', WatermarkType: 'Cursor', WatermarkValue: '2' }] };
+            }
+            return fieldMaps!(params, u);
+        });
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+
+        await orchestrator.RunSync('ci-1', contextUser);
+
+        const fetchChanges = connector.FetchChanges as unknown as ReturnType<typeof vi.fn>;
+        const firstCtx = fetchChanges.mock.calls[0][0] as FetchContext;
+        expect(firstCtx.AfterKeyValue).toBe('2');
     }, 30000);
 });
