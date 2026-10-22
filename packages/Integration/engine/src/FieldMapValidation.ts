@@ -58,11 +58,24 @@ export function FindUnbindableFieldMaps(
     return unbindable;
 }
 
+/**
+ * What the run did about the unbindable maps it found. A map that could not be flipped is reported
+ * apart from one that was: telling an operator a map is off when the write failed would be the same
+ * class of defect this whole check exists to close.
+ */
+export type UnbindableFieldMapOutcome = {
+    /** Maps flipped to `Inactive` so no later run applies them. */
+    Deactivated: number;
+    /** Maps whose deactivation write FAILED — still Active, still dropping values. */
+    DeactivationFailed: number;
+};
+
 /** The operator-facing sentence for a set of unbindable maps on one entity map. */
 export function DescribeUnbindableFieldMaps(
     unbindable: readonly UnbindableFieldMap[],
     externalObjectName: string,
     entityName: string,
+    outcome?: UnbindableFieldMapOutcome,
 ): string {
     const pairs = unbindable.map(u => `${u.SourceFieldName} -> ${u.DestinationFieldName}${u.IsKeyField ? ' (KEY)' : ''}`);
     const keyCount = unbindable.filter(u => u.IsKeyField).length;
@@ -74,6 +87,32 @@ export function DescribeUnbindableFieldMaps(
             ? `, and because ${keyCount === 1 ? 'one of them is a KEY field' : `${keyCount} of them are KEY fields`}, ` +
               `records cannot be matched on a later run and will be re-created.`
             : `.`) +
+        describeOutcome(outcome) +
         ` Apply the schema so the column exists, or point the map at a column that does.`
     );
+}
+
+/**
+ * The clause that says what happened to the maps — omitted entirely when the caller only inspected
+ * them, so the message never implies an action nobody took.
+ */
+function describeOutcome(outcome?: UnbindableFieldMapOutcome): string {
+    if (!outcome) return '';
+    const parts: string[] = [];
+    if (outcome.Deactivated > 0) {
+        parts.push(
+            ` ${outcome.Deactivated} of them ${outcome.Deactivated === 1 ? 'has' : 'have'} been DEACTIVATED so no ` +
+            `later run applies ${outcome.Deactivated === 1 ? 'it' : 'them'} — a refresh re-enables the map once the ` +
+            `column exists, and until then the source column is offered as a custom-column candidate instead of ` +
+            `being dropped without trace.`
+        );
+    }
+    if (outcome.DeactivationFailed > 0) {
+        parts.push(
+            ` ${outcome.DeactivationFailed} could NOT be deactivated (the write failed) and ${outcome.DeactivationFailed === 1
+                ? 'is still Active, so it keeps dropping its value'
+                : 'are still Active, so they keep dropping their values'} every run.`
+        );
+    }
+    return parts.join('');
 }
