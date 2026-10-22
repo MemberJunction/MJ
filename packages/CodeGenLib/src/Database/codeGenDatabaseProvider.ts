@@ -967,6 +967,26 @@ export abstract class CodeGenDatabaseProvider {
      */
     abstract generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], primaryKeyIndexName: string): FullTextSearchResult;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
+    /**
+     * Whether {@link generateFullTextSearch} embeds the table's PHYSICAL primary-key index name
+     * in the DDL it emits — and therefore whether CodeGen must look that name up before calling it.
+     *
+     * SQL Server: `true` — `CREATE FULLTEXT INDEX … KEY INDEX <name>` names a unique index on the
+     *   table, so the DDL literally cannot be composed without it.
+     * PostgreSQL: `false` (the default) — full-text search there is a GIN index over a `tsvector`
+     *   column, and the search function joins the base view on MJ's DECLARED primary keys. No
+     *   physical index name appears anywhere in the generated SQL.
+     *
+     * The default is `false` so that a provider which does not consume the value does not inherit a
+     * precondition it cannot satisfy. The lookup (`GetEntityPrimaryKeyIndexName`) THROWS when the
+     * table has no `PRIMARY KEY` constraint, which is legitimate on PostgreSQL — MJ's primary key
+     * may be a soft key declared only in metadata. Requiring the name unconditionally made full-text
+     * search unreachable on every such table, on a platform that never wanted the name.
+     */
+    get FullTextIndexNeedsPrimaryKeyIndexName(): boolean {
+        return false;
+    }
+
     // ─── RECURSIVE FUNCTIONS (HIERARCHY & ROOT ID) ──────────────────────
 
     /**
@@ -1865,7 +1885,10 @@ export abstract class CodeGenDatabaseProvider {
      *             rejects the view with `function does not exist`.
      *   Phase 1 = view DDL (viewSQL) — may invoke provider-specific recovery.
      *   Phase 2 = CRUD function DDL — ONLY runs if phase 1 succeeded.
-     *   Phase 3 = view permissions (viewPermSQL) — runs only if phase 2 succeeded.
+     *   Phase 3 = full-text search DDL (ftsSQL) — runs after the view phase
+     *             because the search function's result type is the base view.
+     *   Phase 4 = view permissions (viewPermSQL) — runs only if the earlier
+     *             phases succeeded.
      * The `success`/`phase` pair in the result identifies exactly where things
      * fell over so the caller doesn't have to bisect.
      */
@@ -1878,6 +1901,11 @@ export abstract class CodeGenDatabaseProvider {
         crudCreateSQL: string;
         crudUpdateSQL: string;
         crudDeleteSQL: string;
+        /** Full-text search DDL (tsvector column/trigger/index plus the search
+         *  function). Empty when the entity has no full-text search. Must run
+         *  AFTER the view phase — the search function `RETURNS SETOF <baseview>`,
+         *  so it cannot be created against a missing or stale view. */
+        ftsSQL: string;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
     }): Promise<PhasedExecutionResult>;
@@ -2141,8 +2169,10 @@ export interface FieldResolutionGap {
 export interface PhasedExecutionResult {
     /** True only when every requested phase succeeded. */
     success: boolean;
-    /** Which phase failed. Null when `success` is true. */
-    phase: 'tvf' | 'view' | 'functions' | 'permissions' | null;
+    /** Which phase failed. Null when `success` is true. `fulltext-generate`
+     *  is the caller-side failure to GENERATE the full-text DDL, as distinct
+     *  from `fulltext`, the provider's failure to EXECUTE it. */
+    phase: 'tvf' | 'view' | 'functions' | 'fulltext-generate' | 'fulltext' | 'permissions' | null;
     /** Underlying error when `success` is false. */
     error?: Error;
 }

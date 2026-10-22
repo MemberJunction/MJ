@@ -113,7 +113,9 @@
           }
         },
         {
-          "_comments": ["Cached metadata enumeration — Name/Schema/Description for every entity. Used by ActionSmith at design time to pick which entities the new Runtime action will touch and to scope `permissions.allowedEntities` to real entity names that exist in this system."],
+          "_comments": [
+            "Cached metadata enumeration — Name/Schema/Description for every entity. Used by ActionSmith at design time to pick which entities the new Runtime action will touch and to scope `permissions.allowedEntities` to real entity names that exist in this system."
+          ],
           "fields": {
             "AgentID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Get Entity List",
@@ -128,7 +130,9 @@
           }
         },
         {
-          "_comments": ["Deep-dive on a single entity — fields, types, descriptions, relationships, plus top 3 rows of real data. ActionSmith calls this after picking candidate entities from Get Entity List to understand field shape before drafting the code contract."],
+          "_comments": [
+            "Deep-dive on a single entity — fields, types, descriptions, relationships, plus top 3 rows of real data. ActionSmith calls this after picking candidate entities from Get Entity List to understand field shape before drafting the code contract."
+          ],
           "fields": {
             "AgentID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Get Entity Details",
@@ -145,7 +149,9 @@
       ],
       "MJ: AI Agent Relationships": [
         {
-          "_comments": ["Codesmith is a referenced sub-agent — it remains a top-level agent with its own ExposeAsAction=true, while also being callable from ActionSmith for delegated code generation. SubAgentOutputMapping pulls Codesmith's top-level `code` field directly into ActionSmith's payload under `code` — without this, ActionSmith has to manually re-read the Codesmith response text across multiple LLM iterations to extract the code, wasting tokens and iterations."],
+          "_comments": [
+            "Codesmith is a referenced sub-agent — it remains a top-level agent with its own ExposeAsAction=true, while also being callable from ActionSmith for delegated code generation. SubAgentOutputMapping pulls Codesmith's top-level `code` field directly into ActionSmith's payload under `code` — without this, ActionSmith has to manually re-read the Codesmith response text across multiple LLM iterations to extract the code, wasting tokens and iterations."
+          ],
           "fields": {
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:MJ: AI Agents.Name=Codesmith Agent",
@@ -161,7 +167,9 @@
           }
         },
         {
-          "_comments": ["Database Research Agent — escalation path for when the user's request is vague about which entities/fields are involved. ActionSmith should call this ONLY when Get Entity List + Get Entity Details aren't enough (e.g., 'build an action that analyzes customer revenue' when revenue could live on Orders, Invoices, LineItems, or a view). DRA runs open-ended SQL exploration and returns a synthesized schema summary. SubAgentOutputMapping pulls its findings into ActionSmith's payload under `schemaResearch` so ActionSmith can reference them when defining the contract."],
+          "_comments": [
+            "Database Research Agent — escalation path for when the user's request is vague about which entities/fields are involved. ActionSmith should call this ONLY when Get Entity List + Get Entity Details aren't enough (e.g., 'build an action that analyzes customer revenue' when revenue could live on Orders, Invoices, LineItems, or a view). DRA runs open-ended SQL exploration and returns a synthesized schema summary. SubAgentOutputMapping pulls its findings into ActionSmith's payload under `schemaResearch` so ActionSmith can reference them when defining the contract."
+          ],
           "fields": {
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:MJ: AI Agents.Name=Database Research Agent",

@@ -1027,6 +1027,28 @@ export class SQLCodeGenBase {
                 ? await this.generateSPDelete(entity, pool)
                 : '';
 
+        // Full-text search DDL. Without its own phase the generated
+        // *.fulltext.generated.sql is written to disk and then never executed on
+        // any provider that implements executeEntityPhased — nothing in the
+        // phase list carried it. The search objects were therefore absent while
+        // applyPermissions still GRANTed EXECUTE on the search function, and the
+        // resulting `function does not exist` failed the whole CodeGen run.
+        // Generated here (not in the provider) because building it needs the
+        // internal generators and a pool round trip for the PK index name.
+        let ftsSQL = '';
+        if (entity.FullTextSearchEnabled && !entity.VirtualEntity) {
+            try {
+                const ft = await this.GenerateEntityFullTextSearchSQL(pool, entity);
+                ftsSQL = ft.sql;
+            } catch (e) {
+                return {
+                    success: false,
+                    phase: 'fulltext-generate',
+                    error: e instanceof Error ? e : new Error(String(e)),
+                };
+            }
+        }
+
         return this._dbProvider.executeEntityPhased!({
             entity,
             tvfSQL,
@@ -1034,6 +1056,7 @@ export class SQLCodeGenBase {
             crudCreateSQL,
             crudUpdateSQL,
             crudDeleteSQL,
+            ftsSQL,
             viewPermSQL: viewPieces.viewPermSQL,
             willRegenerate,
         });
@@ -1837,28 +1860,16 @@ export class SQLCodeGenBase {
         if (entity.FullTextSearchFunctionGenerated && searchFields.length === 0)
             throw new Error(`FullTextSearchFunctionGenerated is true for entity ${entity.Name}, but no fields are marked as FullTextSearchEnabled`);
 
-        // Get the primary key index name (needed for full text index)
+        // Get the primary key index name — but ONLY for a provider whose full-text DDL actually
+        // embeds it. `GetEntityPrimaryKeyIndexName` THROWS when the table has no PRIMARY KEY
+        // constraint, and on PostgreSQL that is a legitimate shape: MJ's primary key can be a soft
+        // key declared in metadata only. Asking unconditionally turned a SQL-Server requirement
+        // (`CREATE FULLTEXT INDEX … KEY INDEX <name>`) into a precondition that no such table can
+        // satisfy, so full-text search could never be generated for it — on a platform that builds
+        // a GIN index over a tsvector and never looks at the name.
         let primaryKeyIndexName = '';
-        if (entity.FullTextIndexGenerated) {
+        if (entity.FullTextIndexGenerated && this._dbProvider.FullTextIndexNeedsPrimaryKeyIndexName) {
             primaryKeyIndexName = await this.GetEntityPrimaryKeyIndexName(pool, entity);
-        }
-
-        // If the function name is not set, save it to the DB
-        const functionName = entity.FullTextSearchFunction && entity.FullTextSearchFunction.length > 0
-            ? entity.FullTextSearchFunction
-            : `fnSearch${entity.CodeName}`;
-
-        if (entity.FullTextSearchFunctionGenerated && (!entity.FullTextSearchFunction || entity.FullTextSearchFunction.length === 0)) {
-            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
-            const u = UserCache.Instance.Users[0];
-            if (!u)
-                throw new Error('Could not find the first user in the cache, cant generate the full text search function without a user');
-
-            const e = <MJEntityEntity>await md.GetEntityObject('MJ: Entities', u);
-            await e.Load(entity.ID);
-            e.FullTextSearchFunction = functionName;
-            if (!await e.Save())
-                throw new Error(`Could not update the FullTextSearchFunction for entity ${entity.Name}`);
         }
 
         // Say what enabling full-text search costs, at the one moment the person who enabled it is
@@ -1869,8 +1880,52 @@ export class SQLCodeGenBase {
             LogWarning(`   > ${costDisclosure}`);
         }
 
-        // Delegate SQL generation to the provider
+        // Delegate SQL generation to the provider FIRST — the provider owns the
+        // platform's naming scheme, and the name it used is what actually exists
+        // in the database. PostgreSQL creates `fn_search_<snake(BaseTable)>`;
+        // deriving the name here instead (the SQL Server `fnSearch<CodeName>`
+        // form) recorded a function that never exists on PG, and runtime search
+        // then called a name that was never created.
         const result = this._dbProvider.generateFullTextSearch(entity, searchFields, primaryKeyIndexName);
+
+        const functionName = result.functionName && result.functionName.length > 0
+            ? result.functionName
+            : (entity.FullTextSearchFunction && entity.FullTextSearchFunction.length > 0
+                ? entity.FullTextSearchFunction
+                : `fnSearch${entity.CodeName}`);
+
+        // Persist the provider-derived name whenever the stored one DIFFERS, not
+        // only when it is empty. An empty-only condition can never correct a row
+        // stamped with the wrong platform's scheme by an earlier run, because the
+        // wrong name is still a non-empty one.
+        if (entity.FullTextSearchFunctionGenerated && entity.FullTextSearchFunction !== functionName) {
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+            // Guard the ARRAY, not only its first element. An unrefreshed cache holds `[]` today, but
+            // a holder carrying an older GenericDatabaseProvider leaves `_users` undefined, and
+            // `.Users[0]` against that throws a bare `TypeError: Cannot read properties of undefined
+            // (reading '0')` BEFORE the guard below can say anything at all. The declared type is
+            // widened here because the runtime value is the thing being guarded.
+            //
+            // Fatal on purpose: the write-back is the ONLY thing that records the function name.
+            // Skipping it would leave `Entity.FullTextSearchFunction` empty while the DDL still
+            // creates the function, so CodeGen would report success and runtime search would look
+            // for a name no row carries.
+            const cachedUsers: UserInfo[] | undefined = UserCache.Instance.Users;
+            const u: UserInfo | undefined = cachedUsers?.[0];
+            if (!u)
+                throw new Error(
+                    `Cannot record the full-text search function name for entity ${entity.Name}: the CodeGen user cache holds no users, ` +
+                    `so there is no user to write __mj.Entity.FullTextSearchFunction as. The cache is populated by the provider's ` +
+                    `SetupDataSource via UserCache.Instance.Refresh() — verify that it ran for this connection and that __mj.User has ` +
+                    `at least one row. To complete this run without the write-back, set FullTextSearchFunction to '${functionName}' on ` +
+                    `entity ${entity.Name}; that is the name CodeGen is trying to record, so the write-back becomes unnecessary.`);
+
+            const e = <MJEntityEntity>await md.GetEntityObject('MJ: Entities', u);
+            await e.Load(entity.ID);
+            e.FullTextSearchFunction = functionName;
+            if (!await e.Save())
+                throw new Error(`Could not update the FullTextSearchFunction for entity ${entity.Name}`);
+        }
 
         // Add permissions if function was generated
         if (entity.FullTextSearchFunctionGenerated) {

@@ -40,6 +40,7 @@ import {
   EntityRecordNameResult,
   RecordDependency,
   EntityDependency,
+  GetRecordDependenciesOptions,
   LogStatus,
   LogStatusEx,
   CompositeKey,
@@ -506,7 +507,7 @@ export class SQLServerDataProvider
    * ENOTBEGUN on a finished handle. A query on an explicit handle a caller passed in — an IS-A chain
    * sharing its own transaction — is never subject to that check.
    */
-  private _sqlQueue$ = new Subject<SQLQueueItem>();
+  private _sqlQueue$: Subject<SQLQueueItem> | null = null;
   /**
    * Handles whose commit or rollback has run — or whose commit FAILED, which dooms them just the same.
    * The ambient check in runQueueItem consults this as well as `_transaction`, because a failed
@@ -518,8 +519,31 @@ export class SQLServerDataProvider
   // Subscription for the queue processor
   private _queueSubscription: any;
   
-  // Transaction state management
-  private _transactionState$ = new BehaviorSubject<boolean>(false);
+  // Transaction state management — lazy-allocated so read-only per-request providers
+  // avoid allocating RxJS Subject/BehaviorSubject instances when no transaction is opened.
+  private _isTransactionActive = false;
+  private _transactionState$: BehaviorSubject<boolean> | null = null;
+
+  private ensureSqlQueue(): Subject<SQLQueueItem> {
+    if (!this._sqlQueue$) {
+      this._sqlQueue$ = new Subject<SQLQueueItem>();
+    }
+    return this._sqlQueue$;
+  }
+
+  private ensureTransactionStateSubject(): BehaviorSubject<boolean> {
+    if (!this._transactionState$) {
+      this._transactionState$ = new BehaviorSubject<boolean>(this._isTransactionActive);
+    }
+    return this._transactionState$;
+  }
+
+  private setTransactionActiveState(active: boolean): void {
+    this._isTransactionActive = active;
+    if (this._transactionState$) {
+      this._transactionState$.next(active);
+    }
+  }
 
 
   /**
@@ -532,7 +556,7 @@ export class SQLServerDataProvider
    * });
    */
   public get TransactionState$(): Observable<boolean> {
-    return this._transactionState$.asObservable();
+    return this.ensureTransactionStateSubject().asObservable();
   }
 
   /** @deprecated Use {@link TransactionState$}. */
@@ -570,7 +594,7 @@ export class SQLServerDataProvider
   public get IsTransactionActive(): boolean {
     // Always return instance-level state
     // Request-specific state should be accessed via getTransactionContext
-    return this._transactionState$.value;
+    return this._isTransactionActive;
   }
 
   /** @deprecated Use {@link IsTransactionActive}. */
@@ -746,7 +770,7 @@ export class SQLServerDataProvider
     // Each instance gets its own queue processor, but only do this ONCE if we get this method called more than once we don't need to reinit
     // the sub, taht would cause duplicate rprocessing.
     if (!this._queueSubscription) {
-      this._queueSubscription = this._sqlQueue$.pipe(
+      this._queueSubscription = this.ensureSqlQueue().pipe(
         concatMap(item =>
           from(this.runQueueItem(item)).pipe(
             // runQueueItem settles the item's own promise on success; only failure is handled here
@@ -1030,7 +1054,12 @@ export class SQLServerDataProvider
    * @param entityName
    * @param compositeKey
    */
-  protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
+  protected override BuildSoftLinkDependencySQL(
+    entityName: string,
+    compositeKey: CompositeKey,
+    options?: GetRecordDependenciesOptions,
+    contextUser?: UserInfo,
+  ): string {
     // we need to go through ALL of the entities in the system and find all of the EntityFields that have a non-null EntityIDFieldName
     // for each of these, we generate a SQL Statement that will return the EntityName, RelatedEntityName, FieldName, and the primary key values of the related entity
     //
@@ -1041,12 +1070,19 @@ export class SQLServerDataProvider
     if (!targetEntity) {
       throw new Error(`Entity ${entityName} not found in metadata`);
     }
-    // The canonical stored encoding of the target record's key - `ID|<guid>` (see CompositeKey.ToRecordID).
-    // A RecordID column holds this, not the bare primary key value.
-    const targetRecordID = compositeKey.ToRecordID();
+    // Single-primary-key records referenced by polymorphic tables may store either the canonical
+    // `ID|<guid>` encoding (`CompositeKey.ToRecordID()`) OR the bare primary key value (`<guid>`).
+    const targetRecordID = this.escapeSQLLiteral(compositeKey.ToRecordID());
+    const bareValue =
+      compositeKey.KeyValuePairs.length === 1
+        ? this.escapeSQLLiteral(String(compositeKey.KeyValuePairs[0].Value ?? ''))
+        : '';
 
     let sSQL = '';
     this.Entities.forEach((entity) => {
+      if (!this.shouldIncludeDependencyEntity(entity, options, contextUser)) {
+        return;
+      }
       // we build a string that will concatenate all of the primary key values into a single string, this is because the primary key could be a composite key
       // we do this in SQL by combining the pirmary key name and value for each row using the default separator defined by the CompositeKey class
       // the output of this should be like the following 'Field1|Value1||Field2|Value2||Field3|Value3' where the || is the CompositeKey.DefaultFieldDelimiter and the | is the CompositeKey.DefaultValueDelimiter
@@ -1056,6 +1092,12 @@ export class SQLServerDataProvider
       entity.Fields.filter((f) => f.EntityIDFieldName && f.EntityIDFieldName.length > 0).forEach((f) => {
         // each field in f must be processed
         if (sSQL.length > 0) sSQL += ' UNION ALL ';
+
+        const sourceObject = this.resolveDependencySourceObject(entity, [f.Name, f.EntityIDFieldName]);
+        const recordIDPredicate =
+          bareValue && bareValue !== targetRecordID
+            ? `[${f.Name}] IN ('${targetRecordID}', '${bareValue}')`
+            : `[${f.Name}] = '${targetRecordID}'`;
 
         // there is a layer of indirection here because each ROW in each of the entity records for this entity/field combination could point to a DIFFERENT
         // entity. We find out which entity it is pointed to via the EntityIDFieldName in the field definition, so we have to filter the rows in the entity
@@ -1072,10 +1114,10 @@ export class SQLServerDataProvider
                             1 AS IsSoftLink,
                             '${f.EntityIDFieldName}' AS EntityIDFieldName
                         FROM
-                            [${entity.SchemaName}].[${entity.BaseView}]
+                            [${entity.SchemaName}].[${sourceObject}]
                         WHERE
                             [${f.EntityIDFieldName}] = '${targetEntity.ID}' AND
-                            [${f.Name}] = '${this.escapeSQLLiteral(targetRecordID)}'`;
+                            ${recordIDPredicate}`;
       });
     });
     return sSQL;
@@ -1090,13 +1132,26 @@ export class SQLServerDataProvider
     return value.replace(/'/g, "''");
   }
 
-  protected override BuildHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
+  protected override BuildHardLinkDependencySQL(
+    entityDependenciesOrName: EntityDependency[] | string,
+    compositeKey: CompositeKey,
+    options?: GetRecordDependenciesOptions,
+    contextUser?: UserInfo,
+  ): string {
+    const entityDependencies = this.resolveEntityDependencies(entityDependenciesOrName);
     let sSQL = '';
     for (const entityDependency of entityDependencies) {
       const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
-      const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
       const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
-      const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+      if (!entityInfo || !relatedEntityInfo) continue;
+      if (!this.shouldIncludeDependencyEntity(relatedEntityInfo, options, contextUser)) continue;
+
+      const fkField = relatedEntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === entityDependency.FieldName?.trim().toLowerCase());
+      if (fkField?.EntityIDFieldName && fkField.EntityIDFieldName.trim().length > 0) continue;
+
+      const pksToProject = relatedEntityInfo.PrimaryKeys?.length ? relatedEntityInfo.PrimaryKeys : entityInfo.PrimaryKeys;
+      const primaryKeySelectString = `CONCAT(${pksToProject.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+      const sourceObject = this.resolveDependencySourceObject(relatedEntityInfo, [entityDependency.FieldName]);
 
       if (sSQL.length > 0) sSQL += ' UNION ALL ';
       sSQL += `SELECT
@@ -1107,7 +1162,7 @@ export class SQLServerDataProvider
                         0 AS IsSoftLink,
                         NULL AS EntityIDFieldName
                     FROM
-                        [${relatedEntityInfo.SchemaName}].[${relatedEntityInfo.BaseView}]
+                        [${relatedEntityInfo.SchemaName}].[${sourceObject}]
                     WHERE
                         [${entityDependency.FieldName}] = ${this.GetRecordDependencyLinkSQL(entityDependency, entityInfo, relatedEntityInfo, compositeKey)}`;
     }
@@ -1120,7 +1175,8 @@ export class SQLServerDataProvider
       throw new Error(`Field ${dep.FieldName} not found in Entity ${relatedEntity.Name}`);
     }
 
-    if (f.RelatedEntityFieldName?.trim().toLowerCase() === 'id') {
+    const relFieldName = f.RelatedEntityFieldName?.trim().toLowerCase();
+    if (!relFieldName || relFieldName === 'id' || relFieldName === entity.FirstPrimaryKey?.Name?.trim().toLowerCase()) { // first-pk-ok: a foreign key targets a single column; default FK target is the first primary key
       // simple link to first primary key, most common scenario for linkages
       // Key values arrive from remote callers — render through the shared sanitizer.
       return SQLServerDataProvider.RenderKeyValueLiteral(CompositeKey.GetValueByIndex(0), entity.FirstPrimaryKey.NeedsQuotes, entity.FirstPrimaryKey.Name, entity.Name); // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
@@ -2346,8 +2402,9 @@ export class SQLServerDataProvider
     // For transactional queries, use the instance queue to ensure serialization
     // This prevents EREQINPROG errors when multiple queries try to use the same transaction
     this.initializeQueueProcessor();
+    const queue = this.ensureSqlQueue();
     return new Promise<sql.IResult<any>>((resolve, reject) => {
-      this._sqlQueue$.next({
+      queue.next({
         kind: 'query',
         query,
         parameters,
@@ -3032,7 +3089,7 @@ IF ${varName} IS NOT NULL
     const transaction = new sql.Transaction(this._pool);
     await transaction.begin();
     this._transaction = transaction;
-    this._transactionState$.next(true);
+    this.setTransactionActiveState(true);
   }
 
   /**
@@ -3072,8 +3129,9 @@ IF ${varName} IS NOT NULL
    */
   private enqueueTransactionAction(description: string, handle: sql.Transaction, run: () => Promise<void>): Promise<void> {
     this.initializeQueueProcessor();
+    const queue = this.ensureSqlQueue();
     return new Promise<void>((resolve, reject) => {
-      this._sqlQueue$.next({ kind: 'action', description, handle, run, resolve, reject });
+      queue.next({ kind: 'action', description, handle, run, resolve, reject });
     });
   }
 
@@ -3098,14 +3156,14 @@ IF ${varName} IS NOT NULL
       // AbandonPhysicalTransaction can roll the doomed handle back — nulling it first, as the old
       // `finally` did, made that abandon a no-op and leaked the server-side transaction (#4447).
       this._transaction = null;
-      this._transactionState$.next(false);
+      this.setTransactionActiveState(false);
     });
   }
 
   protected override async AbandonPhysicalTransaction(): Promise<void> {
     const stale = this._transaction;
     this._transaction = null;
-    this._transactionState$.next(false);
+    this.setTransactionActiveState(false);
     if (stale) {
       try {
         // Through the queue, like commit and rollback: the handle is already nulled above, so any
@@ -3137,7 +3195,7 @@ IF ${varName} IS NOT NULL
       });
     } finally {
       this._transaction = null;
-      this._transactionState$.next(false);
+      this.setTransactionActiveState(false);
     }
   }
 

@@ -8,7 +8,7 @@
 import { RunLLMToolCallingConformanceSuite, ScriptedToolCall } from '@memberjunction/unit-testing';
 import { GeminiLLM, GEMINI_LEADING_USER_TURN_TEXT } from '../index';
 import { describe, it, expect } from 'vitest';
-import { ChatParams, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL } from '@memberjunction/ai';
+import { ChatParams, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, CHAT_FINISH_REASON_UNEXPECTED_TOOL_CALL } from '@memberjunction/ai';
 
 /** The one scripted response the seam will return for the next call. */
 let nextResponse: Record<string, unknown> = {};
@@ -151,5 +151,46 @@ describe('GeminiLLM — a conversation may not open with a model turn', () => {
         await llm.ChatCompletion(params);
         expect(captured.create?.history ?? []).toEqual([]);
         expect(captured.send?.message).toEqual([{ text: '' }]);
+    });
+});
+
+describe('GeminiLLM — a rejected tool call with no narration is reported, not treated as missing output', () => {
+    const run = async (finishReason: string, finishMessage?: string, declareTools = true) => {
+        nextResponse = {
+            candidates: [{ content: { parts: [] }, finishReason, ...(finishMessage ? { finishMessage } : {}) }],
+            usageMetadata: { promptTokenCount: 11, candidatesTokenCount: 0 }
+        };
+        const llm = new GeminiLLM('conformance-test-key');
+        (llm as unknown as { _gemini: typeof seamClient })._gemini = seamClient;
+        const params = new ChatParams();
+        params.model = 'gemini-3.5-flash';
+        params.messages = [{ role: 'user', content: 'Search.' }];
+        if (declareTools) {
+            params.tools = [{ name: 'search_web', inputSchema: { type: 'object', properties: {} } }];
+        }
+        return llm.ChatCompletion(params);
+    };
+
+    it('reports UNEXPECTED_TOOL_CALL as the normalized unexpected-tool-call reason, with the provider\'s description', async () => {
+        const result = await run('UNEXPECTED_TOOL_CALL', 'Unexpected tool call: delete_everything');
+
+        expect(result.success).toBe(true);
+        expect(result.data.choices[0].finish_reason).toBe(CHAT_FINISH_REASON_UNEXPECTED_TOOL_CALL);
+        expect(result.data.choices[0].finishMessage).toBe('Unexpected tool call: delete_everything');
+    });
+
+    it('reports a MALFORMED_FUNCTION_CALL that came with no narration instead of failing for "no output"', async () => {
+        const result = await run('MALFORMED_FUNCTION_CALL', 'Malformed function call: search_web(query="unterminated');
+
+        expect(result.success).toBe(true);
+        expect(result.data.choices[0].finish_reason).toBe(CHAT_FINISH_REASON_MALFORMED_TOOL_CALL);
+        expect(result.data.choices[0].finishMessage).toContain('search_web');
+    });
+
+    it('fails an empty turn on a request that declared no tools, so failover can try another model', async () => {
+        const result = await run('UNEXPECTED_TOOL_CALL', 'Unexpected tool call: search_web', false);
+
+        expect(result.success).toBe(false);
+        expect(result.errorMessage).toMatch(/No output received/);
     });
 });
