@@ -10199,6 +10199,17 @@ F-DOC-21, F-DOC-36 (M-final). Contained for their later owners: 24 (plan §3.2).
 - **Completed:** Kickoff refresh (`program/conventions.md` §1 & §7 triggers `a` and `b` after PR 1 `#5540` merged at `141d8d065c`) and full adversarial audit against `coding_standards.md`, `AGENTS.md`, and `journal/2026-10-20-PR-1-lessons-learned.md`. Applied decisions `D2-43`–`D2-47` across the plan, updated anchors to `141d8d065c`, created branch `ps/pr-2-truth-suite-containment` from `origin/next` (`141d8d065c`), and copied the refreshed plan into `$MJ/plans/predictive-studio/PR-2-truth-suite-containment.md`.
 - **Next step:** Start Milestone M1 (`Task M1.1` — Python 3.11/3.12 probe module and unit tests in `packages/AI/PredictiveStudio/Sidecar`).
 
+### 2026-10-22 — end-to-end run on a fresh database (after merging `next` @ `bf09290c4c`) — Claude Opus 5.5
+
+- **Setup (README §4, fresh `MJ_PS_PR2_e2e`):** migrate, metadata push (with the GeminiLLM key set), `metadata-optional/integration-test`, `provision.mjs`, bizapps-common at `76809d3` — every step exit 0.
+- **World model:** every catalog dataset loaded at its base seeds and read back through MJAPI — 68 of 68 (9 worlds, 15 scenarios), row counts equal.
+- **All 111 gates in one run** (`truth:run --mode weekly`, `TRUTH_BIZAPPS_COMMON=1`, 22 min): `pass 13 · fail 1 · xfail 1 · xpass 1 · not-implemented 95 · error 0`. The fail was G0.6 (3 of 10 stories said "not causal levers"); after the prompt fix two reruns gave 0 of 10 and 0 of 10 → G0.6 `pass`.
+- **Against the 2026-10-21 baseline:** G0.1 1,000 → 16,776 of 16,776 scored; G0.4/G0.5 `pass`; G0.6 5 causal phrases → 0; G0.7 0 of 2 → 2 of 2 refused, dry run 1,625 → 0 rows; G0.8 0 of 2 → 2 of 2 refused; G0.9 0 of 2 → 2 of 2 honest; G0.10 kept; G0.11 12 of 12 above Poor → 0 of 12, 12 of 12 store the withheld reason; G0.12 `pass`; PR 1's G7.1/7.2/7.3/7.5 `pass`. PR 4's G0.2 `xpass` (0 of 60 published, was 60 of 60), G0.3 `xfail` (2 of 2 publish).
+- **Integration tier** (`RUN_MUTATION_TESTS=1`): 107 passed, 1 failed (IT29 CG5), 1 skipped of 109; CG5 fixed (it asserted a total on a `MaxRows:1` read, which the provider deliberately does not count) → IT29 passes.
+- **UI:** `truth:ui-fixture` (both models Good, `canAct`), then `e2e/specs/ps-containment.spec.ts` headless with magic-link sign-in: 3 of 3 passed.
+- **Fixes this session:** `provision.mjs` config load, scoring poll fallback, G0.6 needs a GeminiLLM key, D2-50 (no teardown), agent prompt (no "not causal …" disclaimers), agent report shows "not measured" instead of 0.85/Good, wizard/editor drop refused As-Of modes, predictions grid reads 5 columns as simple rows, e2e magic-link mode; from `next`: shell `chatOverlay` flag (did not compile), base-forms `|| 'ID'` key fallbacks (guards), IT29 CG5.
+- **Open (not PR 2):** the noise world never reaches Published, but no screen says "no signal" in plain words — overview UX belongs to a later PR.
+
 ## 12. Refresh log (append-only)
 
 ### 2026-10-12 — refresh (written; tier Ready) — Claude Opus 5.5 (plan author)
