@@ -71,8 +71,92 @@
   (TagsPanelToggled)="OnTagsPanelToggled()"
   (LinksRequest)="OnToggleRecordLinks()"
   (AttachmentsPanelToggled)="OnAttachmentsPanelToggled()"
+  (AskAIRequested)="OnAskAIRequested()"
+  (ActionPinChanged)="OnToolbarActionPinChanged($event)"
   (VariantPicked)="OnVariantPicked($event)">
 </mj-form-toolbar>
+}
+
+<!-- ============================================
+     TIME-TRAVEL HISTORICAL VERSION PREVIEW BANNER
+     Renders above the form when previewing a historical RecordChange snapshot
+     ============================================ -->
+@if (ActiveVersionPreview; as preview) {
+  <div class="mj-forms-version-preview-banner" role="region" aria-label="Historical version preview">
+    <div class="mj-forms-version-preview-top-row">
+      <div class="mj-forms-version-preview-main">
+        <span class="mj-forms-version-preview-badge">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          Time-Travel Preview
+        </span>
+        <span class="mj-forms-version-preview-meta">
+          <strong>{{ preview.VersionLabel }}</strong>
+          <span class="mj-forms-version-preview-author">by {{ preview.UserName }}</span>
+        </span>
+        <span class="mj-forms-version-preview-diff-pill">
+          {{ preview.DiffCount ?? 0 }} {{ (preview.DiffCount ?? 0) === 1 ? 'field differs' : 'fields differ' }} from live
+        </span>
+      </div>
+      <div class="mj-forms-version-preview-actions">
+        @if ((preview.TotalRestoreableCount ?? 0) > 1) {
+          <div class="mj-forms-version-preview-stepper">
+            <button type="button"
+                    class="mj-forms-version-preview-step-btn"
+                    [disabled]="(preview.CurrentIndex ?? 0) >= (preview.TotalRestoreableCount ?? 1) - 1"
+                    title="Preview older version"
+                    (click)="OnStepVersionPreview(1)">
+              <i class="fa-solid fa-chevron-left"></i> Older
+            </button>
+            <span class="mj-forms-version-preview-step-count">
+              {{ (preview.TotalRestoreableCount ?? 1) - (preview.CurrentIndex ?? 0) }} / {{ preview.TotalRestoreableCount ?? 1 }}
+            </span>
+            <button type="button"
+                    class="mj-forms-version-preview-step-btn"
+                    [disabled]="(preview.CurrentIndex ?? 0) <= 0"
+                    title="Preview newer version"
+                    (click)="OnStepVersionPreview(-1)">
+              Newer <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+        }
+        <button type="button"
+                class="mj-forms-version-preview-timeline-btn"
+                title="Reopen the Record Changes history timeline drawer"
+                (click)="OnReopenHistoryFromPreview()">
+          <i class="fa-solid fa-list-ul"></i> Timeline
+        </button>
+        @if (EffectiveUserCanEdit && (preview.DiffCount ?? 0) > 0) {
+          <button type="button"
+                  class="mj-forms-version-preview-restore-btn"
+                  (click)="OnRestorePreviewedVersion()">
+            <i class="fa-solid fa-rotate-left"></i> Restore This Version...
+          </button>
+        }
+        <button type="button"
+                class="mj-forms-version-preview-exit-btn"
+                (click)="OnExitVersionPreview()">
+          <i class="fa-solid fa-xmark"></i> Exit Preview
+        </button>
+      </div>
+    </div>
+    @if (PreviewChangedFieldChips.length > 0) {
+      <div class="mj-forms-version-preview-diffs-row" aria-label="Changed fields in this version">
+        @for (diff of PreviewChangedFieldChips.slice(0, 6); track diff.FieldName) {
+          <span class="mj-forms-version-preview-field-chip"
+                [title]="(diff.DisplayName || diff.FieldName) + ': ' + FormatPreviewDiffValue(diff.HistoricalValue) + ' (Current live: ' + FormatPreviewDiffValue(diff.CurrentLiveValue) + ')'">
+            <span class="mj-forms-version-preview-field-chip-label">{{ diff.DisplayName || diff.FieldName }}:</span>
+            <strong class="mj-forms-version-preview-field-chip-hist">{{ FormatPreviewDiffValue(diff.HistoricalValue) }}</strong>
+            <span class="mj-forms-version-preview-field-chip-live">← Live: {{ FormatPreviewDiffValue(diff.CurrentLiveValue) }}</span>
+          </span>
+        }
+        @if (PreviewChangedFieldChips.length > 6) {
+          <span class="mj-forms-version-preview-field-chip-more">
+            +{{ PreviewChangedFieldChips.length - 6 }} more
+          </span>
+        }
+      </div>
+    }
+  </div>
 }
 
 <!-- ============================================
@@ -485,6 +569,8 @@
   <mj-record-changes
     [record]="EffectiveRecord"
     [AllowRestore]="EffectiveUserCanEdit"
+    [PreviewedChangeID]="ActiveVersionPreview?.ChangeID ?? null"
+    (PreviewVersionSelected)="OnPreviewVersionSelected($event)"
     (RestoreRequested)="OnRestoreRequested($event)"
     (dialogClosed)="OnRecordChangesClosed()">
   </mj-record-changes>
@@ -515,6 +601,7 @@
     [IsOpen]="ShowRecordLinks"
     (Close)="OnRecordLinksClosed()"
     (LinkCountChange)="OnLinkCountChanged($event)"
+    (LinksSummaryChange)="OnLinksSummaryChanged($event)"
     (Navigate)="OnNavigate($event)">
   </mj-record-links>
 }
