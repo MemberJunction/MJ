@@ -1,0 +1,12 @@
+# secrets, tofu state, and generated output stay local
+auth.env
+stage.env
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.log
+*.jsonl
+stage*.sql
+redo.sql
+stamp-fix.sql
+jsonarg.sql
