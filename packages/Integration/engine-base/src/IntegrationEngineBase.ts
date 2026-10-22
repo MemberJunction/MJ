@@ -18,10 +18,10 @@ import {
     CompanyIntegrationObjectFieldRow,
     CompanyIntegrationObjectRow,
     ENTITY_COMPANY_INTEGRATION_OBJECTS,
-    asReadOnlyField,
-    asReadOnlyObject,
-    projectCatalogFields,
-    projectCatalogObjects,
+    AsReadOnlyField,
+    AsReadOnlyObject,
+    ProjectCatalogFields,
+    ProjectCatalogObjects,
 } from './CompanyIntegrationCatalog.js';
 
 /**
@@ -226,7 +226,7 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         FieldMaps?: Array<Partial<MJCompanyIntegrationFieldMapEntity>>;
         /**
          * Per-connection catalog rows, as LOADED rows rather than projections — they go through
-         * `projectCatalogObjects`/`projectCatalogFields` exactly as the real load does, so a seed
+         * `ProjectCatalogObjects`/`ProjectCatalogFields` exactly as the real load does, so a seed
          * that omits a required column fails the same way production would.
          */
         CompanyIntegrationObjects?: BaseEntity[];
@@ -447,7 +447,7 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         // shared object id and a seeded per-connection one alike, for the same disjoint-ids reason
         // as above. Every read site that resolves fields from an object it already holds therefore
         // needs no change.
-        const projectedFields = this.CompanyIntegrationObjectFields;
+        const projectedFields = this.companyIntegrationObjectFields;
         if (
             this._fieldsByObjectIDSource !== this._integrationObjectFields ||
             this._fieldsByObjectIDScopedSource !== projectedFields
@@ -465,7 +465,7 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
             for (const field of this._integrationObjectFields) add(field.IntegrationObjectID, field);
             // The per-connection view aliases CompanyIntegrationObjectID as IntegrationObjectID, so
             // both arrays key on the same property name and the loop body is identical.
-            for (const field of projectedFields) add(field.IntegrationObjectID, asReadOnlyField(field));
+            for (const field of projectedFields) add(field.IntegrationObjectID, AsReadOnlyField(field));
             this._fieldsByObjectID = index;
             this._fieldsByObjectIDSource = this._integrationObjectFields;
             this._fieldsByObjectIDScopedSource = projectedFields;
@@ -695,14 +695,14 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
     }
 
     /** Per-connection objects, projected for reading. See CompanyIntegrationCatalog.ts. */
-    private get CompanyIntegrationObjects(): CompanyIntegrationObjectRow[] {
+    private get companyIntegrationObjects(): CompanyIntegrationObjectRow[] {
         return this.projectObjects(IntegrationEngineBase.resolveScopedCatalogRows(this._companyIntegrationObjects));
     }
 
     private projectObjects(rows: BaseEntity[]): CompanyIntegrationObjectRow[] {
         let projected = this._objectProjections.get(rows);
         if (!projected) {
-            projected = projectCatalogObjects(rows);
+            projected = ProjectCatalogObjects(rows);
             this._objectProjections.set(rows, projected);
         }
         return projected;
@@ -722,7 +722,7 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
     private projectWarmFields(rows: BaseEntity[]): MJIntegrationObjectFieldEntity[] {
         let projected = this._warmFieldProjections.get(rows);
         if (!projected) {
-            projected = projectCatalogFields(rows).map(asReadOnlyField);
+            projected = ProjectCatalogFields(rows).map(AsReadOnlyField);
             this._warmFieldProjections.set(rows, projected);
         }
         return projected;
@@ -768,7 +768,7 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         if (objectID == null) return [];
         const scoped = IntegrationEngineBase.scopedCatalogData();
         if (scoped && this.ownedObjectIDs(this.projectObjects(scoped.Objects)).has(NormalizeUUID(objectID))) {
-            const edges = IntegrationEngineBase.resolveScopedCatalogEdges(() => this.CompanyIntegrationObjectFields);
+            const edges = IntegrationEngineBase.resolveScopedCatalogEdges(() => this.companyIntegrationObjectFields);
             return this.edgesByOwner(edges).get(NormalizeUUID(objectID))?.slice() ?? [];
         }
         const related: string[] = [];
@@ -784,9 +784,9 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
     }
 
     /** Per-connection fields that were SEEDED (see `_companyIntegrationObjectFields`), projected for reading. */
-    private get CompanyIntegrationObjectFields(): CompanyIntegrationObjectFieldRow[] {
+    private get companyIntegrationObjectFields(): CompanyIntegrationObjectFieldRow[] {
         if (this._ciofProjectedSource !== this._companyIntegrationObjectFields || this._ciofProjected === null) {
-            this._ciofProjected = projectCatalogFields(this._companyIntegrationObjectFields);
+            this._ciofProjected = ProjectCatalogFields(this._companyIntegrationObjectFields);
             this._ciofProjectedSource = this._companyIntegrationObjectFields;
         }
         return this._ciofProjected;
@@ -794,14 +794,14 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
 
     /** Does this connection have a per-connection catalog at all? */
     public HasCompanyIntegrationCatalog(companyIntegrationID: string): boolean {
-        return this.CompanyIntegrationObjects.some(o => UUIDsEqual(o.CompanyIntegrationID, companyIntegrationID));
+        return this.companyIntegrationObjects.some(o => UUIDsEqual(o.CompanyIntegrationID, companyIntegrationID));
     }
 
     /** All per-connection objects for a connection. */
     public GetCompanyIntegrationObjects(companyIntegrationID: string): MJIntegrationObjectEntity[] {
-        return this.CompanyIntegrationObjects
+        return this.companyIntegrationObjects
             .filter(o => UUIDsEqual(o.CompanyIntegrationID, companyIntegrationID))
-            .map(asReadOnlyObject);
+            .map(AsReadOnlyObject);
     }
 
     /**
@@ -813,24 +813,24 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
      * only a constraint violation waiting to happen.
      */
     public GetCompanyIntegrationObject(companyIntegrationID: string, objectName: string): MJIntegrationObjectEntity | undefined {
-        const row = this.CompanyIntegrationObjects.find(
+        const row = this.companyIntegrationObjects.find(
             o => UUIDsEqual(o.CompanyIntegrationID, companyIntegrationID) && o.Name === objectName
         );
-        return row ? asReadOnlyObject(row) : undefined;
+        return row ? AsReadOnlyObject(row) : undefined;
     }
 
     /** One per-connection object by its own id. */
     public GetCompanyIntegrationObjectByID(objectID: string): MJIntegrationObjectEntity | undefined {
-        const row = this.CompanyIntegrationObjects.find(o => UUIDsEqual(o.ID, objectID));
-        return row ? asReadOnlyObject(row) : undefined;
+        const row = this.companyIntegrationObjects.find(o => UUIDsEqual(o.ID, objectID));
+        return row ? AsReadOnlyObject(row) : undefined;
     }
 
     /** Active per-connection objects, sorted by Sequence. Mirrors GetActiveIntegrationObjects. */
     public GetActiveCompanyIntegrationObjects(companyIntegrationID: string): MJIntegrationObjectEntity[] {
-        return this.CompanyIntegrationObjects
+        return this.companyIntegrationObjects
             .filter(o => UUIDsEqual(o.CompanyIntegrationID, companyIntegrationID) && o.Status === 'Active')
             .sort((a, b) => a.Sequence - b.Sequence)
-            .map(asReadOnlyObject);
+            .map(AsReadOnlyObject);
     }
 
     /**
@@ -849,7 +849,7 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         // Edges from the NARROW edge set, not from full field rows. This walk needs every field of
         // the connection (97,414 on a NetForum catalog) but reads two columns of each; holding full
         // rows to answer it is what made the catalog a multi-gigabyte resident cost.
-        for (const field of IntegrationEngineBase.resolveScopedCatalogEdges(() => this.CompanyIntegrationObjectFields)) {
+        for (const field of IntegrationEngineBase.resolveScopedCatalogEdges(() => this.companyIntegrationObjectFields)) {
             if (!field.RelatedCompanyIntegrationObjectID) continue;
             const parentKey = field.CompanyIntegrationObjectID.toUpperCase();
             const depKey = field.RelatedCompanyIntegrationObjectID.toUpperCase();
@@ -911,7 +911,7 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
             };
         }
 
-        const rows = this.CompanyIntegrationObjects
+        const rows = this.companyIntegrationObjects
             .filter(o => UUIDsEqual(o.CompanyIntegrationID, companyIntegrationID) && o.Status === 'Active')
             .sort((a, b) => a.Sequence - b.Sequence);
         const provenance = { Declared: 0, Endpoint: 0, Sampled: 0 };
@@ -920,7 +920,7 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
                 provenance[r.Provenance]++;
             }
         }
-        const objects = rows.map(asReadOnlyObject);
+        const objects = rows.map(AsReadOnlyObject);
         for (const o of objects) fieldsByObjectID.set(o.ID, this.GetIntegrationObjectFields(o.ID));
 
         return { Objects: objects, FieldsByObjectID: fieldsByObjectID, Source: 'PerConnection', Provenance: provenance };

@@ -395,9 +395,8 @@ export class IntegrationConnectorCreationPipeline {
      * is indistinguishable from "the run hasn't opened its stream yet". So whenever a caller supplied
      * a `RunID` and coalescing served a different run, we publish a terminal ALIAS run under the
      * requested ID pointing at the run that actually did the work. See {@link honourRequestedRunID}.
-     */
-    /**
-     * Every read a discovery makes — the connector's GetCachedObject/GetCachedFields during
+     *
+     * CATALOG SCOPE. Every read a discovery makes — the connector's GetCachedObject/GetCachedFields during
      * sampling, the dependency graph, the excluded-field resolution — happens with THIS connection
      * in catalog scope. Scope-aware getters answer from the connection's own rows once it has any
      * and fall back to the shared declared rows until then, so a first discovery still sees the

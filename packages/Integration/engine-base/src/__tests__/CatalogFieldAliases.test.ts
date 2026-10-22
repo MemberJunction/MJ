@@ -6,10 +6,10 @@
  *
  * These were once expected to come from alias columns on the base view. They cannot: that view is
  * CodeGen-generated, so a hand-added alias is dropped the next time CodeGen runs. The derivation
- * lives in `projectCatalogFields` instead, and this file is what pins it there.
+ * lives in `ProjectCatalogFields` instead, and this file is what pins it there.
  */
 import { describe, it, expect } from 'vitest';
-import { projectCatalogFields, CATALOG_FIELD_COLUMNS } from '../CompanyIntegrationCatalog';
+import { ProjectCatalogFields, CATALOG_FIELD_COLUMNS } from '../CompanyIntegrationCatalog';
 import type { BaseEntity } from '@memberjunction/core';
 
 /** A stand-in for a loaded row: `Get` answers only for columns the VIEW really has. */
@@ -30,7 +30,7 @@ const REAL_COLUMNS = () => {
 
 describe('per-connection field read aliases', () => {
     it('derives the legacy names from the per-connection columns', () => {
-        const [row] = projectCatalogFields([rowWith(REAL_COLUMNS())]);
+        const [row] = ProjectCatalogFields([rowWith(REAL_COLUMNS())]);
         expect(row.IntegrationObjectID).toBe('obj-1');
         expect(row.RelatedIntegrationObjectID).toBe('obj-2');
     });
@@ -38,7 +38,7 @@ describe('per-connection field read aliases', () => {
     it('carries a null related edge through as null rather than undefined', () => {
         const vals = REAL_COLUMNS();
         vals['RelatedCompanyIntegrationObjectID'] = null;
-        const [row] = projectCatalogFields([rowWith(vals)]);
+        const [row] = ProjectCatalogFields([rowWith(vals)]);
         expect(row.RelatedIntegrationObjectID).toBeNull();
     });
 
@@ -48,12 +48,12 @@ describe('per-connection field read aliases', () => {
         const vals = REAL_COLUMNS();
         expect(Object.keys(vals)).not.toContain('IntegrationObjectID');
         expect(Object.keys(vals)).not.toContain('RelatedIntegrationObjectID');
-        expect(() => projectCatalogFields([rowWith(vals)])).not.toThrow();
+        expect(() => ProjectCatalogFields([rowWith(vals)])).not.toThrow();
     });
 
     it('still fails loud when a REAL column is missing (guard not weakened)', () => {
         const vals = REAL_COLUMNS();
         delete vals['ObservedMaxLength'];
-        expect(() => projectCatalogFields([rowWith(vals)])).toThrow(/ObservedMaxLength/);
+        expect(() => ProjectCatalogFields([rowWith(vals)])).toThrow(/ObservedMaxLength/);
     });
 });
