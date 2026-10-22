@@ -203,7 +203,7 @@ async function handleMint(service: WidgetSessionService, req: Request, res: Resp
     origin,
     hostAssertion: typeof body.hostAssertion === 'string' ? body.hostAssertion : undefined,
     visitorKey: typeof body.visitorKey === 'string' ? body.visitorKey : undefined,
-    bearerToken: refresh ? extractBearerToken(req.get('authorization')) : undefined,
+    BearerToken: refresh ? extractBearerToken(req.get('authorization')) : undefined,
     audit: { ipAddress: req.ip, userAgent: req.get('user-agent') ?? undefined, origin },
   };
   const result = refresh ? await service.RefreshGuestSession(input) : await service.MintGuestSession(input);

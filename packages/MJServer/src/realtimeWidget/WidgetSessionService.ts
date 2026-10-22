@@ -80,6 +80,8 @@ export interface MintGuestSessionInput {
    * `RefreshGuestSession` so a refresh proves possession of the session being renewed and
    * preserves its `mj_sid` (`sessionId`).
    */
+  BearerToken?: string;
+  /** @deprecated Use {@link MintGuestSessionInput.BearerToken}. */
   bearerToken?: string;
   audit?: WidgetMintAuditContext;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
@@ -331,7 +333,7 @@ export class WidgetSessionService {
         hostIdentity = verified;
       }
 
-      const existingSessionId = this.verifyRefreshBearerToken(input.bearerToken, widget.ID);
+      const existingSessionId = this.verifyRefreshBearerToken(input.BearerToken ?? input.bearerToken, widget.ID);
       if (!existingSessionId) {
         return this.audited({ success: false, errorCode: 'not_found', error: 'Unknown widget key.' }, input, widget);
       }
