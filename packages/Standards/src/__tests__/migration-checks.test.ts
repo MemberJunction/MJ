@@ -41,8 +41,13 @@ describe('FindExistenceGuards', () => {
         expect(FindExistenceGuards(code)).toEqual([1, 3]);
     });
 
+    it('flags IF [NOT] EXISTS over a bracketed catalog name', () => {
+        const code = ["IF NOT EXISTS (SELECT 1 FROM [sys].[columns] WHERE Name = N'X')", "IF EXISTS (SELECT 1 FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE COLUMN_NAME = N'X')"];
+        expect(FindExistenceGuards(code)).toEqual([1, 2]);
+    });
+
     it('flags DROP … IF EXISTS', () => {
-        expect(FindExistenceGuards(['DROP INDEX IF EXISTS IX_A ON T;'])).toEqual([1]);
+        expect(FindExistenceGuards(['DROP INDEX IF EXISTS IX_A ON T;', 'DROP SEQUENCE IF EXISTS s.Seq;', 'DROP SYNONYM IF EXISTS s.Syn;'])).toEqual([1, 2, 3]);
     });
 
     it('leaves temp-table cleanup alone', () => {
@@ -143,6 +148,31 @@ describe('migration checks against a repo', () => {
         );
         const result = await MigrationExistenceGuardsCheck.Run({ RepoRoot: repo, Roots: ['migrations'], Options: { FromVersion: '202610210000' } });
         expect(result.Violations.map((v) => v.Line)).toEqual([1]);
+    });
+
+    it('skips a CodeGen statement pasted without the separator, and keeps reading the DDL after it', async () => {
+        writeMigration(
+            'V202610210100__v6.2.x__NoSeparator.sql',
+            [
+                '/* SQL text to recompile all views */',
+                'EXEC [s].spRecompileAllViews',
+                '',
+                "IF COL_LENGTH(N'[s].[Contact]', N'X') IS NULL",
+                '    ALTER TABLE [s].[Contact] ADD X INT NULL;',
+                '',
+                '/* SQL text to add special date field __mj_CreatedAt to entity s.Contact */',
+                "IF COL_LENGTH('[s].[Contact]', '__mj_CreatedAt') IS NULL",
+                '    ALTER TABLE [s].[Contact] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;',
+                'GO',
+                '',
+                '/* SQL text to add default constraint for special date field __mj_CreatedAt */',
+                '',
+                "IF NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE [name] = 'DF_Contact_CreatedAt')",
+                "    ALTER TABLE [s].[Contact] ADD CONSTRAINT [DF_Contact_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];",
+            ].join('\n'),
+        );
+        const result = await MigrationExistenceGuardsCheck.Run({ RepoRoot: repo, Roots: ['migrations'], Options: { FromVersion: '202610210000' } });
+        expect(result.Violations.map((v) => v.Line)).toEqual([4]);
     });
 
     it('flags machine-style CHECK values, honoring AllowedValues and the marker', async () => {

@@ -433,30 +433,19 @@ ALTER TABLE ${flyway:defaultSchema}.TableName ADD Column3 UNIQUEIDENTIFIER NULL;
 
 ### 2. Modifying Existing Fields
 
-When modifying existing fields, **always drop existing extended properties first**:
+When changing the description of an existing field, **update it in place with `sp_updateextendedproperty`**. Migrations run in order against a known schema, so you know whether the column already has a description: update it if it does, add it with `sp_addextendedproperty` if it doesn't. Never wrap either call in an `IF EXISTS (SELECT … FROM sys.extended_properties …)` guard (see **NEVER INCLUDE IN MIGRATIONS** above).
 ```sql
--- Drop existing extended property if it exists
-IF EXISTS (SELECT * FROM sys.extended_properties 
-           WHERE major_id = OBJECT_ID('${flyway:defaultSchema}.TableName') 
-           AND minor_id = (SELECT column_id FROM sys.columns 
-                          WHERE object_id = OBJECT_ID('${flyway:defaultSchema}.TableName') 
-                          AND name = 'ColumnName')
-           AND name = 'MS_Description')
-BEGIN
-    EXEC sp_dropextendedproperty 
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-        @level1type = N'TABLE', @level1name = 'TableName',
-        @level2type = N'COLUMN', @level2name = 'ColumnName';
-END
-
--- Then add the new extended property
-EXEC sp_addextendedproperty 
+-- ✅ CORRECT - the column already has a description
+EXEC sp_updateextendedproperty
     @name = N'MS_Description',
     @value = N'New description',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = 'TableName',
     @level2type = N'COLUMN', @level2name = 'ColumnName';
+
+-- ❌ WRONG - a guard turns a schema mismatch into a silent no-op
+IF EXISTS (SELECT * FROM sys.extended_properties WHERE ... AND name = 'MS_Description')
+    EXEC sp_dropextendedproperty ...;
 ```
 
 ### 3. Use Hardcoded UUIDs

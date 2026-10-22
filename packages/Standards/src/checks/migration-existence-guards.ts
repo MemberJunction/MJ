@@ -9,14 +9,15 @@
  * left to review.
  *
  * Only the hand-written part of each migration is read. CodeGen's appended output guards its own
- * drops, and that is CodeGen's business.
+ * drops, and that is CodeGen's business; so is a CodeGen statement pasted without the separator,
+ * which still carries CodeGen's `/* SQL text to … *\/` header.
  *
  * @module @memberjunction/standards
  */
 
 import type { CheckContext, CheckResult, StandardCheck, Violation } from '../types.js';
 import { HasMarkerNear } from '../lib/markers.js';
-import { FindMigrations, StripSqlComments } from '../lib/migrations.js';
+import { FindMigrations, IsCodeGenStatement, StripSqlComments } from '../lib/migrations.js';
 
 /** The reviewed-exception marker, on the guarded line or the line above it. */
 export const EXISTENCE_GUARD_MARKER = 'mj-standards-allow: existence-guard';
@@ -30,11 +31,11 @@ const CATALOG_FUNCTION_GUARD = /\bIF\s+(?:NOT\s+)?(?:\(\s*)?(OBJECT_ID|COL_LENGT
 /** `IF [NOT] EXISTS (` — a guard only when its subquery reads the catalog; see {@link CATALOG_SOURCE}. */
 const EXISTS_GUARD = /\bIF\s+(?:NOT\s+)?EXISTS\s*\(/i;
 
-/** What an existence subquery reads when it is asking about schema rather than data. */
-const CATALOG_SOURCE = /\bsys\s*\.|\bINFORMATION_SCHEMA\s*\.|fn_listextendedproperty/i;
+/** What an existence subquery reads when it is asking about schema rather than data, bracketed or not. */
+const CATALOG_SOURCE = /(?:\bsys|\[sys\])\s*\.|(?:\bINFORMATION_SCHEMA|\[INFORMATION_SCHEMA\])\s*\.|fn_listextendedproperty/i;
 
 /** `DROP <object> IF EXISTS` — the same guard in its SQL Server 2016 spelling. */
-const DROP_IF_EXISTS = /\bDROP\s+(?:TABLE|VIEW|PROCEDURE|PROC|FUNCTION|INDEX|TRIGGER|TYPE|SCHEMA|CONSTRAINT|COLUMN)\s+IF\s+EXISTS\b/i;
+const DROP_IF_EXISTS = /\bDROP\s+(?:TABLE|VIEW|PROCEDURE|PROC|FUNCTION|INDEX|TRIGGER|TYPE|SCHEMA|CONSTRAINT|COLUMN|SEQUENCE|SYNONYM)\s+IF\s+EXISTS\b/i;
 
 /**
  * A temp table (`#work`, `tempdb..#work`). Cleaning one up is not schema idempotency: the table
@@ -74,6 +75,7 @@ function run(context: CheckContext): CheckResult {
         const handWritten = migration.Lines.slice(0, migration.HandWrittenLineCount);
         for (const line of FindExistenceGuards(StripSqlComments(handWritten))) {
             if (HasMarkerNear(migration.Lines, line, EXISTENCE_GUARD_MARKER)) continue;
+            if (IsCodeGenStatement(migration.Lines, line)) continue;
             violations.push({
                 File: migration.File,
                 Line: line,
@@ -97,7 +99,8 @@ export const MigrationExistenceGuardsCheck: StandardCheck = {
         'Flags IF OBJECT_ID / IF COL_LENGTH / IF [NOT] EXISTS (catalog) guards and DROP … IF EXISTS in the hand-written ' +
         'part of every versioned migration at or after the FromVersion option. Migrations run exactly once under ' +
         'Skyway, so a guard only hides schema drift and complicates the PostgreSQL conversion. CodeGen output below ' +
-        `the separator is not read. Reviewed exception: "${EXISTENCE_GUARD_MARKER}" on the line or the one above.`,
+        "the separator is not read, nor is a CodeGen statement pasted without it (under CodeGen's \"/* SQL text to … */\" header). " +
+        `Reviewed exception: "${EXISTENCE_GUARD_MARKER}" on the line or the one above.`,
     DefaultRoots: ['migrations'],
     DefaultOptions: { FromVersion: '202610210000' },
     Run: run,

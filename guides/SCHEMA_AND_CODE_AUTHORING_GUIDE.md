@@ -29,13 +29,15 @@ IF COL_LENGTH(N'[${flyway:defaultSchema}].[ContactType]', N'CommunicationBaseMes
 ```
 
 To replace a hand-written procedure or view, use `CREATE OR ALTER`, not `DROP … IF EXISTS` first.
+To change a column's existing description, use `sp_updateextendedproperty`.
 
 **The one exception** is a guard on *another app's* object that may legitimately not be installed,
 for example an app checking whether BizApps Common's function exists before using it. Mark it with
 `-- mj-standards-allow: existence-guard` and say why on that line.
 
 **Enforced by:** `migration-existence-guards` (error). It reads only the hand-written part of a
-migration, because CodeGen's appended output guards its own drops.
+migration, because CodeGen's appended output guards its own drops. A CodeGen statement pasted
+without the separator is skipped too, recognized by CodeGen's `/* SQL text to … */` header.
 
 ## Value lists are written for people
 
@@ -76,6 +78,17 @@ everywhere else.
 
 **Rule:** a column that orders rows for display is `Sequence`, as everywhere else in MJ. Not
 `DisplayRank`, `SortOrder`, `DisplayOrder` or `Position`.
+
+## Every metadata record has a `primaryKey`
+
+**Rule:** every record in a `metadata/` JSON file has a `primaryKey`, at the top level and on every
+nested `relatedEntities` child. A row the file creates gets a UUID from CLI `uuidgen`. A row that
+already exists, because a migration or CodeGen created it, gets an `@lookup` that resolves to it.
+The full rules are in [`metadata/CLAUDE.md`](../metadata/CLAUDE.md), rule 1.
+
+**Why:** `mj sync push` creates a new row for any record without a `primaryKey`. Older instructions
+said to leave it off, and AI tools still do. The result is a duplicate row, or, when the row already
+exists, a push that fails and rolls back the app's whole metadata.
 
 ## Each layer holds its own concepts
 
