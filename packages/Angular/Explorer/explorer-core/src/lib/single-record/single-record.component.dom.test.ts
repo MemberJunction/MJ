@@ -23,6 +23,8 @@ class EntityFormHostStub {
   @Input() PrimaryKey: unknown;
   @Input() NewRecordValues: unknown;
   @Input() Provider: unknown;
+  @Input() FormMode: unknown;
+  @Output() FormModeChange = new EventEmitter<unknown>();
   @Output() LoadComplete = new EventEmitter<void>();
   @Output() LoadError = new EventEmitter<unknown>();
   @Output() RecordReady = new EventEmitter<unknown>();

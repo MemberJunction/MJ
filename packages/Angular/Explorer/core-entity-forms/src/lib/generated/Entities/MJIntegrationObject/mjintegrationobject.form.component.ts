@@ -23,7 +23,8 @@ export class MJIntegrationObjectFormComponent extends BaseFormComponent {
             { sectionKey: 'requestPayloadConfiguration', sectionName: 'Request Payload Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJIntegrationObjectFieldsIntegrationObjectID', sectionName: 'Integration Object Fields (Integration Object ID)', isExpanded: false },
-            { sectionKey: 'mJIntegrationObjectFieldsRelatedIntegrationObjectID', sectionName: 'Integration Object Fields (Related Integration Object)', isExpanded: false }
+            { sectionKey: 'mJIntegrationObjectFieldsRelatedIntegrationObjectID', sectionName: 'Integration Object Fields (Related Integration Object)', isExpanded: false },
+            { sectionKey: 'mJCompanyIntegrationObjects', sectionName: 'Company Integration Objects', isExpanded: false }
         ]);
     }
 }
