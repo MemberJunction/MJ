@@ -240,12 +240,12 @@
           </div>
         </mj-empty-state>
       } @else {
-        <!-- Activity Over Time Mini-Chart -->
+        <!-- Activity Over Time Burst-Aware Cluster Strip (Time-Gap Compression) -->
         @if (ActivityBuckets.length > 0) {
-          <div class="rc-activity-chart" role="region" aria-label="Change activity over time">
+          <div class="rc-activity-chart" role="region" aria-label="Change activity bursts over time">
             <div class="rc-activity-chart-header">
               <span class="rc-activity-chart-title">
-                <i class="fa-solid fa-chart-column" aria-hidden="true"></i>
+                <i class="fa-solid fa-wave-square" aria-hidden="true"></i>
                 {{ ActivityChartGranularityLabel }}
               </span>
               <div class="rc-activity-chart-meta">
@@ -254,7 +254,7 @@
                     type="button"
                     class="rc-activity-bucket-pill"
                     (click)="ClearBucketFilter()"
-                    title="Clear time bucket filter">
+                    title="Clear burst filter">
                     <span>{{ activeBucketLabel }}</span>
                     <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                   </button>
@@ -266,36 +266,39 @@
                 </div>
               </div>
             </div>
-            <div class="rc-activity-bars">
-              @for (bucket of ActivityBuckets; track bucket.Key; let idx = $index; let first = $first; let last = $last) {
+            <div class="rc-burst-track">
+              @for (bucket of ActivityBuckets; track bucket.Key) {
                 <button
                   type="button"
-                  class="rc-activity-bar-col"
-                  [class.rc-activity-bar-col--empty]="bucket.TotalCount === 0"
-                  [class.rc-activity-bar-col--selected]="SelectedBucketKey === bucket.Key"
-                  [disabled]="bucket.TotalCount === 0"
+                  class="rc-burst-node"
+                  [class.rc-burst-node--selected]="SelectedBucketKey === bucket.Key"
+                  [attr.aria-pressed]="SelectedBucketKey === bucket.Key"
                   [attr.aria-label]="bucket.Tooltip"
                   [title]="bucket.Tooltip"
                   (click)="ToggleBucketFilter(bucket.Key)">
-                  <div class="rc-activity-bar-track">
-                    <div class="rc-activity-bar-fill" [style.height.%]="bucket.HeightPercent">
-                      @if (bucket.RestoreSharePercent > 0) {
-                        <span class="rc-bar-seg rc-bar-seg--restore" [style.height.%]="bucket.RestoreSharePercent"></span>
-                      }
-                      @if (bucket.UpdateSharePercent > 0) {
-                        <span class="rc-bar-seg rc-bar-seg--update" [style.height.%]="bucket.UpdateSharePercent"></span>
-                      }
-                      @if (bucket.CreateSharePercent > 0) {
-                        <span class="rc-bar-seg rc-bar-seg--create" [style.height.%]="bucket.CreateSharePercent"></span>
-                      }
-                    </div>
-                  </div>
-                  <span class="rc-activity-bar-label">
-                    @if (first || last || idx === 4 || idx === 8) {
-                      {{ bucket.Label }}
+                  <div class="rc-burst-pips">
+                    @for (pip of bucket.Pips; track pip.ID) {
+                      <span
+                        class="rc-burst-pip"
+                        [class.rc-burst-pip--create]="pip.Type === 'create'"
+                        [class.rc-burst-pip--update]="pip.Type === 'update'"
+                        [class.rc-burst-pip--restore]="pip.Type === 'restore'"
+                        [title]="pip.Tooltip"></span>
                     }
-                  </span>
+                    @if (bucket.OverflowPipCount > 0) {
+                      <span class="rc-burst-pip-overflow">+{{ bucket.OverflowPipCount }}</span>
+                    }
+                  </div>
+                  <span class="rc-burst-count">{{ bucket.TotalCount }} {{ bucket.TotalCount === 1 ? 'change' : 'changes' }}</span>
+                  <span class="rc-burst-date">{{ bucket.Label }}</span>
+                  <span class="rc-burst-sub">{{ bucket.Subtitle }}</span>
                 </button>
+                @if (bucket.GapAfterLabel) {
+                  <div class="rc-gap-connector" [attr.aria-label]="bucket.GapAfterLabel + ' with no changes'">
+                    <div class="rc-gap-line"></div>
+                    <span class="rc-gap-pill">{{ bucket.GapAfterLabel }}</span>
+                  </div>
+                }
               }
             </div>
           </div>

@@ -368,10 +368,15 @@ describe('RecordChangesComponent (DOM) — date fields', () => {
     expect(queryAll(f, '.rc-preview-form-btn')).toHaveLength(1);
   });
 
-  it('renders the activity over time spark-bar chart when multiple changes exist and filters by bucket click', async () => {
+  it('renders the burst-aware cluster strip with compressed quiet gaps and filters by burst click', async () => {
     const f = await renderExpanded([
       change({
-        ID: 'c-recent',
+        ID: 'c-recent-2',
+        ChangedAt: new Date('2026-10-15T14:10:00.000Z'),
+        User: 'Alice Smith',
+      }),
+      change({
+        ID: 'c-recent-1',
         ChangedAt: new Date('2026-10-15T14:00:00.000Z'),
         User: 'Alice Smith',
       }),
@@ -383,14 +388,20 @@ describe('RecordChangesComponent (DOM) — date fields', () => {
       }),
     ]);
     expect(query(f, '.rc-activity-chart')).not.toBeNull();
-    expect(f.componentInstance.ActivityBuckets).toHaveLength(12);
-    const nonEmptyBucket = f.componentInstance.ActivityBuckets.find((b) => b.TotalCount > 0)!;
-    f.componentInstance.ToggleBucketFilter(nonEmptyBucket.Key);
+    expect(queryAll(f, '.rc-burst-node')).toHaveLength(2);
+    expect(queryAll(f, '.rc-gap-connector')).toHaveLength(1);
+    expect(f.componentInstance.ActivityBuckets).toHaveLength(2);
+    expect(f.componentInstance.ActivityBuckets[0].GapAfterLabel).not.toBeNull();
+    expect(f.componentInstance.ActivityBuckets[1].TotalCount).toBe(2);
+    expect(f.componentInstance.ActivityBuckets[1].Pips).toHaveLength(2);
+
+    const recentBurst = f.componentInstance.ActivityBuckets[1];
+    f.componentInstance.ToggleBucketFilter(recentBurst.Key);
     f.detectChanges();
-    expect(f.componentInstance.SelectedBucketKey).toBe(nonEmptyBucket.Key);
-    expect(f.componentInstance.FilteredData.length).toBe(nonEmptyBucket.TotalCount);
-    f.componentInstance.ClearBucketFilter();
+    expect(f.componentInstance.SelectedBucketKey).toBe(recentBurst.Key);
     expect(f.componentInstance.FilteredData.length).toBe(2);
+    f.componentInstance.ClearBucketFilter();
+    expect(f.componentInstance.FilteredData.length).toBe(3);
   });
 
   it('compares any two arbitrary historical snapshots (vA ↔ vB) and supports comparing against live Current Record', async () => {

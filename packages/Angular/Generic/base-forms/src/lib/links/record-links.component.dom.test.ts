@@ -3,6 +3,7 @@ import { BaseEntity, CompositeKey, EntityFieldTSType, EntityInfo, IMetadataProvi
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { MjRecordLinksComponent } from './record-links.component';
 import { MjRecordLinksDrawerComponent } from './record-links-drawer.component';
+import { MjRecordLinkDirective } from './record-link.directive';
 import { MjRecordPreviewPopoverComponent } from '../preview-popover/record-preview-popover.component';
 import { FormNavigationEvent } from '../types/navigation-events';
 
@@ -144,7 +145,7 @@ describe('MjRecordLinksComponent', () => {
     it('loads dependencies, filters out telemetry & unreadable entities, and groups linked records by entity', async () => {
         setupMocks();
         const fixture = renderComponentFixture(MjRecordLinksComponent, {
-            declarations: [MjRecordLinksComponent, MjRecordLinksDrawerComponent, MjRecordPreviewPopoverComponent],
+            declarations: [MjRecordLinksComponent, MjRecordLinksDrawerComponent, MjRecordLinkDirective, MjRecordPreviewPopoverComponent],
             inputs: { Record: MOCK_RECORD, Mode: 'inline' }
         });
 
@@ -175,7 +176,7 @@ describe('MjRecordLinksComponent', () => {
     it('filters by Link Type (both, soft Cross-App Links, hard Direct Relationships)', async () => {
         setupMocks();
         const fixture = renderComponentFixture(MjRecordLinksComponent, {
-            declarations: [MjRecordLinksComponent, MjRecordPreviewPopoverComponent],
+            declarations: [MjRecordLinksComponent, MjRecordLinkDirective, MjRecordPreviewPopoverComponent],
             inputs: { Record: MOCK_RECORD, Mode: 'inline' }
         });
 
@@ -205,7 +206,7 @@ describe('MjRecordLinksComponent', () => {
     it('filters by category chips and search query', async () => {
         setupMocks();
         const fixture = renderComponentFixture(MjRecordLinksComponent, {
-            declarations: [MjRecordLinksComponent, MjRecordPreviewPopoverComponent],
+            declarations: [MjRecordLinksComponent, MjRecordLinkDirective, MjRecordPreviewPopoverComponent],
             inputs: { Record: MOCK_RECORD, Mode: 'inline' }
         });
 
@@ -236,7 +237,7 @@ describe('MjRecordLinksComponent', () => {
     it('emits Navigate event with target entity and primary key when a card is clicked', async () => {
         setupMocks();
         const fixture = renderComponentFixture(MjRecordLinksComponent, {
-            declarations: [MjRecordLinksComponent, MjRecordPreviewPopoverComponent],
+            declarations: [MjRecordLinksComponent, MjRecordLinkDirective, MjRecordPreviewPopoverComponent],
             inputs: { Record: MOCK_RECORD, Mode: 'inline' }
         });
 
@@ -284,7 +285,7 @@ describe('MjRecordLinksComponent', () => {
         expect(prewarmed.TotalCount).toBe(4);
 
         const fixture = renderComponentFixture(MjRecordLinksComponent, {
-            declarations: [MjRecordLinksComponent, MjRecordPreviewPopoverComponent],
+            declarations: [MjRecordLinksComponent, MjRecordLinkDirective, MjRecordPreviewPopoverComponent],
             inputs: { Record: recordWithOutgoingFK, Mode: 'inline' }
         });
 
@@ -342,7 +343,7 @@ describe('MjRecordLinksComponent', () => {
         } as unknown as BaseEntity;
 
         const fixture = renderComponentFixture(MjRecordLinksComponent, {
-            declarations: [MjRecordLinksComponent, MjRecordPreviewPopoverComponent],
+            declarations: [MjRecordLinksComponent, MjRecordLinkDirective, MjRecordPreviewPopoverComponent],
             inputs: { Record: recordWithNullableOutgoingFK, Mode: 'inline', AllowQuickUnlink: true }
         });
 

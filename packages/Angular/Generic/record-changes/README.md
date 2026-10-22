@@ -176,6 +176,13 @@ The preview compares the **full snapshot** captured in the source change's `Full
 
 This also means any change row is a valid restore target: `Create` (the original state), `Update` (post-update state), `Snapshot` (an explicit point-in-time capture from the Version Label system), or `Delete` (state before deletion — used by the Recycle Bin).
 
+## Activity Over Time — Burst-Aware Cluster Strip (Time-Gap Compression)
+
+Record change histories are often highly irregular over time (for example, an initial creation burst, months of quiet, and a recent cluster of edits). Instead of a linear time axis that leaves 80%+ of buckets empty, `<mj-record-changes>` groups changes into **active editing sessions (burst clusters)** separated by compressed `-- 11 mos quiet --` gap connectors:
+
+- Each burst cluster card displays individual color-coded change pips (`Create`, `Update`, `Restore`), total change count, date label, and session subtitle.
+- Clicking any burst cluster filters the timeline to that session's changes; clicking again (or clicking the active filter pill) clears the filter.
+
 ## Type Exports
 
 ```typescript

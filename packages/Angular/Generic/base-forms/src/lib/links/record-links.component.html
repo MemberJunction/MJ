@@ -224,9 +224,14 @@
                                 <button
                                     type="button"
                                     class="mj-links-card"
-                                    (click)="OnItemClick(item, $event)"
-                                    (mouseenter)="OnCardMouseEnter(item, $event)"
-                                    (mouseleave)="OnCardMouseLeave()">
+                                    [mjRecordLink]="Record"
+                                    [FieldName]="item.Direction === 'outgoing' ? (item.SourceFieldName ?? null) : null"
+                                    [EntityName]="item.EntityName"
+                                    [PrimaryKey]="item.PrimaryKey"
+                                    [DisplayName]="item.DisplayName"
+                                    [Provider]="ProviderToUse"
+                                    (Navigate)="OnItemNavigate(item, $event)"
+                                    (RecordUpdated)="OnItemQuickEdited(item, $event)">
                                     <div class="mj-links-card__main">
                                         <div class="mj-links-card__title-row">
                                             <span class="mj-links-card__title">{{ item.DisplayName }}</span>
@@ -269,20 +274,5 @@
                 </section>
             }
         </div>
-    }
-
-    @if (HoveredItem; as hovered) {
-        <mj-record-preview-popover
-            [Provider]="ProviderToUse"
-            [Visible]="true"
-            [EntityName]="hovered.EntityName"
-            [PrimaryKey]="hovered.PrimaryKey"
-            [DisplayName]="hovered.DisplayName"
-            [AnchorRect]="HoverAnchorRect"
-            (Navigate)="OnPreviewCardNavigate($event)"
-            (RecordUpdated)="OnPreviewRecordUpdated($event)"
-            (MouseEnterCard)="OnPreviewCardMouseEnter()"
-            (MouseLeaveCard)="OnPreviewCardMouseLeave()">
-        </mj-record-preview-popover>
     }
 </ng-template>

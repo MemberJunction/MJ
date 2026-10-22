@@ -740,6 +740,19 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
         this.cdr.markForCheck();
     }
 
+    /** Handle navigation emitted by `[mjRecordLink]` on a linked record card */
+    public OnItemNavigate(_item: RecordLinkItem, navEvent: FormNavigationEvent): void {
+        this.clearHoverTimers();
+        this.HoveredItem = null;
+        this.Navigate.emit(navEvent);
+    }
+
+    /** Handle inline Quick Edit save emitted by `[mjRecordLink]` on a linked record card */
+    public OnItemQuickEdited(item: RecordLinkItem, _event: RecordPreviewUpdatedEvent): void {
+        this.RecordLinkModified.emit({ Action: 'updated', Item: item });
+        void this.LoadLinks(true);
+    }
+
     /** Handle clicking a linked record card */
     public OnItemClick(item: RecordLinkItem, event?: MouseEvent): void {
         this.clearHoverTimers();
