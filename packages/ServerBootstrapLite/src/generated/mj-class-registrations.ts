@@ -221,7 +221,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (456 classes)
+// @memberjunction/core-entities (458 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -365,6 +365,8 @@ import {
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -1652,6 +1654,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -1846,12 +1850,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
-    MJRecommendationProviderEntity,
-    MJRecommendationRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecommendationProviderEntity,
+    MJRecommendationRunEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
@@ -2050,12 +2054,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetTypeformFileContentAction,
     GetTypeformFormsAction,
     GetTypeformResponsesAction,
-    GetTypeformStatisticsAction,
-    UpdateJotFormAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetTypeformStatisticsAction,
+    UpdateJotFormAction,
     UpdateSurveyMonkeyAction,
     UpdateTypeformAction,
     WatchNewJotFormSubmissionsAction,
@@ -2254,12 +2258,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
-    PredictiveStudioModelDevAgent,
-    PredictiveStudioPipelineBuilderAgent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioModelDevAgent,
+    PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
     PredictiveStudioRunExperimentAction,
@@ -2458,12 +2462,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
-    ManageMyCalendarEventAction,
-    ManageMyEmailInboxAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ManageMyCalendarEventAction,
+    ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
     ModifyFormContributionAction,
@@ -2572,7 +2576,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1092;
+export const CLASS_REGISTRATIONS_COUNT = 1094;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

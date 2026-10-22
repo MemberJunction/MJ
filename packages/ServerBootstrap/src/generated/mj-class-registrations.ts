@@ -243,7 +243,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (456 classes)
+// @memberjunction/core-entities (458 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -387,6 +387,8 @@ import {
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -1935,6 +1937,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -2119,12 +2123,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryEntity,
     MJQueryEntityEntity,
     MJQueryEntityExtended,
-    MJQueryFieldEntity,
-    MJQueryParameterEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueryFieldEntity,
+    MJQueryParameterEntity,
     MJQueryPermissionEntity,
     MJQuerySQLEntity,
     MJQueueEntity,
@@ -2323,12 +2327,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CreateJotFormAction,
     CreateSurveyMonkeyAction,
     CreateTypeformAction,
-    ExportGoogleFormsCSVAction,
-    ExportJotFormCSVAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ExportGoogleFormsCSVAction,
+    ExportJotFormCSVAction,
     ExportSurveyMonkeyCSVAction,
     ExportTypeformCSVAction,
     GetGoogleFormAction,
@@ -2527,12 +2531,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     SubmitHumanRubricAction,
     AzureAISearchProvider,
     BGEReRanker,
-    CohereReRanker,
-    ElasticsearchSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    CohereReRanker,
+    ElasticsearchSearchProvider,
     EntitySearchProvider,
     FullTextSearchProvider,
     NoopReRanker,
@@ -2731,12 +2735,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     BraveWebSearchProvider,
     DuckDuckGoWebSearchProvider,
     GoogleCustomSearchWebSearchProvider,
-    PerplexityWebSearchProvider,
-    TavilyWebSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    PerplexityWebSearchProvider,
+    TavilyWebSearchProvider,
     WebSearchQueryServerOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -2942,7 +2946,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1189;
+export const CLASS_REGISTRATIONS_COUNT = 1191;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

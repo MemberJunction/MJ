@@ -35,7 +35,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (456 classes)
+// @memberjunction/core-entities (458 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -179,6 +179,8 @@ import {
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -559,10 +561,11 @@ import {
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
-// @memberjunction/ng-auth-services (6 classes)
+// @memberjunction/ng-auth-services (7 classes)
 import {
     MJAuth0Provider,
     MJCognitoProvider,
+    MJLocalDevProvider,
     MJMSALProvider,
     MJMagicLinkProvider,
     MJOktaProvider,
@@ -881,6 +884,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -925,12 +930,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCredentialCategoryEntity,
     MJCredentialEntity,
     MJCredentialTypeEntity,
-    MJDashboardCategoryEntity,
-    MJDashboardCategoryLinkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardCategoryEntity,
+    MJDashboardCategoryLinkEntity,
     MJDashboardCategoryPermissionEntity,
     MJDashboardEntity,
     MJDashboardEntityExtended,
@@ -1129,12 +1134,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeTestQueryEntity,
     MJSignatureAccountEntity,
     MJSignatureProviderEntity,
-    MJSignatureRequestDocumentEntity,
-    MJSignatureRequestEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSignatureRequestDocumentEntity,
+    MJSignatureRequestEntity,
     MJSignatureRequestLogEntity,
     MJSignatureRequestRecipientEntity,
     MJSkillEntity,
@@ -1241,6 +1246,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     XlsxArtifactViewerComponent,
     MJAuth0Provider,
     MJCognitoProvider,
+    MJLocalDevProvider,
     MJMSALProvider,
     MJMagicLinkProvider,
     MJOktaProvider,
@@ -1332,13 +1338,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTemplateFormComponentExtended,
     MJTestFormComponentExtended,
     MJTestRubricFormComponentExtended,
-    MJTestRunFeedbackFormComponentExtended,
-    MJTestRunFormComponentExtended,
-    MJTestSuiteFormComponentExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJTestRunFeedbackFormComponentExtended,
+    MJTestRunFormComponentExtended,
+    MJTestSuiteFormComponentExtended,
     MJTestSuiteRunFormComponentExtended,
     MLModelFormComponentExtended,
     MLModelFormPolicy,
@@ -1380,7 +1386,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 627;
+export const CLASS_REGISTRATIONS_COUNT = 630;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
