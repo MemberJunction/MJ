@@ -5781,6 +5781,7 @@ export class BaseAgent {
 
     private async runDecisionsFromTool(requests: AgentDecisionRequest[], payload: object, params: ExecuteAgentParams): Promise<AgentToolResult> {
         const results = await this.executeDecisionRequestsAsSteps(requests, payload, this._agentTypePromptParams, params);
+        // fls-guard: decision outcomes, not entity rows
         return { Content: JSON.stringify(results), IsError: results.length > 0 && results.every((r) => !r.success) };
     }
 
