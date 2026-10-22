@@ -559,7 +559,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         // Navigate to the initial route. A deep link is replayed through the router;
         // a bare '/' is left to the router's default route (the Home app).
         if (this.initialPath !== '/') {
-          this.router.navigateByUrl(this.initialPath, { replaceUrl: true });
+          this.router.navigateByUrl(this.initialPath, { replaceUrl: true })?.catch(() => {
+            void this.router.navigateByUrl('/', { replaceUrl: true });
+          });
         }
       } else if (result.error) {
         // Handle errors based on type

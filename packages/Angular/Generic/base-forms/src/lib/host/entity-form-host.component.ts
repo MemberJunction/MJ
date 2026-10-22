@@ -194,6 +194,8 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
    * in that path, so without this the shell would never hear about it.
    */
   @Output() EditModeChanged = new EventEmitter<boolean>();
+  /** Emitted when the user clicks the "Ask AI" button on the form toolbar. */
+  @Output() AskAIRequested = new EventEmitter<void>();
 
   // ── State ───────────────────────────────────────────────────────────────
 
@@ -640,6 +642,11 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       form.RecordReady.subscribe(e => this.RecordReady.emit(e)),
       form.EditModeChanged.subscribe(e => this.EditModeChanged.emit(e)),
     );
+    if (form.AskAIRequested) {
+      this._formEventSubs.push(
+        form.AskAIRequested.subscribe(() => this.AskAIRequested?.emit()),
+      );
+    }
     // Surface 'dismiss' navigation as a first-class Dismissed event too.
     this._formEventSubs.push(
       form.Navigate.subscribe(e => { if (e.Kind === 'dismiss') this.Dismissed.emit(); }),

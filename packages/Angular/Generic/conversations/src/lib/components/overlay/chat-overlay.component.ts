@@ -44,6 +44,21 @@ export interface OverlayConversationSwitchedEvent {
     NewConversationID: string | null;
 }
 
+/** Summary of the active record context extracted from `AppContext.AdditionalContext.Form` */
+export interface OverlayActiveRecordContextSummary {
+    Entity: string;
+    RecordPrimaryKey: string | null;
+    RecordDisplayName: string | null;
+    EditMode: boolean;
+    Dirty: boolean;
+    DirtyFieldNames: readonly string[];
+    HasExternalUpdateConflict: boolean;
+    PreviewingHistoricalChangeID: string | null;
+    TotalLinksCount: number;
+    OutgoingLinksCount: number;
+    IncomingLinksCount: number;
+}
+
 /** Persisted overlay size and position preferences */
 interface OverlayPrefs {
     width: number;
@@ -558,6 +573,38 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
             ChatAgentsOverlayComponent.BASE_BOTTOM_PX,
             Math.min(ideal, maxBottomForVisibility)
         );
+    }
+
+    /**
+     * Extracts a structured summary of the currently open record form from
+     * `AppContext.AdditionalContext.Form` when the user is viewing a record.
+     */
+    public get ActiveRecordContext(): OverlayActiveRecordContextSummary | null {
+        const additional = this.AppContext?.['AdditionalContext'] as Record<string, unknown> | undefined;
+        const form = additional?.['Form'] as Record<string, unknown> | undefined;
+        if (!form || typeof form['Entity'] !== 'string' || !form['Entity']) {
+            return null;
+        }
+        const recordState = form['RecordState'] as Record<string, unknown> | undefined;
+        const links = form['Links'] as Record<string, unknown> | undefined;
+        const dirtyFieldNames = Array.isArray(recordState?.['DirtyFieldNames'])
+            ? (recordState['DirtyFieldNames'] as unknown[]).filter((f): f is string => typeof f === 'string')
+            : [];
+        return {
+            Entity: form['Entity'] as string,
+            RecordPrimaryKey: typeof form['RecordPrimaryKey'] === 'string' ? (form['RecordPrimaryKey'] as string) : null,
+            RecordDisplayName: typeof recordState?.['RecordDisplayName'] === 'string' ? (recordState['RecordDisplayName'] as string) : null,
+            EditMode: recordState?.['EditMode'] === true,
+            Dirty: recordState?.['Dirty'] === true,
+            DirtyFieldNames: dirtyFieldNames,
+            HasExternalUpdateConflict: recordState?.['HasExternalUpdateConflict'] === true,
+            PreviewingHistoricalChangeID: typeof recordState?.['PreviewingHistoricalChangeID'] === 'string'
+                ? (recordState['PreviewingHistoricalChangeID'] as string)
+                : null,
+            TotalLinksCount: typeof links?.['TotalCount'] === 'number' ? (links['TotalCount'] as number) : 0,
+            OutgoingLinksCount: typeof links?.['OutgoingCount'] === 'number' ? (links['OutgoingCount'] as number) : 0,
+            IncomingLinksCount: typeof links?.['IncomingCount'] === 'number' ? (links['IncomingCount'] as number) : 0,
+        };
     }
 
     // --- Private Methods ---

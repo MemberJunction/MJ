@@ -52,10 +52,12 @@ Two kinds of cache exist:
 
 | `PrefixPromptCache` | Providers | Behaviour of the cache | What the agent does with the previous iteration's fragment |
 |---|---|---|---|
-| absent / `false` (block cache) | Anthropic (explicit breakpoints), Gemini (implicit), Cerebras (sliding) | Matches on block or segment boundaries inside the prompt | **Replaces it.** Only the latest fragment is attached; history stays compact. |
+| absent / `false` (block cache) | Anthropic (explicit breakpoints), Gemini (implicit), Cerebras (sliding) | Matches on block or segment boundaries inside the prompt | **Replaces it.** Only the latest fragment is attached; history stays compact. Exception: a native-tools run on Anthropic retains it (see below). |
 | `true` (byte-prefix cache) | OpenAI automatic cache, xAI | Reuses a prior request only when that request's *entire* prompt is a byte prefix of the new one | **Retains it and appends the new one**, so each request is an exact prefix extension of the last. Costs a few hundred stale (cached) tokens per iteration. |
 
 Replacing the fragment on a prefix cache breaks the prefix right after the system prompt and caps the cached share there (measured: GPT 5.6 flat at 21K cached every iteration). Appending recovers the history (~93% cached).
+
+**Native tools on Anthropic are append-only, whatever the catalog says.** Claude 5.x accepts a replayed thinking block only while the system prompt, the tools and every earlier message are unchanged since the turn that produced it. Replacing the fragment would change the history behind every replayed block, and the request would be rejected. So a run that declares native tools to a driver with `BaseLLM.ReplayedReasoningRequiresStablePrefix` (true for `AnthropicLLM`) retains its fragments. When something else changes earlier history anyway (expiry, compaction, expansion, context recovery) or the system prompt or tools change (a skill activating mid-run), the replayed reasoning behind the change is dropped instead of sent.
 
 **Which provider is which is metadata, not code.** `PrefixPromptCache` is a boolean in `LLMConfigurationSettings` in the model catalog's `ModelConfiguration` cascade, which since 6.2 has a vendor layer. AI Vendors carries its own `Configuration` bag (`IAIVendorConfiguration`), and its `ModelDefaults` key is a model-configuration bag that forms the default for every model the vendor serves:
 
