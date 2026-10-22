@@ -30,3 +30,4 @@ export * from './lib/providers/mjexplorer-okta-provider.service';
 export * from './lib/providers/mjexplorer-cognito-provider.service';
 export * from './lib/providers/mjexplorer-workos-provider.service';
 export * from './lib/providers/mjexplorer-magic-link-provider.service';
+export * from './lib/providers/mjexplorer-local-dev-provider.service';
