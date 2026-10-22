@@ -8,7 +8,7 @@ import {
     Output,
     inject
 } from '@angular/core';
-import { CompositeKey, EntityFieldInfo, EntityFieldTSType, EntityInfo, KeyValuePair, RunView } from '@memberjunction/core';
+import { CompositeKey, EntityFieldInfo, EntityFieldTSType, EntityInfo, RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FormNavigationEvent } from '../types/navigation-events';
 
@@ -270,11 +270,8 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         if (!rawId) {
             return null;
         }
-        if (rawId.includes('|')) {
-            return CompositeKey.FromURLSegment(entityInfo, rawId);
-        }
-        const pkField = entityInfo?.FirstPrimaryKey?.Name || 'ID';
-        return new CompositeKey([new KeyValuePair(pkField, rawId)]);
+        // Reads both a bare id and a delimited multi-column segment for any entity.
+        return CompositeKey.FromURLSegment(entityInfo, rawId);
     }
 
     private async loadSummary(): Promise<void> {
