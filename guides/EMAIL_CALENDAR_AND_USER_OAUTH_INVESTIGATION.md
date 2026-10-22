@@ -1,6 +1,8 @@
 # Chief of Staff (CoS) — Phase 2 Engineering Plan: Full-Stack Setup, Real-World Testing, Feature Build-Out & OAuth Investigation
 
 > **Assigned To:** Paul Christmann (`@paul-christmann-rasa`) & AI Coding Agent  
+> **Reviewers:** Caitlin Tuttle (`@ct-bc`), Ryan Kihm (`@rkihm-BC`), Jordan Fanapour (`@jordanfanapour`), Arie Glazier (`@arie-glazier-bcc`)  
+> **Parallel Core Agent Engine PR:** **[MJ #6015](https://github.com/MemberJunction/MJ/pull/6015)** (Assigned to `@ct-bc` — *Always-On Agent Harness & Core Framework Primitives*)  
 > **Status:** Active Phase 2 Plan & Architecture Investigation (Follow-On to Wave 1 PRs)  
 > **Default OAuth Posture:** Enterprise-wide Per-User OAuth is **DISABLED by default** (`AllowUserDelegatedOAuth = false`).
 
@@ -16,6 +18,25 @@ Before starting Phase 2, note that the Wave 1 Chief of Staff foundation has land
 | **`MemberJunction/bizapps-common`** | **[PR #26](https://github.com/MemberJunction/bizapps-common/pull/26)** | - Cross-app Chief of Staff identity resolution (`__mj.User` ↔ `__mj.Employee` ↔ `__mj_BizAppsCommon.Person` ↔ `__mj_BizAppsCommon.Organization`) and architecture guide ([`docs/Chief-Of-Staff-Architecture.md`](https://github.com/MemberJunction/bizapps-common/blob/next/docs/Chief-Of-Staff-Architecture.md)). |
 | **`MemberJunction/bizapps-tasks`** | **[PR #132](https://github.com/MemberJunction/bizapps-tasks/pull/132)**, **[PR #135](https://github.com/MemberJunction/bizapps-tasks/pull/135)** | - Extended `__mj_BizAppsTasks.Task` (`MJ_BizApps_Tasks: Tasks`) with 12 OKR/Priority & cadence columns (`IsPriorityObjective`, `PriorityTier`, `TargetMetricName`, `TargetMetricValue`, `CurrentMetricValue`, `MetricUnit`, `HealthStatus`, `CheckInCadence`, `CheckInCronExpression`, `LastCheckInAt`, `NextCheckInAt`, `WorkstreamKey`).<br>- Added `__mj_BizAppsTasks.TaskCheckIn` (`MJ_BizApps_Tasks: Task Check Ins`) for structured progress, metric deltas, confidence (`0–100`), blockers, and next steps. |
 | **`MemberJunction/bizapps-issues`** | **[PR #77](https://github.com/MemberJunction/bizapps-issues/pull/77)** | - Documented Chief of Staff issue triage, SLA escalation (`SLADueAt` / `EscalationLevel`), dependency tracking (`IssueRelationship`), and task promotion (`PromotedToTaskID`). |
+
+### 0.1 Parallel Core Agent Engine Track ([MJ #6015](https://github.com/MemberJunction/MJ/pull/6015) — Assigned to Caitlin Tuttle `@ct-bc`)
+
+In parallel with your Chief of Staff testing and feature work here in `#5843`, **Caitlin Tuttle (`@ct-bc`)** is leading **[MJ #6015](https://github.com/MemberJunction/MJ/pull/6015)** (`guides/ALWAYS_ON_AGENT_HARNESS_AND_CORE_PRIMITIVES_PLAN.md`) to implement **6 Core Harness & Context-Engineering Improvements** and **4 Framework-Wide Always-On Agent Primitives** directly inside `@memberjunction/ai-agents`, `@memberjunction/ai-prompts`, `@memberjunction/ai-core-plus`, `@memberjunction/actions-base`, `@memberjunction/scheduling-engine`, and `@memberjunction/messaging-adapters`.
+
+Because `#6015` operates strictly at the core framework layer, **your `Chief of Staff` agent will automatically inherit all of these capabilities as soon as `#6015` merges to `next` with zero rework required on your side**:
+
+| Capability Landing in [MJ #6015](https://github.com/MemberJunction/MJ/pull/6015) (`@ct-bc`) | What `Chief of Staff` Automatically Gets |
+| :--- | :--- |
+| **1. KV Cache Stability (Lesson 1)** | Fixes 9 remaining prefix-invalidation vectors (relocating `_ARTIFACT_MANIFEST` & `planApproved` into `<mj-runtime-state>`, gating sliding-window `CompactAnsweredToolCallArguments` on a context threshold, fixing Phase 2 `Promise.all` system ordering, deterministic tool/schema property sorting, and `OpenAILLM` streaming cache telemetry). |
+| **2. Warm-Cache Idle Compaction (Lesson 2)** | `WarmCacheIdleCompactionScheduler` compacts conversations after `3.5 min` of idle time while the provider's 5-min cache is still warm (75–90% cheaper via prefix forking), rehydrates `ScratchpadManager` across turns, and preserves `[seq N \| ISO-timestamp]` + artifact handles. |
+| **3. Dynamic Action Discovery Multiplexer (Lesson 3)** | `actionDiscoveryMode: 'Auto'` (`> 10` effective actions auto-multiplexed via static `search_available_actions` + `execute_discovered_action` tools, with `'DisableMultiplex'` opt-out). Reduces `Chief of Staff`'s 17-action schema footprint from **8,718 → ~3,360 tokens/turn (-61%)** while keeping `promptParams.tools` 100% frozen across skill activations. |
+| **4. Automatic `>8KB` Output Spillover (Lesson 4)** | Fixes the 3× dataset duplication in `RunAdhocQueryAction` and automatically spills action outputs `> 8,000` chars (or arrays `> 25` rows) into `ArtifactToolManager` handles (`[A]`, `[B]`) with a compact schema + 3-row preview. |
+| **5. Mid-Turn Steering & Burst Debouncing (Lesson 5)** | Adds `EnqueueSteeringMessage` / `DrainSteeringMessages` on `AgentRunWatchdog` + `SteerAIAgentRun` mutation, a `2.5s` per-thread burst debouncer in `BaseMessagingAdapter` (fixing the 3-duplicate-conversations race on Slack/Teams), and background routine preemption in `UserRoutineDispatcherDriver` when the human owner is active. |
+| **6. "DX for Agents" Error Recovery (Lesson 6)** | Adds `ActionErrorRecovery` to `ActionResultSimple`, preserves `AIDirectives` & custom `ResultCode` on failure, and fixes silent unknown-field drops in `Create Record` / `Update Record`. |
+| **7. Primitive 1 — `ResponseDisposition`** | First-class `'NotifyUser' \| 'SilentLog' \| 'ReactOnly'` across `LoopAgentResponse`, `AIAgentRun`, `UserRoutineDispatcherDriver` (suppressing noisy wake notifications when nothing actionable changed), and `SlackAdapter` / `TeamsAdapter` (emoji reactions). |
+| **8. Primitive 2 — `<untrusted_external_data>` & Taint Tracking** | `Action.OutputTrustLevel` / `AIAgentAction.OutputTrustLevel` wraps untrusted email/web/webhook outputs in `<untrusted_external_data>`, strips spoofed `AIDirectives`, and sets `this.IsRunTainted = true` on `BaseAgent`. |
+| **9. Primitive 3 — `AutoReview` Safety Judge + `MJ: AI Agent Requests` HITL** | Adds `'AutoReview'` to `AgentPolicyVerdict` (`AgentSafetyJudgeService` using the fast `Default Decision` model in an isolated context), enforces the 3-tier tainted-turn escalation rule (`Allow` for reads, `AutoReview` for internal writes, `RequireApproval` for external/irreversible actions), and deterministically creates an **`MJ: AI Agent Requests`** (`RequestType = 'Approval'`) HITL record whenever approval is required. |
+| **10. Primitive 4 — 5-Tier Cost & Reliability Escalation Ladder** | Standardizes `Memory → Entities/SQL → Web Search → Browser DOM/A11y Tree → Browser Vision → Ask User (AI Agent Requests)` with `PerceptionMode: 'DOMFirst'` in `ComputerUse` / `RemoteBrowser`. |
 
 ---
 
