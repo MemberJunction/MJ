@@ -31,10 +31,10 @@ const nativeHistory: ChatMessage[] = [
 ];
 
 describe('EncodeToolTurnsAsText', () => {
-    it('keeps the call turn\'s prose, renders every tool result as an [Action Result] user message, and passes other turns through', () => {
+    it('keeps the call turn\'s prose and its calls, renders every tool result as an [Action Result] user message, and passes other turns through', () => {
         const out = EncodeToolTurnsAsText(nativeHistory);
         expect(out.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user', 'user', 'assistant']);
-        expect(out[2]).toEqual({ role: 'assistant', content: 'Looking that up.' });
+        expect(out[2].content).toMatch(/^Looking that up\.\n\[Called get_entity_details\(.*\)\]\n\[Called run_query\(.*\)\]$/);
         expect(out[3]).toEqual({ role: 'user', content: `${ACTION_RESULT_TEXT_PREFIX} get_entity_details succeeded. # Members\n- ID` });
         expect(out[4]).toEqual({ role: 'user', content: `${ACTION_RESULT_TEXT_PREFIX} run_query failed. Invalid object name` });
         expect(out[0]).toBe(nativeHistory[0]); // untouched turns are the same objects
@@ -42,12 +42,21 @@ describe('EncodeToolTurnsAsText', () => {
         expect(out.some((m) => m.toolCalls || m.role === 'tool')).toBe(false); // nothing native survives
     });
 
-    it('drops a call turn that carried no prose — the envelope path never had the model\'s own call turn', () => {
+    it('keeps a call turn that carried no prose as the calls it made, so the history still says what was asked for', () => {
         const out = EncodeToolTurnsAsText([
-            { role: 'assistant', content: '', toolCalls: [{ id: 'c', name: 'get_entity_details', arguments: {} }] },
+            { role: 'assistant', content: '', toolCalls: [{ id: 'c', name: 'get_entity_details', arguments: { EntityName: 'Members' } }] },
             { role: 'tool', content: [{ type: 'tool_result', toolCallId: 'c', toolName: 'get_entity_details', isError: false, content: 'x' }] }
         ]);
-        expect(out).toEqual([{ role: 'user', content: `${ACTION_RESULT_TEXT_PREFIX} get_entity_details succeeded. x` }]);
+        expect(out).toEqual([
+            { role: 'assistant', content: '[Called get_entity_details({"EntityName":"Members"})]' },
+            { role: 'user', content: `${ACTION_RESULT_TEXT_PREFIX} get_entity_details succeeded. x` }
+        ]);
+    });
+
+    it('clips a long argument list rather than replaying it whole', () => {
+        const out = EncodeToolTurnsAsText([{ role: 'assistant', content: '', toolCalls: [{ id: 'c', name: 'write_file', arguments: { content: 'x'.repeat(5000) } }] }]);
+        expect(String(out[0].content).length).toBeLessThan(400);
+        expect(out[0].content).toMatch(/^\[Called write_file\(\{"content":"x+… \(5014 characters\)\)\]$/);
     });
 
     it('reads a call turn\'s prose out of text blocks too, and names an unnamed result "tool"', () => {
@@ -56,7 +65,7 @@ describe('EncodeToolTurnsAsText', () => {
             { role: 'tool', content: [{ type: 'tool_result', toolCallId: 'c', isError: false, content: 'r' }] }
         ]);
         expect(out).toEqual([
-            { role: 'assistant', content: 'first\nsecond' },
+            { role: 'assistant', content: 'first\nsecond\n[Called t({})]' },
             { role: 'user', content: `${ACTION_RESULT_TEXT_PREFIX} tool succeeded. r` }
         ]);
     });
@@ -75,6 +84,7 @@ describe('EncodeToolTurnsAsText', () => {
             { role: 'tool', content: '[result expired — stubbed to recover context]' }
         ]);
         expect(out).toEqual([
+            { role: 'assistant', content: '[Called run_query({})]' },
             { role: 'user', content: `${ACTION_RESULT_TEXT_PREFIX} [result expired — stubbed to recover context]` }
         ]);
     });
