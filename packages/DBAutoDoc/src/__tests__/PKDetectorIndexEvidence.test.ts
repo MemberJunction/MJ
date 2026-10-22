@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { PKDetector } from '../discovery/PKDetector';
+import { DiscoveryEngine } from '../discovery/DiscoveryEngine';
 import { ColumnStatsCache } from '../discovery/ColumnStatsCache';
 import { ClassifySingleColumnKey, CompositeKeyIndexes, IsKeyIndex, INDEX_KEY_BOOST, UNIQUE_COMPOSITE_CONFIDENCE } from '../discovery/IndexKeyEvidence';
 import type { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver';
 import type { AutoDocIndex } from '../types/driver';
-import type { ColumnStatistics, PKCandidate } from '../types/discovery';
-import type { RelationshipDiscoveryConfig } from '../types/config';
-import type { ColumnDefinition, TableDefinition } from '../types/state';
+import type { ColumnStatistics, PKCandidate, RelationshipDiscoveryPhase } from '../types/discovery';
+import type { AIConfig, RelationshipDiscoveryConfig } from '../types/config';
+import type { ColumnDefinition, DatabaseDocumentation, TableDefinition } from '../types/state';
 
 // ─── fixtures ────────────────────────────────────────────────────────────────
 
@@ -109,13 +110,46 @@ describe('PKDetector with index evidence', () => {
     expect(INDEX_KEY_BOOST.UniqueNullable).toBeLessThan(INDEX_KEY_BOOST.UniqueNotNull);
   });
 
-  it('considers composite unique indexes even when a surrogate key exists', async () => {
+  it('does not add a composite unique index as a candidate when a single-column key already qualifies', async () => {
+    // Surrogate plus a unique alternate key: discovery flags every candidate's columns as primary key,
+    // so the composite must not become a candidate next to line_id (review on #5791).
     const specs: ColSpec[] = [{ name: 'line_id', rows: 300, distinct: 300 }, { name: 'order_id', rows: 300, distinct: 60 }, { name: 'line_no', rows: 300, distinct: 5 }];
     const found = await detect(table('order_line', specs, [index('uq_order_line', ['order_id', 'line_no'])]), specs);
-    const composite = found.find((c) => c.columnNames.length === 2);
-    expect(composite?.columnNames).toEqual(['order_id', 'line_no']);
-    expect(composite?.confidence).toBe(85);
-    expect(found[0].columnNames).toEqual(['line_id']); // the surrogate still ranks first
+    expect(cols(found)).toEqual(['line_id']);
+  });
+
+  it('end to end: only the surrogate is flagged as primary key next to a composite unique index', async () => {
+    // Robert's reproduction on #5791: discovery applies every candidate at or above primaryKeyMinimum,
+    // so an index-backed composite next to line_id used to flag all three columns.
+    const specs: ColSpec[] = [{ name: 'line_id', rows: 300, distinct: 300 }, { name: 'order_id', rows: 300, distinct: 60 }, { name: 'line_no', rows: 300, distinct: 5 }];
+    const t = table('order_line', specs, [index('uq_order_line', ['order_id', 'line_no'])]);
+    const found = await detect(t, specs);
+    const state = { phases: {}, schemas: [{ name: 'dbo', tables: [t], descriptionIterations: [] }] } as unknown as DatabaseDocumentation;
+    const phase = { discovered: { primaryKeys: found, foreignKeys: [] } } as unknown as RelationshipDiscoveryPhase;
+    const engine = new DiscoveryEngine({
+      Driver: {} as BaseAutoDocDriver, Config: CONFIG, schemas: state.schemas,
+      AiConfig: { provider: 'gemini', model: 'gemini-3.8-flash', apiKey: 'test', temperature: 0, maxTokens: 100 } as AIConfig
+    });
+    engine.ApplyDiscoveriesToState(state, phase);
+    expect(t.columns.filter((c) => c.isPrimaryKey).map((c) => c.name)).toEqual(['line_id']);
+  });
+
+  it('adds a composite unique index as a candidate when no single column qualifies (a junction table)', async () => {
+    const specs: ColSpec[] = [{ name: 'order_ref', type: 'varchar(20)', rows: 300, distinct: 60, samples: ['A', 'B'] }, { name: 'line_ref', type: 'varchar(20)', rows: 300, distinct: 5, samples: ['X', 'Y'] }];
+    const found = await detect(table('order_line', specs, [index('uq_order_line', ['order_ref', 'line_ref'])]), specs);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ columnNames: ['order_ref', 'line_ref'], confidence: UNIQUE_COMPOSITE_CONFIDENCE.NotNull, evidence: { backingIndex: 'uq_order_line' } });
+  });
+
+  it('keeps the higher-confidence candidate when a statistical composite and an index composite share columns', async () => {
+    // H10 finds (order_id, product_id) at 95 from the data; the unique index on the same pair would add it at 85.
+    const specs: ColSpec[] = [{ name: 'order_id', rows: 300, distinct: 60 }, { name: 'product_id', rows: 300, distinct: 40 }];
+    const t = (indexes?: AutoDocIndex[]) => table('order_product', specs, indexes);
+    const withIndex = await detect(t([index('uq_op', ['order_id', 'product_id'])]), specs, { combinationUnique: true });
+    const without = await detect(t(), specs, { combinationUnique: true });
+    expect(cols(withIndex)).toEqual(cols(without));
+    expect(withIndex[0]).toMatchObject({ columnNames: ['order_id', 'product_id'], confidence: 95 });
+    expect(withIndex.some((c) => c.evidence.backingIndex)).toBe(false);
   });
 
   it('skips a composite unique index on nullable columns unless the table has rows and no nulls', async () => {
@@ -133,7 +167,8 @@ describe('PKDetector with index evidence', () => {
   });
 
   it('treats a composite primary-key index like a composite unique index', async () => {
-    const specs: ColSpec[] = [{ name: 'order_id', rows: 10, distinct: 10 }, { name: 'product_id', rows: 10, distinct: 4 }];
+    // A junction table: neither column is unique alone, so no single-column key competes with the composite.
+    const specs: ColSpec[] = [{ name: 'order_id', rows: 10, distinct: 5 }, { name: 'product_id', rows: 10, distinct: 4 }];
     const found = await detect(table('order_detail', specs, [index('pk_od', ['order_id', 'product_id'], { IsUnique: false, IsPrimaryKey: true })]), specs);
     expect(found.find((c) => c.columnNames.length === 2)).toMatchObject({ columnNames: ['order_id', 'product_id'], confidence: 85 });
   });

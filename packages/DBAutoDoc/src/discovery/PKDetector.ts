@@ -81,9 +81,12 @@ export class PKDetector {
       candidates.push(...compositeCandidates);
     }
 
-    // Composite keys backed by a PK or unique index are considered even when a surrogate exists:
-    // the database guarantees them, and the composite search above is skipped in that case.
-    if (this.useIndexes()) {
+    // Composite keys backed by a unique index, for tables where no single column qualifies (junction
+    // tables, for example). When a single-column candidate already clears primaryKeyMinimum, a composite
+    // unique index is an alternate key: adding it as a candidate would get its columns flagged as part of
+    // the primary key too, because discovery applies every candidate above the minimum.
+    const hasSingleColumnKey = candidates.some(c => c.columnNames.length === 1);
+    if (this.useIndexes() && !hasSingleColumnKey) {
       this.mergeCandidates(candidates, this.indexBackedCompositeCandidates(schemaName, table, iteration));
     }
 
