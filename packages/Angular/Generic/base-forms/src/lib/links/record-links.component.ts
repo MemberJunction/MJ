@@ -1180,20 +1180,34 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
         if (row) {
             const nameFieldName = relatedEntity?.NameField?.Name;
             if (nameFieldName && row[nameFieldName] !== undefined && row[nameFieldName] !== null && String(row[nameFieldName]).trim() !== '') {
-                return String(row[nameFieldName]);
+                const candidateName = String(row[nameFieldName]).trim();
+                if (!this.isRawUuid(candidateName)) {
+                    return candidateName;
+                }
             }
             for (const candidate of ['Name', 'Title', 'Subject', 'DisplayName']) {
                 const val = row[candidate];
                 if (val !== undefined && val !== null && String(val).trim() !== '') {
-                    return String(val);
+                    const candidateName = String(val).trim();
+                    if (!this.isRawUuid(candidateName)) {
+                        return candidateName;
+                    }
                 }
             }
         }
         const pkValue = primaryKey?.KeyValuePairs?.[0]?.Value;
         if (pkValue !== undefined && pkValue !== null && String(pkValue).trim() !== '') {
-            return `${entityDisplayName} #${String(pkValue)}`;
+            const rawPk = String(pkValue).trim();
+            if (this.isRawUuid(rawPk)) {
+                return `${entityDisplayName} · ${rawPk.slice(0, 6)}…${rawPk.slice(-4)}`;
+            }
+            return `${entityDisplayName} #${rawPk}`;
         }
         return entityDisplayName;
+    }
+
+    private isRawUuid(value: string): boolean {
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
     }
 
     private resolveRelationshipLabel(

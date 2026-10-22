@@ -396,6 +396,12 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
                 title = String(rawTitle).trim();
             }
         }
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(title.trim())) {
+            const rawUuid = recordIdStr && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recordIdStr.trim())
+                ? recordIdStr.trim()
+                : title.trim();
+            title = `${entityInfo.DisplayNameOrName} · ${rawUuid.slice(0, 6)}…${rawUuid.slice(-4)}`;
+        }
 
         let statusValue: string | null = null;
         const fields: RecordPreviewFieldItem[] = [];
