@@ -1,5 +1,6 @@
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities, ChatToolCall, getToolResultBlocks, CHAT_FINISH_REASON_TOOL_CALLS,
-    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, extractOpenAICompatibleToolCalls } from "@memberjunction/ai";
+    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, ReadOpenAICompatibleToolCalls,
+    CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, type OpenAICompatibleToolCallReadout } from "@memberjunction/ai";
 import { OpenAI } from "openai";
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCompletionMessageFunctionToolCall, ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionSystemMessageParam, ChatCompletionTool, ChatCompletionUserMessageParam } from "openai/resources";
@@ -335,7 +336,8 @@ export class OpenAILLM extends BaseLLM {
                         }
                     }
                     
-                    const toolCalls = this.extractToolCalls(c.message?.tool_calls);
+                    const read = this.extractToolCalls(c.message?.tool_calls);
+                    const toolCalls = read.Calls;
 
                     return {
                         message: {
@@ -346,7 +348,8 @@ export class OpenAILLM extends BaseLLM {
                         },
                         // OpenAI already reports 'tool_calls' here; normalize defensively so the
                         // value is consistent even if a compatible endpoint reports something else.
-                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : c.finish_reason,
+                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : read.Malformed ? CHAT_FINISH_REASON_MALFORMED_TOOL_CALL : c.finish_reason,
+                        ...(read.Malformed ? { finishMessage: read.Malformed } : {}),
                         index: c.index,
                         logprobs: c.logprobs // Include logprobs if present
                     }
@@ -811,6 +814,9 @@ export class OpenAILLM extends BaseLLM {
                     } as ChatCompletionUserMessageParam;
                 
                 case 'assistant':
+                    // `m.reasoning` is not replayed: Chat Completions has no field for reasoning
+                    // items, so a reasoning model's thinking does not carry across tool turns here.
+                    // That needs the Responses API, which this driver does not use yet.
                     return {
                         role: 'assistant' as const,
                         // OpenAI wants null, not '', when the turn is carried entirely by tool calls.
@@ -880,15 +886,15 @@ export class OpenAILLM extends BaseLLM {
      * Normalizes OpenAI's `tool_calls` — whose arguments arrive as a JSON STRING — into
      * {@link ChatToolCall}s with parsed arguments.
      *
-     * A model can emit malformed JSON for a call's arguments. That is a tool-specific failure the
-     * caller must be able to see, so the call is still surfaced (with empty arguments) and logged
-     * rather than dropped — dropping it would look to the agent loop like the model said nothing.
+     * A model can emit malformed JSON for a call's arguments. That is reported as a malformed tool
+     * call, with what the model sent — never run with empty arguments, and never dropped, which
+     * would look to the agent loop like the model said nothing.
      *
      * @param toolCalls The raw tool calls from the response, if any
-     * @returns The normalized calls, or undefined when the model called nothing
+     * @returns The normalized calls, or the malformed call's description
      */
-    private extractToolCalls(toolCalls: ChatCompletionMessageToolCall[] | undefined): ChatToolCall[] | undefined {
-        return extractOpenAICompatibleToolCalls(toolCalls, 'OpenAI provider');
+    private extractToolCalls(toolCalls: ChatCompletionMessageToolCall[] | undefined): OpenAICompatibleToolCallReadout {
+        return ReadOpenAICompatibleToolCalls(toolCalls, 'OpenAI provider');
     }
 
 

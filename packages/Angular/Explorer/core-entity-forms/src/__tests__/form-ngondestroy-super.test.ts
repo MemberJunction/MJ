@@ -48,4 +48,19 @@ describe('custom form components that override ngOnDestroy', () => {
             expect(body).toContain('super.ngOnDestroy()');
         }
     );
+
+    const customLayoutForms = extendedForms.filter(({ source }) =>
+        source.includes('CUSTOM_LAYOUT_TOOLBAR_CONFIG')
+    );
+
+    it('finds all custom-layout forms using CUSTOM_LAYOUT_TOOLBAR_CONFIG', () => {
+        expect(customLayoutForms.length).toBeGreaterThanOrEqual(8);
+    });
+
+    it.each(customLayoutForms.map(({ file, source }) => [file.slice(customDir.length + 1), source] as const))(
+        '%s overrides OwnsEntireFormBody to return true so stock relationship grids are not auto-appended',
+        (_name, source) => {
+            expect(source).toMatch(/override\s+get\s+OwnsEntireFormBody\s*\(\s*\)\s*:\s*boolean\s*\{\s*return\s+true\s*;\s*\}/);
+        }
+    );
 });
