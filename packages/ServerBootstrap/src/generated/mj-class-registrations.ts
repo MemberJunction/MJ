@@ -231,19 +231,20 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/auth-providers (8 classes)
+// @memberjunction/auth-providers (9 classes)
 import {
     Auth0Provider,
     CognitoProvider,
     GoogleProvider,
     HostIdentityProvider,
+    LocalDevProvider,
     MSALProvider,
     MagicLinkProvider,
     OktaProvider,
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (458 classes)
+// @memberjunction/core-entities (456 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -370,8 +371,6 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
-    MJCalendarEventLinkEntity,
-    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -721,6 +720,12 @@ import {
     RingCentralBridge,
 } from '@memberjunction/ai-bridge-ringcentral';
 
+// @memberjunction/ai-bridge-server (2 classes)
+import {
+    LoopbackBridge,
+    OpenAISipBridge,
+} from '@memberjunction/ai-bridge-server';
+
 // @memberjunction/ai-bridge-teams (1 classes)
 import {
     TeamsBridge,
@@ -769,12 +774,6 @@ import {
 import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
-
-// @memberjunction/ai-bridge-server (2 classes)
-import {
-    LoopbackBridge,
-    OpenAISipBridge,
-} from '@memberjunction/ai-bridge-server';
 
 // @memberjunction/communication-ms-graph (1 classes)
 import {
@@ -1375,7 +1374,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (63 classes)
+// @memberjunction/core-entities-server (62 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1401,7 +1400,6 @@ import {
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
-    MJDashboardEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
@@ -1787,6 +1785,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     CognitoProvider,
     GoogleProvider,
     HostIdentityProvider,
+    LocalDevProvider,
     MSALProvider,
     MagicLinkProvider,
     OktaProvider,
@@ -1916,14 +1915,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
-    MJCalendarEventLinkEntity,
-    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
+    MJClusterAnalysisEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
-    MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
     MJCollectionEntity,
     MJCollectionPermissionEntity,
@@ -2123,11 +2120,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryEntity,
     MJQueryEntityEntity,
     MJQueryEntityExtended,
+    MJQueryFieldEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
-    MJQueryFieldEntity,
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
     MJQuerySQLEntity,
@@ -2261,6 +2258,8 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJEntityActionEntityExtended,
     LiveKitBridge,
     RingCentralBridge,
+    LoopbackBridge,
+    OpenAISipBridge,
     TeamsBridge,
     TwilioBridge,
     VonageBridge,
@@ -2282,8 +2281,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     TimePerMinutePriceUnitType,
     RexRecommendationsProvider,
     MJCommunicationProviderEntityExtended,
-    LoopbackBridge,
-    OpenAISipBridge,
     MSGraphProvider,
     SendGridProvider,
     DataContextItemServer,
@@ -2327,11 +2324,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CreateJotFormAction,
     CreateSurveyMonkeyAction,
     CreateTypeformAction,
+    ExportGoogleFormsCSVAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
-    ExportGoogleFormsCSVAction,
     ExportJotFormCSVAction,
     ExportSurveyMonkeyCSVAction,
     ExportTypeformCSVAction,
@@ -2531,11 +2528,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     SubmitHumanRubricAction,
     AzureAISearchProvider,
     BGEReRanker,
+    CohereReRanker,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
-    CohereReRanker,
     ElasticsearchSearchProvider,
     EntitySearchProvider,
     FullTextSearchProvider,
@@ -2671,7 +2668,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
-    MJDashboardEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
@@ -2735,12 +2731,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     BraveWebSearchProvider,
     DuckDuckGoWebSearchProvider,
     GoogleCustomSearchWebSearchProvider,
+    PerplexityWebSearchProvider,
+    TavilyWebSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
-    PerplexityWebSearchProvider,
-    TavilyWebSearchProvider,
     WebSearchQueryServerOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -2946,7 +2942,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1191;
+export const CLASS_REGISTRATIONS_COUNT = 1189;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2994,6 +2990,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/actions-base',
     '@memberjunction/ai-bridge-livekit',
     '@memberjunction/ai-bridge-ringcentral',
+    '@memberjunction/ai-bridge-server',
     '@memberjunction/ai-bridge-teams',
     '@memberjunction/ai-bridge-twilio',
     '@memberjunction/ai-bridge-vonage',
@@ -3001,7 +2998,6 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-engine-base',
     '@memberjunction/ai-recommendations-rex',
     '@memberjunction/communication-types',
-    '@memberjunction/ai-bridge-server',
     '@memberjunction/communication-ms-graph',
     '@memberjunction/communication-sendgrid',
     '@memberjunction/data-context-server',

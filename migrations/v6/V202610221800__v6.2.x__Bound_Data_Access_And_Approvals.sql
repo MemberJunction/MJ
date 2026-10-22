@@ -2416,7 +2416,8 @@ BEGIN
                 CASE WHEN @AgentSessionID_Clear = 1 THEN NULL ELSE ISNULL(@AgentSessionID, NULL) END,
                 ISNULL(@PlanMode, 0),
                 CASE WHEN @ExternalSessionID_Clear = 1 THEN NULL ELSE ISNULL(@ExternalSessionID, NULL) END,
-                ISNULL(@ContinuationDepth, 0)
+                ISNULL(@ContinuationDepth, 0),
+                CASE WHEN @BoundActionParams_Clear = 1 THEN NULL ELSE ISNULL(@BoundActionParams, NULL) END
             )
     END
     ELSE
@@ -2528,7 +2529,8 @@ BEGIN
                 CASE WHEN @AgentSessionID_Clear = 1 THEN NULL ELSE ISNULL(@AgentSessionID, NULL) END,
                 ISNULL(@PlanMode, 0),
                 CASE WHEN @ExternalSessionID_Clear = 1 THEN NULL ELSE ISNULL(@ExternalSessionID, NULL) END,
-                ISNULL(@ContinuationDepth, 0)
+                ISNULL(@ContinuationDepth, 0),
+                CASE WHEN @BoundActionParams_Clear = 1 THEN NULL ELSE ISNULL(@BoundActionParams, NULL) END
             )
     END
     -- return the new record from the base view, which might have some calculated fields

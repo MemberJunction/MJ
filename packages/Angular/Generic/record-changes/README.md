@@ -176,6 +176,20 @@ The preview compares the **full snapshot** captured in the source change's `Full
 
 This also means any change row is a valid restore target: `Create` (the original state), `Update` (post-update state), `Snapshot` (an explicit point-in-time capture from the Version Label system), or `Delete` (state before deletion — used by the Recycle Bin).
 
+## Activity Over Time — Burst-Aware Cluster Strip (Time-Gap Compression & Multi-Year Zoom)
+
+Record change histories are often highly irregular over time (for example, an initial creation burst, months of quiet, and a recent cluster of edits) or span several years with hundreds of changes. `<mj-record-changes>` embeds the reusable `<mj-burst-cluster-strip>` (`MJBurstClusterStripComponent`) from `@memberjunction/ng-ui-components`:
+
+- **Session Burst Clustering & Non-Linear Gap Compression**: Groups adjacent changes into active editing sessions separated by compressed `⋯ 11 mos quiet ⋯` gap connectors instead of leaving 80%+ of linear time buckets empty.
+- **Adaptive Multi-Year Scaling & Semantic Click-to-Zoom**: When raw bursts exceed `BurstEraZoomThreshold` (default `10`) across multiple months/years, the strip automatically coalesces into `Year` or `Month` era cards (`2023`, `2024`, `2025`, `2026`). Clicking any era zooms the strip into that period's bursts with a `← All (N)` breadcrumb pill.
+- **Configurable Grouping Inputs on `<mj-record-changes>`**:
+  - `[BurstResolution]`: `'auto' | 'session' | 'day' | 'week' | 'month' | 'quarter' | 'year'` (default `'auto'`)
+  - `[BurstCoalesceStrategy]`: `'adaptive-era' | 'merge-closest'` (default `'adaptive-era'`)
+  - `[BurstSessionGapHours]`: `number` (default `6`)
+  - `[BurstMaxClusters]`: `number` (default `5`)
+  - `[BurstEraZoomThreshold]`: `number` (default `10`)
+  - `[AllowBurstZoom]`: `boolean` (default `true`)
+
 ## Type Exports
 
 ```typescript
