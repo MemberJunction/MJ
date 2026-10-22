@@ -183,7 +183,7 @@ Cross-cutting "read this before you build that" guides, categorized. **Consult t
 npm run check:ui          # design-token + button gates on changed CSS/SCSS (as the PR gate)
 npm run check:standards   # every adopted MJ standard (see .mj-standards.json)
 npm run check:guards      # UUID, global-provider and primary-key source scanners (CI "Source guards")
-npm run check:exact-pins  # @foblex/* exact version pins match pnpm-lock.yaml
+npm run check:exact-pins  # @foblex/* exact pins match pnpm-lock.yaml
 npm run check:esm         # native-ESM import guard for "type": "module" packages
 npm run check:claude-md   # instruction-file budget, links, routing-table coverage
 npm run check:changeset   # changeset bump levels (local only — no CI gate)
