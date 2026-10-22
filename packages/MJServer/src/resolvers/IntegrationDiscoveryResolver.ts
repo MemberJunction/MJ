@@ -7506,8 +7506,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             } else if (promotionInputs.length > 0) {
                 // The source's own shape is unchanged, but the operator accepted overflow columns.
                 // They still need a migration; there is simply no evolution DDL to share it with.
+                // Retrying variant, as above: it replays only while nothing was applied.
                 const rsm = RuntimeSchemaManager.Instance;
-                const batchResult = await rsm.RunPipelineBatch(promotionInputs);
+                const batchResult = await rsm.RunPipelineBatchWithRetry(promotionInputs);
                 const first = batchResult.Results[0];
                 pipelineSteps = first?.Steps.map((s: RSUPipelineStep) => ({
                     Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message, StepIndex: s.StepIndex, StepTotal: s.StepTotal,

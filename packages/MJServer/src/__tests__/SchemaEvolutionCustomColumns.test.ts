@@ -61,7 +61,8 @@ describe('acceptance', () => {
   });
 
   it('folds the accepted migrations into the SAME batch as the refresh DDL', () => {
-    expect(body()).toMatch(/RunPipelineBatch\(\[rsuInput, \.\.\.promotionInputs\]\)/);
+    // The retrying variant, as every install path uses: it replays only while nothing was applied.
+    expect(body()).toMatch(/RunPipelineBatchWithRetry\(\[rsuInput, \.\.\.promotionInputs\]\)/);
   });
 
   it('still runs a batch when the refresh itself has no DDL', () => {
