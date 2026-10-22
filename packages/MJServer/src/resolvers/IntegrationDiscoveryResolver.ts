@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType, Int, Float } from "type-graphql";
-import { CompositeKey, DatabaseProviderBase, EntityInfo, LocalCacheManager, Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider, TransactionGroupBase } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, DatabaseProviderBase, EntityInfo, LocalCacheManager, Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider, TransactionGroupBase } from "@memberjunction/core";
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { NoLog } from "../logging/NoLog.js";
 import { UUIDsEqual } from "@memberjunction/global";
@@ -34,6 +34,7 @@ import {
     decideSchemaLimitViolations,
     IntegrationConnectorCreationPipeline,
     IntegrationActionGenerator,
+    BuildCatalogWriter, WithCatalogScope,
     ObjectsWithWatermarkFieldChange
 } from "@memberjunction/integration-engine";
 import type {
@@ -1116,6 +1117,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Ctx() ctx: AppContext
     ): Promise<DiscoverObjectsOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
@@ -1141,6 +1143,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         } catch (e) {
             return this.handleDiscoveryError(e);
         }
+        });
     }
 
     /**
@@ -1155,6 +1158,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Ctx() ctx: AppContext
     ): Promise<ListSourceObjectsOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
@@ -1220,6 +1224,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationListSourceObjects error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+        });
     }
 
     private async loadIntegrationObjectsByIntegrationID(
@@ -1306,6 +1311,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("objectName") objectName: string,
         @Ctx() ctx: AppContext
     ): Promise<DiscoverFieldsOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
@@ -1331,6 +1337,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         } catch (e) {
             return this.handleDiscoveryError(e);
         }
+        });
     }
 
     /**
@@ -1389,6 +1396,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("deactivateAbsent", { nullable: true, description: "Comprehensive refresh (default true): objects/fields ABSENT from this discovery are deactivated (Status='Disabled', never deleted, reversible on a later rediscovery). Pass false for a scoped/partial discovery so it never disables what it didn't probe." }) deactivateAbsent: boolean | undefined,
         @Ctx() ctx: AppContext
     ): Promise<RefreshConnectorSchemaOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         // sync lock: a metadata refresh rewrites the IO/IOF rows a sync reads.
         if (!IntegrationEngine.AcquireMaintenanceLock(companyIntegrationID, 'metadata refresh')) {
             return {
@@ -1460,6 +1468,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         } finally {
             IntegrationEngine.ReleaseMaintenanceLock(companyIntegrationID);
         }
+        });
     }
 
     /**
@@ -1606,6 +1615,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
         @Ctx() ctx: AppContext
     ): Promise<SchemaPreviewOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
@@ -1674,6 +1684,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Message: `Error: ${this.formatError(e)}`
             };
         }
+        });
     }
 
     /**
@@ -3107,6 +3118,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("entityName", { nullable: true }) entityName: string | undefined,
         @Ctx() ctx: AppContext
     ): Promise<CustomColumnCandidatesOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
@@ -3121,6 +3133,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationListCustomColumnCandidates error: ${e}`);
             return { Success: false, Message: this.formatError(e), Candidates: [] };
         }
+        });
     }
 
     /**
@@ -3137,6 +3150,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("entityNames", () => [String], { nullable: true }) entityNames: string[] | undefined,
         @Ctx() ctx: AppContext
     ): Promise<PromoteCustomColumnsOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadWriteProvider(ctx.providers) as unknown as IMetadataProvider;
@@ -3157,6 +3171,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationPromoteCustomColumns error: ${e}`);
             return { Success: false, Message: this.formatError(e), Promoted: false, ColumnsAdded: [], SchemaUpdatePending: false };
         }
+        });
     }
 
     /**
@@ -3275,6 +3290,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("entityMaps", () => [EntityMapInput]) entityMaps: EntityMapInput[],
         @Ctx() ctx: AppContext
     ): Promise<CreateEntityMapsOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
@@ -3382,6 +3398,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationCreateEntityMaps error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+        });
     }
 
     // ── SCHEMA EXECUTION ────────────────────────────────────────────────
@@ -3404,6 +3421,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
         @Ctx() ctx: AppContext
     ): Promise<ApplySchemaOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
@@ -3486,6 +3504,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationApplySchema error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+        });
     }
 
     /**
@@ -3512,9 +3531,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Phase 1: Build schema artifacts for each connector's objects
             for (const item of items) {
                 try {
-                    const { schemaOutput, rsuInput } = await this.buildSchemaForConnector(
+                    const { schemaOutput, rsuInput } = await WithCatalogScope(item.CompanyIntegrationID, () => this.buildSchemaForConnector(
                         item.CompanyIntegrationID, item.Objects, validatedPlatform, user, skipGitCommit, skipRestart, provider
-                    );
+                    ));
                     pipelineInputs.push(rsuInput);
                     itemResults.push({
                         CompanyIntegrationID: item.CompanyIntegrationID,
@@ -3581,6 +3600,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
         @Ctx() ctx: AppContext
     ): Promise<ApplyAllOutput> {
+        return WithCatalogScope(input.CompanyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
@@ -3829,6 +3849,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationApplyAll error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+        });
     }
 
     /** Derives a SQL-safe schema name from the integration name (e.g., "HubSpot" → "hubspot"). */
@@ -4111,16 +4132,23 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const limit = IntegrationEngine.Instance.MaxColumnsPerTable;
         const overLimit = objects.filter(o => colCount(o) > limit);
         if (overLimit.length > 0) {
+            // THE SHARPEST CROSS-CONNECTION COLLISION, and the clearest thing the per-connection
+            // catalog fixes. Disabling an over-wide object used to write the SHARED row, so one
+            // customer's column selection silently disabled that object for every other customer
+            // on the same connector — with no error and nothing in either workspace to explain it.
+            // Through the writer, a per-connection connection disables only its own row.
+            const writer = BuildCatalogWriter(md, companyIntegration, user);
             const ioIDByName = new Map(
-                IntegrationEngineBase.Instance.GetActiveIntegrationObjects(companyIntegration.IntegrationID)
+                (await writer.ObjectsInScope())
+                    .filter(io => io.Status === 'Active')
                     .map(io => [io.Name.toLowerCase(), io.ID] as [string, string])
             );
             for (const o of overLimit) {
                 warnings.push(`Disabled "${o.SourceObjectName}" (${colCount(o)} columns > limit ${limit}) — too wide to materialize as one table; reduce its columns or it stays disabled.`);
                 const ioID = ioIDByName.get(o.SourceObjectName.toLowerCase());
                 if (ioID) {
-                    const io = await md.GetEntityObject<MJIntegrationObjectEntity>('MJ: Integration Objects', user);
-                    if (await io.Load(ioID)) {
+                    const io = await writer.LoadObject(ioID);
+                    if (io) {
                         io.Status = 'Disabled';
                         if (!await io.Save()) {
                             LogError(`enforceSchemaLimits: failed to disable over-wide IO '${o.SourceObjectName}': ${io.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -4269,6 +4297,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("syncDirection", () => String, { nullable: true, description: 'Override sync direction: Pull | Push | Bidirectional. If omitted, each entity map\'s own SyncDirection is used.' }) syncDirection: 'Pull' | 'Push' | 'Bidirectional' | undefined,
         @Ctx() ctx: AppContext
     ): Promise<StartSyncOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             await IntegrationEngine.Instance.Config(false, user);
@@ -4396,6 +4425,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationStartSync error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+        });
     }
 
     /**
@@ -5391,6 +5421,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Ctx() ctx: AppContext
     ): Promise<ConnectorCapabilitiesOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
@@ -5409,6 +5440,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationGetConnectorCapabilities error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+        });
     }
 
     // ── APPLY ALL BATCH ─────────────────────────────────────────────────
@@ -5439,6 +5471,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Explicitly clearing these entries ensures Config(true) re-queries the DB.
             await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Integration Objects');
             await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Integration Object Fields');
+            // The per-connection catalog too. Absent on a workspace without the migration, hence the guard.
+            for (const perConnection of ['MJ: Company Integration Objects', 'MJ: Company Integration Object Fields']) {
+                try { await LocalCacheManager.Instance.InvalidateEntityCaches(perConnection); } catch { /* not registered here */ }
+            }
 
             // Force-refresh integration metadata cache so IntrospectSchema
             // picks up any IntegrationObject/Field changes made via mj sync push
@@ -5446,7 +5482,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             // Phase 1: Build schema for each connector in parallel
             const buildResults = await Promise.allSettled(
-                input.Connectors.map(async (connInput) => {
+                // One catalog scope per connection — the innermost wins, so each build resolves its own.
+                input.Connectors.map((connInput) => WithCatalogScope(connInput.CompanyIntegrationID, async () => {
                     const { connector, companyIntegration } = await this.resolveConnector(connInput.CompanyIntegrationID, user, provider);
                     const schemaName = this.deriveSchemaName(companyIntegration.Integration);
                     console.log(
@@ -5621,7 +5658,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         schemaOutput,
                         rsuInput,
                     };
-                })
+                }))
             );
 
             // Separate successes and failures
@@ -5673,6 +5710,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Phase 3: Post-pipeline — create entity maps, field maps, schedules for each success
             for (let i = 0; i < successfulBuilds.length; i++) {
                 const build = successfulBuilds[i];
+                // Entity maps, the unselected-map pass and the first sync all read this connection's catalog.
+                await WithCatalogScope(build.connInput.CompanyIntegrationID, async () => {
                 const pipelineResult = batchResult.Results[i];
                 const integrationName = build.companyIntegration.Integration;
 
@@ -5686,7 +5725,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     });
                     // No pending-work cleanup needed — rows are registered only for
                     // migrations that succeeded.
-                    continue;
+                    return; // stands in for `continue` — this body is the per-connection scope's arrow
                 }
 
                 const connResult: ApplyAllBatchConnectorResult = {
@@ -5741,6 +5780,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
 
                 connectorResults.push(connResult);
+                });
             }
 
             const pipelineSteps = batchResult.Results[0]?.Steps.map((s: RSUPipelineStep) => ({
@@ -5988,6 +6028,39 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
             }
 
+            // Step 6b: the per-connection catalog. Its rows carry a plain FK to this connection and
+            // nothing cascades, so without this the CompanyIntegration delete below violates the
+            // constraint and the WHOLE transaction rolls back — "Transaction failed — all deletes
+            // rolled back" for any connection that ever ran a discovery on the per-connection
+            // catalog (sandbox 2026-09-11, MJ-CAT-18). Fields first: they reference the objects,
+            // including each other's objects through RelatedCompanyIntegrationObjectID, and every
+            // row that can point at this connection's objects is this connection's own. Guarded on
+            // registration, so a workspace without the catalog migration deletes exactly as before.
+            if (md.Entities.some(e => e.Name === 'MJ: Company Integration Objects')) {
+                const cioResult = await rv.RunView<BaseEntity>({
+                    EntityName: 'MJ: Company Integration Objects',
+                    ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                    ResultType: 'entity_object',
+                }, sysUser);
+                const perConnectionObjects = cioResult.Success ? cioResult.Results : [];
+                if (perConnectionObjects.length > 0) {
+                    const objectIDs = perConnectionObjects.map(o => `'${String(o.Get('ID')).replace(/'/g, "''")}'`).join(',');
+                    const ciofResult = await rv.RunView<BaseEntity>({
+                        EntityName: 'MJ: Company Integration Object Fields',
+                        ExtraFilter: `CompanyIntegrationObjectID IN (${objectIDs})`,
+                        ResultType: 'entity_object',
+                    }, sysUser);
+                    for (const field of (ciofResult.Success ? ciofResult.Results : [])) {
+                        field.TransactionGroup = tg;
+                        await field.Delete();
+                    }
+                    for (const object of perConnectionObjects) {
+                        object.TransactionGroup = tg;
+                        await object.Delete();
+                    }
+                }
+            }
+
             // Step 7: Delete the CompanyIntegration itself FIRST, so its CredentialID FK reference
             // is gone before we delete the Credential. (Deleting the Credential first violates the
             // CompanyIntegration.CredentialID foreign key — the constraint is checked per-statement
@@ -6050,12 +6123,28 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
         @Arg("skipGitCommit", { defaultValue: false }) skipGitCommit: boolean,
         @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
-        @Arg("autoEnableNewObjects", { defaultValue: true, description: 'newly-appeared objects get their entity maps created ENABLED — a refresh is an explicit request to bring the source\'s current shape in. Pass false to create them disabled and enable them by hand instead.' }) autoEnableNewObjects: boolean,
-        @Arg("autoEnableNewColumns", { defaultValue: true, description: 'newly-appeared COLUMNS on an enabled object get their field maps created ENABLED, matching autoEnableNewObjects. Pass false to create them disabled instead. NOTE: this governs the REFRESH only — a column discovered mid-SYNC is never auto-created; it is captured as a candidate and needs acceptance (Configuration.autoPromoteCustomColumns, default false).' }) autoEnableNewColumns: boolean,
+        // CONTRACT: new arrivals are DISCOVERED, not adopted. everything.txt is explicit — "we
+        // create entity maps for all objects that are determined as things that should be now
+        // added but arent, we enable nothing (because the user needs to, after the refresh, then
+        // go turn them on)".
+        //
+        // This defaulted TRUE for a while on the claim that a disabled new object "is absent from
+        // IntrospectSchema — so it never reached key inference and never reached a migration".
+        // That claim is wrong, and the code says so plainly:
+        //   - `CreateDisabled` governs ONLY the entity/field map Status and SyncEnabled
+        //     (index.ts:1833-1834, :1880). It never touches IntegrationObject.Status.
+        //   - New IntegrationObject rows are written Status='Active' unconditionally
+        //     (IntegrationSchemaSync.ts:852), so they are returned by GetActiveIntegrationObjects.
+        //   - Phase 4 builds over `evolveNames = continuingMaps + newObjects`, and newObjects is
+        //     included regardless of this flag — so the table IS created either way.
+        // The only thing this flag decides is whether the new object starts SYNCING unasked.
+        @Arg("autoEnableNewObjects", { defaultValue: false, description: 'newly-appeared objects get their entity maps created DISABLED — their tables are still created, they simply do not start syncing until the user enables them. Pass true to auto-enable instead.' }) autoEnableNewObjects: boolean,
+        @Arg("autoEnableNewColumns", { defaultValue: false, description: 'newly-appeared COLUMNS on an enabled object get their field maps created DISABLED, matching autoEnableNewObjects. Pass true to auto-enable instead. NOTE: this governs the REFRESH only — a column discovered mid-SYNC is never auto-created; it is captured as a candidate and needs acceptance (Configuration.autoPromoteCustomColumns, default false).' }) autoEnableNewColumns: boolean,
         @Arg("deactivateAbsent", { nullable: true, description: 'Deactivate IO/IOF absent from this re-discovery (default true — comprehensive refresh; gated on the connector\'s authoritative-discovery getter).' }) deactivateAbsent: boolean | undefined,
         @Arg("cascadeRemoveDependents", { defaultValue: false, description: 'When a removed object has still-active dependents (DAG parent edges), also disable the transitive dependent closure ("force remove those too"). Default false: dependents stay active and each broken edge is surfaced as a warning.' }) cascadeRemoveDependents: boolean,
         @Ctx() ctx: AppContext
     ): Promise<SchemaEvolutionOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         // sync lock: schema evolution rewrites the metadata, field maps and DDL a sync
         // reads — data syncs (manual + scheduled) must not run while this is in flight.
         if (!IntegrationEngine.AcquireMaintenanceLock(companyIntegrationID, 'schema evolution')) {
@@ -6427,6 +6516,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         } finally {
             IntegrationEngine.ReleaseMaintenanceLock(companyIntegrationID);
         }
+        });
     }
 
     /**
