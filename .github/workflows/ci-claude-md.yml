@@ -1,0 +1,48 @@
+name: CLAUDE.md gate
+
+# Runs `npm run check:claude-md` — the budget, link, routing, path-glob and guide-index checks
+# that keep the agent instruction files (root CLAUDE.md, nested CLAUDE.md files,
+# .claude/rules, skills, guides/) loadable and correct.
+#
+# WHY THIS WORKFLOW EXISTS: the check was added with the July 2026 CLAUDE.md refactor but was
+# never wired into CI, so it only ran when someone remembered to run it locally. Within three
+# months root CLAUDE.md was back over its byte ceiling and carried a link to a file outside the
+# repo, and nothing flagged either.
+#
+# No path filter: the check validates backticked paths and inbound links across every markdown
+# file in the repo, so a PR that moves code or renames a guide can break it without touching an
+# instruction file. It is stdlib-only (no `pnpm install`) and finishes in a few seconds.
+
+on:
+  pull_request:
+    branches: [next]
+  push:
+    branches: [next]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-claude-md-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check CLAUDE.md instruction files
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Run check:claude-md
+        run: node .github/scripts/check-claude-md.mjs
