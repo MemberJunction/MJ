@@ -159,6 +159,15 @@ export class ThemeService {
     private brandCss = new Map<string, string>();
 
     /**
+     * An overlay id restored from localStorage by {@link RestorePersistedBrandOverlay} that
+     * bootstrap has not yet confirmed ({@link ApplyBrandOverlay}) or cleared
+     * ({@link ClearBrandOverlay}). Tracked here rather than inferred from the presence of the
+     * preload `<style>`, so a third party touching that element cannot change the service's
+     * answer, and "bootstrap has not run yet" is a state of its own.
+     */
+    private pendingOverlayId: string | null = null;
+
+    /**
      * Observable for user's theme preference (theme ID or 'system')
      */
     public get Preference$(): Observable<string> {
@@ -343,13 +352,19 @@ export class ThemeService {
         await this.loadThemeCss(def);
         // The real stylesheet carries the brand now; a restored preload (this id or a stale one) goes.
         this.removePreloadStyles();
+        this.pendingOverlayId = null;
         document.documentElement.setAttribute('data-theme-overlay', id);
         if (options?.persist === false) {
             return;
         }
         try {
             window.localStorage.setItem(PRELOAD_OVERLAY_KEY, id);
-            window.localStorage.setItem(PRELOAD_OVERLAY_CSS_KEY, JSON.stringify({ id, css: this.brandCss.get(id) ?? '' }));
+            // The CSS is tens of KB; skip the synchronous write when the stored entry already matches
+            // (a re-apply of the same brand), so repeated applies cost nothing and never approach quota.
+            const entry = JSON.stringify({ id, css: this.brandCss.get(id) ?? '' });
+            if (window.localStorage.getItem(PRELOAD_OVERLAY_CSS_KEY) !== entry) {
+                window.localStorage.setItem(PRELOAD_OVERLAY_CSS_KEY, entry);
+            }
         } catch (e) {
             // non-fatal: a brief brand flash on next reload at worst
         }
@@ -401,12 +416,23 @@ export class ThemeService {
         }
         document.documentElement.setAttribute('data-theme-overlay', id);
         this._brandOverlayId = id;
+        this.pendingOverlayId = id;
         return true;
     }
 
-    /** Whether a restored preload `<style>` for this overlay id is in the document. */
+    /**
+     * Whether a restored preload `<style>` for this overlay id is in the document. An attribute
+     * walk rather than an interpolated selector: the id comes from localStorage, and a quote or
+     * bracket in it would make `querySelector` throw — from the explorer-app constructor.
+     */
     private hasPreloadStyle(id: string): boolean {
-        return document.head.querySelector(`style[${PRELOAD_STYLE_ATTR}="${id}"]`) !== null;
+        const styles = document.head.querySelectorAll(`style[${PRELOAD_STYLE_ATTR}]`);
+        for (const el of Array.from(styles)) {
+            if (el.getAttribute(PRELOAD_STYLE_ATTR) === id) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Drop every restored preload `<style>` (a real stylesheet has taken over, or the brand was cleared). */
@@ -419,6 +445,7 @@ export class ThemeService {
      */
     public ClearBrandOverlay(): void {
         this._brandOverlayId = null;
+        this.pendingOverlayId = null;
         document.documentElement.removeAttribute('data-theme-overlay');
         this.disableAllCustomCss();
         this.removePreloadStyles();
@@ -537,9 +564,9 @@ export class ThemeService {
                 if (brandDef?.CssUrl) {
                     await this.loadThemeCss(brandDef);
                     document.documentElement.setAttribute('data-theme-overlay', this._brandOverlayId);
-                } else if (this.hasPreloadStyle(this._brandOverlayId)) {
-                    // Restored from localStorage before bootstrap registered the brand: keep the
-                    // attribute so the preloaded CSS stays matched until the real overlay lands.
+                } else if (this.pendingOverlayId === this._brandOverlayId) {
+                    // Restored from localStorage and not yet confirmed or cleared by bootstrap: keep
+                    // the attribute so the preloaded CSS stays matched until the real overlay lands.
                     document.documentElement.setAttribute('data-theme-overlay', this._brandOverlayId);
                     this.disableAllCustomCss();
                 } else {
