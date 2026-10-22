@@ -100,6 +100,15 @@ describe('per-connection catalog retires by deleting', () => {
     expect(target.Delete).not.toHaveBeenCalled();
   });
 
+  it('a failed object delete reports neither ok nor deleted, so the caller does not count it', async () => {
+    const w = new PerConnectionCatalogWriter({} as never, 'ci-1', 'int-1', {} as never, new Date());
+    const target = makeRow(CATALOG_OBJECT_COLUMNS, { ID: 'obj-1', Name: 'Widget' });
+    target.Delete = vi.fn(async () => false);
+    const out = await w.RetireObject(target as never);
+    expect(target.Delete).toHaveBeenCalled();
+    expect(out).toEqual({ ok: false, deleted: false });
+  });
+
   it('DISABLES an absent field rather than deleting it', async () => {
     // The dictated exception to the delete rule. A column missing from one sample is not a column
     // that has gone; disabling reverses itself the moment discovery sees it again, and keeps the

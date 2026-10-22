@@ -46,7 +46,7 @@ export const CATALOG_OBJECT_COLUMNS = [
 /**
  * Columns the field projection reads. These are all REAL columns on the per-connection field
  * table — the legacy names `IntegrationObjectID` / `RelatedIntegrationObjectID` are NOT here and
- * must not be: they are derived in `projectCatalogFields` (see FIELD_READ_ALIASES).
+ * must not be: they are derived in `ProjectCatalogFields` (see FIELD_READ_ALIASES).
  *
  * They are derived in TypeScript rather than aliased in the base view because the view is
  * CodeGen-generated: a hand-added alias column would be silently dropped the next time CodeGen
@@ -250,7 +250,7 @@ function fieldNamesOf(row: BaseEntity): Set<string> {
  * Verify a loaded row carries every column we read. Called once per array load — the cost is one
  * pass over one row's field list, and the alternative is a silent wrong answer.
  */
-export function assertCatalogColumns(entityName: string, row: BaseEntity, required: readonly string[]): void {
+export function AssertCatalogColumns(entityName: string, row: BaseEntity, required: readonly string[]): void {
     const present = fieldNamesOf(row);
     const missing = required.filter(c => !present.has(c));
     if (missing.length > 0) throw new CompanyIntegrationCatalogSchemaMismatch(entityName, missing);
@@ -268,17 +268,17 @@ function project<T>(row: BaseEntity, columns: readonly string[]): T {
  * nothing and needs no check — a connection with no catalog rows is the ordinary pre-discovery
  * state, not a schema problem.
  */
-export function projectCatalogObjects(rows: BaseEntity[]): CompanyIntegrationObjectRow[] {
+export function ProjectCatalogObjects(rows: BaseEntity[]): CompanyIntegrationObjectRow[] {
     if (rows.length > 0) {
-        assertCatalogColumns(ENTITY_COMPANY_INTEGRATION_OBJECTS, rows[0], CATALOG_OBJECT_COLUMNS);
+        AssertCatalogColumns(ENTITY_COMPANY_INTEGRATION_OBJECTS, rows[0], CATALOG_OBJECT_COLUMNS);
     }
     return rows.map(r => project<CompanyIntegrationObjectRow>(r, CATALOG_OBJECT_COLUMNS));
 }
 
 /** Project loaded field rows for the read path. Same validation rule as the object projection. */
-export function projectCatalogFields(rows: BaseEntity[]): CompanyIntegrationObjectFieldRow[] {
+export function ProjectCatalogFields(rows: BaseEntity[]): CompanyIntegrationObjectFieldRow[] {
     if (rows.length > 0) {
-        assertCatalogColumns(ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS, rows[0], CATALOG_FIELD_COLUMNS);
+        AssertCatalogColumns(ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS, rows[0], CATALOG_FIELD_COLUMNS);
     }
     return rows.map(r => {
         const projected = project<Record<string, unknown>>(r, CATALOG_FIELD_COLUMNS);
@@ -299,11 +299,11 @@ export function projectCatalogFields(rows: BaseEntity[]): CompanyIntegrationObje
  * Calling `.Save()` on the result would throw at runtime rather than corrupt anything, which is the
  * failure mode to want if this contract is ever broken.
  */
-export function asReadOnlyObject(row: CompanyIntegrationObjectRow): MJIntegrationObjectEntity {
+export function AsReadOnlyObject(row: CompanyIntegrationObjectRow): MJIntegrationObjectEntity {
     return row as unknown as MJIntegrationObjectEntity;
 }
 
-/** See {@link asReadOnlyObject}. */
-export function asReadOnlyField(row: CompanyIntegrationObjectFieldRow): MJIntegrationObjectFieldEntity {
+/** See {@link AsReadOnlyObject}. */
+export function AsReadOnlyField(row: CompanyIntegrationObjectFieldRow): MJIntegrationObjectFieldEntity {
     return row as unknown as MJIntegrationObjectFieldEntity;
 }

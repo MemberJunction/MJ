@@ -46,7 +46,7 @@ export default class ActionsRun extends Command {
   };
 
   async run(): Promise<void> {
-    const { ActionService, OutputFormatter } = await import('@memberjunction/ai-cli');
+    const { ActionService, OutputFormatter, CloseMJProvider } = await import('@memberjunction/ai-cli');
 
     const { flags, metadata } = await this.parse(ActionsRun);
     const service = new ActionService();
@@ -92,9 +92,12 @@ export default class ActionsRun extends Command {
         if (!result.success) {
           this.exit(1);
         }
+        setImmediate(() => process.exit(0));
       }
     } catch (error) {
       this.error(error as Error);
+    } finally {
+      await CloseMJProvider().catch(() => {});
     }
   }
 }

@@ -65,7 +65,8 @@ describe('MJ-DISC-16 — a first-discovered object is sampled in the same run', 
         const i = PIPELINE.indexOf('const unsampled =');
         const body = PIPELINE.slice(i, i + 1200);
         const refresh = body.indexOf('RefreshCatalog');
-        const reIntrospect = body.indexOf('stageIntrospect(emitter, opts)');
+        // The heal re-runs the same streaming Introspect+Persist the first pass used.
+        const reIntrospect = body.indexOf('streamIntrospectAndPersist(emitter, opts, withDeadline)');
         expect(refresh).toBeGreaterThan(-1);
         expect(reIntrospect).toBeGreaterThan(-1);
         expect(refresh, 'RefreshCatalog must precede the second Introspect').toBeLessThan(reIntrospect);
@@ -73,7 +74,7 @@ describe('MJ-DISC-16 — a first-discovered object is sampled in the same run', 
 
     it('re-persists after the healing Introspect, or the sampled widths are computed and thrown away', () => {
         const i = PIPELINE.indexOf('const unsampled =');
-        expect(PIPELINE.slice(i, i + 1400)).toMatch(/persistResult = await withDeadline\('Persist'/);
+        expect(PIPELINE.slice(i, i + 1400)).toMatch(/persistResult = await this\.streamIntrospectAndPersist\(/);
     });
 
     it('is non-fatal — a failed heal leaves the state we already had', () => {
@@ -156,7 +157,7 @@ describe('first contact must still sample', () => {
         // row yet. Throwing here ran the whole fallback chain with zero records — no statistical
         // PK and no observed widths, for exactly the objects discovery exists to learn.
         expect(REST).toMatch(/let obj[^\n]*= null;/);
-        expect(REST).toMatch(/catch \{[\s\S]{0,120}not persisted yet/);
+        expect(REST).toMatch(/catch \{[\s\S]{0,120}not persisted yet/i);
         expect(REST).toMatch(/if \(!obj \|\| this\.detectTemplateVars\(obj\.APIPath\)\.length === 0\)/);
     });
 });

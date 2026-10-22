@@ -6,6 +6,7 @@ import type { FormCompositionSnapshot } from '@memberjunction/ng-base-forms';
 import { NavigationService, SharedService } from '@memberjunction/ng-shared';
 import { BaseEntity, BaseEntityEvent, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
+import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { SingleRecordComponent } from './single-record.component';
 
 /**
@@ -31,6 +32,8 @@ class EntityFormHostStub {
   @Output() Saved = new EventEmitter<unknown>();
   @Output() Navigate = new EventEmitter<unknown>();
   @Output() Notification = new EventEmitter<unknown>();
+  @Output() EditModeChanged = new EventEmitter<boolean>();
+  @Output() AskAIRequested = new EventEmitter<void>();
   @Output() Dismissed = new EventEmitter<void>();
   @Output() FormCreated = new EventEmitter<unknown>();
 }
@@ -237,5 +240,19 @@ describe('SingleRecordComponent (DOM) — record deleted by another user', () =>
     remoteDelete('MJ: Users', 'U-1');
 
     expect(fixture.componentInstance.DeletedRemotely).toBe(false);
+  });
+
+  it('expands the chat overlay via ConversationsRuntime when AskAIRequested fires from the form host', () => {
+    const { fixture, host } = render();
+    let expandRequested = 0;
+    let askAiEmitted = 0;
+    const sub = ConversationsRuntime.Instance.Bridge.ExpandOverlayRequested$.subscribe(() => expandRequested++);
+    fixture.componentInstance.AskAIRequested.subscribe(() => askAiEmitted++);
+
+    host.AskAIRequested.emit();
+    sub.unsubscribe();
+
+    expect(askAiEmitted).toBe(1);
+    expect(expandRequested).toBe(1);
   });
 });
