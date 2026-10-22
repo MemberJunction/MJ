@@ -94,6 +94,29 @@ Nest under the agent as `relatedEntities["MJ: AI Agent Rubrics"]`.
 - `"Inactive"` is **not** a valid cost `Status` — the CHECK constraint allows only `Active`, `Pending`, `Expired`, `Invalid`, and a bad value fails `mj sync push` in CI.
 - Run `mj sync validate --dir=metadata` before opening a PR.
 
+#### Polymorphic Foreign Keys (`EntityField.EntityIDFieldName`)
+Whenever an entity has a polymorphic foreign-key pair (a column storing a record ID paired with a sibling column on the same table that identifies the target entity by `EntityID` or entity name — e.g., `EntityID` + `RecordID`, `SourceEntityID` + `SourceRecordID`, `TargetEntityID` + `TargetRecordID`, `AssigneeEntityID` + `AssigneeRecordID`), you **MUST** set `EntityIDFieldName` on the record-ID field's `MJ: Entity Fields` metadata record in `metadata/entities/.polymorphic-fk-entity-fields.json`:
+```json
+{
+  "fields": {
+    "Name": "MJ: Tagged Items"
+  },
+  "relatedEntities": {
+    "MJ: Entity Fields": [
+      {
+        "fields": {
+          "EntityID": "@parent:ID",
+          "Name": "RecordID",
+          "EntityIDFieldName": "EntityID"
+        }
+      }
+    ]
+  }
+}
+```
+- **Why**: Forms (`<mj-form-field>`), grids (`<mj-entity-data-grid>`), cards (`<mj-entity-cards>`), and record detail panels (`<mj-entity-record-detail-panel>`) rely strictly on the hard metadata link `EntityField.EntityIDFieldName` (never heuristics) to resolve target record names, render clickable record links, and scope edit-mode FK search pickers.
+- **Remember**: Do not include `primaryKey` or `sync` blocks on these `EntityField` overrides — `EntityID: "@parent:ID"` + `Name: "<FieldName>"` uniquely identifies the CodeGen-created `EntityField` row across all environments.
+
 ### 5. Template Variable Conventions
 Agent prompt templates receive these standard variables:
 - `{{ agentName }}`: The agent's name

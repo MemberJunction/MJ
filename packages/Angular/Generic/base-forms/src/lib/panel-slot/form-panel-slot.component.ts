@@ -193,6 +193,7 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     private notifyMountedPanels(record: BaseEntity): void {
         for (const ref of this.mounted) {
             ref.instance.OnRecordRefreshed(record);
+            ref.changeDetectorRef.detectChanges();
         }
     }
 

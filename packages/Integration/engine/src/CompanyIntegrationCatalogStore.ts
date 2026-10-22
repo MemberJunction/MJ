@@ -1,4 +1,5 @@
-import { BaseEntity, CompositeKey, IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, DatabaseProviderBase, IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import {
     CATALOG_FIELD_COLUMNS,
     CATALOG_OBJECT_COLUMNS,
@@ -6,6 +7,7 @@ import {
     ENTITY_COMPANY_INTEGRATION_OBJECTS,
     ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
 } from '@memberjunction/integration-engine-base';
+import { CompanyIntegrationCatalogReadFailed } from './CatalogWriter';
 
 /**
  * The ONLY write path to the per-connection catalog.
@@ -86,7 +88,7 @@ export class CatalogRow {
     ) {}
 
     /** @internal */
-    public static wrap(entityName: CatalogEntityName, row: BaseEntity): CatalogRow {
+    public static Wrap(entityName: CatalogEntityName, row: BaseEntity): CatalogRow {
         assertShape(entityName, row);
         return new CatalogRow(entityName, row);
     }
@@ -146,7 +148,9 @@ export class CatalogRow {
 
     /** The row's own error text after a failed Save, for logging. */
     public get LastError(): string {
-        return this.row.LatestResult?.Message ?? '';
+        // CompleteMessage, not Message: a Save refused by validation leaves Message empty and puts
+        // the reason in Errors, which CompleteMessage includes.
+        return this.row.LatestResult?.CompleteMessage ?? '';
     }
 }
 
@@ -165,7 +169,7 @@ export class CompanyIntegrationCatalogStore {
             throw new CompanyIntegrationCatalogSchemaMismatch(entityName, ['<entity not registered>']);
         }
         row.NewRecord();
-        return CatalogRow.wrap(entityName, row);
+        return CatalogRow.Wrap(entityName, row);
     }
 
     public NewObject(): Promise<CatalogRow> {
@@ -182,7 +186,7 @@ export class CompanyIntegrationCatalogStore {
         // `Load(id)` is a GENERATED-subclass convenience. These entities have none, so the entry
         // point is the base one — the same call the existing shared-catalog code makes.
         const loaded = await row.InnerLoad(CompositeKey.FromID(id)); // first-pk-ok: entityName is one of the two per-connection catalog core tables ('MJ: Company Integration Objects' / '... Object Fields'), both keyed by ID
-        return loaded ? CatalogRow.wrap(entityName, row) : null;
+        return loaded ? CatalogRow.Wrap(entityName, row) : null;
     }
 
     public LoadObject(id: string): Promise<CatalogRow | null> {
@@ -212,7 +216,7 @@ export class CompanyIntegrationCatalogStore {
      * 81, 31 and 704 persisted fields.
      */
     private async runView(entityName: CatalogEntityName, filter: string): Promise<BaseEntity[]> {
-        const rv = new RunView();
+        const rv = this.newRunView();
         const result = await rv.RunView<BaseEntity>(
             {
                 EntityName: entityName,
@@ -223,7 +227,22 @@ export class CompanyIntegrationCatalogStore {
             },
             this.contextUser
         );
-        return result?.Success ? (result.Results ?? []) : [];
+        // A failed read is an ERROR, never an empty catalog — the rule CatalogWriter.viewRows applies.
+        // Returning [] here would hand a caller "this connection has no catalog" on a database error.
+        if (!result?.Success) {
+            throw new CompanyIntegrationCatalogReadFailed(entityName, filter, result?.ErrorMessage ?? 'RunView returned no result');
+        }
+        return result.Results ?? [];
+    }
+
+    /**
+     * A RunView on the store's provider — the one its writes use — so a server with more than one
+     * provider never reads from one and writes to another. Server-side providers are
+     * DatabaseProviderBase (an IRunViewProvider), which the IMetadataProvider type does not declare;
+     * same narrowing as CatalogWriter.
+     */
+    private newRunView(): RunView {
+        return new RunView(this.provider as DatabaseProviderBase | undefined);
     }
 
     /**
@@ -236,27 +255,28 @@ export class CompanyIntegrationCatalogStore {
     public async ObjectsForConnection(companyIntegrationID: string): Promise<CatalogRow[]> {
         const rows = await this.runView(
             ENTITY_COMPANY_INTEGRATION_OBJECTS,
-            `CompanyIntegrationID = '${companyIntegrationID}'`
+            `CompanyIntegrationID = '${EscapeSQLString(companyIntegrationID)}'`
         );
-        return rows.map(r => CatalogRow.wrap(ENTITY_COMPANY_INTEGRATION_OBJECTS, r));
+        return rows.map(r => CatalogRow.Wrap(ENTITY_COMPANY_INTEGRATION_OBJECTS, r));
     }
 
     /** Every field row for one object, including disabled ones, for the same reason. */
     public async FieldsForObject(companyIntegrationObjectID: string): Promise<CatalogRow[]> {
         const rows = await this.runView(
             ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
-            `CompanyIntegrationObjectID = '${companyIntegrationObjectID}'`
+            `CompanyIntegrationObjectID = '${EscapeSQLString(companyIntegrationObjectID)}'`
         );
-        return rows.map(r => CatalogRow.wrap(ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS, r));
+        return rows.map(r => CatalogRow.Wrap(ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS, r));
     }
 
     /** Whether this connection has a per-connection catalog at all. Cheap existence check. */
     public async HasCatalog(companyIntegrationID: string): Promise<boolean> {
-        const rv = new RunView();
+        const rv = this.newRunView();
+        const filter = `CompanyIntegrationID = '${EscapeSQLString(companyIntegrationID)}'`;
         const result = await rv.RunView(
             {
                 EntityName: ENTITY_COMPANY_INTEGRATION_OBJECTS,
-                ExtraFilter: `CompanyIntegrationID = '${companyIntegrationID}'`,
+                ExtraFilter: filter,
                 ResultType: 'count_only',
                 // Same reason as runView: a cached zero taken before the first persist would route
                 // the run down the no-catalog path for the rest of its life.
@@ -265,6 +285,9 @@ export class CompanyIntegrationCatalogStore {
             },
             this.contextUser
         );
-        return (result?.TotalRowCount ?? 0) > 0;
+        if (!result?.Success) {
+            throw new CompanyIntegrationCatalogReadFailed(ENTITY_COMPANY_INTEGRATION_OBJECTS, filter, result?.ErrorMessage ?? 'RunView returned no result');
+        }
+        return (result.TotalRowCount ?? 0) > 0;
     }
 }
