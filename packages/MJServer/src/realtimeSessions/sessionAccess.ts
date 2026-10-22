@@ -59,7 +59,9 @@ export interface SessionAccessPrincipal {
 export type SessionAccessRefusal = 'not_owner' | 'scope_missing' | 'scope_mismatch';
 
 /** Outcome of {@link AuthorizeSessionAccess}. */
-export type SessionAccessDecision = { Allowed: true } | { Allowed: false; Reason: SessionAccessRefusal };
+export type SessionAccessDecision =
+    | { Allowed: true; Reason?: undefined }
+    | { Allowed: false; Reason: SessionAccessRefusal };
 
 /**
  * Decides whether `principal` may address the session described by `subject`.

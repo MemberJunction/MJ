@@ -365,7 +365,7 @@ export class WidgetSessionService {
       if (!jwk) {
         return null;
       }
-      const publicKey = createPublicKey({ key: jwk as object, format: 'jwk' });
+      const publicKey = createPublicKey({ key: { ...jwk }, format: 'jwk' });
       const verified = jwt.verify(token, publicKey, {
         algorithms: ['RS256'],
         audience: this.config.audience,
