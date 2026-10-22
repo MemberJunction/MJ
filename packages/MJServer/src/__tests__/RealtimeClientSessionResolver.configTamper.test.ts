@@ -177,8 +177,9 @@ const SCOPED_ANONYMOUS = {
     ID: USER_ID,
     Email: 'guest@magic-link.local',
     IsMagicLinkAnonymous: true,
-    AnonymousVisitorID: 'c3-shared-resource',
-    MagicLinkScope: { ResourceID: 'c3-scope' },
+    AnonymousVisitorID: 'c3-redemption-sid',
+    // The session's conversation is stamped with the caller's resource scope (ResolveSessionScopeIdentity).
+    MagicLinkScope: { ResourceID: 'c3-shared-resource' },
 };
 /** A public web-widget guest: anonymous, but not elevated. */
 const WIDGET_GUEST = {

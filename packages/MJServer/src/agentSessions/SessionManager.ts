@@ -13,6 +13,7 @@ import { WriteReturningVisitorRecap } from './ReturningVisitorRecap.js';
 import { SessionRunIDVerifier, SessionRunIDs } from './SessionRunIDVerifier.js';
 import { ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
 import { RecordingAssemblyScheduler } from '../realtimeSessions/RecordingAssemblyScheduler.js';
+import { ResolveSessionScopeIdentity } from '../realtimeSessions/sessionAccess.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -468,18 +469,13 @@ export class SessionManager {
         conversation.NewRecord();
         conversation.UserID = input.userID;
         conversation.Name = 'Agent Session';
-        // For an anonymous magic-link or widget guest principal, stamp the session's conversation
-        // with the per-token visitor identity (AnonymousVisitorID, sourced from mj_sid) so each
-        // visitor is isolated from other anonymous visitors sharing the Anonymous UserID (and for
-        // widget guests, AnonymousVisitorID equals MagicLinkScope.ResourceID so the {{ScopeResourceID}}
-        // RLS filters continue to match). For a non-anonymous resource-scoped principal, keep
-        // stamping MagicLinkScope.ResourceID. No-op for unscoped named principals.
-        if (contextUser.IsMagicLinkAnonymous) {
-            if (contextUser.AnonymousVisitorID) {
-                conversation.ExternalID = contextUser.AnonymousVisitorID;
-            }
-        } else if (contextUser.MagicLinkScope?.ResourceID) {
-            conversation.ExternalID = contextUser.MagicLinkScope.ResourceID;
+        // Stamp the scope identity AuthorizeSessionAccess compares against (one rule, one place:
+        // ResolveSessionScopeIdentity) — the token's resource scope when it has one, else an anonymous
+        // visitor's mj_sid. This isolates anonymous visitors that share the Anonymous UserID, and keeps
+        // the {{ScopeResourceID}} RLS filters matching the visitor's own rows. No-op for unscoped named principals.
+        const scopeIdentity = ResolveSessionScopeIdentity(contextUser);
+        if (scopeIdentity) {
+            conversation.ExternalID = scopeIdentity;
         }
 
         // Returning-visitor memory (RV1/RV2/RV4) for the VOICE path: the widget guest token carries the

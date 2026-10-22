@@ -186,25 +186,28 @@ describe('SessionManager.CreateSession', () => {
         expect(result.HostInstanceID).toBeTypeOf('string');
     });
 
-    it('stamps conversation ExternalID with AnonymousVisitorID for an anonymous principal', async () => {
-        hasPermissionMock.mockResolvedValue(true);
-        const conversation = makeSessionEntity({ ID: 'conv-anon' });
-        const session = makeSessionEntity({ ID: 'session-anon' });
-        const { provider } = makeProvider((name) =>
-            name === 'MJ: Conversations' ? conversation : session,
-        );
-        const mgr = new SessionManager();
-        const anonUser = {
-            ID: 'user-anon',
-            Email: 'anonymous@magic-link.local',
-            IsMagicLinkAnonymous: true,
-            AnonymousVisitorID: 'visitor-sid-1',
-            MagicLinkScope: { ResourceID: 'shared-invite-resource' },
-        } as unknown as UserInfo;
+    describe('anonymous ExternalID stamp: MagicLinkScope.ResourceID when the token carries one, else mj_sid', () => {
+        async function stampFor(anon: Record<string, unknown>): Promise<unknown> {
+            hasPermissionMock.mockResolvedValue(true);
+            const conversation = makeSessionEntity({ ID: 'conv-anon' });
+            const session = makeSessionEntity({ ID: 'session-anon' });
+            const { provider } = makeProvider((name) => (name === 'MJ: Conversations' ? conversation : session));
+            const anonUser = { ID: 'user-anon', Email: 'anonymous@magic-link.local', IsMagicLinkAnonymous: true, ...anon } as unknown as UserInfo;
+            await new SessionManager().CreateSession({ agentID: 'agent-1', userID: 'user-anon' }, anonUser, provider);
+            return conversation.ExternalID;
+        }
 
-        await mgr.CreateSession({ agentID: 'agent-1', userID: 'user-anon' }, anonUser, provider);
+        it('widget guest (ResourceID == mj_sid): stamps the sessionId', async () => {
+            expect(await stampFor({ AnonymousVisitorID: 'sid-w', MagicLinkScope: { ResourceID: 'sid-w' } })).toBe('sid-w');
+        });
 
-        expect(conversation.ExternalID).toBe('visitor-sid-1');
+        it('anonymous invite WITH a ResourceID: stamps the ResourceID, so scope RLS ({{ScopeResourceID}}) still finds the row', async () => {
+            expect(await stampFor({ AnonymousVisitorID: 'visitor-sid-1', MagicLinkScope: { ResourceID: 'invite-scope-R' } })).toBe('invite-scope-R');
+        });
+
+        it('anonymous invite WITHOUT a ResourceID: stamps the per-redemption mj_sid', async () => {
+            expect(await stampFor({ AnonymousVisitorID: 'visitor-sid-2' })).toBe('visitor-sid-2');
+        });
     });
 
     it('stamps conversation ExternalID with MagicLinkScope.ResourceID for a non-anonymous scoped principal', async () => {

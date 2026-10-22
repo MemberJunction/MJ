@@ -9,13 +9,14 @@
  * ## The two ownership rules
  *
  * 1. **Owner.** The session's `UserID` must be the caller's user.
- * 2. **Scope.** A *named* user is fully identified by (1). An **anonymous widget guest** is not:
- *    every guest authenticates as the one shared Anonymous user, so (1) alone would let any guest
- *    address any other guest's session. What separates guests is the signed per-session scope in
- *    their token (`MagicLinkScope.ResourceID`), which `SessionManager` stamps onto the session's
- *    Conversation as `ExternalID`. So a principal that carries a scope must match it, and an
- *    anonymous principal that carries NO scope is refused outright — it cannot be told apart from
- *    every other anonymous principal.
+ * 2. **Scope.** A *named* user is fully identified by (1). An **anonymous visitor** (widget guest or
+ *    anonymous magic-link invitee) is not: every one authenticates as the one shared Anonymous user, so
+ *    (1) alone would let any visitor address any other visitor's session. What separates them is the
+ *    scope identity {@link ResolveSessionScopeIdentity} reads off the signed token — the resource scope
+ *    (`MagicLinkScope.ResourceID`) when the token carries one, else the per-token `mj_sid`
+ *    (`AnonymousVisitorID`). `SessionManager` stamps that same value onto the session's Conversation as
+ *    `ExternalID`, so a principal with a scope identity must match it, and an anonymous principal with
+ *    none is refused outright — it cannot be told apart from every other anonymous principal.
  *
  * The decision is deliberately pure (no I/O) so it can be applied identically to a freshly loaded
  * row at subscribe time and to the owner/scope snapshot carried inside each published event.
@@ -64,6 +65,26 @@ export type SessionAccessDecision =
     | { Allowed: false; Reason: SessionAccessRefusal };
 
 /**
+ * The scope identity a session is keyed on for `principal` — the one value `SessionManager` stamps as
+ * the session conversation's `ExternalID` and {@link AuthorizeSessionAccess} compares against it.
+ *
+ * - The token's resource scope (`MagicLinkScope.ResourceID`) when it carries one. A widget guest's
+ *   resource scope IS its `mj_sid`; an anonymous magic-link invite with a `ResourceID` (e.g. a Caliber
+ *   Invite Scope, one per subject) shares that scope across its redemptions by design, and the
+ *   `{{ScopeResourceID}}` RLS filters key on the same value, so the visitor can read its own rows.
+ * - Otherwise, for an anonymous principal, the per-token `mj_sid` (`AnonymousVisitorID`), which tells two
+ *   redemptions of an unscoped multi-use invite apart.
+ * - Otherwise `undefined` (a named user without a resource scope).
+ */
+export function ResolveSessionScopeIdentity(principal: SessionAccessPrincipal): string | undefined {
+    const resourceId = principal.MagicLinkScope?.ResourceID;
+    if (resourceId) {
+        return resourceId;
+    }
+    return principal.IsMagicLinkAnonymous ? principal.AnonymousVisitorID || undefined : undefined;
+}
+
+/**
  * Decides whether `principal` may address the session described by `subject`.
  *
  * Fails closed: anything that cannot be positively matched is refused.
@@ -78,18 +99,11 @@ export function AuthorizeSessionAccess(
     if (!principal?.ID || !subject.SessionUserID || !UUIDsEqual(subject.SessionUserID, principal.ID)) {
         return { Allowed: false, Reason: 'not_owner' };
     }
-    if (principal.IsMagicLinkAnonymous) {
-        const visitorId = principal.AnonymousVisitorID;
-        if (!visitorId) {
-            return { Allowed: false, Reason: 'scope_missing' };
-        }
-        return subject.ConversationExternalID === visitorId
-            ? { Allowed: true }
-            : { Allowed: false, Reason: 'scope_mismatch' };
-    }
-    const scopeId = principal.MagicLinkScope?.ResourceID;
+    const scopeId = ResolveSessionScopeIdentity(principal);
     if (!scopeId) {
-        return { Allowed: true };
+        // A named user without a scope is identified by the owner check alone; an anonymous principal
+        // without one cannot be told apart from any other anonymous principal.
+        return principal.IsMagicLinkAnonymous ? { Allowed: false, Reason: 'scope_missing' } : { Allowed: true };
     }
     // Scope ids are opaque base64url strings (case-significant), so compare exactly — not UUIDsEqual.
     return subject.ConversationExternalID === scopeId ? { Allowed: true } : { Allowed: false, Reason: 'scope_mismatch' };

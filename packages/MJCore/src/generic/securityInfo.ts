@@ -372,10 +372,11 @@ export class UserInfo extends BaseInfo {
     private _anonymousVisitorID?: string = undefined;
 
     /**
-     * Per-visitor identity for an anonymous magic-link or widget guest session, set at request time
-     * from the verified session token's `mj_sid` claim. Isolates one anonymous visitor's realtime
-     * sessions and conversations (`Conversation.ExternalID`) from other visitors sharing the
-     * Anonymous user row, even across multi-use magic-link invites that share a `MagicLinkScope.ResourceID`.
+     * Per-token identity for an anonymous magic-link or widget guest session, set at request time
+     * from the verified session token's `mj_sid` claim. When the token carries no resource scope
+     * (`MagicLinkScope.ResourceID`), this is what tells one anonymous visitor's realtime sessions and
+     * conversations (`Conversation.ExternalID`) apart from other visitors sharing the Anonymous user row;
+     * a resource scope, when present, takes precedence (see `ResolveSessionScopeIdentity` in `@memberjunction/server`).
      * Same getter/setter (non-enumerable) rationale as TenantContext/MagicLinkScope — not a database/GraphQL field.
      */
     public get AnonymousVisitorID(): string | undefined {

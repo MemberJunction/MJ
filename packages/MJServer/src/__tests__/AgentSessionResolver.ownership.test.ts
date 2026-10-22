@@ -45,8 +45,8 @@ const guest = (visitorId: string) =>
     ({
         ID: ANON,
         IsMagicLinkAnonymous: true,
+        // An unscoped multi-use invite: redemptions are told apart by mj_sid (a resource scope would be shared).
         AnonymousVisitorID: visitorId,
-        MagicLinkScope: { ResourceID: 'shared-invite-resource' },
     }) as unknown as UserInfo;
 
 function makeProvider(sessionFound = true, externalId = 'visitor-1'): IMetadataProvider {

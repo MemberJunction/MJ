@@ -39,17 +39,42 @@ describe('AuthorizeSessionAccess', () => {
             expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest('scope-1'))).toEqual({ Allowed: true });
         });
 
-        it('refuses a different visitor (same Anonymous user id, different AnonymousVisitorID) — the cross-guest leak', () => {
-            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest('scope-2', 'scope-1'))).toEqual({
+        it('refuses a different widget guest (same Anonymous user id, different visitor id) — the cross-guest leak', () => {
+            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest('scope-2'))).toEqual({
                 Allowed: false,
                 Reason: 'scope_mismatch',
             });
         });
 
-        it('refuses an anonymous principal with no AnonymousVisitorID at all (even when MagicLinkScope.ResourceID is present)', () => {
-            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest(undefined, 'scope-1'))).toEqual({
+        it('refuses an anonymous principal with neither a resource scope nor an AnonymousVisitorID', () => {
+            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest(undefined))).toEqual({
                 Allowed: false,
                 Reason: 'scope_missing',
+            });
+        });
+
+        describe('identity per token kind: MagicLinkScope.ResourceID when the token carries one, else mj_sid', () => {
+            it('widget guest (ResourceID == mj_sid): matches its own sessionId', () => {
+                expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'sid-w' }, guest('sid-w', 'sid-w'))).toEqual({ Allowed: true });
+            });
+
+            it('anonymous invite WITH a ResourceID: identity is the ResourceID, not its per-redemption mj_sid', () => {
+                const visitor = guest('sid-redemption-1', 'invite-scope-R');
+                expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'invite-scope-R' }, visitor)).toEqual({ Allowed: true });
+                expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'sid-redemption-1' }, visitor)).toEqual({
+                    Allowed: false,
+                    Reason: 'scope_mismatch',
+                });
+            });
+
+            it('anonymous invite WITHOUT a ResourceID: identity is mj_sid, so two redemptions are told apart', () => {
+                const first = { ID: OWNER, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'sid-r1' };
+                const second = { ID: OWNER, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'sid-r2' };
+                expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'sid-r1' }, first)).toEqual({ Allowed: true });
+                expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'sid-r1' }, second)).toEqual({
+                    Allowed: false,
+                    Reason: 'scope_mismatch',
+                });
             });
         });
 

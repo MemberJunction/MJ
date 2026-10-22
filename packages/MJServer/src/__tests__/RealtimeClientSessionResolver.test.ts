@@ -1544,8 +1544,8 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
                 ID: 'anon-1',
                 Email: 'anonymous@magic-link.local',
                 IsMagicLinkAnonymous: true,
+                // An unscoped multi-use invite: redemptions are told apart by mj_sid (a resource scope would be shared).
                 AnonymousVisitorID: visitorId,
-                MagicLinkScope: { ResourceID: 'shared-invite' },
             }) as unknown as UserInfo;
         const makeAnonResolver = (visitorId: string): RealtimeClientSessionResolver => {
             const r = new RealtimeClientSessionResolver();
@@ -2312,8 +2312,8 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
                 ID: 'anon-1',
                 Email: 'anonymous@magic-link.local',
                 IsMagicLinkAnonymous: true,
+                // An unscoped multi-use invite: redemptions are told apart by mj_sid (a resource scope would be shared).
                 AnonymousVisitorID: visitorId,
-                MagicLinkScope: { ResourceID: 'shared-invite' },
             }) as unknown as UserInfo;
         const makeAnonResolver = (visitorId: string): RealtimeClientSessionResolver => {
             const r = new RealtimeClientSessionResolver();
