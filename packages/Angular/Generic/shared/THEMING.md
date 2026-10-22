@@ -513,7 +513,7 @@ interface ThemeDefinition {
 
 ### Single-brand hosts: the compiled-in recipe
 
-A host with ONE brand (a learner portal, a white-labelled product) should not load its theme through `CssUrl`. Before login `Reset()` disables every dynamic theme `<link>`, so the login and loading screens would render raw MJ tokens no matter what was registered. The recipe that brands every screen from first paint, with no flash and no pre-paint script:
+A host with ONE brand (a learner portal, a white-labelled product) should not load its theme through `CssUrl`. Before login `Reset()` disables every dynamic theme `<link>` except the active org brand overlay, so a `CssUrl` base theme is gone and the login and loading screens render raw MJ tokens (plus the overlay, when one is active) no matter what was registered. The recipe that brands every screen from first paint, with no flash and no pre-paint script:
 
 1. **Compile the brand theme into the bundle** — the last entry in `angular.json`'s `styles`, keyed to plain `:root` (light) and `[data-theme='dark']` (dark). Every `--mj-*` token the brand overrides lives here; light/dark switching is attribute-only.
 2. **Register picker-only definitions** over the built-in slots so the theme menu shows the brand's names: `RegisterThemes([{ Id: 'light', Name: 'Brand', BaseTheme: 'light', IsBuiltIn: true, IsDefault: true }, { Id: 'dark', Name: 'Brand Dark', BaseTheme: 'dark', IsBuiltIn: true }])`. No `CssUrl` — the CSS is already loaded.

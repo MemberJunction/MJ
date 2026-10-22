@@ -10,11 +10,16 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
  * because brand derivation is not under test. jsdom has no matchMedia, so a non-matching one is
  * installed: 'system' resolves to 'light' here.
  */
-const settings = { saved: undefined as string | undefined };
+const settings = { saved: undefined as string | undefined, throwOnRead: false };
 vi.mock('@memberjunction/core-entities', () => ({
   UserInfoEngine: {
     Instance: {
-      GetSetting: () => settings.saved,
+      GetSetting: () => {
+        if (settings.throwOnRead) {
+          throw new Error('settings unavailable');
+        }
+        return settings.saved;
+      },
       SetSetting: vi.fn(async () => true),
     },
   },
@@ -25,6 +30,7 @@ vi.mock('@memberjunction/theme-engine', () => ({
   emitLogoOverlayCss: vi.fn(() => ''),
 }));
 
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { ThemeDefinition, ThemeService } from '../lib/theme.service';
 
 const BRAND: ThemeDefinition = { Id: 'brand', Name: 'Brand', BaseTheme: 'light', IsBuiltIn: true, IsDefault: true };
@@ -33,6 +39,8 @@ const BRAND_DARK: ThemeDefinition = { Id: 'brand-dark', Name: 'Brand Dark', Base
 describe('ThemeService — IsDefault', () => {
   beforeEach(() => {
     settings.saved = undefined;
+    settings.throwOnRead = false;
+    vi.mocked(UserInfoEngine.Instance.SetSetting).mockClear();
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       writable: true,
@@ -90,10 +98,62 @@ describe('ThemeService — IsDefault', () => {
   });
 
   it('a default theme does not write a preference the user never chose', async () => {
-    const { UserInfoEngine } = await import('@memberjunction/core-entities');
     const service = new ThemeService();
     service.RegisterThemes([BRAND]);
     await service.Initialize();
     expect(UserInfoEngine.Instance.SetSetting).not.toHaveBeenCalled();
+  });
+
+  it('a built-in slot flagged default LATER does not beat a custom theme flagged first (registration order, not registry slot)', async () => {
+    const service = new ThemeService();
+    service.RegisterThemes([
+      { Id: 'acme', Name: 'Acme', BaseTheme: 'light', IsBuiltIn: true, IsDefault: true },
+      { Id: 'dark', Name: 'Dark', BaseTheme: 'dark', IsBuiltIn: true, IsDefault: true },
+    ]);
+    expect(service.DefaultPreference).toBe('acme');
+  });
+
+  it('re-registering the default without the flag drops it from the running', async () => {
+    const service = new ThemeService();
+    service.RegisterThemes([BRAND, { ...BRAND_DARK, IsDefault: true }]);
+    service.RegisterTheme({ ...BRAND, IsDefault: false });
+    expect(service.DefaultPreference).toBe('brand-dark');
+  });
+
+  it('a failed settings read falls back to the default, and to system without one', async () => {
+    settings.throwOnRead = true;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const withDefault = new ThemeService();
+      withDefault.RegisterThemes([BRAND]);
+      await withDefault.Initialize();
+      expect(withDefault.Preference).toBe('brand');
+
+      const without = new ThemeService();
+      await without.Initialize();
+      expect(without.Preference).toBe('system');
+      expect(without.AppliedTheme).toBe('light');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('an unregistered saved theme with no default registered lands on system', async () => {
+    settings.saved = 'retired-theme';
+    const service = new ThemeService();
+    await service.Initialize();
+    expect(service.Preference).toBe('system');
+    expect(service.AppliedTheme).toBe('light');
+  });
+
+  it('Reset() parks the preference on the default, not on system', async () => {
+    settings.saved = 'brand-dark';
+    const service = new ThemeService();
+    service.RegisterThemes([BRAND, BRAND_DARK]);
+    await service.Initialize();
+    expect(service.Preference).toBe('brand-dark');
+    service.Reset();
+    expect(service.Preference).toBe('brand');
+    expect(service.IsInitialized).toBe(false);
   });
 });
