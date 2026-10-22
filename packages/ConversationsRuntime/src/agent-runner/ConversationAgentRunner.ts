@@ -18,7 +18,7 @@
  */
 
 import { BehaviorSubject, Observable } from 'rxjs';
-import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogStatusEx, Metadata, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
     AgentClientSession,
@@ -216,9 +216,10 @@ export class ConversationAgentRunner {
                 : candidateAgents;
             const availableAgents = NarrowToAllowedAgents(permittedAgents, input.AllowedAgentIDs);
 
-            console.log(
-                `[ConversationAgentRunner] Available agents for routing: ${availableAgents.length} (filtered from ${candidateAgents.length} candidates)`
-            );
+            LogStatusEx({
+                message: `[ConversationAgentRunner] Available agents for routing: ${availableAgents.length} (filtered from ${candidateAgents.length} candidates)`,
+                verboseOnly: true,
+            });
 
             const agentParams: RunAgentFromConversationDetailParams = {
                 UserMessageId: input.message.ID,

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { Metadata, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { LogStatusEx, Metadata, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLAIClient, type RunDecisionParams, type RunDecisionResult, type AgentReplyAcknowledgement } from '@memberjunction/graphql-dataprovider';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, coerceFailedExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -348,7 +348,7 @@ export class ConversationAgentService {
     for (const row of result.Results || []) {
       const configurationId = this.readAgentConfigFromMention(row.Message, agentId);
       if (configurationId) {
-        console.log(`\u{1F3AF} Found configuration preset from @mention: ${configurationId}`);
+        LogStatusEx({ message: `\u{1F3AF} Found configuration preset from @mention: ${configurationId}`, verboseOnly: true });
         return configurationId;
       }
     }
@@ -449,7 +449,11 @@ export class ConversationAgentService {
         this.warnOnUnacceptedSkills(agent, requestedSkillIDs);
       }
 
-      console.log(`Invoking sub-agent: ${agentName}`, { reasoning, hasPayload: !!payload, hasConfigPreset: !!agentConfigurationPresetId });
+      LogStatusEx({
+        message: `Invoking sub-agent: ${agentName}`,
+        verboseOnly: true,
+        additionalArgs: [{ reasoning, hasPayload: !!payload, hasConfigPreset: !!agentConfigurationPresetId }]
+      });
 
       // Map AIAgentConfiguration preset ID to actual AIConfiguration ID
       let aiConfigurationId: string | undefined = undefined;
@@ -459,7 +463,7 @@ export class ConversationAgentService {
 
         if (preset) {
           aiConfigurationId = preset.AIConfigurationID || undefined;
-          console.log(`Mapped agent configuration preset "${preset.Name}" to AIConfigurationID: ${aiConfigurationId || 'default'}`);
+          LogStatusEx({ message: `Mapped agent configuration preset "${preset.Name}" to AIConfigurationID: ${aiConfigurationId || 'default'}`, verboseOnly: true });
         } else {
           console.warn(`Agent configuration preset ${agentConfigurationPresetId} not found for agent ${agent.ID}`);
         }
@@ -612,10 +616,14 @@ ${compactHistory}${artifactContext}
 
 **Latest User Message**: "${latestMessage}"`;
 
-      console.log('🔍 Checking agent continuity intent...', {
-        agentName: agent.Name,
-        messagePreview: latestMessage.substring(0, 50),
-        artifactCount: agentArtifacts.length
+      LogStatusEx({
+        message: '🔍 Checking agent continuity intent...',
+        verboseOnly: true,
+        additionalArgs: [{
+          agentName: agent.Name,
+          messagePreview: latestMessage.substring(0, 50),
+          artifactCount: agentArtifacts.length
+        }]
       });
 
       const result = await this._aiClient.RunAIPrompt({
@@ -636,10 +644,14 @@ ${compactHistory}${artifactContext}
           const reasoning = parsed.reasoning || 'No reasoning provided';
           const targetArtifactVersionId = parsed.targetArtifactVersionId || undefined;
 
-          console.log(`✅ Intent check result: ${decision}`, {
-            reasoning,
-            targetArtifactVersionId,
-            latency: result.executionTimeMs || 'unknown'
+          LogStatusEx({
+            message: `✅ Intent check result: ${decision}`,
+            verboseOnly: true,
+            additionalArgs: [{
+              reasoning,
+              targetArtifactVersionId,
+              latency: result.executionTimeMs || 'unknown'
+            }]
           });
 
           if (decision === 'YES' || decision === 'NO' || decision === 'UNSURE') {

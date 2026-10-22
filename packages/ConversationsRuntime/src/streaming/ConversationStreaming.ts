@@ -16,6 +16,7 @@
  */
 
 import { BehaviorSubject, Subject, Subscription } from 'rxjs';
+import { LogStatusEx } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { NormalizeUUID } from '@memberjunction/global';
 
@@ -532,15 +533,16 @@ export class ConversationStreaming {
 
             if (!message) {
                 if (!data.ParentTaskID) {
-                    console.warn('[ConversationStreaming] No message content in TaskOrchestrator update');
+                    LogStatusEx({ message: '[ConversationStreaming] No message content in TaskOrchestrator update', verboseOnly: true });
                 }
                 return;
             }
             if (!conversationDetailId) {
                 if (!data.ParentTaskID) {
-                    console.warn('[ConversationStreaming] TaskOrchestrator update missing conversationDetailId', {
-                        taskName,
-                        message,
+                    LogStatusEx({
+                        message: '[ConversationStreaming] TaskOrchestrator update missing conversationDetailId',
+                        verboseOnly: true,
+                        additionalArgs: [{ taskName, message }],
                     });
                 }
                 return;
@@ -596,9 +598,10 @@ export class ConversationStreaming {
                 if (agentRunId) {
                     const removed = this.context.Tasks.RemoveByAgentRunId(agentRunId);
                     if (removed) {
-                        console.log(
-                            `[ConversationStreaming] Agent run ${agentRunId} completed, removed from active tasks`
-                        );
+                        LogStatusEx({
+                            message: `[ConversationStreaming] Agent run ${agentRunId} completed, removed from active tasks`,
+                            verboseOnly: true,
+                        });
                     }
                 }
 
@@ -621,9 +624,10 @@ export class ConversationStreaming {
 
                     this.cleanupOldCompletions();
 
-                    console.log(
-                        `[ConversationStreaming] Completion broadcast for message ${conversationDetailId} (success: ${String(success)})`
-                    );
+                    LogStatusEx({
+                        message: `[ConversationStreaming] Completion broadcast for message ${conversationDetailId} (success: ${String(success)})`,
+                        verboseOnly: true,
+                    });
                 } else {
                     console.warn(
                         `[ConversationStreaming] Completion received without conversationDetailId for agentRunId: ${agentRunId}`
@@ -641,7 +645,7 @@ export class ConversationStreaming {
             const stepCount = progress?.stepCount as number | undefined;
 
             if (!message) {
-                console.warn('[ConversationStreaming] No message content in agent progress update');
+                LogStatusEx({ message: '[ConversationStreaming] No message content in agent progress update', verboseOnly: true });
                 return;
             }
             if (!conversationDetailId) {
@@ -809,7 +813,10 @@ export class ConversationStreaming {
         this.reconnecting = true;
         this.connectionStatus$.next('reconnecting');
         this.reconnectionTimeout = setTimeout(() => {
-            console.log(`[ConversationStreaming] Attempting to reconnect (attempt ${this.reconnectionAttempts})...`);
+            LogStatusEx({
+                message: `[ConversationStreaming] Attempting to reconnect (attempt ${this.reconnectionAttempts})...`,
+                verboseOnly: true,
+            });
             this.initialized = false;
             this.Initialize();
         }, delay);

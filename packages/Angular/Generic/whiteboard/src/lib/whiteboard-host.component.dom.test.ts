@@ -510,6 +510,16 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
       expect(f.componentInstance.PenColor).toBe(DEFAULT_FIRST);
     });
 
+    it('entries that are not hex colors are dropped, so the pen never moves to a url() or a named color', () => {
+      const f = render();
+      f.componentInstance.PenPalette = ['url(https://tracker.example/pixel.gif)', 'red', '#1d4ed8'];
+      expect(f.componentInstance.PenPalette).toEqual(['#1d4ed8']);
+      expect(f.componentInstance.PenColor).toBe('#1d4ed8');
+      f.componentInstance.PenPalette = ['url(https://tracker.example/pixel.gif)', 'rgb(0, 0, 0)'];
+      expect(f.componentInstance.PenPalette).toBeNull();
+      expect(f.componentInstance.PenColor).toBe(DEFAULT_FIRST);
+    });
+
     it('the toolbar renders the host palette', () => {
       const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
         inputs: { State: new WhiteboardState(), PenPalette: ['#1d4ed8', '#b91c1c'] },
@@ -519,6 +529,41 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
       });
       const swatches = Array.from(f.nativeElement.querySelectorAll('.pen-flyout .pen-c')) as HTMLElement[];
       expect(swatches.length).toBe(2);
+    });
+  });
+
+  // ── Tag → wb-tag-<slug> on the item wrapper (LXP P14.1) ─────────────────────────────
+  describe('item Tag as a wrapper class', () => {
+    it('a tagged sticky carries wb-tag-<slug> beside its kind classes; an untagged one carries no wb-tag-*', () => {
+      const state = new WhiteboardState();
+      state.AddItem({ Kind: 'sticky', X: 10, Y: 20, Text: 'fill me', Tag: 'Slot' }, 'agent');
+      state.AddItem({ Kind: 'sticky', X: 200, Y: 20, Text: 'hello' }, 'user');
+      const f = render(null, state);
+      const wrappers = Array.from(f.nativeElement.querySelectorAll('.bi.sticky')) as HTMLElement[];
+      const taggedEl = wrappers.find((w) => w.textContent?.includes('fill me'));
+      const plainEl = wrappers.find((w) => w.textContent?.includes('hello'));
+      expect(taggedEl?.classList.contains('wb-tag-slot')).toBe(true);
+      expect(taggedEl?.classList.contains('sticky--sage')).toBe(true); // the kind/author classes survive
+      expect(Array.from(plainEl?.classList ?? []).some((c) => c.startsWith('wb-tag-'))).toBe(false);
+    });
+
+    it('an ink path and a connector group carry the class too (SVG elements take the [class] binding)', () => {
+      const state = new WhiteboardState();
+      const a = state.AddItem({ Kind: 'sticky', X: 10, Y: 20, Text: 'a' }, 'user')!;
+      const b = state.AddItem({ Kind: 'sticky', X: 300, Y: 20, Text: 'b' }, 'user')!;
+      state.AddItem({ Kind: 'ink', Points: [{ X: 0, Y: 0 }, { X: 40, Y: 40 }], Color: '#f87171', StrokeWidth: 4, Tag: 'underline' }, 'user');
+      state.AddItem({ Kind: 'connector', FromItemID: a.ID, ToItemID: b.ID, FromPoint: null, ToPoint: null, Tag: 'flow' }, 'agent');
+      const f = render(null, state);
+      expect(f.nativeElement.querySelector('.ink-layer path.wb-tag-underline')).not.toBeNull();
+      expect(f.nativeElement.querySelector('.ink-layer g.wb-tag-flow')).not.toBeNull();
+    });
+
+    it('a tagged shape box carries the class too (static-class wrappers were converted to [class] bindings)', () => {
+      const state = new WhiteboardState();
+      state.AddItem({ Kind: 'shape', Shape: 'rect', X: 0, Y: 0, W: 120, H: 40, Label: 'Head', Tag: 'heading' }, 'agent');
+      const f = render(null, state);
+      const box = f.nativeElement.querySelector('.bi.shape-box') as HTMLElement | null;
+      expect(box?.classList.contains('wb-tag-heading')).toBe(true);
     });
   });
 });

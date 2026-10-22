@@ -97,6 +97,7 @@ vi.mock('@memberjunction/core', () => {
     }
     return {
         Metadata: FakeMetadata,
+        LogStatusEx: vi.fn(),
     };
 });
 

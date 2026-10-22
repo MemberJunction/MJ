@@ -1,4 +1,4 @@
-import { LogError, LogStatus } from "@memberjunction/core";
+import { LogError, LogStatusEx } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { Subscription } from "rxjs";
 
@@ -270,7 +270,7 @@ export class FireAndForgetHelper {
 
             let decision: StallDecision<TResult>;
             try {
-                LogStatus(`[FireAndForget:${label}] Idle window elapsed, reconciling against server run record`);
+                LogStatusEx({ message: `[FireAndForget:${label}] Idle window elapsed, reconciling against server run record`, verboseOnly: true });
                 decision = await config.onStall();
             } catch (e) {
                 settleReject(e as Error);
@@ -288,7 +288,7 @@ export class FireAndForgetHelper {
                     idleTimer.reset();
                 }
             } else if ('resolve' in decision) {
-                LogStatus(`[FireAndForget:${label}] Reconciliation recovered a completed run`);
+                LogStatusEx({ message: `[FireAndForget:${label}] Reconciliation recovered a completed run`, verboseOnly: true });
                 settleResolve(decision.resolve);
             } else {
                 settleReject(decision.reject);
@@ -331,7 +331,7 @@ export class FireAndForgetHelper {
                 FireAndForgetHelper.routeMessage(config, handlers, message);
             }
 
-            LogStatus(`[FireAndForget:${label}] Server accepted, waiting for completion via WebSocket`);
+            LogStatusEx({ message: `[FireAndForget:${label}] Server accepted, waiting for completion via WebSocket`, verboseOnly: true });
 
             return await promise;
 
@@ -446,7 +446,7 @@ export class FireAndForgetHelper {
             }
 
             if (config.isCompletionEvent(parsed)) {
-                LogStatus(`[FireAndForget:${label}] Completion event received`);
+                LogStatusEx({ message: `[FireAndForget:${label}] Completion event received`, verboseOnly: true });
                 handlers.onCompletion(config.extractResult(parsed));
             }
         } catch (e) {
@@ -477,9 +477,10 @@ export class FireAndForgetHelper {
         config: FireAndForgetConfig<TResult>
     ): Promise<TResult> {
         const label = config.operationLabel ?? config.mutationFieldName;
-        LogStatus(
-            `[FireAndForget:${label}] Provider has no PushStatusUpdates channel — running synchronously (fireAndForget disabled)`
-        );
+        LogStatusEx({
+            message: `[FireAndForget:${label}] Provider has no PushStatusUpdates channel — running synchronously (fireAndForget disabled)`,
+            verboseOnly: true
+        });
 
         // Override fireAndForget so the server runs the operation inline and returns the result,
         // rather than acking immediately and publishing the result over a channel we can't hear.
@@ -500,7 +501,7 @@ export class FireAndForgetHelper {
             );
         }
 
-        LogStatus(`[FireAndForget:${label}] Synchronous execution completed`);
+        LogStatusEx({ message: `[FireAndForget:${label}] Synchronous execution completed`, verboseOnly: true });
         return config.extractSyncResult(ack);
     }
 }

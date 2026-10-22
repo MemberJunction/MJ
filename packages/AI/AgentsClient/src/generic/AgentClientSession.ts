@@ -35,7 +35,7 @@ import {
     RunAgentFromConversationDetailParams,
     RunAgentResult,
 } from './AgentClientTypes';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatusEx } from '@memberjunction/core';
 
 /**
  * Manages a client session connected to an MJ agent.
@@ -282,7 +282,7 @@ export class AgentClientSession {
             }
         });
 
-        LogStatus(`AgentClientSession: session started for ${sessionId}`);
+        LogStatusEx({ message: `AgentClientSession: session started for ${sessionId}`, verboseOnly: true });
     }
 
     /**
@@ -294,7 +294,7 @@ export class AgentClientSession {
             this.subscription = null;
         }
         if (this._sessionId) {
-            LogStatus(`AgentClientSession: session stopped for ${this._sessionId}`);
+            LogStatusEx({ message: `AgentClientSession: session stopped for ${this._sessionId}`, verboseOnly: true });
         }
         this._sessionId = null;
         this._isActive = false;

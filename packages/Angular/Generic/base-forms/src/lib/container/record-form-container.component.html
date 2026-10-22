@@ -19,6 +19,9 @@
   [DirtyFieldNames]="EffectiveDirtyFieldNames"
   [ListCount]="ListCount"
   [TagCount]="TagCount"
+  [LinksOpen]="ShowRecordLinks"
+  [LinkCount]="LinkCount"
+  [ConflictCount]="ConflictCount"
   [AttachmentCount]="AttachmentCount"
   [AttachmentsAvailable]="AttachmentsAvailable"
   [IsAttachmentsPanelOpen]="ShowAttachmentsPanel"
@@ -66,6 +69,7 @@
   (ResetSectionOrderRequested)="OnResetSectionOrder()"
   (ManageSectionsRequested)="OnManageSections()"
   (TagsPanelToggled)="OnTagsPanelToggled()"
+  (LinksRequest)="OnToggleRecordLinks()"
   (AttachmentsPanelToggled)="OnAttachmentsPanelToggled()"
   (VariantPicked)="OnVariantPicked($event)">
 </mj-form-toolbar>
@@ -79,6 +83,33 @@
      ============================================ -->
 <!-- Persistent polite live region for the section indicators (see FormIndicatorsAnnouncement) -->
 <span class="mj-forms-visually-hidden" aria-live="polite" aria-atomic="true">{{ FormIndicatorsAnnouncement }}</span>
+
+<!-- ============================================
+     NON-INTRUSIVE LIVE REMOTE UPDATE SLIDE-IN PILL
+     ============================================ -->
+@if (RemoteUpdatePill) {
+  <div class="mj-forms-remote-update-pill"
+       [class.mj-forms-remote-update-pill--warning]="RemoteUpdatePill.Kind === 'stale-while-editing'"
+       role="status"
+       aria-live="polite">
+    <i [class]="RemoteUpdatePill.Kind === 'refreshed' ? 'fa-solid fa-bolt mj-forms-remote-update-pill-icon' : 'fa-solid fa-arrows-rotate mj-forms-remote-update-pill-icon'"></i>
+    <span class="mj-forms-remote-update-pill-text">{{ RemoteUpdatePill.Summary }}</span>
+    @if (RemoteUpdatePill.Kind === 'stale-while-editing') {
+      <button type="button"
+              class="mj-forms-remote-update-pill-action"
+              (click)="OnReloadFromRemotePill()">
+        Reload
+      </button>
+    }
+    <button type="button"
+            class="mj-forms-remote-update-pill-close"
+            title="Dismiss"
+            aria-label="Dismiss notification"
+            (click)="OnDismissRemoteUpdatePill()">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+}
 
 <!-- ============================================
      POSSIBLE DUPLICATES (entry-time check, new records only)
@@ -471,6 +502,21 @@
     (RecordNavigate)="OnTagsRecordNavigate($event)"
     (WidthChanged)="OnTagsPanelWidthChanged($event)">
   </mj-record-tags>
+}
+
+<!-- ============================================
+     LINKS DRAWER (shown when links button clicked)
+     ============================================ -->
+@if (ShowRecordLinks && EffectiveRecord && EffectiveRecord.IsSaved) {
+  <mj-record-links
+    [Provider]="Provider"
+    [Record]="EffectiveRecord"
+    [Mode]="'drawer'"
+    [IsOpen]="ShowRecordLinks"
+    (Close)="OnRecordLinksClosed()"
+    (LinkCountChange)="OnLinkCountChanged($event)"
+    (Navigate)="OnNavigate($event)">
+  </mj-record-links>
 }
 
 <!-- ============================================

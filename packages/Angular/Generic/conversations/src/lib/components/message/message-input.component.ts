@@ -925,7 +925,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    */
   public async InsertAgentMention(agentName: string, focus: boolean = true, clearExisting: boolean = true): Promise<boolean> {
     if (!this.InputBox) {
-      console.log(`[Omnibar→Chat] InsertAgentMention('${agentName}'): input box not mounted yet — caller will retry`);
+      LogStatusEx({ message: `[Omnibar→Chat] InsertAgentMention('${agentName}'): input box not mounted yet — caller will retry`, verboseOnly: true });
       return false;
     }
     if (clearExisting) {
@@ -936,7 +936,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
     try {
       if (!this.mentionAutocomplete.IsInitialized && this.CurrentUser) {
-        console.log(`[Omnibar→Chat] InsertAgentMention('${agentName}'): initializing mention autocomplete…`);
+        LogStatusEx({ message: `[Omnibar→Chat] InsertAgentMention('${agentName}'): initializing mention autocomplete…`, verboseOnly: true });
         await this.mentionAutocomplete.initialize(this.CurrentUser);
       }
       const wanted = agentName.trim().toLowerCase();
@@ -945,7 +945,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         .find(s => s.type === 'agent' && s.name.trim().toLowerCase() === wanted);
       if (suggestion) {
         const inserted = this.InputBox.InsertMention(suggestion, focus);
-        console.log(`[Omnibar→Chat] InsertAgentMention('${agentName}'): resolved to pill (id=${suggestion.id}) — insert ${inserted ? 'OK' : 'FAILED (editor view not ready)'}`);
+        LogStatusEx({ message: `[Omnibar→Chat] InsertAgentMention('${agentName}'): resolved to pill (id=${suggestion.id}) — insert ${inserted ? 'OK' : 'FAILED (editor view not ready)'}`, verboseOnly: true });
         if (inserted) {
           if (focus) {
             this.scheduleFocusReassert(agentName);
@@ -974,7 +974,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         const editor = this.InputBox?.mentionEditor;
         if (editor && !editor.HasFocus) {
           const ok = editor.FocusCaretAtEnd();
-          console.log(`[Omnibar→Chat] focus re-assert (+${delay}ms) for '${context}': ${ok ? 'refocused' : 'editor gone'}`);
+          LogStatusEx({ message: `[Omnibar→Chat] focus re-assert (+${delay}ms) for '${context}': ${ok ? 'refocused' : 'editor gone'}`, verboseOnly: true });
         }
       }, delay);
     }
@@ -1725,14 +1725,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
         // Skip if already complete or errored
         if (message.Status === 'Complete' || message.Status === 'Error') {
-          console.log(`[StreamingCallback] Message ${messageId} is ${message.Status}, ignoring progress update`);
+          LogStatusEx({ message: `[StreamingCallback] Message ${messageId} is ${message.Status}, ignoring progress update`, verboseOnly: true });
           return;
         }
 
         // Check if message was marked as completed (prevents race condition)
         const completionTime = this.completionTimestamps.get(messageId);
         if (completionTime) {
-          console.log(`[StreamingCallback] Message ${messageId} marked complete at ${new Date(completionTime).toISOString()}, ignoring late progress update`);
+          LogStatusEx({ message: `[StreamingCallback] Message ${messageId} marked complete at ${new Date(completionTime).toISOString()}, ignoring late progress update`, verboseOnly: true });
           return;
         }
 
@@ -1775,7 +1775,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // CRITICAL: Update ActiveTasksService to keep the tasks dropdown in sync
         this.activeTasks.updateStatusByConversationDetailId(message.ID, progress.message);
 
-        console.log(`[StreamingCallback] Updated message ${messageId}: ${progress.taskName || 'Agent'}`);
+        LogStatusEx({ message: `[StreamingCallback] Updated message ${messageId}: ${progress.taskName || 'Agent'}`, verboseOnly: true });
       } catch (error) {
         console.error(`[StreamingCallback] Error updating message ${messageId}:`, error);
       }
@@ -1791,7 +1791,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       return;
     }
 
-    console.log(`🧹 Unregistering ${this.registeredCallbacks.size} message callbacks`);
+    LogStatusEx({ message: `🧹 Unregistering ${this.registeredCallbacks.size} message callbacks`, verboseOnly: true });
 
     for (const [messageId, callback] of this.registeredCallbacks) {
       this.streamingService.unregisterMessageCallback(messageId, callback);
@@ -2755,7 +2755,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // Form responses always continue with the agent that requested the form
     // Don't show "Analyzing intent..." message for this obvious case
     if (ConversationUtility.ContainsFormResponse(message)) {
-      console.log('✅ Form response detected, skipping intent check UI (fast path)');
+      LogStatusEx({ message: '✅ Form response detected, skipping intent check UI (fast path)', verboseOnly: true });
       return {
         decision: 'YES' as const,
         reasoning: 'User submitted a form response to the previous agent'
@@ -3192,11 +3192,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     const source = await this.agentService.FindLatestAgentOutputVersion(this.ConversationId, agentId, this.AgentHistoryFrom, branchId);
     if (!source || source.payload == null) {
-      console.log(`📦 No previous payload found for agent ${agentId}`);
+      LogStatusEx({ message: `📦 No previous payload found for agent ${agentId}`, verboseOnly: true });
       return { payload: null, artifactInfo: null };
     }
 
-    console.log(`📦 Loaded previous payload for agent ${agentId} from artifact version ${source.versionId}`);
+    LogStatusEx({ message: `📦 Loaded previous payload for agent ${agentId} from artifact version ${source.versionId}`, verboseOnly: true });
     return {
       payload: source.payload,
       artifactInfo: {
@@ -3284,7 +3284,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
       // Sub-agent failed - attempt auto-retry once. The failed reply stays the server's record of
       // the attempt; it is hidden so the retry's reply takes its place on screen.
-      console.log(`⚠️ ${agentName} failed, attempting auto-retry...`);
+      LogStatusEx({ message: `⚠️ ${agentName} failed, attempting auto-retry...`, verboseOnly: true });
       await this.settleReply(first.reply, `❌ **${agentName}** failed`);
       await this.hideReply(first.reply);
       const retry = await invoke(`${agentName} (retry)`);
@@ -3335,13 +3335,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     if (!lastAIMessage || !lastAIMessage.AgentID) {
       // No previous specialist agent - just mark user message as complete
-      console.log('🔇 No previous specialist agent found - marking complete');
+      LogStatusEx({ message: '🔇 No previous specialist agent found - marking complete', verboseOnly: true });
       await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       return;
     }
 
     if (!IsAgentAllowed(lastAIMessage.AgentID, this.AllowedAgentIDs)) {
-      console.log('🔇 Previous specialist agent is not allowed in this chat - marking complete');
+      LogStatusEx({ message: '🔇 Previous specialist agent is not allowed in this chat - marking complete', verboseOnly: true });
       await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       return;
     }
@@ -3372,7 +3372,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         versionId: source.versionId,
         versionNumber: source.versionNumber
       };
-      console.log('📦 Loaded previous OUTPUT artifact as payload for continuity', previousArtifactInfo);
+      LogStatusEx({ message: '📦 Loaded previous OUTPUT artifact as payload for continuity', verboseOnly: true, additionalArgs: [previousArtifactInfo] });
     }
 
     // The manager's line "Continuing with X for refinement..." and the continuing agent's reply, threaded under it,
@@ -3484,12 +3484,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Multi-stage response handling (same logic as ambient Sage)
         // Stage 1: Check for task graph (multi-step orchestration)
         if (result.payload?.taskGraph) {
-          console.log('📋 Task graph detected from @mention, starting task orchestration');
+          LogStatusEx({ message: '📋 Task graph detected from @mention, starting task orchestration', verboseOnly: true });
           await this.handleTaskGraphExecution(userMessage, result, conversationId, branchId, agentResponseMessage);
         }
         // Stage 2: Check for sub-agent invocation (single-step delegation)
         else if (result.agentRun.FinalStep === 'Success' && result.payload?.invokeAgent) {
-          console.log('🎯 Sub-agent invocation detected from @mention');
+          LogStatusEx({ message: '🎯 Sub-agent invocation detected from @mention', verboseOnly: true });
           await this.handleSubAgentInvocation(userMessage, result, conversationId, branchId, agentResponseMessage);
         }
         // Stage 3: Normal chat response
@@ -3568,7 +3568,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           versionId: target.versionId,
           versionNumber: target.versionNumber
         };
-        console.log('📦 Loaded target artifact version as payload', previousArtifactInfo);
+        LogStatusEx({ message: '📦 Loaded target artifact version as payload', verboseOnly: true, additionalArgs: [previousArtifactInfo] });
       } else {
         console.warn('⚠️ Could not load target artifact version:', targetArtifactVersionId);
       }
@@ -3603,9 +3603,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           versionId: source.versionId,
           versionNumber: source.versionNumber
         };
-        console.log('📦 Loaded artifact as payload for continuation', previousArtifactInfo);
+        LogStatusEx({ message: '📦 Loaded artifact as payload for continuation', verboseOnly: true, additionalArgs: [previousArtifactInfo] });
       } else {
-        console.log(`📦 No artifact found for agent ${agentId} in this conversation`);
+        LogStatusEx({ message: `📦 No artifact found for agent ${agentId} in this conversation`, verboseOnly: true });
       }
     }
 
@@ -3742,7 +3742,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         name: result.Name,
         description: result.Description
       });
-      console.log(`✅ Conversation renamed to: "${result.Name}"`);
+      LogStatusEx({ message: `✅ Conversation renamed to: "${result.Name}"`, verboseOnly: true });
     }
   }
 
