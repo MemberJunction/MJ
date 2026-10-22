@@ -222,6 +222,16 @@ describe('check-exact-pins fixture suite', () => {
         expect(res.stdout + res.stderr).not.toMatch(/\^|~/);
     });
 
+    it('refuses a packages/ directory with no package.json instead of passing a walk that inspected nothing', () => {
+        mkdirSync(join(tempRoot, 'packages', 'empty'), { recursive: true });
+        writeLockfile('');
+
+        expect(() => findPinViolations(tempRoot)).toThrow(/No package\.json files found/);
+        const res = runCli();
+        expect(res.status).toBe(2);
+        expect(res.stderr).toContain('wrong directory?');
+    });
+
     it('exits 2 on missing pnpm-lock.yaml or bad CLI arguments', () => {
         writeManifest('packages/flow-editor', { name: 'pkg' });
         expect(runCli(['--root', tempRoot]).status).toBe(2);

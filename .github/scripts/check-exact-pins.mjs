@@ -17,7 +17,7 @@
  * Usage:  node .github/scripts/check-exact-pins.mjs [--root <dir>]
  * Exit:   0 = all pins exact and in sync with pnpm-lock.yaml
  *         1 = one or more pin violations
- *         2 = bad usage or missing pnpm-lock.yaml / packages directory
+ *         2 = bad usage, missing pnpm-lock.yaml / packages directory, or no package.json under packages/
  */
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -169,6 +169,10 @@ export function findPinViolations(root, pinnedScopes = PINNED_SCOPES) {
     const lockfileText = readFileSync(lockfileTextPathOrThrow(lockfilePath), 'utf8');
     const importers = parseLockfileImporters(lockfileText);
     const manifests = findManifests(packagesDir);
+    // A walk that found nothing must not report the same verdict as a clean tree.
+    if (manifests.length === 0) {
+        throw new Error(`No package.json files found under ${packagesDir} — wrong directory?`);
+    }
 
     const violations = [];
     for (const absManifestPath of manifests) {
