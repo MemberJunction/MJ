@@ -2,7 +2,9 @@
 
 The processor that runs content pipeline stages under Record Set Processing, the hydrator and committer,
 and the built-in stages and extractors. Start with
-[`@memberjunction/content-pipeline-base`](../base/README.md) if you are writing a stage.
+[`@memberjunction/content-pipeline-base`](../base/README.md) if you are writing a stage, and see the
+**[Content Pipeline, Training, and Retrieval Guide](../../../guides/CONTENT_PIPELINE_GUIDE.md)** for the
+end-to-end architecture, configuration precedence, `ContentAutotagging` relationship, and retrieval integration.
 
 ## How a stage runs
 

@@ -1,7 +1,9 @@
 # @memberjunction/content-pipeline-base
 
 The working record, the stage contract, and the driver and extractor contracts shared by every content
-pipeline stage. Nothing here touches a database.
+pipeline stage. Nothing here touches a database. For the end-to-end architecture, `ContentAutotagging`
+relationship, and retrieval integration, see the
+**[Content Pipeline, Training, and Retrieval Guide](../../../guides/CONTENT_PIPELINE_GUIDE.md)**.
 
 ## The working record
 

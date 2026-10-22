@@ -1,5 +1,13 @@
 # Content Autotagging Guide
 
+> **Companion to the [Content Pipeline, Training, and Retrieval Guide](CONTENT_PIPELINE_GUIDE.md):**
+> MemberJunction's staged **Content Pipeline Framework** (`@memberjunction/content-pipeline-base` and `@memberjunction/content-pipeline`) runs content ingestion as six independent Record Set Processing stages (`Discover` / `Sync` → `Extract` → `Tag` → `Segment` → `Embed` → `Delete`). Rather than duplicating source connectors or AI helpers, the staged pipeline and `@memberjunction/content-autotagging` share:
+> - **Source-Type Drivers (`AutotagBase` subclasses)**: Every provider implements `Discover(request)` and `Fetch(request)` for the staged Content Pipeline alongside the legacy `Autotag()` and `SetContentItemsToProcess()` entrypoints.
+> - **Managed Prompt & Taxonomy Helpers**: `ContentAutotagPrompt` (wrapped by `ManagedPromptClassifier` in `TagStage`) and `ContentItemTagBridge` / `TagEngine`.
+> - **Vector Routing & Metadata**: `ContentVectorInfrastructure` (the 5-step vector index resolution cascade) and `ContentVectorMetadata`.
+>
+> Read **[CONTENT_PIPELINE_GUIDE.md](CONTENT_PIPELINE_GUIDE.md)** for the staged architecture, `WorkingRecord` confidence scoring, 5-level configuration precedence, and RAG retrieval integration. Read this guide for the autotagging prompt structure, weight tiers, taxonomy bridge modes, and source configuration knobs.
+
 ## Overview
 
 The Knowledge Hub content autotagging system is a pluggable, metadata-driven pipeline that automatically analyzes textual content, extracts keywords with relevance weights, and bridges those keywords into MemberJunction's formal Tag taxonomy. It supports multiple content source types (entity records, RSS feeds, websites, local files, cloud storage) through a provider architecture backed by the MJ ClassFactory.
@@ -12,7 +20,7 @@ This guide covers architecture, data flow, the tag taxonomy bridge, prompt struc
 
 ### Plugin Architecture
 
-Content source types are resolved at runtime using the ClassFactory provider pattern. Each `ContentSourceType` record in the database carries a `DriverClass` string. The action iterates all source types and instantiates the matching provider via `MJGlobal.Instance.ClassFactory.CreateInstance<AutotagBase>(AutotagBase, driverClass)`.
+Content source types are resolved at runtime using the ClassFactory provider pattern. Each `ContentSourceType` record in the database carries a `DriverClass` string. Both the staged `ContentPipeline` (`DiscoverStage` / `ExtractStage`) and the legacy `AutotagAndVectorizeContentAction` instantiate the matching provider via `MJGlobal.Instance.ClassFactory.CreateInstance<AutotagBase>(AutotagBase, driverClass)`.
 
 ```mermaid
 flowchart LR
@@ -37,10 +45,14 @@ flowchart LR
     CF -- "CreateInstance" --> CS
 ```
 
-Each provider extends the abstract `AutotagBase` class and implements two methods:
+Each provider extends `AutotagBase` and implements:
 
-- `SetContentItemsToProcess(contentSources)` -- discovers and prepares content items
-- `Autotag(contextUser, onProgress?)` -- orchestrates the full pipeline for its source type
+- **Staged Content Pipeline contract** (used by `DiscoverStage` and `ExtractStage` in `@memberjunction/content-pipeline`):
+  - `Discover(request: DiscoverRequest): AsyncIterable<DiscoveredContentItem>` — yields items discovered in the source (supporting incremental `request.Since` watermarks and exhaustive `Sync` walks when `SupportsExhaustiveWalk === true`)
+  - `Fetch(request: LocatorFetchRequest): Promise<FetchedArtifact>` — fetches raw bytes or inline text for an item locator during `ExtractStage`
+- **Legacy monolithic contract** (used by `AutotagAndVectorizeContentAction`, with default no-op implementations on `AutotagBase` so new pipeline-only drivers do not have to implement them):
+  - `SetContentItemsToProcess(contentSources)` — discovers and prepares content items
+  - `Autotag(contextUser, onProgress?)` — orchestrates the full legacy pipeline for its source type
 
 ### End-to-End Data Flow
 
@@ -176,22 +188,30 @@ To add a new content source type:
 ```typescript
 import { RegisterClass } from '@memberjunction/global';
 import { AutotagBase } from '@memberjunction/content-autotagging';
+import {
+    DiscoverRequest,
+    DiscoveredContentItem,
+    LocatorFetchRequest,
+    FetchedArtifact,
+} from '@memberjunction/content-pipeline-base';
 
 @RegisterClass(AutotagBase, 'AutotagSlack')
 export class AutotagSlack extends AutotagBase {
-    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback): Promise<void> {
-        // Implementation
+    public override readonly SupportsExhaustiveWalk = true;
+
+    public override async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredContentItem> {
+        // Yield discovered items for the staged Content Pipeline Discover / Sync stage
     }
 
-    public async SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {
-        // Implementation
+    public override async Fetch(request: LocatorFetchRequest): Promise<FetchedArtifact> {
+        // Return raw bytes or inline text for the staged Content Pipeline Extract stage
     }
 }
 ```
 
-3. Ensure the module is imported so the `@RegisterClass` decorator executes before the action runs.
+3. Ensure the module is imported so the `@RegisterClass` decorator executes before the stage or action runs.
 
-The action (`AutotagAndVectorizeContentAction`) automatically discovers and invokes all registered providers by iterating `ContentSourceType` records and resolving each `DriverClass` through the ClassFactory.
+Both the staged Content Pipeline (`DiscoverStage` and `ExtractStage`) and the legacy `AutotagAndVectorizeContentAction` resolve each `ContentSourceType.DriverClass` through the ClassFactory.
 
 ---
 
@@ -386,10 +406,16 @@ Both can run in parallel when both are set to 1.
 
 | File | Purpose |
 |------|---------|
-| `packages/Actions/ContentAutotag/src/generic/content-autotag-and-vectorize.action.ts` | Entry-point action that iterates source types and invokes providers |
-| `packages/ContentAutotagging/src/Core/generic/AutotagBase.ts` | Abstract base class for all autotag providers |
-| `packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts` | Core engine: metadata caching, LLM prompting, chunking, tag saving |
-| `packages/ContentAutotagging/src/Entity/generic/AutotagEntity.ts` | Entity source type provider with taxonomy bridge |
+| `packages/ContentPipeline/base/src/index.ts` | Stage contracts, `WorkingRecord`, `ConfidenceScale`, `BaseContentClassifier`, and source-driver types |
+| `packages/ContentPipeline/engine/src/index.ts` | `PipelineProcessor`, `WorkingRecordHydrator`, `WorkingRecordCommitter`, and built-in pipeline stages |
+| `packages/ContentAutotagging/src/Core/generic/AutotagBase.ts` | Base class for all source-type drivers (`Discover`, `Fetch`, and legacy `Autotag`) |
+| `packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts` | Legacy orchestrator engine: metadata caching, LLM prompting, chunking, tag saving |
+| `packages/ContentAutotagging/src/Engine/generic/ContentAutotagPrompt.ts` | Shared helper executing the managed `"Content Autotagging"` AI prompt |
+| `packages/ContentAutotagging/src/Engine/generic/ContentVectorInfrastructure.ts` | Shared 5-step vector index, model, credential, and namespace resolver |
+| `packages/ContentAutotagging/src/Engine/generic/ContentVectorMetadata.ts` | Shared vector metadata payload builder for chunks and items |
+| `packages/ContentAutotagging/src/Entity/generic/AutotagEntity.ts` | Entity source-type driver with template rendering and taxonomy bridge |
+| `packages/AI/Knowledge/TagEngine/src/ContentItemTagBridge.ts` | Shared bridge promoting `MJ: Content Item Tags` into `MJ: Tags` and `MJ: Tagged Items` |
 | `packages/AI/Knowledge/TagEngineBase/src/TagEngineBase.ts` | Client+server shared tag engine (hierarchy, CRUD) |
 | `packages/AI/Knowledge/TagEngine/src/TagEngine.ts` | Server-only tag engine with semantic embeddings |
+| `packages/Actions/ContentAutotag/src/generic/content-autotag-and-vectorize.action.ts` | Legacy entry-point action that iterates source types and invokes `provider.Autotag()` |
 | `metadata/prompts/templates/knowledge-hub/content-autotagging.template.md` | Nunjucks prompt template for LLM tagging |
