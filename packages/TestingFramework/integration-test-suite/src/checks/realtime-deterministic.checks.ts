@@ -1,5 +1,5 @@
 /**
- * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD18).
+ * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD19).
  *
  * Domain 10 deterministic legs — NO live sessions, NO sidecar, NO model calls:
  *  - realtime metadata integrity: agent channels (RD1), Realtime model → vendor DriverClass
@@ -38,11 +38,14 @@
  *    endpoint allow it); a tagged model
  *    on the same driver and API name whose Video/Output row has IsSupported=false asks for none (`endpoint`); without
  *    that row, its endpoint alone decides and it asks again. Its fixture rows are deleted afterwards.
+ *  - the recording ledger survives a stale session save (RD19, #6010): a session copy loaded before the terminal stamp,
+ *    through an app-owned `MJ: AI Agent Sessions` class that extends the generated entity (so no server subclass runs),
+ *    is saved as the close; the terminal's counts and status are still there afterwards.
  *
  * Every fixture row is tagged '(mj-integration-test — safe to delete)' and deleted in the same
  * check's finally block, so the bundle needs no shared lifecycle.
  */
-import { BaseEntity, Metadata, ProviderType, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
+import { BaseEntity, DatabaseProviderBase, Metadata, ProviderType, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import { FilterByUUIDs, MJGlobal, NormalizeUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { BaseRealtimeModel, type AIAPIKey, type IRealtimeSession, type RealtimeUnitPrice, type RealtimeUsage } from '@memberjunction/ai';
 import { AIEngineBase, ReadCostLines, ReadRealtimeUsageRecord, RoundCost, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
@@ -52,6 +55,7 @@ import {
     RealtimeClientSessionService,
     ReadRealtimeVideoOutputRow,
     RealtimeModelShowsAvatar,
+    SqlRealtimeRecordingLedger,
     type PrepareClientSessionInput,
     type RealtimeSessionParamsPrep,
     type RealtimeVideoConfig,
@@ -921,6 +925,34 @@ async function runBridgedUsageScenario(ctx: IntegrationCheckContext, fixture: Br
         assertPromptRunUsage(promptRun);
         const pricingActive = serverInvariantsActive(ctx.Provider.ProviderType, 'MJ: AI Prompt Runs');
         assertPricedAndRolledUp(promptRun, coAgentRun, fixture.Priced && pricingActive, fixture.VideoPrice);
+    }
+}
+
+/**
+ * What an app that owns its `MJ: AI Agent Sessions` class registers (bizapps-caliber does, #6010): a class that
+ * extends the GENERATED entity, ranked above MJ's server subclass. Every save in such a host skips
+ * `MJAIAgentSessionEntityServer`, so RD19 proves the recording ledger needs no server subclass to survive a stale save.
+ */
+class AppOwnedSessionEntity extends MJAIAgentSessionEntity {}
+
+const SESSION_ENTITY = 'MJ: AI Agent Sessions';
+
+/**
+ * Makes {@link AppOwnedSessionEntity} win the factory for `MJ: AI Agent Sessions` for the length of `body`, then
+ * re-registers the class that won before, above it: the ClassFactory has no unregister, and other checks in this
+ * process must keep getting the server subclass.
+ */
+async function withAppOwnedSessionClass<T>(body: () => Promise<T>): Promise<T> {
+    const factory = MJGlobal.Instance.ClassFactory;
+    const previous = factory.GetRegistration(BaseEntity, SESSION_ENTITY);
+    const appPriority = (previous?.Priority ?? 0) + 1;
+    factory.Register(BaseEntity, AppOwnedSessionEntity, SESSION_ENTITY, appPriority);
+    try {
+        return await body();
+    } finally {
+        if (previous) {
+            factory.Register(BaseEntity, previous.SubClass, SESSION_ENTITY, appPriority + 1);
+        }
     }
 }
 
@@ -1839,6 +1871,56 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                 await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider).catch(() => undefined);
             }
             console.log(`      → ${deployment.Model.Name} on ${deployment.VendorRow.DriverClass} asks for the face; a tagged model there with IsSupported=false asks for none (endpoint), and with no row asks again; fixture removed`);
+        }
+    },
+    {
+        Id: 'realtime-deterministic.RD19',
+        Name: 'RD19: a stale session save from an app subclass leaves the recording ledger alone (#6010)',
+        Fn: async (ctx): Promise<void> => {
+            if (!(ctx.Provider instanceof DatabaseProviderBase)) {
+                console.warn('  ⚠ realtime-deterministic.RD19 SKIPPED — the recording ledger needs a server-side database provider');
+                return;
+            }
+            const provider = ctx.Provider;
+            const session = await buildSessionFixture(ctx.User);
+            if (!session) {
+                console.warn('  ⚠ realtime-deterministic.RD19 SKIPPED — no MJ: AI Agents row available to anchor a session fixture');
+                return;
+            }
+            try {
+                // 1. A recorded session whose terminal has not landed yet: no expected count, no captured samples.
+                session.RecordingStartedAt = new Date();
+                Assert(await session.Save(), `session fixture save failed: ${session.LatestResult?.CompleteMessage}`);
+
+                await withAppOwnedSessionClass(async () => {
+                    // 2. Load the row the way SessionManager.CloseSession does; the factory hands out the app's class.
+                    const stale = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, ctx.User);
+                    Assert(await stale.Load(session.ID), 'the session fixture loads');
+                    Assert(stale instanceof AppOwnedSessionEntity, 'the app subclass won the factory');
+
+                    // 3. The tail shard lands: the terminal is stamped through the ledger proc, as the shard handler does.
+                    await new SqlRealtimeRecordingLedger(provider, ctx.User).StampTerminal(session.ID, 12, 2_823_296);
+
+                    // 4. The close saves the stale copy.
+                    stale.Status = 'Closed';
+                    stale.ClosedAt = new Date();
+                    stale.CloseReason = 'Explicit';
+                    Assert(await stale.Save(), `close save failed: ${stale.LatestResult?.CompleteMessage}`);
+                });
+
+                // 5. The ledger still holds what the proc wrote, and the close itself was written.
+                const fresh = await loadFresh<MJAIAgentSessionEntity>(SESSION_ENTITY, session.ID, ctx.User);
+                Assert(!!fresh, 'the session fixture did not read back');
+                AssertEqual(fresh!.RecordingExpectedShards, 12, 'expected shards survive the close');
+                AssertEqual(fresh!.RecordingCapturedSamples, 2_823_296, 'captured samples survive the close');
+                AssertEqual(fresh!.RecordingStatus, 'Pending', 'recording status survives the close');
+                AssertEqual(fresh!.Status, 'Closed', 'the close itself was written');
+            } finally {
+                if (session.IsSaved) {
+                    await session.Delete().catch(() => undefined);
+                }
+            }
+            console.log('      → a stale close saved through an app-owned session class kept the terminal stamp; fixture removed');
         }
     }
 ];
