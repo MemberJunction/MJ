@@ -1599,7 +1599,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT130 - FLS Close-out (server)",
+            "TestID": "@lookup:MJ: Tests.Name=IT133 - FLS Close-out (server)",
             "Sequence": 49,
             "Status": "Active"
           },
@@ -1610,7 +1610,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT132 - FLS Close-out (cache segmentation, RunQuery)",
+            "TestID": "@lookup:MJ: Tests.Name=IT135 - FLS Close-out (cache segmentation, RunQuery)",
             "Sequence": 49,
             "Status": "Active"
           },
@@ -1621,7 +1621,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT131 - FLS Close-out Over-The-Wire (client transport)",
+            "TestID": "@lookup:MJ: Tests.Name=IT134 - FLS Close-out Over-The-Wire (client transport)",
             "Sequence": 77,
             "Status": "Active"
           },

@@ -359,9 +359,9 @@ async function provisionRest(ctx: IntegrationCheckContext, fx: FlsClientFixture)
         state.RestSkipReason = 'the reader connection has no current user';
         return;
     }
-    state.ReaderRawKey = await MintFullAccessUserKey(ctx, state, readerID, 'IT131 FLS close-out REST reader (mj-integration-test)');
+    state.ReaderRawKey = await MintFullAccessUserKey(ctx, state, readerID, 'IT134 FLS close-out REST reader (mj-integration-test)');
     if (multiID) {
-        state.MultiRawKey = await MintFullAccessUserKey(ctx, state, multiID, 'IT131 FLS close-out REST multi (mj-integration-test)');
+        state.MultiRawKey = await MintFullAccessUserKey(ctx, state, multiID, 'IT134 FLS close-out REST multi (mj-integration-test)');
     }
     await probeRest();
 }

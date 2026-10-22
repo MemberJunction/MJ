@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT131 - FLS Close-out Over-The-Wire (client transport)",
+    "Name": "IT134 - FLS Close-out Over-The-Wire (client transport)",
     "Description": "The field-level security close-out fixes that live in MJAPI's transports, proven over the wire as genuinely restricted principals: the fls-closeout-client lifecycle reuses IT92's fixture (per-user API keys for the seeded reader, writer and multi users, a GraphQL connection authenticated as each, field security enabled through the wire), gives the fixture employee a Title as the writer, denies the multi user Title through the Denier role and waits until MJAPI enforces it, and mints one more key each for the reader and multi user for REST. Raw GraphQL and REST bodies are sent exactly as any API caller can. Nine checks: CW1 a restricted user's object holds no denied value after a wire Load and a wire Save, and the stored value is untouched; CW2 a GraphQL create carrying a denied key is refused with the client-input wording and writes nothing; CW3 a GraphQL update carrying a denied key and one carrying an unknown OldValues___ key are refused with the same wording, and the row does not move; CW4 transaction-group create and update carrying a denied key and an unknown key are refused with the same wording and write nothing; CW5 a transaction-group update's returned delta carries no value the caller may not read; CW6 the client library's own transaction group creates a record for a restricted user (its payload omits the denied fields); CW7 REST get and REST runView (an entity_object request answered as plain rows) carry no denied value; CW8 REST create and update carrying a denied key and an unknown key are refused with the same wording, and an allowed REST update's response carries no denied value; CW9 over the wire an unknown column in a filter gets the denied column's wording and OverrideExcludeFilter naming a denied column is refused. REST is optional on MJAPI: CW7/CW8 skip loudly unless MJ_REST_API_ENABLED=true (set MJAPI_REST_URL when REST is not at <MJAPI origin><MJAPI_BASE_PATH>/api/v1). An unknown key in a GraphQL create/update INPUT object is rejected by GraphQL schema validation before any resolver runs (the schema is public), so the denied-versus-unknown equality is asserted where unknown keys reach the gate: OldValues___, transaction groups and REST. Teardown restores the Title rule, deletes created rows and the extra keys, then runs IT92's teardown. Skips loudly when MJAPI is unreachable, the seed is absent, or the entity is already FLS-enabled.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
@@ -20,5 +20,9 @@
   },
   "primaryKey": {
     "ID": "45087E5C-BE7C-4228-B2FA-6B6BDB1B4CEB"
+  },
+  "sync": {
+    "lastModified": "2026-10-22T18:12:52.898Z",
+    "checksum": "4fc646c5a214d44942a09ea5876a16920c37460699122d050f575f2a09d5bb34"
   }
 }
