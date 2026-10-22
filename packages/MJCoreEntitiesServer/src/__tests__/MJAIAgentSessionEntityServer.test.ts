@@ -39,6 +39,7 @@ vi.mock('@memberjunction/core-entities', () => {
     /** Minimal stand-in for the generated MJAIAgentSessionEntity. */
     class StubSessionEntity {
         public IsSaved = true;
+        public ContextCurrentUser: unknown = null;
         public Config_: string | null = null;
         public ConfigField: StubConfigField | null = { Dirty: true, OldValue: null };
 
@@ -252,6 +253,35 @@ describe('MJAIAgentSessionEntityServer.Validate', () => {
         } finally {
             base.Validate = original;
         }
+    });
+});
+
+describe('MJAIAgentSessionEntityServer.Validate — ConversationID is not rewritable by an anonymous caller (#4931)', () => {
+    /** A session whose Config is untouched, so only the ConversationID rule can refuse. */
+    function sessionWithConversationEdit(opts: { saved: boolean; conversationIdDirty: boolean; anonymous: boolean }): MJAIAgentSessionEntityServer {
+        const entity = session({ saved: opts.saved, previous: null, next: null, dirty: false });
+        const stub = entity as unknown as { ContextCurrentUser: unknown; LedgerFields: Map<string, unknown> };
+        stub.ContextCurrentUser = { ID: 'anon-user', IsMagicLinkAnonymous: opts.anonymous };
+        stub.LedgerFields.set('ConversationID', { Dirty: opts.conversationIdDirty, NotLoaded: false, MarkNotLoaded: () => {} });
+        return entity;
+    }
+
+    it('refuses an anonymous caller re-pointing an existing session at another conversation', () => {
+        const result = sessionWithConversationEdit({ saved: true, conversationIdDirty: true, anonymous: true }).Validate();
+        expect(result.Success).toBe(false);
+        expect(JSON.stringify(result.Errors)).toContain('ConversationID');
+    });
+
+    it('allows an anonymous caller to set ConversationID when it creates the session (SessionManager.persistNewSession)', () => {
+        expect(sessionWithConversationEdit({ saved: false, conversationIdDirty: true, anonymous: true }).Validate().Success).toBe(true);
+    });
+
+    it('allows an anonymous caller saving other fields (heartbeat, close)', () => {
+        expect(sessionWithConversationEdit({ saved: true, conversationIdDirty: false, anonymous: true }).Validate().Success).toBe(true);
+    });
+
+    it('allows a named caller changing ConversationID', () => {
+        expect(sessionWithConversationEdit({ saved: true, conversationIdDirty: true, anonymous: false }).Validate().Success).toBe(true);
     });
 });
 

@@ -2,12 +2,15 @@ import { BaseEntity, EntitySaveOptions, ValidationErrorInfo, ValidationErrorType
 import { RegisterClass } from '@memberjunction/global';
 import { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
 import { FindProtectedSessionConfigChanges, IsTrustedSessionConfigWriteActive } from './sessionConfigGuard';
+import { CheckAnonymousOwnershipKeyChange, OwnershipKeyGuardTarget } from './anonymousOwnershipKeyGuard';
 
 /**
  * Server-side `MJ: AI Agent Sessions` entity.
  *
  * It keeps the **server-authoritative keys** inside `Config` (the janitor's
- * `maxSessionDeadlineIso`, the `identityVerification` state) out of the session owner's reach, and it
+ * `maxSessionDeadlineIso`, the `identityVerification` state) out of the session owner's reach, keeps an
+ * anonymous visitor from re-pointing an existing session's `ConversationID` (the anonymous ownership key —
+ * see `CheckAnonymousOwnershipKeyChange`), and it
  * keeps every save from writing back the **recording ledger's columns** (see {@link Save}). The
  * owner can legitimately write the row — the `UI` and `Widget Guest` roles hold `CanUpdate` on their
  * own sessions — so the protection has to live at the entity, where the generated CRUD mutations,
@@ -61,9 +64,12 @@ export class MJAIAgentSessionEntityServer extends MJAIAgentSessionEntity {
 
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        const violation = this.checkProtectedConfigKeys();
-        if (violation) {
-            result.Errors.push(violation);
+        const violations = [
+            this.checkProtectedConfigKeys(),
+            CheckAnonymousOwnershipKeyChange(this as unknown as OwnershipKeyGuardTarget, 'ConversationID'),
+        ].filter((v): v is ValidationErrorInfo => v !== null);
+        if (violations.length > 0) {
+            result.Errors.push(...violations);
             result.Success = false;
         }
         return result;
