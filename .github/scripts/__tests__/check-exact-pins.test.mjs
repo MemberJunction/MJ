@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isExactVersion, findPinViolations } from '../check-exact-pins.mjs';
+import { readWorkflow } from './lib/workflow.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SCRIPT = resolve(HERE, '..', 'check-exact-pins.mjs');
@@ -15,6 +16,12 @@ describe('check-exact-pins against this repo', () => {
         const run = spawnSync(process.execPath, [SCRIPT, '--root', REPO_ROOT], { encoding: 'utf8' });
         expect(run.stdout + run.stderr).not.toMatch(/\^|~/);
         expect(run.status).toBe(0);
+    });
+
+    it('triggers test.yml on an edit to .github/scripts/check-exact-pins.mjs alone', () => {
+        const pathsBlock = readWorkflow().match(/<<'PATHS'\n([\s\S]*?)\n\s*PATHS\n/);
+        expect(pathsBlock, "test.yml's changes job must keep its <<'PATHS' list").not.toBeNull();
+        expect(pathsBlock[1].split('\n').map((l) => l.trim())).toContain('.github/scripts/check-exact-pins.mjs');
     });
 });
 
@@ -163,6 +170,30 @@ describe('check-exact-pins fixture suite', () => {
 
         const violations = findPinViolations(tempRoot);
         expect(violations).toHaveLength(2);
+        expect(runCli().status).toBe(1);
+    });
+
+    it('fails when a pinned-scope dependency in optionalDependencies uses a range', () => {
+        writeManifest('packages/flow-editor', {
+            name: '@memberjunction/ng-flow-editor',
+            optionalDependencies: {
+                '@foblex/flow': '^18.0.0',
+            },
+        });
+        writeLockfile(
+            `  packages/flow-editor:\n    optionalDependencies:\n      '@foblex/flow':\n        specifier: ^18.0.0\n        version: 18.0.0(@angular/core@21.2.22)`
+        );
+
+        const violations = findPinViolations(tempRoot);
+        expect(violations).toEqual([
+            {
+                manifestPath: 'packages/flow-editor/package.json',
+                dep: '@foblex/flow',
+                declaredRange: '^18.0.0',
+                lockfileVersion: '18.0.0',
+                lockfileSpecifier: '^18.0.0',
+            },
+        ]);
         expect(runCli().status).toBe(1);
     });
 

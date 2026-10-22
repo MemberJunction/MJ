@@ -30,7 +30,7 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', '.angular', '.turbo']);
 /** Hard cap on directories visited — hitting this means the directory walk escaped. */
 const MAX_DIRS = 20000;
 const EXACT_VERSION_RE = /^\d+\.\d+\.\d+$/;
-const DEP_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies'];
+const DEP_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
 
 /**
  * Return true iff `range` is a strict `X.Y.Z` version string.
