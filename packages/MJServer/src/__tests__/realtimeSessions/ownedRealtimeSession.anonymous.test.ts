@@ -8,7 +8,7 @@ const ANON = uuid('A', '0');
 const SESSION = uuid('1', '1');
 const CONVERSATION = uuid('2', '2');
 const guest = (scope: string) =>
-    ({ ID: ANON, IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: scope } } as unknown as UserInfo);
+    ({ ID: ANON, IsMagicLinkAnonymous: true, AnonymousVisitorID: scope, MagicLinkScope: { ResourceID: scope } } as unknown as UserInfo);
 
 /** A session owned by the shared Anonymous user; its conversation is stamped with visitor 1's scope. */
 function provider(): IMetadataProvider {

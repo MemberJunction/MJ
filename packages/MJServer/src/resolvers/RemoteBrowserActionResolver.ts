@@ -35,6 +35,11 @@ import {
 } from '@memberjunction/remote-browser-base';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
+import {
+  LoadOwnedRealtimeSession,
+  RealtimeSessionNotFoundError,
+  RealtimeSessionOwnershipError,
+} from '../realtimeSessions/ownedRealtimeSession.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -1084,14 +1089,17 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * @returns The loaded, owned session entity.
    */
   protected async loadOwnedSession(agentSessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<MJAIAgentSessionEntity> {
-    const session = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
-    if (!(await session.Load(agentSessionID))) {
-      throw new Error(`Remote-browser session ${agentSessionID} not found.`);
+    try {
+      return await LoadOwnedRealtimeSession(agentSessionID, contextUser, provider);
+    } catch (err) {
+      if (err instanceof RealtimeSessionNotFoundError) {
+        throw new Error(`Remote-browser session ${agentSessionID} not found.`);
+      }
+      if (err instanceof RealtimeSessionOwnershipError) {
+        throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
+      }
+      throw err;
     }
-    if (!UUIDsEqual(session.UserID, contextUser.ID)) {
-      throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
-    }
-    return session;
   }
 
   /**
