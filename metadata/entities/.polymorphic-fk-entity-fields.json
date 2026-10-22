@@ -185,6 +185,29 @@
   },
   {
     "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Calendar Event Links: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Calendar Event Links"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Calendar Event Links&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Calendar Event Links"
+    }
+  },
+  {
+    "_comments": [
       "Polymorphic foreign key declaration(s) on MJ: Company Integration Record Maps: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
     ],
     "fields": {
