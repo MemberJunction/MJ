@@ -1,4 +1,4 @@
-import { Component, ChangeDetectorRef, OnDestroy, OnInit, AfterViewInit, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, NgZone, OnDestroy, OnInit, AfterViewInit, inject } from '@angular/core';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { MJUserNotificationEntity, MJUserNotificationTypeEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { CompositeKey, TransactionGroupBase } from '@memberjunction/core';
@@ -92,6 +92,7 @@ const RELATIVE_REFRESH_MS = 60_000;
 })
 export class UserNotificationsComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
+  private ngZone = inject(NgZone, { optional: true });
 
   public RadioSelected: ReadFilterOption = 'All';
 
@@ -172,13 +173,32 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   async ngOnInit() {
     this.loadNotificationTypes();
     // Refresh the snapshot relative-time labels between change-detection passes.
-    this.relativeTimer = setInterval(() => {
-      for (const vm of this.vmCache.values()) {
-        vm.Relative = this.relativeTime(vm.N.__mj_CreatedAt);
-      }
-      this.groupsKey = ''; // day buckets can shift at midnight
-      this.cdr.markForCheck();
-    }, RELATIVE_REFRESH_MS);
+    // Run outside NgZone so the 60s timer only triggers Angular CD when a label actually changes.
+    const startTimer = () => {
+      this.relativeTimer = setInterval(() => {
+        let anyChanged = false;
+        for (const vm of this.vmCache.values()) {
+          const next = this.relativeTime(vm.N.__mj_CreatedAt);
+          if (vm.Relative !== next) {
+            vm.Relative = next;
+            anyChanged = true;
+          }
+        }
+        this.groupsKey = ''; // day buckets can shift at midnight
+        if (anyChanged) {
+          if (this.ngZone) {
+            this.ngZone.run(() => this.cdr.markForCheck());
+          } else {
+            this.cdr.markForCheck();
+          }
+        }
+      }, RELATIVE_REFRESH_MS);
+    };
+    if (this.ngZone) {
+      this.ngZone.runOutsideAngular(startTimer);
+    } else {
+      startTimer();
+    }
   }
 
   ngAfterViewInit(): void {
@@ -209,17 +229,40 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   // Data shaping (filter → view models → day groups)
   // ========================================================================
 
+  private notificationsToShowCache: MJUserNotificationEntity[] = [];
+  private notificationsToShowKey = '';
+  private unreadNotificationsCache: MJUserNotificationEntity[] = [];
+  private unreadNotificationsKey = '';
+  private readNotificationsCache: MJUserNotificationEntity[] = [];
+  private readNotificationsKey = '';
+
+  private computeAllNotificationsSignature(): { all: MJUserNotificationEntity[]; unreadCount: number; baseKey: string } {
+    const all = this.AllNotifications;
+    let unreadCount = 0;
+    for (let i = 0; i < all.length; i++) {
+      if (all[i].Unread) unreadCount++;
+    }
+    const baseKey = `${all.length}|${unreadCount}|${all[0]?.ID ?? ''}|${all[all.length - 1]?.ID ?? ''}`;
+    return { all, unreadCount, baseKey };
+  }
+
   public get NotificationsToShow(): MJUserNotificationEntity[] {
+    const { all, baseKey } = this.computeAllNotificationsSignature();
+    const key = `${baseKey}|${this.RadioSelected}|${this.SelectedTypeFilter ?? ''}|${this.CurrentFilter}`;
+    if (key === this.notificationsToShowKey) {
+      return this.notificationsToShowCache;
+    }
+
     let temp: MJUserNotificationEntity[] = [];
     switch (this.RadioSelected) {
       case 'All':
-        temp = this.AllNotifications;
+        temp = all;
         break;
       case 'Unread':
-        temp = this.AllNotifications.filter(n => n.Unread);
+        temp = all.filter(n => n.Unread);
         break;
       case 'Read':
-        temp = this.AllNotifications.filter(n => !n.Unread);
+        temp = all.filter(n => !n.Unread);
         break;
     }
 
@@ -229,27 +272,29 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     }
 
     // Apply text filter if it is not empty
-    if (this.CurrentFilter.trim().length > 0) {
+    const filterLower = this.CurrentFilter.trim().toLowerCase();
+    if (filterLower.length > 0) {
       // check for inclusion of filter value in title or message
-      temp = temp.filter(n => n.Title?.toLowerCase().includes(this.CurrentFilter.trim().toLowerCase()) ||
-                              n.Message?.toLowerCase().includes(this.CurrentFilter.trim().toLowerCase())
+      temp = temp.filter(n => n.Title?.toLowerCase().includes(filterLower) ||
+                              n.Message?.toLowerCase().includes(filterLower)
                         );
     }
 
+    this.notificationsToShowKey = key;
+    this.notificationsToShowCache = temp;
     return temp;
   }
 
   /**
    * The filtered notifications as render-ready day groups. Memoized on a composite
-   * key of the inputs so the getter stays cheap across change-detection passes and
-   * the (time-sensitive) VM snapshots never rebuild mid-pass.
+   * key of the inputs BEFORE filtering `AllNotifications`, so the getter stays $O(1)$
+   * across change-detection passes and the (time-sensitive) VM snapshots never rebuild mid-pass.
    */
   public get Groups(): NotificationGroup[] {
-    const list = this.NotificationsToShow;
-    const unread = list.filter(n => n.Unread).length;
-    const key = `${list.length}|${unread}|${this.RadioSelected}|${this.SelectedTypeFilter}|${this.CurrentFilter}|${list[0]?.ID ?? ''}|${list[list.length - 1]?.ID ?? ''}`;
+    const { baseKey } = this.computeAllNotificationsSignature();
+    const key = `${baseKey}|${this.RadioSelected}|${this.SelectedTypeFilter ?? ''}|${this.CurrentFilter}`;
     if (key !== this.groupsKey) {
-      this.groups = this.buildGroups(list);
+      this.groups = this.buildGroups(this.NotificationsToShow);
       this.groupsKey = key;
     }
     return this.groups;
@@ -474,11 +519,21 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   public get UnreadNotifications(): MJUserNotificationEntity[] {
-    return this.AllNotifications.filter(n => n.Unread);
+    const { all, baseKey } = this.computeAllNotificationsSignature();
+    if (baseKey !== this.unreadNotificationsKey) {
+      this.unreadNotificationsKey = baseKey;
+      this.unreadNotificationsCache = all.filter(n => n.Unread);
+    }
+    return this.unreadNotificationsCache;
   }
 
   public get ReadNotifications(): MJUserNotificationEntity[] {
-    return this.AllNotifications.filter(n => !n.Unread);
+    const { all, baseKey } = this.computeAllNotificationsSignature();
+    if (baseKey !== this.readNotificationsKey) {
+      this.readNotificationsKey = baseKey;
+      this.readNotificationsCache = all.filter(n => !n.Unread);
+    }
+    return this.readNotificationsCache;
   }
 
   SelectReadOption(option: ReadFilterOption): void {

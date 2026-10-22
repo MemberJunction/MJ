@@ -78,6 +78,18 @@ describe('PGConnectionManager', () => {
             expect(manager.Config).not.toBeNull();
         });
 
+        it('listens for errors on the pool so a dropped idle connection does not exit the process', async () => {
+            await manager.Initialize({ Host: 'localhost', Database: 'testdb', User: 'user', Password: 'pass' });
+
+            const on = manager.Pool.on as unknown as ReturnType<typeof vi.fn>;
+            expect(on).toHaveBeenCalledWith('error', expect.any(Function));
+            const listener = on.mock.calls.find(([event]) => event === 'error')?.[1] as (err: Error) => void;
+            const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            expect(() => listener(new Error('Connection terminated unexpectedly'))).not.toThrow();
+            expect(logged).toHaveBeenCalled();
+            logged.mockRestore();
+        });
+
         it('passes the statement and idle-in-transaction timeouts to every backend at startup', async () => {
             await manager.Initialize({
                 Host: 'localhost',
@@ -138,19 +150,8 @@ describe('PGConnectionManager', () => {
                 expect(lastConfig?.keepAliveInitialDelayMillis).toBe(10000);
             });
 
-            it("attaches an 'error' listener to the pool it creates", async () => {
-                await manager.Initialize(baseConfig);
-
-                const pool = manager.Pool as unknown as {
-                    on: { mock: { calls: unknown[][] } };
-                    listeners: Record<string, unknown[]>;
-                };
-                expect(pool.on.mock.calls.some((c) => c[0] === 'error')).toBe(true);
-                expect(pool.listeners['error']?.length ?? 0).toBeGreaterThan(0);
-            });
-
             it('an idle-client error is handled, not thrown — the run survives it', async () => {
-                const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+                const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
                 try {
                     await manager.Initialize(baseConfig);
 
@@ -161,10 +162,10 @@ describe('PGConnectionManager', () => {
                         expect(pool.emit('error', new Error('read ECONNRESET'))).toBe(true);
                     }).not.toThrow();
 
-                    expect(warn).toHaveBeenCalled();
-                    expect(String(warn.mock.calls[0][0])).toContain('ECONNRESET');
+                    expect(logged).toHaveBeenCalled();
+                    expect(logged.mock.calls[0].map(String).join(' ')).toContain('ECONNRESET');
                 } finally {
-                    warn.mockRestore();
+                    logged.mockRestore();
                 }
             });
 

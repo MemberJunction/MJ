@@ -664,8 +664,28 @@ describe('AnthropicLLM', () => {
                 const apiMessages = callArgs.messages;
                 const lastMessage = apiMessages[apiMessages.length - 1];
                 expect(lastMessage.role).toBe('assistant');
-                // The content is formatted through formatMessagesWithCaching, so check for the prefill text
-                expect(lastMessage.content).toEqual([{ type: 'text', text: '{"data":', cache_control: { type: 'ephemeral' } }]);
+                // The content is formatted through formatMessagesWithCaching. enableCaching: false is
+                // honoured, so the prefill carries no cache breakpoint.
+                expect(lastMessage.content).toEqual([{ type: 'text', text: '{"data":' }]);
+            });
+
+            it('caches by default when enableCaching is not set', async () => {
+                const mockFinalMessage = vi.fn().mockResolvedValue({
+                    content: [{ type: 'text', text: 'completed response' }],
+                    usage: { input_tokens: 10, output_tokens: 5 },
+                    stop_reason: 'end_turn'
+                });
+                mockStream.mockReturnValue({ on: vi.fn().mockReturnValue({ finalMessage: mockFinalMessage }) });
+
+                await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({
+                    messages: [{ role: ChatMessageRole.user, content: 'Generate JSON' }],
+                    model: 'claude-sonnet-4-20250514',
+                    maxOutputTokens: 1024,
+                    assistantPrefill: '{"data":'
+                });
+
+                const apiMessages = mockStream.mock.calls[0][0].messages;
+                expect(apiMessages[apiMessages.length - 1].content).toEqual([{ type: 'text', text: '{"data":', cache_control: { type: 'ephemeral' } }]);
             });
 
             it('should not add prefill message when assistantPrefill is not set', async () => {

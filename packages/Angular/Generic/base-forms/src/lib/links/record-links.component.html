@@ -1,0 +1,275 @@
+@if (Mode === 'drawer') {
+    @if (IsOpen) {
+        <div class="mj-links-backdrop" (click)="OnClose()"></div>
+        <aside class="mj-links-drawer" role="dialog" aria-label="Links">
+            <div class="mj-links-drawer__header">
+                <div class="mj-links-drawer__title-group">
+                    <span class="mj-links-drawer__icon">
+                        <i class="fa-solid fa-link"></i>
+                    </span>
+                    <div class="mj-links-drawer__titles">
+                        <h3 class="mj-links-drawer__title">
+                            Links
+                            @if (TotalLinkCount > 0) {
+                                <span class="mj-links-drawer__count">{{ TotalLinkCount }}</span>
+                            }
+                        </h3>
+                        <span class="mj-links-drawer__subtitle">Connected records across your workspace</span>
+                    </div>
+                </div>
+                <div class="mj-links-drawer__header-actions">
+                    <button
+                        type="button"
+                        class="mj-links-icon-btn"
+                        title="Refresh links"
+                        aria-label="Refresh links"
+                        [disabled]="IsLoading"
+                        (click)="LoadLinks(true)">
+                        <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading"></i>
+                    </button>
+                    <button
+                        type="button"
+                        class="mj-links-icon-btn"
+                        title="Close Links panel"
+                        aria-label="Close Links panel"
+                        (click)="OnClose()">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="mj-links-drawer__body">
+                <ng-container *ngTemplateOutlet="linksContentTpl"></ng-container>
+            </div>
+        </aside>
+    }
+} @else {
+    <div class="mj-links-widget">
+        <ng-container *ngTemplateOutlet="linksContentTpl"></ng-container>
+    </div>
+}
+
+<ng-template #linksContentTpl>
+    <!-- Search, Direction Tabs & Collapsible Filter Bar -->
+    <div class="mj-links-controls">
+        @if (!IsLoading && TotalLinkCount > 0) {
+            <div class="mj-links-direction-tabs" role="tablist" aria-label="Link direction filter">
+                <button
+                    type="button"
+                    class="mj-links-direction-tab"
+                    [class.mj-links-direction-tab--active]="DirectionFilter === 'all'"
+                    (click)="SetDirectionFilter('all')">
+                    <span>All</span>
+                    <span class="mj-links-direction-tab__count">{{ TotalLinkCount }}</span>
+                </button>
+                <button
+                    type="button"
+                    class="mj-links-direction-tab"
+                    [class.mj-links-direction-tab--active]="DirectionFilter === 'outgoing'"
+                    (click)="SetDirectionFilter('outgoing')"
+                    title="Records referenced by fields on this record">
+                    <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                    <span>On This Record</span>
+                    <span class="mj-links-direction-tab__count">{{ OutgoingLinkCount }}</span>
+                </button>
+                <button
+                    type="button"
+                    class="mj-links-direction-tab"
+                    [class.mj-links-direction-tab--active]="DirectionFilter === 'incoming'"
+                    (click)="SetDirectionFilter('incoming')"
+                    title="Other records that reference this record">
+                    <i class="fa-solid fa-arrow-turn-up" aria-hidden="true"></i>
+                    <span>Linked To This</span>
+                    <span class="mj-links-direction-tab__count">{{ IncomingLinkCount }}</span>
+                </button>
+            </div>
+        }
+
+        <div class="mj-links-search-row">
+            <div class="mj-links-search">
+                <i class="fa-solid fa-magnifying-glass mj-links-search__icon"></i>
+                <input
+                    type="text"
+                    class="mj-links-search__input"
+                    placeholder="Search linked records..."
+                    aria-label="Search linked records"
+                    [value]="SearchText"
+                    (input)="OnSearchInput($event)" />
+                @if (SearchText) {
+                    <button
+                        type="button"
+                        class="mj-links-search__clear"
+                        title="Clear search"
+                        aria-label="Clear search"
+                        (click)="ClearSearch()">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                }
+            </div>
+            <button
+                type="button"
+                class="mj-links-filter-toggle"
+                [class.mj-links-filter-toggle--active]="ShowFilterPanel || LinkFilter !== 'both'"
+                [attr.aria-expanded]="ShowFilterPanel"
+                title="Filter by link type"
+                (click)="ToggleFilterPanel()">
+                <i class="fa-solid fa-sliders"></i>
+                <span>Filter</span>
+                @if (LinkFilter !== 'both') {
+                    <span class="mj-links-filter-toggle__dot"></span>
+                }
+            </button>
+        </div>
+
+        <!-- Collapsible Link Type Filter Panel -->
+        @if (ShowFilterPanel) {
+            <div class="mj-links-filter-panel">
+                <div class="mj-links-filter-panel__label">Link Type</div>
+                <div class="mj-links-filter-options" role="radiogroup" aria-label="Link Type">
+                    <button
+                        type="button"
+                        class="mj-links-filter-option"
+                        [class.mj-links-filter-option--active]="LinkFilter === 'both'"
+                        (click)="SetLinkFilter('both')">
+                        <span>All Links</span>
+                        <span class="mj-links-filter-option__count">{{ TotalLinkCount }}</span>
+                    </button>
+                    <button
+                        type="button"
+                        class="mj-links-filter-option"
+                        [class.mj-links-filter-option--active]="LinkFilter === 'soft'"
+                        (click)="SetLinkFilter('soft')">
+                        <i class="fa-solid fa-diagram-project"></i>
+                        <span>Cross-App Links</span>
+                        <span class="mj-links-filter-option__count">{{ CrossAppLinkCount }}</span>
+                    </button>
+                    <button
+                        type="button"
+                        class="mj-links-filter-option"
+                        [class.mj-links-filter-option--active]="LinkFilter === 'hard'"
+                        (click)="SetLinkFilter('hard')">
+                        <i class="fa-solid fa-link"></i>
+                        <span>Direct Relationships</span>
+                        <span class="mj-links-filter-option__count">{{ DirectRelationshipCount }}</span>
+                    </button>
+                </div>
+            </div>
+        }
+
+        <!-- Top Category Chips -->
+        @if (!IsLoading && TotalLinkCount > 0) {
+            <div class="mj-links-chips" role="tablist" aria-label="Linked record categories">
+                @for (chip of CategoryChips; track chip.EntityName ?? '__all__') {
+                    <button
+                        type="button"
+                        class="mj-links-chip"
+                        [class.mj-links-chip--active]="SelectedEntityName === chip.EntityName"
+                        (click)="SelectCategoryChip(chip.EntityName)">
+                        <i [class]="chip.Icon"></i>
+                        <span class="mj-links-chip__label">{{ chip.Label }}</span>
+                        <span class="mj-links-chip__count">({{ chip.Count }})</span>
+                    </button>
+                }
+            </div>
+        }
+    </div>
+
+    <!-- Main Content States -->
+    @if (IsLoading) {
+        <div class="mj-links-state">
+            <i class="fa-solid fa-spinner fa-spin mj-links-state__spinner"></i>
+            <span>Loading linked records...</span>
+        </div>
+    } @else if (ErrorMessage) {
+        <div class="mj-links-state mj-links-state--error">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            <span>{{ ErrorMessage }}</span>
+        </div>
+    } @else if (TotalLinkCount === 0) {
+        <div class="mj-links-state mj-links-state--empty">
+            <div class="mj-links-state__icon">
+                <i class="fa-solid fa-link-slash"></i>
+            </div>
+            <div class="mj-links-state__title">No linked records yet</div>
+            <div class="mj-links-state__desc">
+                Records across your workspace that reference this item or are linked on this record will appear here automatically.
+            </div>
+        </div>
+    } @else if (FilteredGroups.length === 0) {
+        <div class="mj-links-state mj-links-state--empty">
+            <div class="mj-links-state__icon">
+                <i class="fa-solid fa-filter-circle-xmark"></i>
+            </div>
+            <div class="mj-links-state__title">No matching links</div>
+            <div class="mj-links-state__desc">
+                No linked records match "{{ SearchText || ActiveLinkFilterLabel }}".
+            </div>
+            <button type="button" class="mj-links-reset-btn" (click)="ResetFilters()">
+                Reset filters
+            </button>
+        </div>
+    } @else {
+        <div class="mj-links-groups">
+            @for (group of FilteredGroups; track group.EntityName) {
+                <section class="mj-links-group">
+                    <header class="mj-links-group__header">
+                        <div class="mj-links-group__title">
+                            <i [class]="group.EntityIcon + ' mj-links-group__icon'"></i>
+                            <span>{{ group.EntityDisplayName }}</span>
+                        </div>
+                        <span class="mj-links-group__badge">{{ group.Items.length }}</span>
+                    </header>
+                    <div class="mj-links-group__items">
+                        @for (item of group.Items; track item.TrackKey) {
+                            <button
+                                type="button"
+                                class="mj-links-card"
+                                (click)="OnItemClick(item, $event)"
+                                (mouseenter)="OnCardMouseEnter(item, $event)"
+                                (mouseleave)="OnCardMouseLeave()">
+                                <div class="mj-links-card__main">
+                                    <div class="mj-links-card__title-row">
+                                        <span class="mj-links-card__title">{{ item.DisplayName }}</span>
+                                        @if (item.StatusLabel) {
+                                            <span class="mj-links-card__status">{{ item.StatusLabel }}</span>
+                                        }
+                                    </div>
+                                    <div class="mj-links-card__meta">
+                                        <span class="mj-links-card__direction-pill" [class.mj-links-card__direction-pill--outgoing]="item.Direction === 'outgoing'">
+                                            <i [class]="item.Direction === 'outgoing' ? 'fa-solid fa-arrow-up-right-from-square' : 'fa-solid fa-arrow-turn-up'" aria-hidden="true"></i>
+                                            {{ item.DirectionLabel }}
+                                        </span>
+                                        <span class="mj-links-card__relationship">
+                                            <i [class]="item.IsSoftLink ? 'fa-solid fa-diagram-project' : 'fa-solid fa-link'"></i>
+                                            {{ item.RelationshipLabel }}
+                                        </span>
+                                        <span class="mj-links-card__type-pill" [class.mj-links-card__type-pill--soft]="item.IsSoftLink">
+                                            {{ item.LinkTypeLabel }}
+                                        </span>
+                                        @if (item.FormattedDate) {
+                                            <span class="mj-links-card__date">{{ item.FormattedDate }}</span>
+                                        }
+                                    </div>
+                                </div>
+                                <i class="fa-solid fa-chevron-right mj-links-card__chevron"></i>
+                            </button>
+                        }
+                    </div>
+                </section>
+            }
+        </div>
+    }
+
+    @if (HoveredItem; as hovered) {
+        <mj-record-preview-popover
+            [Provider]="ProviderToUse"
+            [Visible]="true"
+            [EntityName]="hovered.EntityName"
+            [PrimaryKey]="hovered.PrimaryKey"
+            [DisplayName]="hovered.DisplayName"
+            [AnchorRect]="HoverAnchorRect"
+            (Navigate)="OnPreviewCardNavigate($event)"
+            (MouseEnterCard)="OnPreviewCardMouseEnter()"
+            (MouseLeaveCard)="OnPreviewCardMouseLeave()">
+        </mj-record-preview-popover>
+    }
+</ng-template>

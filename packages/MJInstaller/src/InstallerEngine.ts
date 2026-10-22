@@ -994,6 +994,16 @@ export class InstallerEngine {
       return;
     }
 
+    // Local Dev auth checks
+    if (authType === 'local') {
+      diagnostics.AddCheck({
+        Name: 'Local Dev Auth',
+        Status: 'pass',
+        Message: 'AUTH_TYPE is "local" (local development mock JWT provider).',
+      });
+      this.emitDiagnostic('Local Dev Auth', 'pass', 'AUTH_TYPE is "local".');
+    }
+
     // MSAL auth checks
     if (authType === 'msal') {
       if (!clientId) {
@@ -1075,6 +1085,26 @@ export class InstallerEngine {
       if (!(await fs.FileExists(envPath))) continue;
 
       const content = await fs.ReadText(envPath);
+
+      if (explorerAuthType === 'local') {
+        const hasLocalDevAuth = /^MJ_DEV_AUTH_ENABLED\s*=\s*['"]?(true|1)['"]?/im.test(content);
+        if (!hasLocalDevAuth) {
+          diagnostics.AddCheck({
+            Name: 'MJAPI auth consistency',
+            Status: 'warn',
+            Message: `Explorer uses local dev auth ("local") but MJAPI .env is missing MJ_DEV_AUTH_ENABLED=true.`,
+            SuggestedFix: 'Add MJ_DEV_AUTH_ENABLED=true to the MJAPI .env file for local development.',
+          });
+          this.emitDiagnostic('MJAPI auth consistency', 'warn', 'MJAPI .env missing MJ_DEV_AUTH_ENABLED=true.');
+        } else {
+          diagnostics.AddCheck({
+            Name: 'MJAPI auth consistency',
+            Status: 'pass',
+            Message: 'MJAPI .env has MJ_DEV_AUTH_ENABLED=true matching Explorer local auth type.',
+          });
+          this.emitDiagnostic('MJAPI auth consistency', 'pass', 'MJAPI .env MJ_DEV_AUTH_ENABLED=true present.');
+        }
+      }
 
       if (explorerAuthType === 'msal') {
         const hasTenantId = /^TENANT_ID\s*=\s*\S+/m.test(content);
@@ -1257,6 +1287,62 @@ export class InstallerEngine {
           Type: 'manual',
         },
       });
+    }
+
+    // 3. Turborepo AI Env Passthrough Check (Scope: 'ai')
+    const turboJsonPath = path.join(targetDir, 'turbo.json');
+    if (await fs.FileExists(turboJsonPath)) {
+      try {
+        const turboRaw = await fs.ReadText(turboJsonPath);
+        const turboParsed = JSON.parse(turboRaw) as {
+          envMode?: string;
+          globalPassThroughEnv?: string[];
+          globalEnv?: string[];
+        };
+        if (turboParsed.envMode !== 'loose') {
+          const allowed = [
+            ...(turboParsed.globalPassThroughEnv ?? []),
+            ...(turboParsed.globalEnv ?? []),
+          ];
+          const passesAiVendorKeys = allowed.some(
+            (pattern) => pattern === 'AI_VENDOR_API_KEY__*' || pattern === '*' || pattern.startsWith('AI_VENDOR_API_KEY__')
+          );
+          if (!passesAiVendorKeys && !turboRaw.includes('AI_VENDOR_API_KEY__')) {
+            this.emitDiagnostic(
+              'Turbo AI env passthrough',
+              'warn',
+              'turbo.json does not include AI_VENDOR_API_KEY__* in globalPassThroughEnv; Turborepo strict mode may strip AI vendor API keys from child processes.',
+              'Add "AI_VENDOR_API_KEY__*" to "globalPassThroughEnv" in turbo.json or pass --env-mode=loose to turbo.'
+            );
+            diagnostics.AddCheck({
+              Name: 'Turbo AI env passthrough',
+              Status: 'warn',
+              Message: 'turbo.json does not pass through AI_VENDOR_API_KEY__* environment variables.',
+              SuggestedFix: 'Add "AI_VENDOR_API_KEY__*" to "globalPassThroughEnv" in turbo.json.',
+              Code: 'TURBO_AI_ENV_STRIPPED',
+              Scope: 'ai',
+              Remediation: {
+                Type: 'manual',
+              },
+            });
+          } else {
+            this.emitDiagnostic(
+              'Turbo AI env passthrough',
+              'pass',
+              'turbo.json passes through AI_VENDOR_API_KEY__* environment variables.'
+            );
+            diagnostics.AddCheck({
+              Name: 'Turbo AI env passthrough',
+              Status: 'pass',
+              Message: 'turbo.json passes through AI_VENDOR_API_KEY__* environment variables.',
+              Code: 'TURBO_AI_ENV_OK',
+              Scope: 'ai',
+            });
+          }
+        }
+      } catch {
+        // Ignore malformed turbo.json
+      }
     }
   }
 

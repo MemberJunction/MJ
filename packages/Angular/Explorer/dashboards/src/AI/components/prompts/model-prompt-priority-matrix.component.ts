@@ -5,6 +5,7 @@ import { Subject, BehaviorSubject } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { IndexByUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
@@ -308,11 +309,7 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
       this.error = null;
       this.LoadingMessage = 'Loading prompts, models, and associations...';
       
-      const [prompts, models, associations] = await Promise.all([
-        this.loadPrompts(),
-        this.loadModels(),
-        this.loadAssociations()
-      ]);
+      const [prompts, models, associations] = await this.loadMatrixEntities();
       
       this.Prompts = this.SelectedPrompts.length > 0 ? this.SelectedPrompts : prompts;
       this.Models = this.SelectedModels.length > 0 ? this.SelectedModels : models;
@@ -329,6 +326,35 @@ export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent imp
     }
   }
   
+  private async loadMatrixEntities(): Promise<[MJAIPromptEntityExtended[], MJAIModelEntityExtended[], MJAIPromptModelEntity[]]> {
+    await AIEngineBase.Instance.Config(false);
+    if (AIEngineBase.Instance.Prompts.length > 0 || AIEngineBase.Instance.Models.length > 0) {
+      const prompts = this.SelectedPrompts.length > 0
+        ? this.SelectedPrompts
+        : AIEngineBase.Instance.Prompts
+            .filter(p => p.Status === 'Active')
+            .slice()
+            .sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
+      const models = this.SelectedModels.length > 0
+        ? this.SelectedModels
+        : AIEngineBase.Instance.Models
+            .filter(m => m.IsActive)
+            .slice()
+            .sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
+      const associations = AIEngineBase.Instance.PromptModels
+        .slice()
+        .sort((a, b) => (a.Priority || 0) - (b.Priority || 0));
+      return [prompts, models, associations];
+    }
+
+    const [prompts, models, associations] = await Promise.all([
+      this.loadPrompts(),
+      this.loadModels(),
+      this.loadAssociations()
+    ]);
+    return [prompts, models, associations];
+  }
+
   private async loadPrompts(): Promise<MJAIPromptEntityExtended[]> {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView({

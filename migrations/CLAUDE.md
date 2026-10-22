@@ -120,7 +120,7 @@ V[YYYYMMDDHHMM]__v[VERSION].x_[DESCRIPTION].sql
 **NEVER INCLUDE IN MIGRATIONS:**
 - **Metadata-record inserts via `*__Metadata_Sync.sql` migrations** — metadata changes (new AI models, prompts, agents, etc.) ship ONLY as declarative JSON under `/metadata/` (with CLI-`uuidgen` primaryKey UUIDs, no `sync` blocks). At release time the build engineer runs `mj sync push` against a clean DB at the last released version, generating ONE consolidated metadata-sync migration per build (SS + PG) and writing back the `sync` blocks. Do not hand-author per-PR sync migrations. See `metadata/CLAUDE.md` rule 1b.
 - View creation/updates (handled by CodeGen)
-- EntityField inserts/updates — **including `ValueListType` and `EntityFieldValue` rows** (handled by CodeGen)
+- EntityField inserts/updates — **including `ValueListType`, `EntityFieldValue` rows, and `EntityIDFieldName` polymorphic FK links** (CodeGen owns initial `EntityField` creation; `EntityIDFieldName` decorations belong in `metadata/entities/.polymorphic-fk-entity-fields.json` and ship via release-time `mj sync push`)
 - Entity metadata changes (handled by CodeGen)
 - Stored procedure creation/updates (handled by CodeGen)
 - Any MemberJunction metadata updates (handled by CodeGen)

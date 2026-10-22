@@ -96,6 +96,40 @@ export interface FilterPill {
   Variant: 'type' | 'restore';
 }
 
+/** A single time bucket in the change history activity spark-bar chart. */
+export interface ActivityChartBucket {
+  /** Stable bucket key for selection and track-by. */
+  Key: string;
+  /** Short axis label (e.g. 'Oct 22', '2 PM', 'Jan \'26'). */
+  Label: string;
+  /** Detailed tooltip text describing the bucket range and breakdown. */
+  Tooltip: string;
+  /** Inclusive bucket start timestamp (ms). */
+  StartTime: number;
+  /** Exclusive bucket end timestamp (ms). */
+  EndTime: number;
+  /** Total changes in this bucket. */
+  TotalCount: number;
+  /** Count of standard updates in this bucket. */
+  UpdateCount: number;
+  /** Count of create events in this bucket. */
+  CreateCount: number;
+  /** Count of restore events in this bucket. */
+  RestoreCount: number;
+  /** Count of delete/other events in this bucket. */
+  OtherCount: number;
+  /** Normalized bar height percentage (14..100 for non-empty, 8 for empty). */
+  HeightPercent: number;
+  /** Proportion of bar height for Updates (0..100). */
+  UpdateSharePercent: number;
+  /** Proportion of bar height for Creates (0..100). */
+  CreateSharePercent: number;
+  /** Proportion of bar height for Restores (0..100). */
+  RestoreSharePercent: number;
+  /** Set of normalized RecordChange IDs falling into this bucket. */
+  ChangeIDs: Set<string>;
+}
+
 /**
  * Slide-out timeline of all changes to a single record. Hosts the reusable
  * {@link RestorePreviewPanelComponent} for the actual restore confirmation
@@ -135,6 +169,19 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
 
   /** Whether to show a "Restore" button on each historical version row. Default false. */
   @Input() AllowRestore = false;
+
+  /**
+   * Optional ID of the historical change currently being previewed directly
+   * inside the host entity form ("Time Travel" mode).
+   */
+  @Input() PreviewedChangeID: string | null = null;
+
+  /**
+   * Emitted when the user toggles "Preview in Form" on a historical change card
+   * (or clears the preview). Emits the selected {@link MJRecordChangeEntity} or
+   * `null` when exiting preview.
+   */
+  @Output() PreviewVersionSelected = new EventEmitter<MJRecordChangeEntity | null>();
 
   /**
    * Emitted when the user confirms a restore in the preview panel.
@@ -204,6 +251,13 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
   RecordLabels: RecordLabel[] = [];
   IsLoadingLabels = false;
   ShowCreateWizard = false;
+  /** Controls whether the compact version labels tray is expanded in the header. */
+  ShowLabelsTray = false;
+
+  // Activity spark-bar chart state
+  ActivityBuckets: ActivityChartBucket[] = [];
+  SelectedBucketKey: string | null = null;
+  ActivityChartGranularityLabel = '';
 
   // Filter properties
   SearchTerm = '';
@@ -342,6 +396,7 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
           );
           this.rebuildViewDataIndex();
           this.rebuildConditionalPills();
+          this.rebuildActivityChart();
           this.applyFilters();
           this.IsLoading = false;
         } else {
@@ -426,8 +481,107 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
 
   public ClearFilters(): void {
     this.SearchTerm = '';
+    this.SelectedBucketKey = null;
     for (const k of Object.keys(this.ChipSelections)) this.ChipSelections[k] = false;
     this.applyFilters();
+  }
+
+  public ToggleLabelsTray(): void {
+    this.ShowLabelsTray = !this.ShowLabelsTray;
+    this.cdr.markForCheck();
+  }
+
+  public ToggleBucketFilter(bucketKey: string): void {
+    const bucket = this.ActivityBuckets.find(b => b.Key === bucketKey);
+    if (!bucket || bucket.TotalCount === 0) return;
+    this.SelectedBucketKey = this.SelectedBucketKey === bucketKey ? null : bucketKey;
+    this.applyFilters();
+  }
+
+  public ClearBucketFilter(): void {
+    if (!this.SelectedBucketKey) return;
+    this.SelectedBucketKey = null;
+    this.applyFilters();
+  }
+
+  public get SelectedBucketLabel(): string | null {
+    if (!this.SelectedBucketKey) return null;
+    return this.ActivityBuckets.find(b => b.Key === this.SelectedBucketKey)?.Label ?? null;
+  }
+
+  /**
+   * Human-friendly display name for the current entity (uses `EntityInfo.DisplayNameOrName`,
+   * stripping technical schema prefixes like `MJ_BizApps_Common: ` when falling back to `Name`).
+   */
+  public get EntityDisplayName(): string {
+    const info = this.record?.EntityInfo as (typeof this.record.EntityInfo & { DisplayNameOrName?: string; DisplayName?: string }) | undefined;
+    if (!info) return '';
+    if (info.DisplayNameOrName && info.DisplayNameOrName.trim().length > 0) {
+      return info.DisplayNameOrName.trim();
+    }
+    if (info.DisplayName && info.DisplayName.trim().length > 0) {
+      return info.DisplayName.trim();
+    }
+    const rawName = info.Name || '';
+    const colonIdx = rawName.indexOf(':');
+    return colonIdx >= 0 ? rawName.slice(colonIdx + 1).trim() : rawName.trim();
+  }
+
+  /**
+   * Icon class for the current entity, falling back to `fa-solid fa-layer-group`.
+   */
+  public get EntityIcon(): string {
+    const icon = (this.record?.EntityInfo as { Icon?: string } | undefined)?.Icon;
+    return icon && icon.trim().length > 0 ? icon.trim() : 'fa-solid fa-layer-group';
+  }
+
+  /**
+   * Display name of the current record (e.g. 'Henry Grantham'), or null if unavailable.
+   */
+  public get RecordDisplayName(): string | null {
+    const rec = this.record as (BaseEntity & {
+      NameFieldValue?: unknown;
+      Fields?: Array<{ Name: string; Value: unknown }>;
+    }) | undefined;
+    if (!rec) return null;
+    const entityInfo = rec.EntityInfo as { NameField?: { Name?: string } } | undefined;
+    const nameFieldName = entityInfo?.NameField?.Name;
+    if (nameFieldName && Array.isArray(rec.Fields)) {
+      const f = rec.Fields.find(item => item.Name === nameFieldName);
+      if (f?.Value != null && String(f.Value).trim().length > 0) {
+        return String(f.Value).trim();
+      }
+    }
+    if (Array.isArray(rec.Fields)) {
+      for (const candidate of ['DisplayName', 'Name', 'Title', 'FullName']) {
+        const f = rec.Fields.find(item => item.Name.toLowerCase() === candidate.toLowerCase());
+        if (f?.Value != null && String(f.Value).trim().length > 0) {
+          return String(f.Value).trim();
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Up to 4 unique contributors for the compact avatar stack in the header.
+   */
+  public get TopContributors(): Array<{ Name: string; Initials: string }> {
+    const seen = new Set<string>();
+    const out: Array<{ Name: string; Initials: string }> = [];
+    for (const c of this.ViewData) {
+      const rawUser = (c.User || '').trim();
+      if (!rawUser) continue;
+      const key = rawUser.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        Name: this.GetUserDisplayName(rawUser),
+        Initials: this.GetUserInitials(rawUser),
+      });
+      if (out.length >= 4) break;
+    }
+    return out;
   }
 
   /**
@@ -474,11 +628,150 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
   }
 
   private isRestoreChange(c: MJRecordChangeEntity): boolean {
-    return c.Source === 'Restore' || (c as any).RestoredFromID != null;
+    const withLineage = c as MJRecordChangeEntity & { RestoredFromID?: string | null };
+    return c.Source === 'Restore' || withLineage.RestoredFromID != null;
+  }
+
+  private rebuildActivityChart(): void {
+    if (!this.ViewData || this.ViewData.length === 0) {
+      this.ActivityBuckets = [];
+      this.ActivityChartGranularityLabel = '';
+      this.SelectedBucketKey = null;
+      return;
+    }
+
+    const timestamps = this.ViewData
+      .map(c => new Date(c.ChangedAt).getTime())
+      .filter(t => Number.isFinite(t));
+
+    if (timestamps.length === 0) {
+      this.ActivityBuckets = [];
+      return;
+    }
+
+    const minTime = Math.min(...timestamps);
+    const maxTime = Math.max(...timestamps, Date.now());
+    const spanMs = Math.max(0, maxTime - minTime);
+    const bucketCount = 12;
+
+    const hourMs = 3600 * 1000;
+    const dayMs = 24 * hourMs;
+
+    let stepMs: number;
+    let windowStart: number;
+    let mode: 'hour' | 'day' | 'week' | 'month';
+
+    if (spanMs <= 36 * hourMs) {
+      mode = 'hour';
+      this.ActivityChartGranularityLabel = 'Recent activity (by 2h window)';
+      stepMs = Math.max(hourMs, Math.ceil(Math.max(spanMs, 12 * hourMs) / bucketCount));
+      windowStart = maxTime - stepMs * bucketCount;
+    } else if (spanMs <= 21 * dayMs) {
+      mode = 'day';
+      this.ActivityChartGranularityLabel = 'Daily change activity';
+      stepMs = Math.max(dayMs, Math.ceil(spanMs / (bucketCount - 1)));
+      windowStart = maxTime - stepMs * bucketCount;
+    } else if (spanMs <= 120 * dayMs) {
+      mode = 'week';
+      this.ActivityChartGranularityLabel = 'Weekly change activity';
+      stepMs = Math.max(7 * dayMs, Math.ceil(spanMs / (bucketCount - 1)));
+      windowStart = maxTime - stepMs * bucketCount;
+    } else {
+      mode = 'month';
+      this.ActivityChartGranularityLabel = 'History over time';
+      stepMs = Math.ceil(spanMs / (bucketCount - 1));
+      windowStart = minTime - Math.floor(stepMs * 0.25);
+    }
+
+    const buckets: ActivityChartBucket[] = [];
+    for (let i = 0; i < bucketCount; i++) {
+      const start = windowStart + i * stepMs;
+      const end = i === bucketCount - 1 ? maxTime + 1000 : windowStart + (i + 1) * stepMs;
+      const midDate = new Date(Math.floor((start + end) / 2));
+      const label = this.formatBucketAxisLabel(midDate, mode);
+      buckets.push({
+        Key: `b-${i}-${start}`,
+        Label: label,
+        Tooltip: '',
+        StartTime: start,
+        EndTime: end,
+        TotalCount: 0,
+        UpdateCount: 0,
+        CreateCount: 0,
+        RestoreCount: 0,
+        OtherCount: 0,
+        HeightPercent: 10,
+        UpdateSharePercent: 0,
+        CreateSharePercent: 0,
+        RestoreSharePercent: 0,
+        ChangeIDs: new Set<string>(),
+      });
+    }
+
+    for (const c of this.ViewData) {
+      const t = new Date(c.ChangedAt).getTime();
+      if (!Number.isFinite(t)) continue;
+      let idx = Math.floor((t - windowStart) / stepMs);
+      if (idx < 0) idx = 0;
+      if (idx >= bucketCount) idx = bucketCount - 1;
+      const b = buckets[idx];
+      b.TotalCount++;
+      b.ChangeIDs.add(NormalizeUUID(c.ID));
+      if (this.isRestoreChange(c)) {
+        b.RestoreCount++;
+      } else if (c.Type === 'Create') {
+        b.CreateCount++;
+      } else if (c.Type === 'Update' || !c.Type) {
+        b.UpdateCount++;
+      } else {
+        b.OtherCount++;
+      }
+    }
+
+    const maxCount = Math.max(1, ...buckets.map(b => b.TotalCount));
+    for (const b of buckets) {
+      if (b.TotalCount === 0) {
+        b.HeightPercent = 10;
+        b.Tooltip = `${b.Label} · No changes`;
+      } else {
+        b.HeightPercent = Math.max(22, Math.round((b.TotalCount / maxCount) * 100));
+        b.UpdateSharePercent = Math.round(((b.UpdateCount + b.OtherCount) / b.TotalCount) * 100);
+        b.CreateSharePercent = Math.round((b.CreateCount / b.TotalCount) * 100);
+        b.RestoreSharePercent = Math.max(0, 100 - b.UpdateSharePercent - b.CreateSharePercent);
+        const parts: string[] = [];
+        if (b.UpdateCount > 0) parts.push(`${b.UpdateCount} update${b.UpdateCount !== 1 ? 's' : ''}`);
+        if (b.CreateCount > 0) parts.push(`${b.CreateCount} create`);
+        if (b.RestoreCount > 0) parts.push(`${b.RestoreCount} restore${b.RestoreCount !== 1 ? 's' : ''}`);
+        if (b.OtherCount > 0) parts.push(`${b.OtherCount} other`);
+        b.Tooltip = `${b.Label} · ${b.TotalCount} change${b.TotalCount !== 1 ? 's' : ''} (${parts.join(', ')})`;
+      }
+    }
+
+    this.ActivityBuckets = buckets;
+    if (this.SelectedBucketKey && !buckets.some(b => b.Key === this.SelectedBucketKey)) {
+      this.SelectedBucketKey = null;
+    }
+  }
+
+  private formatBucketAxisLabel(date: Date, mode: 'hour' | 'day' | 'week' | 'month'): string {
+    if (mode === 'hour') {
+      return new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: true }).format(date);
+    }
+    if (mode === 'month') {
+      return new Intl.DateTimeFormat('en-US', { month: 'short', year: '2-digit' }).format(date);
+    }
+    return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date);
   }
 
   private applyFilters(): void {
     let filtered = [...this.ViewData];
+
+    if (this.SelectedBucketKey) {
+      const activeBucket = this.ActivityBuckets.find(b => b.Key === this.SelectedBucketKey);
+      if (activeBucket) {
+        filtered = filtered.filter(change => activeBucket.ChangeIDs.has(NormalizeUUID(change.ID)));
+      }
+    }
 
     if (this.SearchTerm.trim()) {
       const search = this.SearchTerm.toLowerCase();
@@ -652,9 +945,49 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
    */
   OnRestoreVersion(change: MJRecordChangeEntity, event: MouseEvent): void {
     event.stopPropagation();
+    this.OpenRestoreForChange(change);
+  }
+
+  /**
+   * Programmatically opens the restore confirmation panel for a specific
+   * historical change (e.g., when triggered from the host form's Time-Travel
+   * Preview banner).
+   */
+  public OpenRestoreForChange(change: MJRecordChangeEntity): void {
     this.RestorePreviewChange = change;
     this.RestorePreviewVisible = true;
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Returns true when `change` is the historical version currently being
+   * previewed in the host form.
+   */
+  public IsChangePreviewedInForm(change: MJRecordChangeEntity): boolean {
+    return this.PreviewedChangeID != null && UUIDsEqual(this.PreviewedChangeID, change.ID);
+  }
+
+  /**
+   * Toggles in-form Time-Travel preview for the given historical change.
+   */
+  public OnToggleFormPreview(change: MJRecordChangeEntity, event: MouseEvent): void {
+    event.stopPropagation();
+    if (this.IsChangePreviewedInForm(change)) {
+      this.PreviewedChangeID = null;
+      this.PreviewVersionSelected.emit(null);
+    } else {
+      this.PreviewedChangeID = change.ID;
+      this.PreviewVersionSelected.emit(change);
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Returns all loaded changes that carry a `FullRecordJSON` snapshot and can
+   * be previewed in the form, ordered newest-first.
+   */
+  public GetPreviewableChanges(): MJRecordChangeEntity[] {
+    return this.ViewData.filter(c => c.Type !== 'Delete' && !!c.FullRecordJSON);
   }
 
   /**
@@ -703,7 +1036,8 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
    * (e.g., it's been pruned from history) or when this row isn't a restore.
    */
   public GetRestoredFromSourceChange(change: MJRecordChangeEntity): MJRecordChangeEntity | null {
-    const sourceId = (change as any).RestoredFromID;
+    const withLineage = change as MJRecordChangeEntity & { RestoredFromID?: string | null };
+    const sourceId = withLineage.RestoredFromID;
     if (!sourceId) return null;
     return this.viewDataById.get(NormalizeUUID(sourceId)) ?? null;
   }

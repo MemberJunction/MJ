@@ -131,18 +131,9 @@ export class PGConnectionManager {
             ...PGConnectionManager.serverTimeouts(config),
         });
 
-        // A network reset of an IDLE pooled client makes node-pg re-emit the socket error as an
-        // 'error' event on the Pool. Pool is an EventEmitter, so with NO listener attached Node
-        // treats it as an unhandled 'error' event and terminates the process — which is how a
-        // long CodeGen run died with "Unhandled 'error' event ... on BoundPool" / `read
-        // ECONNRESET` while work was still in flight and nothing was actually wrong with the
-        // schema. Attaching a listener downgrades it to what it is: pg has already removed the
-        // dead client from the pool, and the next acquire opens a fresh connection, so the run
-        // continues. Only attached to pools this manager OWNS — a pool handed in via
-        // InitializeWithExistingPool belongs to its creator (and attaching here would add one
-        // listener per per-request provider, tripping Node's max-listeners warning).
-        this._pool.on('error', (err: Error) => {
-            console.warn(`[pg pool] idle client error (non-fatal, connection discarded): ${err?.message ?? String(err)}`);
+        // An idle connection the server drops is emitted on the pool; without a listener Node exits.
+        this._pool.on('error', (err) => {
+            console.error('[PGConnectionManager] Idle connection error (connection evicted):', err.message);
         });
 
         // Verify connectivity

@@ -100,6 +100,8 @@ The slide-in timeline of all changes to a single record. Hosts the reusable `Res
 |-------|------|---------|-------------|
 | `record` | `BaseEntity` | — | **Required.** The live record whose change history will be displayed. |
 | `AllowRestore` | `boolean` | `false` | When true, renders a "Restore record to this version" button on each change card and exposes the `RestoreRequested` event. |
+| `AllowFormPreview` | `boolean` | `true` | When true, renders a "Preview in Form" button on each change card that has `FullRecordJSON` so the host form can rehydrate and preview that snapshot in place. |
+| `PreviewedChangeID` | `string \| null` | `null` | ID of the historical `MJRecordChangeEntity` currently being previewed in the host form. Highlights the active version card in the timeline. |
 
 #### Outputs
 
@@ -107,6 +109,12 @@ The slide-in timeline of all changes to a single record. Hosts the reusable `Res
 |--------|------------|-------------|
 | `dialogClosed` | `void` | Emitted when the user closes the slide-in. |
 | `RestoreRequested` | `RestoreVersionEvent` | Emitted after the user confirms a restore in the preview panel. The host is responsible for applying the snapshot and saving. |
+| `PreviewVersionSelected` | `PreviewVersionEvent \| null` | Emitted when the user clicks "Preview in Form" on a historical version (`{ Change, Index, TotalCount }`) or exits preview (`null`). Wired automatically by `<mj-record-form-container>`. |
+
+#### 12-Month Activity Sparkline & Collapsible Version Labels
+
+- **Activity Sparkline (`ActivityChartBuckets`)**: When a record has 2+ changes, a collapsible 12-month bar chart appears in the timeline header showing monthly change volume. Clicking any month bar filters the timeline to changes in that month (`SelectedMonthKey`); clicking again clears the filter.
+- **Compact Collapsible Version Labels (`ShowLabelsSection`)**: Version labels are tucked behind a single-line header pill (`Labels (N)` + `+ Label` quick action) and stay collapsed by default when 0 labels exist so the change timeline gets maximum vertical space.
 
 #### `RestoreVersionEvent`
 

@@ -21,11 +21,13 @@ import {
     DetailIDsCoveredByMatchQuery,
     GroupMatchesByDetail,
     PickDefaultEntityDocument,
-    SelectCurrentRunForEntity,
+    SelectCurrentRunForDocument,
 } from '../AI/components/duplicates/duplicate-detection-run-scope';
 
-const ENTITY_ORGS = 'E0000001-0000-0000-0000-000000000001';
-const ENTITY_PEOPLE = 'E0000002-0000-0000-0000-000000000002';
+const DOC_ORGS = 'D0C00001-0000-0000-0000-000000000001';
+const DOC_PEOPLE = 'D0C00002-0000-0000-0000-000000000002';
+/** A second document for the same entity as DOC_ORGS (e.g. another template). */
+const DOC_ORGS_OTHER = 'D0C00003-0000-0000-0000-000000000003';
 const RUN_ORGS_OLD = 'A0000000-0000-0000-0000-00000000000A';
 const RUN_ORGS_NEW = 'B0000000-0000-0000-0000-00000000000B';
 const RUN_PEOPLE = 'C0000000-0000-0000-0000-00000000000C';
@@ -107,104 +109,111 @@ function loadReviewRows(runViews: ReturnType<typeof fakeRunViews>, runID: string
     return { details, matchQueries, matches };
 }
 
-function run(ID: string, EntityID: string, ProcessingStatus: string, StartedAt: string, SourceListID: string | null = null) {
-    return { ID, EntityID, ProcessingStatus, StartedAt: new Date(StartedAt), SourceListID };
+function run(ID: string, EntityDocumentID: string, ProcessingStatus: string, StartedAt: string, SourceListID: string | null = null) {
+    return { ID, EntityDocumentID, ProcessingStatus, StartedAt: new Date(StartedAt), SourceListID };
 }
 
 const RUN_NEWEST = 'D0000000-0000-0000-0000-00000000000D';
 
-describe('SelectCurrentRunForEntity', () => {
+describe('SelectCurrentRunForDocument', () => {
     const runs = [
-        run(RUN_PEOPLE, ENTITY_PEOPLE, 'Complete', '2026-09-20T00:00:00Z'),
-        run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
-        run(RUN_ORGS_OLD, ENTITY_ORGS, 'Complete', '2026-09-01T00:00:00Z'),
+        run(RUN_PEOPLE, DOC_PEOPLE, 'Complete', '2026-09-20T00:00:00Z'),
+        run(RUN_ORGS_NEW, DOC_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
+        run(RUN_ORGS_OLD, DOC_ORGS, 'Complete', '2026-09-01T00:00:00Z'),
     ];
 
-    it("picks the latest run of the requested entity, ignoring other entities' newer runs", () => {
-        expect(SelectCurrentRunForEntity(runs, ENTITY_ORGS)?.ID).toBe(RUN_ORGS_NEW);
-        expect(SelectCurrentRunForEntity(runs, ENTITY_PEOPLE)?.ID).toBe(RUN_PEOPLE);
+    it("picks the latest run of the requested document, ignoring other documents' newer runs", () => {
+        expect(SelectCurrentRunForDocument(runs, DOC_ORGS)?.ID).toBe(RUN_ORGS_NEW);
+        expect(SelectCurrentRunForDocument(runs, DOC_PEOPLE)?.ID).toBe(RUN_PEOPLE);
     });
 
     it('shows a newer run even while it is still In Progress (a cancelled run stays In Progress)', () => {
         // Preferring the older Complete run here would hide the rows the user just watched being produced.
-        const withActive = [...runs, run(RUN_NEWEST, ENTITY_ORGS, 'In Progress', '2026-09-22T00:00:00Z')];
-        expect(SelectCurrentRunForEntity(withActive, ENTITY_ORGS)?.ID).toBe(RUN_NEWEST);
+        const withActive = [...runs, run(RUN_NEWEST, DOC_ORGS, 'In Progress', '2026-09-22T00:00:00Z')];
+        expect(SelectCurrentRunForDocument(withActive, DOC_ORGS)?.ID).toBe(RUN_NEWEST);
     });
 
     it('skips a newer Failed run, which usually has no details, in favour of the newest good one', () => {
-        const withFailed = [...runs, run(RUN_NEWEST, ENTITY_ORGS, 'Failed', '2026-09-22T00:00:00Z')];
-        expect(SelectCurrentRunForEntity(withFailed, ENTITY_ORGS)?.ID).toBe(RUN_ORGS_NEW);
+        const withFailed = [...runs, run(RUN_NEWEST, DOC_ORGS, 'Failed', '2026-09-22T00:00:00Z')];
+        expect(SelectCurrentRunForDocument(withFailed, DOC_ORGS)?.ID).toBe(RUN_ORGS_NEW);
     });
 
     it('skips a newer list-scoped run, which holds a subset, in favour of the newest entity-wide one', () => {
-        const withListRun = [...runs, run(RUN_NEWEST, ENTITY_ORGS, 'Complete', '2026-09-22T00:00:00Z', 'L0000000-0000-0000-0000-00000000000L')];
-        expect(SelectCurrentRunForEntity(withListRun, ENTITY_ORGS)?.ID).toBe(RUN_ORGS_NEW);
+        const withListRun = [...runs, run(RUN_NEWEST, DOC_ORGS, 'Complete', '2026-09-22T00:00:00Z', 'L0000000-0000-0000-0000-00000000000L')];
+        expect(SelectCurrentRunForDocument(withListRun, DOC_ORGS)?.ID).toBe(RUN_ORGS_NEW);
     });
 
     it('falls back to the newest run of any kind when every run failed or was list-scoped', () => {
         const onlyPoor = [
-            run('F0000000-0000-0000-0000-00000000000F', ENTITY_ORGS, 'Failed', '2026-09-10T00:00:00Z'),
-            run(RUN_NEWEST, ENTITY_ORGS, 'Complete', '2026-09-22T00:00:00Z', 'L0000000-0000-0000-0000-00000000000L'),
+            run('F0000000-0000-0000-0000-00000000000F', DOC_ORGS, 'Failed', '2026-09-10T00:00:00Z'),
+            run(RUN_NEWEST, DOC_ORGS, 'Complete', '2026-09-22T00:00:00Z', 'L0000000-0000-0000-0000-00000000000L'),
         ];
-        expect(SelectCurrentRunForEntity(onlyPoor, ENTITY_ORGS)?.ID).toBe(RUN_NEWEST);
+        expect(SelectCurrentRunForDocument(onlyPoor, DOC_ORGS)?.ID).toBe(RUN_NEWEST);
     });
 
     it('orders by StartedAt, not by the order the rows arrived in', () => {
         const shuffled = [
-            run('F0000000-0000-0000-0000-00000000000F', ENTITY_ORGS, 'Failed', '2026-09-10T00:00:00Z'),
-            run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
-            run(RUN_ORGS_OLD, ENTITY_ORGS, 'Complete', '2026-09-01T00:00:00Z'),
+            run('F0000000-0000-0000-0000-00000000000F', DOC_ORGS, 'Failed', '2026-09-10T00:00:00Z'),
+            run(RUN_ORGS_NEW, DOC_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
+            run(RUN_ORGS_OLD, DOC_ORGS, 'Complete', '2026-09-01T00:00:00Z'),
         ];
-        expect(SelectCurrentRunForEntity(shuffled, ENTITY_ORGS)?.ID).toBe(RUN_ORGS_NEW);
+        expect(SelectCurrentRunForDocument(shuffled, DOC_ORGS)?.ID).toBe(RUN_ORGS_NEW);
     });
 
-    it('returns null when there is no entity, or no run for it', () => {
-        expect(SelectCurrentRunForEntity(runs, null)).toBeNull();
-        expect(SelectCurrentRunForEntity(runs, '')).toBeNull();
-        expect(SelectCurrentRunForEntity(runs, 'E0000009-0000-0000-0000-000000000009')).toBeNull();
-        expect(SelectCurrentRunForEntity([], ENTITY_ORGS)).toBeNull();
+    it('ignores a newer run of another document for the same entity', () => {
+        // Two documents can cover one entity (different templates or thresholds). Each shows its own run.
+        const withOtherDocument = [...runs, run(RUN_NEWEST, DOC_ORGS_OTHER, 'Complete', '2026-09-22T00:00:00Z')];
+        expect(SelectCurrentRunForDocument(withOtherDocument, DOC_ORGS)?.ID).toBe(RUN_ORGS_NEW);
+        expect(SelectCurrentRunForDocument(withOtherDocument, DOC_ORGS_OTHER)?.ID).toBe(RUN_NEWEST);
     });
 
-    it('matches the entity ID regardless of casing', () => {
-        expect(SelectCurrentRunForEntity(runs, ENTITY_ORGS.toLowerCase())?.ID).toBe(RUN_ORGS_NEW);
+    it('returns null when there is no document, or no run for it', () => {
+        expect(SelectCurrentRunForDocument(runs, null)).toBeNull();
+        expect(SelectCurrentRunForDocument(runs, '')).toBeNull();
+        expect(SelectCurrentRunForDocument(runs, 'D0C00009-0000-0000-0000-000000000009')).toBeNull();
+        expect(SelectCurrentRunForDocument([], DOC_ORGS)).toBeNull();
+    });
+
+    it('matches the document ID regardless of casing', () => {
+        expect(SelectCurrentRunForDocument(runs, DOC_ORGS.toLowerCase())?.ID).toBe(RUN_ORGS_NEW);
     });
 });
 
 describe('PickDefaultEntityDocument', () => {
     const docs = [
-        { ID: 'DOC-UNRELATED', EntityID: 'E0000009-0000-0000-0000-000000000009' },
-        { ID: 'DOC-ORGS', EntityID: ENTITY_ORGS },
-        { ID: 'DOC-PEOPLE', EntityID: ENTITY_PEOPLE },
+        { ID: 'D0C00009-0000-0000-0000-000000000009' },
+        { ID: DOC_ORGS },
+        { ID: DOC_PEOPLE },
     ];
 
-    it('lands on the document for the entity of the most recent run, not on the first document', () => {
+    it('lands on the document of the most recent run, not on the first document', () => {
         const runs = [
-            run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
-            run(RUN_PEOPLE, ENTITY_PEOPLE, 'Complete', '2026-09-20T00:00:00Z'),
+            run(RUN_ORGS_NEW, DOC_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
+            run(RUN_PEOPLE, DOC_PEOPLE, 'Complete', '2026-09-20T00:00:00Z'),
         ];
-        expect(PickDefaultEntityDocument(docs, runs)?.ID).toBe('DOC-PEOPLE');
+        expect(PickDefaultEntityDocument(docs, runs)?.ID).toBe(DOC_PEOPLE);
     });
 
-    it('prefers the entity of the newest good run over a newer Failed or list-scoped one', () => {
+    it('prefers the document of the newest good run over a newer Failed or list-scoped one', () => {
         const runs = [
-            run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
-            run(RUN_PEOPLE, ENTITY_PEOPLE, 'Failed', '2026-09-20T00:00:00Z'),
-            run(RUN_NEWEST, ENTITY_PEOPLE, 'Complete', '2026-09-22T00:00:00Z', 'L0000000-0000-0000-0000-00000000000L'),
+            run(RUN_ORGS_NEW, DOC_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
+            run(RUN_PEOPLE, DOC_PEOPLE, 'Failed', '2026-09-20T00:00:00Z'),
+            run(RUN_NEWEST, DOC_PEOPLE, 'Complete', '2026-09-22T00:00:00Z', 'L0000000-0000-0000-0000-00000000000L'),
         ];
-        expect(PickDefaultEntityDocument(docs, runs)?.ID).toBe('DOC-ORGS');
+        expect(PickDefaultEntityDocument(docs, runs)?.ID).toBe(DOC_ORGS);
     });
 
-    it('skips runs whose entity has no document and takes the next newest', () => {
+    it('skips runs of documents not in the list and takes the next newest', () => {
         const runs = [
-            run('Z0000000-0000-0000-0000-00000000000Z', 'E0000007-0000-0000-0000-000000000007', 'Complete', '2026-09-21T00:00:00Z'),
-            run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
+            run('Z0000000-0000-0000-0000-00000000000Z', 'D0C00007-0000-0000-0000-000000000007', 'Complete', '2026-09-21T00:00:00Z'),
+            run(RUN_ORGS_NEW, DOC_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
         ];
-        expect(PickDefaultEntityDocument(docs, runs)?.ID).toBe('DOC-ORGS');
+        expect(PickDefaultEntityDocument(docs, runs)?.ID).toBe(DOC_ORGS);
     });
 
     it('falls back to the first document when no run matches, and to null with no documents', () => {
-        expect(PickDefaultEntityDocument(docs, [])?.ID).toBe('DOC-UNRELATED');
-        expect(PickDefaultEntityDocument([], [run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z')])).toBeNull();
+        expect(PickDefaultEntityDocument(docs, [])?.ID).toBe('D0C00009-0000-0000-0000-000000000009');
+        expect(PickDefaultEntityDocument([], [run(RUN_ORGS_NEW, DOC_ORGS, 'Complete', '2026-09-15T00:00:00Z')])).toBeNull();
     });
 });
 

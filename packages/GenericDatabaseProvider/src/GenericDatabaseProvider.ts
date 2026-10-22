@@ -80,7 +80,7 @@ import {
     QueryInfo,
 } from '@memberjunction/core';
 
-import { BytesToBase64, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { BytesToBase64, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -261,6 +261,35 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
         return super.Config(data, providerToUse);
     }
+
+    /**
+     * Bounded freshness window (in milliseconds) for server-side `LocalCacheManager` RunView
+     * and Dataset slots. Within this window after a slot was written or last verified against
+     * SQL, `RunViewsWithCacheCheck` and `GetDatasetByName` can trust the in-memory slot with
+     * zero DB hits. Once this window elapses, the next check performs a lightweight batched
+     * SQL status probe (`COUNT(*)` + `MAX(__mj_UpdatedAt)`) to auto-reconcile any out-of-band
+     * SQL mutations (e.g., migrations, `mj sync push`, external scripts) without requiring a
+     * server restart.
+     */
+    protected ServerCacheVerificationTTLMs: number = 5000;
+
+    /**
+     * Public accessor for {@link ServerCacheVerificationTTLMs}.
+     * Set to `0` to force SQL status verification on every cache check.
+     */
+    public get ServerCacheVerificationTTL(): number {
+        return this.ServerCacheVerificationTTLMs;
+    }
+    public set ServerCacheVerificationTTL(value: number) {
+        this.ServerCacheVerificationTTLMs = Math.max(0, value);
+    }
+
+    /**
+     * Most recent authoritative SQL status result per dataset key (`datasetName + filterKey`),
+     * populated by `GetDatasetStatusByName` and consumed by `GetDatasetByName` to reconcile
+     * cached dataset item slots against live SQL row counts and timestamps.
+     */
+    private _lastDatasetStatusByName = new Map<string, { status: DatasetStatusResultType; timestamp: number }>();
 
     /**************************************************************************/
     // SQL Logging — Session Management & Statement Logging
@@ -2090,6 +2119,33 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Maximum number of concurrent database view executions allowed within a single
+     * {@link InternalRunViews} batch. Prevents large `RunViews` batches from exhausting
+     * the connection pool in a single tick. Set to 0 or Infinity to disable the cap.
+     * Default: 8.
+     */
+    public static MaxConcurrentViewsPerBatch: number = 8;
+
+    /**
+     * Process-wide single-flight coalescing registry for in-flight read-only RunView executions.
+     * When multiple concurrent requests (across any per-request provider instance on the same
+     * server process) execute an identical non-transactional RunView simultaneously, only the
+     * first caller queries the database; joiners await the same promise and receive a shallow-cloned
+     * result object and Results array.
+     */
+    private static readonly _inFlightRunViews = new Map<string, {
+        promise: Promise<RunViewResult<unknown>>;
+        hasJoiners: boolean;
+    }>();
+
+    /**
+     * Number of currently in-flight coalesced RunView executions across this process.
+     */
+    public static get InFlightRunViewCount(): number {
+        return GenericDatabaseProvider._inFlightRunViews.size;
+    }
+
+    /**
      * Shared InternalRunView implementation.
      * Handles: view resolution, permissions, field selection, WHERE clause building
      * (view + extra filter + user search + exclude + RLS), ORDER BY, pagination,
@@ -2100,12 +2156,171 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Determines whether a RunView invocation is eligible for process-wide single-flight
+     * coalescing across concurrent requests.
+     */
+    protected canCoalesceRunViewInFlight(
+        params: RunViewParams | null | undefined,
+        countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
+    ): boolean {
+        if (!params || countExecutor) {
+            return false;
+        }
+        if (params.ResultType && params.ResultType !== 'simple' && params.ResultType !== 'count_only') {
+            return false;
+        }
+        if (params.SaveViewResults || params.ForceAuditLog) {
+            return false;
+        }
+        if (this.IsCallerInAmbientTransaction() || this.CurrentTransactionDepth > 0 || this.HasPhysicalTransaction) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Builds the deterministic single-flight key for an in-flight RunView execution.
+     * Includes connection string, entity/view identity, filter, orderBy, fields, resultType,
+     * pagination/keyset cursor, aggregates, and effective user role/row-filter security context.
+     */
+    protected buildSingleFlightRunViewKey(params: RunViewParams, contextUser?: UserInfo): string | null {
+        try {
+            const user = contextUser ?? this.CurrentUser;
+            if (!user) {
+                return null;
+            }
+            const entityInfo = params.EntityName ? this.EntityByName(params.EntityName) : undefined;
+            if (entityInfo?.AuditViewRuns && (params.ViewID || params.ViewName || params.ViewEntity)) {
+                return null;
+            }
+            const baseFingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
+                params,
+                this.InstanceConnectionString,
+            );
+            const fieldsKey = params.Fields && params.Fields.length > 0
+                ? [...params.Fields].map(f => f.trim().toLowerCase()).sort().join(',')
+                : '*';
+            const rlsClause = entityInfo && typeof entityInfo.GetEffectiveRowFilterWhereClause === 'function'
+                ? entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '')
+                : `user:${user.ID ?? ''}`;
+            const roleKey = user.UserRoles && user.UserRoles.length > 0
+                ? user.UserRoles.map(r => (r.RoleID ?? '').trim().toLowerCase()).sort().join(',')
+                : `user:${user.ID ?? ''}`;
+            const aggregatesKey = params.Aggregates && params.Aggregates.length > 0
+                ? JSON.stringify(params.Aggregates)
+                : '';
+            const afterKey = params.AfterKey ? params.AfterKey.ToConcatenatedString() : '';
+            const ve = params.ViewEntity as MJUserViewEntityExtended | undefined;
+            const viewEntityKey = ve
+                ? `${ve.ID ?? ''}:${ve.WhereClause ?? ''}:${ve.SmartFilterWhereClause ?? ''}`
+                : '';
+            return [
+                baseFingerprint,
+                `f:${fieldsKey}`,
+                `rt:${params.ResultType || 'simple'}`,
+                `uss:${params.UserSearchString ?? ''}`,
+                `vid:${params.ViewID ?? ''}`,
+                `vn:${params.ViewName ?? ''}`,
+                `ve:${viewEntityKey}`,
+                `exRun:${params.ExcludeUserViewRunID ?? ''}`,
+                `exAll:${params.ExcludeDataFromAllPriorViewRuns ? '1' : '0'}`,
+                `ovEx:${params.OverrideExcludeFilter ?? ''}`,
+                `igMax:${params.IgnoreMaxRows ? '1' : '0'}`,
+                `max:${params.MaxRows ?? ''}`,
+                `start:${params.StartRow ?? ''}`,
+                `after:${afterKey}`,
+                `ds:${params.DataSource ?? ''}`,
+                `agg:${aggregatesKey}`,
+                `roles:${roleKey}`,
+                `rls:${rlsClause}`,
+            ].join('|');
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Shallow-clones a shared single-flight RunViewResult and its row objects so concurrent
+     * callers cannot mutate each other's result arrays or row properties in place.
+     */
+    protected cloneSingleFlightRunViewResult<T>(result: RunViewResult<unknown>): RunViewResult<T> {
+        if (!result) {
+            return result as RunViewResult<T>;
+        }
+        return {
+            ...result,
+            Results: Array.isArray(result.Results)
+                ? result.Results.map(row => (row && typeof row === 'object' ? ({ ...(row as Record<string, unknown>) } as T) : (row as T)))
+                : [],
+            AggregateResults: result.AggregateResults
+                ? result.AggregateResults.map(a => ({ ...a }))
+                : undefined,
+        };
+    }
+
+    /**
+     * Returns true when an identical read-only RunView is already in flight in the process-wide
+     * single-flight registry. Used by {@link InternalRunViews} so duplicate views in a batch can
+     * join an active query immediately without consuming a concurrency slot.
+     */
+    protected hasInFlightSingleFlightView(params: RunViewParams, contextUser?: UserInfo): boolean {
+        if (!this.canCoalesceRunViewInFlight(params)) {
+            return false;
+        }
+        const key = this.buildSingleFlightRunViewKey(params, contextUser);
+        return !!key && GenericDatabaseProvider._inFlightRunViews.has(key);
+    }
+
+    /**
      * The body of {@link InternalRunView}. `countExecutor`, when supplied, replaces the
      * direct execution of a `count_only` view's COUNT query — {@link InternalRunViews} uses
      * it to coalesce an all-`count_only` batch into one statement (see countOnlyBatch.ts).
      * Everything before that step — permissions, RLS, filter screening — is unchanged.
      */
     protected async RunViewCore<T = unknown>(
+        params: RunViewParams,
+        contextUser?: UserInfo,
+        countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
+    ): Promise<RunViewResult<T>> {
+        const singleFlightKey = this.canCoalesceRunViewInFlight(params, countExecutor)
+            ? this.buildSingleFlightRunViewKey(params, contextUser)
+            : null;
+
+        if (singleFlightKey) {
+            const existing = GenericDatabaseProvider._inFlightRunViews.get(singleFlightKey);
+            if (existing) {
+                existing.hasJoiners = true;
+                const shared = await existing.promise;
+                return this.cloneSingleFlightRunViewResult<T>(shared);
+            }
+
+            const entry: {
+                promise: Promise<RunViewResult<unknown>>;
+                hasJoiners: boolean;
+            } = {
+                promise: null as unknown as Promise<RunViewResult<unknown>>,
+                hasJoiners: false,
+            };
+
+            const executionPromise = this.executeRunViewCore<unknown>(params, contextUser, countExecutor)
+                .finally(() => {
+                    if (GenericDatabaseProvider._inFlightRunViews.get(singleFlightKey) === entry) {
+                        GenericDatabaseProvider._inFlightRunViews.delete(singleFlightKey);
+                    }
+                });
+            entry.promise = executionPromise;
+            GenericDatabaseProvider._inFlightRunViews.set(singleFlightKey, entry);
+
+            const result = await executionPromise;
+            return entry.hasJoiners
+                ? this.cloneSingleFlightRunViewResult<T>(result)
+                : (result as RunViewResult<T>);
+        }
+
+        return this.executeRunViewCore<T>(params, contextUser, countExecutor);
+    }
+
+    private async executeRunViewCore<T = unknown>(
         params: RunViewParams,
         contextUser?: UserInfo,
         countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
@@ -2449,33 +2664,51 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 aggregateValidationErrors = aggregateBuild.validationErrors;
             }
 
-            // ── Execute queries in parallel ──
-            const queries: Promise<unknown>[] = [];
-            const queryKeys: string[] = [];
+            // ── Execute queries (single TDS batch via ExecuteSQLBatch when multiple SQL statements are needed) ──
+            const sqlQueries: string[] = [];
+            const sqlQueryKeys: string[] = [];
+            let countExecutorPromise: Promise<unknown> | null = null;
 
             if (params.ResultType !== 'count_only') {
-                queries.push(this.ExecuteSQL(viewSQL, undefined, undefined, contextUser));
-                queryKeys.push('data');
+                sqlQueries.push(viewSQL);
+                sqlQueryKeys.push('data');
             }
 
             const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
             const willNeedCount = countSQL && (usingPagination || params.ResultType === 'count_only');
             if (willNeedCount) {
-                queries.push(countExecutor && params.ResultType === 'count_only'
-                    ? countExecutor(countSQL!)
-                    : this.ExecuteSQL(countSQL!, undefined, undefined, contextUser));
-                queryKeys.push('count');
+                if (countExecutor && params.ResultType === 'count_only') {
+                    countExecutorPromise = countExecutor(countSQL!);
+                } else {
+                    sqlQueries.push(countSQL!);
+                    sqlQueryKeys.push('count');
+                }
             }
 
             const aggregateStartTime = Date.now();
             if (aggregateSQL) {
-                queries.push(this.ExecuteSQL(aggregateSQL, undefined, undefined, contextUser));
-                queryKeys.push('aggregate');
+                sqlQueries.push(aggregateSQL);
+                sqlQueryKeys.push('aggregate');
             }
 
-            const results = await Promise.all(queries);
             const resultMap: Record<string, unknown> = {};
-            queryKeys.forEach((key, index) => { resultMap[key] = results[index]; });
+            if (sqlQueries.length === 1 && !countExecutorPromise) {
+                resultMap[sqlQueryKeys[0]] = await this.ExecuteSQL(sqlQueries[0], undefined, undefined, contextUser);
+            } else if (sqlQueries.length > 0 && countExecutorPromise) {
+                const [batchResults, countRes] = await Promise.all([
+                    sqlQueries.length === 1
+                        ? this.ExecuteSQL(sqlQueries[0], undefined, undefined, contextUser).then(r => [r])
+                        : this.ExecuteSQLBatch(sqlQueries, undefined, undefined, contextUser),
+                    countExecutorPromise,
+                ]);
+                sqlQueryKeys.forEach((key, index) => { resultMap[key] = batchResults[index]; });
+                resultMap['count'] = countRes;
+            } else if (sqlQueries.length > 1) {
+                const batchResults = await this.ExecuteSQLBatch(sqlQueries, undefined, undefined, contextUser);
+                sqlQueryKeys.forEach((key, index) => { resultMap[key] = batchResults[index]; });
+            } else if (countExecutorPromise) {
+                resultMap['count'] = await countExecutorPromise;
+            }
 
             // ── Process data rows ──
             let retData = (resultMap['data'] as Record<string, unknown>[]) || [];
@@ -2488,7 +2721,30 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             if (willNeedCount && resultMap['count']) {
                 const countResult = resultMap['count'] as { TotalRowCount: number }[];
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
-            } else if (countSQL && maxRowsUsed && retData.length === maxRowsUsed) {
+            } else if (countSQL && maxRowsUsed && maxRowsUsed > 1 && retData.length === maxRowsUsed) {
+                // A row-limited read that came back FULL may have been truncated, so the total is
+                // worth a second round trip: this is what makes Explorer's "100 of 299" correct.
+                // `maxRowsUsed > 1` carves out the ONE case where it cannot be: a `MaxRows:1`
+                // probe. Those callers ask "does a row exist / give me the one row" — a
+                // record-map lookup, a single-key resolve — and never read TotalRowCount. The
+                // count they triggered was pure cost, and SEQUENTIAL cost: it runs after the data
+                // query has already resolved, so it is a full extra round trip on the critical
+                // path, not a parallel one.
+                //
+                // Measured on a live tenant over a 120-second census: 1,000 record-map lookups
+                // fired 721 of these counts and 800 row lookups fired 600 — 1,321 extra round
+                // trips totalling 9,760 ms, 11.4% of ALL SQL time in the window. Nothing read a
+                // single one of the results.
+                //
+                // Everything with `maxRowsUsed > 1` is untouched, so the "100 of 299" behaviour
+                // is preserved exactly; only the degenerate single-row probe changes.
+                //
+                // What DOES change for `MaxRows:1`, stated plainly: with no `rowCount`, the return
+                // below falls back to `rowCount ?? retData.length`, so a hit now reports
+                // `TotalRowCount: 1` instead of the whole view's row count. That is the entire
+                // observable difference, and it is confined to a limit of exactly one row — a shape
+                // no caller asks for in order to learn a total, because a total is the one thing a
+                // single-row limit cannot tell it anything about.
                 const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, undefined, contextUser);
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
             }
@@ -2569,8 +2825,60 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (IsCoalescibleCountBatch(params)) {
             return this.RunCoalescedCountBatch<T>(params, contextUser);
         }
-        const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
-        return Promise.all(promises);
+        if (params.length === 0) {
+            return [];
+        }
+        const limit = GenericDatabaseProvider.MaxConcurrentViewsPerBatch;
+        if (!limit || !Number.isFinite(limit) || limit <= 0 || params.length <= limit) {
+            const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
+            return Promise.all(promises);
+        }
+
+        const results = new Array<RunViewResult<T>>(params.length);
+        const started = new Array<boolean>(params.length).fill(false);
+        const joinerPromises: Promise<void>[] = [];
+        let cursor = 0;
+
+        const attachInFlightDuplicates = (fromIndex: number): void => {
+            if (typeof this.hasInFlightSingleFlightView !== 'function') {
+                return;
+            }
+            for (let j = fromIndex; j < params.length; j++) {
+                if (!started[j] && this.hasInFlightSingleFlightView(params[j], contextUser)) {
+                    started[j] = true;
+                    const joinIdx = j;
+                    joinerPromises.push(
+                        this.InternalRunView<T>(params[joinIdx], contextUser).then((res) => {
+                            results[joinIdx] = res;
+                        }),
+                    );
+                }
+            }
+        };
+
+        const runWorker = async (): Promise<void> => {
+            while (cursor < params.length) {
+                const idx = cursor++;
+                if (started[idx]) {
+                    continue;
+                }
+                started[idx] = true;
+                const viewPromise = this.InternalRunView<T>(params[idx], contextUser);
+                attachInFlightDuplicates(idx + 1);
+                results[idx] = await viewPromise;
+            }
+        };
+
+        const workerCount = Math.min(limit, params.length);
+        const workers: Promise<void>[] = [];
+        for (let w = 0; w < workerCount; w++) {
+            workers.push(runWorker());
+        }
+        await Promise.all(workers);
+        if (joinerPromises.length > 0) {
+            await Promise.all(joinerPromises);
+        }
+        return results;
     }
 
     /**
@@ -2784,7 +3092,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const ftsCoversDeniedField = deniedSearchFields.size > 0 &&
             entityInfo.Fields.some(f => f.FullTextSearchEnabled && deniedSearchFields.has(f.Name.trim().toLowerCase()));
 
-        if (entityInfo.FullTextSearchEnabled && !ftsCoversDeniedField) {
+        // `FullTextSearchEnabled` alone is NOT enough to take this branch: the branch names
+        // `FullTextSearchFunction` and, when that is null or blank, the `?? ''` below emitted
+        // `... FROM "schema".""('term')` — a syntax error, thrown on EVERY user search of such an
+        // entity, with no fallback. The two columns are independent (the flag can be set by hand
+        // or by a metadata sync before CodeGen has minted the function), so the name has to be
+        // checked, not assumed. A blank name now falls through to the per-field LIKE path, which
+        // needs no database object and returns results.
+        //
+        // Composed with, not substituted for, the field-security condition above — both have to
+        // hold to search through the index.
+        const ftsFunctionName = entityInfo.FullTextSearchFunction;
+        const hasFTSFunction = typeof ftsFunctionName === 'string' && ftsFunctionName.trim().length > 0;
+
+        if (entityInfo.FullTextSearchEnabled && hasFTSFunction && !ftsCoversDeniedField) {
             let u = safeUserSearchString;
             const uUpper = u.toUpperCase();
             // WORD-boundary tests, not substring tests (#4392). As substrings, `OR` matches
@@ -3309,10 +3630,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 itemsNeedingValidation.push({ index: i, item, entityInfo });
             }
 
-            // Phase 1: Check server's LocalCacheManager first (zero DB hits)
+            // Phase 1: Check server's LocalCacheManager first (zero DB hits when within freshness window)
             const currentResults: RunViewWithCacheCheckResult<T>[] = [];
             const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: CachedRunViewResult }> = [];
-            const serverCacheMissItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
+            const serverCacheMissItems: Array<{
+                index: number;
+                item: RunViewWithCacheCheckParams;
+                entityInfo: EntityInfo;
+                serverCached?: CachedRunViewResult;
+                fingerprint?: string;
+            }> = [];
 
             for (const { index, item, entityInfo } of itemsNeedingValidation) {
                 const entityLabel = item.params.EntityName || 'unknown';
@@ -3320,6 +3647,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (resolved) {
                     if (resolved.status === 'current') {
                         currentResults.push(resolved.result);
+                    } else if (resolved.status === 'needs_verification') {
+                        serverCacheMissItems.push({
+                            index,
+                            item,
+                            entityInfo,
+                            serverCached: resolved.serverCached,
+                            fingerprint: resolved.fingerprint,
+                        });
                     } else {
                         serverCacheStaleItems.push({ index, item, entityInfo, serverCached: resolved.serverCached! });
                     }
@@ -3328,7 +3663,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 }
             }
 
-            // Phase 2: For server cache misses, fall back to DB validation
+            // Phase 2: For server cache misses and TTL-expired server slots, validate against DB
             const differentialItems: Array<{
                 index: number; params: RunViewParams; entityInfo: EntityInfo; whereSQL: string;
                 clientMaxUpdatedAt: string; clientRowCount: number;
@@ -3337,12 +3672,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const staleItemsNoTracking: Array<{ index: number; params: RunViewParams }> = [];
 
             if (serverCacheMissItems.length > 0) {
-                // Build WHERE clauses and run batched DB status check only for cache misses
-                const itemsForDBCheck: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }> = [];
-                for (const { index, item, entityInfo } of serverCacheMissItems) {
+                // Build WHERE clauses and run batched DB status check only for cache misses / TTL-expired slots
+                const itemsForDBCheck: Array<{
+                    index: number;
+                    item: RunViewWithCacheCheckParams;
+                    entityInfo: EntityInfo;
+                    whereSQL: string;
+                    serverCached?: CachedRunViewResult;
+                    fingerprint?: string;
+                }> = [];
+                for (const { index, item, entityInfo, serverCached, fingerprint } of serverCacheMissItems) {
                     try {
                         const whereSQL = await this.buildWhereClauseForCacheCheck(item.params, entityInfo, user);
-                        itemsForDBCheck.push({ index, item, entityInfo, whereSQL });
+                        itemsForDBCheck.push({ index, item, entityInfo, whereSQL, serverCached, fingerprint });
                     } catch (e) {
                         errorResults.push({ viewIndex: index, status: 'error', errorMessage: e instanceof Error ? e.message : String(e) });
                     }
@@ -3350,7 +3692,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
                 const cacheStatusResults = await this.getBatchedServerCacheStatus(itemsForDBCheck, contextUser);
 
-                for (const { index, item, entityInfo, whereSQL } of itemsForDBCheck) {
+                for (const { index, item, entityInfo, whereSQL, serverCached, fingerprint } of itemsForDBCheck) {
                     const serverStatus = cacheStatusResults.get(index);
                     if (!serverStatus || !serverStatus.success) {
                         errorResults.push({ viewIndex: index, status: 'error', errorMessage: serverStatus?.errorMessage || 'Failed to get cache status' });
@@ -3358,6 +3700,36 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     }
 
                     const entityLabel = item.params.EntityName || 'unknown';
+                    if (serverCached && fingerprint) {
+                        const cachedSlotStatus = {
+                            maxUpdatedAt: serverCached.maxUpdatedAt,
+                            rowCount: serverCached.totalRowCount ?? serverCached.rowCount,
+                        };
+                        if (this.isCacheCurrent(cachedSlotStatus, serverStatus)) {
+                            // Server cache slot is confirmed current against SQL — refresh its verification timestamp in O(1)
+                            LocalCacheManager.Instance.TouchRunViewResultVerifiedAt(fingerprint);
+                            if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                                LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — server cache verified against DB and matches client cache`, verboseOnly: true });
+                                currentResults.push({ viewIndex: index, status: 'current' });
+                            } else {
+                                LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-VERIFIED-CACHE] "${entityLabel}" — server cache verified against DB, serving ${serverCached.rowCount} rows without full SQL query`, verboseOnly: true });
+                                serverCacheStaleItems.push({ index, item, entityInfo, serverCached });
+                            }
+                            continue;
+                        } else {
+                            // Out-of-band SQL mutation or missed invalidation occurred!
+                            // Evict the stale server slot and refresh from DB so LocalCacheManager and the client self-heal.
+                            LogStatusEx({ message: `    ♻️ [SmartCache RECONCILE-EVICT] "${entityLabel}" — server cache slot disagreed with DB status; invalidating and refreshing from DB`, verboseOnly: true });
+                            await LocalCacheManager.Instance.InvalidateRunViewResult(fingerprint);
+                            if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
+                                currentResults.push({ viewIndex: index, status: 'current' });
+                            } else {
+                                staleItemsNoTracking.push({ index, params: item.params });
+                            }
+                            continue;
+                        }
+                    }
+
                     if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
                         LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches DB (server cache miss)`, verboseOnly: true });
                         currentResults.push({ viewIndex: index, status: 'current' });
@@ -3817,15 +4189,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Checks the server's LocalCacheManager for cached data matching the client's request.
-     * Returns the resolution if found (either 'current' or server-cached data to serve),
-     * or null if the server cache doesn't have this data.
+     * Returns the resolution if found ('current', 'stale' server-cached data to serve, or
+     * 'needs_verification' when the server slot's freshness window has elapsed),
+     * or null if the server cache doesn't have this data (or was evicted due to client monotonicity).
      */
     private async resolveFromServerCache(
         item: RunViewWithCacheCheckParams,
         index: number,
         entityLabel: string,
         contextUser?: UserInfo,
-    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: CachedRunViewResult } | null> {
+    ): Promise<
+        | { status: 'current'; result: RunViewWithCacheCheckResult<never> }
+        | { status: 'stale'; serverCached: CachedRunViewResult }
+        | { status: 'needs_verification'; serverCached: CachedRunViewResult; fingerprint: string }
+        | null
+    > {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
 
         const rlsWhereClause = this.ComputeRunViewRLSWhereClause(item.params, contextUser);
@@ -3834,7 +4212,44 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
         if (!cached) return null;
 
-        const serverStatus = { maxUpdatedAt: cached.maxUpdatedAt, rowCount: cached.rowCount };
+        // 1. Client Monotonicity Guard:
+        // If the client's cacheStatus has a timestamp newer than the server's cached slot,
+        // the server slot is provably stale (e.g., client received a newer write from another
+        // replica or after an out-of-band update). Never serve stale rows backward in time:
+        // evict the server slot immediately and route to Phase 2 DB validation.
+        const clientDate = this.parseClientTimestamp(item.cacheStatus!.maxUpdatedAt);
+        const serverCachedDate = this.parseClientTimestamp(cached.maxUpdatedAt);
+        const serverCachedRowCount = cached.totalRowCount ?? cached.rowCount;
+        if (
+            clientDate &&
+            serverCachedDate &&
+            ((clientDate.getTime() - serverCachedDate.getTime()) >= 1000 ||
+                (clientDate.getTime() > serverCachedDate.getTime() && item.cacheStatus!.rowCount !== serverCachedRowCount))
+        ) {
+            LogStatusEx({
+                message: `    ⚠️ [SmartCache MONOTONICITY-EVICT] "${entityLabel}" — client timestamp (${item.cacheStatus!.maxUpdatedAt}) is newer than server cache (${cached.maxUpdatedAt}); evicting stale server slot`,
+                verboseOnly: true,
+            });
+            await LocalCacheManager.Instance.InvalidateRunViewResult(fingerprint);
+            return null;
+        }
+
+        // 2. Bounded Server-Slot Freshness Window:
+        // If the server slot has not been verified against SQL within ServerCacheVerificationTTLMs,
+        // route to Phase 2's batched SQL status check before trusting it.
+        const verifiedAt = cached.lastVerifiedAt ?? cached.cachedAt;
+        const needsVerification =
+            this.ServerCacheVerificationTTLMs <= 0 ||
+            (verifiedAt !== undefined && (Date.now() - verifiedAt) > this.ServerCacheVerificationTTLMs);
+        if (needsVerification) {
+            LogStatusEx({
+                message: `    ⏱️ [SmartCache VERIFY-TTL] "${entityLabel}" — server cache slot verification TTL expired, routing to batched DB status check`,
+                verboseOnly: true,
+            });
+            return { status: 'needs_verification', serverCached: cached, fingerprint };
+        }
+
+        const serverStatus = { maxUpdatedAt: cached.maxUpdatedAt, rowCount: serverCachedRowCount };
         if (this.isCacheCurrent(item.cacheStatus!, serverStatus)) {
             LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches server cache, no DB hit`, verboseOnly: true });
             return { status: 'current', result: { viewIndex: index, status: 'current' } };
@@ -5958,6 +6373,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         let cacheHitCount = 0;
         let cacheMissCount = 0;
 
+        interface PreparedDatasetItem {
+            item: Record<string, unknown>;
+            entitySchemaName: string;
+            entityBaseView: string;
+            code: string;
+            entityName: string;
+            entityID: string;
+            scope: DatasetItemScope;
+            rowFilterKey: string | undefined;
+            fingerprint: string;
+            cached: CachedRunViewResult | null;
+        }
+        const preparedItems: PreparedDatasetItem[] = [];
+
         for (const item of items) {
             const entitySchemaName = String(item['EntitySchemaName'] ?? schema);
             const entityBaseView = String(item['EntityBaseView']);
@@ -5999,20 +6428,120 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
             // The row filter keys the slot, so one user's filtered rows are never served to another.
             const rowFilterKey = scope.RowFilter || undefined;
-
-            // Try cache first
-            if (cacheAvailable) {
-                const fingerprint = cache.GenerateRunViewFingerprint(
+            const fingerprint = cacheAvailable
+                ? cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: scope.Filter } as RunViewParams,
                     this.InstanceConnectionString,
                     rowFilterKey,
                     this.datasetCacheSegment(datasetName, code)
+                )
+                : '';
+            const cached = cacheAvailable && fingerprint
+                ? await cache.GetRunViewResult(fingerprint)
+                : null;
+
+            preparedItems.push({
+                item,
+                entitySchemaName,
+                entityBaseView,
+                code,
+                entityName,
+                entityID,
+                scope,
+                rowFilterKey,
+                fingerprint,
+                cached,
+            });
+        }
+
+        // Reconcile cached dataset slots against live SQL status (GetDatasetStatusByName)
+        // when status was recently fetched, when GetDatasetStatusByName is overridden/spied,
+        // or when any cached item's verification TTL (ServerCacheVerificationTTLMs) has elapsed.
+        let liveStatus: DatasetStatusResultType | undefined;
+        if (cacheAvailable && preparedItems.some(p => p.cached !== null)) {
+            const statusKey = this.buildDatasetStatusCacheKey(datasetName, itemFilters);
+            const recorded = provider._lastDatasetStatusByName.get(statusKey) ?? this._lastDatasetStatusByName.get(statusKey);
+            const isStatusMethodOverridden =
+                this.GetDatasetStatusByName !== GenericDatabaseProvider.prototype.GetDatasetStatusByName ||
+                provider.GetDatasetStatusByName !== GenericDatabaseProvider.prototype.GetDatasetStatusByName;
+            const anyCachedExpired = preparedItems.some(p => {
+                if (!p.cached) return false;
+                const verifiedAt = p.cached.lastVerifiedAt ?? p.cached.cachedAt;
+                return (
+                    this.ServerCacheVerificationTTLMs <= 0 ||
+                    (verifiedAt !== undefined && (Date.now() - verifiedAt) > this.ServerCacheVerificationTTLMs)
                 );
-                const cached = await cache.GetRunViewResult(fingerprint);
+            });
+
+            if (
+                isStatusMethodOverridden ||
+                (anyCachedExpired && (!recorded || (Date.now() - recorded.timestamp) > this.ServerCacheVerificationTTLMs))
+            ) {
+                try {
+                    const fetched = await provider.GetDatasetStatusByName(datasetName, itemFilters, contextUser, providerToUse);
+                    if (fetched?.Success) {
+                        liveStatus = fetched;
+                    }
+                } catch (statusErr) {
+                    LogError(`GetDatasetByName("${datasetName}"): status verification failed: ${statusErr instanceof Error ? statusErr.message : String(statusErr)}`);
+                }
+            } else if (recorded?.status?.Success) {
+                liveStatus = recorded.status;
+            }
+        }
+
+        const statusByEntityID = liveStatus?.Success && Array.isArray(liveStatus.EntityUpdateDates)
+            ? IndexByUUID(liveStatus.EntityUpdateDates.filter(e => Boolean(e.EntityID)), e => e.EntityID)
+            : null;
+        const statusByEntityName = new Map<string, DatasetStatusResultType['EntityUpdateDates'][number]>();
+        if (liveStatus?.Success && Array.isArray(liveStatus.EntityUpdateDates)) {
+            for (const e of liveStatus.EntityUpdateDates) {
+                if (e.EntityName) {
+                    statusByEntityName.set(e.EntityName.trim().toLowerCase(), e);
+                }
+            }
+        }
+
+        for (const prepared of preparedItems) {
+            const { item, entitySchemaName, entityBaseView, code, entityName, entityID, scope, fingerprint } = prepared;
+            let cached = prepared.cached;
+
+            if (cached) {
+                const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
+                const latestUpdateDate = this.computeLatestUpdateDate(cached.results, dateFieldToCheck, item);
+
+                if (liveStatus?.Success && Array.isArray(liveStatus.EntityUpdateDates)) {
+                    const statusEntry = (entityID ? statusByEntityID?.Get(entityID) : undefined)
+                        ?? statusByEntityName.get(entityName.trim().toLowerCase());
+                    if (statusEntry) {
+                        const rowCountMatches = cached.results.length === statusEntry.RowCount;
+                        const cachedMaxDate = this.parseClientTimestamp(cached.maxUpdatedAt);
+                        const effectiveCachedTime = Math.max(
+                            latestUpdateDate ? new Date(latestUpdateDate).getTime() : 0,
+                            cachedMaxDate ? cachedMaxDate.getTime() : 0
+                        );
+                        const statusTime = statusEntry.UpdateDate ? new Date(statusEntry.UpdateDate).getTime() : 0;
+                        const timestampMatches =
+                            isNaN(statusTime) ||
+                            statusTime <= 0 ||
+                            effectiveCachedTime <= 0 ||
+                            Math.abs(statusTime - effectiveCachedTime) < 1000;
+
+                        if (!rowCountMatches || !timestampMatches) {
+                            LogStatusEx({
+                                message: `    ♻️ [Dataset RECONCILE-EVICT] "${datasetName}/${code}" (${entityName}) — cached slot (rows=${cached.results.length}) disagreed with SQL status (rows=${statusEntry.RowCount}); invalidating and re-fetching from SQL`,
+                                verboseOnly: true,
+                            });
+                            await cache.InvalidateRunViewResult(fingerprint);
+                            cached = null;
+                        } else {
+                            cache.TouchRunViewResultVerifiedAt(fingerprint);
+                        }
+                    }
+                }
+
                 if (cached) {
                     cacheHitCount++;
-                    const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
-                    const latestUpdateDate = this.computeLatestUpdateDate(cached.results, dateFieldToCheck, item);
                     cachedResults.push({
                         EntityID: entityID,
                         EntityName: entityName,
@@ -6025,7 +6554,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 }
             }
 
-            // Cache miss — validate columns and build SQL
+            // Cache miss (or invalidated stale slot) — validate columns and build SQL
             cacheMissCount++;
             const columns = provider.getColumnsForDatasetItem(item, datasetName);
             if (!columns) {
@@ -6045,16 +6574,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const filterSQL = whereSQL ? 'WHERE ' + whereSQL : '';
             uncachedQueries.push(`SELECT ${columns} FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)} ${filterSQL}`);
             uncachedItems.push(item);
-            // Store fingerprint for write-through caching after SQL
-            const fp = cacheAvailable
-                ? cache.GenerateRunViewFingerprint(
-                    { EntityName: entityName, ExtraFilter: scope.Filter } as RunViewParams,
-                    this.InstanceConnectionString,
-                    rowFilterKey,
-                    this.datasetCacheSegment(datasetName, code)
-                )
-                : '';
-            uncachedFingerprints.push(fp);
+            uncachedFingerprints.push(fingerprint);
         }
 
         // Phase 2: Execute SQL only for cache misses
@@ -6340,7 +6860,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             };
         }
 
-        return {
+        const statusResult: DatasetStatusResultType = {
             DatasetID: String(items[0]['DatasetID']),
             DatasetName: datasetName,
             Success: true,
@@ -6348,6 +6868,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             LatestUpdateDate: overallLatestDate,
             EntityUpdateDates: updateDates,
         };
+        const statusKey = this.buildDatasetStatusCacheKey(datasetName, itemFilters);
+        const now = Date.now();
+        this._lastDatasetStatusByName.set(statusKey, { status: statusResult, timestamp: now });
+        provider._lastDatasetStatusByName.set(statusKey, { status: statusResult, timestamp: now });
+        return statusResult;
+    }
+
+    /**
+     * Builds the lookup key for {@link _lastDatasetStatusByName} from dataset name and item filters.
+     */
+    private buildDatasetStatusCacheKey(datasetName: string, itemFilters?: DatasetItemFilterType[]): string {
+        return `${datasetName}::${this.ConvertItemFiltersToUniqueKey(itemFilters ?? [])}`;
     }
 
     /**************************************************************************/
