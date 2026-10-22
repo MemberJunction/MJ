@@ -198,7 +198,7 @@ function scheduleRefresh(
     scheduler(() => {
         void (async () => {
             try {
-                const refreshed = await client.Refresh(session.visitorKey);
+                const refreshed = await client.Refresh(session.token, session.visitorKey);
                 transport.UpdateToken(refreshed.token);
                 scheduleRefresh(client, transport, element, refreshed, scheduler);
             } catch {

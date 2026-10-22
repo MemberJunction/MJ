@@ -31,6 +31,7 @@ describe('WidgetSessionClient.Mint', () => {
         const session = await client.Mint();
 
         expect(calls[0].url).toBe('https://api.test/widget/session');
+        expect(calls[0].init?.headers).toEqual({ 'content-type': 'application/json' });
         expect(JSON.parse(calls[0].init?.body as string)).toEqual({ widgetKey: 'pk_test_1' });
         expect(session.token).toBe('jwt.token.here');
         expect(session.pinnedAgentId).toBe('AGENT1');
@@ -119,11 +120,19 @@ describe('WidgetSessionClient.ResolveIdentity (RV4)', () => {
 });
 
 describe('WidgetSessionClient.Refresh', () => {
-    it('hits the refresh endpoint', async () => {
+    it('hits the refresh endpoint with Authorization: Bearer <currentToken>', async () => {
         const { fn, calls } = fakeFetch(200, goodBody);
         const client = new WidgetSessionClient('https://api.test', 'pk_test_1', fn);
-        await client.Refresh();
+        await client.Refresh('current.guest.jwt', 'vk_abc123');
         expect(calls[0].url).toBe('https://api.test/widget/session/refresh');
+        expect(calls[0].init?.headers).toEqual({
+            'content-type': 'application/json',
+            authorization: 'Bearer current.guest.jwt',
+        });
+        expect(JSON.parse(calls[0].init?.body as string)).toEqual({
+            widgetKey: 'pk_test_1',
+            visitorKey: 'vk_abc123',
+        });
     });
 });
 

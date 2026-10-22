@@ -47,6 +47,30 @@ describe('mountWidget', () => {
         expect(scheduled[0].delay).toBeGreaterThan(0);
     });
 
+    it('passes the current session token as Authorization: Bearer when the refresh timer fires', async () => {
+        const transport = new MockWidgetTransport();
+        const callbacks: Array<() => void> = [];
+        const calls: Array<{ url: string; init?: RequestInit }> = [];
+        const recordingFetch: FetchLike = async (url, init) => {
+            calls.push({ url, init });
+            return { ok: true, status: 200, json: async () => sessionBody };
+        };
+        await MountWidget(
+            { widgetKey: 'pk', apiUrl: 'https://api.test' },
+            {
+                sessionClientFactory: (apiUrl: string, widgetKey: string) => new WidgetSessionClient(apiUrl, widgetKey, recordingFetch),
+                transportFactory: () => transport,
+                scheduler: (cb: () => void) => callbacks.push(cb),
+            },
+        );
+        expect(callbacks).toHaveLength(1);
+        callbacks[0]();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(calls).toHaveLength(2);
+        expect(calls[1].url).toBe('https://api.test/widget/session/refresh');
+        expect((calls[1].init?.headers as Record<string, string>).authorization).toBe('Bearer jwt');
+    });
+
     it('falls back to <body> when no mount target is given', async () => {
         const el = await MountWidget({ widgetKey: 'pk', apiUrl: 'https://api.test' }, deps(new MockWidgetTransport(), []));
         expect(el.parentElement).toBe(document.body);
