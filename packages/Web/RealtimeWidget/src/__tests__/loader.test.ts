@@ -71,6 +71,50 @@ describe('mountWidget', () => {
         expect((calls[1].init?.headers as Record<string, string>).authorization).toBe('Bearer jwt');
     });
 
+    it('retries refresh with the current session token when the visitor clicks Retry after a failed refresh', async () => {
+        const transport = new MockWidgetTransport();
+        const callbacks: Array<() => void> = [];
+        const calls: Array<{ url: string; init?: RequestInit }> = [];
+        let refreshAttempt = 0;
+        const recordingFetch: FetchLike = async (url, init) => {
+            calls.push({ url, init });
+            if (url.endsWith('/refresh')) {
+                refreshAttempt++;
+                if (refreshAttempt === 1) {
+                    return { ok: false, status: 503, json: async () => ({ success: false }) };
+                }
+                return { ok: true, status: 200, json: async () => ({ ...sessionBody, token: 'jwt-refreshed' }) };
+            }
+            return { ok: true, status: 200, json: async () => sessionBody };
+        };
+        const el = await MountWidget(
+            { widgetKey: 'pk', apiUrl: 'https://api.test' },
+            {
+                sessionClientFactory: (apiUrl: string, widgetKey: string) => new WidgetSessionClient(apiUrl, widgetKey, recordingFetch),
+                transportFactory: () => transport,
+                scheduler: (cb: () => void) => callbacks.push(cb),
+            },
+        );
+        // First scheduled refresh fails -> shows connection-lost banner
+        callbacks[0]();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(el.ShadowRootRef.querySelector('.mj-widget-banner')?.hasAttribute('hidden')).toBe(false);
+
+        // Visitor triggers Retry -> re-schedules and succeeds with the same Bearer token within the grace window
+        el.RetryConnection();
+        expect(callbacks).toHaveLength(2);
+        callbacks[1]();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(calls).toHaveLength(3);
+        expect(calls[2].url).toBe('https://api.test/widget/session/refresh');
+        expect((calls[2].init?.headers as Record<string, string>).authorization).toBe('Bearer jwt');
+        // Refresh timer re-armed with the refreshed session token ('jwt-refreshed')
+        expect(callbacks).toHaveLength(3);
+        callbacks[2]();
+        await new Promise((r) => setTimeout(r, 0));
+        expect((calls[3].init?.headers as Record<string, string>).authorization).toBe('Bearer jwt-refreshed');
+    });
+
     it('falls back to <body> when no mount target is given', async () => {
         const el = await MountWidget({ widgetKey: 'pk', apiUrl: 'https://api.test' }, deps(new MockWidgetTransport(), []));
         expect(el.parentElement).toBe(document.body);
