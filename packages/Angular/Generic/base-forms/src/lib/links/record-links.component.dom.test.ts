@@ -3,6 +3,7 @@ import { BaseEntity, CompositeKey, EntityInfo, IMetadataProvider, KeyValuePair, 
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { MjRecordLinksComponent } from './record-links.component';
 import { MjRecordLinksDrawerComponent } from './record-links-drawer.component';
+import { MjRecordPreviewPopoverComponent } from '../preview-popover/record-preview-popover.component';
 import { FormNavigationEvent } from '../types/navigation-events';
 
 const CONTACT_PK = new CompositeKey([new KeyValuePair('ID', 'contact-1')]);
@@ -142,7 +143,7 @@ describe('MjRecordLinksComponent', () => {
     it('loads dependencies, filters out telemetry & unreadable entities, and groups linked records by entity', async () => {
         setupMocks();
         const fixture = renderComponentFixture(MjRecordLinksComponent, {
-            declarations: [MjRecordLinksComponent, MjRecordLinksDrawerComponent],
+            declarations: [MjRecordLinksComponent, MjRecordLinksDrawerComponent, MjRecordPreviewPopoverComponent],
             inputs: { Record: MOCK_RECORD, Mode: 'inline' }
         });
 
@@ -173,7 +174,7 @@ describe('MjRecordLinksComponent', () => {
     it('filters by Link Type (both, soft Cross-App Links, hard Direct Relationships)', async () => {
         setupMocks();
         const fixture = renderComponentFixture(MjRecordLinksComponent, {
-            declarations: [MjRecordLinksComponent],
+            declarations: [MjRecordLinksComponent, MjRecordPreviewPopoverComponent],
             inputs: { Record: MOCK_RECORD, Mode: 'inline' }
         });
 
@@ -203,7 +204,7 @@ describe('MjRecordLinksComponent', () => {
     it('filters by category chips and search query', async () => {
         setupMocks();
         const fixture = renderComponentFixture(MjRecordLinksComponent, {
-            declarations: [MjRecordLinksComponent],
+            declarations: [MjRecordLinksComponent, MjRecordPreviewPopoverComponent],
             inputs: { Record: MOCK_RECORD, Mode: 'inline' }
         });
 
@@ -234,7 +235,7 @@ describe('MjRecordLinksComponent', () => {
     it('emits Navigate event with target entity and primary key when a card is clicked', async () => {
         setupMocks();
         const fixture = renderComponentFixture(MjRecordLinksComponent, {
-            declarations: [MjRecordLinksComponent],
+            declarations: [MjRecordLinksComponent, MjRecordPreviewPopoverComponent],
             inputs: { Record: MOCK_RECORD, Mode: 'inline' }
         });
 
@@ -252,5 +253,56 @@ describe('MjRecordLinksComponent', () => {
             EntityName: 'Tasks',
             PrimaryKey: MOCK_DEPENDENCIES[2].PrimaryKey
         });
+    });
+
+    it('discovers outgoing FK links ("On This Record"), filters by direction, and prewarms link counts', async () => {
+        setupMocks();
+        const recordWithOutgoingFK = {
+            IsSaved: true,
+            PrimaryKey: CONTACT_PK,
+            Get: (fieldName: string) => (fieldName === 'PrimaryOrderID' ? 'order-101' : null),
+            EntityInfo: {
+                Name: 'Contacts',
+                DisplayNameOrName: 'Contacts',
+                Fields: [
+                    {
+                        Name: 'PrimaryOrderID',
+                        DisplayNameOrName: 'Primary Order',
+                        IsPrimaryKey: false,
+                        RelatedEntity: 'Orders',
+                        RelatedEntityFieldName: 'ID',
+                        EntityIDFieldName: ''
+                    }
+                ]
+            }
+        } as unknown as BaseEntity;
+
+        const prewarmed = await MjRecordLinksComponent.PrewarmRecordLinkCount(recordWithOutgoingFK, Metadata.Provider);
+        expect(prewarmed.OutgoingCount).toBe(1);
+        expect(prewarmed.IncomingCount).toBe(3);
+        expect(prewarmed.TotalCount).toBe(4);
+
+        const fixture = renderComponentFixture(MjRecordLinksComponent, {
+            declarations: [MjRecordLinksComponent, MjRecordPreviewPopoverComponent],
+            inputs: { Record: recordWithOutgoingFK, Mode: 'inline' }
+        });
+
+        await flushPromises();
+        fixture.detectChanges();
+
+        const comp = fixture.componentInstance;
+        expect(comp.OutgoingLinkCount).toBe(1);
+        expect(comp.IncomingLinkCount).toBe(3);
+        expect(comp.TotalLinkCount).toBe(4);
+
+        comp.SetDirectionFilter('outgoing');
+        fixture.detectChanges();
+        expect(comp.FilteredLinkCount).toBe(1);
+        expect(comp.FilteredGroups[0].Items[0].Direction).toBe('outgoing');
+
+        comp.SetDirectionFilter('incoming');
+        fixture.detectChanges();
+        expect(comp.FilteredLinkCount).toBe(3);
+        expect(comp.FilteredGroups.every(g => g.Items.every(i => i.Direction === 'incoming'))).toBe(true);
     });
 });
