@@ -12,13 +12,17 @@ import {
 import {
     BaseEntity,
     CompositeKey,
+    EntityFieldInfo,
     EntityInfo,
+    IMetadataProvider,
+    KeyValuePair,
     RecordDependency,
     RunView,
     RunViewParams
 } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FormNavigationEvent } from '../types/navigation-events';
+import { type RecordPreviewAnchorRect } from '../preview-popover/record-preview-popover.component';
 
 /**
  * System telemetry/audit entities that should never appear in the business-facing Links panel.
@@ -31,6 +35,32 @@ const EXCLUDED_SYSTEM_ENTITIES = new Set<string>([
 ]);
 
 export type RecordLinkFilterType = 'both' | 'soft' | 'hard';
+export type RecordLinkDirectionFilter = 'all' | 'outgoing' | 'incoming';
+
+/**
+ * Compact summary of record links published to the form toolbar badge and AI agent context.
+ */
+export interface RecordLinksSummary {
+    TotalCount: number;
+    OutgoingCount: number;
+    IncomingCount: number;
+    ByEntity: Array<{
+        EntityName: string;
+        EntityDisplayName: string;
+        Direction: 'outgoing' | 'incoming' | 'both';
+        Count: number;
+        SampleNames: string[];
+    }>;
+}
+
+interface OutgoingCandidate {
+    EntityName: string;
+    RelatedEntity: EntityInfo | undefined;
+    FieldInfo: EntityFieldInfo;
+    PrimaryKey: CompositeKey;
+    PreResolvedDisplayName: string | null;
+    IsSoftLink: boolean;
+}
 
 /**
  * Enriched representation of a single linked record item.
@@ -58,6 +88,10 @@ export interface RecordLinkItem {
     IsSoftLink: boolean;
     /** Human-readable link category label ("Cross-App Link" or "Direct Relationship") */
     LinkTypeLabel: 'Cross-App Link' | 'Direct Relationship';
+    /** Whether the link originates from a field on this record ('outgoing') or from another record referencing this one ('incoming') */
+    Direction: 'outgoing' | 'incoming';
+    /** Human-readable direction label ("On This Record" or "Linked To This") */
+    DirectionLabel: 'On This Record' | 'Linked To This';
 }
 
 /**
@@ -82,8 +116,9 @@ export interface RecordLinkCategoryChip {
 
 /**
  * Reusable `<mj-record-links>` widget that displays all records linked to the current `Record`
- * (both Cross-App Links and Direct Relationships), grouped by entity with search, link-type filter,
- * category chips, and record navigation.
+ * in both directions:
+ * - **Outgoing ("On This Record")**: foreign-key (`RelatedEntity`) and polymorphic-FK (`EntityIDFieldName`) fields populated on this record.
+ * - **Incoming ("Linked To This")**: records across the workspace referencing this record via hard FKs or polymorphic/soft links (`GetRecordDependencies`).
  *
  * Can be embedded inline inside any form section/dashboard (`[Mode]="'inline'"`) or rendered as a
  * slide-in drawer (`[Mode]="'drawer'"`).
@@ -96,6 +131,9 @@ export interface RecordLinkCategoryChip {
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MjRecordLinksComponent extends BaseAngularComponent implements OnInit, OnDestroy {
+    private static readonly DEP_CACHE_TTL_MS = 30_000;
+    private static readonly depCache = new Map<string, { LoadedAt: number; Deps: RecordDependency[] }>();
+
     private cdr = inject(ChangeDetectorRef);
 
     private _record: BaseEntity | null = null;
@@ -147,6 +185,9 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
     /** Emitted whenever the total loaded link count changes. */
     @Output() LinkCountChange = new EventEmitter<number>();
 
+    /** Emitted whenever the enriched links summary changes. */
+    @Output() LinksSummaryChange = new EventEmitter<RecordLinksSummary>();
+
     /** Loading state */
     public IsLoading = false;
 
@@ -162,15 +203,317 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
     /** Active link type filter: 'both' (All Links), 'soft' (Cross-App Links), or 'hard' (Direct Relationships) */
     public LinkFilter: RecordLinkFilterType = 'both';
 
+    /** Active direction filter: 'all', 'outgoing' (On This Record), or 'incoming' (Linked To This) */
+    public DirectionFilter: RecordLinkDirectionFilter = 'all';
+
     /** Currently selected entity filter chip (`null` means All) */
     public SelectedEntityName: string | null = null;
 
     /** All loaded and enriched link items for the current record */
     public AllItems: RecordLinkItem[] = [];
 
+    /** Hover preview card state */
+    public HoveredItem: RecordLinkItem | null = null;
+    public HoverAnchorRect: RecordPreviewAnchorRect | null = null;
+
     private isInitialized = false;
     private isDestroyed = false;
     private loadVersion = 0;
+    private hoverOpenTimer: ReturnType<typeof setTimeout> | null = null;
+    private hoverCloseTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** Clear the static dependency cache (useful in unit tests). */
+    public static ClearDependencyCache(): void {
+        MjRecordLinksComponent.depCache.clear();
+    }
+
+    /**
+     * Synchronously computes the outgoing links summary from the record's in-memory FK and
+     * polymorphic-FK fields without making any network calls.
+     */
+    public static BuildOutgoingLinksSummary(
+        record: BaseEntity,
+        provider: IMetadataProvider | null | undefined
+    ): RecordLinksSummary {
+        if (!record || !record.IsSaved || !record.EntityInfo) {
+            return { TotalCount: 0, OutgoingCount: 0, IncomingCount: 0, ByEntity: [] };
+        }
+        const entities = provider?.Entities ?? [];
+        const outgoing = MjRecordLinksComponent.extractOutgoingCandidates(record, provider, entities);
+        const byEntityMap = new Map<string, {
+            EntityName: string;
+            EntityDisplayName: string;
+            Count: number;
+            SampleNames: string[];
+        }>();
+
+        for (const out of outgoing) {
+            const displayName = out.RelatedEntity?.DisplayNameOrName || out.EntityName;
+            let entry = byEntityMap.get(out.EntityName);
+            if (!entry) {
+                entry = {
+                    EntityName: out.EntityName,
+                    EntityDisplayName: displayName,
+                    Count: 0,
+                    SampleNames: []
+                };
+                byEntityMap.set(out.EntityName, entry);
+            }
+            entry.Count += 1;
+            if (out.PreResolvedDisplayName && entry.SampleNames.length < 3) {
+                entry.SampleNames.push(out.PreResolvedDisplayName);
+            }
+        }
+
+        return {
+            TotalCount: outgoing.length,
+            OutgoingCount: outgoing.length,
+            IncomingCount: 0,
+            ByEntity: Array.from(byEntityMap.values()).map(e => ({
+                EntityName: e.EntityName,
+                EntityDisplayName: e.EntityDisplayName,
+                Direction: 'outgoing' as const,
+                Count: e.Count,
+                SampleNames: e.SampleNames
+            }))
+        };
+    }
+
+    /**
+     * Pre-warms the total bidirectional link count (outgoing FK/polymorphic fields on the record
+     * + incoming `GetRecordDependencies`) and caches the incoming dependencies so opening the
+     * `<mj-record-links>` drawer reuses them without a duplicate network request.
+     */
+    public static async PrewarmRecordLinkCount(
+        record: BaseEntity,
+        provider: IMetadataProvider | null | undefined
+    ): Promise<RecordLinksSummary> {
+        if (!record || !record.IsSaved || !record.EntityInfo || !provider) {
+            return { TotalCount: 0, OutgoingCount: 0, IncomingCount: 0, ByEntity: [] };
+        }
+        const entities = provider.Entities ?? [];
+        const outgoing = MjRecordLinksComponent.extractOutgoingCandidates(record, provider, entities);
+        const rawDeps = await MjRecordLinksComponent.fetchDependenciesWithCache(record, provider, false);
+        const incoming = MjRecordLinksComponent.filterIncomingDependencies(rawDeps, entities);
+
+        const byEntityMap = new Map<string, {
+            EntityName: string;
+            EntityDisplayName: string;
+            HasOutgoing: boolean;
+            HasIncoming: boolean;
+            Count: number;
+            SampleNames: string[];
+        }>();
+
+        for (const out of outgoing) {
+            const displayName = out.RelatedEntity?.DisplayNameOrName || out.EntityName;
+            let entry = byEntityMap.get(out.EntityName);
+            if (!entry) {
+                entry = {
+                    EntityName: out.EntityName,
+                    EntityDisplayName: displayName,
+                    HasOutgoing: true,
+                    HasIncoming: false,
+                    Count: 0,
+                    SampleNames: []
+                };
+                byEntityMap.set(out.EntityName, entry);
+            }
+            entry.HasOutgoing = true;
+            entry.Count += 1;
+            if (out.PreResolvedDisplayName && entry.SampleNames.length < 3) {
+                entry.SampleNames.push(out.PreResolvedDisplayName);
+            }
+        }
+
+        for (const dep of incoming) {
+            const entityInfo = MjRecordLinksComponent.findEntityInfoStatic(entities, dep.RelatedEntityName);
+            const displayName = entityInfo?.DisplayNameOrName || dep.RelatedEntityName;
+            let entry = byEntityMap.get(dep.RelatedEntityName);
+            if (!entry) {
+                entry = {
+                    EntityName: dep.RelatedEntityName,
+                    EntityDisplayName: displayName,
+                    HasOutgoing: false,
+                    HasIncoming: true,
+                    Count: 0,
+                    SampleNames: []
+                };
+                byEntityMap.set(dep.RelatedEntityName, entry);
+            }
+            entry.HasIncoming = true;
+            entry.Count += 1;
+        }
+
+        return {
+            TotalCount: outgoing.length + incoming.length,
+            OutgoingCount: outgoing.length,
+            IncomingCount: incoming.length,
+            ByEntity: Array.from(byEntityMap.values()).map(e => ({
+                EntityName: e.EntityName,
+                EntityDisplayName: e.EntityDisplayName,
+                Direction: e.HasOutgoing && e.HasIncoming ? 'both' : e.HasOutgoing ? 'outgoing' : 'incoming',
+                Count: e.Count,
+                SampleNames: e.SampleNames
+            }))
+        };
+    }
+
+    private static async fetchDependenciesWithCache(
+        record: BaseEntity,
+        provider: IMetadataProvider,
+        forceRefresh: boolean
+    ): Promise<RecordDependency[]> {
+        const pkStr = MjRecordLinksComponent.getPrimaryKeyStringStatic(record.PrimaryKey);
+        const cacheKey = `${record.EntityInfo.Name}::${pkStr}`;
+        if (!forceRefresh) {
+            const cached = MjRecordLinksComponent.depCache.get(cacheKey);
+            if (cached && Date.now() - cached.LoadedAt < MjRecordLinksComponent.DEP_CACHE_TTL_MS) {
+                return cached.Deps;
+            }
+        }
+        const deps = await provider.GetRecordDependencies(record.EntityInfo.Name, record.PrimaryKey, {
+            IncludeSystemEntities: false
+        });
+        const safeDeps = deps ?? [];
+        MjRecordLinksComponent.depCache.set(cacheKey, {
+            LoadedAt: Date.now(),
+            Deps: safeDeps
+        });
+        return safeDeps;
+    }
+
+    private static filterIncomingDependencies(
+        deps: RecordDependency[],
+        entities: EntityInfo[]
+    ): RecordDependency[] {
+        return (deps ?? []).filter(dep => {
+            if (!dep || !dep.RelatedEntityName) {
+                return false;
+            }
+            if (EXCLUDED_SYSTEM_ENTITIES.has(dep.RelatedEntityName.trim())) {
+                return false;
+            }
+            const entityInfo = MjRecordLinksComponent.findEntityInfoStatic(entities, dep.RelatedEntityName);
+            const entityWithPerm = entityInfo as (EntityInfo & { CanRead?: boolean }) | null;
+            if (entityWithPerm && (entityWithPerm.CanRead === false || entityWithPerm.IncludeInAPI === false)) {
+                return false;
+            }
+            return true;
+        });
+    }
+
+    private static extractOutgoingCandidates(
+        record: BaseEntity,
+        provider: IMetadataProvider | null | undefined,
+        entities: EntityInfo[]
+    ): OutgoingCandidate[] {
+        const candidates: OutgoingCandidate[] = [];
+        const fields = record.EntityInfo?.Fields ?? [];
+        const seenKeys = new Set<string>();
+
+        for (const field of fields) {
+            if (field.IsPrimaryKey || field.Name.startsWith('__mj_')) {
+                continue;
+            }
+            if (field.Status === 'Deprecated' || field.Status === 'Disabled') {
+                continue;
+            }
+
+            // 1. Polymorphic FK configured via EntityField.EntityIDFieldName (Rule 2e)
+            const entityIdFieldName = field.EntityIDFieldName?.trim();
+            if (entityIdFieldName) {
+                const rawRecordId = record.Get(field.Name);
+                const rawEntityRef = record.Get(entityIdFieldName);
+                if (rawRecordId == null || String(rawRecordId).trim() === '' || rawEntityRef == null || String(rawEntityRef).trim() === '') {
+                    continue;
+                }
+                const entityRefStr = String(rawEntityRef).trim();
+                const targetEntity = provider?.EntityByID?.(entityRefStr) ?? MjRecordLinksComponent.findEntityInfoStatic(entities, entityRefStr);
+                if (!targetEntity || EXCLUDED_SYSTEM_ENTITIES.has(targetEntity.Name.trim())) {
+                    continue;
+                }
+                const entityWithPerm = targetEntity as (EntityInfo & { CanRead?: boolean });
+                if (entityWithPerm.CanRead === false || entityWithPerm.IncludeInAPI === false) {
+                    continue;
+                }
+                const pk = CompositeKey.FromURLSegment(targetEntity, String(rawRecordId).trim());
+                const dedupeKey = `poly:${targetEntity.Name}:${field.Name}:${MjRecordLinksComponent.getPrimaryKeyStringStatic(pk)}`;
+                if (seenKeys.has(dedupeKey)) {
+                    continue;
+                }
+                seenKeys.add(dedupeKey);
+                candidates.push({
+                    EntityName: targetEntity.Name,
+                    RelatedEntity: targetEntity,
+                    FieldInfo: field,
+                    PrimaryKey: pk,
+                    PreResolvedDisplayName: null,
+                    IsSoftLink: true
+                });
+                continue;
+            }
+
+            // 2. Standard hard Foreign Key via EntityField.RelatedEntity
+            const relatedEntityName = field.RelatedEntity?.trim();
+            if (!relatedEntityName || EXCLUDED_SYSTEM_ENTITIES.has(relatedEntityName)) {
+                continue;
+            }
+            const fkValue = record.Get(field.Name);
+            if (fkValue == null || String(fkValue).trim() === '') {
+                continue;
+            }
+            const targetEntity = MjRecordLinksComponent.findEntityInfoStatic(entities, relatedEntityName);
+            const entityWithPerm = targetEntity as (EntityInfo & { CanRead?: boolean }) | undefined;
+            if (entityWithPerm && (entityWithPerm.CanRead === false || entityWithPerm.IncludeInAPI === false)) {
+                continue;
+            }
+            const pkFieldName = field.RelatedEntityFieldName || targetEntity?.FirstPrimaryKey?.Name || 'ID';
+            const pk = new CompositeKey([new KeyValuePair(pkFieldName, fkValue)]);
+            const dedupeKey = `fk:${relatedEntityName}:${field.Name}:${MjRecordLinksComponent.getPrimaryKeyStringStatic(pk)}`;
+            if (seenKeys.has(dedupeKey)) {
+                continue;
+            }
+            seenKeys.add(dedupeKey);
+
+            let preResolvedName: string | null = null;
+            if (field.RelatedEntityNameFieldMap) {
+                const joinedVal = record.Get(field.RelatedEntityNameFieldMap);
+                if (joinedVal != null && String(joinedVal).trim() !== '') {
+                    preResolvedName = String(joinedVal).trim();
+                }
+            }
+
+            candidates.push({
+                EntityName: targetEntity?.Name || relatedEntityName,
+                RelatedEntity: targetEntity,
+                FieldInfo: field,
+                PrimaryKey: pk,
+                PreResolvedDisplayName: preResolvedName,
+                IsSoftLink: false
+            });
+        }
+
+        return candidates;
+    }
+
+    private static findEntityInfoStatic(entities: EntityInfo[], entityName: string): EntityInfo | undefined {
+        const normalized = entityName.trim().toLowerCase();
+        return entities.find(e => e.Name.trim().toLowerCase() === normalized);
+    }
+
+    private static getPrimaryKeyStringStatic(primaryKey: CompositeKey | undefined | null): string {
+        if (!primaryKey) {
+            return '';
+        }
+        if (typeof primaryKey.ToConcatenatedString === 'function') {
+            return primaryKey.ToConcatenatedString();
+        }
+        if (Array.isArray(primaryKey.KeyValuePairs)) {
+            return primaryKey.KeyValuePairs.map(kv => `${kv.FieldName}|${kv.Value}`).join('||');
+        }
+        return '';
+    }
 
     ngOnInit(): void {
         this.isInitialized = true;
@@ -182,11 +525,22 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
 
     ngOnDestroy(): void {
         this.isDestroyed = true;
+        this.clearHoverTimers();
     }
 
     /** Total number of links loaded for this record */
     public get TotalLinkCount(): number {
         return this.AllItems.length;
+    }
+
+    /** Count of Outgoing links ("On This Record") */
+    public get OutgoingLinkCount(): number {
+        return this.AllItems.filter(i => i.Direction === 'outgoing').length;
+    }
+
+    /** Count of Incoming links ("Linked To This") */
+    public get IncomingLinkCount(): number {
+        return this.AllItems.filter(i => i.Direction === 'incoming').length;
     }
 
     /** Count of Cross-App Links (`IsSoftLink === true`) */
@@ -199,10 +553,13 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
         return this.AllItems.filter(i => !i.IsSoftLink).length;
     }
 
-    /** Items matching the active Link Type filter and search query (prior to entity chip selection) */
+    /** Items matching the active Direction, Link Type, and Search filters (prior to entity chip selection) */
     public get ItemsMatchingTypeAndSearch(): RecordLinkItem[] {
         const search = this.SearchText.trim().toLowerCase();
         return this.AllItems.filter(item => {
+            if (this.DirectionFilter !== 'all' && item.Direction !== this.DirectionFilter) {
+                return false;
+            }
             if (this.LinkFilter === 'soft' && !item.IsSoftLink) {
                 return false;
             }
@@ -260,7 +617,7 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
         return chips;
     }
 
-    /** Final grouped items after applying LinkType, SearchText, and SelectedEntityName filters */
+    /** Final grouped items after applying DirectionFilter, LinkType, SearchText, and SelectedEntityName filters */
     public get FilteredGroups(): RecordLinkGroup[] {
         const items = this.ItemsMatchingTypeAndSearch.filter(item =>
             this.SelectedEntityName === null || item.EntityName === this.SelectedEntityName
@@ -307,10 +664,21 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
         this.cdr.markForCheck();
     }
 
+    /** Select a Direction filter ('all' | 'outgoing' | 'incoming') */
+    public SetDirectionFilter(direction: RecordLinkDirectionFilter): void {
+        this.DirectionFilter = direction;
+        this.pruneSelectedEntityChipIfNeeded();
+        this.cdr.markForCheck();
+    }
+
     /** Select a Link Type filter ('both' | 'soft' | 'hard') */
     public SetLinkFilter(filter: RecordLinkFilterType): void {
         this.LinkFilter = filter;
-        // Reset entity chip if the selected entity no longer has items under the new filter
+        this.pruneSelectedEntityChipIfNeeded();
+        this.cdr.markForCheck();
+    }
+
+    private pruneSelectedEntityChipIfNeeded(): void {
         if (this.SelectedEntityName !== null) {
             const stillHasEntity = this.ItemsMatchingTypeAndSearch.some(
                 i => i.EntityName === this.SelectedEntityName
@@ -319,7 +687,6 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
                 this.SelectedEntityName = null;
             }
         }
-        this.cdr.markForCheck();
     }
 
     /** Select a category chip by entity name (`null` for All) */
@@ -350,12 +717,15 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
     public ResetFilters(): void {
         this.SearchText = '';
         this.LinkFilter = 'both';
+        this.DirectionFilter = 'all';
         this.SelectedEntityName = null;
         this.cdr.markForCheck();
     }
 
     /** Handle clicking a linked record card */
     public OnItemClick(item: RecordLinkItem, event?: MouseEvent): void {
+        this.clearHoverTimers();
+        this.HoveredItem = null;
         const navEvent: FormNavigationEvent = event && (event.metaKey || event.ctrlKey)
             ? {
                 Kind: 'record',
@@ -371,22 +741,100 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
         this.Navigate.emit(navEvent);
     }
 
+    /** Open `<mj-record-preview-popover>` when hovering over a link card */
+    public OnCardMouseEnter(item: RecordLinkItem, event: MouseEvent): void {
+        const anchorEl = event.currentTarget as HTMLElement | null;
+        if (!anchorEl) return;
+
+        if (this.hoverCloseTimer) {
+            clearTimeout(this.hoverCloseTimer);
+            this.hoverCloseTimer = null;
+        }
+        if (this.hoverOpenTimer) {
+            clearTimeout(this.hoverOpenTimer);
+        }
+
+        this.hoverOpenTimer = setTimeout(() => {
+            this.hoverOpenTimer = null;
+            if (this.isDestroyed) return;
+            const r = anchorEl.getBoundingClientRect();
+            this.HoverAnchorRect = {
+                top: r.top,
+                bottom: r.bottom,
+                left: r.left,
+                right: r.right,
+                width: r.width,
+                height: r.height
+            };
+            this.HoveredItem = item;
+            this.cdr.markForCheck();
+        }, 280);
+    }
+
+    /** Schedule closing the hover preview popover when the pointer leaves a card */
+    public OnCardMouseLeave(): void {
+        if (this.hoverOpenTimer) {
+            clearTimeout(this.hoverOpenTimer);
+            this.hoverOpenTimer = null;
+        }
+        if (this.hoverCloseTimer) {
+            clearTimeout(this.hoverCloseTimer);
+        }
+        this.hoverCloseTimer = setTimeout(() => {
+            this.hoverCloseTimer = null;
+            if (!this.isDestroyed) {
+                this.HoveredItem = null;
+                this.cdr.markForCheck();
+            }
+        }, 180);
+    }
+
+    public OnPreviewCardMouseEnter(): void {
+        if (this.hoverCloseTimer) {
+            clearTimeout(this.hoverCloseTimer);
+            this.hoverCloseTimer = null;
+        }
+    }
+
+    public OnPreviewCardMouseLeave(): void {
+        this.OnCardMouseLeave();
+    }
+
+    public OnPreviewCardNavigate(navEvent: FormNavigationEvent): void {
+        this.clearHoverTimers();
+        this.HoveredItem = null;
+        this.Navigate.emit(navEvent);
+        this.cdr.markForCheck();
+    }
+
+    private clearHoverTimers(): void {
+        if (this.hoverOpenTimer) {
+            clearTimeout(this.hoverOpenTimer);
+            this.hoverOpenTimer = null;
+        }
+        if (this.hoverCloseTimer) {
+            clearTimeout(this.hoverCloseTimer);
+            this.hoverCloseTimer = null;
+        }
+    }
+
     /** Request to close the drawer */
     public OnClose(): void {
         this.Close.emit();
     }
 
     /**
-     * Load dependencies for `this.Record` via `GetRecordDependencies`, filter out system
+     * Load bidirectional links for `this.Record` (both outgoing FK / polymorphic FK fields on
+     * this record and incoming dependencies via `GetRecordDependencies`), filter out system
      * telemetry entities and unreadable entities, and batch-enrich record names/dates via `RunViews`.
      */
-    public async LoadLinks(): Promise<void> {
+    public async LoadLinks(forceRefresh = false): Promise<void> {
         const record = this._record;
         if (!record || !record.IsSaved || !record.EntityInfo) {
             this.AllItems = [];
             this.IsLoading = false;
             this.ErrorMessage = null;
-            this.LinkCountChange.emit(0);
+            this.emitCountAndSummary();
             this.cdr.markForCheck();
             return;
         }
@@ -398,53 +846,48 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
 
         try {
             const provider = this.ProviderToUse;
-            const depOptions = { IncludeSystemEntities: false };
-            const deps = await provider.GetRecordDependencies(record.EntityInfo.Name, record.PrimaryKey, depOptions);
+            const entities: EntityInfo[] = provider.Entities ?? [];
+
+            // 1. Outgoing candidates from this record's own FK and polymorphic FK fields
+            const outgoingCandidates = MjRecordLinksComponent.extractOutgoingCandidates(record, provider, entities);
+
+            // 2. Incoming dependencies from GetRecordDependencies (reusing pre-warmed cache when fresh)
+            const deps = await MjRecordLinksComponent.fetchDependenciesWithCache(record, provider, forceRefresh);
 
             if (this.isDestroyed || currentVersion !== this.loadVersion) {
                 return;
             }
 
-            const entities: EntityInfo[] = provider.Entities ?? [];
-            const filteredDeps = (deps ?? []).filter(dep => {
-                if (!dep || !dep.RelatedEntityName) {
-                    return false;
-                }
-                if (EXCLUDED_SYSTEM_ENTITIES.has(dep.RelatedEntityName.trim())) {
-                    return false;
-                }
-                const entityInfo = this.findEntityInfo(entities, dep.RelatedEntityName);
-                const entityWithPerm = entityInfo as (EntityInfo & { CanRead?: boolean }) | null;
-                if (entityWithPerm && (entityWithPerm.CanRead === false || entityWithPerm.IncludeInAPI === false)) {
-                    return false;
-                }
-                return true;
-            });
+            const filteredDeps = MjRecordLinksComponent.filterIncomingDependencies(deps, entities);
 
-            if (filteredDeps.length === 0) {
+            if (outgoingCandidates.length === 0 && filteredDeps.length === 0) {
                 this.AllItems = [];
                 this.IsLoading = false;
-                this.LinkCountChange.emit(0);
+                this.emitCountAndSummary();
                 this.cdr.markForCheck();
                 return;
             }
 
-            // Group dependencies by RelatedEntityName
-            const groupedDeps = new Map<string, RecordDependency[]>();
+            // Combine target primary keys per related entity so we batch-enrich both outgoing and incoming in a single RunViews call
+            const keysByEntity = new Map<string, CompositeKey[]>();
+            for (const out of outgoingCandidates) {
+                const list = keysByEntity.get(out.EntityName) ?? [];
+                list.push(out.PrimaryKey);
+                keysByEntity.set(out.EntityName, list);
+            }
             for (const dep of filteredDeps) {
-                const list = groupedDeps.get(dep.RelatedEntityName) ?? [];
-                list.push(dep);
-                groupedDeps.set(dep.RelatedEntityName, list);
+                const list = keysByEntity.get(dep.RelatedEntityName) ?? [];
+                list.push(dep.PrimaryKey);
+                keysByEntity.set(dep.RelatedEntityName, list);
             }
 
-            // Build batch RunViews query for each related entity group
-            const groupEntries = Array.from(groupedDeps.entries());
+            const groupEntries = Array.from(keysByEntity.entries());
             const viewParamsList: RunViewParams[] = [];
 
-            for (const [relatedEntityName, entityDeps] of groupEntries) {
+            for (const [relatedEntityName, pks] of groupEntries) {
                 const relatedEntity = this.findEntityInfo(entities, relatedEntityName);
-                const fieldsToRequest = this.buildFieldsToRequest(relatedEntity, entityDeps);
-                const extraFilter = this.buildBatchWhereClause(entityDeps.slice(0, 50));
+                const fieldsToRequest = this.buildFieldsToRequestForKeys(relatedEntity, pks);
+                const extraFilter = this.buildBatchWhereClauseForKeys(pks.slice(0, 50));
 
                 viewParamsList.push({
                     EntityName: relatedEntityName,
@@ -481,48 +924,83 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
                 return;
             }
 
-            // Build enriched RecordLinkItem list
             const enrichedItems: RecordLinkItem[] = [];
             let index = 0;
-            for (const [relatedEntityName, entityDeps] of groupEntries) {
-                const relatedEntity = this.findEntityInfo(entities, relatedEntityName);
-                const entityDisplayName = relatedEntity?.DisplayNameOrName || relatedEntityName;
+
+            // Build Outgoing items first ("On This Record")
+            for (const out of outgoingCandidates) {
+                const relatedEntity = out.RelatedEntity ?? this.findEntityInfo(entities, out.EntityName);
+                const entityDisplayName = relatedEntity?.DisplayNameOrName || out.EntityName;
                 const entityIcon = relatedEntity?.Icon || 'fa-solid fa-link';
-                const entityRows = rowsByEntity.get(relatedEntityName) ?? [];
+                const entityRows = rowsByEntity.get(out.EntityName) ?? [];
+                const matchedRow = this.findMatchingRow(entityRows, out.PrimaryKey);
+                const displayName = out.PreResolvedDisplayName || this.resolveRecordDisplayName(
+                    matchedRow,
+                    relatedEntity,
+                    entityDisplayName,
+                    out.PrimaryKey
+                );
+                const relationshipLabel = this.humanizeFieldName(out.FieldInfo.DisplayNameOrName || out.FieldInfo.Name);
+                const statusLabel = this.resolveStatusLabel(matchedRow, relatedEntity);
+                const formattedDate = this.resolveFormattedDate(matchedRow);
+                const pkConcat = this.getPrimaryKeyString(out.PrimaryKey);
 
-                for (const dep of entityDeps) {
-                    const matchedRow = this.findMatchingRow(entityRows, dep.PrimaryKey);
-                    const displayName = this.resolveRecordDisplayName(
-                        matchedRow,
-                        relatedEntity,
-                        entityDisplayName,
-                        dep.PrimaryKey
-                    );
-                    const relationshipLabel = this.resolveRelationshipLabel(dep, relatedEntity);
-                    const statusLabel = this.resolveStatusLabel(matchedRow, relatedEntity);
-                    const formattedDate = this.resolveFormattedDate(matchedRow);
-                    const isSoft = Boolean(dep.IsSoftLink);
-                    const pkConcat = this.getPrimaryKeyString(dep.PrimaryKey);
+                enrichedItems.push({
+                    TrackKey: `out:${out.EntityName}:${out.FieldInfo.Name}:${pkConcat}:${index++}`,
+                    EntityName: out.EntityName,
+                    EntityDisplayName: entityDisplayName,
+                    EntityIcon: entityIcon,
+                    PrimaryKey: out.PrimaryKey,
+                    DisplayName: displayName,
+                    RelationshipLabel: relationshipLabel,
+                    StatusLabel: statusLabel,
+                    FormattedDate: formattedDate,
+                    IsSoftLink: out.IsSoftLink,
+                    LinkTypeLabel: out.IsSoftLink ? 'Cross-App Link' : 'Direct Relationship',
+                    Direction: 'outgoing',
+                    DirectionLabel: 'On This Record'
+                });
+            }
 
-                    enrichedItems.push({
-                        TrackKey: `${relatedEntityName}:${dep.FieldName}:${pkConcat}:${index++}`,
-                        EntityName: relatedEntityName,
-                        EntityDisplayName: entityDisplayName,
-                        EntityIcon: entityIcon,
-                        PrimaryKey: dep.PrimaryKey,
-                        DisplayName: displayName,
-                        RelationshipLabel: relationshipLabel,
-                        StatusLabel: statusLabel,
-                        FormattedDate: formattedDate,
-                        IsSoftLink: isSoft,
-                        LinkTypeLabel: isSoft ? 'Cross-App Link' : 'Direct Relationship'
-                    });
-                }
+            // Build Incoming items ("Linked To This")
+            for (const dep of filteredDeps) {
+                const relatedEntity = this.findEntityInfo(entities, dep.RelatedEntityName);
+                const entityDisplayName = relatedEntity?.DisplayNameOrName || dep.RelatedEntityName;
+                const entityIcon = relatedEntity?.Icon || 'fa-solid fa-link';
+                const entityRows = rowsByEntity.get(dep.RelatedEntityName) ?? [];
+                const matchedRow = this.findMatchingRow(entityRows, dep.PrimaryKey);
+                const displayName = this.resolveRecordDisplayName(
+                    matchedRow,
+                    relatedEntity,
+                    entityDisplayName,
+                    dep.PrimaryKey
+                );
+                const relationshipLabel = this.resolveRelationshipLabel(dep, relatedEntity);
+                const statusLabel = this.resolveStatusLabel(matchedRow, relatedEntity);
+                const formattedDate = this.resolveFormattedDate(matchedRow);
+                const isSoft = Boolean(dep.IsSoftLink);
+                const pkConcat = this.getPrimaryKeyString(dep.PrimaryKey);
+
+                enrichedItems.push({
+                    TrackKey: `in:${dep.RelatedEntityName}:${dep.FieldName}:${pkConcat}:${index++}`,
+                    EntityName: dep.RelatedEntityName,
+                    EntityDisplayName: entityDisplayName,
+                    EntityIcon: entityIcon,
+                    PrimaryKey: dep.PrimaryKey,
+                    DisplayName: displayName,
+                    RelationshipLabel: relationshipLabel,
+                    StatusLabel: statusLabel,
+                    FormattedDate: formattedDate,
+                    IsSoftLink: isSoft,
+                    LinkTypeLabel: isSoft ? 'Cross-App Link' : 'Direct Relationship',
+                    Direction: 'incoming',
+                    DirectionLabel: 'Linked To This'
+                });
             }
 
             this.AllItems = enrichedItems;
             this.IsLoading = false;
-            this.LinkCountChange.emit(this.AllItems.length);
+            this.emitCountAndSummary();
             this.cdr.markForCheck();
         } catch (err: unknown) {
             if (this.isDestroyed || currentVersion !== this.loadVersion) {
@@ -531,9 +1009,55 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
             this.AllItems = [];
             this.IsLoading = false;
             this.ErrorMessage = err instanceof Error ? err.message : 'Unable to load linked records.';
-            this.LinkCountChange.emit(0);
+            this.emitCountAndSummary();
             this.cdr.markForCheck();
         }
+    }
+
+    private emitCountAndSummary(): void {
+        this.LinkCountChange.emit(this.AllItems.length);
+        const byEntityMap = new Map<string, {
+            EntityName: string;
+            EntityDisplayName: string;
+            HasOutgoing: boolean;
+            HasIncoming: boolean;
+            Count: number;
+            SampleNames: string[];
+        }>();
+
+        for (const item of this.AllItems) {
+            let entry = byEntityMap.get(item.EntityName);
+            if (!entry) {
+                entry = {
+                    EntityName: item.EntityName,
+                    EntityDisplayName: item.EntityDisplayName,
+                    HasOutgoing: false,
+                    HasIncoming: false,
+                    Count: 0,
+                    SampleNames: []
+                };
+                byEntityMap.set(item.EntityName, entry);
+            }
+            if (item.Direction === 'outgoing') entry.HasOutgoing = true;
+            if (item.Direction === 'incoming') entry.HasIncoming = true;
+            entry.Count += 1;
+            if (item.DisplayName && entry.SampleNames.length < 3) {
+                entry.SampleNames.push(item.DisplayName);
+            }
+        }
+
+        this.LinksSummaryChange.emit({
+            TotalCount: this.AllItems.length,
+            OutgoingCount: this.OutgoingLinkCount,
+            IncomingCount: this.IncomingLinkCount,
+            ByEntity: Array.from(byEntityMap.values()).map(e => ({
+                EntityName: e.EntityName,
+                EntityDisplayName: e.EntityDisplayName,
+                Direction: e.HasOutgoing && e.HasIncoming ? 'both' : e.HasOutgoing ? 'outgoing' : 'incoming',
+                Count: e.Count,
+                SampleNames: e.SampleNames
+            }))
+        });
     }
 
     private computeRecordSignature(record: BaseEntity | null): string {
@@ -545,24 +1069,22 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
     }
 
     private findEntityInfo(entities: EntityInfo[], entityName: string): EntityInfo | undefined {
-        const normalized = entityName.trim().toLowerCase();
-        return entities.find(e => e.Name.trim().toLowerCase() === normalized);
+        return MjRecordLinksComponent.findEntityInfoStatic(entities, entityName);
     }
 
-    private buildFieldsToRequest(
+    private buildFieldsToRequestForKeys(
         relatedEntity: EntityInfo | undefined,
-        deps: RecordDependency[]
+        pks: CompositeKey[]
     ): string[] {
         const fieldSet = new Set<string>();
 
-        // Primary key fields
         if (relatedEntity?.PrimaryKeys?.length) {
             for (const pk of relatedEntity.PrimaryKeys) {
                 fieldSet.add(pk.Name);
             }
         }
-        for (const dep of deps) {
-            for (const kv of dep.PrimaryKey?.KeyValuePairs ?? []) {
+        for (const pk of pks) {
+            for (const kv of pk?.KeyValuePairs ?? []) {
                 if (kv.FieldName) {
                     fieldSet.add(kv.FieldName);
                 }
@@ -572,7 +1094,6 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
             fieldSet.add('ID');
         }
 
-        // NameField
         if (relatedEntity?.NameField?.Name) {
             fieldSet.add(relatedEntity.NameField.Name);
         } else if (relatedEntity?.Fields?.length) {
@@ -586,12 +1107,10 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
             }
         }
 
-        // Timestamp field
         if (!relatedEntity?.Fields?.length || relatedEntity.Fields.some(f => f.Name === '__mj_UpdatedAt')) {
             fieldSet.add('__mj_UpdatedAt');
         }
 
-        // Optional Status / Type / Role fields if present on relatedEntity.Fields
         if (relatedEntity?.Fields?.length) {
             for (const candidate of ['Status', 'Type', 'Role']) {
                 const found = relatedEntity.Fields.find(
@@ -606,10 +1125,10 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
         return Array.from(fieldSet);
     }
 
-    private buildBatchWhereClause(deps: RecordDependency[]): string {
+    private buildBatchWhereClauseForKeys(pks: CompositeKey[]): string {
         const clauses: string[] = [];
-        for (const dep of deps) {
-            const pk = dep.PrimaryKey as (CompositeKey & { WhereClause?: () => string }) | undefined;
+        for (const pkRaw of pks) {
+            const pk = pkRaw as (CompositeKey & { WhereClause?: () => string }) | undefined;
             if (!pk) {
                 continue;
             }
@@ -661,20 +1180,34 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
         if (row) {
             const nameFieldName = relatedEntity?.NameField?.Name;
             if (nameFieldName && row[nameFieldName] !== undefined && row[nameFieldName] !== null && String(row[nameFieldName]).trim() !== '') {
-                return String(row[nameFieldName]);
+                const candidateName = String(row[nameFieldName]).trim();
+                if (!this.isRawUuid(candidateName)) {
+                    return candidateName;
+                }
             }
             for (const candidate of ['Name', 'Title', 'Subject', 'DisplayName']) {
                 const val = row[candidate];
                 if (val !== undefined && val !== null && String(val).trim() !== '') {
-                    return String(val);
+                    const candidateName = String(val).trim();
+                    if (!this.isRawUuid(candidateName)) {
+                        return candidateName;
+                    }
                 }
             }
         }
         const pkValue = primaryKey?.KeyValuePairs?.[0]?.Value;
         if (pkValue !== undefined && pkValue !== null && String(pkValue).trim() !== '') {
-            return `${entityDisplayName} #${String(pkValue)}`;
+            const rawPk = String(pkValue).trim();
+            if (this.isRawUuid(rawPk)) {
+                return `${entityDisplayName} · ${rawPk.slice(0, 6)}…${rawPk.slice(-4)}`;
+            }
+            return `${entityDisplayName} #${rawPk}`;
         }
         return entityDisplayName;
+    }
+
+    private isRawUuid(value: string): boolean {
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
     }
 
     private resolveRelationshipLabel(
@@ -703,10 +1236,10 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
             return 'Linked Record';
         }
         const trimmed = fieldName.trim();
-        if (trimmed.toLowerCase() === 'recordid') {
+        if (trimmed.toLowerCase() === 'recordid' || trimmed.toLowerCase() === 'record id') {
             return 'Linked Record';
         }
-        const withoutId = trimmed.replace(/ID$/i, '');
+        const withoutId = trimmed.replace(/\s*ID$/i, '');
         const spaced = withoutId.replace(/([a-z0-9])([A-Z])/g, '$1 $2').trim();
         return spaced.length > 0 ? spaced : 'Linked Record';
     }
@@ -750,15 +1283,6 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
     }
 
     private getPrimaryKeyString(primaryKey: CompositeKey | undefined | null): string {
-        if (!primaryKey) {
-            return '';
-        }
-        if (typeof primaryKey.ToConcatenatedString === 'function') {
-            return primaryKey.ToConcatenatedString();
-        }
-        if (Array.isArray(primaryKey.KeyValuePairs)) {
-            return primaryKey.KeyValuePairs.map(kv => `${kv.FieldName}|${kv.Value}`).join('||');
-        }
-        return '';
+        return MjRecordLinksComponent.getPrimaryKeyStringStatic(primaryKey);
     }
 }

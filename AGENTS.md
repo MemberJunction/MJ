@@ -2356,7 +2356,7 @@ When a migration creates a new lookup or reference table (e.g., `AIAgentRequestT
      }
    }
    ```
-3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values. **Omit `primaryKey` and `sync`** — these are auto-populated by mj-sync on first push.
+3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values and a `primaryKey` UUID from CLI `uuidgen`; omit `sync`, which the release-time `mj sync push` writes. A record without a `primaryKey` is inserted as a new row on every push (see `metadata/CLAUDE.md` rule 1).
 4. Push with: `pnpm mj sync push --dir=metadata --include="agent-request-types"`
 
 **Why metadata files over SQL INSERTs:**
@@ -2379,7 +2379,7 @@ When creating new applications with custom dashboards:
    - `ResourceType`: Usually `"Custom"` for dashboard resources
    - `DriverClass`: Class name registered with `@RegisterClass(BaseResourceComponent, 'ClassName')`
    - `isDefault`: Set to `true` for the default tab (only one per app)
-4. For new apps, omit `primaryKey` and `sync` sections - they're populated by mj-sync
+4. For new apps, include a `primaryKey` from CLI `uuidgen` and omit `sync` (see `metadata/CLAUDE.md` rule 1)
 5. Include `"relatedEntities": { "Application Entities": [] }` for the sync structure
 
 ### Resource Components for Custom Dashboards

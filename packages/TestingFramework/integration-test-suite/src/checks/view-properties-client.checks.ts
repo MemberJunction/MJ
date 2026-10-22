@@ -159,17 +159,17 @@ async function deleteFixture(ctx: IntegrationCheckContext, entityName: string, i
     try {
         const row = await ctx.Provider.GetEntityObject<MJUserViewEntityExtended | MJAIAgentRunEntity>(entityName, ctx.User);
         if (await row.Load(id) && !(await row.Delete())) {
-            LogError(`IT130 teardown: could not delete ${entityName} ${id}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            LogError(`IT133 teardown: could not delete ${entityName} ${id}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
     } catch (err) {
-        LogError(`IT130 teardown: could not delete ${entityName} ${id}: ${err instanceof Error ? err.message : String(err)}`);
+        LogError(`IT133 teardown: could not delete ${entityName} ${id}: ${err instanceof Error ? err.message : String(err)}`);
     }
 }
 
 async function tearDown(ctx: IntegrationCheckContext, fx: ViewPropertiesFixture): Promise<void> {
     for (const id of fx.CreatedViewIDs) await deleteFixture(ctx, 'MJ: User Views', id);
     for (const id of fx.CreatedRunIDs) await deleteFixture(ctx, RUNS_ENTITY, id);
-    await DeleteMintedUserKeys(ctx, fx).catch(err => LogError(`IT130 teardown: could not delete the minted API keys: ${err instanceof Error ? err.message : String(err)}`));
+    await DeleteMintedUserKeys(ctx, fx).catch(err => LogError(`IT133 teardown: could not delete the minted API keys: ${err instanceof Error ? err.message : String(err)}`));
 }
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {

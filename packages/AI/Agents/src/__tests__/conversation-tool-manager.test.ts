@@ -260,6 +260,14 @@ describe('ConversationToolManager', () => {
         expect(docs).toContain('Max 8 tool calls per response');
     });
 
+    it('native documentation names the conversation_tool tool and drops the envelope field and per-response cap', () => {
+        const docs = manager.GetToolDocumentation(true);
+        expect(docs).toContain('`conversation_tool`');
+        expect(docs).not.toContain('conversationToolCalls');
+        expect(docs).not.toContain('next turn');
+        expect(docs).toContain('summarizeRange');
+    });
+
     describe('history floor (ExecuteAgentParams.ConversationHistoryFrom)', () => {
         const FLOOR = new Date('2026-09-01T12:00:00.000Z');
         const before = new Date('2026-09-01T11:59:59.999Z');

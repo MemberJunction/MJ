@@ -13,28 +13,63 @@
 
   @if (!IsLoading) {
     <div class="rc-container">
-      <!-- Version Labels Section -->
-      <div class="rc-labels-section">
-        <div class="rc-labels-header">
-          <div class="rc-labels-title">
-            <i class="fa-solid fa-tags" aria-hidden="true"></i>
-            <span>Version Labels</span>
-            @if (RecordLabels.length > 0) {
-              <span class="rc-labels-count">{{ RecordLabels.length }}</span>
-            }
+      <!-- Compact Context Header (Entity Display Name + Record Name + Stats + Compact Version Labels Action) -->
+      <div class="rc-page-header">
+        <div class="rc-header-main">
+          <div class="rc-header-title-row">
+            <span class="rc-entity-badge rc-page-subtitle">
+              <i [class]="EntityIcon" aria-hidden="true"></i>
+              {{ EntityDisplayName }}
+            </span>
+            <h2 class="rc-page-title">{{ RecordDisplayName || 'Change History' }}</h2>
           </div>
-          <button class="rc-create-label-btn" (click)="OpenCreateWizard()" title="Create a version label for this record">
-            <i class="fa-solid fa-plus"></i> Create Label
+          @if (viewData.length > 0) {
+            <div class="rc-header-stats-row">
+              <span class="rc-change-count">
+                {{ viewData.length }} change{{ viewData.length !== 1 ? 's' : '' }} &middot;
+                {{ getUniqueContributorCount() }} contributor{{ getUniqueContributorCount() !== 1 ? 's' : '' }}
+              </span>
+              @if (TopContributors.length > 0) {
+                <div class="rc-contributor-stack" aria-label="Contributors">
+                  @for (contributor of TopContributors; track contributor.Name) {
+                    <span class="rc-contributor-avatar" [attr.aria-label]="contributor.Name" [title]="contributor.Name">
+                      {{ contributor.Initials }}
+                    </span>
+                  }
+                </div>
+              }
+              <span class="rc-latest-time">&middot; Latest {{ formatRelativeTime(viewData[0].ChangedAt) }}</span>
+            </div>
+          }
+        </div>
+
+        <div class="rc-header-actions">
+          @if (RecordLabels.length > 0) {
+            <button
+              type="button"
+              class="rc-labels-toggle-btn"
+              [class.active]="ShowLabelsTray"
+              (click)="ToggleLabelsTray()"
+              [attr.aria-expanded]="ShowLabelsTray">
+              <i class="fa-solid fa-tags" aria-hidden="true"></i>
+              <span>{{ RecordLabels.length }} Label{{ RecordLabels.length !== 1 ? 's' : '' }}</span>
+              <i class="fa-solid" [class.fa-chevron-up]="ShowLabelsTray" [class.fa-chevron-down]="!ShowLabelsTray" aria-hidden="true"></i>
+            </button>
+          }
+          <button
+            type="button"
+            class="rc-create-label-btn"
+            (click)="OpenCreateWizard()"
+            title="Create a version label snapshot for this record">
+            <i class="fa-solid fa-tag" aria-hidden="true"></i>
+            <span>+ Label</span>
           </button>
         </div>
-        @if (IsLoadingLabels) {
-          <div class="rc-labels-loading">
-            <i class="fa-solid fa-spinner fa-spin"></i> Loading labels...
-          </div>
-        } @else if (RecordLabels.length === 0) {
-          <mj-empty-state class="rc-labels-empty" Size="compact"
-            Icon="" Title="No version labels for this record yet." />
-        } @else {
+      </div>
+
+      <!-- Collapsible Version Labels Tray (only takes vertical space when user opens it and labels exist) -->
+      @if (ShowLabelsTray && RecordLabels.length > 0) {
+        <div class="rc-labels-tray">
           <div class="rc-labels-list">
             @for (label of RecordLabels; track label.ID) {
               <div class="rc-label-chip" [title]="label.Description || label.Name">
@@ -47,8 +82,8 @@
               </div>
             }
           </div>
-        }
-      </div>
+        </div>
+      }
 
       @if (viewData.length === 0) {
         <!-- Empty state -->
@@ -63,20 +98,66 @@
           </div>
         </mj-empty-state>
       } @else {
-        <!-- Page Header -->
-        <div class="rc-page-header">
-          <div>
-            <h2 class="rc-page-title">Change History</h2>
-            <div class="rc-page-subtitle">{{ record.EntityInfo.Name }}</div>
-          </div>
-          <div class="rc-header-meta">
-            <div class="rc-entity-badge">
-              <i class="fa-solid fa-database" aria-hidden="true"></i>
-              {{ record.EntityInfo.Name }}
+        <!-- Activity Over Time Mini-Chart -->
+        @if (ActivityBuckets.length > 0) {
+          <div class="rc-activity-chart" role="region" aria-label="Change activity over time">
+            <div class="rc-activity-chart-header">
+              <span class="rc-activity-chart-title">
+                <i class="fa-solid fa-chart-column" aria-hidden="true"></i>
+                {{ ActivityChartGranularityLabel }}
+              </span>
+              <div class="rc-activity-chart-meta">
+                @if (SelectedBucketLabel; as activeBucketLabel) {
+                  <button
+                    type="button"
+                    class="rc-activity-bucket-pill"
+                    (click)="ClearBucketFilter()"
+                    title="Clear time bucket filter">
+                    <span>{{ activeBucketLabel }}</span>
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                  </button>
+                }
+                <div class="rc-activity-legend">
+                  <span class="rc-legend-item"><span class="rc-legend-dot rc-legend-dot--update"></span>Update</span>
+                  <span class="rc-legend-item"><span class="rc-legend-dot rc-legend-dot--create"></span>Create</span>
+                  <span class="rc-legend-item"><span class="rc-legend-dot rc-legend-dot--restore"></span>Restore</span>
+                </div>
+              </div>
             </div>
-            <div class="rc-change-count">{{ viewData.length }} change{{ viewData.length !== 1 ? 's' : '' }} &middot; {{ getUniqueContributorCount() }} contributor{{ getUniqueContributorCount() !== 1 ? 's' : '' }}</div>
+            <div class="rc-activity-bars">
+              @for (bucket of ActivityBuckets; track bucket.Key; let idx = $index; let first = $first; let last = $last) {
+                <button
+                  type="button"
+                  class="rc-activity-bar-col"
+                  [class.rc-activity-bar-col--empty]="bucket.TotalCount === 0"
+                  [class.rc-activity-bar-col--selected]="SelectedBucketKey === bucket.Key"
+                  [disabled]="bucket.TotalCount === 0"
+                  [attr.aria-label]="bucket.Tooltip"
+                  [title]="bucket.Tooltip"
+                  (click)="ToggleBucketFilter(bucket.Key)">
+                  <div class="rc-activity-bar-track">
+                    <div class="rc-activity-bar-fill" [style.height.%]="bucket.HeightPercent">
+                      @if (bucket.RestoreSharePercent > 0) {
+                        <span class="rc-bar-seg rc-bar-seg--restore" [style.height.%]="bucket.RestoreSharePercent"></span>
+                      }
+                      @if (bucket.UpdateSharePercent > 0) {
+                        <span class="rc-bar-seg rc-bar-seg--update" [style.height.%]="bucket.UpdateSharePercent"></span>
+                      }
+                      @if (bucket.CreateSharePercent > 0) {
+                        <span class="rc-bar-seg rc-bar-seg--create" [style.height.%]="bucket.CreateSharePercent"></span>
+                      }
+                    </div>
+                  </div>
+                  <span class="rc-activity-bar-label">
+                    @if (first || last || idx === 4 || idx === 8) {
+                      {{ bucket.Label }}
+                    }
+                  </span>
+                </button>
+              }
+            </div>
           </div>
-        </div>
+        }
 
         <!-- Filter Bar — chips render only for change types/sources actually present in loaded data.
              When more than 2 conditional chips would render, they collapse into a "More filters" popover. -->
@@ -186,6 +267,7 @@
                     [class.expanded]="expandedItems.has(change.ID)"
                     [class.rc-card-restore]="isRestoreRow(change)"
                     [class.rc-card-highlight]="HighlightedChangeID === change.ID"
+                    [class.rc-card-previewing]="IsChangePreviewedInForm(change)"
                     [attr.tabindex]="0"
                     [attr.aria-expanded]="expandedItems.has(change.ID)"
                     [attr.aria-label]="getTimelineItemLabel(change)"
@@ -197,6 +279,13 @@
                         <span class="rc-card-type-badge"
                               [class.rc-card-type-badge-restore]="isRestoreRow(change)">{{ getEffectiveBadgeText(change) }}</span>
                         <span class="rc-card-summary">{{ getChangeSummary(change) }}</span>
+
+                        @if (IsChangePreviewedInForm(change)) {
+                          <span class="rc-previewing-chip" title="This version is currently rendered inside the form">
+                            <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                            Previewing in form
+                          </span>
+                        }
 
                         <!-- Lineage chip — visible when this row was produced by a restore -->
                         @if (isRestoreRow(change)) {
@@ -310,17 +399,32 @@
                           </div>
                         }
 
-                        <!-- Restore action: shown for Update, Create, and Snapshot rows.
+                        <!-- Restore & In-Form Preview actions: shown for Update, Create, and Snapshot rows.
                              Hidden on Delete rows (handled via the Recycle Bin path)
-                             and on the most recent change (restoring to current state is a no-op). -->
-                        @if (AllowRestore && change.Type !== 'Delete' && !isMostRecentChange(change)) {
+                             and on the most recent change (restoring/previewing current state is a no-op). -->
+                        @if (change.Type !== 'Delete' && !isMostRecentChange(change) && (AllowRestore || change.FullRecordJSON)) {
                           <div class="rc-restore-action">
-                            <button class="rc-restore-btn"
-                              (click)="OnRestoreVersion(change, $event)"
-                              title="Restore the entire record to its state at this version">
-                              <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
-                              Restore record to this version
-                            </button>
+                            @if (change.FullRecordJSON) {
+                              <button
+                                type="button"
+                                class="rc-preview-form-btn"
+                                [class.rc-preview-form-btn--active]="IsChangePreviewedInForm(change)"
+                                (click)="OnToggleFormPreview(change, $event)"
+                                title="Render this historical version's field values directly inside the form">
+                                <i class="fa-solid" [class.fa-eye]="!IsChangePreviewedInForm(change)" [class.fa-eye-slash]="IsChangePreviewedInForm(change)" aria-hidden="true"></i>
+                                {{ IsChangePreviewedInForm(change) ? 'Exit Form Preview' : 'Preview in Form' }}
+                              </button>
+                            }
+                            @if (AllowRestore) {
+                              <button
+                                type="button"
+                                class="rc-restore-btn"
+                                (click)="OnRestoreVersion(change, $event)"
+                                title="Restore the entire record to its state at this version">
+                                <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                                Restore record to this version
+                              </button>
+                            }
                           </div>
                         }
                       </div>

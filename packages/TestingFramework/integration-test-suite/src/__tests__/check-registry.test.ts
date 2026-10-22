@@ -24,6 +24,8 @@ import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.ch
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
 import { AiVendorEffortChecks } from '../checks/ai-vendor-effort.checks';
 import { NativeToolCallingLiveChecks } from '../checks/native-tool-calling-live.checks';
+import { NativeToolLoopChecks } from '../checks/native-tool-loop.checks';
+import { NativeToolLoopLiveChecks } from '../checks/native-tool-loop-live.checks';
 import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
@@ -151,6 +153,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['prompt-runner', PromptRunnerChecks, 1],
         ['ai-vendor-effort', AiVendorEffortChecks, 2],
         ['native-tool-calling-live', NativeToolCallingLiveChecks, 4],
+        ['native-tool-loop', NativeToolLoopChecks, 13],
+        ['native-tool-loop-live', NativeToolLoopLiveChecks, 3],
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
@@ -206,7 +210,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
-        ['view-properties-client', ViewPropertiesClientChecks, 5], // VP1-VP5 User View properties over the wire: values, locked refusal, token default, RLS on top, cache keying (IT130)
+        ['view-properties-client', ViewPropertiesClientChecks, 5], // VP1-VP5 User View properties over the wire: values, locked refusal, token default, RLS on top, cache keying (IT133)
         ['calendar-event-links', CalendarEventLinksChecks, 2], // CL1 UI role over GraphQL reads but cannot create; CL2 links, sync with a moved time and an RSVP, resync on a refused token, cancel (IT127)
         ['conversation-authorship-client', ConversationAuthorshipClientChecks, 10], // CA1-CA10 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message (IT115)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
@@ -337,6 +341,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'metadata-sync-push': 10,
         'metadata-sync': 9,
         'native-tool-calling-live': 4,
+        'native-tool-loop': 13,
+        'native-tool-loop-live': 3,
         'nested-transactions': 11,
         'open-app-teardown': 2,
         'performance-benchmark': 14,
@@ -420,7 +426,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(134);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(136);
     });
 });
 
@@ -775,6 +781,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'native-tool-calling-live.NTC2',
         'native-tool-calling-live.NTC3',
         'native-tool-calling-live.NTC4',
+        'native-tool-loop-live.NTLL1',
+        'native-tool-loop-live.NTLL2',
+        'native-tool-loop-live.NTLL3',
         'performance-benchmark.PB10',
         'performance-benchmark.PB11',
         'performance-benchmark.PB12',

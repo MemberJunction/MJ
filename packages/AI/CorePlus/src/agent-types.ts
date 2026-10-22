@@ -11,7 +11,7 @@
  */
 
 import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
-import { ChatMessage, ChatToolCall } from '@memberjunction/ai';
+import { ChatMessage, ChatReasoningBlock, ChatToolCall } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
@@ -576,6 +576,16 @@ export type ArtifactDirective = {
     description?: string;
 };
 
+/** A native call to one of an agent's own tools, as the loop carries it from the turn to execution. */
+export interface AgentToolCallRequest {
+    /** The provider's call id, answered by the call's tool result. */
+    toolCallId: string;
+    /** The declared tool name. */
+    toolName: string;
+    /** The parsed arguments the model sent. */
+    arguments: Record<string, unknown>;
+}
+
 /**
  * Represents the next step determination from an agent type.
  * 
@@ -658,9 +668,25 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
         toolCalls: ChatToolCall[];
         /** Whether results go back as native tool-result turns — the runner's recorded decision. */
         sendResultsNatively: boolean;
+        /**
+         * The provider's reasoning blocks from the turn, replayed with the call turn so the model
+         * keeps its reasoning across the tool loop. Opaque to the loop.
+         */
+        reasoning?: ChatReasoningBlock[];
     };
     /** On the payload-only Retry, the call id of the `payload_change_request` being answered. */
     payloadToolCallId?: string;
+    /**
+     * Native calls to the agent's own tools on this turn, in the order the model made them. The
+     * loop runs them before the step itself, each as a `Tool` run step, and answers each call with
+     * its result. Can accompany any step a tool-call turn produces.
+     */
+    agentToolCalls?: AgentToolCallRequest[];
+    /**
+     * Native calls on this turn the loop chose not to run, each answered with an error result
+     * carrying its reason, so the model can make the call again on a later turn.
+     */
+    declinedToolCalls?: Array<{ toolCallId: string; toolName: string; reason: string }>;
     /** Message to send to user when step is 'chat' */
     message?: string;
     /**
