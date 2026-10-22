@@ -69,10 +69,7 @@ export function ResolveLinkMetadataProvider(
         return explicitProvider;
     }
     const recordProvider = (record as unknown as { ProviderToUse?: IMetadataProvider } | null | undefined)?.ProviderToUse;
-    if (recordProvider) {
-        return recordProvider;
-    }
-    return Metadata.Provider ?? null;
+    return recordProvider ?? Metadata.Provider ?? null;
 }
 
 /**
