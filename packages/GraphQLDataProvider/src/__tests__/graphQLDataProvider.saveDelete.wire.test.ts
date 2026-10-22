@@ -183,6 +183,119 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             // OriginalValues captured for every field by CodeName
             expect(entity.LatestResult.OriginalValues).toHaveLength(10);
         });
+
+        it('omits untouched Deprecated/Disabled fields on Create without calling entity.Get on them, while still sending explicitly dirtied Deprecated fields', async () => {
+            const entityId = 'A1B2C3D4-0000-4000-8000-000000000099';
+            const detailEntityInfo = new EntityInfo({
+                ID: entityId,
+                Name: 'ConversationDetails',
+                BaseTable: 'ConversationDetail',
+                BaseView: 'vwConversationDetails',
+                SchemaName: 'MJ',
+                Status: 'Active',
+                EntityFields: [
+                    {
+                        ID: `EF-${entityId}-1`,
+                        EntityID: entityId,
+                        Name: 'ID',
+                        Type: 'uniqueidentifier',
+                        IsPrimaryKey: true,
+                        AllowsNull: false,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 1,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-2`,
+                        EntityID: entityId,
+                        Name: 'Message',
+                        Type: 'nvarchar',
+                        AllowsNull: false,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 2,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-3`,
+                        EntityID: entityId,
+                        Name: 'ArtifactID',
+                        Type: 'uniqueidentifier',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 3,
+                        Status: 'Deprecated',
+                    },
+                    {
+                        ID: `EF-${entityId}-4`,
+                        EntityID: entityId,
+                        Name: 'SuggestedResponses',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 4,
+                        Status: 'Deprecated',
+                    },
+                ],
+            });
+            provider.RegisterTestEntity(detailEntityInfo);
+
+            // Case 1: Create without touching Deprecated fields
+            const detail1 = new TestCustomerEntity(detailEntityInfo, provider);
+            detail1.NewRecord();
+            detail1.Set('Message', 'Hello');
+            const accessedFields1: string[] = [];
+            const origGet1 = detail1.Get.bind(detail1);
+            detail1.Get = (fieldName: string) => {
+                accessedFields1.push(fieldName);
+                return origGet1(fieldName);
+            };
+
+            GraphQLWire.EnqueueResponse(
+                saveResponse('CreateMJConversationDetail', {
+                    ID: 'DET-1',
+                    Message: 'Hello',
+                    ArtifactID: null,
+                    SuggestedResponses: null,
+                })
+            );
+            await provider.Save(detail1, user, new EntitySaveOptions());
+
+            const input1 = lastInputRecord();
+            expect(input1).toHaveProperty('Message', 'Hello');
+            expect(input1).not.toHaveProperty('ArtifactID');
+            expect(input1).not.toHaveProperty('SuggestedResponses');
+            expect(accessedFields1).not.toContain('ArtifactID');
+            expect(accessedFields1).not.toContain('SuggestedResponses');
+
+            // Case 2: Create where caller explicitly dirties ArtifactID
+            const detail2 = new TestCustomerEntity(detailEntityInfo, provider);
+            detail2.NewRecord();
+            detail2.Set('Message', 'With legacy artifact');
+            detail2.Set('ArtifactID', 'ART-LEGACY-1');
+
+            GraphQLWire.EnqueueResponse(
+                saveResponse('CreateMJConversationDetail', {
+                    ID: 'DET-2',
+                    Message: 'With legacy artifact',
+                    ArtifactID: 'ART-LEGACY-1',
+                    SuggestedResponses: null,
+                })
+            );
+            await provider.Save(detail2, user, new EntitySaveOptions());
+
+            const input2 = lastInputRecord();
+            expect(input2).toHaveProperty('Message', 'With legacy artifact');
+            expect(input2).toHaveProperty('ArtifactID', 'ART-LEGACY-1');
+            expect(input2).not.toHaveProperty('SuggestedResponses');
+        });
     });
 
     describe('Save — update', () => {

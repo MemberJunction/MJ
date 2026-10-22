@@ -897,3 +897,24 @@
   color: var(--mj-text-primary);
   outline: none;
 }
+
+.mj-forms-toolbar__btn--active {
+  background: color-mix(in srgb, var(--mj-brand-primary, #3b82f6) 14%, transparent);
+  color: var(--mj-brand-primary, #3b82f6);
+  border-color: var(--mj-brand-primary, #3b82f6);
+}
+
+.mj-forms-edit-banner-conflicts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--mj-status-warning, #f59e0b) 18%, transparent);
+  color: var(--mj-status-warning-text, #b45309);
+  border: 1px solid color-mix(in srgb, var(--mj-status-warning, #f59e0b) 40%, transparent);
+}
+

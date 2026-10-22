@@ -62,17 +62,6 @@ git branch --set-upstream-to=origin/my-feature-branch my-feature-branch
 ### 4. START WORK ON A FEATURE BRANCH
 Before starting a new line of work, check the current branch. It must be (a) separate from the remote default branch and (b) named for the work being requested. If not, **ask first**, then cut and switch to one.
 
-### 5. NO HAND-LINKING IN THE M5 JOINED WORKSPACE
-This clone sits under `/Users/amith/Dropbox/develop/M5/`, a pnpm mega-workspace that already
-live-links every `@memberjunction/*` and `@mj-biz-apps/*` package. **Never** add per-package
-`node_modules` symlinks, `pnpm link`, or `rsync` another worktree's `dist/` to unstick a resolve.
-That duplicates `type-graphql`. Then `Int`/`Float`/`ID` imported from `@memberjunction/server`
-are `undefined` and MJAPI fails schema build (`CannotDetermineGraphQLTypeError` on `MaxRows` /
-`RowCount`). Explorer shows `GraphQL Error (Code: unknown)`. **Do not patch `generated.js` or
-`MJServer/dist` to work around it.** Undo the extra link, `pnpm install` **only at `M5/`**,
-rebuild the package you changed, restart with `pnpm start` from `packages/MJAPI`. Full do/don't:
-[`../CLAUDE.md`](../CLAUDE.md) (the M5 workspace file).
-
 ---
 
 ## ✅ Definition of Done
@@ -83,16 +72,16 @@ A change is not done until **both** test tiers pass. Report results — pass/fai
 ```bash
 cd packages/PackageName && pnpm test
 ```
-If tests fail because of your change, **update them**. If they fail for other reasons, **fix them**. Never leave broken tests behind. Never assume tests still pass after changing signatures, renaming methods, changing return values, or altering behavior.
+If tests fail because of your change, **update them**. If they fail for other reasons, **fix them**. Never leave broken tests behind. Never assume tests still pass after changing signatures, names, return values, or behavior.
 
 **Integration tests** — the deterministic tier must be run headless and pass:
 ```bash
 pnpm run test:integration    # = MJ_INTEGRATION_TEST=1 pnpm mj test suite "Integration Tests — Deterministic"
 pnpm mj test run "IT30 - Conversation Compaction (assembly layer)"   # single bundle while iterating
 ```
-Unit tests passing is necessary but **not sufficient** — the integration tier catches the seams between packages that unit tests mock away. Run it after migrations + CodeGen have been applied. Full details, authoring rules, and the client-first transport doctrine: [`guides/INTEGRATION_TESTING_QUICKSTART.md`](guides/INTEGRATION_TESTING_QUICKSTART.md).
+Unit tests passing is **not sufficient** — the integration tier catches the seams between packages that unit tests mock away. Run it after migrations + CodeGen. Details, authoring rules, and the client-first transport doctrine: [`guides/INTEGRATION_TESTING_QUICKSTART.md`](guides/INTEGRATION_TESTING_QUICKSTART.md).
 
-**Repo-wide gates** — `npm run check:guards` and `npm run check:standards` must pass. Neither is a required check, so a red one merges and breaks `next` for every later PR. A hook runs both before `git push` / `gh pr create`.
+**Repo-wide gates**: `check:guards` and `check:standards` must pass. Neither is a required check, so a red one merges and breaks `next`; a hook runs both before `git push` / `gh pr create`.
 
 ---
 
@@ -106,11 +95,11 @@ Unit tests passing is necessary but **not sufficient** — the integration tier 
 
 **CodeGen reads JSONType definitions from the database, not from `metadata/`.** Run `mj sync push` **before** `mj codegen`, or CodeGen regenerates from stale definitions and *silently deletes* properties from the generated types. Full ordering + why it's silent: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 
-**A CodeGen `EntityField` INSERT in a migration must never carry a literal `Sequence`.** The number CodeGen writes is a temporary placeholder that a *repeatable* script renumbers — and Flyway runs every versioned migration before any repeatable script, so on a from-scratch database it never gets renumbered in time and a second migration touching the same entity collides on `UQ_EntityField_EntityID_Sequence`. It then reports itself as an unrelated foreign-key error. This cannot fail on a working dev database; it fails only on fresh installs. Use an apply-time `MAX(Sequence)+1` expression. Gate: `node .github/scripts/check-migration-entityfield-sequence.mjs`. Full explanation: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
+**A CodeGen `EntityField` INSERT in a migration must never carry a literal `Sequence`** — use an apply-time `MAX(Sequence)+1` expression. A literal fails only on fresh installs (`UQ_EntityField_EntityID_Sequence`, misreported as an FK error), so a dev database never catches it. Gate + why: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 
-**One database per agent.** Before `mj migrate` / `mj codegen` / `mj sync push`, confirm no other session is using your `DB_DATABASE` — a git worktree isolates the filesystem, **not** the database. Interleaved CodeGen runs leave metadata demanding view columns that no longer exist, and *both* runs report success while someone else's server logs the errors. Rules + the incident that produced them: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
+**One database per agent.** A git worktree isolates the filesystem, **not** the database — before `mj migrate` / `mj codegen` / `mj sync push`, confirm no other session is using your `DB_DATABASE`. Interleaved CodeGen runs corrupt metadata while both report success. Details: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 
-**Build commands** — this is a **pnpm** workspace (`packageManager` in `package.json` pins the version; the lockfile is `pnpm-lock.yaml`). Never run `npm install` here — it would create a `package-lock.json` the repo no longer uses and resolve a different tree:
+**Build commands** — this is a **pnpm** workspace (`packageManager` pins the version; lockfile `pnpm-lock.yaml`). Never run `npm install` here — it creates a `package-lock.json` the repo doesn't use and resolves a different tree:
 ```bash
 pnpm run build            # all packages, from repo root
 pnpm run watch            # watch mode
@@ -120,21 +109,21 @@ cd packages/PackageName && pnpm run build   # single package — use this, NOT t
 ```
 After making code changes, **always compile the affected package** and fix all TypeScript errors before proceeding.
 
-**pnpm workspace**: add dependencies to the individual package's `package.json`, then run `pnpm install` **at the repository root**. Never run it inside a package directory. pnpm enforces declared dependencies strictly — a package that imports something it doesn't declare fails to resolve rather than falling through to a hoisted copy, so declare every import.
+**pnpm workspace**: add dependencies to the individual package's `package.json`, then run `pnpm install` **at the repository root**. Never run it inside a package directory. pnpm is strict: an undeclared import fails to resolve, so declare every one.
 
-**Multi-repo dev (MJ + Open App repos side by side)**: `mj dev workspace` generates a pnpm workspace over a plain parent folder of sibling clones — never hand-link repos or run installs inside a member. Setup, daily loop, and recovery: [`guides/DEV_WORKSPACE_QUICKSTART.md`](guides/DEV_WORKSPACE_QUICKSTART.md).
+**Multi-repo dev (MJ + Open App repos)**: `mj dev workspace` builds a pnpm workspace over a parent folder of sibling clones — never hand-link repos (`pnpm link`, `node_modules` symlinks, copying another worktree's `dist/`) or install inside a member. A hand link duplicates `type-graphql` (MJAPI: `CannotDetermineGraphQLTypeError`) — undo it and reinstall at the workspace root; never patch `dist/`. Setup, daily loop, recovery: [`guides/DEV_WORKSPACE_QUICKSTART.md`](guides/DEV_WORKSPACE_QUICKSTART.md).
 
-**Migration folder**: the `migrations/v*/` folder must match **the major version in the migration's own filename** — `V…__v6.1.x__Name.sql` belongs in `migrations/v6/`, a `v5.x` file in `migrations/v5/`. Read the folder off the name you just chose; never off a number written down here, which goes stale at every era. Flyway scans `./migrations` recursively and reads the version from the filename, so a misfiled migration still runs — but it strands its PostgreSQL counterpart, which is paired per folder (`migrations/vN` ↔ `migrations-pg/vN`).
+**Migration folder**: the `migrations/v*/` folder must match **the major version in the migration's own filename** — `V…__v6.1.x__Name.sql` belongs in `migrations/v6/`, a `v5.x` file in `migrations/v5/`. Read the folder off the name you chose, never off a number written here. A misfiled migration still runs but strands its PostgreSQL counterpart (paired per folder: `migrations/vN` ↔ `migrations-pg/vN`).
 
-**PostgreSQL is toolchain territory — do not hand-author it, and do not build tooling for it.** A feature PR ships the **T-SQL migration only**. Never write a `migrations-pg/**` counterpart, and never write a script that checks, generates, or gates PG parity. Converting T-SQL to PG is deterministic transpilation (`mj migrate convert`, the SQLConverter package, `/pg-migrate-v2`) run by the **build engineer at release time** — the same cadence as the consolidated metadata-sync migration. LLM-inferred PG SQL and one-off parity scripts are exactly what that toolchain exists to replace: they drift from the converter, gate feature PRs on work that is not theirs, and rot. If PG conversion looks wrong, fix the converter or tell the build engineer — do not route around it. Details: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
+**PostgreSQL: a feature PR ships the T-SQL migration only.** Never hand-write a `migrations-pg/**` file, and never build a script that checks, generates, or gates PG parity — the build engineer transpiles at release time (`mj migrate convert`, `/pg-migrate-v2`). If conversion looks wrong, fix the converter. Details: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 
-**The API path isn't always at `/`.** MJAPI mounts every route under `MJAPI_BASE_PATH`; `GRAPHQL_ROOT_PATH` is only Apollo's path; `MJAPI_PUBLIC_URL` is where the world reaches MJAPI. Never derive one from another. Server routes and outward URLs go through `ApiRoute()` from `@memberjunction/server`, never `app.use('/x')` or a hand-built `${publicUrl}/x`. CI enforces it (`check:api-root` + a boot test). Rules: [`packages/MJAPI/CLAUDE.md`](packages/MJAPI/CLAUDE.md).
+**MJAPI routes go through `ApiRoute()`** from `@memberjunction/server` — never `app.use('/x')` or a hand-built `${publicUrl}/x`. The API isn't always at `/`: `MJAPI_BASE_PATH`, `GRAPHQL_ROOT_PATH` and `MJAPI_PUBLIC_URL` are independent, so never derive one from another. CI-gated. Rules: [`packages/MJAPI/CLAUDE.md`](packages/MJAPI/CLAUDE.md).
 
 **Record Changes**: MJ has built-in version control for all entities. Don't implement custom versioning.
 
-**Never stage or commit local host artifacts**: Never commit `mj.config.cjs`, `mj.config.json`, or generated host folders (`packages/GeneratedEntities/**`, `packages/MJAPI/src/generated/**`, `packages/MJExplorer/src/app/generated/**`) to the repository. They belong strictly to local running environments.
+**Never stage or commit local host artifacts** — `mj.config.cjs`, `mj.config.json`, or generated host folders (`packages/GeneratedEntities/**`, `packages/MJAPI/src/generated/**`, `packages/MJExplorer/src/app/generated/**`) — they are per-machine.
 
-**Migration authoring structure**: Hand-written DDL at top (`ALTER TABLE`, extended properties) → at least 50 blank lines → standard CodeGen comment block → appended CodeGen output (`EntityField` INSERT with apply-time sequence, procs, views, permissions). Never do ad-hoc inline metadata updates in migrations; manage metadata via `metadata/*.json` seed files (`mj sync push`).
+**Migration layout**: hand-written DDL → at least 50 blank lines → CodeGen comment block → appended CodeGen output. No ad-hoc metadata inserts/updates in migrations — metadata lives in `metadata/*.json` (`mj sync push`). Details: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 
 ---
 
@@ -157,7 +146,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 | Path | Scope |
 |---|---|
 | [`migrations/CLAUDE.md`](migrations/CLAUDE.md) | Migration authoring — naming, hardcoded UUIDs, system columns CodeGen owns, CHECK constraints, CodeGen handoff |
-| [`metadata/CLAUDE.md`](metadata/CLAUDE.md) | Metadata authoring — `@lookup`/`@file`/`@parent` refs, `uuidgen` primary keys, metadata ships only as release migrations (no install-time metadata phase), seeding lookup tables, application metadata |
+| [`metadata/CLAUDE.md`](metadata/CLAUDE.md) | Metadata authoring — `@lookup`/`@file`/`@parent` refs, a `primaryKey` on every record (`uuidgen` or `@lookup`), metadata ships only as release migrations (no install-time metadata phase), seeding lookup tables, application metadata, polymorphic-FK `EntityIDFieldName` |
 | [`metadata/components/CLAUDE.md`](metadata/components/CLAUDE.md) | Interactive component authoring — component architecture rules, the `ProductRevenueMatrix` reference implementation |
 | [`docker/CLAUDE.md`](docker/CLAUDE.md) | Docker workbench + MJAPI container configurations |
 | [`stats/CLAUDE.md`](stats/CLAUDE.md) | Repo LOC stats — generated files, do not hand-edit |
@@ -175,7 +164,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 
 ### Guides — the complete index is [`guides/README.md`](guides/README.md)
 
-41 cross-cutting "read this before you build that" guides, categorized. **Consult the index before starting work in an unfamiliar area** — these capture patterns already litigated. Frequently needed: [Dev Workspace Quickstart](guides/DEV_WORKSPACE_QUICKSTART.md), [UI Layering](guides/UI_LAYERING_GUIDE.md), [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
+Cross-cutting "read this before you build that" guides, categorized. **Consult the index before working in an unfamiliar area** — they capture patterns already litigated. Frequently needed: [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
 
 **UI work is layered — L0 runtime → L1 widget → L2 composite → L3 Explorer surface.** Nothing below L3 imports `@angular/router` or an Explorer package; nothing at L3 holds domain logic. Read [`guides/UI_LAYERING_GUIDE.md`](guides/UI_LAYERING_GUIDE.md) before building any UI, in this repo or any MJ app repo.
 
@@ -191,13 +180,13 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 ### Local CI mirrors
 
 ```bash
-npm run check:ui          # design-token + button gates on changed CSS/SCSS (mirrors the PR gate)
+npm run check:ui          # design-token + button gates on changed CSS/SCSS (as the PR gate)
 npm run check:standards   # every adopted MJ standard (see .mj-standards.json)
 npm run check:guards      # UUID, global-provider and primary-key source scanners (CI "Source guards")
 npm run check:esm         # native-ESM import guard for "type": "module" packages
-npm run check:claude-md   # instruction-file budget, link validity, and routing-table coverage
-npm run check:changeset   # changeset bump levels (local only — no CI gate enforces this one)
-npm run check:codegen-tail # new-table migrations ship their generated entity (same command CI runs)
+npm run check:claude-md   # instruction-file budget, links, routing-table coverage
+npm run check:changeset   # changeset bump levels (local only — no CI gate)
+npm run check:codegen-tail # new-table migrations ship their generated entity (as CI runs it)
 ```
 
 ---

@@ -243,6 +243,20 @@ Check if there are any pending metadata changes (new/updated records in `metadat
    > `Metadata_Sync.sql` migration — and thus never reaches production, where those IT agents would
    > surface in every user's `@agent` picker. It is pushed only into the throwaway Step-3 database,
    > in Step 4.2.
+
+   > 🚨 **If this release changes entity `Configuration` (e.g. `SaveReturnMode`), push
+   > `metadata/entities` on its own first**, then the full push in a new process:
+   > ```bash
+   > mj sync push --dir ./metadata --include=entities
+   > mj sync push --dir ./metadata
+   > ```
+   > The CLI reads entity metadata once at startup. On 6.2.0-edge.5,
+   > `V202610171645__SaveReturnMode_DatestampsOnly_StoredProcedures` had already made
+   > `spCreateAIPromptRun` return only the ID and datestamps, while the setting that tells the
+   > provider so was still waiting in `metadata/entities`. The first prompt save that wrote a
+   > prompt run (only when AI keys are configured) failed with `Column name or number of supplied
+   > values does not match table definition`, and the push rolled back. The Metadata_Sync
+   > migration is then both SQL logs, concatenated in the order they ran (steps 6–7).
 6. **Grab the generated SQL** from `metadata/sql_logging/` — find the most recent `MetadataSync_Push_*.sql` file
 7. **Copy it to the migrations folder** and rename using the naming convention:
    ```

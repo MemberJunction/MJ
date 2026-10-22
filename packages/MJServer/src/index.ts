@@ -38,7 +38,7 @@ import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateReadOnlyProvider, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
-import { variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
+import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
@@ -103,10 +103,15 @@ import { ApiRoute, ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
 import { MountHealthcheckRoute, MountPublicCoreRoutes, MountExtensionHealthRoute, MountAuthCatalogRoute, MountAuthenticatedCoreRoutes } from './coreRoutes.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 import { CreateMetadataRefreshSignalHandler, METADATA_REFRESH_SIGNAL } from './metadataRefreshSignal.js';
+import { CacheInvalidationBroadcastManager } from './broadcast/index.js';
+import { ResolveServerRole, ShouldRunBackgroundWorkers } from './serverRoleConfigUnits.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
 export { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
+export * from './serverRoleConfigUnits.js';
+export * from './broadcast/index.js';
+export { ApplyRootVariablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 
 /**
  * Returns the configured database platform from the `DB_PLATFORM` environment
@@ -491,6 +496,8 @@ const setupComplete$ = new ReplaySubject(1);
     // Every API pool carries the statement and idle-in-transaction timeouts from connection #1.
     const pgConnectionConfig = BuildPostgreSQLConnectionConfig(pgEndpoint, configInfo.databaseSettings, 'api');
     const pgPool = new pg.default.Pool(ToPGPoolConfig(pgConnectionConfig));
+    // An idle connection the server drops is emitted on the pool; without a listener Node exits.
+    pgPool.on('error', (err) => console.error('[PostgreSQL pool] Idle connection error (connection evicted):', err.message));
 
     // Verify connection
     const testClient = await pgPool.connect();
@@ -508,6 +515,7 @@ const setupComplete$ = new ReplaySubject(1);
         ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'read-only')),
         types: MJPostgresTypes,
       });
+      readOnlyPgPool.on('error', (err) => console.error('[PostgreSQL read-only pool] Idle connection error (connection evicted):', err.message));
       const readOnlyTestClient = await readOnlyPgPool.connect();
       try {
         for (const warning of await DescribeReadOnlyLoginOverreach(readOnlyTestClient, mj_core_schema)) {
@@ -594,6 +602,7 @@ const setupComplete$ = new ReplaySubject(1);
           'codegen',
         );
         const codegenPgPool = new pg.default.Pool(ToPGPoolConfig(codegenPgConnectionConfig));
+        codegenPgPool.on('error', (err) => console.error('[PostgreSQL CodeGen pool] Idle connection error (connection evicted):', err.message));
         const codegenTestClient = await codegenPgPool.connect();
         await codegenTestClient.query('SELECT 1');
         codegenTestClient.release();
@@ -1030,6 +1039,7 @@ const setupComplete$ = new ReplaySubject(1);
   // config.ts loads and validates at module scope, so importing it there would pull full config
   // validation into every import chain that touches the resolver, unit tests included.
   ConfigureRecordDataBroadcast(configInfo.cacheSettings?.recordDataBroadcastEntities);
+  CacheInvalidationBroadcastManager.Instance.Configure(configInfo.cacheSettings?.broadcast);
 
   // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
   // ANY BaseEntity save/delete occurs on this server — regardless of whether it
@@ -1103,7 +1113,6 @@ const setupComplete$ = new ReplaySubject(1);
     scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
     emitSchemaFile: websiteRunFromPackage !== 1,
     pubSub,
-    globalMiddlewares: [variablesLoggingMiddleware],
   });
   const buildMs = performance.now() - tBuild;
 
@@ -1130,6 +1139,7 @@ const setupComplete$ = new ReplaySubject(1);
   auditResolversForUndecoratedArgs();
 
   const tTransform = performance.now();
+  schema = ApplyRootVariablesLoggingMiddleware(schema);
   schema = requireSystemUserDirective.transformer(schema);
   schema = publicDirective.transformer(schema);
 
@@ -1530,11 +1540,29 @@ const setupComplete$ = new ReplaySubject(1);
   // ─── GraphQL middleware (contextFunction reads req.userPayload, no re-auth) ─────
   app.use(
     graphqlRootPath,
-    cors<cors.CorsRequest>(),
+    cors<cors.CorsRequest>({
+      exposedHeaders: ['X-MJ-Cache-Seq', 'X-MJ-Server-ID'],
+    }),
     BodyParser.json({ limit: '50mb' }),
     // Express 5 leaves req.body as undefined for non-JSON or empty bodies;
     // Apollo Server's expressMiddleware requires req.body to be defined.
-    (req, _res, next) => { if (req.body === undefined) req.body = {}; next(); },
+    // Also piggyback the latest monotonic cache invalidation sequence and server process ID
+    // onto every GraphQL HTTP response so clients can detect and recover missed invalidations.
+    (req, res, next) => {
+      if (req.body === undefined) req.body = {};
+      const broadcastProvider = CacheInvalidationBroadcastManager.Instance.Provider;
+      res.setHeader('X-MJ-Cache-Seq', String(broadcastProvider.CurrentSequence));
+      res.setHeader('X-MJ-Server-ID', broadcastProvider.ServerProcessID);
+      const originalWriteHead = res.writeHead.bind(res);
+      res.writeHead = ((...args: Parameters<typeof res.writeHead>) => {
+        if (!res.headersSent) {
+          res.setHeader('X-MJ-Cache-Seq', String(broadcastProvider.CurrentSequence));
+          res.setHeader('X-MJ-Server-ID', broadcastProvider.ServerProcessID);
+        }
+        return originalWriteHead(...args);
+      }) as typeof res.writeHead;
+      next();
+    },
     expressMiddleware(apolloServer, {
       context: contextFunction({
                                  setupComplete$,
@@ -1549,9 +1577,15 @@ const setupComplete$ = new ReplaySubject(1);
     app.use(mw);
   }
 
+  const serverRole = ResolveServerRole(configInfo.serverRole ?? process.env.MJ_SERVER_ROLE);
+  const runBackgroundWorkers = ShouldRunBackgroundWorkers(serverRole);
+  if (!runBackgroundWorkers) {
+    LogStatus(`[ServerRole] Running in '${serverRole}' mode — background worker services are disabled on this replica.`);
+  }
+
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;
-  if (configInfo.scheduledJobs?.enabled) {
+  if (runBackgroundWorkers && configInfo.scheduledJobs?.enabled) {
     try {
       scheduledJobsService = new ScheduledJobsService(configInfo.scheduledJobs);
       await scheduledJobsService.Initialize();
@@ -1565,7 +1599,7 @@ const setupComplete$ = new ReplaySubject(1);
   // Initialize and start the integration sync worker if enabled (PR 1 item 8).
   // Off by default — deployments that don't opt in keep running syncs inline.
   let integrationSyncWorker: IntegrationSyncWorkerService | null = null;
-  if (configInfo.integrationSyncWorker?.enabled) {
+  if (runBackgroundWorkers && configInfo.integrationSyncWorker?.enabled) {
     try {
       integrationSyncWorker = new IntegrationSyncWorkerService(configInfo.integrationSyncWorker);
       await integrationSyncWorker.Initialize();
@@ -1603,52 +1637,55 @@ const setupComplete$ = new ReplaySubject(1);
   }
   startupLog.PrintSummary();
 
-  // Process pending RSU work from pre-restart (entity maps, field maps, sync)
-  processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`));
-
-  // Resume any integration syncs that were orphaned by the previous process restart
   const resumeUser = UserCache.Instance.GetSystemUser();
-  if (resumeUser) {
-    IntegrationEngine.Instance.ResumeOrphanedSyncs(resumeUser)
-      .catch(err => console.warn(`[IntegrationEngine] Orphaned sync resume failed: ${err}`));
-  }
 
-  // Force-fail any agent runs left 'Running' by a process that died (restart/crash/OOM) or whose
-  // terminal-state write never landed. Staleness-based, so it never touches runs another healthy
-  // instance is still heart-beating. The watchdog also self-registers for graceful-shutdown
-  // cancellation (via ShutdownRegistry) once it begins tracking this process's first live run.
-  if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
-    const sweepUser = resumeUser;
-    const sweepProvider = Metadata.Provider; // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
-    AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser)
-      .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
+  if (runBackgroundWorkers) {
+    // Process pending RSU work from pre-restart (entity maps, field maps, sync)
+    processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`));
 
-    // The watchdog repairs the RUN; nothing repaired the conversation detail, which is the row the
-    // chat actually renders from (MJ #4222). A process that dies mid-run leaves a terminal run
-    // beside a message that still claims to be generating, and it spins forever for anyone who
-    // opens it. Runs at boot (closes restart orphans) and on a timer (closes mid-life orphans),
-    // mirroring the watchdog's own two-phase shape.
-    const reconcileOrphans = () =>
-      ReconcileOrphanedConversationDetails(sweepProvider, sweepUser)
-        .catch(err => console.warn(`[OrphanDetailReconciler] Pass failed: ${err}`));
-    void reconcileOrphans();
-    const orphanDetailTimer = setInterval(() => void reconcileOrphans(), ORPHAN_DETAIL_SWEEP_INTERVAL_MS);
-    ShutdownRegistry.Instance.Register({
-      ShutdownName: 'OrphanDetailReconciler',
-      Shutdown: () => { clearInterval(orphanDetailTimer); },
-    });
-  }
+    // Resume any integration syncs that were orphaned by the previous process restart
+    if (resumeUser) {
+      IntegrationEngine.Instance.ResumeOrphanedSyncs(resumeUser)
+        .catch(err => console.warn(`[IntegrationEngine] Orphaned sync resume failed: ${err}`));
+    }
 
-  // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then a periodic tick
-  // that closes stale and over-deadline sessions and rebuilds lost realtime recordings from their
-  // crash-recovery shards (storage reads and writes). Self-registers with ShutdownRegistry, so its timer
-  // is cleared by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
-  if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
-    SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
-      .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
-    // The bridge engine's orphan reconcile likewise starts only now that this process holds its port, so it can't
-    // take the live bridges of another MJAPI still serving that port for its own orphans (#5310).
-    StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+    // Force-fail any agent runs left 'Running' by a process that died (restart/crash/OOM) or whose
+    // terminal-state write never landed. Staleness-based, so it never touches runs another healthy
+    // instance is still heart-beating. The watchdog also self-registers for graceful-shutdown
+    // cancellation (via ShutdownRegistry) once it begins tracking this process's first live run.
+    if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
+      const sweepUser = resumeUser;
+      const sweepProvider = Metadata.Provider; // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
+      AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser)
+        .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
+
+      // The watchdog repairs the RUN; nothing repaired the conversation detail, which is the row the
+      // chat actually renders from (MJ #4222). A process that dies mid-run leaves a terminal run
+      // beside a message that still claims to be generating, and it spins forever for anyone who
+      // opens it. Runs at boot (closes restart orphans) and on a timer (closes mid-life orphans),
+      // mirroring the watchdog's own two-phase shape.
+      const reconcileOrphans = () =>
+        ReconcileOrphanedConversationDetails(sweepProvider, sweepUser)
+          .catch(err => console.warn(`[OrphanDetailReconciler] Pass failed: ${err}`));
+      void reconcileOrphans();
+      const orphanDetailTimer = setInterval(() => void reconcileOrphans(), ORPHAN_DETAIL_SWEEP_INTERVAL_MS);
+      ShutdownRegistry.Instance.Register({
+        ShutdownName: 'OrphanDetailReconciler',
+        Shutdown: () => { clearInterval(orphanDetailTimer); },
+      });
+    }
+
+    // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then a periodic tick
+    // that closes stale and over-deadline sessions and rebuilds lost realtime recordings from their
+    // crash-recovery shards (storage reads and writes). Self-registers with ShutdownRegistry, so its timer
+    // is cleared by the gracefulShutdown drain below (no explicit Stop() wiring needed here).
+    if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
+      SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+        .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
+      // The bridge engine's orphan reconcile likewise starts only now that this process holds its port, so it can't
+      // take the live bridges of another MJAPI still serving that port for its own orphans (#5310).
+      StartBridgeOrphanReconciliation(Metadata.Provider, resumeUser); // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
+    }
   }
 
   // Launch the durable task-graph dispatcher: claim Pending tasks, execute them with a fresh
@@ -1677,7 +1714,7 @@ const setupComplete$ = new ReplaySubject(1);
     // StartTaskGraphDispatcher); this gives the agent seam the same.
     SuppressTaskGraphSubmission('MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 is set on this host');
     LogStatus('[TaskGraphDispatcher] Disabled by MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 — this process will neither accept nor execute task graphs.');
-  } else if (resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
+  } else if (runBackgroundWorkers && resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
     StartTaskGraphDispatcher(taskGraphPool, resumeUser)
       .catch(err => console.warn(`[TaskGraphDispatcher] Startup failed: ${err}`));
   }
@@ -1687,7 +1724,7 @@ const setupComplete$ = new ReplaySubject(1);
   // ShutdownAll() drains it (up to 2 × shutdownDrainMs) before the HTTP server closes.
   // Not awaited: a slow engine load must not delay readiness, and a failure never stops the API.
   const workQueueProvider = Metadata.Provider; // global-provider-ok: server startup — the work-queue host runs on the server's own provider
-  if (configInfo.workQueue?.enabled && workQueueProvider instanceof DatabaseProviderBase) {
+  if (runBackgroundWorkers && configInfo.workQueue?.enabled && workQueueProvider instanceof DatabaseProviderBase) {
     const workQueuePool = dataSources[0]?.dataSource;
     const providerSource = new MJServerWorkQueueProviderSource(workQueuePool instanceof sql.ConnectionPool ? workQueuePool : null, workQueueProvider);
     StartWorkQueueHost(configInfo.workQueue, workQueueProvider, providerSource)
@@ -2193,9 +2230,10 @@ function mountRealtimeRecordingRoutes(app: Application): boolean {
   }
   const graceMs = (): number => configInfo.realtime.recordingAssemblyGraceSeconds * 1000;
   const systemUser = UserCache.Instance.GetSystemUser();
-  if (systemUser) {
+  const runWorkers = ShouldRunBackgroundWorkers(ResolveServerRole(configInfo.serverRole ?? process.env.MJ_SERVER_ROLE));
+  if (systemUser && runWorkers) {
     RecordingAssemblyScheduler.Instance.Start({ Provider: provider, SystemUser: systemUser, GraceMs: graceMs });
-  } else {
+  } else if (!systemUser) {
     LogError('[Realtime] Recording assembly scheduler not started: no system user; the session janitor assembles recordings instead');
   }
   app.use(ApiRoute(REALTIME_RECORDING_MOUNT_PATH), cors<cors.CorsRequest>(), CreateRealtimeRecordingRouter({
