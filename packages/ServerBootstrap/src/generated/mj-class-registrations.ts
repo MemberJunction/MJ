@@ -231,19 +231,20 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/auth-providers (8 classes)
+// @memberjunction/auth-providers (9 classes)
 import {
     Auth0Provider,
     CognitoProvider,
     GoogleProvider,
     HostIdentityProvider,
+    LocalDevProvider,
     MSALProvider,
     MagicLinkProvider,
     OktaProvider,
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (454 classes)
+// @memberjunction/core-entities (456 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -385,6 +386,8 @@ import {
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -1803,6 +1806,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     CognitoProvider,
     GoogleProvider,
     HostIdentityProvider,
+    LocalDevProvider,
     MSALProvider,
     MagicLinkProvider,
     OktaProvider,
@@ -1934,11 +1938,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthorizationRoleEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
-    MJCollectionArtifactEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCollectionArtifactEntity,
     MJCollectionEntity,
     MJCollectionPermissionEntity,
     MJCollectionPermissionEntityExtended,
@@ -1951,6 +1955,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -2136,13 +2142,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryEntityEntity,
     MJQueryEntityExtended,
     MJQueryFieldEntity,
-    MJQueryParameterEntity,
-    MJQueryPermissionEntity,
-    MJQuerySQLEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueryParameterEntity,
+    MJQueryPermissionEntity,
+    MJQuerySQLEntity,
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
@@ -2340,13 +2346,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CreateSurveyMonkeyAction,
     CreateTypeformAction,
     ExportGoogleFormsCSVAction,
-    ExportJotFormCSVAction,
-    ExportSurveyMonkeyCSVAction,
-    ExportTypeformCSVAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ExportJotFormCSVAction,
+    ExportSurveyMonkeyCSVAction,
+    ExportTypeformCSVAction,
     GetGoogleFormAction,
     GetGoogleFormsStatisticsAction,
     GetJotFormAction,
@@ -2544,13 +2550,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AzureAISearchProvider,
     BGEReRanker,
     CohereReRanker,
-    ElasticsearchSearchProvider,
-    EntitySearchProvider,
-    FullTextSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    ElasticsearchSearchProvider,
+    EntitySearchProvider,
+    FullTextSearchProvider,
     NoopReRanker,
     OpenAIReRanker,
     OpenSearchSearchProvider,
@@ -2748,13 +2754,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ExecuteScheduledJobNowAction,
     GetScheduledJobStatisticsAction,
     QueryScheduledJobsAction,
-    UpdateScheduledJobAction,
-    AgentEvalDriver,
-    DecisionEvalDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    UpdateScheduledJobAction,
+    AgentEvalDriver,
+    DecisionEvalDriver,
     PromptEvalDriver,
     RubricCalibrationTestDriver,
     ComputerUseAction,
@@ -2952,13 +2958,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     AWSIoTCoreBroadcastProvider,
     AzureWebPubSubBroadcastProvider,
     GCPPubSubBroadcastProvider,
-    MJEntityPermissionEntityServer,
-    MJTenantFilterMiddleware,
-    RateLimitMiddleware,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    MJEntityPermissionEntityServer,
+    MJTenantFilterMiddleware,
+    RateLimitMiddleware,
     SequencedRoleBucketBroadcastProvider,
     HelloWorldHandler,
     WorkQueueServerExtension,
@@ -2979,7 +2985,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1203;
+export const CLASS_REGISTRATIONS_COUNT = 1206;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

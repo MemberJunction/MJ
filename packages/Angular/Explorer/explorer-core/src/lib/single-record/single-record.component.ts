@@ -6,6 +6,7 @@ import { Subscription } from 'rxjs';
 import { GetDeletedRecordFromEvent, NavigationService, RecentAccessService, RecordIdentityMatches, SafeDetectChanges, SharedService } from '@memberjunction/ng-shared';
 import { MJEvent, MJGlobal } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 
 /**
  * Explorer-side host for a single entity record in the main tab area.
@@ -101,6 +102,12 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
    * only route the snapshot has out to Explorer.
    */
   @Output() public CompositionChanged: EventEmitter<FormCompositionSnapshot> = new EventEmitter<FormCompositionSnapshot>();
+
+  /**
+   * Emitted when the user clicks "Ask AI" in the record form toolbar.
+   * Also requests expansion of the floating chat overlay via ConversationsRuntime.
+   */
+  @Output() public AskAIRequested: EventEmitter<void> = new EventEmitter<void>();
 
   @ViewChild(MjEntityFormHostComponent) private formHost?: MjEntityFormHostComponent;
 
@@ -220,6 +227,11 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
 
   OnEditModeChanged(editing: boolean): void {
     this.EditModeChanged.emit(editing);
+  }
+
+  OnAskAIRequested(): void {
+    this.AskAIRequested.emit();
+    ConversationsRuntime.Instance.Bridge.RequestExpandOverlay();
   }
 
   OnNotification(event: FormNotificationEvent): void {

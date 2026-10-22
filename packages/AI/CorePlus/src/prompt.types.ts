@@ -431,6 +431,14 @@ export class AIPromptParams extends AIModelRunParams {
   PreRenderedChildTemplates?: Record<string, string>;
 
   /**
+   * The system-prompt-and-tools fingerprint of the previous request in this conversation, from
+   * `GetSentPrefixFingerprint`. Set by a caller that replays reasoning to a provider which binds it
+   * to an unchanged prefix. When this request's system prompt or tools differ, the runner sends
+   * it without any replayed reasoning, which that provider would otherwise reject.
+   */
+  ReplayedReasoningPrefix?: string;
+
+  /**
    * Optional callback for receiving execution progress updates
    * Provides real-time information about the execution progress
    */

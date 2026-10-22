@@ -35,6 +35,7 @@ import { PlacementPreviewPanelComponent } from './lib/panel-slot/placement-previ
 import { RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
 import { MjRecordLinksComponent } from './lib/links/record-links.component';
 import { MjRecordLinksDrawerComponent } from './lib/links/record-links-drawer.component';
+import { MjRecordPreviewPopoverComponent } from './lib/preview-popover/record-preview-popover.component';
 
 /**
  * BaseFormsModule - Form components and base classes for rendering and editing MemberJunction entity records.
@@ -78,7 +79,8 @@ import { MjRecordLinksDrawerComponent } from './lib/links/record-links-drawer.co
     MjFormPlacementPreviewComponent,
     PlacementPreviewPanelComponent,
     MjRecordLinksComponent,
-    MjRecordLinksDrawerComponent
+    MjRecordLinksDrawerComponent,
+    MjRecordPreviewPopoverComponent
   ],
   imports: [
     CommonModule,
@@ -122,7 +124,8 @@ import { MjRecordLinksDrawerComponent } from './lib/links/record-links-drawer.co
     MjFormPlacementPreviewComponent,
     PlacementPreviewPanelComponent,
     MjRecordLinksComponent,
-    MjRecordLinksDrawerComponent
+    MjRecordLinksDrawerComponent,
+    MjRecordPreviewPopoverComponent
   ]
 })
 export class BaseFormsModule { }
