@@ -1,13 +1,15 @@
-import { Component, ViewChild, ElementRef, ChangeDetectorRef, OnInit } from '@angular/core';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { Component, ViewChild, ElementRef, ChangeDetectorRef, OnInit, inject } from '@angular/core';
+import { BaseResourceComponent, NavigationService, SafeDetectChanges } from '@memberjunction/ng-shared';
 import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, MJEventType , UUIDsEqual } from '@memberjunction/global';
-import { CompositeKey, Metadata, EntityInfo, BaseEntity, BaseEntityEvent } from '@memberjunction/core';
+import { CompositeKey, Metadata, EntityInfo, BaseEntity, BaseEntityEvent, LogError } from '@memberjunction/core';
+import { FormResolverService } from '@memberjunction/ng-base-forms';
 import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, ViewRelatedRecordNavigation, ExportColumnTypeForSQLType } from '@memberjunction/ng-entity-viewer';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { ExportColumn } from '@memberjunction/export-engine';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
 import type { SaveViewAsListResult } from '@memberjunction/ng-list-management';
+import { ShouldOfferStandardFormCreate } from './standard-form-create';
 import { debounceTime, filter, takeUntil } from 'rxjs/operators';
 /**
  * UserViewResource - Resource wrapper for displaying User Views in tabs
@@ -172,6 +174,12 @@ export class UserViewResource extends BaseResourceComponent {
     }
     public ViewEntity: MJUserViewEntityExtended | null = null;
 
+    /**
+     * Show "New in standard form" (MJ#4755): a custom form hides the CodeGen
+     * form for this entity and the user may create. Resolved after load.
+     */
+    public ShowNewInStandardForm = false;
+
     /** @deprecated Use {@link ViewEntity}. */
     public get viewEntity(): MJUserViewEntityExtended | null {
       return this.ViewEntity;
@@ -249,6 +257,7 @@ export class UserViewResource extends BaseResourceComponent {
     }
 
     private dataLoaded = false;
+    private formResolver = inject(FormResolverService);
     private get metadata() { return this.ProviderToUse; }
     constructor(
         private cdr: ChangeDetectorRef,
@@ -299,6 +308,7 @@ export class UserViewResource extends BaseResourceComponent {
             this.ViewEntity = null;
             this.GridState = null;
             this.errorMessage = null;
+            this.ShowNewInStandardForm = false;
             this.loadView();
         }
     }
@@ -342,6 +352,8 @@ export class UserViewResource extends BaseResourceComponent {
             else {
                 this.errorMessage = 'No view ID or entity specified';
             }
+            // Deliberately not awaited: the extra button must never hold up the view.
+            void this.refreshStandardFormCreate();
         } catch (error) {
             console.error('Error loading view:', error);
             this.errorMessage = error instanceof Error ? error.message : 'Failed to load view';
@@ -607,6 +619,38 @@ export class UserViewResource extends BaseResourceComponent {
     /** @deprecated Use {@link OnCreateNewRecord}. */
     public onCreateNewRecord(): void {
       return this.OnCreateNewRecord();
+    }
+
+    /**
+     * Create a new record in the CodeGen standard form (MJ#4755) — the escape
+     * hatch for entities whose custom form cannot create records.
+     */
+    public OnCreateNewRecordInStandardForm(): void {
+        if (!this.EntityInfo) return;
+        this.navigationService.OpenNewEntityRecord(this.EntityInfo.Name, { formMode: 'standard' });
+    }
+
+    /**
+     * Decide whether to offer "New in standard form" for the loaded entity.
+     * Discards the answer if the view moved to another entity meanwhile.
+     */
+    private async refreshStandardFormCreate(): Promise<void> {
+        const entity = this.EntityInfo;
+        if (!entity) return;
+        let show = false;
+        try {
+            const p = this.ProviderToUse;
+            const res = await this.formResolver.ResolveFormForEntity(entity, p.CurrentUser, p);
+            const canCreate = entity.GetUserPermisions(p.CurrentUser).CanCreate;
+            show = ShouldOfferStandardFormCreate(res, canCreate);
+        } catch (err) {
+            LogError(`ViewResource: could not resolve forms for "${entity.Name}": ${err instanceof Error ? err.message : String(err)}`);
+        }
+        if (this.EntityInfo !== entity) return;
+        this.ShowNewInStandardForm = show;
+        // Safe variant: this runs after an await in a fire-and-forget promise,
+        // so the view may be destroyed (tab closed) or mid-pass by now.
+        SafeDetectChanges(this.cdr);
     }
 
     /**

@@ -14,6 +14,12 @@
       <i class="fa-solid fa-pen-to-square"></i>
       <span class="mj-forms-edit-banner-text">Editing: {{ RecordDisplayName }}</span>
     }
+    @if (EffectiveConflictCount > 0) {
+      <span class="mj-forms-edit-banner-conflicts" role="status">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span>{{ EffectiveConflictCount }} {{ EffectiveConflictCount === 1 ? 'conflict needs' : 'conflicts need' }} review</span>
+      </span>
+    }
     <div class="mj-forms-toolbar-spacer"></div>
     <div class="mj-forms-edit-banner-actions">
       @for (item of ResolvedEditBeforeSaveItems; track item.Key) {
@@ -107,6 +113,8 @@
               @for (item of MoreMenuItems; track item.Key) {
                 <div class="mj-forms-menu-row" [class.disabled]="item.Disabled">
                   <button class="mj-forms-menu-item" type="button"
+                    [class.mj-forms-btn--links]="item.Key === 'links'"
+                    [class.mj-forms-toolbar__btn--active]="item.Key === 'links' && LinksOpen"
                     [disabled]="item.Disabled || item.IsLoading" [title]="item.Description"
                     (click)="OnMenuItemClick(item, $event)">
                     <span class="mj-forms-menu-icon">
@@ -336,6 +344,8 @@
     [class.mj-forms-btn--history]="item.Key === 'history'"
     [class.mj-forms-btn--list]="item.Key === 'list'"
     [class.mj-forms-btn--tags]="item.Key === 'tags'"
+    [class.mj-forms-btn--links]="item.Key === 'links'"
+    [class.mj-forms-toolbar__btn--active]="item.Key === 'links' && LinksOpen"
     [class.mj-forms-btn--attachments]="item.Key === 'attachments'"
     [class]="item.CssClass"
     [disabled]="item.Disabled || item.IsLoading"

@@ -1,5 +1,99 @@
 # @memberjunction/metadata-sync
 
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- a0db1fb: `mj sync` keeps `@env:` references on pull, adds `pushWhen` and `@env:VAR?optional`, and fixes pull, push and validate defects.
+  - **Pull keeps `@env:` references.** A file value written as `@env:VAR` keeps the reference after `mj sync pull` under `merge` and `overwrite`, also with `--multi-file`: in a field, inside JSON fields (and their `@file:` JSON side files), in `@lookup:` criteria and create fields, in `collections`/`embeds`/`extension` items, and in `primaryKey`. The resolved value (often a secret) is no longer written into the file. When `VAR` is set and differs from the database, pull warns without printing either value. Pull finds an existing record by the key variable's value. When a top-level record's key variable is not set, pull stops before it writes any file; for a child record's key, it stops with an error that names the file and the variable. Pull also stops before it writes any file when a record file in the folder cannot be read, so it never writes that file's records again as new files.
+  - **`pushWhen`.** An entity folder's `.mj-sync.json` can set `"pushWhen": "@env:VAR"`. Push runs over the folder only when `VAR` is `true` or `1`; otherwise it skips and logs the folder and does not fail. `--format=json` lists skipped folders in `data.skippedDirectories`.
+  - **`@env:VAR?optional`.** When `VAR` is not set, push leaves the field out of the save and warns, and still pushes the rest of the record.
+  - **Fix:** `mj sync pull --merge-strategy`, `--preserve-fields` and `--exclude-fields` were accepted and ignored. They now override the folder's pull settings for the run.
+  - **Fix:** `mj sync push --dir=<entity folder>` failed with "No entity directories found". It now pushes that folder, with root settings from the nearest parent root `.mj-sync.json`. `mj sync validate --dir=<entity folder>` now validates that folder (before, it validated only its subfolders).
+  - **Fix:** `mergeStrategy: "skip"` rewrote files and counted them as updated. It now leaves them alone and counts them as skipped.
+  - **Push does not print `@env:` values:** the verbose diff and the change report show `<hidden>` / `<from @env:VAR>`, and save errors show `<from @env:VAR>` for values of 6 or more characters. In a SQL Server SQL log, push leaves env-sourced fields out (`-- <Entity>.<Field>: not recorded, value comes from @env:VAR`); a replayed create then gets the column default, or fails if the column is NOT NULL with no default. Push warns, with names only, about what it cannot leave out (an env-sourced primary key, a value still in the log, other providers' logs). On create, a `primaryKey` written as `@env:VAR` stays in the file when the database saved the variable's value as the key. Push resolves an `@env:` `primaryKey` of a `collections` child and of a record to delete.
+  - **`?optional` in `@lookup:`** is an error in validation and push.
+  - **`mj sync watch`** chooses folders as push does, honors `pushWhen` and `?optional`, resolves an `@env:` primary key, matches field names without case as push does (and sets a virtual property such as `TemplateText` as written), and masks `@env:` values in its output. When one file fails, watch prints the error and goes on watching. Its SQL log leaves env-sourced fields out of the SQL statements, but the record-change data in that log can hold the old database value of an env-sourced field.
+  - **Fix:** push and watch now apply `.mj-folder.json` defaults, from the sync root down to the record file's folder (a deeper folder wins; any `.mj-folder.json` wins over the entity's `.mj-sync.json` defaults). An unset `?optional` variable in a default skips that default. Validation no longer asks for `entityName` in `.mj-folder.json`.
+  - **Fix:** `--update-existing` / `--create-new` (and their `--no-` forms) now reach the pull. `--multi-file` does not use them.
+  - **Fix:** `--multi-file` reads an empty target file as no records. With `--since`/`--incremental` it removes the entries of soft-deleted records from the file, and no longer deletes the whole file when a deleted record's `Name` equals the file name.
+  - **Fix:** with `--incremental`, a record whose lookup push deferred now gets its deferred fields saved. The record keeps its earlier checksum in the file, so each later `--incremental` push checks it again until the record changes. A deferred child finds its `@parent:` record from the main pass.
+  - **Fix:** `mj sync validate` now honors the root `ignoreDirectories` and reads the record files the way push finds them (before, it found none from the usual working folder). Two entries for the same record that set a field to different values are an error that gives the `path:line` of each entry. A `@template:` value is an error, because push does not support it. Because validation now checks record files, `mj sync push --ci` can stop on errors that earlier versions did not find (unknown fields and top-level keys, a `__mj_` field or the primary key in `fields`, `@template:`, `?optional` in `@lookup:`, missing `@file:` targets, conflicting entries); fix the files or use `--no-validate`. A read-only field that push ignores, such as a joined display field that pull writes, is a warning that names `pull.ignoreVirtualFields` for a virtual field and `pull.excludeFields` for another field. Validation matches field names without case, as push does.
+  - **`@memberjunction/generic-database-provider`:** `SqlLoggingOptions.TransformStatement` rewrites each statement before the SQL log session reads or prints it.
+  - **Fix:** `mj sync watch` sees file changes again. It watches each entity folder and picks the record files push reads (`filePattern`, default `*.json`, dot files included, no `.mj-*.json` files) and `.md`/`.txt`/`.html`/`.liquid`/`.sql` files itself, because chokidar 5 does not support glob patterns. A change event for the content watch itself just wrote is ignored, so one edit gives one sync.
+  - **Fix:** `--multi-file` pull also finds an existing record in the folder's other record files, so it keeps that record's `@env:` references instead of writing the database value.
+  - **Fix:** pull leaves out a read-only field whose database value holds the value of an `@env:` reference in the record file (for example a key path built from an `@env:` key; a UUID matches without case), and removes such a field that the file already holds, with `merge` too.
+  - **Fix:** push and watch leave the SQL-log SET line of a field skipped for an unset `?optional` variable out of the log, by name, so a full-row save does not log the field's database value.
+  - **Fix:** push's error for an unset `@env:` variable names the record file with the line where the record starts, the entity and the field (for a composition child, its path such as `collections.Lines[0].fields.Name` and its entity; no line for a file that uses `@include`).
+
+### Patch Changes
+
+- Updated dependencies [3b0e8db]
+- Updated dependencies [0d81c53]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [a9344ad]
+- Updated dependencies [c6b4b85]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [35ed364]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [a0db1fb]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [a9614be]
+- Updated dependencies [8420f36]
+- Updated dependencies [e38710c]
+- Updated dependencies [006a5e7]
+- Updated dependencies [ba61c0b]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [2ca8690]
+- Updated dependencies [74d44e1]
+- Updated dependencies [c7d1170]
+- Updated dependencies [79d4f27]
+- Updated dependencies [5f707d1]
+- Updated dependencies [091e7ea]
+- Updated dependencies [3cb20c0]
+- Updated dependencies [8389c99]
+- Updated dependencies [03c085c]
+- Updated dependencies [dc38250]
+  - @memberjunction/generic-database-provider@6.2.0-edge.5
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.5
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.5
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.5
+  - @memberjunction/core-entities-server@6.2.0-edge.5
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/sql-dialect@6.2.0-edge.5
+  - @memberjunction/record-graph@6.2.0-edge.5
+  - @memberjunction/cli-core@6.2.0-edge.5
+  - @memberjunction/config@6.2.0-edge.5
+  - @memberjunction/network-utils@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Patch Changes

@@ -22,6 +22,7 @@
     "src/lib/field/form-field.fk-strategy.dom.test.ts",
     "src/lib/base-form-component.ts",
     "src/lib/base-form-component.validation.dom.test.ts",
+    "src/lib/base-form-component.unsaved-changes.dom.test.ts",
     "src/lib/base-form-component.section-order.dom.test.ts",
     "src/lib/base-form-component.form-context.dom.test.ts",
     "src/lib/base-form-component.duplicate-entry-check.dom.test.ts",
@@ -61,7 +62,12 @@
     "src/lib/apply/form-slot-probe.service.dom.test.ts",
     "src/lib/panel-slot/placement-preview.ts",
     "src/lib/panel-slot/placement-preview-panel.component.ts",
-    "src/lib/panel-slot/slot-order.dom.test.ts"
+    "src/lib/panel-slot/slot-order.dom.test.ts",
+    "src/lib/links/record-links.component.ts",
+    "src/lib/links/record-links-drawer.component.ts",
+    "src/lib/links/record-links.component.dom.test.ts",
+    "src/lib/field/form-field-live-merge.component.dom.test.ts",
+    "src/lib/container/live-edit-mode-merge.component.dom.test.ts"
   ],
   "exclude": [
     "node_modules",

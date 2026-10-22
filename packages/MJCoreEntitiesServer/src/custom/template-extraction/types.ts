@@ -94,7 +94,8 @@ export interface EnrichmentResult {
  */
 export interface EnrichedParameterInfo {
     name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    Description: string;
+    // case-violation-ok-legacy-back-compat: read off the AI prompt's JSON output, which says `description` (metadata/prompts/output/system/template-param-extraction.example.json). Renaming it dropped every AI description.
+    description: string;
 }
 
 /**
