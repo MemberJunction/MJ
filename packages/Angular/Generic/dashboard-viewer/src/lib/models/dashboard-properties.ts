@@ -141,7 +141,9 @@ export function IsTypeCompatible(source: DashboardValueType, target: DashboardVa
 
 /** A SQL type name (an entity field's or a query column's) as a dashboard value type. */
 export function SqlTypeToValueType(sqlType: string | null | undefined): DashboardValueType {
-    const t = (sqlType ?? '').toLowerCase().replace(/\(.*$/, '').trim();
+    const raw = (sqlType ?? '').toLowerCase();
+    const parenIdx = raw.indexOf('(');
+    const t = (parenIdx >= 0 ? raw.slice(0, parenIdx) : raw).trim();
     if (t === 'uniqueidentifier' || t === 'uuid') return 'uuid';
     if (['bit', 'boolean', 'bool'].includes(t)) return 'boolean';
     if (['int', 'bigint', 'smallint', 'tinyint', 'decimal', 'numeric', 'float', 'real', 'money', 'smallmoney', 'integer', 'double precision'].includes(t)) return 'number';
