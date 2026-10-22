@@ -70,16 +70,21 @@ export interface FormToolbarActionRegistrationMetadata extends Record<string, un
 /**
  * Convenience decorator for registering a {@link BaseFormToolbarAction} subclass with
  * `MJGlobal.Instance.ClassFactory`.
+ *
+ * When subclassing an existing toolbar action plugin (such as `RecordLinksToolbarAction`),
+ * any metadata properties omitted here (including `Key`, `Icon`, `MenuLabel`, `Order`, `Pinnable`, etc.)
+ * are automatically inherited from the superclass registration at resolution time.
  */
 export function RegisterFormToolbarAction(
-    metadata: FormToolbarActionRegistrationMetadata,
+    metadata: Partial<FormToolbarActionRegistrationMetadata> = {},
     priority = 0
 ): (constructor: Function) => void {
     return RegisterClassEx(BaseFormToolbarAction, {
         key: metadata.Key,
         priority,
         skipNullKeyWarning: true,
-        metadata
+        autoRegisterWithRootClass: true,
+        metadata: metadata as Record<string, unknown>
     });
 }
 
@@ -295,43 +300,126 @@ export function MatchesToolbarActionEntityScope(
     return false;
 }
 
+function isStrictSubclassOf(subCtor: unknown, superCtor: unknown): boolean {
+    if (typeof subCtor !== 'function' || typeof superCtor !== 'function' || subCtor === superCtor) {
+        return false;
+    }
+    return Boolean(
+        subCtor.prototype &&
+        superCtor.prototype &&
+        subCtor.prototype instanceof (superCtor as new (...args: unknown[]) => unknown)
+    );
+}
+
+function isSpecificEntityScope(scope: string | readonly string[] | undefined): boolean {
+    if (scope === undefined || scope === null || scope === '*') return false;
+    const list = Array.isArray(scope) ? scope : [scope];
+    return list.some((s) => typeof s === 'string' && s.trim().length > 0 && s.trim() !== '*');
+}
+
 /**
  * Discovers all `BaseFormToolbarAction` registrations in `MJGlobal.Instance.ClassFactory`
- * whose `EntityScope` matches `entityInfo`, collapsing duplicate `Key` registrations by highest
- * ClassFactory `Priority` (last-registered wins on ties) and instantiating each winning action.
+ * (including subclasses registered via `@RegisterFormToolbarAction`, `@RegisterClass`, or
+ * `@RegisterClassEx` against either `BaseFormToolbarAction` or a concrete action superclass),
+ * merges inherited metadata up the class prototype chain, filters by `EntityScope` against
+ * `entityInfo`, and resolves a single winning action per `Key` where:
+ * 1. A subclass always overrides its superclass (`Sub.prototype instanceof Super`),
+ * 2. An entity-scoped registration overrides a global (`'*'`) registration of equal priority,
+ * 3. Higher ClassFactory `Priority` (and later registration order on ties) wins.
  */
 export function ResolveFormToolbarActionsForEntity(
     entityInfo: EntityInfo | null | undefined
 ): BaseFormToolbarAction[] {
     if (!entityInfo) return [];
-    const registrations = MJGlobal.Instance.ClassFactory.GetAllRegistrationsByMetadata(
-        BaseFormToolbarAction,
-        (metadata) => {
-            if (!metadata) return false;
-            const typed = metadata as Partial<FormToolbarActionRegistrationMetadata>;
-            if (typeof typed.Key !== 'string' || typed.Key.trim().length === 0) {
-                return false;
-            }
-            return MatchesToolbarActionEntityScope(typed.EntityScope, entityInfo);
-        }
-    );
+    const byRoot = MJGlobal.Instance.ClassFactory.GetRegistrationsByRootClass(BaseFormToolbarAction);
+    const byBase = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseFormToolbarAction);
+    const allRegistrations = Array.from(new Set([...byRoot, ...byBase]));
 
-    // Group by normalized Key and pick highest Priority (last-registered wins on ties)
-    const winnerByKey = new Map<string, (typeof registrations)[number]>();
-    for (const reg of registrations) {
-        const meta = reg.Metadata as FormToolbarActionRegistrationMetadata;
+    // Build a lookup from constructor -> merged metadata by walking registered superclasses
+    const resolveEffectiveMetadata = (
+        reg: (typeof allRegistrations)[number]
+    ): FormToolbarActionRegistrationMetadata | null => {
+        // Find all ancestor registrations in prototype order (oldest ancestor -> immediate parent)
+        const ancestors = allRegistrations
+            .filter((other) => isStrictSubclassOf(reg.SubClass, other.SubClass))
+            .sort((a, b) => ( isStrictSubclassOf(a.SubClass, b.SubClass) ? 1 : -1 ));
+
+        const merged: Record<string, unknown> = {};
+        for (const anc of ancestors) {
+            if (anc.Metadata && typeof anc.Metadata === 'object') {
+                for (const [k, v] of Object.entries(anc.Metadata)) {
+                    if (v !== undefined) merged[k] = v;
+                }
+            }
+            if (typeof anc.Key === 'string' && anc.Key.trim().length > 0 && !merged['Key']) {
+                merged['Key'] = anc.Key.trim();
+            }
+        }
+        if (reg.Metadata && typeof reg.Metadata === 'object') {
+            for (const [k, v] of Object.entries(reg.Metadata)) {
+                if (v !== undefined) merged[k] = v;
+            }
+        }
+        if (typeof reg.Key === 'string' && reg.Key.trim().length > 0 && !merged['Key']) {
+            merged['Key'] = reg.Key.trim();
+        }
+
+        const key = merged['Key'];
+        if (typeof key !== 'string' || key.trim().length === 0) {
+            return null;
+        }
+        return merged as FormToolbarActionRegistrationMetadata;
+    };
+
+    interface ResolvedCandidate {
+        Registration: (typeof allRegistrations)[number];
+        Metadata: FormToolbarActionRegistrationMetadata;
+    }
+
+    const winnerByKey = new Map<string, ResolvedCandidate>();
+    for (const reg of allRegistrations) {
+        const meta = resolveEffectiveMetadata(reg);
+        if (!meta) continue;
+        if (!MatchesToolbarActionEntityScope(meta.EntityScope, entityInfo)) continue;
+
         const normKey = meta.Key.trim().toLowerCase();
         const existing = winnerByKey.get(normKey);
-        if (!existing || reg.Priority >= existing.Priority) {
-            winnerByKey.set(normKey, reg);
+        if (!existing) {
+            winnerByKey.set(normKey, { Registration: reg, Metadata: meta });
+            continue;
+        }
+
+        // 1. Subclass always overrides its superclass
+        if (isStrictSubclassOf(reg.SubClass, existing.Registration.SubClass)) {
+            winnerByKey.set(normKey, { Registration: reg, Metadata: meta });
+            continue;
+        }
+        if (isStrictSubclassOf(existing.Registration.SubClass, reg.SubClass)) {
+            continue;
+        }
+
+        // 2. Specific EntityScope overrides global ('*') when priority is equal
+        const candidateSpecific = isSpecificEntityScope(meta.EntityScope);
+        const existingSpecific = isSpecificEntityScope(existing.Metadata.EntityScope);
+        if (candidateSpecific && !existingSpecific && reg.Priority >= existing.Registration.Priority) {
+            winnerByKey.set(normKey, { Registration: reg, Metadata: meta });
+            continue;
+        }
+        if (existingSpecific && !candidateSpecific && existing.Registration.Priority >= reg.Priority) {
+            continue;
+        }
+
+        // 3. Higher Priority (or last-registered on ties) wins
+        if (reg.Priority >= existing.Registration.Priority) {
+            winnerByKey.set(normKey, { Registration: reg, Metadata: meta });
         }
     }
 
     const instances: BaseFormToolbarAction[] = [];
-    for (const reg of winnerByKey.values()) {
-        const Ctor = reg.SubClass as new () => BaseFormToolbarAction;
+    for (const winner of winnerByKey.values()) {
+        const Ctor = winner.Registration.SubClass as new () => BaseFormToolbarAction;
         const instance = new Ctor();
-        instance.Metadata = reg.Metadata as FormToolbarActionRegistrationMetadata;
+        instance.Metadata = winner.Metadata;
         instances.push(instance);
     }
 

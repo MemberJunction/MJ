@@ -4,6 +4,11 @@ import { By } from '@angular/platform-browser';
 import { CompositeKey, type BaseEntity } from '@memberjunction/core';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { MjRecordFormContainerComponent } from './record-form-container.component';
+import {
+  RegisterFormToolbarAction,
+  ResolveFormToolbarActionsForEntity,
+} from '../toolbar/base-form-toolbar-action';
+import { RecordLinksToolbarAction } from '../toolbar/actions/record-links-toolbar-action';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { FormCompositionRegistry } from '../chrome/form-composition-registry';
 import type { FormCompositionSnapshot } from '../chrome/form-composition-snapshot';
@@ -1170,5 +1175,37 @@ describe('MjRecordFormContainerComponent (DOM) — Time-Travel Form Version Prev
     expect(f.componentInstance.ActiveVersionPreview).toBeNull();
     expect(firstField.Value).toBe('Janet');
     expect(displayField.Value).toBe('Janet Doe');
+  });
+});
+
+describe('BaseFormToolbarAction — subclass override and metadata inheritance', () => {
+  it('allows subclassing a toolbar button plugin to override the superclass and inherit its metadata', () => {
+    @RegisterFormToolbarAction({
+      EntityScope: 'MJ_BizApps_Common: People',
+      MenuLabel: 'Person Graph',
+    })
+    class CustomPersonLinksToolbarAction extends RecordLinksToolbarAction {}
+    void CustomPersonLinksToolbarAction;
+
+    const peopleActions = ResolveFormToolbarActionsForEntity({
+      Name: 'MJ_BizApps_Common: People',
+      SchemaName: 'common',
+    } as never);
+    const linksForPeople = peopleActions.find((a) => a.Metadata.Key === 'links');
+    expect(linksForPeople).toBeInstanceOf(CustomPersonLinksToolbarAction);
+    expect(linksForPeople?.Metadata.MenuLabel).toBe('Person Graph');
+    // Inherited from RecordLinksToolbarAction without re-declaring
+    expect(linksForPeople?.Metadata.Icon).toBe('fa-solid fa-diagram-project');
+    expect(linksForPeople?.Metadata.Pinnable).toBe(true);
+
+    // Non-matching entity still resolves the base RecordLinksToolbarAction
+    const accountActions = ResolveFormToolbarActionsForEntity({
+      Name: 'Accounts',
+      SchemaName: 'crm',
+    } as never);
+    const linksForAccounts = accountActions.find((a) => a.Metadata.Key === 'links');
+    expect(linksForAccounts).toBeInstanceOf(RecordLinksToolbarAction);
+    expect(linksForAccounts).not.toBeInstanceOf(CustomPersonLinksToolbarAction);
+    expect(linksForAccounts?.Metadata.MenuLabel).toBe('Links');
   });
 });
