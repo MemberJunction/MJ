@@ -169,7 +169,6 @@ describe('polymorphic foreign key utilities (EntityField.EntityIDFieldName)', ()
     });
     const unlinkedRecordId = field({
       Name: 'LegacyRecordID',
-      EntityIDFieldName: null,
       DefaultInView: true,
     });
     return {
