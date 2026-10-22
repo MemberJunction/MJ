@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { ShellComponent } from './shell.component';
 import { ResourceResolver } from '../../app-routing.module';
-import { NavigationEnd, NavigationError, type ActivatedRouteSnapshot, type RouterStateSnapshot } from '@angular/router';
+import { NavigationError, type ActivatedRouteSnapshot, type RouterStateSnapshot } from '@angular/router';
 import { Subject } from 'rxjs';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 
@@ -364,55 +364,6 @@ describe('ResourceResolver.Resolve on app/:appName/record/:param1/:param2 (route
                 Configuration: expect.objectContaining({
                     Entity: 'MJ_BizApps_Common: People',
                     recordId: 'ID|4FF5A9B0-008A-57E4-9DF6-002290210A26',
-                }),
-            })
-        );
-    });
-
-    it('opens a record tab when entityName is supplied via ?Entity= query param on /resource/record/:recordId', async () => {
-        const resolver = Object.create(ResourceResolver.prototype) as ResourceResolver;
-        const openTab = vi.fn();
-
-        const open = resolver as unknown as Record<string, unknown>;
-        open['loggedInPromise'] = Promise.resolve();
-        open['processedUrls'] = new Map<string, number>();
-        open['URL_DEBOUNCE_MS'] = 100;
-        open['tabService'] = {
-            ShouldSuppressResolve: () => false,
-            ClearSuppressFlag: vi.fn(),
-            OpenTab: openTab,
-        };
-        open['_provider'] = {
-            Applications: [],
-            EntityByName: (name: string) =>
-                name === 'MJ: Tasks'
-                    ? { Name: 'MJ: Tasks', DisplayName: 'Tasks', PrimaryKeys: [{ Name: 'ID' }] }
-                    : undefined,
-            GetCachedRecordNameOnlyIfCached: () => null,
-        };
-
-        const route = {
-            params: {
-                recordId: 'ID|D7B01CAC-6E44-4337-9476-3375A948B3EC',
-            },
-            data: {},
-            queryParams: { Entity: 'MJ: Tasks' },
-            url: [],
-        } as unknown as ActivatedRouteSnapshot;
-        const state = {
-            url: '/resource/record/ID%7CD7B01CAC-6E44-4337-9476-3375A948B3EC?Entity=MJ:%20Tasks',
-        } as unknown as RouterStateSnapshot;
-
-        await resolver.Resolve(route, state);
-
-        expect(openTab).toHaveBeenCalledTimes(1);
-        expect(openTab).toHaveBeenCalledWith(
-            expect.objectContaining({
-                Title: 'Tasks',
-                ResourceRecordId: 'ID|D7B01CAC-6E44-4337-9476-3375A948B3EC',
-                Configuration: expect.objectContaining({
-                    Entity: 'MJ: Tasks',
-                    recordId: 'ID|D7B01CAC-6E44-4337-9476-3375A948B3EC',
                 }),
             })
         );

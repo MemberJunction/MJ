@@ -486,7 +486,7 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
             if (entityWithPerm && (entityWithPerm.CanRead === false || entityWithPerm.IncludeInAPI === false)) {
                 continue;
             }
-            const pkFieldName = field.RelatedEntityFieldName || targetEntity?.FirstPrimaryKey?.Name || 'ID';
+            const pkFieldName = field.RelatedEntityFieldName || targetEntity?.FirstPrimaryKey?.Name || 'ID'; // first-pk-ok: a foreign key targets a single column
             const pk = new CompositeKey([new KeyValuePair(pkFieldName, fkValue)]);
             const dedupeKey = `fk:${relatedEntityName}:${field.Name}:${MjRecordLinksComponent.getPrimaryKeyStringStatic(pk)}`;
             if (seenKeys.has(dedupeKey)) {
