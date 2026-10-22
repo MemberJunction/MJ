@@ -1,5 +1,7 @@
 import { SetProvider, IMetadataProvider } from '@memberjunction/core';
+import { ClientClauseScreen, RenderPipeline } from '@memberjunction/generic-database-provider';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { ActionEngineServer } from '@memberjunction/actions';
 import sql from 'mssql';
 import { LoadAIConfig } from '../config';
 import { DiscoverMJConfig, EffectiveProcessId, LoadDynamicPackages, StderrDynamicPackagesLogger } from '@memberjunction/dynamic-packages';
@@ -17,6 +19,8 @@ import '@memberjunction/ai-agents';     // Register agent types
 import '@memberjunction/ai-openai';
 import '@memberjunction/ai-groq';
 import '@memberjunction/ai-anthropic';
+import '@memberjunction/ai-mistral';
+import '@memberjunction/ai-cerebras';
 
 let isInitialized = false;
 let connectionPool: sql.ConnectionPool | null = null;
@@ -121,29 +125,70 @@ For security, consider using environment variables:
     // setupSQLServerClient creates the SQLServerDataProvider and registers it as the
     // global default — the established CLI bootstrap pattern. Capture the same instance
     // here so callers receive it directly without reading Metadata.Provider later.
-    cliProvider = await setupSQLServerClient(providerConfig) as unknown as IMetadataProvider;
+    const sqlProvider = await setupSQLServerClient(providerConfig);
+    cliProvider = sqlProvider as unknown as IMetadataProvider;
+
+    const actionEngine = ActionEngineServer.Instance;
+    actionEngine.SetAdhocSQLAuthorizer({
+      Authorize: (sqlText, provider, contextUser) => {
+        try {
+          const rendered = RenderPipeline.Run(sqlText, {
+            Platform: provider.PlatformKey,
+            ContextUser: contextUser,
+            RequireReadStatement: true,
+          });
+          const dialect = ClientClauseScreen.DialectFor(provider);
+          ClientClauseScreen.AssertFullStatementUsesReadableEntityViews(
+            rendered.Trace.AfterTemplates,
+            provider.Entities,
+            dialect,
+            contextUser,
+            'ad-hoc SQL'
+          );
+          return null;
+        } catch (err: unknown) {
+          return err instanceof Error ? err.message : String(err);
+        }
+      },
+      ClampTimeoutSeconds: (requestedSeconds?: number) => {
+        const maxSeconds = 180;
+        if (requestedSeconds == null || !Number.isFinite(requestedSeconds) || requestedSeconds <= 0) {
+          return maxSeconds;
+        }
+        return Math.min(Math.floor(requestedSeconds), maxSeconds);
+      },
+    });
+    actionEngine.SetReadOnlyProviderFactory(async () => sqlProvider);
+
     isInitialized = true;
     return cliProvider;
-  } catch (error: any) {
-    if (error?.message?.startsWith('❌')) {
+  } catch (error: unknown) {
+    const errObj = (error && typeof error === 'object' ? error : {}) as {
+      message?: string;
+      code?: string;
+      address?: string;
+      port?: number;
+      userName?: string;
+    };
+    if (errObj.message?.startsWith('❌')) {
       // Already formatted error, re-throw as is
       throw error;
-    } else if (error?.code === 'ECONNREFUSED') {
+    } else if (errObj.code === 'ECONNREFUSED') {
       throw new Error(`❌ Failed to connect to database server
 
-Problem: Connection refused to ${error.address}:${error.port}
+Problem: Connection refused to ${errObj.address}:${errObj.port}
 Likely cause: Database server not running or incorrect host/port
 
 Next steps:
 1. Verify SQL Server is running on the specified host/port
 2. Check firewall settings allow connections
-3. Test connection: telnet ${error.address} ${error.port}
+3. Test connection: telnet ${errObj.address} ${errObj.port}
 4. Verify host and port in mj.config.cjs`);
-    } else if (error?.code === 'ELOGIN') {
+    } else if (errObj.code === 'ELOGIN') {
       throw new Error(`❌ Database authentication failed
 
 Problem: Invalid username or password
-User: ${error.userName}
+User: ${errObj.userName}
 
 Next steps:
 1. Verify username and password in mj.config.cjs
@@ -153,7 +198,7 @@ Next steps:
     } else {
       throw new Error(`❌ Failed to initialize MJ data provider
 
-Problem: ${error?.message || 'Unknown error'}
+Problem: ${errObj.message || 'Unknown error'}
 Context: Setting up SQL Server connection and MJ infrastructure
 
 Next steps:
