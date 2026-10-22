@@ -171,6 +171,16 @@ async function handleUpgrade(service: WidgetSessionService, req: Request, res: R
   res.status(status).json(result);
 }
 
+/** Extracts a raw JWT from an `Authorization: Bearer <token>` header, or undefined when absent/malformed. */
+function extractBearerToken(authHeader: string | undefined): string | undefined {
+  if (!authHeader) {
+    return undefined;
+  }
+  const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+  const token = match?.[1]?.trim();
+  return token && token.length > 0 ? token : undefined;
+}
+
 /** Shared mint/refresh handler — parses the request, calls the service, maps the status. */
 async function handleMint(service: WidgetSessionService, req: Request, res: Response, refresh: boolean): Promise<void> {
   const body = (req.body ?? {}) as { widgetKey?: string; hostAssertion?: string; visitorKey?: string };
@@ -193,6 +203,7 @@ async function handleMint(service: WidgetSessionService, req: Request, res: Resp
     origin,
     hostAssertion: typeof body.hostAssertion === 'string' ? body.hostAssertion : undefined,
     visitorKey: typeof body.visitorKey === 'string' ? body.visitorKey : undefined,
+    bearerToken: refresh ? extractBearerToken(req.get('authorization')) : undefined,
     audit: { ipAddress: req.ip, userAgent: req.get('user-agent') ?? undefined, origin },
   };
   const result = refresh ? await service.RefreshGuestSession(input) : await service.MintGuestSession(input);

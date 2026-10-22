@@ -1,4 +1,25 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import jwt from 'jsonwebtoken';
+import { createPublicKey } from 'node:crypto';
+
+const runViewMock = vi.fn(async () => ({ Success: true, Results: [] as unknown[] }));
+const mockUsers: Array<{ ID: string; Email: string; IsActive: boolean }> = [];
+vi.mock('@memberjunction/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/core')>();
+  return {
+    ...actual,
+    RunView: class {
+      RunView = runViewMock;
+    },
+    Metadata: {
+      get Provider() {
+        return {
+          Roles: [{ ID: '00000000-0000-4000-8000-000000000099', Name: 'Widget Guest' }],
+        };
+      },
+    },
+  };
+});
 
 // WidgetSessionService is the imperative shell for public widget sessions — importing it pulls in
 // config.ts (which eagerly validates DB env vars at module load) plus the full magic-link /
@@ -13,8 +34,15 @@ vi.mock('@memberjunction/generic-database-provider', () => ({
     // The subject reads exactly these two through `ResolveConfiguredPrincipal`. It no longer
     // calls `UserByName`/`GetSystemUser`, and stubbing members nobody calls hides the day a
     // test does reach `resolveLookupUser` and trips the resolver's missing-system-id guard.
-    Instance: { Users: [], SYSTEM_USER_ID: 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E' },
-    Users: [],
+    Instance: {
+      get Users() {
+        return mockUsers;
+      },
+      SYSTEM_USER_ID: 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E',
+    },
+    get Users() {
+      return mockUsers;
+    },
   },
 }));
 vi.mock('../auth/magicLink/MagicLinkService.js', () => ({
@@ -33,7 +61,8 @@ vi.mock('../realtimeWidget/visitorIdentity.js', () => ({
     get forgetVisitor() { return this.ForgetVisitor; },
 }));
 
-import { WidgetSessionService } from '../realtimeWidget/WidgetSessionService.js';
+import { WidgetSessionService, REFRESH_GRACE_SECONDS } from '../realtimeWidget/WidgetSessionService.js';
+import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 import type { WidgetConfig } from '../config.js';
 
 /**
@@ -99,5 +128,192 @@ describe('WidgetSessionService — ResolvePerInstanceRateLimit', () => {
     await service.ResolvePerInstanceRateLimit('  pk_live_padded  ');
     await service.ResolvePerInstanceRateLimit('pk_live_padded');
     expect(service.RateLimitCacheSize).toBe(1);
+  });
+});
+
+describe('WidgetSessionService — RefreshGuestSession preserves mj_sid (#4931)', () => {
+  const WIDGET_ID = '11111111-1111-4111-8111-111111111111';
+  const OTHER_WIDGET_ID = '22222222-2222-4222-8222-222222222222';
+  const APP_ID = '33333333-3333-4333-8333-333333333333';
+  const ROLE_ID = '00000000-0000-4000-8000-000000000099';
+  const AGENT_ID = '44444444-4444-4444-8444-444444444444';
+
+  function makeWidgetRow() {
+    return {
+      ID: WIDGET_ID,
+      PublicKey: 'pk_live_test',
+      Status: 'Active',
+      AllowedOrigins: '["https://acme.com"]',
+      Modality: 'Both',
+      GuestRoleID: ROLE_ID,
+      ApplicationID: APP_ID,
+      PinnedAgentID: AGENT_ID,
+      AuthStrategy: 'Anonymous',
+      SessionTTLMinutes: 15,
+      RateLimitPerMinute: 30,
+      RememberReturningVisitors: false,
+      EnabledChannels: null,
+      VoiceMaxSessionMinutes: 10,
+    };
+  }
+
+  beforeEach(() => {
+    MagicLinkKeyManager.Instance.Initialize();
+    mockUsers.length = 0;
+    mockUsers.push({ ID: 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E', Email: 'system@system.org', IsActive: true });
+    runViewMock.mockReset();
+    runViewMock.mockImplementation(async (params: { ExtraFilter?: string }) => {
+      if (params.ExtraFilter?.includes('pk_live_test')) {
+        return { Success: true, Results: [makeWidgetRow()] };
+      }
+      return { Success: true, Results: [] };
+    });
+  });
+
+  it('exports REFRESH_GRACE_SECONDS = 300', () => {
+    expect(REFRESH_GRACE_SECONDS).toBe(300);
+  });
+
+  it('preserves sessionId and mj_sid across RefreshGuestSession when presented with the current valid Bearer token', async () => {
+    const service = new WidgetSessionService('https://mj.example.com', makeConfig());
+    const minted = await service.MintGuestSession({
+      widgetKey: 'pk_live_test',
+      origin: 'https://acme.com',
+    });
+    expect(minted.success).toBe(true);
+    expect(minted.sessionId).toBeDefined();
+    expect(minted.token).toBeDefined();
+
+    const refreshed = await service.RefreshGuestSession({
+      widgetKey: 'pk_live_test',
+      origin: 'https://acme.com',
+      bearerToken: minted.token,
+    });
+    expect(refreshed.success).toBe(true);
+    expect(refreshed.sessionId).toBe(minted.sessionId);
+
+    const publicKey = createPublicKey({ key: MagicLinkKeyManager.Instance.GetJWKS().keys[0] as object, format: 'jwk' });
+    const decoded = jwt.verify(refreshed.token!, publicKey, { algorithms: ['RS256'], audience: 'mj-magic-link' }) as jwt.JwtPayload;
+    expect(decoded.mj_sid).toBe(minted.sessionId);
+    expect(decoded.sub).toBe(`magic-link|${minted.sessionId}`);
+    expect(decoded.mj_scopes?.[0]?.resourceId).toBe(minted.sessionId);
+  });
+
+  it('accepts a token that expired within REFRESH_GRACE_SECONDS (e.g. 60s ago) and preserves sessionId', async () => {
+    const service = new WidgetSessionService('https://mj.example.com', makeConfig());
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const recentlyExpiredToken = MagicLinkKeyManager.Instance.Sign({
+      iss: 'https://mj.example.com',
+      aud: 'mj-magic-link',
+      sub: 'magic-link|sid-recent-exp',
+      email: 'anonymous@magic-link.local',
+      iat: nowSeconds - 960,
+      exp: nowSeconds - 60,
+      mj_magic_link: true,
+      mj_anon: true,
+      mj_sid: 'sid-recent-exp',
+      mj_widget_id: WIDGET_ID,
+      mj_app_id: APP_ID,
+      mj_role: 'Widget Guest',
+      mj_scopes: [{ appId: APP_ID, role: 'Widget Guest', resourceType: 'Custom', resourceId: 'sid-recent-exp' }],
+    });
+
+    const refreshed = await service.RefreshGuestSession({
+      widgetKey: 'pk_live_test',
+      origin: 'https://acme.com',
+      bearerToken: recentlyExpiredToken,
+    });
+    expect(refreshed.success).toBe(true);
+    expect(refreshed.sessionId).toBe('sid-recent-exp');
+  });
+
+  it('rejects RefreshGuestSession with uniform 403 not_found when bearerToken is missing, tampered, expired past grace, wrong widget, or non-anonymous', async () => {
+    const service = new WidgetSessionService('https://mj.example.com', makeConfig());
+    const nowSeconds = Math.floor(Date.now() / 1000);
+
+    // 1. Missing bearerToken
+    const missing = await service.RefreshGuestSession({
+      widgetKey: 'pk_live_test',
+      origin: 'https://acme.com',
+    });
+    expect(missing).toMatchObject({ success: false, errorCode: 'not_found' });
+
+    // 2. Tampered signature
+    const minted = await service.MintGuestSession({
+      widgetKey: 'pk_live_test',
+      origin: 'https://acme.com',
+    });
+    const tampered = await service.RefreshGuestSession({
+      widgetKey: 'pk_live_test',
+      origin: 'https://acme.com',
+      bearerToken: minted.token!.slice(0, -4) + 'AAAA',
+    });
+    expect(tampered).toMatchObject({ success: false, errorCode: 'not_found' });
+
+    // 3. Expired past REFRESH_GRACE_SECONDS (301s ago)
+    const tooOldToken = MagicLinkKeyManager.Instance.Sign({
+      iss: 'https://mj.example.com',
+      aud: 'mj-magic-link',
+      sub: 'magic-link|sid-old',
+      email: 'anonymous@magic-link.local',
+      iat: nowSeconds - 1201,
+      exp: nowSeconds - (REFRESH_GRACE_SECONDS + 1),
+      mj_magic_link: true,
+      mj_anon: true,
+      mj_sid: 'sid-old',
+      mj_widget_id: WIDGET_ID,
+      mj_app_id: APP_ID,
+      mj_role: 'Widget Guest',
+    });
+    const expiredBeyondGrace = await service.RefreshGuestSession({
+      widgetKey: 'pk_live_test',
+      origin: 'https://acme.com',
+      bearerToken: tooOldToken,
+    });
+    expect(expiredBeyondGrace).toMatchObject({ success: false, errorCode: 'not_found' });
+
+    // 4. Wrong mj_widget_id
+    const wrongWidgetToken = MagicLinkKeyManager.Instance.Sign({
+      iss: 'https://mj.example.com',
+      aud: 'mj-magic-link',
+      sub: 'magic-link|sid-other-widget',
+      email: 'anonymous@magic-link.local',
+      iat: nowSeconds,
+      exp: nowSeconds + 900,
+      mj_magic_link: true,
+      mj_anon: true,
+      mj_sid: 'sid-other-widget',
+      mj_widget_id: OTHER_WIDGET_ID,
+      mj_app_id: APP_ID,
+      mj_role: 'Widget Guest',
+    });
+    const wrongWidget = await service.RefreshGuestSession({
+      widgetKey: 'pk_live_test',
+      origin: 'https://acme.com',
+      bearerToken: wrongWidgetToken,
+    });
+    expect(wrongWidget).toMatchObject({ success: false, errorCode: 'not_found' });
+
+    // 5. Non-anonymous magic-link token (mj_anon: false)
+    const nonAnonToken = MagicLinkKeyManager.Instance.Sign({
+      iss: 'https://mj.example.com',
+      aud: 'mj-magic-link',
+      sub: 'magic-link|sid-non-anon',
+      email: 'verified@example.com',
+      iat: nowSeconds,
+      exp: nowSeconds + 900,
+      mj_magic_link: true,
+      mj_anon: false,
+      mj_sid: 'sid-non-anon',
+      mj_widget_id: WIDGET_ID,
+      mj_app_id: APP_ID,
+      mj_role: 'Widget Guest',
+    });
+    const nonAnon = await service.RefreshGuestSession({
+      widgetKey: 'pk_live_test',
+      origin: 'https://acme.com',
+      bearerToken: nonAnonToken,
+    });
+    expect(nonAnon).toMatchObject({ success: false, errorCode: 'not_found' });
   });
 });

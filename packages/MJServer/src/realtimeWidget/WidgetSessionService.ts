@@ -14,6 +14,8 @@
  * @module @memberjunction/server/widget
  */
 
+import { createPublicKey } from 'node:crypto';
+import jwt from 'jsonwebtoken';
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { MJLruCache, UUIDsEqual } from '@memberjunction/global';
 import type { MJConversationWidgetInstanceEntity, MJConversationEntity } from '@memberjunction/core-entities';
@@ -32,6 +34,12 @@ const CONVERSATIONS_ENTITY = 'MJ: Conversations';
 
 /** Shape of the durable visitor anchor key (opaque base64url, same alphabet as generateSessionId). */
 const VISITOR_KEY_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
+
+/**
+ * Maximum clock-skew / late-timer grace window (seconds) after `exp` during which
+ * `RefreshGuestSession` still accepts a widget guest Bearer token and preserves its `mj_sid`.
+ */
+export const REFRESH_GRACE_SECONDS = 300;
 
 /** Resolved returning-visitor anchor for a mint: the durable key + the prior conversation to chain from. */
 interface ReturningVisitorResolution {
@@ -67,6 +75,12 @@ export interface MintGuestSessionInput {
    * server mints a fresh one. Ignored entirely when remembering is off.
    */
   visitorKey?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  /**
+   * The caller's current guest session JWT (`Authorization: Bearer <token>`), required by
+   * `RefreshGuestSession` so a refresh proves possession of the session being renewed and
+   * preserves its `mj_sid` (`sessionId`).
+   */
+  bearerToken?: string;
   audit?: WidgetMintAuditContext;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
@@ -275,12 +289,108 @@ export class WidgetSessionService {
   }
 
   /**
-   * Refreshes a live guest session. The widget always holds its public key, so a
-   * refresh is a fresh mint by the same key + origin — short-TTL tokens with no
-   * refresh-token machinery (mirrors magic-link's no-refresh-token stance).
+   * Refreshes a live guest session while preserving its per-visitor `sessionId` (`mj_sid`).
+   * Requires the caller's current widget guest JWT (`input.bearerToken`), verified against the
+   * magic-link signing key with a {@link REFRESH_GRACE_SECONDS} post-expiry grace window, and
+   * bound to the resolved widget instance (`mj_widget_id === widget.ID`, `mj_anon === true`,
+   * `mj_magic_link === true`). Any failure returns the same uniform 403 shape as an unknown widget key.
    */
   public async RefreshGuestSession(input: MintGuestSessionInput): Promise<MintGuestSessionResult> {
-    return this.MintGuestSession(input);
+    try {
+      const contextUser = this.resolveLookupUser();
+      if (!contextUser) {
+        LogError('[Widget] No lookup context user available; server not configured.');
+        return { success: false, errorCode: 'server_error', error: 'Server not configured for widget sessions.' };
+      }
+
+      const widget = await this.loadWidgetByKey(input.widgetKey, contextUser);
+      if (!widget) {
+        return this.audited({ success: false, errorCode: 'not_found', error: 'Unknown widget key.' }, input, undefined);
+      }
+
+      const eligibility = EvaluateWidgetMint(
+        { Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality },
+        input.origin,
+      );
+      if (!eligibility.ok) {
+        return this.audited({ success: false, errorCode: eligibility.errorCode, error: 'Widget mint rejected.' }, input, widget);
+      }
+
+      const guestRoleName = this.resolveGuestRoleName(widget.GuestRoleID);
+      if (!guestRoleName) {
+        LogError(`[Widget] Guest role ${widget.GuestRoleID} for widget ${widget.ID} not found in metadata.`);
+        return this.audited({ success: false, errorCode: 'server_error', error: 'Guest role not resolvable.' }, input, widget);
+      }
+
+      let hostIdentity: HostAssertedIdentity | undefined;
+      if (widget.AuthStrategy === 'HostIdentity') {
+        const verified = this.verifyHost(widget, input.hostAssertion);
+        if (!verified) {
+          return this.audited({ success: false, errorCode: 'host_assertion_invalid', error: 'Host identity assertion invalid.' }, input, widget);
+        }
+        hostIdentity = verified;
+      }
+
+      const existingSessionId = this.verifyRefreshBearerToken(input.bearerToken, widget.ID);
+      if (!existingSessionId) {
+        return this.audited({ success: false, errorCode: 'not_found', error: 'Unknown widget key.' }, input, widget);
+      }
+
+      const returningVisitor = await this.resolveReturningVisitor(widget, input.visitorKey, contextUser);
+      const resolvedIdentity = await this.resolveHostIdentityIfApplicable(widget, hostIdentity, returningVisitor, contextUser);
+
+      return this.audited(
+        this.mintToken(widget, guestRoleName, hostIdentity, returningVisitor, resolvedIdentity, existingSessionId),
+        input,
+        widget,
+      );
+    } catch (e) {
+      LogError(e);
+      return { success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /**
+   * Verifies the caller's current widget guest JWT for `RefreshGuestSession` and returns its
+   * `mj_sid` when valid, or `null` when missing, tampered, expired past {@link REFRESH_GRACE_SECONDS},
+   * non-anonymous, or minted for a different widget.
+   */
+  private verifyRefreshBearerToken(bearerToken: string | undefined, widgetId: string): string | null {
+    const token = (bearerToken ?? '').trim();
+    if (!token) {
+      return null;
+    }
+    try {
+      const jwk = MagicLinkKeyManager.Instance.GetJWKS().keys[0];
+      if (!jwk) {
+        return null;
+      }
+      const publicKey = createPublicKey({ key: jwk as object, format: 'jwk' });
+      const verified = jwt.verify(token, publicKey, {
+        algorithms: ['RS256'],
+        audience: this.config.audience,
+        ignoreExpiration: true,
+      });
+      if (typeof verified !== 'object' || verified === null) {
+        return null;
+      }
+      const payload = verified as jwt.JwtPayload;
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      if (typeof payload.exp !== 'number' || nowSeconds > payload.exp + REFRESH_GRACE_SECONDS) {
+        return null;
+      }
+      if (payload.mj_magic_link !== true || payload.mj_anon !== true) {
+        return null;
+      }
+      if (typeof payload.mj_widget_id !== 'string' || !UUIDsEqual(payload.mj_widget_id, widgetId)) {
+        return null;
+      }
+      const sid = typeof payload.mj_sid === 'string' ? payload.mj_sid.trim() : '';
+      return sid.length > 0 ? sid : null;
+    } catch (e) {
+      LogError(`[Widget] Refresh token verification failed for widget ${widgetId}: ${e instanceof Error ? e.message : String(e)}`);
+      return null;
+    }
   }
 
   /**
@@ -412,12 +522,14 @@ export class WidgetSessionService {
     hostIdentity?: HostAssertedIdentity,
     returningVisitor?: ReturningVisitorResolution,
     resolvedIdentity?: ResolvedVisitorIdentity,
+    existingSessionId?: string,
   ): MintGuestSessionResult {
     const nowSeconds = Math.floor(Date.now() / 1000);
     const ttlMinutes = widget.SessionTTLMinutes || this.config.defaultSessionTtlMinutes;
-    // Generated once and returned to the client: the widget stamps Conversation.ExternalID with
-    // this id so the Widget Guest RLS filters ({{ScopeResourceID}}) isolate this guest's rows.
-    const sessionId = GenerateSessionId();
+    // Generated once on initial mint and preserved across refreshes: the widget (and server-side
+    // voice session creation) stamps Conversation.ExternalID with this id so the Widget Guest RLS
+    // filters ({{ScopeResourceID}}) and AuthorizeSessionAccess isolate this guest's rows.
+    const sessionId = existingSessionId ?? GenerateSessionId();
     const claims = BuildWidgetGuestClaims({
       issuer: this.publicUrl,
       audience: this.config.audience,
