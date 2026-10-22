@@ -1070,3 +1070,105 @@ describe('MjRecordFormContainerComponent (DOM) — the drawer changed a panel', 
     expect(notified).toBe(1);
   });
 });
+
+describe('MjRecordFormContainerComponent (DOM) — Time-Travel Form Version Preview', () => {
+  interface MockField {
+    Name: string;
+    CodeName: string;
+    Value: unknown;
+    OldValue: unknown;
+    ReadOnly: boolean;
+    Dirty: boolean;
+    EntityFieldInfo: { IsPrimaryKey: boolean; DisplayNameOrName: string };
+    ResetNeverSetFlag: () => void;
+    ResetOldValue: () => void;
+  }
+
+  function makeField(name: string, val: unknown, opts?: { readOnly?: boolean; isPK?: boolean }): MockField {
+    const fld: MockField = {
+      Name: name,
+      CodeName: name,
+      Value: val,
+      OldValue: val,
+      ReadOnly: opts?.readOnly ?? false,
+      Dirty: false,
+      EntityFieldInfo: {
+        IsPrimaryKey: opts?.isPK ?? false,
+        DisplayNameOrName: name,
+      },
+      ResetNeverSetFlag: () => {
+        /* allow read-only write */
+      },
+      ResetOldValue: () => {
+        fld.OldValue = fld.Value;
+        fld.Dirty = false;
+      },
+    };
+    return fld;
+  }
+
+  it('auto-closes ShowRecordChanges, rehydrates all fields including synthesized DisplayName, renders diff chips, and restores live values on exit', () => {
+    const idField = makeField('ID', 'person-1', { isPK: true });
+    const firstField = makeField('FirstName', 'Janet');
+    const lastField = makeField('LastName', 'Doe');
+    const displayField = makeField('DisplayName', 'Janet Doe', { readOnly: true });
+
+    const personRecord = {
+      EntityInfo: { Name: 'MJ_BizApps_Common: People', DisplayNameOrName: 'People' },
+      Fields: [idField, firstField, lastField, displayField],
+      Dirty: false,
+    } as unknown as BaseEntity;
+
+    const f = render({ Record: personRecord, UserCanEdit: true });
+    f.componentInstance.ShowRecordChanges = true;
+    f.detectChanges();
+
+    // Historical change where FirstName was 'Jane', while FullRecordJSON still held stale 'Janet Doe' DisplayName
+    const histChange = {
+      ID: 'chg-1',
+      Type: 'Update',
+      Source: 'Internal',
+      User: 'Alice Smith',
+      ChangedAt: new Date('2026-10-01T14:00:00.000Z'),
+      ChangesDescription: 'Updated FirstName',
+      FullRecordJSON: JSON.stringify({
+        ID: 'person-1',
+        FirstName: 'Jane',
+        LastName: 'Doe',
+        DisplayName: 'Janet Doe',
+      }),
+      ChangesJSON: '{}',
+    };
+
+    f.componentInstance.OnPreviewVersionSelected({
+      Change: histChange as never,
+      Index: 1,
+      TotalCount: 2,
+    });
+    f.detectChanges();
+
+    // 1. Drawer auto-closes so the form is unobstructed
+    expect(f.componentInstance.ShowRecordChanges).toBe(false);
+
+    // 2. Both FirstName and read-only calculated DisplayName are rehydrated to historical values
+    expect(firstField.Value).toBe('Jane');
+    expect(displayField.Value).toBe('Jane Doe');
+    expect(firstField.Dirty).toBe(false);
+    expect(displayField.Dirty).toBe(false);
+
+    // 3. Top scrubber bar renders diff chips and Timeline button
+    expect(query(f, '.mj-forms-version-preview-banner')).not.toBeNull();
+    expect(query(f, '.mj-forms-version-preview-timeline-btn')).not.toBeNull();
+    expect(f.componentInstance.PreviewChangedFieldChips.map((c) => c.FieldName)).toEqual([
+      'FirstName',
+      'DisplayName',
+    ]);
+
+    // 4. Exiting preview restores the stashed live values cleanly
+    f.componentInstance.OnExitVersionPreview();
+    f.detectChanges();
+    expect(f.componentInstance.ActiveVersionPreview).toBeNull();
+    expect(firstField.Value).toBe('Janet');
+    expect(displayField.Value).toBe('Janet Doe');
+  });
+});

@@ -246,6 +246,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   /** Active historical version being previewed inline across form fields (Time-Travel Preview) */
   ActiveVersionPreview: FormVersionPreviewState | null = null;
   private activePreviewSourceChange: MJRecordChangeEntity | null = null;
+  private liveRecordPreviewStash: Map<string, { value: unknown; oldValue: unknown }> | null = null;
+  private previewableChangesCache: MJRecordChangeEntity[] = [];
+
+  /** Unique list of field diffs for the active version preview banner chips */
+  PreviewChangedFieldChips: FormVersionPreviewFieldDiff[] = [];
 
   /** Number of active field conflicts during edit mode */
   ConflictCount = 0;
@@ -2479,6 +2484,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Edit mode change: delegate to FormComponent if available, otherwise re-emit.
    */
   OnEditModeChange(editMode: boolean): void {
+    if (editMode && this.ActiveVersionPreview) {
+      this.OnExitVersionPreview();
+    }
     if (!editMode) {
       this.recordRefresh.ClearAllConflicts();
     }
@@ -2987,6 +2995,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.BeforeHistoryView.emit(beforeEvent);
     if (beforeEvent.Cancel) return;
 
+    // Ensure live record fields are restored before opening the history/restore drawer
+    this.restoreLiveRecordFromPreviewStash(this.EffectiveRecord);
+
     // If not cancelled, show built-in record changes drawer
     this.ShowRecordChanges = true;
     this.cdr.markForCheck();
@@ -3076,7 +3087,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       return;
     }
     const change = 'Change' in event ? event.Change : event;
-    const previewable = this.recordChangesDrawer?.GetPreviewableChanges() ?? [];
+    if (this.recordChangesDrawer) {
+      this.previewableChangesCache = this.recordChangesDrawer.GetPreviewableChanges();
+    }
+    const previewable = this.previewableChangesCache;
     const currentIndex =
       'Change' in event && typeof event.Index === 'number'
         ? event.Index
@@ -3089,8 +3103,25 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const record = this.EffectiveRecord;
     if (!record || !Array.isArray(record.Fields)) return;
 
+    // Close the slide-in Record Changes drawer automatically so the form is 100%
+    // bright, unobstructed, and full-width under the Time-Travel Scrubber Bar.
+    this.ShowRecordChanges = false;
+
     if (this.EffectiveEditMode && !this.EffectiveIsDirty) {
       this.OnEditModeChange(false);
+    }
+
+    // Restore live baseline first if stepping from one previewed version to another,
+    // then capture a fresh stash of the true live values before rehydrating `record`.
+    if (this.liveRecordPreviewStash) {
+      this.restoreLiveRecordFromPreviewStash(record);
+    }
+    this.liveRecordPreviewStash = new Map();
+    for (const field of record.Fields) {
+      this.liveRecordPreviewStash.set(field.Name, {
+        value: field.Value,
+        oldValue: field.OldValue,
+      });
     }
 
     const parsedSnapshot: Record<string, unknown> = {};
@@ -3112,7 +3143,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         >;
         for (const [k, v] of Object.entries(rawChanges)) {
           const fieldKey = (v?.field || k).toLowerCase();
-          if (!(fieldKey in parsedSnapshot) && v && 'newValue' in v) {
+          if (v && 'newValue' in v) {
             parsedSnapshot[fieldKey] = v.newValue;
           }
         }
@@ -3121,21 +3152,27 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       }
     }
 
+    // Synthesize calculated composite name fields (e.g. DisplayName / FullName on People)
+    // because FullRecordJSON is captured before SQL Server recomputes computed columns.
+    this.synthesizeCalculatedSnapshotFields(record, parsedSnapshot);
+
     const snapshotValues: Record<string, unknown> = {};
     const fieldDiffs = new Map<string, FormVersionPreviewFieldDiff>();
+    const diffChips: FormVersionPreviewFieldDiff[] = [];
     let diffCount = 0;
 
     for (const field of record.Fields) {
       if (field.Name.startsWith('__mj_')) continue;
       const lowerName = field.Name.toLowerCase();
       const lowerCode = field.CodeName ? field.CodeName.toLowerCase() : null;
+      const liveBaseline = this.liveRecordPreviewStash.get(field.Name)?.value ?? field.Value;
       const hasHist =
         lowerName in parsedSnapshot || (lowerCode !== null && lowerCode in parsedSnapshot);
       const histVal = hasHist
         ? lowerName in parsedSnapshot
           ? parsedSnapshot[lowerName]
           : parsedSnapshot[lowerCode!]
-        : field.Value;
+        : liveBaseline;
 
       snapshotValues[field.Name] = histVal;
       snapshotValues[lowerName] = histVal;
@@ -3146,24 +3183,35 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         snapshotValues[lowerCode] = histVal;
       }
 
-      if (
-        !field.EntityFieldInfo?.IsPrimaryKey &&
-        this.formatComparableValue(histVal) !== this.formatComparableValue(field.Value)
-      ) {
-        const fieldWithLabel = field as EntityField & { DisplayNameOrName?: string };
-        const diff: FormVersionPreviewFieldDiff = {
-          FieldName: field.Name,
-          DisplayName:
-            field.EntityFieldInfo?.DisplayNameOrName || fieldWithLabel.DisplayNameOrName || field.Name,
-          HistoricalValue: histVal,
-          CurrentLiveValue: field.Value,
-          IsChanged: true,
-        };
-        fieldDiffs.set(lowerName, diff);
-        if (lowerCode) {
-          fieldDiffs.set(lowerCode, diff);
+      if (!field.EntityFieldInfo?.IsPrimaryKey) {
+        if (this.formatComparableValue(histVal) !== this.formatComparableValue(liveBaseline)) {
+          const fieldWithLabel = field as EntityField & { DisplayNameOrName?: string };
+          const diff: FormVersionPreviewFieldDiff = {
+            FieldName: field.Name,
+            DisplayName:
+              field.EntityFieldInfo?.DisplayNameOrName || fieldWithLabel.DisplayNameOrName || field.Name,
+            HistoricalValue: histVal,
+            CurrentLiveValue: liveBaseline,
+            IsChanged: true,
+          };
+          fieldDiffs.set(lowerName, diff);
+          if (lowerCode) {
+            fieldDiffs.set(lowerCode, diff);
+          }
+          diffChips.push(diff);
+          diffCount++;
         }
-        diffCount++;
+
+        // Rehydrate the in-memory BaseEntity field (including ReadOnly/calculated fields)
+        // so custom header panels (e.g. PersonHeaderPanel / bizapps-person-identity) and
+        // calculated fields reflect the previewed historical snapshot while keeping Dirty=false.
+        if (field.ReadOnly && typeof field.ResetNeverSetFlag === 'function') {
+          field.ResetNeverSetFlag();
+        }
+        field.Value = histVal;
+        if (typeof field.ResetOldValue === 'function') {
+          field.ResetOldValue();
+        }
       }
     }
 
@@ -3176,6 +3224,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       : String(change.ChangedAt ?? '');
 
     this.activePreviewSourceChange = change;
+    this.PreviewChangedFieldChips = diffChips;
     this.recordRefresh.SetVersionPreview({
       ChangeID: change.ID,
       ChangedAt: changedAt,
@@ -3194,13 +3243,129 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       TotalRestoreableCount: totalCount,
     });
     this.scheduleChromeResolve();
+    this.Fc?.cdr?.markForCheck();
     this.cdr.markForCheck();
+  }
+
+  private synthesizeCalculatedSnapshotFields(
+    record: BaseEntity,
+    parsedSnapshot: Record<string, unknown>
+  ): void {
+    const stash = this.liveRecordPreviewStash;
+    if (!stash) return;
+
+    const getLive = (name: string): string => {
+      const f = record.Fields.find((fld) => fld.Name.toLowerCase() === name.toLowerCase());
+      if (!f) return '';
+      const val = stash.get(f.Name)?.value ?? f.Value;
+      return val !== null && val !== undefined ? String(val).trim() : '';
+    };
+    const getHist = (name: string): string => {
+      const key = name.toLowerCase();
+      if (key in parsedSnapshot) {
+        const val = parsedSnapshot[key];
+        return val !== null && val !== undefined ? String(val).trim() : '';
+      }
+      return getLive(name);
+    };
+
+    const hasFirstLast =
+      record.Fields.some((f) => f.Name.toLowerCase() === 'firstname') &&
+      record.Fields.some((f) => f.Name.toLowerCase() === 'lastname');
+    if (!hasFirstLast) return;
+
+    const liveFirst = getLive('FirstName');
+    const liveMiddle = getLive('MiddleName');
+    const liveLast = getLive('LastName');
+    const liveSuffix = getLive('Suffix');
+
+    const histFirst = getHist('FirstName');
+    const histMiddle = getHist('MiddleName');
+    const histLast = getHist('LastName');
+    const histSuffix = getHist('Suffix');
+
+    const namePartsChanged =
+      histFirst !== liveFirst ||
+      histMiddle !== liveMiddle ||
+      histLast !== liveLast ||
+      histSuffix !== liveSuffix;
+    if (!namePartsChanged) return;
+
+    for (const calcFieldName of ['DisplayName', 'FullName', 'FirstLast']) {
+      const calcField = record.Fields.find((f) => f.Name.toLowerCase() === calcFieldName.toLowerCase());
+      if (!calcField || !calcField.ReadOnly) continue;
+
+      const calcKey = calcField.Name.toLowerCase();
+      const liveCalcVal = getLive(calcField.Name);
+      const snapshotCalcVal =
+        calcKey in parsedSnapshot && parsedSnapshot[calcKey] != null
+          ? String(parsedSnapshot[calcKey]).trim()
+          : '';
+
+      // If FullRecordJSON still holds the pre-save / live calculated value (or is empty),
+      // synthesize the historical composite name from the historical name parts.
+      if (!snapshotCalcVal || snapshotCalcVal === liveCalcVal) {
+        const liveWithMiddle = [liveFirst, liveMiddle, liveLast, liveSuffix].filter(Boolean).join(' ');
+        const includeMiddle = Boolean(liveMiddle && liveCalcVal === liveWithMiddle);
+        const synthesized = (
+          includeMiddle
+            ? [histFirst, histMiddle, histLast, histSuffix]
+            : [histFirst, histLast, histSuffix]
+        )
+          .filter(Boolean)
+          .join(' ');
+        if (synthesized) {
+          parsedSnapshot[calcKey] = synthesized;
+        }
+      }
+    }
+  }
+
+  private restoreLiveRecordFromPreviewStash(record?: BaseEntity | null): void {
+    const target = record ?? this.EffectiveRecord;
+    const stash = this.liveRecordPreviewStash;
+    if (!stash || !target || !Array.isArray(target.Fields)) {
+      this.liveRecordPreviewStash = null;
+      return;
+    }
+    for (const field of target.Fields) {
+      const saved = stash.get(field.Name);
+      if (!saved) continue;
+      if (field.ReadOnly && typeof field.ResetNeverSetFlag === 'function') {
+        field.ResetNeverSetFlag();
+      }
+      field.Value = saved.oldValue;
+      if (typeof field.ResetOldValue === 'function') {
+        field.ResetOldValue();
+      }
+      if (this.formatComparableValue(saved.value) !== this.formatComparableValue(saved.oldValue)) {
+        if (field.ReadOnly && typeof field.ResetNeverSetFlag === 'function') {
+          field.ResetNeverSetFlag();
+        }
+        field.Value = saved.value;
+      }
+    }
+    this.liveRecordPreviewStash = null;
+  }
+
+  public FormatPreviewDiffValue(val: unknown): string {
+    if (val === null || val === undefined || val === '') return '(empty)';
+    if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+    if (val instanceof Date) {
+      return isNaN(val.getTime()) ? '(empty)' : val.toLocaleDateString();
+    }
+    const str = String(val).trim();
+    if (!str) return '(empty)';
+    if (str.length > 36) return `${str.slice(0, 33)}...`;
+    return str;
   }
 
   OnStepVersionPreview(delta: number): void {
     const preview = this.ActiveVersionPreview;
-    if (!preview || !this.recordChangesDrawer) return;
-    const previewable = this.recordChangesDrawer.GetPreviewableChanges();
+    if (!preview) return;
+    const previewable =
+      this.recordChangesDrawer?.GetPreviewableChanges() ?? this.previewableChangesCache;
+    if (previewable.length === 0) return;
     const nextIndex = (preview.CurrentIndex ?? 0) + delta;
     if (nextIndex < 0 || nextIndex >= previewable.length) return;
     const targetChange = previewable[nextIndex];
@@ -3211,17 +3376,29 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     });
   }
 
+  OnReopenHistoryFromPreview(): void {
+    this.restoreLiveRecordFromPreviewStash(this.EffectiveRecord);
+    this.ShowRecordChanges = true;
+    this.Fc?.cdr?.markForCheck();
+    this.cdr.markForCheck();
+  }
+
   OnRestorePreviewedVersion(): void {
     if (!this.activePreviewSourceChange) return;
+    const targetChange = this.activePreviewSourceChange;
+    this.restoreLiveRecordFromPreviewStash(this.EffectiveRecord);
     this.ShowRecordChanges = true;
     this.cdr.detectChanges();
-    this.recordChangesDrawer?.OpenRestoreForChange(this.activePreviewSourceChange);
+    this.recordChangesDrawer?.OpenRestoreForChange(targetChange);
   }
 
   OnExitVersionPreview(): void {
+    this.restoreLiveRecordFromPreviewStash(this.EffectiveRecord);
     this.activePreviewSourceChange = null;
+    this.PreviewChangedFieldChips = [];
     this.recordRefresh.SetVersionPreview(null);
     this.scheduleChromeResolve();
+    this.Fc?.cdr?.markForCheck();
     this.cdr.markForCheck();
   }
 
@@ -3234,6 +3411,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         (f.CodeName && f.CodeName.toLowerCase() === req.FieldName.toLowerCase())
     );
     if (!targetField) return;
+
+    const savedSourceChange = this.activePreviewSourceChange;
+    const savedIndex = this.ActiveVersionPreview?.CurrentIndex;
+    const savedTotal = this.ActiveVersionPreview?.TotalRestoreableCount;
+
+    // Restore live field baseline before saving the single restored field
+    this.restoreLiveRecordFromPreviewStash(record);
 
     const changeId = req.SourceChangeID || req.ChangeID || '';
     try {
@@ -3248,11 +3432,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
             3000,
           );
           this.loadVersionCount(record);
-          if (this.activePreviewSourceChange && this.ActiveVersionPreview) {
+          if (savedSourceChange) {
             this.OnPreviewVersionSelected({
-              Change: this.activePreviewSourceChange,
-              Index: this.ActiveVersionPreview.CurrentIndex,
-              TotalCount: this.ActiveVersionPreview.TotalRestoreableCount,
+              Change: savedSourceChange,
+              Index: savedIndex,
+              TotalCount: savedTotal,
             });
           }
           this.cdr.markForCheck();
