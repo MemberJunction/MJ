@@ -772,6 +772,134 @@ Stored in `MJ: Entities.Configuration` (JSONType):
 - **Drag & Drop Upload**: Direct upload pipeline linked into `MJ: File Entity Record Links`.
 - **Cancelable Event Hooks**: Full Before/After lifecycle (`BeforeUpload`, `BeforeDelete`, `BeforeUnlink`, `BeforeDownload`, `BeforePreview`, `BeforeReplace`).
 
+### 7e. Pluggable Form Toolbar Actions (`BaseFormToolbarAction` & `@RegisterFormToolbarAction`)
+
+Toolbar buttons in `<mj-form-toolbar>` can be authored as self-contained, lifecycle-aware TypeScript classes that extend **`BaseFormToolbarAction`** and register via **`@RegisterFormToolbarAction(metadata, priority?)`**. The built-in **Record Links (`RecordLinksToolbarAction`)** button is implemented using this exact plugin architecture.
+
+#### Why Pluggable Toolbar Actions?
+Instead of hardcoding entity-specific buttons into `<mj-form-toolbar>` or overriding an entire form just to add a toolbar action, any package or vertical OpenApp can register a `BaseFormToolbarAction` class scoped to:
+- **All entities globally**: `EntityScope: '*'` (default)
+- **A single entity**: `EntityScope: 'MJ_BizApps_Common: People'`
+- **A glob pattern of entities**: `EntityScope: 'MJ_BizApps_Orders:*'` or `'*Invoice*'`
+- **A database schema**: `EntityScope: 'schema:common'`
+- **An array of patterns**: `EntityScope: ['MJ_BizApps_Common: People', 'MJ_BizApps_Common: Organizations']`
+
+#### Lifecycle Hooks & Pin-Aware Pre-Warming
+Every instantiated `BaseFormToolbarAction` receives a strongly-typed **`FormToolbarActionLifecycleContext`** (`Record`, `EntityInfo`, `Provider`, `EditMode`, `IsDirty`, `IsPinned`, `IsVisibleOnBar`, `FormComponent`, plus state mutators `SetBadge`, `SetLoading`, `SetDisabled`, `SetActive`, `RequestChangeDetection`):
+
+| Hook | When It Runs | Typical Use |
+|------|--------------|-------------|
+| `IsApplicable(ctx)` | Before render & pre-warm | Gate visibility by entity metadata, record state (`ctx.Record.IsSaved`), or user permissions |
+| `OnInit(ctx)` | When form mounts or switches record | Reset local state or initialize lightweight subscriptions |
+| `OnPrewarm(ctx)` | Fire-and-forget when a saved record opens | Prefetch badge counts or background summaries — **check `if (!ctx.IsPinned) return;` to avoid network queries when unpinned!** |
+| `OnPinStateChanged(ctx, isPinned)` | User pins/unpins button in toolbar overflow | Trigger lazy `OnPrewarm(ctx)` the moment the user pins the button to their primary bar |
+| `OnRecordSaved(ctx)` | After `Record.Save()` succeeds | Refresh badge counts or invalidate cached state |
+| `OnRecordRefreshed(ctx)` | After record reload | Re-run pre-warm or clear stale state |
+| `OnExecute(ctx, event)` | User clicks the button or overflow menu item | Open a drawer/modal, invoke an Action/Agent, or toggle state |
+| `OnDestroy()` | Form container unmounts | Clean up timers or subscriptions |
+
+#### Authoring a New Scoped Toolbar Action
+
+```typescript
+import {
+  BaseFormToolbarAction,
+  RegisterFormToolbarAction,
+  type FormToolbarActionLifecycleContext,
+} from '@memberjunction/ng-base-forms';
+
+@RegisterFormToolbarAction({
+  Key: 'verify-compliance',
+  MenuLabel: 'Verify Compliance',
+  Tooltip: 'Run compliance checks for this record',
+  Icon: 'fa-solid fa-shield-check',
+  EntityScope: ['MJ_BizApps_Common: People', 'MJ_BizApps_Common: Organizations'],
+  Order: 45,
+  Pinnable: true,
+  Mode: 'action',
+})
+export class VerifyComplianceToolbarAction extends BaseFormToolbarAction {
+  public override async OnPrewarm(ctx: FormToolbarActionLifecycleContext): Promise<void> {
+    // Only pre-warm over the network if the user has pinned this button onto their toolbar
+    if (!ctx.IsPinned) return;
+    const issueCount = await this.fetchOpenComplianceIssuesCount(ctx);
+    ctx.SetBadge(issueCount > 0 ? issueCount : null);
+    ctx.RequestChangeDetection();
+  }
+
+  public override async OnExecute(ctx: FormToolbarActionLifecycleContext): Promise<void> {
+    ctx.SetLoading(true);
+    ctx.RequestChangeDetection();
+    try {
+      await this.runComplianceCheck(ctx);
+    } finally {
+      ctx.SetLoading(false);
+      ctx.RequestChangeDetection();
+    }
+  }
+
+  private async fetchOpenComplianceIssuesCount(_ctx: FormToolbarActionLifecycleContext): Promise<number> {
+    return 0;
+  }
+
+  private async runComplianceCheck(_ctx: FormToolbarActionLifecycleContext): Promise<void> {}
+}
+```
+
+#### Subclassing & Overriding an Existing Toolbar Button (with Metadata Inheritance)
+You can **subclass** any existing toolbar action plugin (such as `RecordLinksToolbarAction`) and decorate your subclass with `@RegisterFormToolbarAction(...)` to customize or replace the superclass behavior—either globally (`EntityScope: '*'`) or for specific entities (`EntityScope: 'MJ_BizApps_Common: People'`).
+
+When you subclass a toolbar action:
+1. **Automatic Prototype-Chain Metadata Inheritance**: `ResolveFormToolbarActionsForEntity` walks the prototype chain and merges ancestor `@RegisterFormToolbarAction` metadata (`{ ...ancestorMetadata, ...childMetadata }`). You do **not** need to repeat `Key: 'links'`, `Icon`, `Order`, `Pinnable`, or `Mode`—only specify the properties you want to override (such as `EntityScope`, `MenuLabel`, or `Tooltip`).
+2. **3-Tier Winner Resolution per `Key`**:
+   - **Tier 1 (Subclass Override)**: A subclass (`Sub.prototype instanceof Super`) **always** wins over its superclass for matching entities, regardless of registration order.
+   - **Tier 2 (Entity Specificity)**: An entity-scoped registration (`EntityScope: 'MJ_BizApps_Common: People'`) overrides a global wildcard registration (`EntityScope: '*'`) of equal explicit priority.
+   - **Tier 3 (ClassFactory Priority)**: Higher `@RegisterFormToolbarAction(metadata, priority)` wins (auto-incremented in module import order when `priority` is omitted/`0`).
+
+```typescript
+import {
+  RecordLinksToolbarAction,
+  RegisterFormToolbarAction,
+  type FormToolbarActionLifecycleContext,
+} from '@memberjunction/ng-base-forms';
+
+// Inherits Key: 'links', Icon: 'fa-solid fa-diagram-project', Order: 40, Pinnable: true, Mode: 'toggle-drawer'
+// Overrides RecordLinksToolbarAction ONLY on 'MJ_BizApps_Common: People' forms:
+@RegisterFormToolbarAction({
+  EntityScope: 'MJ_BizApps_Common: People',
+  MenuLabel: 'Person Graph',
+  Tooltip: 'Explore Person relationships & organizational links',
+})
+export class PersonLinksToolbarAction extends RecordLinksToolbarAction {
+  public override async OnPrewarm(ctx: FormToolbarActionLifecycleContext): Promise<void> {
+    // Always pre-warm on People forms even when unpinned:
+    await super.OnPrewarm({ ...ctx, IsPinned: true });
+  }
+}
+
+export function LoadPersonLinksToolbarAction(): void {
+  // Tree-shaking prevention loader
+}
+```
+
+### 7f. Bidirectional Record Links (`<mj-record-links>`) & Hover Preview Cards (`<mj-record-preview-popover>`)
+
+Every entity form includes a **Bidirectional Record Links** drawer (`<mj-record-links>`) driven by `RecordLinksToolbarAction`:
+- **Three Discovery Channels in One Batched `RunViews` Call**:
+  1. **Outbound References (`↗`)**: Non-null foreign keys on the current record pointing to parent/referenced entities (`Record.EntityInfo.Fields` where `RelatedEntityID` is populated).
+  2. **Inbound References (`↙`)**: Child/referencing records across `EntityInfo.RelatedEntities` that point to the current record via standard foreign keys.
+  3. **Polymorphic Links (`↗` / `↙`)**: Polymorphic `EntityID` + `RecordID` pairs declared via `EntityField.EntityIDFieldName`.
+- **Direction Filter Pills & Badges**: Users can filter the links drawer by `All`, `Outbound ↗`, or `Inbound ↙`, search across linked records, and open any linked record in a tab or floating `<mj-form-window>`.
+- **Sage / AI Agent Context Integration**: When links are loaded or pre-warmed, `RecordLinksToolbarAction` publishes a compact `FormAgentLinksSummary` onto the form container's `FormCompositionSnapshot`, which flows automatically into `AppContext.AdditionalContext.Form.LinksSummary` so Sage and form-aware agents know the record's connected neighborhood without extra tool calls.
+- **Hover Preview Cards (`<mj-record-preview-popover>`)**: Foreign-key links inside `<mj-form-field>` (read mode) attach the `[mjRecordPreview]` directive, displaying a rich hover card after a 380ms intent delay with the target record's entity badge, display name, top summary fields, a 1-click subtle copy-ID pill, `"Float Window"`, and `"Open Record"` actions.
+
+### 7g. In-Form Time-Travel Version Preview & Record Changes Activity Sparkline
+
+The `<mj-record-changes>` history drawer and `<mj-record-form-container>` work together to let users inspect historical snapshots **directly inside the actual entity form** before deciding whether to restore:
+- **Single-Click `"Preview in Form"`**: Clicking `"Preview in Form"` on any version card in `<mj-record-changes>` automatically closes the slide-in drawer so the form is 100% bright and unobstructed, switches the form into read-only preview mode, and mounts a sticky **Time-Travel Scrubber Bar** at the top of the form.
+- **Full-Record + Calculated DisplayName Rehydration**: The container stashes the live field values (`liveRecordPreviewStash`) and rehydrates `Record.Fields` from the version's `FullRecordJSON` + `ChangesJSON` overlay without marking the record dirty (`Dirty === false`). If a read-only composite `DisplayName` / `FullName` field in `FullRecordJSON` was stale relative to changed name parts (`FirstName`, `MiddleName`, `LastName`), the container synthesizes the historical display name and broadcasts `FormSlotCoordinator.NotifyVersionPreviewChanged()` so custom `BaseFormPanel` headers and slots re-render immediately.
+- **Interactive Scrubber & Changed-Field Jump Chips**: The top scrubber bar provides `◀ Prev` / `Next ▶` version stepping, clickable changed-field diff chips (which scroll to and highlight the modified field in the form), a `"Timeline"` button to pop the `<mj-record-changes>` drawer back open with the active version highlighted, `"Restore This Version"`, and `"Exit Preview"`.
+- **Record Changes Header, Activity Sparkline & Collapsible Version Labels**: `<mj-record-changes>` features a deduplicated header using `EntityInfo.DisplayNameOrName`, a collapsible **12-Month Activity Sparkline** bar chart (click any month bar to filter the timeline to that month), and a compact single-line **Version Labels** toggle pill that stays collapsed by default when 0 labels exist.
+
 ---
 
 ## 8. Navigation from inside a dialog / slide-in
@@ -821,6 +949,8 @@ That keeps the Generic stack routing-free and lets each consumer pick the UX.
 | Keep a record open (non-modal) while working elsewhere | `<mj-form-window>` or `forms.Open({Presentation:'window'})` |
 | Edit just one section of a record in an overlay | `SectionName` on any shell / `forms.Open({SectionName})` |
 | Add a custom section into a generated form | `BaseFormPanel` + slot — [PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md) (Content Sources is the example) |
+| Add or override a toolbar button on one, many, or all entity forms | `BaseFormToolbarAction` + `@RegisterFormToolbarAction` — [§7e](#7e-pluggable-form-toolbar-actions-baseformtoolbaraction--registerformtoolbaraction) |
+| Subclass & customize an existing toolbar plugin (e.g. Links) | Extend `RecordLinksToolbarAction` + `@RegisterFormToolbarAction` (inherits metadata automatically) — [§7e](#7e-pluggable-form-toolbar-actions-baseformtoolbaraction--registerformtoolbaraction) |
 | Replace a form's whole layout | Custom `*Extended` form — [Angular/CLAUDE.md](../packages/Angular/CLAUDE.md) |
 | Build a brand-new bespoke editor dialog | **Stop** — first check if a `<mj-form-dialog>` covers it |
 
@@ -834,6 +964,8 @@ That keeps the Generic stack routing-free and lets each consumer pick the UX.
 - **Config:** `types/entity-form-config.ts`
 - **Resolver:** `resolver/form-resolver.service.ts`
 - **Container:** `container/record-form-container.component.ts`
+- **Toolbar Actions:** `toolbar/base-form-toolbar-action.ts`, `toolbar/actions/record-links-toolbar-action.ts`
+- **Record Links & Hover Previews:** `links/record-links.component.ts`, `preview-popover/record-preview-popover.component.ts`
 - **Panels:** [PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md)
 - **Custom forms + toolbar pattern:** [packages/Angular/CLAUDE.md](../packages/Angular/CLAUDE.md)
 - **Slide-in primitive:** `MjSlidePanelComponent` in `@memberjunction/ng-ui-components`

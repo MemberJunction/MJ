@@ -8,7 +8,7 @@ import {
 import { BaseEntity } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FormNavigationEvent } from '../types/navigation-events';
-import { RecordLinkFilterType } from './record-links.component';
+import { RecordLinkFilterType, RecordLinksSummary } from './record-links.component';
 
 /**
  * Convenience slide-in drawer component `<mj-record-links-drawer>` wrapping `<mj-record-links [Mode]="'drawer'">`.
@@ -25,7 +25,8 @@ import { RecordLinkFilterType } from './record-links.component';
             [IsOpen]="IsOpen"
             (Navigate)="Navigate.emit($event)"
             (Close)="Close.emit()"
-            (LinkCountChange)="LinkCountChange.emit($event)">
+            (LinkCountChange)="LinkCountChange.emit($event)"
+            (LinksSummaryChange)="LinksSummaryChange.emit($event)">
         </mj-record-links>
     `,
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -38,4 +39,5 @@ export class MjRecordLinksDrawerComponent extends BaseAngularComponent {
     @Output() Navigate = new EventEmitter<FormNavigationEvent>();
     @Output() Close = new EventEmitter<void>();
     @Output() LinkCountChange = new EventEmitter<number>();
+    @Output() LinksSummaryChange = new EventEmitter<RecordLinksSummary>();
 }
