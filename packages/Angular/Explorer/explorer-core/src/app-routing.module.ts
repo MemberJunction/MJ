@@ -553,9 +553,10 @@ export class ResourceResolver implements Resolve<void> {
     }
 
     // Determine resource type and record ID based on the route path
-    if (route.params['recordId'] !== undefined && route.params['entityName'] !== undefined) {
-      // /resource/record/:entityName/:recordId
-      const entityName = decodeURIComponent(route.params['entityName']);
+    const rawEntityName = route.params['entityName'] ?? route.queryParams['Entity'] ?? route.queryParams['entity'];
+    if (route.params['recordId'] !== undefined && rawEntityName !== undefined) {
+      // /resource/record/:entityName/:recordId or /resource/record/:recordId?Entity=:entityName
+      const entityName = decodeURIComponent(String(rawEntityName));
       const recordId = route.params['recordId'];
       const isNew = IsNewEntityRecordUrlId(recordId);
       const newRecordValues = readNewRecordValuesQuery(route.queryParams);
@@ -788,6 +789,12 @@ const routes: Routes = [
   // Legacy resource routes (kept for backward compatibility, will redirect in future)
   {
     path: 'resource/record/:entityName/:recordId',
+    resolve: { data: ResourceResolver },
+    canActivate: [AuthGuard, AppLockGuard],
+    component: SingleRecordComponent,
+  },
+  {
+    path: 'resource/record/:recordId',
     resolve: { data: ResourceResolver },
     canActivate: [AuthGuard, AppLockGuard],
     component: SingleRecordComponent,
