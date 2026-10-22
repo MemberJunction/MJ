@@ -1,0 +1,32 @@
+name: Exact version pins for build-baked scopes
+
+on:
+  pull_request:
+    branches:
+      - next
+    paths:
+      - 'packages/**/package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/scripts/check-exact-pins.mjs'
+      - '.github/workflows/ci-exact-pins.yml'
+
+# Least-privilege token: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
+jobs:
+  check-exact-pins:
+    name: packages/** must exact-pin @foblex/* to match pnpm-lock.yaml
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Check exact version pins
+        run: node .github/scripts/check-exact-pins.mjs
