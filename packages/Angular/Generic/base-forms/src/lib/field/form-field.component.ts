@@ -8,7 +8,7 @@ import { FormContext } from '../types/form-types';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { FORM_SECTION_FIELD_HOST, SectionRelevantFormContextChanged } from '../section-indicators/form-section-field-host';
 import { FormFieldEditCoordinator } from '../form-field-edit.coordinator';
-import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
+import { FormRecordRefreshCoordinator, type FormFieldConflict } from '../form-record-refresh.coordinator';
 import { FormatFKCell, FilterCachedFKRows, QuoteSqlIdList } from './fk-search-utils';
 import { LinkedFieldOptionsStore } from './linked-field-options';
 import {
@@ -217,6 +217,23 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   @HostBinding('class.mj-forms-field--remotely-updated')
   public IsRemotelyUpdated = false;
 
+  /**
+   * Host class applied when this field has an unresolved remote edit conflict.
+   */
+  @HostBinding('class.mj-forms-field--conflict')
+  public get HasActiveConflict(): boolean {
+    return this.ActiveConflict !== null;
+  }
+
+  /** Whether the original-value popover is currently open */
+  public ShowOriginalValuePopover = false;
+
+  /** Previous server value when this clean field was auto-merged live during edit mode */
+  public AutoMergedPreviousValue: unknown = undefined;
+
+  /** Active remote edit conflict for this field, if any */
+  public ActiveConflict: FormFieldConflict | null = null;
+
   constructor() {
     super();
     // Registered at construction (the creation pass), not in a lifecycle hook: the section's host
@@ -248,6 +265,27 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
           const ownFieldLower = (this.FieldName || '').trim().toLowerCase();
           const fieldInfoNameLower = (this.FieldInfo?.Name || '').trim().toLowerCase();
           const siblingEntityFieldLower = (this.FieldInfo?.EntityIDFieldName || '').trim().toLowerCase();
+
+          // Check for auto-merged clean field baseline
+          if (evt.autoMergedPreviousValues) {
+            if (ownFieldLower && evt.autoMergedPreviousValues.has(ownFieldLower)) {
+              this.AutoMergedPreviousValue = evt.autoMergedPreviousValues.get(ownFieldLower);
+            } else if (fieldInfoNameLower && evt.autoMergedPreviousValues.has(fieldInfoNameLower)) {
+              this.AutoMergedPreviousValue = evt.autoMergedPreviousValues.get(fieldInfoNameLower);
+            }
+          }
+
+          // Check for dirty-field conflict
+          if (evt.conflicts) {
+            const conflict =
+              (ownFieldLower ? evt.conflicts.get(ownFieldLower) : undefined) ??
+              (fieldInfoNameLower ? evt.conflicts.get(fieldInfoNameLower) : undefined);
+            if (conflict) {
+              this.ActiveConflict = conflict;
+              this.ShowOriginalValuePopover = false;
+            }
+          }
+
           if (
             (ownFieldLower && evt.changedFieldNames.has(ownFieldLower)) ||
             (fieldInfoNameLower && evt.changedFieldNames.has(fieldInfoNameLower)) ||
@@ -256,6 +294,18 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
             this.triggerRemoteUpdateHighlight();
           } else {
             this.cdr.detectChanges();
+          }
+        }),
+        this.recordRefresh.ConflictsChanged$.subscribe(conflicts => {
+          const ownFieldLower = (this.FieldName || '').trim().toLowerCase();
+          const fieldInfoNameLower = (this.FieldInfo?.Name || '').trim().toLowerCase();
+          const current =
+            (ownFieldLower ? conflicts.get(ownFieldLower) : undefined) ??
+            (fieldInfoNameLower ? conflicts.get(fieldInfoNameLower) : undefined) ??
+            null;
+          if (this.ActiveConflict !== current) {
+            this.ActiveConflict = current;
+            this.cdr.markForCheck();
           }
         })
       );
@@ -451,10 +501,12 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (!this.Record) return;
     const oldValue = this.Record.Get(this.FieldName);
     this.Record.Set(this.FieldName, newValue);
+    this.AutoMergedPreviousValue = undefined;
     this.markTouched();
     this.runFieldValidation();
     this.ValueChange.emit({ FieldName: this.FieldName, OldValue: oldValue, NewValue: newValue });
     this.fieldEdits?.Notify({ FieldName: this.FieldName });
+    this.cdr.markForCheck();
   }
 
   /** Whether this field is read-only based on entity metadata */
@@ -515,8 +567,169 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Whether this field has been modified (dirty). Only shown for saved records (not new). */
   get IsDirty(): boolean {
     if (!this.Record || !this.Record.IsSaved) return false;
-    const field = this.Record.Fields?.find(f => f.Name === this.FieldName);
+    return this.IsFieldDirty;
+  }
+
+  /**
+   * Whether the underlying EntityField is currently marked dirty (modified compared to its baseline `OldValue`).
+   */
+  public get IsFieldDirty(): boolean {
+    const field = this.getEntityField();
     return field?.Dirty ?? false;
+  }
+
+  /**
+   * Formatted representation of the field's baseline `OldValue` (or `'Empty'` when null/empty).
+   */
+  public get FormattedOriginalValue(): string {
+    const field = this.getEntityField();
+    return this.FormatFieldValue(field?.OldValue);
+  }
+
+  /**
+   * Formatted representation of `AutoMergedPreviousValue` (when a clean field was updated live during Edit Mode).
+   */
+  public get FormattedAutoMergedPreviousValue(): string {
+    return this.FormatFieldValue(this.AutoMergedPreviousValue);
+  }
+
+  /**
+   * Formats an arbitrary field value cleanly for display in original-value popovers and conflict cards.
+   * Returns `'Empty'` when the value is null, undefined, or blank string.
+   */
+  public FormatFieldValue(val: unknown): string {
+    if (val === null || val === undefined) {
+      return 'Empty';
+    }
+    if (val instanceof Date) {
+      if (isNaN(val.getTime())) {
+        return 'Empty';
+      }
+      return this.isDateOnlyField ? FormatDateOnly(val) : val.toLocaleString();
+    }
+    const str = String(val);
+    return str.trim() === '' ? 'Empty' : str;
+  }
+
+  /**
+   * Toggle the floating Original Value popover on a modified field.
+   */
+  public ToggleOriginalValuePopover(event?: Event): void {
+    event?.stopPropagation();
+    this.ShowOriginalValuePopover = !this.ShowOriginalValuePopover;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Restore this field's value back to its baseline `OldValue`, clearing its dirty state
+   * and notifying the form's field-edit coordinator.
+   */
+  public RestoreOriginalValue(event?: Event): void {
+    event?.stopPropagation();
+    event?.preventDefault();
+    const field = this.getEntityField();
+    if (!field) {
+      return;
+    }
+    const previousCurrentValue = this.Record?.Get ? this.Record.Get(this.FieldName) : field.Value;
+    const originalValue = field.OldValue;
+    if (typeof this.Record?.Set === 'function') {
+      this.Record.Set(this.FieldName, originalValue);
+    }
+    field.Value = originalValue;
+    this._fkInputText = null;
+    this._resolvedFKName = undefined;
+    this._resolvedFKValue = undefined;
+    this.ShowOriginalValuePopover = false;
+    this.runFieldValidation();
+    this.ValueChange.emit({
+      FieldName: this.FieldName,
+      OldValue: previousCurrentValue,
+      NewValue: originalValue
+    });
+    this.fieldEdits?.Notify({ FieldName: this.FieldName });
+    this.sectionHost?.NotifyFieldChanged(this);
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Resolve an active conflict by keeping the user's local edit (`localEditedValue`) while
+   * ensuring the field's baseline `OldValue` matches the incoming server value.
+   */
+  public AcceptLocalConflictValue(event?: Event): void {
+    event?.stopPropagation();
+    const conflict = this.ActiveConflict;
+    if (!conflict) {
+      return;
+    }
+    const field = this.getEntityField();
+    const localValue = conflict.localEditedValue;
+    if (field) {
+      field.Value = conflict.incomingServerValue;
+      field.ResetOldValue?.();
+      field.Value = localValue;
+    }
+    if (typeof this.Record?.Set === 'function') {
+      this.Record.Set(this.FieldName, localValue);
+    }
+    this.ActiveConflict = null;
+    this.recordRefresh?.ResolveConflict(this.FieldName);
+    this.sectionHost?.NotifyFieldChanged(this);
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Resolve an active conflict by adopting the new server value (`incomingServerValue`),
+   * resetting the field's baseline `OldValue`, and notifying the field-edit coordinator.
+   */
+  public AcceptRemoteConflictValue(event?: Event): void {
+    event?.stopPropagation();
+    const conflict = this.ActiveConflict;
+    if (!conflict) {
+      return;
+    }
+    const previousLocal = conflict.localEditedValue;
+    const incomingVal = conflict.incomingServerValue;
+    const field = this.getEntityField();
+    if (typeof this.Record?.Set === 'function') {
+      this.Record.Set(this.FieldName, incomingVal);
+    }
+    if (field) {
+      field.Value = incomingVal;
+      field.ResetOldValue?.();
+    }
+    this._fkInputText = null;
+    this._resolvedFKName = undefined;
+    this._resolvedFKValue = undefined;
+    this.ActiveConflict = null;
+    this.runFieldValidation();
+    this.ValueChange.emit({
+      FieldName: this.FieldName,
+      OldValue: previousLocal,
+      NewValue: incomingVal
+    });
+    this.fieldEdits?.Notify({ FieldName: this.FieldName });
+    this.recordRefresh?.ResolveConflict(this.FieldName);
+    this.sectionHost?.NotifyFieldChanged(this);
+    this.cdr.markForCheck();
+  }
+
+  private getEntityField(): { Name: string; Value: unknown; OldValue: unknown; Dirty: boolean; ResetOldValue?: () => void } | undefined {
+    if (!this.Record || !this.FieldName) {
+      return undefined;
+    }
+    const recWithGetter = this.Record as BaseEntity & {
+      GetFieldByName?: (name: string) => { Name: string; Value: unknown; OldValue: unknown; Dirty: boolean; ResetOldValue?: () => void } | undefined;
+    };
+    if (typeof recWithGetter.GetFieldByName === 'function') {
+      const byMethod = recWithGetter.GetFieldByName(this.FieldName);
+      if (byMethod) {
+        return byMethod;
+      }
+    }
+    return this.Record.Fields?.find(
+      f => f.Name.trim().toLowerCase() === this.FieldName.trim().toLowerCase()
+    );
   }
 
   /** Whether this field is required (not nullable) */
@@ -2939,6 +3152,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       if (changes['EditMode'] && !this.EditMode) {
         this._touched = false;
         this._fieldErrors = [];
+        this.ShowOriginalValuePopover = false;
+        this.AutoMergedPreviousValue = undefined;
+        this.ActiveConflict = null;
       }
       // Re-snapshot the edit-mode rendering decision whenever edit mode toggles
       if (changes['EditMode']) {
