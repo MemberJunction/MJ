@@ -173,3 +173,25 @@ describe('BaseAgent — a Retry on a turn whose agent tools already reported', (
         expect(p.conversationMessages[2].content).toBe('Retrying due to: Check the outline.');
     });
 });
+
+describe('BaseAgent — a native complete_task refused for unmet minimum executions', () => {
+    class MinimumsProbe extends BaseAgent {
+        protected override async checkMinimumExecutionRequirements(): Promise<string[]> {
+            return ["Action 'Search' must run at least once (ran 0)"];
+        }
+        public Validate(step: BaseAgentNextStep): Promise<BaseAgentNextStep> {
+            return this.validateSuccessNextStep(params(), step, {}, {} as MJAIAgentRunEntityExtended, {} as MJAIAgentRunStepEntityExtended);
+        }
+    }
+
+    it('keeps the call\'s turn and id, so the refusal answers that call', async () => {
+        const probe = new MinimumsProbe();
+        (probe as unknown as { logError: () => void }).logError = () => undefined;
+
+        const step = await probe.Validate(stepFor('Success', 'complete_task'));
+
+        expect(step).toMatchObject({ step: 'Retry', payloadToolCallId: 'call_0' });
+        expect(step.nativeTurn?.toolCalls.map((c) => c.id)).toEqual(['call_0']);
+        expect(step.errorMessage).toMatch(/Minimum execution requirements not met/);
+    });
+});

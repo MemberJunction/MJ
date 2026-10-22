@@ -49,7 +49,7 @@ import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type'
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended, MJAIAgentRunStepEntityExtended, AgentDecisionRequest, AgentFinishIf, BaseAgentNextStep, AgentChatMessage } from '@memberjunction/ai-core-plus';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
-import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
+import { RecordSentPrefixFingerprint, RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
 import type { AgentToolDefinition } from '../native-tools/agent-tools';
 import { FINISH_IF_MODE_WARNING_SHOWN_MAX, FINISH_IF_MODE_WARNINGS_REMEMBERED } from '../finish-if-mode-warnings';
@@ -60,7 +60,7 @@ import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { AIEngine } from '@memberjunction/aiengine';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
 import { PayloadFeedbackManager } from '../PayloadFeedbackManager';
-import { AIAPIKeys } from '@memberjunction/ai';
+import { AIAPIKeys, type ChatResult } from '@memberjunction/ai';
 import { UserInfo as CoreUserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
@@ -3115,7 +3115,7 @@ describe('BaseAgent.Execute — replayed reasoning behind an unchanged history',
     type Selection = AIPromptRunResult['modelSelectionInfo'];
     /** Stands in for a run served by a driver whose replayed reasoning is bound to the history before it. */
     class BoundReasoningAgent extends HarnessAgent {
-        protected override resolveAppendOnlyState(): boolean {
+        protected override ResolveAppendOnlyState(): boolean {
             return (this as unknown as { _nativeToolBindings?: unknown })._nativeToolBindings !== undefined;
         }
     }
@@ -3152,10 +3152,10 @@ describe('BaseAgent.Execute — replayed reasoning after an earlier message is r
     type Selection = AIPromptRunResult['modelSelectionInfo'];
     /** A run on a prefix-bound driver whose first tool result is stubbed before the third request, as expiry would. */
     class RewritingAgent extends HarnessAgent {
-        protected override resolveAppendOnlyState(): boolean {
+        protected override ResolveAppendOnlyState(): boolean {
             return true;
         }
-        protected override replayedReasoningRequiresStablePrefix(): boolean {
+        protected override DriverRequiresStableReasoningPrefix(): boolean {
             return true;
         }
         protected override async pruneAndCompactExpiredMessages(params: ExecuteAgentParams): Promise<void> {
@@ -3191,6 +3191,45 @@ describe('BaseAgent.Execute — replayed reasoning after an earlier message is r
         expect(turnOf(params.conversationMessages as AgentChatMessage[], 'c2')).not.toHaveProperty('reasoning');
         // The second request, sent before the rewrite, still carried the turn-1 reasoning unchanged.
         expect(turnOf(runner.Calls[1].conversationMessages as AgentChatMessage[], 'c1')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c1' });
+    });
+});
+
+describe('BaseAgent.Execute — the system prompt or tools change mid-run', () => {
+    type Selection = AIPromptRunResult['modelSelectionInfo'];
+    class BoundAgent extends HarnessAgent {
+        protected override ResolveAppendOnlyState(): boolean {
+            return true;
+        }
+        protected override DriverRequiresStableReasoningPrefix(): boolean {
+            return true;
+        }
+    }
+
+    /** A thinking tool-call turn whose request the runner fingerprinted as `prefix`. */
+    function thinkingCall(id: string, prefix: string): AIPromptRunResult {
+        const result = llmNativeActionCall(id, true);
+        const message = (result.chatResult as unknown as { data: { choices: Array<{ message: Record<string, unknown> }> } }).data.choices[0].message;
+        message.reasoning = [{ provider: 'anthropic', kind: 'thinking', text: `Think ${id}.`, signature: `sig-${id}` }];
+        RecordSentPrefixFingerprint(result.chatResult as unknown as ChatResult, prefix);
+        return { ...result, modelSelectionInfo: { ModelSelected: { ID: 'm' }, vendorSelected: { ID: 'v' } } as unknown as Selection };
+    }
+
+    it('hands each request the previous fingerprint, and drops the history\'s reasoning once it changes', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new BoundAgent();
+        // Request 2's prefix differs from request 1's — a skill activated and added a tool.
+        const runner = new ScriptedPromptRunner([() => thinkingCall('c1', 'prefix-A'), () => thinkingCall('c2', 'prefix-B'), () => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        expect(runner.Calls.map((c) => c.ReplayedReasoningPrefix)).toEqual([undefined, 'prefix-A', 'prefix-B']);
+        const turnOf = (messages: AgentChatMessage[], id: string) => messages.find((m) => m.toolCalls?.some((c) => c.id === id));
+        // c1's thinking was made under prefix A; the runner sent request 2 without it, and the history dropped it.
+        expect(turnOf(runner.Calls[2].conversationMessages as AgentChatMessage[], 'c1')).not.toHaveProperty('reasoning');
+        // c2's thinking was made under prefix B, which request 3 still has.
+        expect(turnOf(runner.Calls[2].conversationMessages as AgentChatMessage[], 'c2')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c2' });
     });
 });
 

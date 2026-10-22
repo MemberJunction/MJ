@@ -893,6 +893,18 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState — replayed reasoning boun
         expect(decide('ITFreeTestLLM', true)).toBe(false);
     });
 
+    it('waits for the first selection when a model override names no vendor, then keeps the fragments', () => {
+        const a = agentUnderTest() as Internals & { _nativeToolBindings?: Map<string, unknown> };
+        const { promptParams } = makeInputs({});
+        const { model, vendor } = serve('ITBindingTestLLM');
+        promptParams.override = { modelId: model.ID };
+        a._nativeToolBindings = new Map();
+        // Turn 1: no selection yet, so the vendor is unknown — replace for now, not settled.
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+        a._lastModelSelectionInfo = { ModelSelected: model, vendorSelected: vendor };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
+    });
+
     it('still honours an explicit replace', () => {
         expect(decide('ITBindingTestLLM', true, 'replace')).toBe(false);
     });

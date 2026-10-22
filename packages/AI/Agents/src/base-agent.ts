@@ -24,7 +24,7 @@ import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID, ResolvePayloadAtEnd } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
-import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult, GetSentPrefixFingerprint } from '@memberjunction/ai-prompts';
 import { BaseLLM, ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
@@ -733,6 +733,8 @@ export class BaseAgent {
     private _lastVolatileStateMessage: AgentChatMessage | undefined;
     /** The previous request's outgoing messages, as {@link messageFingerprint}s. */
     private _lastSentFingerprints: string[] | undefined;
+    /** The previous request's system-prompt-and-tools fingerprint, from the prompt runner. */
+    private _lastSentPrefix: string | undefined;
 
     /**
      * The trailing-state retention mode once it has been decided for this run, frozen at the first
@@ -2360,6 +2362,7 @@ export class BaseAgent {
             this._lastVolatileStateMessage = undefined;
             this._resolvedTrailingStateMode = undefined;
             this._lastSentFingerprints = undefined;
+            this._lastSentPrefix = undefined;
             this._turn1InsertionIndex = -1;
             this._runScope = undefined; // set again by initializeAgentRun, in Phase 1
             this.resetActionCircuitBreaker();
@@ -6095,7 +6098,7 @@ export class BaseAgent {
             this._lastVolatileStateMessage = volatileStateMessage;
         }
         if (promptParams.conversationMessages) {
-            promptParams.conversationMessages = this.dropReasoningBehindChangedHistory(params, promptParams.conversationMessages);
+            promptParams.conversationMessages = this.dropReasoningBehindChangedHistory(params, promptParams.conversationMessages, promptParams);
         }
 
         return promptParams;
@@ -6113,13 +6116,16 @@ export class BaseAgent {
      * consistent. Messages the previous request did not have (the model's reply, new results)
      * are not a change.
      */
-    private dropReasoningBehindChangedHistory(params: ExecuteAgentParams, outgoing: ChatMessage[]): ChatMessage[] {
+    private dropReasoningBehindChangedHistory(params: ExecuteAgentParams, outgoing: ChatMessage[], promptParams: AIPromptParams): ChatMessage[] {
         const fingerprints = outgoing.map(BaseAgent.messageFingerprint);
         const previous = this._lastSentFingerprints;
         this._lastSentFingerprints = fingerprints;
-        const selection = this._lastModelSelectionInfo;
-        if (!previous || this._nativeToolBindings === undefined
-            || !this.replayedReasoningRequiresStablePrefix(selection?.ModelSelected, selection?.vendorSelected)) {
+        if (!this.replaysPrefixBoundReasoning()) {
+            return outgoing;
+        }
+        // The system prompt and tools are compared by the prompt runner, which renders the one and finalizes the other.
+        promptParams.ReplayedReasoningPrefix = this._lastSentPrefix;
+        if (!previous) {
             return outgoing;
         }
         const changedAt = previous.findIndex((fingerprint, i) => fingerprints[i] !== fingerprint);
@@ -6143,6 +6149,34 @@ export class BaseAgent {
         });
         this.logStatus(`Dropped replayed reasoning from ${stale.size} tool call(s): an earlier message changed since it was produced`, true, params);
         return outgoing.map((m, i) => (i >= changedAt && callsStale(m) ? withoutReasoning(m) : m));
+    }
+
+    /** Whether this run replays reasoning to a driver that binds it to an unchanged request prefix. */
+    private replaysPrefixBoundReasoning(): boolean {
+        const selection = this._lastModelSelectionInfo;
+        return this._nativeToolBindings !== undefined
+            && this.DriverRequiresStableReasoningPrefix(selection?.ModelSelected, selection?.vendorSelected);
+    }
+
+    /**
+     * Keeps the system-prompt-and-tools fingerprint of the request just sent, for the next one. When
+     * it changed, the runner sent this request without replayed reasoning; the history drops it too,
+     * so no later request replays a block made under the old prompt or tools.
+     */
+    private trackSentPrefix(params: ExecuteAgentParams, promptResult: AIPromptRunResult): void {
+        const sent = GetSentPrefixFingerprint(promptResult.chatResult);
+        const previous = this._lastSentPrefix;
+        this._lastSentPrefix = sent;
+        if (previous === undefined || sent === undefined || sent === previous || !this.replaysPrefixBoundReasoning()) {
+            return;
+        }
+        params.conversationMessages.forEach((m, i) => {
+            const turn = m as AgentChatMessage;
+            if (turn.reasoning) {
+                const { reasoning: _dropped, ...rest } = turn;
+                params.conversationMessages[i] = rest;
+            }
+        });
     }
 
     /** What makes a message the same message to a provider — reasoning aside, which only this check removes. */
@@ -6217,7 +6251,7 @@ export class BaseAgent {
      * < Model Vendors), read through {@link resolvePrefixPromptCache}. `true` means append-only;
      * anything else means replace. One exception comes from the driver, not the catalog: a run that
      * declares native tools to a driver whose replayed reasoning needs the history before it
-     * unchanged is append-only too (see {@link resolveAppendOnlyState}).
+     * unchanged is append-only too (see {@link ResolveAppendOnlyState}).
      *
      * Decided ONCE per run. An explicit `trailingStateMode` or a runtime model override answers
      * immediately. Otherwise the answer is frozen at the first model selection and reused for every
@@ -6247,7 +6281,11 @@ export class BaseAgent {
         if (promptParams.override?.modelId) {
             const model = AIEngine.Instance?.ModelsByID?.get(NormalizeUUID(promptParams.override.modelId));
             const vendor = promptParams.override.vendorId ? AIEngine.Instance?.VendorsByID?.get(NormalizeUUID(promptParams.override.vendorId)) : undefined;
-            return this.resolveAppendOnlyState(model, vendor);
+            // Without a vendor the serving driver is not known yet: a catalog "yes" stands, anything
+            // else waits for the first selection below, which names the vendor.
+            if (vendor || this.resolvePrefixPromptCache(model, undefined)) {
+                return this.ResolveAppendOnlyState(model, vendor);
+            }
         }
 
         if (this._resolvedTrailingStateMode !== undefined) {
@@ -6256,7 +6294,7 @@ export class BaseAgent {
         if (this._lastModelSelectionInfo) {
             const model = this._lastModelSelectionInfo.ModelSelected;
             const vendor = this._lastModelSelectionInfo.vendorSelected;
-            this._resolvedTrailingStateMode = this.resolveAppendOnlyState(model, vendor);
+            this._resolvedTrailingStateMode = this.ResolveAppendOnlyState(model, vendor);
             return this._resolvedTrailingStateMode;
         }
 
@@ -6271,15 +6309,15 @@ export class BaseAgent {
      * request drops the previous fragment, and a thinking block produced after it would be replayed
      * behind a changed history and rejected.
      */
-    protected resolveAppendOnlyState(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
+    protected ResolveAppendOnlyState(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
         if (this.resolvePrefixPromptCache(model, vendor)) {
             return true;
         }
-        return this._nativeToolBindings !== undefined && this.replayedReasoningRequiresStablePrefix(model, vendor);
+        return this._nativeToolBindings !== undefined && this.DriverRequiresStableReasoningPrefix(model, vendor);
     }
 
     /** Whether the driver serving `model` on `vendor` binds replayed reasoning to the unchanged history before it. */
-    protected replayedReasoningRequiresStablePrefix(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
+    protected DriverRequiresStableReasoningPrefix(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
         if (!model || !vendor) {
             return false;
         }
@@ -7281,10 +7319,12 @@ export class BaseAgent {
                 this._generalValidationRetryCount++;
             }
             
+            // A native complete_task keeps its turn and call id, so the refusal answers that call.
             return {
                 step: 'Retry',
                 terminate: false,
-                errorMessage: violationMessage
+                errorMessage: violationMessage,
+                ...(nextStep.nativeTurn ? { nativeTurn: nextStep.nativeTurn, payloadToolCallId: nextStep.payloadToolCallId } : {})
             };
         }
 
@@ -15390,6 +15430,7 @@ The context is now within limits. Please retry your request with the recovered c
             if (promptResult.modelSelectionInfo) {
                 this._lastModelSelectionInfo = promptResult.modelSelectionInfo;
             }
+            this.trackSentPrefix(params, promptResult);
 
             // Check for cancellation after prompt execution — before the failure check, because a prompt
             // the caller cancelled comes back failed, and that is not a prompt failure. The step does not
@@ -20837,8 +20878,9 @@ The context is now within limits. Please retry your request with the recovered c
                         reason: `Expired after ${turnsAlive} turns (limit: ${msg.metadata.expirationTurns})`
                     });
                 } else if (msg.metadata.expirationMode === 'Compact') {
-                    // Ensure we have compact config
-                    if (msg.metadata.compactMode) {
+                    // Compacted once is compacted: compacting again would summarize the summary, and
+                    // change the message again on every turn. Expansion clears the flag.
+                    if (msg.metadata.compactMode && !msg.metadata.wasCompacted) {
                         messagesToCompact.push({
                             index: i,
                             message: msg,
@@ -21580,7 +21622,9 @@ The context is now within limits. Please retry your request with the recovered c
                 }
 
                 const truncated = originalContent.substring(0, length);
-                return `${truncated}...\n\n[Compacted: showing first ${length} of ${originalContent.length} characters. Agent can request expansion if needed.]`;
+                // A native-only agent has no message expansion, so its tool results do not offer it.
+                const expandable = !(message.role === 'tool' && this.GetNativeControlConfig(params).NativeOnly);
+                return `${truncated}...\n\n[Compacted: showing first ${length} of ${originalContent.length} characters.${expandable ? ' Agent can request expansion if needed.' : ''}]`;
             }
 
             case 'AI Summary': {

@@ -56,4 +56,45 @@ describe('BaseAgent.pruneAndCompactExpiredMessages — a native tool turn', () =
         ]);
         expect((params.conversationMessages[2] as AgentChatMessage).metadata?.wasCompacted).toBe(true);
     });
+
+    it('compacts a turn once: a later pass leaves the summary as it is', async () => {
+        const agent = new Probe();
+        (agent as unknown as { logStatus: () => void }).logStatus = vi.fn();
+        const params = {
+            agent: { Name: 'P' },
+            conversationMessages: [
+                { role: 'user', content: 'Run the queries.' },
+                { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'run_query', arguments: {} }, { id: 'c2', name: 'run_query', arguments: {} }] },
+                toolTurn()
+            ]
+        } as unknown as ExecuteAgentParams;
+
+        await agent.Prune(params, 5);
+        const once = JSON.stringify(params.conversationMessages[2].content);
+        await agent.Prune(params, 6);
+        await agent.Prune(params, 7);
+
+        expect(agent.Summaries).toHaveLength(2);
+        expect(JSON.stringify(params.conversationMessages[2].content)).toBe(once);
+    });
+});
+
+describe('BaseAgent.compactMessage — the expansion note on a truncated tool result', () => {
+    class Real extends BaseAgent {
+        public Compact(message: AgentChatMessage, typeConfiguration: string | null): Promise<string> {
+            const params = { agent: { Name: 'P', TypeConfiguration: typeConfiguration } } as unknown as ExecuteAgentParams;
+            return this.compactMessage(message, { compactMode: 'First N Chars', compactLength: 10, compactPromptId: '', originalLength: 100 }, params);
+        }
+    }
+    const result = { role: 'tool', content: 'x'.repeat(100) } as unknown as AgentChatMessage;
+
+    it('offers expansion when the agent has it', async () => {
+        expect(await new Real().Compact(result, null)).toMatch(/Agent can request expansion if needed/);
+    });
+
+    it('does not offer it to a native-only agent, which has no message expansion', async () => {
+        const text = await new Real().Compact(result, JSON.stringify({ NativeControl: { NativeOnly: true } }));
+        expect(text).toMatch(/showing first 10 of 100 characters\.\]$/);
+        expect(text).not.toMatch(/expansion/);
+    });
 });
