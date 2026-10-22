@@ -1209,6 +1209,20 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
   });
 
   describe('the "Agent can see" chip', () => {
+    it('stays hidden by default when only background surface bridges exist and no camera or screen is shared', async () => {
+      const { f, sources$ } = await renderWithBoard();
+      sources$.next([{
+        SourceID: 'Whiteboard#1',
+        Label: 'Whiteboard',
+        Kind: 'surface',
+        Enabled: true,
+        Active: true,
+        FramesSent: 1,
+      }]);
+      await settle();
+      expect(query(f, '.perception-chip__trigger')).toBeNull();
+    });
+
     it("passes the user's pick of the source the agent sees, and the return to the call's choice, to the session", async () => {
       const { f, sources$, calls } = await renderWithBoard();
       const state = (id: string, label: string, active: boolean, picked = false): VideoSourceState => ({
@@ -1603,7 +1617,7 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
           { provide: RealtimeSessionService, useValue: session.service },
           { provide: ErrorHandler, useValue: { handleError: (error: unknown) => reported.push(error) } },
         ],
-        inputs: { Chrome: chrome, AgentName: 'Sage', ...inputs },
+        inputs: { Chrome: chrome, AgentName: 'Sage', ShowAvatarNotice: true, ...inputs },
         autoDetect: true,
       });
       await settle();
@@ -1619,6 +1633,13 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       const index = timers.mock.calls.findIndex((call) => call[1] === NOTICE_MS);
       return index >= 0 ? timers.mock.results[index].value : undefined;
     };
+
+    it('is hidden by default unless ShowAvatarNotice is enabled', async () => {
+      const { f, notice$ } = await renderCall('console', { ShowAvatarNotice: false });
+      notice$.next(ENDPOINT);
+      await settle();
+      expect(alertOf(f)).toBeNull();
+    });
 
     it('says why under the banner once the call has a notice, as a polite status with a dismiss button', async () => {
       const { f, notice$ } = await renderCall('console');
