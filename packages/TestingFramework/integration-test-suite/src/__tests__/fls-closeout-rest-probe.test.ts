@@ -1,5 +1,5 @@
 /**
- * IT131's REST checks skip when MJAPI has REST turned off. With GraphQL at the root path, a REST
+ * IT134's REST checks skip when MJAPI has REST turned off. With GraphQL at the root path, a REST
  * URL that nothing mounted falls through to Apollo, which answers 400 rather than 404; that must
  * be read as "REST is not enabled" at once, not polled for two minutes as a key not yet honoured.
  */

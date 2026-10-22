@@ -146,13 +146,13 @@ A test only counts once you have **seen it fail** against the code without your 
    - `IT90 - Field-Level Security Enforcement`
    - `IT91 - FLS Lifecycle and System-User Guards` (mutation tier, `RUN_MUTATION_TESTS=1`)
    - `IT92 - FLS Over-The-Wire (client transport)`, as a genuinely restricted wire identity
-   - `IT130 - FLS Close-out (server)` (CO14–CO16 are mutation tier)
-   - `IT131 - FLS Close-out Over-The-Wire (client transport)`; its REST checks need
+   - `IT133 - FLS Close-out (server)` (CO14–CO16 are mutation tier)
+   - `IT134 - FLS Close-out Over-The-Wire (client transport)`; its REST checks need
      `MJ_REST_API_ENABLED=true` on MJAPI
-   - `IT132 - FLS Close-out (cache segmentation, RunQuery)`
+   - `IT135 - FLS Close-out (cache segmentation, RunQuery)`
 
    ```bash
-   pnpm mj test run "IT131 - FLS Close-out Over-The-Wire (client transport)"
+   pnpm mj test run "IT134 - FLS Close-out Over-The-Wire (client transport)"
    ```
 6. **A missing precondition is a skip, not a pass.** In an integration check, end with
    `SkipCheck(reason)` (`@memberjunction/testing-integration`) when a fixture is not seeded or a

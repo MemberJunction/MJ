@@ -988,7 +988,7 @@ restriction should know them before relying on it.
   is the highest-risk configuration available — it is the one that can strip the system user, which
   runs background work and shares one engine cache across all users — and it was deliberately not
   tested. The mechanism that makes it survivable *is* covered. The IT91 lifecycle checks exercise the
-  `No Access`, delete, `Deny` and role-removal guards and the startup sweep (§1.4); IT130's
+  `No Access`, delete, `Deny` and role-removal guards and the startup sweep (§1.4); IT133's
   mutation-tier checks cover a lowercase `deny` on a system-user role and re-pointing a rule's
   `RoleID` or a system-user role assignment. The stored-state reads, the refusal of transaction
   groups with several guarded writes, and re-pointing a rule's `EntityFieldID` are covered by unit
@@ -1129,12 +1129,12 @@ appears in what your feature produces:
   - `IT91 - FLS Lifecycle and System-User Guards` (mutation tier, `RUN_MUTATION_TESTS=1`);
   - `IT92 - FLS Over-The-Wire (client transport)`, which runs as a genuinely restricted wire
     identity;
-  - `IT130 - FLS Close-out (server)`: object width, the clause gate, datasets, Record Changes, the
+  - `IT133 - FLS Close-out (server)`: object width, the clause gate, datasets, Record Changes, the
     configuration guards (CO14–CO16 are mutation tier) and the consumers that deliver onward;
-  - `IT131 - FLS Close-out Over-The-Wire (client transport)`: client-input rejection and transport
+  - `IT134 - FLS Close-out Over-The-Wire (client transport)`: client-input rejection and transport
     projection over GraphQL and REST, as restricted users with their own API keys. Its REST checks
     need `MJ_REST_API_ENABLED=true` on MJAPI;
-  - `IT132 - FLS Close-out (cache segmentation, RunQuery)`: cache segmentation
+  - `IT135 - FLS Close-out (cache segmentation, RunQuery)`: cache segmentation
     and saved-query enforcement.
 - **A missing precondition is a skip, not a pass.** In an integration check, call `SkipCheck(reason)`
   from `@memberjunction/testing-integration` when a fixture is not seeded or a transport is off; it
