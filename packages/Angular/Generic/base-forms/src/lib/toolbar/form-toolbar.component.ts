@@ -43,6 +43,7 @@ const STANDARD_MENU_LABELS: Record<string, string> = {
   tags: 'Tags',
   links: 'Links',
   attachments: 'Attachments',
+  'ask-ai': 'Ask AI',
 };
 
 /**
@@ -267,6 +268,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   /** Emitted when the Links button is clicked */
   @Output() LinksRequest = new EventEmitter<void>();
+
+  /** Emitted when the Ask AI button is clicked */
+  @Output() AskAIRequested = new EventEmitter<void>();
 
   /** Emitted when the Attachments button is clicked */
   @Output() AttachmentsPanelToggled = new EventEmitter<void>();
@@ -702,6 +706,11 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.LinksRequest.emit();
   }
 
+  OnAskAI(): void {
+    if (this.dispatchToFormRef('OnAskAIRequested')) return;
+    this.AskAIRequested.emit();
+  }
+
   OnAttachmentsPanel(): void {
     if (this.dispatchToFormRef('HandleAttachmentsPanel')) return;
     this.AttachmentsPanelToggled.emit();
@@ -861,6 +870,18 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         Visible: this.Config.ShowAttachmentsButton && this.AttachmentsAvailable,
         Disabled: false,
         CssClass: this.IsAttachmentsPanelOpen ? 'active' : '',
+      },
+      {
+        Key: 'ask-ai',
+        Text: '',
+        Description: 'Ask AI about this record',
+        Icon: 'fa-solid fa-wand-magic-sparkles',
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 75,
+        Visible: this.Config.ShowAskAIButton !== false && (this.Record?.IsSaved ?? false),
+        Disabled: false,
       }
     );
 
@@ -899,7 +920,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
     // 4. Resolve states, evaluate predicates, apply overrides
     const resolved: ResolvedToolbarItem[] = [];
-    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'clone', 'favorite', 'history', 'list', 'tags', 'links', 'attachments']);
+    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'clone', 'favorite', 'history', 'list', 'tags', 'links', 'attachments', 'ask-ai']);
 
     for (const item of rawItems) {
       const overrides = this.ItemOverrides?.get(item.Key);
@@ -1332,6 +1353,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
           break;
         case 'attachments':
           this.OnAttachmentsPanel();
+          break;
+        case 'ask-ai':
+          this.OnAskAI();
           break;
         case 'clone':
           this.OnClone();

@@ -1,0 +1,63 @@
+@if (Visible && Summary; as summary) {
+    <div
+        class="mj-record-preview-popover"
+        [ngStyle]="PopoverPositionStyle"
+        role="dialog"
+        [attr.aria-label]="summary.EntityDisplayName + ' preview: ' + summary.Title"
+        (mouseenter)="OnCardMouseEnter()"
+        (mouseleave)="OnCardMouseLeave()">
+        <div class="mj-record-preview-header">
+            <div class="mj-record-preview-entity-row">
+                <span class="mj-record-preview-icon-wrap">
+                    <i [class]="summary.EntityIcon" aria-hidden="true"></i>
+                </span>
+                <span class="mj-record-preview-entity-badge">{{ summary.EntityDisplayName }}</span>
+                @if (summary.StatusValue) {
+                    <span class="mj-record-preview-status-chip">{{ summary.StatusValue }}</span>
+                }
+            </div>
+            <div class="mj-record-preview-title" [title]="summary.Title">{{ summary.Title }}</div>
+        </div>
+
+        <div class="mj-record-preview-body">
+            @if (IsLoading) {
+                <div class="mj-record-preview-loading">
+                    <i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
+                    <span>Loading preview…</span>
+                </div>
+            } @else if (summary.Fields.length > 0) {
+                <div class="mj-record-preview-grid">
+                    @for (item of summary.Fields; track item.FieldName) {
+                        <div class="mj-record-preview-field">
+                            <span class="mj-record-preview-field-label">{{ item.Label }}</span>
+                            <span class="mj-record-preview-field-value" [title]="item.Value">{{ item.Value }}</span>
+                        </div>
+                    }
+                </div>
+            } @else {
+                <div class="mj-record-preview-id-row">
+                    <span class="mj-record-preview-field-label">Record ID</span>
+                    <span class="mj-record-preview-field-value mj-record-preview-field-value--mono">{{ summary.RecordID }}</span>
+                </div>
+            }
+        </div>
+
+        <div class="mj-record-preview-footer">
+            <button
+                type="button"
+                class="mj-record-preview-btn mj-record-preview-btn--primary"
+                (click)="OnOpenRecord(false, $event)">
+                <i class="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i>
+                <span>Open Record</span>
+            </button>
+            <button
+                type="button"
+                class="mj-record-preview-btn mj-record-preview-btn--secondary"
+                (click)="OnOpenRecord(true, $event)"
+                title="Open in new tab">
+                <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                <span>New Tab</span>
+            </button>
+        </div>
+    </div>
+}

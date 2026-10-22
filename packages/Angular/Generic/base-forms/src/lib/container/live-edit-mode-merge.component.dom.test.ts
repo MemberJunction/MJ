@@ -85,6 +85,7 @@ class IsaPanelStub {
 class RecordChangesStub {
     @Input() record: unknown;
     @Input() AllowRestore = false;
+    @Input() PreviewedChangeID: unknown = null;
 }
 @Component({ standalone: true, selector: 'mj-record-tags', template: '' })
 class RecordTagsStub {

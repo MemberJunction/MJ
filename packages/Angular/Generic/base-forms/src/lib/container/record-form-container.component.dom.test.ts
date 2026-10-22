@@ -102,7 +102,7 @@ class EmptyStateStub { @Input() Message = ''; }
 @Component({ standalone: true, selector: 'mj-isa-related-panel', template: '' })
 class IsaPanelStub { @Input() Record: unknown; @Input() EditMode = false; @Input() Collapsed = false; }
 @Component({ standalone: true, selector: 'mj-record-changes', template: '' })
-class RecordChangesStub { @Input() record: unknown; @Input() AllowRestore = false; }
+class RecordChangesStub { @Input() record: unknown; @Input() AllowRestore = false; @Input() PreviewedChangeID: unknown = null; }
 @Component({ standalone: true, selector: 'mj-record-tags', template: '' })
 class RecordTagsStub { @Input() Record: unknown; @Input() WidthPx = 0; }
 @Component({ standalone: true, selector: 'mj-record-links', template: '' })

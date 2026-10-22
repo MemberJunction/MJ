@@ -789,10 +789,59 @@
   .rc-date-label::before { left: 7px; }
 }
 
-/* ─── Restore Action ──────────────────────────────────────────── */
+/* ─── Restore & Form Preview Actions ─────────────────────────── */
+.rc-card.rc-card-previewing {
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+}
+
+.rc-previewing-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+}
+
+.rc-card-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 150ms ease;
+  font-family: inherit;
+  line-height: 1.1;
+}
+
+.rc-card-preview-btn:hover {
+  color: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+}
+
+.rc-card-preview-btn--active {
+  color: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+}
+
 .rc-restore-action {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
   padding-top: 10px;
   margin-top: 10px;
   /* Breathing room from the card's bottom and right edges so the button
@@ -800,6 +849,35 @@
   padding-right: 10px;
   padding-bottom: 10px;
   border-top: 1px solid var(--mj-border-subtle);
+}
+
+.rc-preview-form-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 150ms ease;
+  font-family: inherit;
+  line-height: 1;
+}
+
+.rc-preview-form-btn:hover {
+  color: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+}
+
+.rc-preview-form-btn--active {
+  color: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
 }
 
 .rc-restore-btn {

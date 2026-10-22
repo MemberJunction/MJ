@@ -14,7 +14,7 @@ import { BuildFormAgentContext, EntityFormMode, type FormAgentContext, type Form
   standalone: false,
     selector: 'mj-record-resource',
     styles: [`:host { display: block; height: 100%; width: 100%; }`],
-    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" [FormMode]="FormMode" (FormModeChange)="OnFormModeChange($event)" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()" (EditModeChanged)="ResourceEditModeChanged($event)" (CompositionChanged)="OnCompositionChanged($event)"></mj-single-record>`
+    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" [FormMode]="FormMode" (FormModeChange)="OnFormModeChange($event)" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()" (EditModeChanged)="ResourceEditModeChanged($event)" (CompositionChanged)="OnCompositionChanged($event)" (AskAIRequested)="OnAskAIRequested()"></mj-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent implements OnInit {
     @ViewChild(SingleRecordComponent) private singleRecord?: SingleRecordComponent;
@@ -61,6 +61,11 @@ export class EntityRecordResource extends BaseResourceComponent implements OnIni
      */
     public OnCompositionChanged(snapshot: FormCompositionSnapshot): void {
         this.agentContext = { Form: BuildFormAgentContext(snapshot) };
+        this.publishAgentContext();
+    }
+
+    /** Ensure the active form's agent context is published immediately when opening AI chat. */
+    public OnAskAIRequested(): void {
         this.publishAgentContext();
     }
 

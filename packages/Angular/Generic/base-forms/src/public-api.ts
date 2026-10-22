@@ -72,6 +72,7 @@ export * from './lib/isa-related-panel/isa-related-card.component';
 export * from './lib/isa-related-panel/isa-related-panel.component';
 export * from './lib/links/record-links.component';
 export * from './lib/links/record-links-drawer.component';
+export * from './lib/preview-popover/record-preview-popover.component';
 
 // Dynamic slot-injection extension point for form panels.
 // See packages/Angular/Generic/base-forms/PANELS.md for the architecture +

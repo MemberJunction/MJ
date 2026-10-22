@@ -3,7 +3,9 @@ import { BaseEntity } from '@memberjunction/core';
 import {
     FormRecordRefreshCoordinator,
     type FormFieldConflict,
-    type FormRemoteUpdateEvent
+    type FormRemoteUpdateEvent,
+    type FormSingleFieldRestoreRequest,
+    type FormVersionPreviewState
 } from '../form-record-refresh.coordinator';
 
 describe('FormRecordRefreshCoordinator', () => {
@@ -112,5 +114,53 @@ describe('FormRecordRefreshCoordinator', () => {
         coordinator.ClearAllConflicts();
         expect(coordinator.ActiveConflicts.size).toBe(0);
         expect(conflictCounts).toEqual([2, 1, 0]);
+    });
+
+    it('broadcasts time-travel version preview state and single-field restore requests', () => {
+        const coordinator = new FormRecordRefreshCoordinator();
+        const previews: Array<FormVersionPreviewState | null> = [];
+        const restoreRequests: FormSingleFieldRestoreRequest[] = [];
+
+        coordinator.VersionPreviewChanged$.subscribe((p) => previews.push(p));
+        coordinator.SingleFieldRestoreRequested$.subscribe((req) => restoreRequests.push(req));
+
+        const previewState: FormVersionPreviewState = {
+            ChangeID: 'chg-42',
+            ChangedAt: '2026-04-20T10:00:00Z',
+            UserName: 'Alice Smith',
+            VersionSummary: 'Updated Status and Budget',
+            Snapshot: { Status: 'Draft', Budget: 50000 },
+            ChangedFields: new Map([
+                [
+                    'status',
+                    {
+                        FieldName: 'Status',
+                        HistoricalValue: 'Draft',
+                        CurrentLiveValue: 'Approved'
+                    }
+                ]
+            ])
+        };
+
+        coordinator.SetVersionPreview(previewState);
+        expect(coordinator.ActiveVersionPreview).toEqual(previewState);
+        expect(previews).toEqual([previewState]);
+
+        coordinator.RequestRestoreSingleField({
+            FieldName: 'Status',
+            HistoricalValue: 'Draft',
+            ChangeID: 'chg-42'
+        });
+        expect(restoreRequests).toEqual([
+            {
+                FieldName: 'Status',
+                HistoricalValue: 'Draft',
+                ChangeID: 'chg-42'
+            }
+        ]);
+
+        coordinator.SetVersionPreview(null);
+        expect(coordinator.ActiveVersionPreview).toBeNull();
+        expect(previews).toEqual([previewState, null]);
     });
 });

@@ -137,6 +137,19 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
   @Input() AllowRestore = false;
 
   /**
+   * Optional ID of the historical change currently being previewed directly
+   * inside the host entity form ("Time Travel" mode).
+   */
+  @Input() PreviewedChangeID: string | null = null;
+
+  /**
+   * Emitted when the user toggles "Preview in Form" on a historical change card
+   * (or clears the preview). Emits the selected {@link MJRecordChangeEntity} or
+   * `null` when exiting preview.
+   */
+  @Output() PreviewVersionSelected = new EventEmitter<MJRecordChangeEntity | null>();
+
+  /**
    * Emitted when the user confirms a restore in the preview panel.
    * The host is responsible for applying the snapshot to the record and
    * saving with `record.SetRestoreContext()` set first.
@@ -652,9 +665,49 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
    */
   OnRestoreVersion(change: MJRecordChangeEntity, event: MouseEvent): void {
     event.stopPropagation();
+    this.OpenRestoreForChange(change);
+  }
+
+  /**
+   * Programmatically opens the restore confirmation panel for a specific
+   * historical change (e.g., when triggered from the host form's Time-Travel
+   * Preview banner).
+   */
+  public OpenRestoreForChange(change: MJRecordChangeEntity): void {
     this.RestorePreviewChange = change;
     this.RestorePreviewVisible = true;
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Returns true when `change` is the historical version currently being
+   * previewed in the host form.
+   */
+  public IsChangePreviewedInForm(change: MJRecordChangeEntity): boolean {
+    return this.PreviewedChangeID != null && UUIDsEqual(this.PreviewedChangeID, change.ID);
+  }
+
+  /**
+   * Toggles in-form Time-Travel preview for the given historical change.
+   */
+  public OnToggleFormPreview(change: MJRecordChangeEntity, event: MouseEvent): void {
+    event.stopPropagation();
+    if (this.IsChangePreviewedInForm(change)) {
+      this.PreviewedChangeID = null;
+      this.PreviewVersionSelected.emit(null);
+    } else {
+      this.PreviewedChangeID = change.ID;
+      this.PreviewVersionSelected.emit(change);
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Returns all loaded changes that carry a `FullRecordJSON` snapshot and can
+   * be previewed in the form, ordered newest-first.
+   */
+  public GetPreviewableChanges(): MJRecordChangeEntity[] {
+    return this.ViewData.filter(c => c.Type !== 'Delete' && !!c.FullRecordJSON);
   }
 
   /**

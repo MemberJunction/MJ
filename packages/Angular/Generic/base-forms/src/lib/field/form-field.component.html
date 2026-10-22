@@ -9,9 +9,17 @@
 @if (!IsClaimedByContribution && !IsFieldDeprecatedOrDisabled && IsFieldReadableByUser && Record && (Record.IsSaved || !IsFieldReadOnly) && !ShouldHideField) {
   <!-- READ-ONLY MODE -->
   @if ((!EditMode || IsFieldReadOnly) && !ShouldHideField) {
-    <div class="mj-forms-field" [class.mj-forms-field--no-label]="!ShowLabel" [class.mj-forms-field--readonly]="EditMode && IsFieldReadOnly" [class.mj-forms-field--dirty]="IsDirty">
+    <div class="mj-forms-field" [class.mj-forms-field--no-label]="!ShowLabel" [class.mj-forms-field--readonly]="EditMode && IsFieldReadOnly" [class.mj-forms-field--dirty]="IsDirty" [class.mj-forms-field--time-travel]="ActiveVersionPreview !== null" [class.mj-forms-field--time-travel-diff]="HasTimeTravelDiff">
       @if (ShowLabel) {
-        <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
+        <div class="mj-forms-field-label-row">
+          <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
+          @if (HasTimeTravelDiff) {
+            <span class="mj-forms-time-travel-badge" title="This field's value at the previewed historical version differs from the current live record">
+              <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+              Changed
+            </span>
+          }
+        </div>
       }
       <div class="mj-forms-field-control">
         <!-- FK fields with a mapped or resolved name: show the name as a hyperlink -->
@@ -22,6 +30,8 @@
                 @if (RecordLinksEnabled) {
                   <a class="mj-forms-field-link mj-forms-field-link--fk mj-forms-field-link--poly"
                      (click)="OnRecordLinkClick($event)"
+                     (mouseenter)="OnFKLinkMouseEnter($event)"
+                     (mouseleave)="OnFKLinkMouseLeave()"
                      [title]="'Open ' + (EffectiveRelatedEntityName || 'related') + ' record: ' + (FKDisplayName || FormatValue())">
                     @if (EffectiveRelatedEntityIcon) {
                       <i [class]="EffectiveRelatedEntityIcon + ' mj-forms-poly-entity-icon'"></i>
@@ -38,7 +48,11 @@
               </span>
             } @else {
               @if (RecordLinksEnabled) {
-                <a class="mj-forms-field-link mj-forms-field-link--fk" (click)="OnRecordLinkClick($event)" title="View related record">
+                <a class="mj-forms-field-link mj-forms-field-link--fk"
+                   (click)="OnRecordLinkClick($event)"
+                   (mouseenter)="OnFKLinkMouseEnter($event)"
+                   (mouseleave)="OnFKLinkMouseLeave()"
+                   title="View related record">
                   {{ FKDisplayName }}
                 </a>
               } @else {
@@ -138,8 +152,38 @@
             }
           }
         }
+        @if (HasTimeTravelDiff) {
+          <div class="mj-forms-time-travel-bar" role="status">
+            <span class="mj-forms-time-travel-current" [title]="'Current live value: ' + FormattedCurrentLiveValue">
+              <i class="fa-solid fa-bolt" aria-hidden="true"></i>
+              <span>Current live: <strong>{{ FormattedCurrentLiveValue }}</strong></span>
+            </span>
+            <button
+              type="button"
+              class="mj-forms-time-travel-restore-btn"
+              (click)="OnRestoreSingleFieldFromPreview($event)"
+              title="Restore only this field to its value from this historical version">
+              <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+              <span>Restore this field</span>
+            </button>
+          </div>
+        }
       </div>
     </div>
+    @if (ShowFKHoverPreview) {
+      <mj-record-preview-popover
+        [Provider]="ProviderToUse"
+        [Visible]="ShowFKHoverPreview"
+        [EntityName]="EffectiveRelatedEntityName"
+        [RecordID]="FormatValue()"
+        [PrimaryKey]="FKHoverTargetKey"
+        [DisplayName]="FKDisplayName"
+        [AnchorRect]="FKHoverAnchorRect"
+        (Navigate)="OnPreviewCardNavigate($event)"
+        (MouseEnterCard)="OnPreviewCardMouseEnter()"
+        (MouseLeaveCard)="OnPreviewCardMouseLeave()">
+      </mj-record-preview-popover>
+    }
   }
 
   <!-- EDIT MODE -->

@@ -186,6 +186,7 @@
                     [class.expanded]="expandedItems.has(change.ID)"
                     [class.rc-card-restore]="isRestoreRow(change)"
                     [class.rc-card-highlight]="HighlightedChangeID === change.ID"
+                    [class.rc-card-previewing]="IsChangePreviewedInForm(change)"
                     [attr.tabindex]="0"
                     [attr.aria-expanded]="expandedItems.has(change.ID)"
                     [attr.aria-label]="getTimelineItemLabel(change)"
@@ -197,6 +198,13 @@
                         <span class="rc-card-type-badge"
                               [class.rc-card-type-badge-restore]="isRestoreRow(change)">{{ getEffectiveBadgeText(change) }}</span>
                         <span class="rc-card-summary">{{ getChangeSummary(change) }}</span>
+
+                        @if (IsChangePreviewedInForm(change)) {
+                          <span class="rc-previewing-chip" title="This version is currently rendered inside the form">
+                            <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                            Previewing in form
+                          </span>
+                        }
 
                         <!-- Lineage chip — visible when this row was produced by a restore -->
                         @if (isRestoreRow(change)) {
@@ -227,6 +235,17 @@
                         <span class="rc-card-time" [title]="formatFullDateTime(change.ChangedAt)">{{ formatTime(change.ChangedAt) }}</span>
                         <span class="rc-card-source" [class]="getSourceClass(change.Source)">{{ change.Source }}</span>
                         <span class="rc-card-status" [class]="getStatusClass(change.Status)">{{ change.Status }}</span>
+                        @if (change.Type !== 'Delete' && change.FullRecordJSON && !isMostRecentChange(change)) {
+                          <button
+                            type="button"
+                            class="rc-card-preview-btn"
+                            [class.rc-card-preview-btn--active]="IsChangePreviewedInForm(change)"
+                            (click)="OnToggleFormPreview(change, $event)"
+                            [title]="IsChangePreviewedInForm(change) ? 'Exit form time-travel preview' : 'Preview this historical version directly in the form'">
+                            <i class="fa-solid" [class.fa-eye]="!IsChangePreviewedInForm(change)" [class.fa-eye-slash]="IsChangePreviewedInForm(change)" aria-hidden="true"></i>
+                            <span>{{ IsChangePreviewedInForm(change) ? 'Previewing' : 'Preview in Form' }}</span>
+                          </button>
+                        }
                         <i class="fa-solid fa-chevron-down rc-card-chevron" aria-hidden="true"></i>
                       </div>
                     </div>
@@ -310,17 +329,32 @@
                           </div>
                         }
 
-                        <!-- Restore action: shown for Update, Create, and Snapshot rows.
+                        <!-- Restore & In-Form Preview actions: shown for Update, Create, and Snapshot rows.
                              Hidden on Delete rows (handled via the Recycle Bin path)
-                             and on the most recent change (restoring to current state is a no-op). -->
-                        @if (AllowRestore && change.Type !== 'Delete' && !isMostRecentChange(change)) {
+                             and on the most recent change (restoring/previewing current state is a no-op). -->
+                        @if (change.Type !== 'Delete' && !isMostRecentChange(change) && (AllowRestore || change.FullRecordJSON)) {
                           <div class="rc-restore-action">
-                            <button class="rc-restore-btn"
-                              (click)="OnRestoreVersion(change, $event)"
-                              title="Restore the entire record to its state at this version">
-                              <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
-                              Restore record to this version
-                            </button>
+                            @if (change.FullRecordJSON) {
+                              <button
+                                type="button"
+                                class="rc-preview-form-btn"
+                                [class.rc-preview-form-btn--active]="IsChangePreviewedInForm(change)"
+                                (click)="OnToggleFormPreview(change, $event)"
+                                title="Render this historical version's field values directly inside the form">
+                                <i class="fa-solid" [class.fa-eye]="!IsChangePreviewedInForm(change)" [class.fa-eye-slash]="IsChangePreviewedInForm(change)" aria-hidden="true"></i>
+                                {{ IsChangePreviewedInForm(change) ? 'Exit Form Preview' : 'Preview in Form' }}
+                              </button>
+                            }
+                            @if (AllowRestore) {
+                              <button
+                                type="button"
+                                class="rc-restore-btn"
+                                (click)="OnRestoreVersion(change, $event)"
+                                title="Restore the entire record to its state at this version">
+                                <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                                Restore record to this version
+                              </button>
+                            }
                           </div>
                         }
                       </div>
