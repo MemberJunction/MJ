@@ -26,7 +26,7 @@ import { BaseAgentType } from './agent-types/base-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID, IndexByUUID } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, UUIDSet, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID, IndexByUUID } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -2661,6 +2661,9 @@ export class BaseAgent {
             this.skipHeldDecisions(params, this.runEndForHeldDecisions());
             this.releasePerRunDataCache();
             await this.finalizeRun(this.deriveRunOutcome());
+            if (this._agentRun?.ID) {
+                AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            }
             // The run is over: a later direct ExecuteSingleAction resolves the scope and the audience from its own params.
             this.clearRunBoundState();
         }
@@ -17150,7 +17153,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Fall back to database-configured actions if _effectiveActions is empty (shouldn't happen in normal flow)
             const effectiveActions = this._effectiveActions.length > 0
                 ? this._effectiveActions
-                : actionEngine.Actions.filter(a =>
+                : (actionEngine.Actions || []).filter(a =>
                     agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID))
                   );
 
@@ -17178,8 +17181,16 @@ The context is now within limits. Please retry your request with the recovered c
             // Execute all actions in parallel
             let lastStep: MJAIAgentRunStepEntityExtended | undefined = undefined;
             const actionPromises = actions.map(async (aa) => {
-                // Find action entity from the effective actions (which includes runtime changes)
-                const actionEntity = effectiveActions.find(a => a.Name === aa.name);
+                // Find action entity from the effective actions (which includes runtime changes),
+                // or from actions referenced directly by this agent's Flow steps (AIAgentStep.ActionID)
+                let actionEntity = effectiveActions.find(a => a.Name === aa.name);
+                if (!actionEntity && Array.isArray(actionEngine?.Actions)) {
+                    const agentSteps = AIEngine.Instance.GetAgentSteps?.(params.agent.ID) || [];
+                    const stepActionIds = new UUIDSet(agentSteps.map(s => s.ActionID));
+                    actionEntity = actionEngine.Actions.find(
+                        a => a.Name === aa.name && stepActionIds.Has(a.ID)
+                    );
+                }
                 if (!actionEntity) {
                     throw new Error(`Action "${aa.name}" Not Found for Agent "${params.agent.Name}". Available actions: ${effectiveActions.map(a => a.Name).join(', ')}`);
                 }
@@ -19755,6 +19766,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
             await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
         }
 
         return {
@@ -19972,6 +19984,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
             const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
             }

@@ -70,6 +70,24 @@ export interface PersistSchemaOptions {
    * are preserved, and the CustomColumnPromoter reactivates them if the object reappears.
    */
   DeactivateAbsent?: boolean;
+  /**
+   * The OBJECT half of {@link DeactivateAbsent}, separately gateable. Defaults to `DeactivateAbsent`.
+   *
+   * A streaming discovery persists one object at a time and then the complete set of object NAMES,
+   * and the two retirements belong to opposite moments: per object, the object's own field list is
+   * complete but every OTHER object looks absent, so objects must not retire there; in the final
+   * name pass the whole name set is known, so absent objects may retire. Still gated on an
+   * authoritative source, exactly as `DeactivateAbsent` is.
+   */
+  DeactivateAbsentObjects?: boolean;
+  /**
+   * The FIELD half of {@link DeactivateAbsent}, separately gateable. Defaults to `DeactivateAbsent`.
+   *
+   * Per object the field list is complete, so absent fields may retire there; the final name pass
+   * carries name stubs with no fields, so retiring fields there would disable every column of
+   * every object. Still gated on an authoritative source, exactly as `DeactivateAbsent` is.
+   */
+  DeactivateAbsentFields?: boolean;
 }
 
 /** Per-field provenance recording which source decided each attribute during the merge. */
@@ -381,6 +399,91 @@ export interface ObjectMergeLog {
   Created: boolean;
   /** Whether any attribute changed from prior value. */
   Updated: boolean;
+  /**
+   * MJ-RUN-37 — WHICH attributes the overlay rewrote on an existing row, by IntegrationObject
+   * column name (`'Description'`, `'DisplayName'`, `'IncrementalWatermarkField'`,
+   * `'Status:reactivated'`). Empty for a created row and for an unchanged one.
+   *
+   * `Updated` alone says only THAT something moved. The schema evolution has to know WHAT, because
+   * some overlay changes invalidate state that lives outside this table — a watermark-field swap
+   * changes the meaning of every stored Pull cursor without adding a column, so a DDL diff cannot
+   * see it. UpsertObject already computed this list to log it; it is returned so the evolution can
+   * act on it rather than re-derive it from a diff that structurally cannot contain it.
+   */
+  ChangedAttributes: string[];
+}
+
+/**
+ * MJ-RUN-37 — the overlay attributes whose change makes an object's stored Pull watermark
+ * MEANINGLESS rather than merely stale.
+ *
+ * `IncrementalWatermarkField` names the source column the incremental filter is built from. Swap it
+ * and the stored cursor value — captured from the OLD column — is applied as a lower bound on the
+ * NEW one. Where the new column sorts later, every row below that value is filtered out at the
+ * source and never fetched again. Nothing reports it: the run's fetch-integrity check compares what
+ * arrived against what the source said matched the filter it was given, and those agree exactly.
+ * The result is silent, permanent absence with no artifact to find it in.
+ */
+export const WATERMARK_INVALIDATING_ATTRIBUTES: readonly string[] = ['IncrementalWatermarkField'];
+
+/**
+ * Names of the objects whose persist-time overlay invalidated their Pull watermark.
+ *
+ * Pure, so the decision that matters — persist DETECTED it, evolution must ACT on it, and on
+ * nothing else — is pinnable without a database.
+ *
+ * Two exclusions, both guarding against OVER-firing. Resetting a watermark costs a full re-fetch of
+ * the object, so a rule that fires when nothing relevant changed quietly turns every refresh into a
+ * fleet-wide full sync:
+ *
+ *  - a CREATED row is never a change. A brand-new object has no watermark to invalidate.
+ *  - `restrictTo`, when given, limits the answer to that set (the evolution passes its CONTINUING
+ *    entity maps). An object with no continuing map has no Pull watermark this run can reset, so
+ *    reporting it would inflate the change set — and `HasChanges` — with a name nothing acts on.
+ *    Matched case-insensitively, as every catalog-to-map reconciliation in this codebase is.
+ *    Returned names keep the CATALOG's casing, which is what the source object is called.
+ */
+export function ObjectsWithWatermarkFieldChange(log: readonly ObjectMergeLog[], restrictTo?: readonly string[]): string[] {
+  const allowed = restrictTo === undefined ? undefined : new Set(restrictTo.map((n) => n.toLowerCase()));
+  const out: string[] = [];
+  for (const entry of log) {
+    if (entry.Created) continue;
+    const changed = entry.ChangedAttributes ?? [];
+    if (!changed.some((a) => WATERMARK_INVALIDATING_ATTRIBUTES.includes(a))) continue;
+    if (allowed && !allowed.has(entry.ObjectName.toLowerCase())) continue;
+    out.push(entry.ObjectName);
+  }
+  return out;
+}
+
+/**
+ * The IntegrationObject columns an object upsert changed, as {@link ObjectMergeLog.ChangedAttributes}
+ * reports them: the columns rebased from the declaration plus the overlay's own entries.
+ *
+ * The watermark counts only on its NET change. On a per-connection row the rebase can move
+ * `IncrementalWatermarkField` to the declared value and the overlay can move it straight back to
+ * what discovery reports, so the step list says nothing reliable about whether it changed. Getting
+ * this wrong either way is costly: a declaration that moves it must reset the stored Pull cursor
+ * (see {@link ObjectsWithWatermarkFieldChange}), and a rebase the overlay undoes must not, or every
+ * refresh would re-fetch the object in full.
+ *
+ * Pure, so that rule is pinnable without a database.
+ *
+ * @param rebased Columns `RebaseFromDeclared` moved.
+ * @param overlay The upsert's own change log; its `rebased:` summary entry is ignored.
+ * @param watermarkBefore `IncrementalWatermarkField` before the rebase.
+ * @param watermarkAfter `IncrementalWatermarkField` after the overlay.
+ */
+export function ObjectChangedAttributes(
+  rebased: readonly string[],
+  overlay: readonly string[],
+  watermarkBefore: string | null,
+  watermarkAfter: string | null,
+): string[] {
+  const out = [...new Set([...rebased, ...overlay.filter((c) => !c.startsWith('rebased:'))])]
+    .filter((c) => c !== 'IncrementalWatermarkField');
+  if (watermarkAfter !== watermarkBefore) out.push('IncrementalWatermarkField');
+  return out;
 }
 
 export interface PersistSchemaResult {
@@ -607,6 +710,7 @@ export class IntegrationSchemaSync {
         EffectiveSource: r.EffectiveSource,
         Created: r.Created,
         Updated: r.Updated,
+        ChangedAttributes: r.ChangedAttributes,
       });
     }
 
@@ -700,7 +804,17 @@ export class IntegrationSchemaSync {
     // enumerated the FULL gamut the credentials expose (SourceSchema.IsAuthoritative). A stubbed/empty or
     // cache-driven discovery has IsAuthoritative=false, so absence proves NOTHING and nothing is disabled
     // (else it would wrongly wipe the Declared metadata that is the only source). Deactivate, never delete.
-    if (opts.DeactivateAbsent && SourceSchema.IsAuthoritative) {
+    //
+    // Object-level and field-level retirement are separately gateable (DeactivateAbsentObjects /
+    // DeactivateAbsentFields), because a STREAMING discovery needs them at different moments with
+    // opposite scopes: a per-object persist holds that object's FULL field list but sees only one
+    // object, and the final name pass sees every object but no fields. Both default to
+    // DeactivateAbsent, so every caller that sets neither behaves exactly as before. The PURE decider
+    // still decides both from one flag — its tests stay the cheapest correctness evidence here — and
+    // its OUTPUT is filtered instead of forking its logic.
+    const retireObjects = opts.DeactivateAbsentObjects ?? opts.DeactivateAbsent ?? false;
+    const retireFields = opts.DeactivateAbsentFields ?? opts.DeactivateAbsent ?? false;
+    if ((retireObjects || retireFields) && SourceSchema.IsAuthoritative) {
       // Gather the active set + per-discovered-object fields, then let the PURE decision
       // (decideAbsentDeactivations — unit-tested) choose what to Disable. The EFFECT (load + Save) is
       // applied here; the CHOICE lives in the pure function so it is testable without mocking the engine.
@@ -740,7 +854,7 @@ export class IntegrationSchemaSync {
       });
       let deactivated = 0;
       let removed = 0;
-      for (const id of decision.ObjectIDsToDeactivate) {
+      for (const id of retireObjects ? decision.ObjectIDsToDeactivate : []) {
         const obj = await writer.LoadObject(id);
         if (obj) {
           // The WRITER decides disable-vs-delete: shared rows are the declared floor other
@@ -761,7 +875,7 @@ export class IntegrationSchemaSync {
       // answer for the SHARED catalog only, so on a per-connection run it would silently miss and the
       // log line would carry a bare id.
       const objectNameByID = new Map(existingObjects.map((o) => [NormalizeUUID(o.ID), o.Name]));
-      for (const id of decision.FieldIDsToDeactivate) {
+      for (const id of retireFields ? decision.FieldIDsToDeactivate : []) {
         const f = await writer.LoadField(id);
         if (f) {
           const owner0 = f.IntegrationObjectID;
@@ -825,7 +939,14 @@ export class IntegrationSchemaSync {
     declaredObject: MJIntegrationObjectEntity | null,
     /** Whether the connector claims its object enumeration is complete. Decides provenance. */
     discoveryIsAuthoritative: boolean,
-  ): Promise<{ ObjectID: string | null; Created: boolean; Updated: boolean; EffectiveSource: 'Declared' | 'Discovered' | 'Custom' }> {
+  ): Promise<{
+    ObjectID: string | null;
+    Created: boolean;
+    Updated: boolean;
+    EffectiveSource: 'Declared' | 'Discovered' | 'Custom';
+    /** Overlay attributes rewritten on an EXISTING row — see {@link ObjectMergeLog.ChangedAttributes}. */
+    ChangedAttributes: string[];
+  }> {
     let existing = existingObjects.find((o) => o.Name.toLowerCase() === srcObj.ExternalName.toLowerCase());
     // MJ-CAT-17. A per-connection catalog starts EMPTY, so on a connection's first discovery every
     // declared object is "new" here even though the connector declared it. Creating it from the
@@ -847,6 +968,11 @@ export class IntegrationSchemaSync {
     }
 
     if (existing) {
+      // The watermark column as it stood before this run touched the row. The rebase below can move
+      // it to the declared value and the overlay can move it straight back, so the step list in
+      // `changes` says nothing reliable about whether it CHANGED. ChangedAttributes reports it on its
+      // net change only (see the return below).
+      const watermarkBefore = existing.IncrementalWatermarkField ?? null;
       // Declared row exists. Overlay rule (external-wins-when-present): when the
       // EXTERNAL system returns a value for an attribute, that value overrides the curated
       // metadata; when the external system is SILENT on it, the curated value sticks. This is
@@ -925,7 +1051,12 @@ export class IntegrationSchemaSync {
             fieldsTouched: changes,
           }),
         );
-        return { ObjectID: existing.ID, Created: seeded, Updated: !seeded, EffectiveSource: 'Declared' };
+        // A row seeded from its declaration this run is CREATED, and a created row is never a change,
+        // so it reports none. Otherwise see ObjectChangedAttributes for why the watermark is netted.
+        const changedAttributes = seeded
+          ? []
+          : ObjectChangedAttributes(rebased, changes, watermarkBefore, existing.IncrementalWatermarkField ?? null);
+        return { ObjectID: existing.ID, Created: seeded, Updated: !seeded, EffectiveSource: 'Declared', ChangedAttributes: changedAttributes };
       }
       console.log(
         JSON.stringify({
@@ -937,7 +1068,7 @@ export class IntegrationSchemaSync {
           reason: 'no-overlay-deltas',
         }),
       );
-      return { ObjectID: existing.ID, Created: false, Updated: false, EffectiveSource: 'Declared' };
+      return { ObjectID: existing.ID, Created: false, Updated: false, EffectiveSource: 'Declared', ChangedAttributes: [] };
     }
 
     // New row — mark as 'Discovered' by default. Vendor-signaled custom objects
@@ -980,7 +1111,7 @@ export class IntegrationSchemaSync {
             metadataSource: 'Discovered',
           }),
         );
-        return { ObjectID: obj.ID, Created: true, Updated: false, EffectiveSource: 'Discovered' };
+        return { ObjectID: obj.ID, Created: true, Updated: false, EffectiveSource: 'Discovered', ChangedAttributes: [] };
       }
       // Save() returned false (validation/constraint failure) WITHOUT throwing — SURFACE it.
       // A silent false here is exactly how discovered objects vanished with zero signal.
@@ -990,7 +1121,7 @@ export class IntegrationSchemaSync {
     } catch (err) {
       console.warn(`[IntegrationSchemaSync] Failed to create IntegrationObject '${srcObj.ExternalName}': ${err instanceof Error ? err.message : err}`);
     }
-    return { ObjectID: null, Created: false, Updated: false, EffectiveSource: 'Discovered' };
+    return { ObjectID: null, Created: false, Updated: false, EffectiveSource: 'Discovered', ChangedAttributes: [] };
   }
 
   // ── Field upsert ─────────────────────────────────────────────────
