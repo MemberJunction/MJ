@@ -7211,6 +7211,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             code: string;
             entityName: string;
             entityID: string;
+            /** The item's entity, used to project rows for the caller. */
+            itemEntity: EntityInfo | undefined;
             scope: DatasetItemScope;
             rowFilterKey: string | undefined;
             fingerprint: string;
@@ -7278,6 +7280,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 code,
                 entityName,
                 entityID,
+                itemEntity,
                 scope,
                 rowFilterKey,
                 fingerprint,
@@ -7334,7 +7337,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
 
         for (const prepared of preparedItems) {
-            const { item, entitySchemaName, entityBaseView, code, entityName, entityID, scope, fingerprint } = prepared;
+            const { item, entitySchemaName, entityBaseView, code, entityName, entityID, itemEntity, scope, fingerprint } = prepared;
             let cached = prepared.cached;
 
             if (cached) {
