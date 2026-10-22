@@ -28,6 +28,9 @@ export class GateSelection {
     if (gate.Requires.includes('live-model') && !IsTierEnabled('live-model', env)) {
       return 'requires live-model: RUN_AGENT_TESTS is set to 0 (enable live-model tier with model keys configured)';
     }
+    if (gate.Requires.includes('live-model') && !env.AI_VENDOR_API_KEY__GeminiLLM) {
+      return 'requires live-model: AI_VENDOR_API_KEY__GeminiLLM is not set (the story generator runs on GeminiLLM, D2-33)';
+    }
     if (gate.Requires.includes('sidecar-16gb') && env.TRUTH_ALLOW_HIGH_MEMORY !== '1') {
       return 'requires sidecar-16gb: W8 training needs more memory than the runner has (set TRUTH_ALLOW_HIGH_MEMORY=1 on a larger host)';
     }

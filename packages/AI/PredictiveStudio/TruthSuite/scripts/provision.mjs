@@ -10,7 +10,7 @@ import sql from 'mssql';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const mjRoot = path.resolve(root, '..', '..', '..', '..');
 const mjCli = path.join(mjRoot, 'packages', 'MJCLI', 'bin', 'run.js');
-const dbCfg = LoadDbConfig();
+const dbCfg = await LoadDbConfig();
 
 function run(cmd, args, cwd, extraEnv = {}) {
   const res = spawnSync(cmd, args, {
@@ -41,14 +41,14 @@ function findNewestCodeGenSql(dir) {
 
 async function openPool() {
   return sql.connect({
-    server: dbCfg.host,
-    port: dbCfg.port,
-    user: dbCfg.user,
-    password: dbCfg.password,
-    database: dbCfg.database,
-    options: {
-      trustServerCertificate: dbCfg.trustServerCertificate,
-    },
+    server: dbCfg.Host,
+    port: dbCfg.Port,
+    user: dbCfg.User,
+    password: dbCfg.Password,
+    database: dbCfg.Database,
+    requestTimeout: 120_000,
+    // Same options as the integration framework's own pool (testing-integration bootstrap.ts).
+    options: { encrypt: false, trustServerCertificate: true },
   });
 }
 
@@ -71,7 +71,7 @@ if (process.argv.includes('--codegen')) {
   process.exit(0);
 }
 
-const dbName = dbCfg.database || process.env.DB_DATABASE || '';
+const dbName = dbCfg.Database;
 if (!/^MJ_PS_PR\d+_|^test$/.test(dbName) && process.env.TRUTH_ALLOW_PROVISION_DB !== '1') {
   console.error(
     `Refusing to run truth:provision against DB_DATABASE='${dbName}': only MJ_PS_PR<n>_<agent> or the CI 'test' database (set TRUTH_ALLOW_PROVISION_DB=1 to override).`,

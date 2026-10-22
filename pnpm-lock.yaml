@@ -1521,40 +1521,40 @@ importers:
   packages/AI/PredictiveStudio/TruthSuite:
     dependencies:
       '@memberjunction/ai-agents':
-        specifier: 6.2.0-edge.4
+        specifier: 6.2.0-edge.5
         version: link:../../Agents
       '@memberjunction/aiengine':
-        specifier: 6.2.0-edge.4
+        specifier: 6.2.0-edge.5
         version: link:../../Engine
       '@memberjunction/core':
-        specifier: 6.2.0-edge.4
+        specifier: 6.2.0-edge.5
         version: link:../../../MJCore
       '@memberjunction/core-entities':
-        specifier: 6.2.0-edge.4
+        specifier: 6.2.0-edge.5
         version: link:../../../MJCoreEntities
       '@memberjunction/global':
-        specifier: 6.2.0-edge.4
+        specifier: 6.2.0-edge.5
         version: link:../../../MJGlobal
       '@memberjunction/graphql-dataprovider':
-        specifier: 6.2.0-edge.4
+        specifier: 6.2.0-edge.5
         version: link:../../../GraphQLDataProvider
       '@memberjunction/predictive-studio':
-        specifier: 6.2.0-edge.4
+        specifier: 6.2.0-edge.5
         version: link:../Engine
       '@memberjunction/predictive-studio-core':
-        specifier: 6.2.0-edge.4
+        specifier: 6.2.0-edge.5
         version: link:../Core
       '@memberjunction/predictive-studio-sidecar':
-        specifier: 6.2.0-edge.4
+        specifier: 6.2.0-edge.5
         version: link:../Sidecar
       '@memberjunction/server-bootstrap-lite':
-        specifier: 6.2.0-edge.4
+        specifier: 6.2.0-edge.5
         version: link:../../../ServerBootstrapLite
       '@memberjunction/testing-engine-base':
-        specifier: 6.2.0-edge.4
+        specifier: 6.2.0-edge.5
         version: link:../../../TestingFramework/EngineBase
       '@memberjunction/testing-integration':
-        specifier: 6.2.0-edge.4
+        specifier: 6.2.0-edge.5
         version: link:../../../TestingFramework/testing-integration
       mssql:
         specifier: ^12.2.0

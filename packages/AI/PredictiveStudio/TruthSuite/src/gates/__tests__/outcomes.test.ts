@@ -32,8 +32,10 @@ describe('gate outcomes', () => {
     expect(GateSelection.MissingRequirement(g, { RUN_AGENT_TESTS: '0' })).toBe(
       'requires live-model: RUN_AGENT_TESTS is set to 0 (enable live-model tier with model keys configured)',
     );
-    expect(GateSelection.MissingRequirement(g, {})).toBeNull();
-    expect(GateSelection.MissingRequirement(g, { RUN_AGENT_TESTS: '1' })).toBeNull();
+    expect(GateSelection.MissingRequirement(g, {})).toMatch(/AI_VENDOR_API_KEY__GeminiLLM is not set/);
+    const keyed = { AI_VENDOR_API_KEY__GeminiLLM: 'k' };
+    expect(GateSelection.MissingRequirement(g, keyed)).toBeNull();
+    expect(GateSelection.MissingRequirement(g, { ...keyed, RUN_AGENT_TESTS: '1' })).toBeNull();
     const w8: Pick<GateEntry, 'RunMode' | 'Requires'> = { RunMode: 'weekly', Requires: ['sidecar-16gb'] };
     expect(GateSelection.MissingRequirement(w8, {})).toMatch(/^requires sidecar-16gb:/);
     expect(GateSelection.MissingRequirement(w8, { TRUTH_ALLOW_HIGH_MEMORY: '1' })).toBeNull();

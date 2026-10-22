@@ -89,10 +89,7 @@ export class HarnessScoring {
       { recordProcessID: recordProcessId },
       { provider: ctx.Provider, user: ctx.User },
     );
-    if (!rn.Success) {
-      throw new Error(`RecordProcess.RunNow for ${recordProcessId} failed: ${rn.ErrorMessage || 'RunNow returned Success=false'}`);
-    }
-
+    // A RunNow that drops at the transport (Success=false, no processRunID) leaves the run going server-side, so poll for it.
     let processRunId: string | null = null;
     let status: MJProcessRunEntity['Status'] = 'Failed';
     if (rn.Output && rn.Output.processRunID) {

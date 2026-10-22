@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/predictive-studio-truth-suite",
-  "version": "6.2.0-edge.4",
+  "version": "6.2.0-edge.5",
   "private": true,
   "type": "module",
   "license": "BUSL-1.1",
@@ -28,18 +28,18 @@
     "test:python": "node scripts/run-pytest.mjs"
   },
   "dependencies": {
-    "@memberjunction/ai-agents": "6.2.0-edge.4",
-    "@memberjunction/aiengine": "6.2.0-edge.4",
-    "@memberjunction/core": "6.2.0-edge.4",
-    "@memberjunction/core-entities": "6.2.0-edge.4",
-    "@memberjunction/global": "6.2.0-edge.4",
-    "@memberjunction/graphql-dataprovider": "6.2.0-edge.4",
-    "@memberjunction/predictive-studio": "6.2.0-edge.4",
-    "@memberjunction/predictive-studio-core": "6.2.0-edge.4",
-    "@memberjunction/predictive-studio-sidecar": "6.2.0-edge.4",
-    "@memberjunction/server-bootstrap-lite": "6.2.0-edge.4",
-    "@memberjunction/testing-engine-base": "6.2.0-edge.4",
-    "@memberjunction/testing-integration": "6.2.0-edge.4",
+    "@memberjunction/ai-agents": "6.2.0-edge.5",
+    "@memberjunction/aiengine": "6.2.0-edge.5",
+    "@memberjunction/core": "6.2.0-edge.5",
+    "@memberjunction/core-entities": "6.2.0-edge.5",
+    "@memberjunction/global": "6.2.0-edge.5",
+    "@memberjunction/graphql-dataprovider": "6.2.0-edge.5",
+    "@memberjunction/predictive-studio": "6.2.0-edge.5",
+    "@memberjunction/predictive-studio-core": "6.2.0-edge.5",
+    "@memberjunction/predictive-studio-sidecar": "6.2.0-edge.5",
+    "@memberjunction/server-bootstrap-lite": "6.2.0-edge.5",
+    "@memberjunction/testing-engine-base": "6.2.0-edge.5",
+    "@memberjunction/testing-integration": "6.2.0-edge.5",
     "mssql": "^12.2.0"
   },
   "devDependencies": {
