@@ -140,10 +140,6 @@ export class PGConnectionManager {
             // DSQL refuses connections that send these startup parameters.
             ...(dsql ? { maxLifetimeSeconds: AURORA_DSQL_MAX_LIFETIME_SECONDS } : PGConnectionManager.serverTimeouts(config)),
         });
-        // An idle connection the server drops is emitted on the pool; without a listener Node exits.
-        this._pool.on('error', (err) => {
-            console.error('[PGConnectionManager] Idle connection error (connection evicted):', err.message);
-        });
 
         // An idle connection the server drops is emitted on the pool; without a listener Node exits.
         this._pool.on('error', (err) => {
