@@ -3894,7 +3894,8 @@ export abstract class BaseEntity<T = unknown> {
         return this._transactionGroup;
     }
 
-    set TransactionGroup(group: TransactionGroupBase) {
+    /** Set `null` to detach the entity from a group, e.g. once the group has been submitted. */
+    set TransactionGroup(group: TransactionGroupBase | null) {
         this._transactionGroup = group;
     }
 

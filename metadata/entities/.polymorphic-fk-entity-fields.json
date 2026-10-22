@@ -1,0 +1,1084 @@
+[
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Access Control Rules: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Access Control Rules"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Access Control Rules&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Access Control Rules"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Action Execution Logs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Action Execution Logs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "TargetEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Action Execution Logs&Name=TargetRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Action Execution Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: AI Agent Examples: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Examples"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "PrimaryScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Examples&Name=PrimaryScopeRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Examples"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: AI Agent Notes: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Notes"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "PrimaryScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Notes&Name=PrimaryScopeRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Notes"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: AI Agent Runs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Runs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "PrimaryScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Runs&Name=PrimaryScopeRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Runs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: AI Agent Sessions: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Sessions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "LinkedEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=LinkedRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Sessions"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Archive Run Details: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Archive Run Details"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Archive Run Details&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Archive Run Details"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Audit Logs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Audit Logs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Audit Logs&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Audit Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Company Integration Record Maps: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Company Integration Record Maps"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Company Integration Record Maps&Name=EntityRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Company Integration Record Maps"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Company Integration Run Details: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Company Integration Run Details"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Company Integration Run Details&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Company Integration Run Details"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Conversations: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Conversations"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "LinkedEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Conversations&Name=LinkedRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Conversations"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Data Context Items: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Data Context Items"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Data Context Items&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Data Context Items"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Entity Actions: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Entity Actions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "ScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Actions&Name=ScopeRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Actions"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Entity Record Documents: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Entity Record Documents"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Record Documents&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Record Documents"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Feature Values: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Feature Values"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Feature Values&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Feature Values"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: File Entity Record Links: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: File Entity Record Links"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: File Entity Record Links&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: File Entity Record Links"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Generated Codes: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Generated Codes"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "LinkedEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Generated Codes&Name=LinkedRecordPrimaryKey"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Generated Codes"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Identity Claims: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Identity Claims"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Identity Claims&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Identity Claims"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Interaction Links: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Interaction Links"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Interaction Links&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Interaction Links"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Process Run Details: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Process Run Details"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Process Run Details&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Process Run Details"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Recommendation Items: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Recommendation Items"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "DestinationEntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Recommendation Items&Name=DestinationEntityRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Recommendation Items"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Recommendations: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Recommendations"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "SourceEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Recommendations&Name=SourceEntityRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Recommendations"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Record Changes: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Record Changes"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Changes&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Changes"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Record Clone Log Items: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Record Clone Log Items"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Clone Log Items&Name=SourceRecordID"
+          }
+        },
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Clone Log Items&Name=TargetRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Clone Log Items"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Record Clone Logs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Record Clone Logs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "RootEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Clone Logs&Name=RootSourceRecordID"
+          }
+        },
+        {
+          "fields": {
+            "EntityIDFieldName": "RootEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Clone Logs&Name=RootTargetRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Clone Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Record Geo Codes: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Record Geo Codes"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Geo Codes&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Geo Codes"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Record Links: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Record Links"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "SourceEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Links&Name=SourceRecordID"
+          }
+        },
+        {
+          "fields": {
+            "EntityIDFieldName": "TargetEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Links&Name=TargetRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Links"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Record Merge Logs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Record Merge Logs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Merge Logs&Name=SurvivingRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Merge Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Record Process Watermarks: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Record Process Watermarks"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Process Watermarks&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Process Watermarks"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Rubric Evaluations: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Rubric Evaluations"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "SubjectEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Evaluations&Name=SubjectRecordID"
+          }
+        },
+        {
+          "fields": {
+            "EntityIDFieldName": "ContextEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Evaluations&Name=ContextRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Rubric Evaluations"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Scoped Notification Configs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Scoped Notification Configs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "PrimaryScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Scoped Notification Configs&Name=PrimaryScopeRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Scoped Notification Configs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Scoped Prompt Configs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Scoped Prompt Configs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "PrimaryScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Scoped Prompt Configs&Name=PrimaryScopeRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Scoped Prompt Configs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Scoped Prompt Parts: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Scoped Prompt Parts"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "PrimaryScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Scoped Prompt Parts&Name=PrimaryScopeRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Scoped Prompt Parts"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Signature Requests: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Signature Requests"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Signature Requests&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Signature Requests"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Tag Scopes: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Tag Scopes"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "ScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tag Scopes&Name=ScopeRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tag Scopes"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Tagged Items: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Tagged Items"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tagged Items&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tagged Items"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Template Params: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Template Params"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Template Params&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Template Params"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: User Favorites: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: User Favorites"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User Favorites&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User Favorites"
+    }
+  },
+  {
+    "_comments": [
+      "Prevent RecordID/MatchRecordID/DeletedRecordID columns from being treated as IsNameField."
+    ],
+    "fields": {
+      "Name": "MJ: Duplicate Run Detail Matches"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Duplicate Run Detail Matches&Name=MatchRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Duplicate Run Detail Matches"
+    }
+  },
+  {
+    "_comments": [
+      "Prevent DeletedRecordID column from being treated as IsNameField."
+    ],
+    "fields": {
+      "Name": "MJ: Record Merge Deletion Logs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Merge Deletion Logs&Name=DeletedRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Merge Deletion Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Prevent RecordID column from being treated as IsNameField."
+    ],
+    "fields": {
+      "Name": "MJ: User View Run Details"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User View Run Details&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User View Run Details"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: User Record Logs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: User Record Logs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User Record Logs&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User Record Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Users: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Users"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "LinkedEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=LinkedEntityRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Users"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Version Label Items: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Version Label Items"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Version Label Items&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Version Label Items"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Version Labels: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Version Labels"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Version Labels&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Version Labels"
+    }
+  }
+]

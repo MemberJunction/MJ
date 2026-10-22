@@ -115,6 +115,8 @@ The host renders the complete experience: header (title, saved chip, ownership l
 
 What the roster does **not** do: it is not a content policy. It does not restrict what already exists on the board or what an agent places, and it does not gate authoring on existing items — Duplicate, z-order, Delete and pasting an image all keep working regardless of the roster. The one exception is **Restyle…**, which is hidden when the roster omits `text`: Restyle opens the text tool's style flyout, so without that tool the entry would be present and do nothing. That is the other axis: `[ReadOnly]="true"` renders the board with no toolbar and no keyboard, guards every mutation, and hides the agent toast's Undo — pan and zoom stay live, because reading a board you cannot change still means moving around it. The roster narrows *which tools*; ReadOnly decides *whether anything mutates*.
 
+**Setting the pen palette.** The default five pen colors (`WHITEBOARD_PEN_COLORS`) are tuned for MJ's dark canvas and open with a pale slate that is close to invisible on a light host theme. Pass `[PenPalette]="['#1d4ed8', '#b91c1c', '#15803d']"` to replace them; `null` (the default) keeps MJ's five. The palette is an input rather than CSS custom properties on purpose: ink and text items persist the chosen hex, so a `var()` palette would make a saved board theme-dependent. When a palette arrives that excludes the current pen color, the pen moves to the palette's first entry, so the selected swatch is always one the user can see; a color that is still in the new palette is kept, compared case-insensitively. Entries must be `#rgb` or `#rrggbb` (`IsWhiteboardHexColor`, the same rule the agent tools apply to a text color): blank, non-string and non-hex entries are dropped, and a palette with nothing usable reads as `null`. Named colors, `rgb()` and `url()` are rejected on purpose, since a swatch paints its entry straight into `style.background`, which Angular does not sanitize. Violet stays off the user palette either way: it is the agent's ownership hue.
+
 **Hiding the Focus toggle.** The header's "Move to stage" / "Back to tab" button only emits `FocusModeChange`; it is MJ's realtime overlay that collapses the call column in response. A host that composes the board into its own chrome (a lesson's content seat, a full-surface room) has nothing to collapse, so pass `[ShowFocusToggle]="false"` and the button is not rendered. `SetOnStage` and `FocusMode` keep working with it hidden, and the rest of the header is unchanged.
 
 The zoom cluster supports **hold-to-zoom**: a plain click on + / − steps through the usual presets, while holding the button down zooms continuously in small smooth increments (~3.5% every 50 ms) until release — same 25%–200% clamp.
@@ -132,6 +134,7 @@ import { RealtimeWhiteboardHostComponent, WhiteboardState } from '@memberjunctio
       [AgentName]="'Sage'"
       [BoardTitle]="'Planning board'"
       [ToolRoster]="['select', 'pan', 'pen', 'sticky', 'text', 'eraser']"
+      [PenPalette]="['#1d4ed8', '#b91c1c', '#15803d']"
       [ReadOnly]="false"
       (SceneDelta)="onSceneDelta($event)"
       (WidgetSubmitted)="onWidgetInput($event)"

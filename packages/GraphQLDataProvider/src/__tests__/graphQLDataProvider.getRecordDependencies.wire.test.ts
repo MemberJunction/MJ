@@ -37,6 +37,7 @@ describe('GraphQLDataProvider GetRecordDependencies wire behavior', () => {
         expect(result).toEqual([]);
         const req = GraphQLWire.LastRequest;
         expect(req.document).toContain('PrimaryKey');
+        expect(req.document).toContain('FieldDisplayName');
         expect(req.document).toContain('IsSoftLink');
         expect(req.document).toContain('EntityIDFieldName');
         expect(req.document).not.toContain('CompositeKey {');
@@ -117,5 +118,47 @@ describe('GraphQLDataProvider GetRecordDependencies wire behavior', () => {
         const deps = await provider.GetRecordDependencies('Customers', key);
 
         expect(deps).toEqual([]);
+    });
+
+    it('sends RecordDependencyOptionsInput when options are provided and maps FieldDisplayName', async () => {
+        GraphQLWire.EnqueueResponse({
+            GetRecordDependencies: [
+                {
+                    EntityName: 'Customers',
+                    RelatedEntityName: 'MJ: Task Links',
+                    FieldName: 'RecordID',
+                    FieldDisplayName: 'Linked Record',
+                    PrimaryKey: {
+                        KeyValuePairs: [{ FieldName: 'ID', Value: 'TL-100' }],
+                    },
+                    IsSoftLink: true,
+                    EntityIDFieldName: 'EntityID',
+                },
+            ],
+        });
+
+        const key = new CompositeKey([new KeyValuePair('ID', 'CUST-001')]);
+        const options = {
+            LinkType: 'soft' as const,
+            IncludeSystemEntities: false,
+            EntityNames: ['MJ: Task Links'],
+        };
+        const deps = await provider.GetRecordDependencies('Customers', key, undefined, options);
+
+        const req = GraphQLWire.LastRequest;
+        expect(req.document).toContain('$options: RecordDependencyOptionsInput');
+        expect(req.document).toContain('options: $options');
+        expect(req.variables).toEqual({
+            entityName: 'Customers',
+            CompositeKey: {
+                KeyValuePairs: [{ FieldName: 'ID', Value: 'CUST-001' }],
+            },
+            options,
+        });
+
+        expect(deps).toHaveLength(1);
+        expect(deps[0].FieldDisplayName).toBe('Linked Record');
+        expect(deps[0].IsSoftLink).toBe(true);
+        expect(deps[0].EntityIDFieldName).toBe('EntityID');
     });
 });

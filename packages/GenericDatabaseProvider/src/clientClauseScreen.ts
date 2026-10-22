@@ -203,6 +203,40 @@ export class ClientClauseScreen {
     }
 
     /**
+     * Screens a full client-supplied SQL statement (ad-hoc query path) so every table reference
+     * resolves to an entity BaseView that `user` can read unscoped (CanRead, no row-level filter,
+     * no denied fields), with in-scope CTE references permitted.
+     */
+    public static AssertFullStatementUsesReadableEntityViews(
+        sqlText: string,
+        entities: readonly EntityInfo[],
+        dialect: SQLParserDialect,
+        user: UserInfo | undefined,
+        label = 'SQL',
+    ): void {
+        if (!user) {
+            throw new Error(`Invalid ${label}: no acting user resolved for ad-hoc SQL — refusing`);
+        }
+        ClientClauseScreen.AssertNoIdentifierAliasNames(sqlText, dialect, label);
+        ClientClauseScreen.AssertNoForbiddenFunctionCalls(sqlText, dialect, label);
+        const parser = new SQLParser(sqlText, dialect);
+        if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
+            throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);
+        }
+        if (ClientClauseScreen.AstContainsWriteNode(parser.AST)) {
+            throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
+        }
+        const reads = ClientClauseScreen.CollectStatementReads(parser);
+        ClientClauseScreen.AssertEverySelectAccountedFor(sqlText, dialect, reads, label);
+        const allowed = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
+        for (const relation of reads.Relations) {
+            if (relation.IsCTEReference) continue;
+            const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
+            if (entity) ClientClauseScreen.AssertUnscopedRead(entity, user, label);
+        }
+    }
+
+    /**
      * Applies {@link AssertClauseUsesEntityBaseViews} to every clause of a RunView request. A
      * platform-specific clause has every variant screened, each under its own platform's dialect.
      */
