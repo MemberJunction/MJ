@@ -833,7 +833,8 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       const user = p.CurrentUser ?? undefined;
       const list = await p.GetEntityObject<MJListEntity>('MJ: Lists', user);
       // Minute-resolution timestamp so two sends on the same day don't produce identical-named lists.
-      list.Name = `At-Risk: ${this.Selected.title} (${new Date().toISOString().slice(0, 16).replace('T', ' ')})`;
+      const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+      list.Name = AtRiskRules.FormatAtRiskListName(this.Selected.title, stamp);
       list.EntityID = entityId;
       if (user?.ID) list.UserID = user.ID;
       list.RefreshMode = 'Additive';

@@ -6,6 +6,7 @@ import {
   PredictiveStudioScoreRecordSetOperation,
   RecordProcessRunNowOperation,
 } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
 import type { RunContext } from './run-fixtures';
 import type { LoadedDataset, RecordProcessScoring, ScoreAttempt, ScoreRequest } from './types';
 
@@ -88,10 +89,13 @@ export class HarnessScoring {
       { recordProcessID: recordProcessId },
       { provider: ctx.Provider, user: ctx.User },
     );
+    if (!rn.Success) {
+      throw new Error(`RecordProcess.RunNow for ${recordProcessId} failed: ${rn.ErrorMessage || 'RunNow returned Success=false'}`);
+    }
 
     let processRunId: string | null = null;
     let status: MJProcessRunEntity['Status'] = 'Failed';
-    if (rn.Success && rn.Output && rn.Output.processRunID) {
+    if (rn.Output && rn.Output.processRunID) {
       processRunId = rn.Output.processRunID;
       status = rn.Output.status;
     } else {
@@ -99,7 +103,7 @@ export class HarnessScoring {
         const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<ProcessRunRow>(
           {
             EntityName: 'MJ: Process Runs',
-            ExtraFilter: `RecordProcessID='${recordProcessId}' AND StartTime >= '${new Date(since.getTime() - 5000).toISOString()}'`,
+            ExtraFilter: `RecordProcessID='${EscapeSQLString(recordProcessId)}' AND StartTime >= '${new Date(since.getTime() - 5000).toISOString()}'`,
             Fields: ['ID', 'Status', 'StartTime', 'EndTime', 'ProcessedItems', 'SuccessCount', 'ErrorCount', 'SkippedCount', 'ErrorMessage'],
             OrderBy: 'StartTime DESC',
             MaxRows: 1,
@@ -125,7 +129,7 @@ export class HarnessScoring {
     const detailsRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<PrdRow>(
       {
         EntityName: 'MJ: Process Run Details',
-        ExtraFilter: `ProcessRunID='${processRunId}'`,
+        ExtraFilter: `ProcessRunID='${EscapeSQLString(processRunId)}'`,
         Fields: ['RecordID', 'Status', 'ResultPayload', 'ErrorMessage'],
         ResultType: 'simple',
         IgnoreMaxRows: true,

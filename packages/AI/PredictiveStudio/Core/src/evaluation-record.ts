@@ -50,10 +50,10 @@ export class EvaluationLineage {
   }
 
   /** The record training writes for a pipeline's validation strategy. Throws `InvalidMajorityBaselineRuleError`. */
-  public static Build(validation: ValidationStrategy): EvaluationRecord {
+  public static Build(validation: ValidationStrategy, options?: { ValidationOutOfSample?: boolean }): EvaluationRecord {
     const timeIndex = validation.TimeIndexColumn?.trim() || null;
     return {
-      ValidationOutOfSample: true,
+      ValidationOutOfSample: options?.ValidationOutOfSample ?? true,
       TimeIndexColumn: timeIndex,
       EvaluatedAsForecast: false,
       WithheldReason: timeIndex ? EvaluationLineage.NotEvaluatedAsForecast : null,

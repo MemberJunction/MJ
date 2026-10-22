@@ -10,6 +10,7 @@ describe('PredictiveStudioScoreHistoryService', () => {
     const res = await service.LoadRecordScoreHistory({
       provider: fakeProvider,
       recordId: '',
+      InvertedRisk: false,
     });
     expect(res).toEqual([]);
   });
@@ -55,6 +56,7 @@ describe('PredictiveStudioScoreHistoryService', () => {
       provider: fakeProvider,
       recordId: 'rec-123',
       modelId: 'm1',
+      InvertedRisk: false,
     });
 
     expect(points.length).toBe(2);
@@ -105,9 +107,46 @@ describe('PredictiveStudioScoreHistoryService', () => {
       provider: fakeProvider,
       recordId: 'rec-123',
       modelId: 'm1',
+      InvertedRisk: false,
     });
 
     expect(points.length).toBe(1);
     expect(points[0].score).toBe(0.65);
+  });
+
+  it('inverts driver up polarity when InvertedRisk is true (F8)', async () => {
+    const mockDetails = [
+      {
+        ProcessRunID: 'run-1',
+        RecordID: 'rec-123',
+        Status: 'Succeeded',
+        ResultPayload: JSON.stringify({
+          modelId: 'm1',
+          score: 0.85,
+          class: 'Renewed',
+          drivers: [{ feature: 'AutoRenew=true', importance: 0.4 }],
+        }),
+        __mj_CreatedAt: new Date('2026-09-10T12:00:00Z'),
+      },
+    ];
+
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunView: vi.fn().mockResolvedValue({
+        Success: true,
+        Results: mockDetails,
+      }),
+    } as unknown as RunView);
+
+    const service = new PredictiveStudioScoreHistoryService();
+    const fakeProvider = {} as unknown as IMetadataProvider;
+    const points = await service.LoadRecordScoreHistory({
+      provider: fakeProvider,
+      recordId: 'rec-123',
+      modelId: 'm1',
+      InvertedRisk: true,
+    });
+
+    expect(points).toHaveLength(1);
+    expect(points[0].drivers[0].up).toBe(false);
   });
 });

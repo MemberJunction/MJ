@@ -108,9 +108,10 @@ describe('ml-model-view-models', () => {
   });
 
   describe('humanizeFeatureName', () => {
-    it('turns camelCase and snake_case into clean Title Case', () => {
+    it('delegates to AtRiskRules.HumanizeFeatureName for camelCase, snake_case, and one-hot =', () => {
       expect(HumanizeFeatureName('daysUntilExpiration')).toBe('Days Until Expiration');
-      expect(HumanizeFeatureName('total_spend_amount')).toBe('Total Spend Amount');
+      expect(HumanizeFeatureName('total_spend_amount')).toBe('Total spend amount');
+      expect(HumanizeFeatureName('IsAutoRenew=1')).toBe('Is Auto Renew = 1');
     });
   });
 

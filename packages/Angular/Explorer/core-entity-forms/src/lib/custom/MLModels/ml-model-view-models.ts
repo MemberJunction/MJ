@@ -2,7 +2,7 @@
  * Pure view-model functions and types for ML Model detail and metrics rendering.
  * Framework-free, deterministic calculations over plain model entity data.
  */
-import { ImportanceDisplay } from '@memberjunction/predictive-studio-core';
+import { AtRiskRules, ImportanceDisplay } from '@memberjunction/predictive-studio-core';
 
 export interface PSFeatureBar {
   name: string;
@@ -82,12 +82,7 @@ export const PS_FEATURE_DOMINANCE_THRESHOLD = 0.6;
 
 export function HumanizeFeatureName(name: string): string {
   if (!name) return '';
-  return name
-    .replace(/^Is([A-Z])/, '$1')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/_/g, ' ')
-    .trim()
-    .replace(/\b[a-z]/g, (c) => c.toUpperCase());
+  return AtRiskRules.HumanizeFeatureName(name);
 }
 
 /** @deprecated Use {@link HumanizeFeatureName}. */

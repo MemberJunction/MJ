@@ -79,10 +79,14 @@ export class BulkLoader {
     table: string,
     columns: ReadonlyArray<TableColumnSpec>,
     rows: ReadonlyArray<ReadonlyArray<SqlCell>>,
+    preloadedTableColumns?: ReadonlyArray<TableColumnSpec>,
+    tx?: sql.Transaction,
   ): Promise<void> {
     const bare = BulkLoader.bareTable(table);
-    await BulkLoader.AssertDirectSqlOptIn(pool, bare);
-    const tableColumns = await BulkLoader.ReadTableColumns(pool, bare);
+    const tableColumns = preloadedTableColumns ?? (await (async (): Promise<TableColumnSpec[]> => {
+      await BulkLoader.AssertDirectSqlOptIn(pool, bare);
+      return BulkLoader.ReadTableColumns(pool, bare);
+    })());
     TruthCsv.AssertHeaderOrder(
       columns.map((c) => c.Name),
       tableColumns.map((c) => c.Name),
@@ -103,12 +107,18 @@ export class BulkLoader {
       for (const row of batch) {
         sqlTable.rows.add(...row);
       }
-      await pool.request().bulk(sqlTable);
+      const req = tx ? new sql.Request(tx) : pool.request();
+      await req.bulk(sqlTable);
     }
   }
 
   /** Parse a CSV file (refusing truth files), coerce cells against `sys.columns`, and bulk-insert into `pstruth.<table>`. */
-  public static async LoadCsvFile(pool: sql.ConnectionPool, table: string, csvPath: string): Promise<number> {
+  public static async LoadCsvFile(
+    pool: sql.ConnectionPool,
+    table: string,
+    csvPath: string,
+    tx?: sql.Transaction,
+  ): Promise<number> {
     TruthCsv.AssertNotTruthFile(csvPath);
     const bare = BulkLoader.bareTable(table);
     await BulkLoader.AssertDirectSqlOptIn(pool, bare);
@@ -127,7 +137,7 @@ export class BulkLoader {
     const coercedRows: SqlCell[][] = parsed.Rows.map((row) =>
       activeCols.map((col, idx) => TruthCsv.CoerceCell(row[idx] ?? '', col.SqlType)),
     );
-    await BulkLoader.Insert(pool, bare, activeCols, coercedRows);
+    await BulkLoader.Insert(pool, bare, activeCols, coercedRows, tableCols, tx);
     return coercedRows.length;
   }
 }

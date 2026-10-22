@@ -6,6 +6,8 @@ Predictive Studio planted-truth test suite: the 111-gate registry, seeded world 
 
 Every gate in `gates/gates.json` tests a specific Predictive Studio contract against a planted-truth world (`W1`–`W9`, `C1`–`C3`) or time-series scenario (`T1`–`T6`, `D1`–`D5`, `M1`–`M3`) where the true data-generating process (`TrueP`, structural coefficients, censoring dates, and regime shifts) is known before any model is fit.
 
+**Division of labor with the integration-test-suite rigs:** The existing ten Predictive Studio rigs under `packages/TestingFramework/integration-test-suite/rigs/ps-*.ts` (gated by `PS_INTEGRATION=1`: operate flow, scheduled scoring, scored query, agent builder, agent run, and five live lifecycle flows) prove in-process engine seams under `PS_INTEGRATION=1`. This truth suite judges planted-truth gates end-to-end over a running MJAPI and sidecar. Do not introduce a third test surface. Test-only metadata for the `pstruth` schema (`AllowDirectSQLInsert`/`Update`/`Delete` opt-ins) intentionally lives package-local under `TruthSuite/metadata/` (plan decisions `D2-05` and `D2-40`) rather than `metadata-optional/`, and `truth:run` automatically runs `pnpm run truth:clean` at teardown to remove `PSTruth:`-prefixed fixtures in FK-safe order unless `TRUTH_KEEP_FIXTURES=1` is set.
+
 ## 2. Registry and Outcomes
 
 All 111 gates live in `gates/gates.json` from day one:

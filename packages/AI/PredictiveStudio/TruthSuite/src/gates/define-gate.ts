@@ -1,5 +1,6 @@
 import { it } from 'vitest';
 import { performance } from 'node:perf_hooks';
+import { IsTierEnabled } from '@memberjunction/testing-integration';
 import { GateRegistry } from '../registry/load';
 import type { GateEntry, RunMode } from '../registry/types';
 import { GateResults, type GateMeasurement } from './results';
@@ -24,8 +25,8 @@ export class GateSelection {
 
   /** The first requirement this host lacks, as the `not-run` reason; null when the gate can run here. */
   public static MissingRequirement(gate: Pick<GateEntry, 'Requires'>, env: NodeJS.ProcessEnv): string | null {
-    if (gate.Requires.includes('live-model') && env.TRUTH_LIVE_MODEL !== '1') {
-      return 'requires live-model: set TRUTH_LIVE_MODEL=1 with model keys configured';
+    if (gate.Requires.includes('live-model') && !IsTierEnabled('live-model', env)) {
+      return 'requires live-model: RUN_AGENT_TESTS is set to 0 (enable live-model tier with model keys configured)';
     }
     if (gate.Requires.includes('sidecar-16gb') && env.TRUTH_ALLOW_HIGH_MEMORY !== '1') {
       return 'requires sidecar-16gb: W8 training needs more memory than the runner has (set TRUTH_ALLOW_HIGH_MEMORY=1 on a larger host)';

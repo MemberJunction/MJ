@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pytest
 
-from app import metrics
+from app import algorithms, main, metrics, schemas
 from tests.test_train_predict import client
 
 
@@ -58,6 +58,27 @@ def test_kfold_refuses_k_larger_than_a_class() -> None:
     assert "needs at least 5 rows of every class" in resp.text
 
 
+def test_kfold_allows_non_contiguous_integer_class_labels() -> None:
+    """When class indices in y_dev are [1, 2] (class 0 absent in dev split), kfold still runs."""
+    raw = _noise_request("kfold", "logistic_regression", k=5, n=40)
+    req = schemas.TrainRequest.model_validate(raw)
+    dev_rows = raw["data"]["rows"]
+    y_dev = np.array([1] * 20 + [2] * 20, dtype=int)
+    m = main._kfold_out_of_fold_metrics(
+        req,
+        dev_rows,
+        raw["data"]["columns"],
+        [f"x{i}" for i in range(6)],
+        [{"op": "standardize", "cols": [f"x{i}" for i in range(6)]}],
+        6,
+        y_dev,
+        True,
+        lambda: algorithms.build_estimator("logistic_regression", "classification", {}),
+        42,
+    )
+    assert m["n"] == 40.0
+
+
 def test_too_few_rows_are_refused_not_scored_in_sample() -> None:
     req = _noise_request("train_test_split", "logistic_regression", n=3)
     req["data"]["rows"][0][-1] = 0
@@ -65,6 +86,17 @@ def test_too_few_rows_are_refused_not_scored_in_sample() -> None:
     resp = client.post("/train", json=req)
     assert resp.status_code == 400
     assert "at least 4" in resp.text
+
+
+def test_four_binary_rows_with_20pct_split_reports_insufficient_rows_message() -> None:
+    req = _noise_request("train_test_split", "logistic_regression", n=4)
+    req["data"]["rows"][0][-1] = 0
+    req["data"]["rows"][1][-1] = 0
+    req["data"]["rows"][2][-1] = 1
+    req["data"]["rows"][3][-1] = 1
+    resp = client.post("/train", json=req)
+    assert resp.status_code == 400
+    assert "measure the model on rows it did not train on" in resp.text
 
 
 def test_classification_metrics_report_majority_rate_and_predicted_classes() -> None:

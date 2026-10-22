@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import { EvaluationLineage, TrustVerdicts, type ValidationStrategy } from '@memberjunction/predictive-studio-core';
 import { ContainmentProbe } from '../containment-probe';
+import { HarnessModels } from '../promote';
 import type { CandidateModel, ScoreAttempt, TrainAttempt } from '../types';
 
 const train = (over: Partial<TrainAttempt>): TrainAttempt => ({
@@ -90,5 +91,13 @@ describe('containment probe — stored verdict and time index', () => {
     expect(ContainmentProbe.ApplyTimeIndexDeclaration(pipeline, 'MonthIndex')).toBe(true);
     const saved = JSON.parse(pipeline.ValidationStrategy || '{}') as ValidationStrategy;
     expect(saved).toEqual({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' });
+  });
+});
+
+describe('HarnessModels.EscapeLikePrefix (F7 / F-L)', () => {
+  it('escapes single quotes and LIKE wildcards (%, _, [) with bracket classes and emits no backslashes', () => {
+    const escaped = HarnessModels.EscapeLikePrefix("PSTruth_W1%['a']");
+    expect(escaped).toBe("PSTruth[_]W1[%][[]''a'']");
+    expect(escaped).not.toContain('\\');
   });
 });

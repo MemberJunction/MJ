@@ -233,4 +233,16 @@ describe('the At-Risk list is the highest-risk rows (W1 → S9.5, F-UI-4)', () =
     const rows: AtRiskRow[] = [10, 20, 39].map((riskPct, i) => ({ recordId: `r${i}`, label: null, score: 1 - riskPct / 100, riskPct, class: null, band: 'low', drivers: null }));
     expect(AtRiskRules.SelectAtRiskListMembers(rows, 200)).toEqual([]);
   });
+
+  it('truncates long prediction titles so MJ: Lists.Name never exceeds 100 characters (F-R)', () => {
+    const shortName = AtRiskRules.FormatAtRiskListName('Member Renewal Risk', '2026-10-22 10:50');
+    expect(shortName).toBe('At-Risk: Member Renewal Risk (2026-10-22 10:50)');
+    expect(shortName.length).toBeLessThanOrEqual(100);
+
+    const longTitle = 'PSTruth: W3-leak logistic_regression pr-2026-10-21T23-37-12-954Z extra-long-suffix-for-test';
+    const longName = AtRiskRules.FormatAtRiskListName(longTitle, '2026-10-22 10:50');
+    expect(longName.length).toBeLessThanOrEqual(100);
+    expect(longName.startsWith('At-Risk: PSTruth: W3-leak logistic_regression')).toBe(true);
+    expect(longName.endsWith('… (2026-10-22 10:50)')).toBe(true);
+  });
 });

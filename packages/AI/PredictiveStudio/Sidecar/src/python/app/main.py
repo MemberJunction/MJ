@@ -105,6 +105,7 @@ def train(req: TrainRequest) -> TrainResponse:
         training_row_count=result["training_row_count"],
         duration_sec=round(duration, 4),
         holdout_metrics=result.get("holdout_metrics"),
+        validation_out_of_sample=bool(result.get("validation_out_of_sample", True)),
     )
 
 
@@ -132,9 +133,15 @@ def _split_holdout_indices(
     if not holdout_size or holdout_size <= 0 or holdout_size >= 1:
         return all_idx, np.empty((0,), dtype=int)
     stratify = y if (is_classification or _looks_like_classes(y)) and len(np.unique(y)) > 1 else None
-    dev_idx, hold_idx = train_test_split(
-        all_idx, test_size=holdout_size, random_state=random_state, stratify=stratify
-    )
+    try:
+        dev_idx, hold_idx = train_test_split(
+            all_idx, test_size=holdout_size, random_state=random_state, stratify=stratify
+        )
+    except ValueError as exc:
+        raise ValueError(
+            f"Only {n} rows were supplied — too few to carve a {holdout_size:g} locked holdout across all classes "
+            f"and still measure the model on rows it did not train on ({exc}). Add rows or lower LockedHoldoutFraction."
+        ) from exc
     return dev_idx, hold_idx
 
 
@@ -258,6 +265,7 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
         "metrics": train_metrics,
         "feature_importance": feature_importance,
         "training_row_count": int(len(rows)),
+        "validation_out_of_sample": True,
     }
 
     if X_hold.shape[0] > 0:
@@ -364,7 +372,13 @@ def _fit_and_score(
         test_size = req.validation.test_size or 0.2
         idx = np.arange(n_dev)
         stratify = y if is_classification and len(np.unique(y)) > 1 else None
-        tr_idx, te_idx = train_test_split(idx, test_size=test_size, random_state=random_state, stratify=stratify)
+        try:
+            tr_idx, te_idx = train_test_split(idx, test_size=test_size, random_state=random_state, stratify=stratify)
+        except ValueError as exc:
+            raise ValueError(
+                f"Only {n_dev} training rows remain after the locked holdout — too few to split {test_size:g} across all classes "
+                f"and measure the model on rows it did not train on ({exc}). Add rows, increase test_size, or lower LockedHoldoutFraction."
+            ) from exc
         val_metrics = _anti_skew_val_metrics(
             req, dev_rows, columns, feature_cols, ops_spec, target_idx,
             tr_idx, te_idx, y, is_classification, encoder, build,
@@ -448,7 +462,8 @@ def _kfold_out_of_fold_metrics(
         raise ValueError(f"kfold needs 2 <= K <= {n_rows} (the training rows); got K={k}.")
     idx = np.arange(n_rows)
     if is_classification:
-        smallest = int(np.min(np.bincount(y_dev.astype(int))))
+        _, class_counts = np.unique(y_dev, return_counts=True)
+        smallest = int(np.min(class_counts)) if len(class_counts) >= 2 else 0
         if smallest < k:
             raise ValueError(
                 f"kfold with K={k} needs at least {k} rows of every class; the smallest class has {smallest}. "

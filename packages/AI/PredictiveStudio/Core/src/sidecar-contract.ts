@@ -183,6 +183,8 @@ export interface TrainResponse {
   duration_sec: number;
   /** Honest metrics on the locked holdout, scored exactly once (plan §8.2). */
   holdout_metrics?: ModelMetrics;
+  /** True when the sidecar computed `metrics` strictly out-of-sample (fit on train fold/split only, scored on held-out fold/split). Absent on pre-C5 sidecars. */
+  validation_out_of_sample?: boolean;
 }
 
 /**

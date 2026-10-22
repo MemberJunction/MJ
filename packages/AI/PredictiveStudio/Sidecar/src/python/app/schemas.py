@@ -96,6 +96,7 @@ class TrainResponse(BaseModel):
     training_row_count: int
     duration_sec: float
     holdout_metrics: Optional[Dict[str, float]] = None
+    validation_out_of_sample: bool = True
     # Opaque id callers may pass back on /predict to hit the warm model cache
     # without re-sending the (potentially large) artifact_b64.
     model_id: Optional[str] = None

@@ -1,27 +1,42 @@
 import sql from 'mssql';
+import { LoadDbConfig, type DbConfig } from '@memberjunction/testing-integration';
 
 /** Database connection pool factory for the pstruth schema. */
 export class TruthConnection {
-  /** Open a connection pool from the standard DB_* environment variables; refuses missing host/database/credentials. */
-  public static async OpenPool(env: NodeJS.ProcessEnv = process.env): Promise<sql.ConnectionPool> {
-    for (const key of ['DB_HOST', 'DB_DATABASE', 'DB_USERNAME', 'DB_PASSWORD'] as const) {
-      if (!env[key]) {
-        throw new Error(`TruthConnection.OpenPool: missing required environment variable ${key}`);
-      }
+  /** Build the `mssql` pool config from `LoadDbConfig()` (`mj.config.cjs` `databaseSettings` takes precedence over `DB_*`). */
+  public static async ResolvePoolConfig(
+    loadDbConfig: () => Promise<DbConfig> = LoadDbConfig,
+    env: NodeJS.ProcessEnv = process.env,
+  ): Promise<sql.config> {
+    const db = await loadDbConfig();
+    if (db.Platform !== 'sqlserver') {
+      throw new Error(`TruthConnection.OpenPool: the pstruth schema requires SQL Server (got platform '${db.Platform}')`);
     }
-    const pool = new sql.ConnectionPool({
-      server: env.DB_HOST!,
-      port: env.DB_PORT ? Number(env.DB_PORT) : 1433,
-      database: env.DB_DATABASE!,
-      user: env.DB_USERNAME!,
-      password: env.DB_PASSWORD!,
+    const trustCert =
+      env.DB_TRUST_SERVER_CERTIFICATE === undefined
+        ? true
+        : env.DB_TRUST_SERVER_CERTIFICATE === '1' || env.DB_TRUST_SERVER_CERTIFICATE.toLowerCase() === 'true';
+    return {
+      server: db.Host,
+      port: db.Port,
+      database: db.Database,
+      user: db.User,
+      password: db.Password,
       requestTimeout: 120_000,
       options: {
-        trustServerCertificate:
-          env.DB_TRUST_SERVER_CERTIFICATE === '1' ||
-          env.DB_TRUST_SERVER_CERTIFICATE?.toLowerCase() === 'true',
+        encrypt: false,
+        trustServerCertificate: trustCert,
       },
-    });
+    };
+  }
+
+  /** Open a connection pool resolved via `LoadDbConfig()` (`mj.config.cjs` `databaseSettings` with `DB_*` fallback). */
+  public static async OpenPool(
+    loadDbConfig: () => Promise<DbConfig> = LoadDbConfig,
+    env: NodeJS.ProcessEnv = process.env,
+  ): Promise<sql.ConnectionPool> {
+    const cfg = await TruthConnection.ResolvePoolConfig(loadDbConfig, env);
+    const pool = new sql.ConnectionPool(cfg);
     return pool.connect();
   }
 }

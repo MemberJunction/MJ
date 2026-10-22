@@ -159,10 +159,13 @@ export function GenerateMarkdownReport(
   published: boolean,
   features: MLFeatureImportancePayload[],
   leaderboard?: MLLeaderboardEntryPayload[],
+  importanceHidden = true,
 ): string {
   const topFeatures = features.length > 0
     ? features.slice(0, 8).map((f) => `- **${f.feature}**: ${(f.importance * 100).toFixed(1)}% of the model's weight`).join('\n')
-    : `- ${ImportanceDisplay.HiddenNote}`;
+    : importanceHidden
+      ? `- ${ImportanceDisplay.HiddenNote}`
+      : '- No feature importance weights were recorded for this model.';
 
   let leaderboardSection = '';
   if (leaderboard && leaderboard.length > 0) {
@@ -206,8 +209,9 @@ export function generateMarkdownReport(
   published: boolean,
   features: MLFeatureImportancePayload[],
   leaderboard?: MLLeaderboardEntryPayload[],
+  importanceHidden = true,
 ): string {
-  return GenerateMarkdownReport(name, goal, targetVar, targetMetric, score, trustGrade, oneLiner, published, features, leaderboard);
+  return GenerateMarkdownReport(name, goal, targetVar, targetMetric, score, trustGrade, oneLiner, published, features, leaderboard, importanceHidden);
 }
 
 @RegisterClass(BaseAgent, 'PredictiveStudioPipelineBuilderAgent')
@@ -253,9 +257,10 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       const scoreVal = result.trust?.headlineMetric?.value ?? 0.85;
 
       const winnerAlgorithm = (result.leaderboard || []).find((r) => r.isWinner)?.algorithm || payload.ProposedExperiments?.[0]?.AlgorithmName || null;
-      const featureBars = ImportanceDisplay.GlobalDriversShowable(winnerAlgorithm)
-        ? ParseFeatureImportance(result.model?.FeatureImportance).sort((a, b) => b.importance - a.importance)
-        : [];
+      const rawFeatures = ParseFeatureImportance(result.model?.FeatureImportance).sort((a, b) => b.importance - a.importance);
+      const showable = ImportanceDisplay.GlobalDriversShowable(winnerAlgorithm);
+      const featureBars = showable ? rawFeatures : [];
+      const importanceHidden = rawFeatures.length > 0 && !showable;
 
       const leaderboard: MLLeaderboardEntryPayload[] =
         result.leaderboard && result.leaderboard.length > 0
@@ -288,6 +293,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
         result.published,
         featureBars,
         leaderboard,
+        importanceHidden,
       );
 
       newPayloadObj = {

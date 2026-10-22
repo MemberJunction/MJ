@@ -258,15 +258,19 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     if (!model) {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ML Model '${this.modelId}' not found`);
     }
+    // Only a Draft placeholder with no artifact may trigger opt-in auto-train (D2-C3); Archived is always refused first.
+    if (!ModelNotScorableError.CanScore(model.Status) && model.Status !== 'Draft') {
+      throw new ModelNotScorableError(this.modelId, model.Status);
+    }
     if (!ModelHasTrainedArtifact(model) || !model.ArtifactFileID) {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelNeedsTrainingMessage(this.modelId)}`);
+    }
+    if (!ModelNotScorableError.CanScore(model.Status)) {
+      throw new ModelNotScorableError(this.modelId, model.Status);
     }
     const bytes = await this.deps.artifactLoader.load(model.ArtifactFileID, context.ContextUser);
     if (!bytes) {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelArtifactMissingMessage(this.modelId, model.ArtifactFileID)}`);
-    }
-    if (!ModelNotScorableError.CanScore(model.Status)) {
-      throw new ModelNotScorableError(this.modelId, model.Status);
     }
     return this.buildLoadedModel(model, bytes, context);
   }

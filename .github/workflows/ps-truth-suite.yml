@@ -144,11 +144,18 @@ jobs:
           LIVE_KEYS: '${{ secrets.INTEGRATION_LIVE_MODEL_KEYS }}'
           GEMINI_KEY: '${{ secrets.GEMINI_API_KEY }}'
         run: |
-          if [ -n "$LIVE_KEYS" ]; then printf '%s\n' "$LIVE_KEYS" >> .env; src=INTEGRATION_LIVE_MODEL_KEYS
-          elif [ -n "$GEMINI_KEY" ]; then printf 'AI_VENDOR_API_KEY__GeminiLLM=%s\n' "$GEMINI_KEY" >> .env; src=GEMINI_API_KEY
-          else echo "::error::neither INTEGRATION_LIVE_MODEL_KEYS nor GEMINI_API_KEY is set — G0.6 cannot be measured" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1; fi
+          if [ -n "$LIVE_KEYS" ]; then
+            printf '%s\n' "$LIVE_KEYS" | tee -a .env packages/MJAPI/.env >> "$GITHUB_ENV"
+            src=INTEGRATION_LIVE_MODEL_KEYS
+          elif [ -n "$GEMINI_KEY" ]; then
+            printf 'AI_VENDOR_API_KEY__GeminiLLM=%s\n' "$GEMINI_KEY" | tee -a .env packages/MJAPI/.env >> "$GITHUB_ENV"
+            src=GEMINI_API_KEY
+          else
+            echo "::error::neither INTEGRATION_LIVE_MODEL_KEYS nor GEMINI_API_KEY is set — G0.6 cannot be measured" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           grep -q '^AI_VENDOR_API_KEY__GeminiLLM=' .env || { echo "::error::the live keys from $src carry no AI_VENDOR_API_KEY__GeminiLLM line" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1; }
-          echo "TRUTH_LIVE_MODEL=1" >> "$GITHUB_ENV"; echo "RUN_AGENT_TESTS=1" >> "$GITHUB_ENV"
+          echo "RUN_AGENT_TESTS=1" >> "$GITHUB_ENV"
           echo "live-model keys from $src" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Boot MJAPI on the truth sidecar
         run: |

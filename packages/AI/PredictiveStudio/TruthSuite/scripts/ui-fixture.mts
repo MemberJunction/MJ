@@ -18,7 +18,7 @@ async function publishedScoredModel(h: TruthHarness, w1: LoadedDataset, algorith
   const pipelineName = `PSTruth: UI W1 ${algorithm} ${h.RunID}`;
   const spec: PipelineSpec = {
     Name: pipelineName, Dataset: w1, Target: 'Renewed', ProblemType: 'classification', Features: [...W_WORLD_FEATURES], Algorithm: algorithm,
-    AsOf: { Mode: 'none' }, Validation: { Strategy: 'train_test_split', LockedHoldoutFraction: 0.2 }, DenyFields: [...W_WORLD_DENY_FIELDS],
+    AsOf: { Mode: 'none' }, Validation: { Strategy: 'train_test_split', LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'warn' }, DenyFields: [...W_WORLD_DENY_FIELDS],
   };
   const trained = await h.Train(await h.CreatePipeline(spec), { MaxRows: 1000000 });
   if (!trained.ModelID) return `${algorithm}: training failed: ${trained.ErrorMessage || 'no message'}`;
@@ -37,6 +37,9 @@ async function main(): Promise<void> {
   const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
   const coefficient = await publishedScoredModel(h, w1, 'logistic_regression');
   if (typeof coefficient === 'string') throw new Error(coefficient);
+  if (!coefficient.canAct) {
+    throw new Error(`coefficient model ${coefficient.modelId} is not actionable (grade=${coefficient.grade}, canAct=false)`);
+  }
   const treeRefusals: string[] = [];
   let tree: UIFixtureModel | null = null;
   for (const algorithm of TREE_ALGORITHMS) {

@@ -16,7 +16,8 @@ const packageRoot = path.resolve(__dirname, '..');
 const pythonDir = path.join(packageRoot, 'src', 'python');
 const fromEnv = process.env.PREDICTIVE_STUDIO_PYTHON?.trim();
 const venvPython = fromEnv && fromEnv.length > 0 ? fromEnv : path.join(packageRoot, '.venv', 'bin', 'python');
-if (!existsSync(venvPython)) {
+const isPath = venvPython.includes('/') || venvPython.includes('\\');
+if (isPath && !existsSync(venvPython)) {
   console.error(`Python not found at ${venvPython}. Run \`pnpm run setup:python\` or set PREDICTIVE_STUDIO_PYTHON.`);
   process.exit(1);
 }

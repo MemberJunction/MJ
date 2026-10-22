@@ -4,11 +4,13 @@ import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { LoadDbConfig } from '@memberjunction/testing-integration';
 import sql from 'mssql';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const mjRoot = path.resolve(root, '..', '..', '..', '..');
 const mjCli = path.join(mjRoot, 'packages', 'MJCLI', 'bin', 'run.js');
+const dbCfg = LoadDbConfig();
 
 function run(cmd, args, cwd, extraEnv = {}) {
   const res = spawnSync(cmd, args, {
@@ -39,15 +41,13 @@ function findNewestCodeGenSql(dir) {
 
 async function openPool() {
   return sql.connect({
-    server: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT || 1433),
-    user: process.env.DB_USERNAME,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE,
+    server: dbCfg.host,
+    port: dbCfg.port,
+    user: dbCfg.user,
+    password: dbCfg.password,
+    database: dbCfg.database,
     options: {
-      trustServerCertificate:
-        process.env.DB_TRUST_SERVER_CERTIFICATE === '1' ||
-        process.env.DB_TRUST_SERVER_CERTIFICATE === 'true',
+      trustServerCertificate: dbCfg.trustServerCertificate,
     },
   });
 }
@@ -69,6 +69,33 @@ if (process.argv.includes('--codegen')) {
   }
   console.log(sqlFile);
   process.exit(0);
+}
+
+const dbName = dbCfg.database || process.env.DB_DATABASE || '';
+if (!/^MJ_PS_PR\d+_|^test$/.test(dbName) && process.env.TRUTH_ALLOW_PROVISION_DB !== '1') {
+  console.error(
+    `Refusing to run truth:provision against DB_DATABASE='${dbName}': only MJ_PS_PR<n>_<agent> or the CI 'test' database (set TRUTH_ALLOW_PROVISION_DB=1 to override).`,
+  );
+  process.exit(1);
+}
+
+const prePool = await openPool();
+try {
+  const preRes = await prePool.request().query(`
+    SELECT
+      CASE WHEN OBJECT_ID(N'__mj.Entity', N'U') IS NULL THEN 0 ELSE 1 END AS hasEntityTable,
+      CASE WHEN OBJECT_ID(N'__mj.flyway_schema_history', N'U') IS NULL THEN 0
+           ELSE (SELECT COUNT(*) FROM __mj.flyway_schema_history WHERE success = 0) END AS failedMigrations
+  `);
+  const row = preRes.recordset[0];
+  if (!row || Number(row.hasEntityTable) === 0 || Number(row.failedMigrations) > 0) {
+    console.error(
+      `Refusing to run truth:provision against DB_DATABASE='${dbName}': core __mj schema is incomplete or has failed migrations (hasEntityTable=${row?.hasEntityTable ?? 0}, failedMigrations=${row?.failedMigrations ?? 0}). Run 'mj migrate' first.`,
+    );
+    process.exit(1);
+  }
+} finally {
+  await prePool.close();
 }
 
 run(
@@ -109,11 +136,6 @@ try {
       "SELECT COUNT(*) AS cnt FROM __mj.Entity WHERE SchemaName = 'pstruth' AND AllowDirectSQLInsert = 1 AND AllowDirectSQLUpdate = 1 AND AllowDirectSQLDelete = 1",
     );
   const m = Number(sanctionedRes.recordset[0]?.cnt ?? 0);
-  // Ensure at least one active FileStorageProvider row exists on fresh databases so MJFilesArtifactStore can stamp File.ProviderID.
-  await pool.request().query(`
-    IF NOT EXISTS (SELECT 1 FROM __mj.FileStorageProvider WHERE IsActive = 1)
-      UPDATE TOP (1) __mj.FileStorageProvider SET IsActive = 1
-  `);
   console.log(`pstruth: ${n} entities, direct SQL sanctioned on ${m}`);
   await pool.close();
   if (m !== n) {

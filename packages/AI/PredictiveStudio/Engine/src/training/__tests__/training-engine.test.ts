@@ -238,6 +238,7 @@ const cleanResponse: TrainResponse = {
   training_row_count: 8,
   duration_sec: 1.4,
   holdout_metrics: { auc: 0.79 },
+  validation_out_of_sample: true,
 };
 
 /** Build a TrainingEngine wired to an assembler over the given member rows. */
@@ -477,5 +478,12 @@ describe('TrainingEngine — evaluation record and the time-index containment (T
     expect(EvaluationLineage.Read(model.Lineage)?.WithheldReason).toBe(EvaluationLineage.NotEvaluatedAsForecast);
     expect(run.Notes).toContain('Trust withheld — not evaluated as a forecast');
     expect(TrustVerdicts.DeriveTrustVerdict(model)).toMatchObject({ grade: 'Poor', canAct: false, withheldReason: EvaluationLineage.NotEvaluatedAsForecast });
+  });
+
+  it('records ValidationOutOfSample=false when the sidecar response does not confirm out-of-sample scoring', async () => {
+    const legacySidecarResponse: TrainResponse = { ...cleanResponse, validation_out_of_sample: undefined };
+    const { deps } = buildDeps({ response: legacySidecarResponse });
+    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(EvaluationLineage.Read(model.Lineage)?.ValidationOutOfSample).toBe(false);
   });
 });

@@ -19,6 +19,7 @@
     "truth:provision": "node scripts/provision.mjs",
     "truth:sidecar": "tsx scripts/sidecar.mts",
     "truth:smoke": "tsx scripts/smoke-w1.mts",
+    "truth:clean": "tsx src/harness/cleanup.ts",
     "truth:run": "node scripts/run-truth.mjs",
     "truth:report": "node scripts/report.mjs",
     "truth:readme": "tsx scripts/readme-walkthrough.mts",

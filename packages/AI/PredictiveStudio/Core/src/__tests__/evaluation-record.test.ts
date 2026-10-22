@@ -6,6 +6,7 @@ describe('evaluation record', () => {
     expect(EvaluationLineage.Build({ Strategy: 'kfold', K: 5, LockedHoldoutFraction: 0.1 })).toEqual({
       ValidationOutOfSample: true, TimeIndexColumn: null, EvaluatedAsForecast: false, WithheldReason: null, MajorityBaselineRule: 'enforce',
     });
+    expect(EvaluationLineage.Build({ Strategy: 'kfold', K: 5, LockedHoldoutFraction: 0.1 }, { ValidationOutOfSample: false }).ValidationOutOfSample).toBe(false);
   });
   it('withholds the verdict when a time index is declared (not evaluated as a forecast)', () => {
     const record = EvaluationLineage.Build({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' });

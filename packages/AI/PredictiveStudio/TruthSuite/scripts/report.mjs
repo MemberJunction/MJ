@@ -37,7 +37,10 @@ const outcomes = results.map((r) => ({
   name: r.TestName,
   passed: passingOutcomes.has(r.Outcome),
   durationMs: r.DurationMs,
-  error: r.Error,
+  error:
+    r.Outcome === 'pass'
+      ? r.Error
+      : `${r.Outcome}${r.Error ? `: ${r.Error}` : r.Detail ? `: ${r.Detail}` : ''}`,
 }));
 writeFileSync(path.join(resultsDir, 'outcomes.json'), `${JSON.stringify(outcomes, null, 2)}\n`);
 

@@ -371,6 +371,20 @@ export class AtRiskRules {
       .trim()
       .replace(/^\w/, (c) => c.toUpperCase());
   }
+
+  /**
+   * Build the `MJ: Lists.Name` string (`At-Risk: <title> (<timestamp>)`) truncated to `maxLength`
+   * (100 chars, matching `MJ: Lists.Name` `NVARCHAR(100)`) so long prediction titles never fail save validation.
+   */
+  public static FormatAtRiskListName(title: string, timestamp: string, maxLength = 100): string {
+    const prefix = 'At-Risk: ';
+    const suffix = ` (${timestamp})`;
+    const maxTitleLen = Math.max(1, maxLength - prefix.length - suffix.length);
+    const trimmed = title.trim();
+    const truncatedTitle =
+      trimmed.length > maxTitleLen ? `${trimmed.slice(0, maxTitleLen - 1).trimEnd()}…` : trimmed;
+    return `${prefix}${truncatedTitle}${suffix}`;
+  }
 }
 
 export function ParseRowDrivers(raw: unknown, invertedRisk: boolean): RowDriver[] | null {

@@ -5,7 +5,7 @@ import {
   PredictiveStudioPromoteModelOperation,
   type PredictiveStudioModelTargetStatus,
 } from '@memberjunction/core-entities';
-import { IndexByUUID, SafeJSONParse, type UUIDMap } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, SafeJSONParse, type UUIDMap } from '@memberjunction/global';
 import { TrustVerdicts } from '@memberjunction/predictive-studio-core';
 import type { AlgorithmRow } from './pipelines';
 import type { RunContext } from './run-fixtures';
@@ -56,6 +56,12 @@ export class HarnessModels {
     };
   }
 
+  /** Escape a string for a SQL Server `LIKE '<prefix>%'` filter (escapes `[`, `%`, `_` with bracket classes and `'` via `EscapeSQLString`). */
+  public static EscapeLikePrefix(prefix: string): string {
+    const likeEscaped = prefix.replace(/[[%_]/g, (ch) => `[${ch}]`);
+    return EscapeSQLString(likeEscaped);
+  }
+
   /** Read one `MJ: ML Models` row and its training run into a `CandidateModel`. */
   public static async ReadModel(ctx: RunContext, modelId: string): Promise<CandidateModel> {
     const m = await ctx.Provider.GetEntityObject<MJMLModelEntity>('MJ: ML Models', ctx.User);
@@ -65,7 +71,7 @@ export class HarnessModels {
     const runsRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJMLTrainingRunEntity>(
       {
         EntityName: 'MJ: ML Training Runs',
-        ExtraFilter: `ResultingModelID='${modelId.replace(/'/g, "''")}'`,
+        ExtraFilter: `ResultingModelID='${EscapeSQLString(modelId)}'`,
         ResultType: 'entity_object',
         BypassCache: true,
       },
@@ -81,7 +87,7 @@ export class HarnessModels {
     const pipeRes = await rv.RunView<{ ID: string }>(
       {
         EntityName: 'MJ: ML Training Pipelines',
-        ExtraFilter: `Name LIKE '${prefix.replace(/'/g, "''")}%'`,
+        ExtraFilter: `Name LIKE '${HarnessModels.EscapeLikePrefix(prefix)}%'`,
         Fields: ['ID'],
         ResultType: 'simple',
         BypassCache: true,
@@ -91,7 +97,7 @@ export class HarnessModels {
     if (!pipeRes.Success) throw new Error(`read pipelines by prefix: ${pipeRes.ErrorMessage}`);
     if (pipeRes.Results.length === 0) return [];
 
-    const inList = pipeRes.Results.map((p) => `'${p.ID.replace(/'/g, "''")}'`).join(',');
+    const inList = pipeRes.Results.map((p) => `'${EscapeSQLString(p.ID)}'`).join(',');
     const [modelsRes, runsRes] = await Promise.all([
       rv.RunView<MJMLModelEntity>(
         {

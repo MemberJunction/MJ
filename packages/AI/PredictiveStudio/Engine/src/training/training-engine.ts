@@ -105,7 +105,7 @@ export class TrainingEngine {
       throw new AsOfSettingHasNoEffectError('pipeline', resolved.asOf.Mode, resolved.pipeline.ID);
     }
     // Validates the evaluation settings (D2-C5d: an unknown MajorityBaselineRule is refused) before any row is written.
-    EvaluationLineage.Build(resolved.validation);
+    EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
     const run = await this.createRunRow(resolved, input, deps);
 
     try {
@@ -120,10 +120,13 @@ export class TrainingEngine {
       const trainRequest = this.buildTrainRequest(resolved, assembly, split.training, validation);
 
       const response = await deps.sidecar.train(trainRequest, split.lockedHoldout);
+      const evaluation = EvaluationLineage.Build(resolved.validation, {
+        ValidationOutOfSample: response.validation_out_of_sample === true,
+      });
 
       const dominance = this.checkLeakage(response, resolved.leakageGuard);
-      const model = await this.createModelRow(resolved, input, assembly, split, response, deps);
-      await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, deps);
+      const model = await this.createModelRow(resolved, input, assembly, split, response, evaluation, deps);
+      await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, evaluation, deps);
       return { model, run };
     } catch (err) {
       await this.finalizeRunFailure(run, err, deps);
@@ -192,6 +195,7 @@ export class TrainingEngine {
     resolved: ResolvedPipeline,
     response: TrainResponse,
     dominance: DominanceResult,
+    evaluation: EvaluationRecord,
     deps: TrainingDeps,
   ): Promise<void> {
     run.ResultingModelID = model.ID;
@@ -205,7 +209,7 @@ export class TrainingEngine {
     run.Status = 'Completed';
     run.CompletedAt = new Date();
     run.ComputeCost = 0;
-    run.Notes = this.buildRunNotes(dominance, EvaluationLineage.Build(resolved.validation));
+    run.Notes = this.buildRunNotes(dominance, evaluation);
     await this.saveOrThrow(run, 'finalize ML Training Run');
   }
 
@@ -331,6 +335,7 @@ export class TrainingEngine {
     assembly: FeatureAssemblyResult,
     split: HoldoutSplit,
     response: TrainResponse,
+    evaluation: EvaluationRecord,
     deps: TrainingDeps,
   ): Promise<MJMLModelEntity> {
     const version = await deps.recordLoader.nextModelVersion(resolved.pipeline.ID, deps.contextUser, deps.provider);
@@ -351,7 +356,7 @@ export class TrainingEngine {
       model.HoldoutMetrics = JSON.stringify(response.holdout_metrics);
     }
     model.FeatureImportance = JSON.stringify(response.feature_importance ?? {});
-    model.Lineage = JSON.stringify(this.buildLineage(resolved, input, split, response));
+    model.Lineage = JSON.stringify(this.buildLineage(resolved, input, split, response, evaluation));
     model.TrainedAt = new Date();
     model.TrainingDurationSec = Math.round(response.duration_sec ?? 0);
     model.TrainingRowCount = response.training_row_count ?? split.trainingRowCount;
@@ -371,7 +376,13 @@ export class TrainingEngine {
    * produce any feature columns at inference (train/serve break), so both are
    * persisted alongside the other provenance fields.
    */
-  private buildLineage(resolved: ResolvedPipeline, input: TrainModelInput, split: HoldoutSplit, _response: TrainResponse): Record<string, unknown> {
+  private buildLineage(
+    resolved: ResolvedPipeline,
+    input: TrainModelInput,
+    split: HoldoutSplit,
+    _response: TrainResponse,
+    evaluation: EvaluationRecord,
+  ): Record<string, unknown> {
     return {
       pipelineId: resolved.pipeline.ID,
       pipelineVersion: resolved.pipeline.Version,
@@ -384,7 +395,7 @@ export class TrainingEngine {
       lockedHoldoutRowCount: split.holdoutRowCount,
       trainingRowCount: split.trainingRowCount,
       assembledAt: new Date().toISOString(),
-      [EvaluationLineage.Key]: EvaluationLineage.Build(resolved.validation),
+      [EvaluationLineage.Key]: evaluation,
     };
   }
 

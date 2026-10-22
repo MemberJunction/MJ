@@ -54,29 +54,26 @@ export class WorldLoader {
 
     const tx = new sql.Transaction(pool);
     await tx.begin();
+    let peopleCount = 0;
+    let actualRows = 0;
     try {
       await new sql.Request(tx).query(`DELETE FROM pstruth.[${rowTable}]; DELETE FROM pstruth.[${personTable}];`);
+      peopleCount = await BulkLoader.LoadCsvFile(pool, personTable, path.join(dir, 'people.csv'), tx);
+      await BulkLoader.LoadCsvFile(pool, rowTable, path.join(dir, 'rows.csv'), tx);
+      await new sql.Request(tx).query(
+        `ALTER TABLE pstruth.[${personTable}] WITH CHECK CHECK CONSTRAINT ALL; ALTER TABLE pstruth.[${rowTable}] WITH CHECK CHECK CONSTRAINT ALL;`,
+      );
+      const countRes = await new sql.Request(tx).query<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM pstruth.[${rowTable}]`);
+      actualRows = Number(countRes.recordset[0]?.cnt ?? 0);
+      if (actualRows !== manifest.rowCount) {
+        throw new Error(
+          `WorldLoader.LoadSeed(${worldId}): loaded row count ${actualRows} differs from manifest rowCount ${manifest.rowCount}`,
+        );
+      }
       await tx.commit();
     } catch (err) {
       await tx.rollback();
       throw err;
-    }
-
-    const peopleCount = await BulkLoader.LoadCsvFile(pool, personTable, path.join(dir, 'people.csv'));
-    await BulkLoader.LoadCsvFile(pool, rowTable, path.join(dir, 'rows.csv'));
-
-    await pool
-      .request()
-      .query(
-        `ALTER TABLE pstruth.[${personTable}] WITH CHECK CHECK CONSTRAINT ALL; ALTER TABLE pstruth.[${rowTable}] WITH CHECK CHECK CONSTRAINT ALL;`,
-      );
-
-    const countRes = await pool.request().query<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM pstruth.[${rowTable}]`);
-    const actualRows = Number(countRes.recordset[0]?.cnt ?? 0);
-    if (actualRows !== manifest.rowCount) {
-      throw new Error(
-        `WorldLoader.LoadSeed(${worldId}): loaded row count ${actualRows} differs from manifest rowCount ${manifest.rowCount}`,
-      );
     }
 
     const rowsSha = createHash('sha256')

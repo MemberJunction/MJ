@@ -271,13 +271,21 @@ describe('MLModelInferenceProcessor — empty feature assembly guardrail', () =>
 
 describe('MLModelInferenceProcessor — lifecycle status gate (W1 → S7.3, F-SCO-1)', () => {
   for (const status of ['Draft', 'Archived'] as const) {
-    it(`refuses a ${status} model in Preflight before any record is scored`, async () => {
+    it(`refuses a ${status} model in Preflight before any record is scored or artifact is downloaded`, async () => {
       const model = new FakeMLModel();
       model.Status = status;
       const { deps, sidecar } = buildDeps(model);
+      let artifactLoads = 0;
+      deps.artifactLoader = {
+        async load(): Promise<Uint8Array | null> {
+          artifactLoads++;
+          return new Uint8Array([1, 2, 3]);
+        },
+      };
       const processor = buildProcessor(deps);
       await expect(processor.Preflight(CTX)).rejects.toBeInstanceOf(ModelNotScorableError);
       await expect(processor.Preflight(CTX)).rejects.toThrow(`is ${status} and cannot score records`);
+      expect(artifactLoads).toBe(0);
       expect(sidecar.Requests).toHaveLength(0);
     });
 
@@ -310,5 +318,13 @@ describe('MLModelInferenceProcessor — lifecycle status gate (W1 → S7.3, F-SC
     model.ArtifactFileID = null;
     const { deps } = buildDeps(model);
     await expect(buildProcessor(deps).Preflight(CTX)).rejects.toBeInstanceOf(ModelNeedsTrainingError);
+  });
+
+  it('refuses an Archived model with ModelNotScorableError even when its artifact was purged (F1)', async () => {
+    const model = new FakeMLModel();
+    model.Status = 'Archived';
+    model.ArtifactFileID = null;
+    const { deps } = buildDeps(model);
+    await expect(buildProcessor(deps).Preflight(CTX)).rejects.toBeInstanceOf(ModelNotScorableError);
   });
 });

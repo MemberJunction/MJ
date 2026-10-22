@@ -20,7 +20,6 @@ import {
 import { ImportanceDisplay } from '@memberjunction/predictive-studio-core';
 
 import {
-  ModelImportanceView,
   PSFeatureBar,
   PSMetricDisplay,
   PS_FEATURE_DOMINANCE_THRESHOLD,
@@ -305,12 +304,25 @@ export class PSModelDetailComponent {
 
   // ── Feature Importance & Leakage Gate ──
 
+  /** Cached parsed and displayed importance bars for the last (algorithm, importance JSON) pair. */
+  private importanceCache: { key: string; allBars: PSFeatureBar[]; displayedBars: PSFeatureBar[] } | null = null;
+
+  private get cachedImportance(): { allBars: PSFeatureBar[]; displayedBars: PSFeatureBar[] } {
+    if (!this.Model) return { allBars: [], displayedBars: [] };
+    const key = `${this.Model.Algorithm}\u0000${this.Model.FeatureImportance}`;
+    if (this.importanceCache?.key !== key) {
+      const allBars = ParseFeatureImportance(this.Model.FeatureImportance, 6).map((b) => ({
+        ...b,
+        name: HumanizeFeatureName(b.name),
+      }));
+      const displayedBars = ImportanceDisplay.GlobalDriversShowable(this.Model.Algorithm) ? allBars : [];
+      this.importanceCache = { key, allBars, displayedBars };
+    }
+    return this.importanceCache;
+  }
+
   public get Importance(): PSFeatureBar[] {
-    if (!this.Model) return [];
-    return ParseFeatureImportance(this.Model.FeatureImportance, 6).map((b) => ({
-      ...b,
-      name: HumanizeFeatureName(b.name),
-    }));
+    return this.cachedImportance.allBars;
   }
 
   /** @deprecated Use {@link Importance}. */
@@ -318,22 +330,13 @@ export class PSModelDetailComponent {
     return this.Importance;
   }
 
-  /** Bars of the last (algorithm, importance JSON) pair; the template reads `DisplayedImportance` every change-detection pass. */
-  private displayedImportanceCache: { key: string; bars: PSFeatureBar[] } | null = null;
-
   /**
    * The importance bars shown in the Feature Importance card (empty for split / impurity importance). Cached on the
    * algorithm and importance JSON, so the parse runs once per model and again whenever either value changes
    * (coding standards §7: getters Angular bindings hit).
    */
   public get DisplayedImportance(): PSFeatureBar[] {
-    if (!this.Model) return [];
-    const key = `${this.Model.Algorithm}\u0000${this.Model.FeatureImportance}`;
-    if (this.displayedImportanceCache?.key !== key) {
-      const bars = ModelImportanceView.DisplayedFeatureImportance(this.Model.Algorithm, this.Model.FeatureImportance, 6).map((b) => ({ ...b, name: HumanizeFeatureName(b.name) }));
-      this.displayedImportanceCache = { key, bars };
-    }
-    return this.displayedImportanceCache.bars;
+    return this.cachedImportance.displayedBars;
   }
 
   /** True when the model has importance data that is hidden because of its kind. */

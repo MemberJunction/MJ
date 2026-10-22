@@ -610,7 +610,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
             const icon = d.up ? 'fa-arrow-up' : 'fa-arrow-down';
             const label = this.escapeHtml(d.label);
             return `<span class="ps-why-chip ${cls}" title="${label}"><i class="fa-solid ${icon}"></i> ${label}</span>`;
-          }).join('');
+          }).join(' ');
           return `<div class="pg-drivers-cell">${chips}</div>`;
         },
       },
@@ -756,7 +756,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
           EntityName: 'MJ: Process Run Details',
           ExtraFilter: `ProcessRunID = '${effectiveRunId.replace(/'/g, "''")}'`,
           OrderBy: '__mj_CreatedAt ASC',
-          MaxRows: 10000,
+          IgnoreMaxRows: true,
           ResultType: 'entity_object',
         },
         user,

@@ -105,5 +105,12 @@ if ((vitestRes.status ?? 1) !== 0 && gateFilter === undefined) {
   console.error(`vitest exited ${vitestRes.status}`);
 }
 
+if (env.TRUTH_KEEP_FIXTURES !== '1') {
+  const cleanRes = spawnSync('pnpm', ['run', 'truth:clean'], { cwd: root, env, stdio: 'inherit' });
+  if ((cleanRes.status ?? 0) !== 0) {
+    console.warn(`truth:clean exited ${cleanRes.status}`);
+  }
+}
+
 const reportRes = spawnSync(process.execPath, [path.join(root, 'scripts', 'report.mjs')], { cwd: root, env, stdio: 'inherit' });
 process.exit(reportRes.status ?? 1);

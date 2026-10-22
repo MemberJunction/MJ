@@ -155,7 +155,7 @@ export class ScenarioLoader {
     });
 
     await pool.request().query(`DELETE FROM pstruth.[${table}];`);
-    await BulkLoader.Insert(pool, table, activeCols, coercedRows);
+    await BulkLoader.Insert(pool, table, activeCols, coercedRows, tableCols);
 
     const countRes = await pool.request().query<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM pstruth.[${table}]`);
     const actualRows = Number(countRes.recordset[0]?.cnt ?? 0);

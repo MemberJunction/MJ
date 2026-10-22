@@ -182,12 +182,17 @@ describe('resolveEntity', () => {
 });
 
 describe('GenerateMarkdownReport — copy (W1 → S9.3)', () => {
-  const report = (features: Array<{ feature: string; importance: number }>) =>
-    GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', 0.72, 'Good', 'Right about 8 out of 10 times.', true, features, []);
-  it('prints the hidden-list note instead of inventing a ranking', () => {
+  const report = (features: Array<{ feature: string; importance: number }>, importanceHidden = true) =>
+    GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', 0.72, 'Good', 'Right about 8 out of 10 times.', true, features, [], importanceHidden);
+  it('prints the hidden-list note instead of inventing a ranking when importance is hidden', () => {
     const md = report([]);
     expect(md).toContain('split or impurity counts');
     expect(md).not.toMatch(/Features analyzed from source entity/);
+  });
+  it('prints a plain no-weights note when a coefficient model recorded no importance weights', () => {
+    const md = report([], false);
+    expect(md).toContain('No feature importance weights were recorded');
+    expect(md).not.toContain('split or impurity counts');
   });
   it('contains no causal phrase and no canned "honest holdout" sentence', () => {
     expect(CausalCopy.FindPhrases(report([{ feature: 'AutoRenew', importance: 0.6 }]))).toEqual([]);
