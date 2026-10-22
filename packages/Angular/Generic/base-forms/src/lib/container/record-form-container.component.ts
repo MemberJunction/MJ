@@ -39,6 +39,7 @@ import { BuildFormCompositionSnapshot, type FormAgentLinksSummary, type FormAgen
 import { FormCompositionRegistry } from '../chrome/form-composition-registry';
 import { FormPanelAdminService } from '../panel-manager/form-panel-admin.service';
 import { MjRecordLinksComponent } from '../links/record-links.component';
+import { TOOLBAR_PINS_SETTING_KEY, DEFAULT_PINNED_TOOLBAR_ACTIONS } from '../toolbar/form-toolbar.component';
 import type { FormChromeSpec } from '../chrome/form-chrome';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
@@ -2011,8 +2012,48 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     void this.prewarmRecordLinks(record);
   }
 
+  /**
+   * Returns true when the 'links' toolbar action is pinned for the current user
+   * (either in their saved `mj.form.toolbar.pinnedActions` setting or in `DefaultPinnedActions`).
+   * Network pre-warming of incoming `GetRecordDependencies` only runs on form load when the
+   * user has pinned the Links button to their toolbar; otherwise only the zero-cost in-memory
+   * outgoing links summary is computed until the user opens the Links drawer.
+   */
+  public IsLinksActionPinned(): boolean {
+    try {
+      const provider = this.ProviderToUse;
+      const engine = provider
+        ? (UserInfoEngine.GetProviderInstance<UserInfoEngine>(provider, UserInfoEngine) as UserInfoEngine)
+        : UserInfoEngine.Instance;
+      const activeEngine = engine?.Loaded ? engine : UserInfoEngine.Instance;
+      const raw = activeEngine?.GetSetting(TOOLBAR_PINS_SETTING_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { Pinned?: unknown };
+        if (Array.isArray(parsed.Pinned)) {
+          return parsed.Pinned.includes('links');
+        }
+      }
+    } catch {
+      // Fall back to default pinned actions
+    }
+    const defaults = this.EffectiveToolbarConfig?.DefaultPinnedActions ?? DEFAULT_PINNED_TOOLBAR_ACTIONS;
+    return defaults.includes('links');
+  }
+
   private async prewarmRecordLinks(record: BaseEntity): Promise<void> {
     if (!record?.IsSaved || !record.EntityInfo) return;
+    // Always compute the zero-cost in-memory outgoing links summary from the record's FK / polymorphic-FK fields.
+    const outgoingSummary = MjRecordLinksComponent.BuildOutgoingLinksSummary(record, this.ProviderToUse);
+    this.LinksSummary = outgoingSummary;
+    this.LinkCount = outgoingSummary.TotalCount;
+
+    // Only query incoming GetRecordDependencies over the network if the user has pinned the Links button.
+    if (!this.IsLinksActionPinned()) {
+      this.scheduleChromeResolve();
+      this.cdr.markForCheck();
+      return;
+    }
+
     try {
       const summary = await MjRecordLinksComponent.PrewarmRecordLinkCount(record, this.ProviderToUse);
       if (this.destroyed || this.EffectiveRecord !== record) return;

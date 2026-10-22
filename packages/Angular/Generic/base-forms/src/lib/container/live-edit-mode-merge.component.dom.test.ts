@@ -4,6 +4,7 @@ import { BaseEntity, EntityInfo, RunView } from '@memberjunction/core';
 import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
 import { MjRecordFormContainerComponent } from './record-form-container.component';
 import { MjFormToolbarComponent } from '../toolbar/form-toolbar.component';
+import { MjRecordLinksComponent } from '../links/record-links.component';
 import { FormRecordRefreshCoordinator, type FormRemoteUpdateEvent } from '../form-record-refresh.coordinator';
 
 @Component({ standalone: true, selector: 'mj-form-toolbar', template: '' })
@@ -291,5 +292,43 @@ describe('PerformLiveEditModeMerge & Toolbar Conflict/Links Integration', () => 
         expect(linksItem).toBeDefined();
         expect(linksItem?.Badge).toBe(4);
         expect(linksItem?.CssClass).toContain('mj-forms-toolbar__btn--active');
+    });
+
+    it('only pre-warms network GetRecordDependencies when the links button is pinned for the user', async () => {
+        const record = makeDealRecord();
+        const prewarmSpy = vi.spyOn(MjRecordLinksComponent, 'PrewarmRecordLinkCount').mockResolvedValue({
+            TotalCount: 9,
+            OutgoingCount: 1,
+            IncomingCount: 8,
+            ByEntity: []
+        });
+
+        const fixture = renderComponentFixture(MjRecordFormContainerComponent, {
+            imports: CONTAINER_CHILD_STUBS,
+            declarations: [MjRecordFormContainerComponent],
+            inputs: {
+                Record: record,
+                EntityInfo: record.EntityInfo,
+                EditMode: false
+            }
+        });
+        const container = fixture.componentInstance;
+
+        // 1. Default user (links NOT pinned): network PrewarmRecordLinkCount should NOT be called
+        expect(container.IsLinksActionPinned()).toBe(false);
+        await (container as unknown as { prewarmRecordLinks(r: BaseEntity): Promise<void> }).prewarmRecordLinks(record);
+        expect(prewarmSpy).not.toHaveBeenCalled();
+
+        // 2. User with 'links' pinned: network PrewarmRecordLinkCount SHOULD be called
+        fixture.componentRef.setInput('ToolbarConfig', {
+            ...container.EffectiveToolbarConfig,
+            DefaultPinnedActions: ['favorite', 'history', 'links']
+        });
+        expect(container.IsLinksActionPinned()).toBe(true);
+        await (container as unknown as { prewarmRecordLinks(r: BaseEntity): Promise<void> }).prewarmRecordLinks(record);
+        expect(prewarmSpy).toHaveBeenCalledTimes(1);
+        expect(container.LinkCount).toBe(9);
+
+        prewarmSpy.mockRestore();
     });
 });

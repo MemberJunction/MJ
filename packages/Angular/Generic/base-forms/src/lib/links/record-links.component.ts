@@ -228,15 +228,67 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
     }
 
     /**
+     * Synchronously computes the outgoing links summary from the record's in-memory FK and
+     * polymorphic-FK fields without making any network calls.
+     */
+    public static BuildOutgoingLinksSummary(
+        record: BaseEntity,
+        provider: IMetadataProvider | null | undefined
+    ): RecordLinksSummary {
+        if (!record || !record.IsSaved || !record.EntityInfo) {
+            return { TotalCount: 0, OutgoingCount: 0, IncomingCount: 0, ByEntity: [] };
+        }
+        const entities = provider?.Entities ?? [];
+        const outgoing = MjRecordLinksComponent.extractOutgoingCandidates(record, provider, entities);
+        const byEntityMap = new Map<string, {
+            EntityName: string;
+            EntityDisplayName: string;
+            Count: number;
+            SampleNames: string[];
+        }>();
+
+        for (const out of outgoing) {
+            const displayName = out.RelatedEntity?.DisplayNameOrName || out.EntityName;
+            let entry = byEntityMap.get(out.EntityName);
+            if (!entry) {
+                entry = {
+                    EntityName: out.EntityName,
+                    EntityDisplayName: displayName,
+                    Count: 0,
+                    SampleNames: []
+                };
+                byEntityMap.set(out.EntityName, entry);
+            }
+            entry.Count += 1;
+            if (out.PreResolvedDisplayName && entry.SampleNames.length < 3) {
+                entry.SampleNames.push(out.PreResolvedDisplayName);
+            }
+        }
+
+        return {
+            TotalCount: outgoing.length,
+            OutgoingCount: outgoing.length,
+            IncomingCount: 0,
+            ByEntity: Array.from(byEntityMap.values()).map(e => ({
+                EntityName: e.EntityName,
+                EntityDisplayName: e.EntityDisplayName,
+                Direction: 'outgoing' as const,
+                Count: e.Count,
+                SampleNames: e.SampleNames
+            }))
+        };
+    }
+
+    /**
      * Pre-warms the total bidirectional link count (outgoing FK/polymorphic fields on the record
      * + incoming `GetRecordDependencies`) and caches the incoming dependencies so opening the
      * `<mj-record-links>` drawer reuses them without a duplicate network request.
      */
     public static async PrewarmRecordLinkCount(
         record: BaseEntity,
-        provider: IMetadataProvider
+        provider: IMetadataProvider | null | undefined
     ): Promise<RecordLinksSummary> {
-        if (!record || !record.IsSaved || !record.EntityInfo) {
+        if (!record || !record.IsSaved || !record.EntityInfo || !provider) {
             return { TotalCount: 0, OutgoingCount: 0, IncomingCount: 0, ByEntity: [] };
         }
         const entities = provider.Entities ?? [];
@@ -353,7 +405,7 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
 
     private static extractOutgoingCandidates(
         record: BaseEntity,
-        provider: IMetadataProvider,
+        provider: IMetadataProvider | null | undefined,
         entities: EntityInfo[]
     ): OutgoingCandidate[] {
         const candidates: OutgoingCandidate[] = [];
@@ -377,7 +429,7 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
                     continue;
                 }
                 const entityRefStr = String(rawEntityRef).trim();
-                const targetEntity = provider.EntityByID(entityRefStr) ?? MjRecordLinksComponent.findEntityInfoStatic(entities, entityRefStr);
+                const targetEntity = provider?.EntityByID?.(entityRefStr) ?? MjRecordLinksComponent.findEntityInfoStatic(entities, entityRefStr);
                 if (!targetEntity || EXCLUDED_SYSTEM_ENTITIES.has(targetEntity.Name.trim())) {
                     continue;
                 }
