@@ -140,12 +140,12 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJInteractionOffers', sectionName: 'Interaction Offers', isExpanded: false },
             { sectionKey: 'mJConversationBranches', sectionName: 'Conversation Branches', isExpanded: false },
             { sectionKey: 'mJFeaturePipelineVersions', sectionName: 'Feature Pipeline Versions', isExpanded: false },
-            { sectionKey: 'mJAIBridgeAgentIdentities', sectionName: 'AI Bridge Agent Identities', isExpanded: false },
-            { sectionKey: 'mJAIAgentUserPolicies', sectionName: 'AI Agent User Policies', isExpanded: false },
             { sectionKey: 'mJUserViewsApprovedByUserID', sectionName: 'User Views (Approved By User ID)', isExpanded: false },
             { sectionKey: 'mJDashboardsApprovedByUserID', sectionName: 'Dashboards (Approved By User ID)', isExpanded: false },
             { sectionKey: 'mJQueries', sectionName: 'Queries', isExpanded: false },
-            { sectionKey: 'mJComponents', sectionName: 'Components', isExpanded: false }
+            { sectionKey: 'mJComponents', sectionName: 'Components', isExpanded: false },
+            { sectionKey: 'mJAIBridgeAgentIdentities', sectionName: 'AI Bridge Agent Identities', isExpanded: false },
+            { sectionKey: 'mJAIAgentUserPolicies', sectionName: 'AI Agent User Policies', isExpanded: false }
         ]);
     }
 }
