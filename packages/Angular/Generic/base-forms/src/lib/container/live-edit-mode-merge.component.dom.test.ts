@@ -401,7 +401,7 @@ describe('PerformLiveEditModeMerge & Toolbar Conflict/Links Integration', () => 
         expect(actions.some(a => a.Metadata.Key === 'deal-approval-check')).toBe(true);
         expect(lifecycleLog).toContain('init:Deals');
 
-        await container.prewarmToolbarActions(record);
+        await container.PrewarmToolbarActions(record);
         expect(lifecycleLog).toContain('prewarm:pinned=false');
 
         // Simulate user pinning 'deal-approval-check' in the More menu

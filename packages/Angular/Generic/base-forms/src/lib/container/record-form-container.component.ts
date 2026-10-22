@@ -2033,7 +2033,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.badgeCountsLoaded = true;
     // Fire and forget — counts land while the form renders; nothing awaits them.
     void this.loadFormCounts(record);
-    void this.prewarmToolbarActions(record);
+    void this.PrewarmToolbarActions(record);
   }
 
   /**
@@ -2211,7 +2211,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   /**
    * Runs `OnPrewarm` across all applicable {@link BaseFormToolbarAction} plugins for the active record.
    */
-  public async prewarmToolbarActions(record: BaseEntity): Promise<void> {
+  public async PrewarmToolbarActions(record: BaseEntity): Promise<void> {
     if (!record?.EntityInfo) return;
     const actions = this.ensureToolbarActions();
     await Promise.all(
@@ -3094,7 +3094,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const currentIndex =
       'Change' in event && typeof event.Index === 'number'
         ? event.Index
-        : Math.max(0, previewable.findIndex((c) => c.ID === change.ID));
+        : Math.max(0, previewable.findIndex((c) => UUIDsEqual(c.ID, change.ID)));
     const totalCount =
       'Change' in event && typeof event.TotalCount === 'number'
         ? event.TotalCount

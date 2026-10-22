@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { By } from '@angular/platform-browser';
-import { CompositeKey, type BaseEntity } from '@memberjunction/core';
+import { CompositeKey, type BaseEntity, type EntityInfo } from '@memberjunction/core';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { MjRecordFormContainerComponent } from './record-form-container.component';
 import {
@@ -15,7 +15,7 @@ import type { FormCompositionSnapshot } from '../chrome/form-composition-snapsho
 import { DETAILS_SECTION_KEY } from '../chrome/form-chrome';
 import type { FormChromeSpec } from '../chrome/form-chrome';
 import type { BaseFormComponent } from '../base-form-component';
-import { UserInfoEngine } from '@memberjunction/core-entities';
+import { UserInfoEngine, type MJRecordChangeEntity } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { FORM_PLACEMENT_PREVIEW, FormPlacementPreview, PLACEMENT_PREVIEW_KEY } from '../panel-slot/placement-preview';
 import { ForgetHiddenPanelsSettings } from '../panel-slot/panel-hides';
@@ -1143,10 +1143,13 @@ describe('MjRecordFormContainerComponent (DOM) — Time-Travel Form Version Prev
         DisplayName: 'Janet Doe',
       }),
       ChangesJSON: '{}',
-    };
+    } satisfies Pick<
+      MJRecordChangeEntity,
+      'ID' | 'Type' | 'Source' | 'User' | 'ChangedAt' | 'ChangesDescription' | 'FullRecordJSON' | 'ChangesJSON'
+    >;
 
     f.componentInstance.OnPreviewVersionSelected({
-      Change: histChange as never,
+      Change: histChange as unknown as MJRecordChangeEntity,
       Index: 1,
       TotalCount: 2,
     });
@@ -1187,10 +1190,11 @@ describe('BaseFormToolbarAction — subclass override and metadata inheritance',
     class CustomPersonLinksToolbarAction extends RecordLinksToolbarAction {}
     void CustomPersonLinksToolbarAction;
 
-    const peopleActions = ResolveFormToolbarActionsForEntity({
+    const peopleEntity = {
       Name: 'MJ_BizApps_Common: People',
       SchemaName: 'common',
-    } as never);
+    } satisfies Pick<EntityInfo, 'Name' | 'SchemaName'>;
+    const peopleActions = ResolveFormToolbarActionsForEntity(peopleEntity as unknown as EntityInfo);
     const linksForPeople = peopleActions.find((a) => a.Metadata.Key === 'links');
     expect(linksForPeople).toBeInstanceOf(CustomPersonLinksToolbarAction);
     expect(linksForPeople?.Metadata.MenuLabel).toBe('Person Graph');
@@ -1199,10 +1203,11 @@ describe('BaseFormToolbarAction — subclass override and metadata inheritance',
     expect(linksForPeople?.Metadata.Pinnable).toBe(true);
 
     // Non-matching entity still resolves the base RecordLinksToolbarAction
-    const accountActions = ResolveFormToolbarActionsForEntity({
+    const accountEntity = {
       Name: 'Accounts',
       SchemaName: 'crm',
-    } as never);
+    } satisfies Pick<EntityInfo, 'Name' | 'SchemaName'>;
+    const accountActions = ResolveFormToolbarActionsForEntity(accountEntity as unknown as EntityInfo);
     const linksForAccounts = accountActions.find((a) => a.Metadata.Key === 'links');
     expect(linksForAccounts).toBeInstanceOf(RecordLinksToolbarAction);
     expect(linksForAccounts).not.toBeInstanceOf(CustomPersonLinksToolbarAction);
