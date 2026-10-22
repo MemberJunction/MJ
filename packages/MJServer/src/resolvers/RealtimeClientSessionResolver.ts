@@ -33,7 +33,7 @@
  */
 import { Resolver, Mutation, Arg, Ctx, Int, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { AuthorizationEvaluator, UserInfo, IMetadataProvider, LogError, LogErrorEx, LogStatus, RunView, BaseEntity } from '@memberjunction/core';
+import { AuthorizationEvaluator, UserInfo, IMetadataProvider, DatabaseProviderBase, LogError, LogErrorEx, LogStatus, RunView, BaseEntity } from '@memberjunction/core';
 import { UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import {
     MJAIAgentEntity,
@@ -62,6 +62,7 @@ import {
     RealtimeAllowedAgent,
     RealtimeDirectActionsConfig,
     REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION,
+    SqlRealtimeRecordingLedger,
     resolveRecordingStorageAccountID,
     storeRealtimeRecording,
     writeRealtimeRecordingSegment,
@@ -596,7 +597,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         );
 
         // Best-effort: stamp recording-start metadata when the browser captured (with consent) at start.
-        await this.stampRecordingStart(session, recordingConsent, recordingStartedAt);
+        await this.stampRecordingStart(session, recordingConsent, recordingStartedAt, contextUser, provider);
 
         const clientTools = this.parseClientTools(clientToolsJson);
         const channelCandidates = this.parseChannelCandidates(channelCandidatesJson);
@@ -1477,7 +1478,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     private requireUserAndProvider(
         userPayload: AppContext['userPayload'],
         providers: AppContext['providers'],
-    ): { contextUser: UserInfo; provider: IMetadataProvider } {
+    ): { contextUser: UserInfo; provider: DatabaseProviderBase } {
         const contextUser = this.GetUserFromPayload(userPayload);
         if (!contextUser) {
             throw new Error('Not authenticated: no user context for realtime session operation');
@@ -2845,17 +2846,24 @@ export class RealtimeClientSessionResolver extends ResolverBase {
 
     /**
      * Stamps `RecordingStartedAt` (the recording `t0` alignment origin) + `RecordingMedia` on a
-     * just-started session when the browser captured WITH consent. Best-effort: a parse/save failure
-     * is logged and swallowed — a recording-metadata problem must never fail the session start.
+     * just-started session when the browser captured WITH consent. `RecordingStartedAt` goes through
+     * the entity save (and stays set on the in-memory session, so a later save of it cannot clear it);
+     * `RecordingMedia` is a recording-ledger column that an entity save cannot write (#6010), so it goes
+     * through the ledger's `spStampAIAgentSessionRecordingFile` proc. Best-effort: a parse/save/stamp
+     * failure is logged and swallowed — a recording-metadata problem must never fail the session start.
      *
      * @param session The freshly created/loaded session.
      * @param recordingConsent Whether the user consented to recording — only `true` stamps anything.
      * @param recordingStartedAt ISO-8601 recording start timestamp from the browser.
+     * @param contextUser The caller, on whose behalf the proc runs.
+     * @param provider The server-side database provider the proc runs through.
      */
     private async stampRecordingStart(
         session: MJAIAgentSessionEntity,
         recordingConsent: boolean | undefined,
         recordingStartedAt: string | undefined,
+        contextUser: UserInfo,
+        provider: DatabaseProviderBase,
     ): Promise<void> {
         if (recordingConsent !== true || !recordingStartedAt) {
             return;
@@ -2866,10 +2874,17 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return;
         }
         session.RecordingStartedAt = startedAt;
-        session.RecordingMedia = 'Audio';
         if (!(await session.Save())) {
             LogError(
                 `RealtimeClientSessionResolver.stampRecordingStart save failed for session ${session.ID}: ${this.describeSaveFailure(session)}`,
+            );
+        }
+        try {
+            await new SqlRealtimeRecordingLedger(provider, contextUser).StampFile(session.ID, { media: 'Audio' });
+        } catch (error) {
+            LogError(
+                `RealtimeClientSessionResolver.stampRecordingStart media stamp failed for session ${session.ID}: ` +
+                    `${error instanceof Error ? error.message : String(error)}`,
             );
         }
     }

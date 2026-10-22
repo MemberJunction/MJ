@@ -14,10 +14,11 @@
  * @module @memberjunction/ai-agents
  */
 import { randomBytes } from 'crypto';
-import { IMetadataProvider, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { IMetadataProvider, DatabaseProviderBase, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { MJAIAgentEntity, MJAIAgentSessionEntity, MJFileEntityRecordLinkEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine, FileStorageBase } from '@memberjunction/storage';
 import { RealtimeRecordingMedia } from './realtime-recording-capture';
+import { SqlRealtimeRecordingLedger } from './realtime-recording-ledger';
 
 /**
  * Resolves the storage account a session recording should be written to: the agent's
@@ -327,7 +328,8 @@ export interface StoreRealtimeRecordingResult {
 /**
  * Uploads a session recording to MJStorage, links it to the `AIAgentSession` (via
  * `MJ: File Entity Record Links`), and stamps `RecordingFileID` / `RecordingMedia` / `RecordingStartedAt`
- * on the session. Never throws — a recording-storage failure must not fail the session; failures are
+ * on the session through the ledger's `spStampAIAgentSessionRecordingFile` proc (the recording columns are
+ * not updatable through an entity save, #6010). Never throws — a recording-storage failure must not fail the session; failures are
  * logged AND carried out in the result so the caller can report the real cause (a bare `null` used to
  * strand reasons like Drive's "Service Accounts do not have storage quota" three layers down).
  *
@@ -374,7 +376,7 @@ async function linkAndStamp(input: StoreRealtimeRecordingInput, fileID: string):
     const sessionLoaded = await session.Load(SessionID);
     await LinkRecordingToSession(fileID, SessionID, ContextUser, Provider);
     if (sessionLoaded) {
-        await stampRecordingOnSession(session, fileID, Media, StartedAt);
+        await stampRecordingOnSession(session, fileID, Media, StartedAt, ContextUser, Provider);
     }
     return { FileID: fileID, ErrorMessage: null, Superseded: false };
 }
@@ -396,9 +398,9 @@ async function stampPreservingExisting(input: StoreRealtimeRecordingInput, fileI
         LogStatus(`storeRealtimeRecording: session ${SessionID} already has recording file ${session.RecordingFileID}; the just-uploaded file ${fileID} is orphaned and was not linked or stamped`);
         return { FileID: fileID, ErrorMessage: null, Superseded: true };
     }
-    if (!await stampRecordingOnSession(session, fileID, Media, StartedAt)) {
-        const reason = session.LatestResult?.CompleteMessage ?? 'unknown error';
-        return { FileID: fileID, ErrorMessage: `could not stamp file ${fileID} on session ${SessionID} (file orphaned, not linked): ${reason}`, Superseded: false };
+    const stampFailure = await stampRecordingOnSession(session, fileID, Media, StartedAt, ContextUser, Provider);
+    if (stampFailure !== null) {
+        return { FileID: fileID, ErrorMessage: `could not stamp file ${fileID} on session ${SessionID} (file orphaned, not linked): ${stampFailure}`, Superseded: false };
     }
     await LinkRecordingToSession(fileID, SessionID, ContextUser, Provider);
     return { FileID: fileID, ErrorMessage: null, Superseded: false };
@@ -429,18 +431,36 @@ export async function LinkRecordingToSession(fileID: string, sessionID: string, 
     return true;
 }
 
-/** Stamps the recording fields on an already-loaded session (file + media kind + t0). Logs and returns false on a failed save. */
+/**
+ * Stamps the recording file, media kind and t0 on a session through `spStampAIAgentSessionRecordingFile`
+ * (the recording columns are not updatable through an entity save, #6010). Logs with the session id and
+ * returns the failure reason, or `null` when the stamp landed. Never throws.
+ */
 async function stampRecordingOnSession(
-    session: MJAIAgentSessionEntity, fileID: string, media: RealtimeRecordingMedia, startedAt: Date
-): Promise<boolean> {
-    session.RecordingFileID = fileID;
-    session.RecordingMedia = media;
-    session.RecordingStartedAt = startedAt;
-    if (!await session.Save()) {
-        LogError(`storeRealtimeRecording: failed to stamp recording fields on session ${session.ID}: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-        return false;
+    session: MJAIAgentSessionEntity, fileID: string, media: RealtimeRecordingMedia, startedAt: Date,
+    contextUser: UserInfo, provider: IMetadataProvider
+): Promise<string | null> {
+    try {
+        const ledger = new SqlRealtimeRecordingLedger(requireDatabaseProvider(provider, session.ID), contextUser);
+        await ledger.StampFile(session.ID, { fileID, media, startedAt });
+        return null;
+    } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        LogError(`storeRealtimeRecording: failed to stamp recording file ${fileID} on session ${session.ID}: ${reason}`);
+        return reason;
     }
-    return true;
+}
+
+/**
+ * The provider as a server-side database provider. Checked structurally (it can run SQL) rather than with
+ * `instanceof`, so a provider from another module copy or a test double still qualifies. The stamp proc
+ * call needs `ExecuteSQL`, so a provider without it fails here with a clear message.
+ */
+function requireDatabaseProvider(provider: IMetadataProvider, sessionID: string): DatabaseProviderBase {
+    if (typeof (provider as Partial<DatabaseProviderBase>).ExecuteSQL !== 'function') {
+        throw new Error(`session ${sessionID}: the recording file can only be stamped through a server-side database provider`);
+    }
+    return provider as unknown as DatabaseProviderBase;
 }
 
 /** @deprecated Use {@link StoreRealtimeRecording}. */

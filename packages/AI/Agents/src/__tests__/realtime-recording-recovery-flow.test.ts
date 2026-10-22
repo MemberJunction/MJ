@@ -16,7 +16,9 @@ import {
 } from '../realtime/realtime-recording-store';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
-const FOLDER = 'realtime-recordings/sess-1';
+const SESSION = '11111111-2222-4333-8444-555555555555';
+const FILE = '66666666-7777-4888-9999-000000000000';
+const FOLDER = `realtime-recordings/${SESSION}`;
 const user = {} as UserInfo;
 /** Every recovery attempt uploads under its own name: `recording-recovered-<epoch ms>-<random hex>.wav`. */
 const RECOVERED_NAME = /^recording-recovered-\d+-[0-9a-f]+\.wav$/;
@@ -66,13 +68,36 @@ class FakeBucket {
 
 interface SessionRow { RecordingFileID: string | null; RecordingMedia: string | null; RecordingStartedAt: Date | null }
 
-/** Fake provider: every GetEntityObject returns a fresh object over one shared in-memory session row. */
+/**
+ * Fake provider: every GetEntityObject returns a fresh object over one shared in-memory session row. The
+ * recording columns are written only by `spStampAIAgentSessionRecordingFile`, through ExecuteSQL, as in production.
+ */
 class FakeProvider {
     public readonly Row: SessionRow = { RecordingFileID: null, RecordingMedia: null, RecordingStartedAt: null };
-    public SessionSaveResult = true;
+    /** When false the stamp proc throws. */
+    public StampSucceeds = true;
     public SessionLoadResult = true;
     public readonly Links: { FileID: string }[] = [];
-    /** Successful writes in the order they happened: `session-save` (the stamp) and `link-save`. */
+    /** Every session `Save()` — the recording stamp must never come through one. */
+    public SessionSaves = 0;
+    /** Every SQL call, as made. */
+    public readonly SqlCalls: { Sql: string; Params: unknown[] | undefined }[] = [];
+    public readonly MJCoreSchemaName = '__mj';
+    public readonly Dialect = {
+        ProcedureCallSyntax: (schema: string, name: string, params: string[]): string => `EXEC [${schema}].[${name}] ${params.join(', ')}`,
+        ParameterPlaceholder: (index: number): string => `@p${index}`,
+    };
+    public async ExecuteSQL(sql: string, params?: unknown[]): Promise<unknown[]> {
+        this.SqlCalls.push({ Sql: sql, Params: params });
+        if (!sql.includes('spStampAIAgentSessionRecordingFile')) return [];
+        if (!this.StampSucceeds) throw new Error('stamp refused');
+        if (params?.[1] != null) this.Row.RecordingFileID = params[1] as string;
+        if (params?.[2] != null) this.Row.RecordingMedia = params[2] as string;
+        if (params?.[3] != null) this.Row.RecordingStartedAt = params[3] as Date;
+        this.Events.push('stamp-proc');
+        return [{ RecordingStatus: null }];
+    }
+    /** Successful writes in the order they happened: `stamp-proc` (the stamp) and `link-save`. */
     public readonly Events: string[] = [];
     /** Runs inside the link save. Recovery links only after its stamp, so this models a writer landing after it. */
     public OnLinkSave: (() => void) | null = null;
@@ -91,25 +116,17 @@ class FakeProvider {
             return link;
         }
         const row = this.Row;
-        const events = this.Events;
-        const saveResult = (): boolean => this.SessionSaveResult;
         const loadResult = (): boolean => this.SessionLoadResult;
+        const countSave = (): void => { this.SessionSaves++; };
         const session = {
-            RecordingFileID: null as string | null, RecordingMedia: null as string | null, RecordingStartedAt: null as Date | null,
+            ID: SESSION, RecordingFileID: null as string | null,
             LatestResult: { CompleteMessage: 'save refused' },
             async Load(): Promise<boolean> {
                 if (!loadResult()) return false;
                 session.RecordingFileID = row.RecordingFileID;
                 return true;
             },
-            async Save(): Promise<boolean> {
-                if (!saveResult()) return false;
-                row.RecordingFileID = session.RecordingFileID;
-                row.RecordingMedia = session.RecordingMedia;
-                row.RecordingStartedAt = session.RecordingStartedAt;
-                events.push('session-save');
-                return true;
-            },
+            async Save(): Promise<boolean> { countSave(); return true; },
         };
         return session;
     }
@@ -123,7 +140,7 @@ let uploads: UploadArgs[];
 
 function recoverInput() {
     return {
-        SessionID: 'sess-1', StorageAccountID: 'acct-1', StartedAt: new Date('2026-08-16T00:00:00Z'),
+        SessionID: SESSION, StorageAccountID: 'acct-1', StartedAt: new Date('2026-08-16T00:00:00Z'),
         ContextUser: user, Provider: provider as unknown as IMetadataProvider,
     };
 }
@@ -144,7 +161,7 @@ beforeEach(() => {
     uploadFileMock.mockImplementation(async (args: UploadArgs) => {
         uploads.push(args);
         bucket.Put(`${FOLDER}/${args.fileName}`, args.content, args.mimeType);
-        return { FileID: 'file-new' };
+        return { FileID: FILE };
     });
 });
 
@@ -157,7 +174,7 @@ describe('RecoverRealtimeRecordingFromSegments', () => {
 
         const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
 
-        expect(result).toMatchObject({ Outcome: 'Recovered', FileID: 'file-new', SegmentCount: 2, MissingIndexes: [1], ErrorMessage: null });
+        expect(result).toMatchObject({ Outcome: 'Recovered', FileID: FILE, SegmentCount: 2, MissingIndexes: [1], ErrorMessage: null });
         expect(uploads).toHaveLength(1);
         expect(uploads[0].fileName).toMatch(RECOVERED_NAME);
         expect(uploads[0].mimeType).toBe('audio/wav');
@@ -166,7 +183,7 @@ describe('RecoverRealtimeRecordingFromSegments', () => {
         expect(uploads[0].description).toContain('Recovered from 2 crash-recovery segment(s)');
         expect(uploads[0].description).toContain('missing segment(s) 1');
         expect(uploads[0].description).toContain('estimated silence');
-        expect(provider.Row.RecordingFileID).toBe('file-new');
+        expect(provider.Row.RecordingFileID).toBe(FILE);
         expect(bucket.Keys()).toEqual([
             `${FOLDER}/peaks.json`, `${FOLDER}/${uploads[0].fileName}`, `${FOLDER}/recording.wav`,
             'realtime-recordings/sess-12/seg-0000.r24000.pcm',
@@ -288,7 +305,7 @@ describe('RecoverRealtimeRecordingFromSegments', () => {
         uploadFileMock.mockImplementationOnce(async (args: UploadArgs) => {
             uploads.push({ ...args });
             provider.Row.RecordingFileID = 'file-late';
-            return { FileID: 'file-new' };
+            return { FileID: FILE };
         });
         const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
         expect(result.Outcome).toBe('Superseded');
@@ -299,7 +316,7 @@ describe('RecoverRealtimeRecordingFromSegments', () => {
 
     it('fails, keeps shards and creates no link row when the stamp does not stick', async () => {
         seed({ 'seg-0000.r24000.pcm': 4 });
-        provider.SessionSaveResult = false;
+        provider.StampSucceeds = false;
         const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
         expect(result.Outcome).toBe('Failed');
         expect(provider.Links).toHaveLength(0);
@@ -310,8 +327,8 @@ describe('RecoverRealtimeRecordingFromSegments', () => {
         seed({ 'seg-0000.r24000.pcm': 4 });
         const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
         expect(result.Outcome).toBe('Recovered');
-        expect(provider.Events).toEqual(['session-save', 'link-save']);
-        expect(provider.Links).toEqual([{ FileID: 'file-new' }]);
+        expect(provider.Events).toEqual(['stamp-proc', 'link-save']);
+        expect(provider.Links).toEqual([{ FileID: FILE }]);
     });
 
     it('is Failed, not Superseded, when the session cannot be re-read before stamping; keeps shards', async () => {
@@ -319,7 +336,7 @@ describe('RecoverRealtimeRecordingFromSegments', () => {
         provider.SessionLoadResult = false;
         const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
         expect(result.Outcome).toBe('Failed');
-        expect(result.ErrorMessage).toContain('could not re-read session sess-1 before stamping');
+        expect(result.ErrorMessage).toContain(`could not re-read session ${SESSION} before stamping`);
         expect(provider.Links).toHaveLength(0);
         expect(bucket.Keys()).toContain(`${FOLDER}/seg-0000.r24000.pcm`);
     });
@@ -347,11 +364,11 @@ describe('RecoverRealtimeRecordingFromSegments', () => {
             try {
                 const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
 
-                expect(result).toMatchObject({ Outcome: 'Recovered', FileID: 'file-new', ErrorMessage: null });
-                expect(provider.Row.RecordingFileID).toBe('file-new');
+                expect(result).toMatchObject({ Outcome: 'Recovered', FileID: FILE, ErrorMessage: null });
+                expect(provider.Row.RecordingFileID).toBe(FILE);
                 expect(bucket.Keys()).toContain(`${FOLDER}/seg-0000.r24000.pcm`);
                 expect(bucket.Keys()).toContain(`${FOLDER}/seg-0001.r24000.pcm`);
-                const message = errors.messages().find((m) => m.includes('sess-1') && m.includes('seg-0000.r24000.pcm'));
+                const message = errors.messages().find((m) => m.includes(SESSION) && m.includes('seg-0000.r24000.pcm'));
                 expect(message).toBeDefined();
                 expect(message).toContain('seg-0001.r24000.pcm');
             } finally {
@@ -369,7 +386,7 @@ describe('RecoverRealtimeRecordingFromSegments', () => {
 
                 expect(result.Outcome).toBe('Recovered');
                 expect(bucket.Keys()).toContain(`${FOLDER}/seg-0001.r24000.pcm`);
-                expect(errors.messages().some((m) => m.includes('sess-1') && m.includes(`${FOLDER}/seg-0001.r24000.pcm`))).toBe(true);
+                expect(errors.messages().some((m) => m.includes(SESSION) && m.includes(`${FOLDER}/seg-0001.r24000.pcm`))).toBe(true);
             } finally {
                 errors.restore();
             }
@@ -380,9 +397,9 @@ describe('RecoverRealtimeRecordingFromSegments', () => {
         seed({ 'seg-0000.r24000.pcm': 4 });
         const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_791_000_000_000); // same millisecond for both attempts
         try {
-            provider.SessionSaveResult = false;
+            provider.StampSucceeds = false;
             expect((await RecoverRealtimeRecordingFromSegments(recoverInput())).Outcome).toBe('Failed');
-            provider.SessionSaveResult = true;
+            provider.StampSucceeds = true;
             expect((await RecoverRealtimeRecordingFromSegments(recoverInput())).Outcome).toBe('Recovered');
         } finally {
             nowSpy.mockRestore();
@@ -425,7 +442,7 @@ describe('recovery bounds and precision', () => {
         uploadFileMock.mockImplementationOnce(async (args: UploadArgs) => {
             uploads.push(args);
             bucket.Put(`${FOLDER}/seg-0002.r24000.pcm`, Buffer.alloc(4));
-            return { FileID: 'file-new' };
+            return { FileID: FILE };
         });
         provider.OnLinkSave = null;
         const result = await RecoverRealtimeRecordingFromSegments(recoverInput());
@@ -454,7 +471,7 @@ describe('recovery bounds and precision', () => {
 describe('rate in the shard key', () => {
     it('names a PCM shard with its rate', async () => {
         await WriteRealtimeRecordingSegment({
-            SessionID: 'sess-1', SegmentIndex: 3, Audio: Buffer.from('a'), MimeType: 'audio/L16;rate=48000',
+            SessionID: SESSION, SegmentIndex: 3, Audio: Buffer.from('a'), MimeType: 'audio/L16;rate=48000',
             StorageAccountID: 'acct-1', ContextUser: user,
         });
         expect(bucket.Keys()).toEqual([`${FOLDER}/seg-0003.r48000.pcm`]);
@@ -462,7 +479,7 @@ describe('rate in the shard key', () => {
 
     it("names a PCM shard with its rate whatever the MIME type's case", async () => {
         await WriteRealtimeRecordingSegment({
-            SessionID: 'sess-1', SegmentIndex: 3, Audio: Buffer.from('a'), MimeType: 'audio/l16;rate=48000',
+            SessionID: SESSION, SegmentIndex: 3, Audio: Buffer.from('a'), MimeType: 'audio/l16;rate=48000',
             StorageAccountID: 'acct-1', ContextUser: user,
         });
         expect(bucket.Keys()).toEqual([`${FOLDER}/seg-0003.r48000.pcm`]);
@@ -470,7 +487,7 @@ describe('rate in the shard key', () => {
 
     it('keeps the unkeyed name when the MIME has no rate', async () => {
         await WriteRealtimeRecordingSegment({
-            SessionID: 'sess-1', SegmentIndex: 3, Audio: Buffer.from('a'), MimeType: 'audio/L16',
+            SessionID: SESSION, SegmentIndex: 3, Audio: Buffer.from('a'), MimeType: 'audio/L16',
             StorageAccountID: 'acct-1', ContextUser: user,
         });
         expect(bucket.Keys()).toEqual([`${FOLDER}/seg-0003.pcm`]);
@@ -482,28 +499,28 @@ describe('StoreRealtimeRecording default behaviour', () => {
         provider.Row.RecordingFileID = 'file-existing';
         const result = await StoreRealtimeRecording({
             Audio: Buffer.from('audio'), MimeType: 'audio/wav', Media: 'Audio', StartedAt: new Date(),
-            StorageAccountID: 'acct-1', SessionID: 'sess-1', ContextUser: user, Provider: provider as unknown as IMetadataProvider,
+            StorageAccountID: 'acct-1', SessionID: SESSION, ContextUser: user, Provider: provider as unknown as IMetadataProvider,
         });
-        expect(result).toEqual({ FileID: 'file-new', ErrorMessage: null, Superseded: false });
+        expect(result).toEqual({ FileID: FILE, ErrorMessage: null, Superseded: false });
         expect(uploads[0].fileName).toBe('recording.wav');
-        expect(provider.Row.RecordingFileID).toBe('file-new');
+        expect(provider.Row.RecordingFileID).toBe(FILE);
     });
 
     it('still links and reports success when the session cannot be loaded, as before', async () => {
         provider.SessionLoadResult = false;
         const result = await StoreRealtimeRecording({
             Audio: Buffer.from('audio'), MimeType: 'audio/wav', Media: 'Audio', StartedAt: new Date(),
-            StorageAccountID: 'acct-1', SessionID: 'sess-1', ContextUser: user, Provider: provider as unknown as IMetadataProvider,
+            StorageAccountID: 'acct-1', SessionID: SESSION, ContextUser: user, Provider: provider as unknown as IMetadataProvider,
         });
-        expect(result).toEqual({ FileID: 'file-new', ErrorMessage: null, Superseded: false });
-        expect(provider.Links).toEqual([{ FileID: 'file-new' }]);
+        expect(result).toEqual({ FileID: FILE, ErrorMessage: null, Superseded: false });
+        expect(provider.Links).toEqual([{ FileID: FILE }]);
         expect(provider.Row.RecordingFileID).toBeNull();
     });
 
     it('names the file from the MIME type whatever its case', async () => {
         await StoreRealtimeRecording({
             Audio: Buffer.from('audio'), MimeType: 'Audio/WebM;codecs=opus', Media: 'Audio', StartedAt: new Date(),
-            StorageAccountID: 'acct-1', SessionID: 'sess-1', ContextUser: user, Provider: provider as unknown as IMetadataProvider,
+            StorageAccountID: 'acct-1', SessionID: SESSION, ContextUser: user, Provider: provider as unknown as IMetadataProvider,
         });
         expect(uploads[0].fileName).toBe('recording.webm');
     });
@@ -514,33 +531,79 @@ describe('StoreRealtimeRecording with PreserveExistingRecording', () => {
         return {
             Audio: Buffer.from('audio'), MimeType: 'audio/wav', Media: 'Audio' as const, StartedAt: new Date(),
             FileName: 'recording-recovered-1-ab.wav', PreserveExistingRecording: true,
-            StorageAccountID: 'acct-1', SessionID: 'sess-1', ContextUser: user, Provider: provider as unknown as IMetadataProvider,
+            StorageAccountID: 'acct-1', SessionID: SESSION, ContextUser: user, Provider: provider as unknown as IMetadataProvider,
         };
     }
 
     it('reports a session it cannot re-read as a failure carrying the orphaned file id', async () => {
         provider.SessionLoadResult = false;
         const result = await StoreRealtimeRecording(preserveInput());
-        expect(result.FileID).toBe('file-new');
+        expect(result.FileID).toBe(FILE);
         expect(result.Superseded).toBe(false);
-        expect(result.ErrorMessage).toContain('could not re-read session sess-1 before stamping');
+        expect(result.ErrorMessage).toContain(`could not re-read session ${SESSION} before stamping`);
         expect(provider.Links).toHaveLength(0);
     });
 
     it('is Superseded with no link and no stamp when the session already has a recording', async () => {
         provider.Row.RecordingFileID = 'file-existing';
         const result = await StoreRealtimeRecording(preserveInput());
-        expect(result).toEqual({ FileID: 'file-new', ErrorMessage: null, Superseded: true });
+        expect(result).toEqual({ FileID: FILE, ErrorMessage: null, Superseded: true });
         expect(provider.Links).toHaveLength(0);
         expect(provider.Row.RecordingFileID).toBe('file-existing');
     });
 
     it('reports a stamp that does not save as a failure and creates no link', async () => {
-        provider.SessionSaveResult = false;
+        provider.StampSucceeds = false;
         const result = await StoreRealtimeRecording(preserveInput());
-        expect(result.FileID).toBe('file-new');
+        expect(result.FileID).toBe(FILE);
         expect(result.Superseded).toBe(false);
-        expect(result.ErrorMessage).toContain('sess-1');
+        expect(result.ErrorMessage).toContain(SESSION);
+        expect(result.ErrorMessage).toContain('stamp refused');
         expect(provider.Links).toHaveLength(0);
+    });
+});
+
+describe('StoreRealtimeRecording stamps through the ledger proc (#6010)', () => {
+    const startedAt = new Date('2026-10-01T00:00:00Z');
+    const endOfCallInput = (overrides: object = {}) => ({
+        Audio: Buffer.from('audio'), MimeType: 'audio/wav', Media: 'Audio' as const, StartedAt: startedAt,
+        StorageAccountID: 'acct-1', SessionID: SESSION, ContextUser: user, Provider: provider as unknown as IMetadataProvider,
+        ...overrides,
+    });
+
+    it('end of call stamps with spStampAIAgentSessionRecordingFile and never saves the session entity', async () => {
+        const result = await StoreRealtimeRecording(endOfCallInput());
+        expect(result).toEqual({ FileID: FILE, ErrorMessage: null, Superseded: false });
+        const stamps = provider.SqlCalls.filter((c) => c.Sql.includes('spStampAIAgentSessionRecordingFile'));
+        expect(stamps).toHaveLength(1);
+        expect(stamps[0].Params).toEqual([SESSION, FILE, 'Audio', startedAt]);
+        expect(provider.SessionSaves).toBe(0);
+    });
+
+    it('logs the stamp failure with the session id and still reports the upload as stored', async () => {
+        provider.StampSucceeds = false;
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const result = await StoreRealtimeRecording(endOfCallInput());
+            expect(result).toEqual({ FileID: FILE, ErrorMessage: null, Superseded: false });
+            const logged = spy.mock.calls.map((c) => c.join(' '));
+            expect(logged.some((m) => m.includes(SESSION) && m.includes('stamp refused'))).toBe(true);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it('with PreserveExistingRecording, a provider that cannot run SQL fails naming the database-provider requirement', async () => {
+        const noSql = Object.assign(Object.create(provider), { ExecuteSQL: undefined }) as unknown as IMetadataProvider;
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const result = await StoreRealtimeRecording(endOfCallInput({ PreserveExistingRecording: true, Provider: noSql }));
+            expect(result.FileID).toBe(FILE);
+            expect(result.ErrorMessage).toContain('server-side database provider');
+            expect(result.ErrorMessage).toContain(SESSION);
+            expect(provider.Links).toHaveLength(0);
+        } finally {
+            spy.mockRestore();
+        }
     });
 });

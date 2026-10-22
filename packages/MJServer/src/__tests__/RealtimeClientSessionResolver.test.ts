@@ -374,6 +374,65 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
         expect(JSON.parse(result.SessionConfigJson)).toEqual({ instructions: 'hi' });
     });
 
+    describe('recording consent at start (#6010)', () => {
+        const RECORDING_SESSION_ID = 'a1a1a1a1-0000-4000-8000-000000000001';
+        const STARTED_AT = '2026-10-01T00:00:00.000Z';
+
+        /** A provider that can run the ledger's proc, recording every SQL call; `failSql` makes it throw. */
+        function makeSqlProvider(failSql = false) {
+            const sqlCalls: { Sql: string; Params: unknown[] }[] = [];
+            const provider = {
+                ...(makeProvider(() => makeSessionEntity()) as object),
+                MJCoreSchemaName: '__mj',
+                Dialect: {
+                    ProcedureCallSyntax: (schema: string, name: string, params: string[]) => `EXEC [${schema}].[${name}] ${params.join(', ')}`,
+                    ParameterPlaceholder: (index: number) => `@p${index}`,
+                },
+                ExecuteSQL: vi.fn(async (sql: string, params: unknown[]) => {
+                    sqlCalls.push({ Sql: sql, Params: params });
+                    if (failSql) throw new Error('proc exploded');
+                    return [{ RecordingStatus: null }];
+                }),
+            };
+            return { provider, sqlCalls };
+        }
+
+        async function startWithConsent(provider: unknown) {
+            currentProvider = provider;
+            const createdSession = makeSessionEntity({ ID: RECORDING_SESSION_ID });
+            createSessionMock.mockResolvedValue(createdSession);
+            prepareClientSessionMock.mockResolvedValue({
+                Success: true,
+                ClientConfig: { Provider: 'openai', Model: 'gpt-realtime', EphemeralToken: 'ek', ExpiresAt: '2026-01-01T00:00:00Z', SessionConfig: {} },
+            });
+            const result = await makeResolver().StartRealtimeClientSession(
+                'target-1', makeCtx(), undefined, undefined, undefined, undefined, undefined, undefined, STARTED_AT, true,
+            );
+            return { createdSession, result };
+        }
+
+        it('saves RecordingStartedAt through the entity and stamps RecordingMedia through the ledger proc', async () => {
+            const { provider, sqlCalls } = makeSqlProvider();
+            const { createdSession } = await startWithConsent(provider);
+
+            expect((createdSession.RecordingStartedAt as Date).toISOString()).toBe(STARTED_AT);
+            expect(createdSession.Save).toHaveBeenCalled();
+            const stamps = sqlCalls.filter((c) => c.Sql.includes('spStampAIAgentSessionRecordingFile'));
+            expect(stamps).toHaveLength(1);
+            expect(stamps[0].Params).toEqual([RECORDING_SESSION_ID, null, 'Audio', null]);
+            expect(createdSession.RecordingMedia).toBeUndefined();
+        });
+
+        it('does not fail the session start when the media stamp throws, and logs it with the session id', async () => {
+            errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { provider } = makeSqlProvider(true);
+            const { result } = await startWithConsent(provider);
+
+            expect(result.AgentSessionId).toBe(RECORDING_SESSION_ID);
+            expect(errSpy?.mock.calls.some((c) => String(c[0]).includes(RECORDING_SESSION_ID) && String(c[0]).includes('proc exploded'))).toBe(true);
+        });
+    });
+
     it('threads preferredModelId to the prepare service and surfaces ModelName + narration template', async () => {
         hasPermissionMock.mockResolvedValue(true);
         // Explicit model selection is gated by 'Realtime: Advanced Session Controls' — grant it.
