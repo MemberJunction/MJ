@@ -272,6 +272,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   /** Emitted when the Ask AI button is clicked */
   @Output() AskAIRequested = new EventEmitter<void>();
 
+  /** Emitted when the user pins or unpins a toolbar action in the More menu */
+  @Output() ActionPinChanged = new EventEmitter<{ Key: string; Pinned: boolean }>();
+
   /** Emitted when the Attachments button is clicked */
   @Output() AttachmentsPanelToggled = new EventEmitter<void>();
 
@@ -1136,15 +1139,19 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    */
   public TogglePin(key: string): void {
     const pins = [...this.PinnedKeys];
+    let nowPinned = false;
     if (pins.includes(key)) {
       pins.splice(pins.indexOf(key), 1);
+      nowPinned = false;
     } else if (this.CanPinMore) {
       pins.push(key);
+      nowPinned = true;
     } else {
       return; // at the cap: the button stays focusable (aria-disabled) so its hint can be read
     }
     this.writePins(pins);
     this._pinnedItems = null;
+    this.ActionPinChanged.emit({ Key: key, Pinned: nowPinned });
     this.cdr.markForCheck();
   }
 
@@ -1349,7 +1356,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
           this.OnTagsPanel();
           break;
         case 'links':
-          this.OnLinks();
+          if (!item.Config.OnClick) {
+            this.OnLinks();
+          }
           break;
         case 'attachments':
           this.OnAttachmentsPanel();

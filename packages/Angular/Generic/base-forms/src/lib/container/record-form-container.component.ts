@@ -40,6 +40,16 @@ import { FormCompositionRegistry } from '../chrome/form-composition-registry';
 import { FormPanelAdminService } from '../panel-manager/form-panel-admin.service';
 import { MjRecordLinksComponent } from '../links/record-links.component';
 import { TOOLBAR_PINS_SETTING_KEY, DEFAULT_PINNED_TOOLBAR_ACTIONS } from '../toolbar/form-toolbar.component';
+import {
+  BaseFormToolbarAction,
+  type FormToolbarActionLifecycleContext,
+  ResolveFormToolbarActionsForEntity,
+} from '../toolbar/base-form-toolbar-action';
+import { RecordLinksToolbarAction } from '../toolbar/actions/record-links-toolbar-action';
+
+// Ensure built-in RecordLinksToolbarAction is never tree-shaken before ClassFactory registration
+const _BUILTIN_TOOLBAR_ACTIONS = [RecordLinksToolbarAction];
+void _BUILTIN_TOOLBAR_ACTIONS;
 import type { FormChromeSpec } from '../chrome/form-chrome';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
@@ -509,8 +519,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const registered = this.Fc?.RegisteredToolbarItems && this.Fc.RegisteredToolbarItems.length > 0
       ? this.Fc.RegisteredToolbarItems
       : this.RegisteredToolbarItems;
+    const pluggable = this.pluggableToolbarItemConfigs(registered);
     const manage = this.managePanelsToolbarItem();
-    return manage ? [...registered, manage] : [...registered];
+    return [
+      ...pluggable,
+      ...registered,
+      ...(manage ? [manage] : []),
+    ];
   }
 
   /** Memoised so the toolbar's identity check does not see a new object every pass. */
@@ -876,6 +891,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    this.destroyToolbarActions();
     // A count or chrome-rule result still in flight then matches nothing and is dropped.
     this.countRequestToken++;
     this.chromeRulesForEntityId = null;
@@ -1999,6 +2015,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * All queries run in parallel for performance.
    */
   private badgeCountsLoaded = false;
+  private toolbarActions: BaseFormToolbarAction[] = [];
+  private toolbarActionsEntityName: string | null = null;
+  private toolbarActionsInitRecord: BaseEntity | null = null;
 
   private loadBadgeCounts(): void {
     if (this.badgeCountsLoaded) return;
@@ -2009,17 +2028,140 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.badgeCountsLoaded = true;
     // Fire and forget — counts land while the form renders; nothing awaits them.
     void this.loadFormCounts(record);
-    void this.prewarmRecordLinks(record);
+    void this.prewarmToolbarActions(record);
   }
 
   /**
-   * Returns true when the 'links' toolbar action is pinned for the current user
-   * (either in their saved `mj.form.toolbar.pinnedActions` setting or in `DefaultPinnedActions`).
-   * Network pre-warming of incoming `GetRecordDependencies` only runs on form load when the
-   * user has pinned the Links button to their toolbar; otherwise only the zero-cost in-memory
-   * outgoing links summary is computed until the user opens the Links drawer.
+   * Returns the instantiated {@link BaseFormToolbarAction} plugins matching the active entity.
    */
-  public IsLinksActionPinned(): boolean {
+  public GetToolbarActions(): readonly BaseFormToolbarAction[] {
+    return this.ensureToolbarActions();
+  }
+
+  private ensureToolbarActions(): BaseFormToolbarAction[] {
+    const entityInfo = this.EffectiveEntityInfo;
+    const entityName = entityInfo?.Name ?? null;
+    if (entityName !== this.toolbarActionsEntityName) {
+      this.destroyToolbarActions();
+      this.toolbarActionsEntityName = entityName;
+      this.toolbarActions = ResolveFormToolbarActionsForEntity(entityInfo);
+      this.toolbarActionsInitRecord = null;
+    }
+
+    const record = this.EffectiveRecord;
+    if (record && record.EntityInfo && this.toolbarActionsInitRecord !== record) {
+      this.toolbarActionsInitRecord = record;
+      for (const action of this.toolbarActions) {
+        const ctx = this.buildToolbarActionContext(action, record);
+        if (action.IsApplicable(ctx)) {
+          void action.OnInit(ctx);
+        }
+      }
+    }
+    return this.toolbarActions;
+  }
+
+  private destroyToolbarActions(): void {
+    for (const action of this.toolbarActions) {
+      try {
+        action.OnDestroy();
+      } catch {
+        // Ignore teardown errors
+      }
+    }
+    this.toolbarActions = [];
+    this.toolbarActionsEntityName = null;
+    this.toolbarActionsInitRecord = null;
+  }
+
+  private pluggableToolbarItemConfigs(explicitItems: readonly FormToolbarItemConfig[]): FormToolbarItemConfig[] {
+    const record = this.EffectiveRecord;
+    const entityInfo = this.EffectiveEntityInfo;
+    if (!record || !entityInfo) return [];
+
+    const explicitKeys = new Set(explicitItems.map((i) => i.Key.trim().toLowerCase()));
+    const actions = this.ensureToolbarActions();
+    const out: FormToolbarItemConfig[] = [];
+
+    for (const action of actions) {
+      const keyLower = action.Metadata.Key.trim().toLowerCase();
+      if (explicitKeys.has(keyLower)) continue;
+      if (keyLower === 'links' && this.EffectiveToolbarConfig.ShowLinksButton === false) {
+        continue;
+      }
+      if (keyLower === 'links') {
+        action.IsActive = this.ShowRecordLinks;
+        if (this.LinkCount > 0) {
+          action.Badge = this.LinkCount;
+        }
+      }
+      const ctx = this.buildToolbarActionContext(action, record);
+      if (!action.IsApplicable(ctx)) continue;
+
+      out.push(
+        action.ToToolbarItemConfig((event?: MouseEvent) => {
+          const execCtx = this.buildToolbarActionContext(action, this.EffectiveRecord ?? record);
+          return action.OnExecute(execCtx, event);
+        })
+      );
+    }
+    return out;
+  }
+
+  private buildToolbarActionContext(
+    action: BaseFormToolbarAction,
+    recordOverride?: BaseEntity
+  ): FormToolbarActionLifecycleContext {
+    const record = (recordOverride ?? this.EffectiveRecord)!;
+    const entityInfo = (this.EffectiveEntityInfo ?? record?.EntityInfo)!;
+    const isPinned = this.IsToolbarActionPinned(action.Metadata.Key);
+    const isVisibleOnBar = action.Metadata.Pinnable === false || isPinned;
+
+    return {
+      Record: record,
+      EntityInfo: entityInfo,
+      Provider: this.ProviderToUse,
+      EditMode: this.EffectiveEditMode,
+      IsDirty: this.EffectiveIsDirty,
+      IsPinned: isPinned,
+      IsVisibleOnBar: isVisibleOnBar,
+      FormComponent: this.Fc,
+      SetBadge: (badge: string | number | null | undefined) => {
+        action.Badge = badge ?? undefined;
+        if (action.Metadata.Key === 'links') {
+          this.LinkCount = typeof badge === 'number' ? badge : 0;
+        }
+      },
+      SetLoading: (loading: boolean) => {
+        action.IsLoading = loading;
+      },
+      SetDisabled: (disabled: boolean, reason?: string) => {
+        action.Disabled = disabled;
+        action.DisabledReason = reason;
+      },
+      SetActive: (active: boolean) => {
+        action.IsActive = active;
+      },
+      SetRecordLinksDrawerOpen: (open: boolean) => {
+        this.ShowRecordLinks = open;
+      },
+      IsRecordLinksDrawerOpen: () => this.ShowRecordLinks,
+      SetLinksSummary: (summary: FormAgentLinksSummary) => {
+        this.LinksSummary = summary;
+        this.LinkCount = summary.TotalCount;
+        this.scheduleChromeResolve();
+      },
+      RequestChangeDetection: () => {
+        this.cdr.markForCheck();
+      },
+    };
+  }
+
+  /**
+   * Returns true when the given toolbar action key is pinned for the current user
+   * (either in their saved `mj.form.toolbar.pinnedActions` setting or in `DefaultPinnedActions`).
+   */
+  public IsToolbarActionPinned(key: string): boolean {
     try {
       const provider = this.ProviderToUse;
       const engine = provider
@@ -2030,39 +2172,61 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       if (raw) {
         const parsed = JSON.parse(raw) as { Pinned?: unknown };
         if (Array.isArray(parsed.Pinned)) {
-          return parsed.Pinned.includes('links');
+          return parsed.Pinned.includes(key);
         }
       }
     } catch {
       // Fall back to default pinned actions
     }
     const defaults = this.EffectiveToolbarConfig?.DefaultPinnedActions ?? DEFAULT_PINNED_TOOLBAR_ACTIONS;
-    return defaults.includes('links');
+    return defaults.includes(key);
+  }
+
+  /**
+   * Returns true when the 'links' toolbar action is pinned for the current user.
+   */
+  public IsLinksActionPinned(): boolean {
+    return this.IsToolbarActionPinned('links');
+  }
+
+  /**
+   * Invoked when the user pins or unpins an action in `<mj-form-toolbar>`.
+   * Notifies the corresponding {@link BaseFormToolbarAction} via `OnPinStateChanged`.
+   */
+  public OnToolbarActionPinChanged(event: { Key: string; Pinned: boolean }): void {
+    const record = this.EffectiveRecord;
+    if (!record?.EntityInfo) return;
+    const actions = this.ensureToolbarActions();
+    const matched = actions.find((a) => a.Metadata.Key.toLowerCase() === event.Key.toLowerCase());
+    if (!matched) return;
+    const ctx = this.buildToolbarActionContext(matched, record);
+    void matched.OnPinStateChanged(ctx, event.Pinned);
+  }
+
+  /**
+   * Runs `OnPrewarm` across all applicable {@link BaseFormToolbarAction} plugins for the active record.
+   */
+  public async prewarmToolbarActions(record: BaseEntity): Promise<void> {
+    if (!record?.EntityInfo) return;
+    const actions = this.ensureToolbarActions();
+    await Promise.all(
+      actions.map(async (action) => {
+        const ctx = this.buildToolbarActionContext(action, record);
+        if (!action.IsApplicable(ctx)) return;
+        await action.OnPrewarm(ctx);
+      })
+    );
   }
 
   private async prewarmRecordLinks(record: BaseEntity): Promise<void> {
     if (!record?.IsSaved || !record.EntityInfo) return;
-    // Always compute the zero-cost in-memory outgoing links summary from the record's FK / polymorphic-FK fields.
-    const outgoingSummary = MjRecordLinksComponent.BuildOutgoingLinksSummary(record, this.ProviderToUse);
-    this.LinksSummary = outgoingSummary;
-    this.LinkCount = outgoingSummary.TotalCount;
-
-    // Only query incoming GetRecordDependencies over the network if the user has pinned the Links button.
-    if (!this.IsLinksActionPinned()) {
-      this.scheduleChromeResolve();
-      this.cdr.markForCheck();
-      return;
-    }
-
-    try {
-      const summary = await MjRecordLinksComponent.PrewarmRecordLinkCount(record, this.ProviderToUse);
-      if (this.destroyed || this.EffectiveRecord !== record) return;
-      this.LinkCount = summary.TotalCount;
-      this.LinksSummary = summary;
-      this.scheduleChromeResolve();
-      this.cdr.markForCheck();
-    } catch (e) {
-      LogError(`Prewarming record links failed for ${record.EntityInfo.Name}: ${e instanceof Error ? e.message : String(e)}`);
+    const actions = this.ensureToolbarActions();
+    const linksAction = actions.find((a) => a.Metadata.Key === 'links');
+    if (linksAction) {
+      const ctx = this.buildToolbarActionContext(linksAction, record);
+      if (linksAction.IsApplicable(ctx)) {
+        await linksAction.OnPrewarm(ctx);
+      }
     }
   }
 

@@ -57,6 +57,8 @@ export * from './lib/duplicate-entry-check/duplicate-entry-check';
 
 // Components
 export * from './lib/toolbar/form-toolbar.component';
+export * from './lib/toolbar/base-form-toolbar-action';
+export * from './lib/toolbar/actions/record-links-toolbar-action';
 export * from './lib/field/form-field.component';
 export * from './lib/field/fk-search-utils';
 export * from './lib/field/fk-lookup-strategy';

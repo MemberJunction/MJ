@@ -4,6 +4,12 @@ import { BaseEntity, EntityInfo, RunView } from '@memberjunction/core';
 import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
 import { MjRecordFormContainerComponent } from './record-form-container.component';
 import { MjFormToolbarComponent } from '../toolbar/form-toolbar.component';
+import {
+    BaseFormToolbarAction,
+    type FormToolbarActionLifecycleContext,
+    MatchesToolbarActionEntityScope,
+    RegisterFormToolbarAction,
+} from '../toolbar/base-form-toolbar-action';
 import { MjRecordLinksComponent } from '../links/record-links.component';
 import { FormRecordRefreshCoordinator, type FormRemoteUpdateEvent } from '../form-record-refresh.coordinator';
 
@@ -330,5 +336,91 @@ describe('PerformLiveEditModeMerge & Toolbar Conflict/Links Integration', () => 
         expect(container.LinkCount).toBe(9);
 
         prewarmSpy.mockRestore();
+    });
+
+    it('discovers entity/pattern-scoped BaseFormToolbarAction registrations and drives OnPrewarm, OnPinStateChanged, OnExecute, and OnDestroy lifecycles', async () => {
+        const dealEntity = { Name: 'Deals', SchemaName: 'sales' } as unknown as EntityInfo;
+        const orderEntity = { Name: 'MJ_BizApps_Orders: Order Headers', SchemaName: 'mj_bizapps_orders' } as unknown as EntityInfo;
+
+        expect(MatchesToolbarActionEntityScope('*', dealEntity)).toBe(true);
+        expect(MatchesToolbarActionEntityScope('Deals', dealEntity)).toBe(true);
+        expect(MatchesToolbarActionEntityScope('Invoices', dealEntity)).toBe(false);
+        expect(MatchesToolbarActionEntityScope('MJ_BizApps_Orders:*', orderEntity)).toBe(true);
+        expect(MatchesToolbarActionEntityScope('schema:sales', dealEntity)).toBe(true);
+        expect(MatchesToolbarActionEntityScope(['Invoices', '*Order*'], orderEntity)).toBe(true);
+
+        const lifecycleLog: string[] = [];
+
+        @RegisterFormToolbarAction({
+            Key: 'deal-approval-check',
+            EntityScope: ['Deals', 'MJ_BizApps_Sales:*'],
+            Text: 'Check Approval',
+            Icon: 'fa-solid fa-stamp',
+            Pinnable: true,
+            Order: 85
+        })
+        class DealApprovalToolbarAction extends BaseFormToolbarAction {
+            public override OnInit(ctx: FormToolbarActionLifecycleContext): void {
+                lifecycleLog.push(`init:${ctx.EntityInfo.Name}`);
+            }
+            public override OnPrewarm(ctx: FormToolbarActionLifecycleContext): void {
+                lifecycleLog.push(`prewarm:pinned=${ctx.IsPinned}`);
+                if (ctx.IsPinned) {
+                    ctx.SetBadge(3);
+                }
+            }
+            public override OnPinStateChanged(ctx: FormToolbarActionLifecycleContext, isPinned: boolean): void {
+                lifecycleLog.push(`pinChanged:${isPinned}`);
+                if (isPinned) {
+                    ctx.SetBadge(3);
+                }
+            }
+            public override OnExecute(ctx: FormToolbarActionLifecycleContext): void {
+                lifecycleLog.push(`execute:${ctx.Record.Get('DealName')}`);
+            }
+            public override OnDestroy(): void {
+                lifecycleLog.push('destroy');
+            }
+        }
+        void DealApprovalToolbarAction;
+
+        const record = makeDealRecord();
+        const fixture = renderComponentFixture(MjRecordFormContainerComponent, {
+            imports: CONTAINER_CHILD_STUBS,
+            declarations: [MjRecordFormContainerComponent],
+            inputs: {
+                Record: record,
+                EntityInfo: record.EntityInfo,
+                EditMode: false
+            }
+        });
+        const container = fixture.componentInstance;
+
+        const actions = container.GetToolbarActions();
+        expect(actions.some(a => a.Metadata.Key === 'links')).toBe(true);
+        expect(actions.some(a => a.Metadata.Key === 'deal-approval-check')).toBe(true);
+        expect(lifecycleLog).toContain('init:Deals');
+
+        await container.prewarmToolbarActions(record);
+        expect(lifecycleLog).toContain('prewarm:pinned=false');
+
+        // Simulate user pinning 'deal-approval-check' in the More menu
+        container.OnToolbarActionPinChanged({ Key: 'deal-approval-check', Pinned: true });
+        expect(lifecycleLog).toContain('pinChanged:true');
+
+        const projected = container.EffectiveRegisteredToolbarItems.find(i => i.Key === 'deal-approval-check');
+        expect(projected).toBeDefined();
+        expect(projected?.Badge).toBe(3);
+
+        await projected?.OnClick?.({
+            ItemKey: 'deal-approval-check',
+            Item: projected,
+            Record: record,
+            EditMode: false
+        });
+        expect(lifecycleLog).toContain('execute:Enterprise Expansion');
+
+        fixture.destroy();
+        expect(lifecycleLog).toContain('destroy');
     });
 });
