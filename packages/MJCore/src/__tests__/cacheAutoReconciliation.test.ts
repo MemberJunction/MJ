@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { LocalCacheManager } from '../generic/localCacheManager';
-import { InMemoryLocalStorageProvider } from '../generic/inMemoryLocalStorageProvider';
+import { InMemoryLocalStorageProvider } from '../generic/InMemoryLocalStorageProvider';
 import { ProviderBase } from '../generic/providerBase';
 import {
     AllMetadata,
