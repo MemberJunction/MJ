@@ -14,15 +14,36 @@
         <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
       }
       <div class="mj-forms-field-control">
-        <!-- FK fields with a mapped name field: show the name as a hyperlink -->
+        <!-- FK fields with a mapped or resolved name: show the name as a hyperlink -->
         @if (IsFKWithNameField) {
           <span class="mj-forms-field-value">
-            @if (RecordLinksEnabled) {
-              <a class="mj-forms-field-link mj-forms-field-link--fk" (click)="OnRecordLinkClick($event)" title="View related record">
-                {{ FKDisplayName }}
-              </a>
+            @if (IsPolymorphicFK) {
+              <span class="mj-forms-poly-fk-read">
+                @if (RecordLinksEnabled) {
+                  <a class="mj-forms-field-link mj-forms-field-link--fk mj-forms-field-link--poly"
+                     (click)="OnRecordLinkClick($event)"
+                     [title]="'Open ' + (EffectiveRelatedEntityName || 'related') + ' record: ' + (FKDisplayName || FormatValue())">
+                    @if (EffectiveRelatedEntityIcon) {
+                      <i [class]="EffectiveRelatedEntityIcon + ' mj-forms-poly-entity-icon'"></i>
+                    }
+                    <span>{{ FKDisplayName || FormatValue() }}</span>
+                    <i class="fa-solid fa-arrow-up-right-from-square mj-forms-field-link-icon"></i>
+                  </a>
+                } @else {
+                  <span>{{ FKDisplayName || FormatValue() }}</span>
+                }
+                @if (ShowPolymorphicRawIDBadge) {
+                  <span class="mj-forms-poly-id-badge" [title]="'Record ID: ' + FormatValue()">{{ CompactPolymorphicRawID }}</span>
+                }
+              </span>
             } @else {
-              {{ FKDisplayName }}
+              @if (RecordLinksEnabled) {
+                <a class="mj-forms-field-link mj-forms-field-link--fk" (click)="OnRecordLinkClick($event)" title="View related record">
+                  {{ FKDisplayName }}
+                </a>
+              } @else {
+                {{ FKDisplayName }}
+              }
             }
           </span>
         }
