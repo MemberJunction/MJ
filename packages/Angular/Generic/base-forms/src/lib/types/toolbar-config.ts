@@ -45,6 +45,9 @@ export interface FormToolbarConfig {
   /** Show the Links button for viewing linked records across the workspace. Default: true */
   ShowLinksButton: boolean;
 
+  /** Show the Ask AI button for opening the AI assistant with active record context. Default: true */
+  ShowAskAIButton?: boolean;
+
   /** Show the Attachments button for viewing/managing linked file attachments. Default: true */
   ShowAttachmentsButton: boolean;
 
@@ -155,6 +158,7 @@ export const DEFAULT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowListButton: true,
   ShowTagsButton: true,
   ShowLinksButton: true,
+  ShowAskAIButton: true,
   ShowAttachmentsButton: true,
   ShowCloneButton: true,
   ShowFormVariantPicker: true,
@@ -186,6 +190,7 @@ export const EXPLORER_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowListButton: true,
   ShowTagsButton: true,
   ShowLinksButton: true,
+  ShowAskAIButton: true,
   ShowAttachmentsButton: true,
   ShowCloneButton: true,
   ShowFormVariantPicker: true,
@@ -221,6 +226,7 @@ export const CUSTOM_LAYOUT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowListButton: true,
   ShowTagsButton: true,
   ShowLinksButton: true,
+  ShowAskAIButton: true,
   ShowAttachmentsButton: true,
   ShowCloneButton: true,
   ShowFormVariantPicker: true,
