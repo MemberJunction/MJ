@@ -33,6 +33,9 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
     /** Custom-layout Template form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
 
+    /** Custom-layout form owns its entire body; suppress auto-filled relationship sections. */
+    public override get OwnsEntireFormBody(): boolean { return true; }
+
     /**
      * Read-only mirror of the editor's rows (fed only by {@link OnSharedTemplateContentChange}),
      * kept for the count badges and unsaved-changes flag. Never load or save through it.

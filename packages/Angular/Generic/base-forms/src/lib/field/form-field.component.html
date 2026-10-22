@@ -14,15 +14,36 @@
         <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
       }
       <div class="mj-forms-field-control">
-        <!-- FK fields with a mapped name field: show the name as a hyperlink -->
+        <!-- FK fields with a mapped or resolved name: show the name as a hyperlink -->
         @if (IsFKWithNameField) {
           <span class="mj-forms-field-value">
-            @if (RecordLinksEnabled) {
-              <a class="mj-forms-field-link mj-forms-field-link--fk" (click)="OnRecordLinkClick($event)" title="View related record">
-                {{ FKDisplayName }}
-              </a>
+            @if (IsPolymorphicFK) {
+              <span class="mj-forms-poly-fk-read">
+                @if (RecordLinksEnabled) {
+                  <a class="mj-forms-field-link mj-forms-field-link--fk mj-forms-field-link--poly"
+                     (click)="OnRecordLinkClick($event)"
+                     [title]="'Open ' + (EffectiveRelatedEntityName || 'related') + ' record: ' + (FKDisplayName || FormatValue())">
+                    @if (EffectiveRelatedEntityIcon) {
+                      <i [class]="EffectiveRelatedEntityIcon + ' mj-forms-poly-entity-icon'"></i>
+                    }
+                    <span>{{ FKDisplayName || FormatValue() }}</span>
+                    <i class="fa-solid fa-arrow-up-right-from-square mj-forms-field-link-icon"></i>
+                  </a>
+                } @else {
+                  <span>{{ FKDisplayName || FormatValue() }}</span>
+                }
+                @if (ShowPolymorphicRawIDBadge) {
+                  <span class="mj-forms-poly-id-badge" [title]="'Record ID: ' + FormatValue()">{{ CompactPolymorphicRawID }}</span>
+                }
+              </span>
             } @else {
-              {{ FKDisplayName }}
+              @if (RecordLinksEnabled) {
+                <a class="mj-forms-field-link mj-forms-field-link--fk" (click)="OnRecordLinkClick($event)" title="View related record">
+                  {{ FKDisplayName }}
+                </a>
+              } @else {
+                {{ FKDisplayName }}
+              }
             }
           </span>
         }
@@ -123,11 +144,17 @@
 
   <!-- EDIT MODE -->
   @if (EditMode && !IsFieldReadOnly) {
-    <div class="mj-forms-field mj-forms-field--editing" [class.mj-forms-field--no-label]="!ShowLabel" [class.mj-forms-field--dirty]="IsDirty" [class.mj-forms-field--required-empty]="IsRequiredEmpty" [class.mj-forms-field--has-error]="ShowErrors" [class.mj-forms-field--has-warning]="ShowWarnings || StoredDateIsUnreadable">
+    <div class="mj-forms-field mj-forms-field--editing" [class.mj-forms-field--no-label]="!ShowLabel" [class.mj-forms-field--dirty]="IsDirty" [class.mj-forms-field--conflict]="ActiveConflict !== null" [class.mj-forms-field--required-empty]="IsRequiredEmpty" [class.mj-forms-field--has-error]="ShowErrors" [class.mj-forms-field--has-warning]="ShowWarnings || StoredDateIsUnreadable">
       @if (ShowLabel) {
-        <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
+        <div class="mj-forms-field-label-row">
+          <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
+          <ng-container *ngTemplateOutlet="fieldEditIndicatorsTpl"></ng-container>
+        </div>
       }
       <div class="mj-forms-field-control">
+        @if (!ShowLabel) {
+          <ng-container *ngTemplateOutlet="fieldEditIndicatorsTpl"></ng-container>
+        }
         <!-- Foreign Key fields get custom search autocomplete -->
         @if (HasRelatedEntity) {
           <div class="mj-fk-search"
@@ -532,6 +559,77 @@
           </div>
         </div>
       }
+      <!-- Inline Conflict Resolution Card -->
+      @if (ActiveConflict) {
+        <div class="mj-forms-field__conflict-card" role="alert">
+          <div class="mj-forms-field__conflict-header">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>Updated in another session while you were editing</span>
+          </div>
+          <div class="mj-forms-field__conflict-comparison">
+            <div class="mj-forms-field__conflict-col mj-forms-field__conflict-col--local">
+              <span class="mj-forms-field__conflict-col-label">Your edit</span>
+              <span class="mj-forms-field__conflict-col-value">{{ FormatFieldValue(ActiveConflict.localEditedValue) }}</span>
+            </div>
+            <div class="mj-forms-field__conflict-col mj-forms-field__conflict-col--remote">
+              <span class="mj-forms-field__conflict-col-label">New value</span>
+              <span class="mj-forms-field__conflict-col-value">{{ FormatFieldValue(ActiveConflict.incomingServerValue) }}</span>
+            </div>
+          </div>
+          <div class="mj-forms-field__conflict-actions">
+            <button type="button"
+                    class="mj-forms-field__conflict-btn mj-forms-field__conflict-btn--keep"
+                    (click)="AcceptLocalConflictValue($event)">
+              <i class="fa-solid fa-check"></i>
+              <span>Keep mine</span>
+            </button>
+            <button type="button"
+                    class="mj-forms-field__conflict-btn mj-forms-field__conflict-btn--use-remote"
+                    (click)="AcceptRemoteConflictValue($event)">
+              <i class="fa-solid fa-arrow-down-long"></i>
+              <span>Use new value</span>
+            </button>
+          </div>
+        </div>
+      }
     </div>
   }
 }
+
+<!-- Shared template for edit-mode field indicators (Original Value Popover & Auto-Merged Badge) -->
+<ng-template #fieldEditIndicatorsTpl>
+  @if (EditMode && IsFieldDirty && !ActiveConflict) {
+    <div class="mj-forms-field__history-wrap"
+         (mouseenter)="ShowOriginalValuePopover = true"
+         (mouseleave)="ShowOriginalValuePopover = false">
+      <button type="button"
+              class="mj-forms-field__history-trigger"
+              title="Original value"
+              aria-label="Original value"
+              [attr.aria-expanded]="ShowOriginalValuePopover"
+              (click)="ToggleOriginalValuePopover($event)">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+      </button>
+      @if (ShowOriginalValuePopover) {
+        <div class="mj-forms-field__history-popover" role="dialog" aria-label="Original value">
+          <div class="mj-forms-field__history-popover-header">Original value</div>
+          <div class="mj-forms-field__history-popover-value">{{ FormattedOriginalValue }}</div>
+          <button type="button"
+                  class="mj-forms-field__restore-btn"
+                  (click)="RestoreOriginalValue($event)">
+            <i class="fa-solid fa-rotate-left"></i>
+            <span>Restore</span>
+          </button>
+        </div>
+      }
+    </div>
+  }
+  @if (EditMode && AutoMergedPreviousValue !== undefined && !ActiveConflict) {
+    <span class="mj-forms-field__auto-merged-badge"
+          [title]="'Previously: ' + FormattedAutoMergedPreviousValue">
+      <i class="fa-solid fa-bolt"></i>
+      <span>Updated live</span>
+      <span class="mj-forms-field__auto-merged-tooltip">Previously: {{ FormattedAutoMergedPreviousValue }}</span>
+    </span>
+  }
+</ng-template>

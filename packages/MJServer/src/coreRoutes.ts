@@ -23,6 +23,7 @@ import { CreateMagicLinkHandler, CreateMagicLinkJwksRouter, RegisterMagicLinkAut
 import { CreateWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
 import { CreateRealtimeVerifyRouter, REALTIME_VERIFY_MOUNT_PATH, RealtimeSessionVerificationService } from './realtimeSessions/index.js';
 import { CreateAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
+import { AssertLocalDevAuthAllowed, IsLocalDevAuthEnabled, RegisterLocalDevAuthProvider } from './auth/localDevAuth.js';
 import type { StartupLogger } from './logging/StartupLogger.js';
 
 type RouteLog = Pick<StartupLogger, 'LogIf'>;
@@ -63,8 +64,22 @@ export function MountPublicCoreRoutes(app: Application, publicUrl: string, log: 
 
     routers.MagicLink = mountMagicLinkPublic(app, publicUrl, log);
     routers.Widget = mountWidgetPublic(app, publicUrl, log);
+    mountLocalDevAuthPublic(app, publicUrl, log);
     mountRealtimeVerify(app, log);
     return routers;
+}
+
+function mountLocalDevAuthPublic(app: Application, publicUrl: string, log: RouteLog): void {
+    AssertLocalDevAuthAllowed();
+    if (!IsLocalDevAuthEnabled()) {
+        return;
+    }
+    RegisterLocalDevAuthProvider(publicUrl);
+    if (!configInfo.magicLink?.enabled && !configInfo.widget?.enabled) {
+        app.use(ApiRoute(MAGIC_LINK_MOUNT_PATH), cors<cors.CorsRequest>(), CreateMagicLinkJwksRouter());
+        log.LogIf('verbose', `[LocalDevAuth] Published RS256 signing key at ${ApiRoute(MAGIC_LINK_MOUNT_PATH)}/jwks.json`);
+    }
+    log.LogIf('verbose', `[LocalDevAuth] Local dev auth routes enabled at ${ApiRoute(AUTH_CATALOG_MOUNT_PATH)}/dev-login (localhost only)`);
 }
 
 function mountOAuthCallback(app: Application, publicUrl: string, log: RouteLog): Router | undefined {
