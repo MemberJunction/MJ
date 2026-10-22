@@ -23,6 +23,13 @@ import { AssessSpec } from '../interactive/mobile-safety';
  * package whose export shape does not match its declared `Shape` fails here rather than on a phone.
  */
 
+/**
+ * Time allowed for importing the whole registry cold. Locally that takes well under a second, but
+ * a CI shard imports these packages from a cold disk while other suites run beside it, and has run
+ * past vitest's 5 s default often enough to fail unrelated PRs.
+ */
+const REGISTRY_IMPORT_TIMEOUT_MS = 30_000;
+
 /** Builds a minimal renderable spec declaring the given libraries. */
 function SpecWith(libraries: NonNullable<ComponentSpec['libraries']>): ComponentSpec {
     return {
@@ -140,7 +147,7 @@ describe('ResolveMobileLibraries', () => {
         expect(typeof lib<(c: string) => { hex: () => string }>('chroma')).toBe('function');
         expect(typeof lib<{ get: unknown }>('axios').get).toBe('function');
         expect(typeof lib<(d: string) => { format: (f: string) => string }>('moment')('2026-01-02').format).toBe('function');
-    });
+    }, REGISTRY_IMPORT_TIMEOUT_MS);
 
     it('names an unprovidable library with the reason rather than dropping it', async () => {
         const resolved = await ResolveMobileLibraries([{ name: 'chart.js', globalVariable: 'Chart' }]);

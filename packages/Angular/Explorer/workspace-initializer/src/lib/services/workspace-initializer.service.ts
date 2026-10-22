@@ -7,7 +7,7 @@
  */
 
 import { Injectable } from '@angular/core';
-import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
+import { LogError, LogStatus, LogStatusEx, Metadata, RunView } from '@memberjunction/core';
 import { MJThemeEntity } from '@memberjunction/core-entities';
 import { setupGraphQLClient, GraphQLProviderConfigData, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
@@ -80,13 +80,13 @@ export class WorkspaceInitializerService {
 
       await setupGraphQLClient(config);
       const end = Date.now();
-      console.log(`[Workspace] GraphQL client setup complete: ${end - start}ms`);
+      LogStatus(`[Workspace] GraphQL client setup complete: ${end - start}ms`);
 
       // Subscribe to cross-server cache invalidation events via GraphQL WebSocket
       // This enables real-time data refresh when other servers modify entities
       if (GraphQLDataProvider.Instance) {
           GraphQLDataProvider.Instance.SubscribeToCacheInvalidation();
-          console.log('✓ Cache invalidation subscription active');
+          LogStatus('✓ Cache invalidation subscription active');
       }
 
       // 2. Load metadata and validate user
@@ -410,7 +410,7 @@ export class WorkspaceInitializerService {
       });
       await this.themeService.ApplyBrandOverlay(theme.ID);
     } catch (err) {
-      LogStatus(`Org brand theme bootstrap skipped: ${err instanceof Error ? err.message : String(err)}`);
+      LogStatusEx({ message: `Org brand theme bootstrap skipped: ${err instanceof Error ? err.message : String(err)}`, verboseOnly: true });
     }
   }
 

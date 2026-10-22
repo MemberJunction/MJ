@@ -2,7 +2,14 @@ import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, Chang
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EntityInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, RunView, Metadata, RunViewParams, EntityFieldValueListType, EntityFieldInfo, CompositeKey, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { BuildCompositeKey, BuildPkString } from '../utils/record.util';
+import {
+  BuildCompositeKey,
+  BuildPkString,
+  ResolvePolymorphicTargetEntity,
+  BuildPolymorphicCompositeKey,
+  PolymorphicCacheKey,
+  BatchResolvePolymorphicRecordNames
+} from '../utils/record.util';
 
 interface RelatedEntityData {
   relationship: EntityRelationshipInfo;
@@ -237,10 +244,27 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
   super();}
 
+  private _polymorphicRecordNames = new Map<string, string>();
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['record'] && this.record && this.entity) {
       this.loadRelationshipCounts();
       this.loadOrganicKeyCounts();
+      void this.resolvePolymorphicNamesForRecord();
+    }
+  }
+
+  private async resolvePolymorphicNamesForRecord(): Promise<void> {
+    if (!this.record || !this.entity) return;
+    const sizeBefore = this._polymorphicRecordNames.size;
+    await BatchResolvePolymorphicRecordNames(
+      [this.record],
+      this.entity,
+      this.ProviderToUse,
+      this._polymorphicRecordNames,
+    );
+    if (this._polymorphicRecordNames.size !== sizeBefore) {
+      this.ngZone.run(() => this.cdr.detectChanges());
     }
   }
 
@@ -659,8 +683,8 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
     for (const field of this.entity.Fields) {
       // Skip system fields and sensitive fields
       if (excludePatterns.some(p => field.Name.toLowerCase().includes(p))) continue;
-      // Skip very long text fields (but not FK fields which are usually GUIDs)
-      if (field.Length && field.Length > 500 && !field.RelatedEntityID) continue;
+      // Skip very long text fields (but not FK fields or polymorphic FK fields)
+      if (field.Length && field.Length > 500 && !field.RelatedEntityID && !field.EntityIDFieldName) continue;
 
       const value = this.record[field.Name];
 
@@ -682,6 +706,30 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
           fields.push(fkDisplay);
         }
         continue;
+      }
+
+      // Handle Polymorphic Foreign Key fields (EntityField.EntityIDFieldName)
+      if (field.EntityIDFieldName && field.EntityIDFieldName.trim().length > 0) {
+        if (value !== null && value !== undefined && String(value).trim() !== '') {
+          const rawId = String(value).trim();
+          const targetEntity = ResolvePolymorphicTargetEntity(this.record, field, this.ProviderToUse);
+          if (targetEntity) {
+            const compositeKey = BuildPolymorphicCompositeKey(rawId, targetEntity);
+            const resolvedName = compositeKey
+              ? this._polymorphicRecordNames.get(PolymorphicCacheKey(targetEntity.Name, compositeKey))
+              : undefined;
+            fields.push({
+              type: 'foreign-key',
+              name: field.Name,
+              label: this.formatFieldLabel(field),
+              value: rawId,
+              displayValue: resolvedName || rawId,
+              relatedEntityName: targetEntity.Name,
+              relatedRecordId: rawId
+            });
+            continue;
+          }
+        }
       }
 
       // Skip empty values for regular fields

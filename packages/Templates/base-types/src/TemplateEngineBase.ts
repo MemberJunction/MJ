@@ -43,7 +43,8 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
                 Type: 'dataset',
                 DatasetName: 'Template_Metadata',
                 DatasetResultHandling: "single_property",
-                PropertyName: "_metadata"
+                PropertyName: "_metadata",
+                AutoRefresh: true
             }
         ]
         await this.Load(c, provider, forceRefresh, contextUser);
@@ -62,6 +63,7 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
             template.Content = contentByTemplate.get(key) ?? [];
             template.Params = paramsByTemplate.get(key) ?? [];
         }
+        this._indexedTemplatesRef = undefined;
     }
 
     /*

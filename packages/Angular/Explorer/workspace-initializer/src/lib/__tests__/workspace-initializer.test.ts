@@ -30,6 +30,7 @@ vi.mock('@angular/core', () => ({
 vi.mock('@memberjunction/core', () => ({
   LogError: vi.fn(),
   LogStatus: vi.fn(),
+  LogStatusEx: vi.fn(),
   Metadata: class {
     CurrentUser = { ID: 'user-1' };
   },

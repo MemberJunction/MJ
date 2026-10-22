@@ -1,5 +1,64 @@
 # @memberjunction/livekit-room-server
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 17c36d1: The meeting dial-in rate limiter stays cheap and keeps its lockouts under a flood of distinct caller numbers.
+  - **Constant cost per failed attempt.** Past 1,000 tracked numbers, every failed dial-in used to scan the whole map for expired entries, so a flood of distinct numbers cost a 10,000-entry scan per attempt. The scan now runs at most once per 1,000 new numbers, and enforcing the 10,000-entry cap drops a single entry.
+  - **Lockouts are evicted last.** A locked-out caller could flood 10,000 other numbers to push their own lockout out of the map. Locked-out numbers are now kept apart, and the cap drops a number that is only counting attempts first; a lockout goes only when every tracked number is locked out.
+  - **A failure during an active lockout leaves it alone.** It used to reset the lockout once the attempt window had passed. The dial-in service never records a failure for a locked-out number, so this only affects direct callers of `DialInRateLimiter`.
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [52b9fd5]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [cd39c95]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai-prompts@6.2.0-edge.5
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/aiengine@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/storage@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ai-bridge-base@6.2.0-edge.5
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.5
+  - @memberjunction/ai-bridge-server@6.2.0-edge.5
+  - @memberjunction/ai-bridge-livekit-native@6.2.0-edge.5
+  - @memberjunction/network-utils@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Minor Changes

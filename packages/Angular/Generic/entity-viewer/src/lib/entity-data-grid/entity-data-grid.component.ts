@@ -21,7 +21,16 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { BuildPkString, BuildUsablePkString, CanonicalizeColumnFields, ComputeFieldsList } from '../utils/record.util';
+import {
+  BuildPkString,
+  BuildUsablePkString,
+  CanonicalizeColumnFields,
+  ComputeFieldsList,
+  ResolvePolymorphicTargetEntity,
+  BuildPolymorphicCompositeKey,
+  PolymorphicCacheKey,
+  BatchResolvePolymorphicRecordNames
+} from '../utils/record.util';
 import { AggregateField } from '../utils/aggregate-field.util';
 import {
   MJUserViewEntityExtended,
@@ -754,6 +763,8 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // ========================================
 
   private _visualConfig: GridVisualConfig = {};
+  private _effectiveVisualConfig: Required<GridVisualConfig> = { ...DEFAULT_VISUAL_CONFIG };
+  private _effectiveVisualConfigSource: GridVisualConfig | null = null;
   /**
    * Visual configuration for the grid appearance.
    * Allows customization of header styles, row colors, cell formatting, and more.
@@ -762,6 +773,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   @Input()
   set VisualConfig(value: GridVisualConfig) {
     this._visualConfig = value || {};
+    this._effectiveVisualConfigSource = null;
     this.applyVisualConfig();
   }
   get VisualConfig(): GridVisualConfig {
@@ -769,10 +781,15 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   /**
-   * Get the effective visual config (user config merged with defaults)
+   * Get the effective visual config (user config merged with defaults).
+   * Memoized on `_visualConfig` reference to avoid allocating a new object on every change-detection pass.
    */
   get EffectiveVisualConfig(): Required<GridVisualConfig> {
-    return { ...DEFAULT_VISUAL_CONFIG, ...this._visualConfig };
+    if (this._effectiveVisualConfigSource !== this._visualConfig) {
+      this._effectiveVisualConfigSource = this._visualConfig;
+      this._effectiveVisualConfig = { ...DEFAULT_VISUAL_CONFIG, ...this._visualConfig };
+    }
+    return this._effectiveVisualConfig;
   }
 
   /** @deprecated Use {@link EffectiveVisualConfig}. */
@@ -1301,26 +1318,60 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return this.gridStateDescribesCurrentEntity() ? this._gridState?.aggregates : undefined;
   }
 
+  private _cardAggregatesCache: ViewGridAggregate[] = [];
+  private _cardAggregatesKey = '';
+  private _columnAggregatesCache: ViewGridAggregate[] = [];
+  private _columnAggregatesKey = '';
+
+  private buildAggregatesCacheKey(expressions: ViewGridAggregate[] | undefined, displayType: 'card' | 'column'): string {
+    if (!expressions || expressions.length === 0) {
+      return '';
+    }
+    return expressions
+      .filter(a => a.enabled !== false && a.displayType === displayType)
+      .map(a => `${a.id ?? a.expression}:${a.label ?? ''}:${a.order ?? 0}:${a.column ?? ''}`)
+      .join('|');
+  }
+
   /**
    * Returns enabled aggregates configured for card display.
+   * Memoized by expression signature so template bindings do not allocate a new array
+   * or trigger `AggregatePanelComponent.ngOnChanges` on unrelated change-detection passes.
    */
   public get CardAggregates(): ViewGridAggregate[] {
     const config = this.effectiveAggregatesConfig;
-    if (!config?.expressions) return [];
-    return config.expressions
-      .filter(a => a.enabled !== false && a.displayType === 'card')
-      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    const expressions = config?.expressions;
+    if (!expressions || expressions.length === 0) {
+      return this._cardAggregatesCache.length === 0 ? this._cardAggregatesCache : (this._cardAggregatesCache = []);
+    }
+    const key = this.buildAggregatesCacheKey(expressions, 'card');
+    if (key !== this._cardAggregatesKey) {
+      this._cardAggregatesKey = key;
+      this._cardAggregatesCache = expressions
+        .filter(a => a.enabled !== false && a.displayType === 'card')
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+    }
+    return this._cardAggregatesCache;
   }
 
   /**
    * Returns enabled aggregates configured for column footer display.
+   * Memoized by expression signature to avoid per-CD array allocation and sorting.
    */
   public get ColumnAggregates(): ViewGridAggregate[] {
     const config = this.effectiveAggregatesConfig;
-    if (!config?.expressions) return [];
-    return config.expressions
-      .filter(a => a.enabled !== false && a.displayType === 'column')
-      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    const expressions = config?.expressions;
+    if (!expressions || expressions.length === 0) {
+      return this._columnAggregatesCache.length === 0 ? this._columnAggregatesCache : (this._columnAggregatesCache = []);
+    }
+    const key = this.buildAggregatesCacheKey(expressions, 'column');
+    if (key !== this._columnAggregatesKey) {
+      this._columnAggregatesKey = key;
+      this._columnAggregatesCache = expressions
+        .filter(a => a.enabled !== false && a.displayType === 'column')
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+    }
+    return this._columnAggregatesCache;
   }
 
   /**
@@ -3293,6 +3344,34 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         return linkHtml;
       }
 
+      // Polymorphic FK rendering (driven by hard metadata link EntityField.EntityIDFieldName)
+      if (!customFormat && field?.EntityIDFieldName && params.data) {
+        const rawRecordId = String(params.value ?? '').trim();
+        if (rawRecordId) {
+          const targetEntity = ResolvePolymorphicTargetEntity(params.data, field, this.ProviderToUse);
+          if (targetEntity) {
+            const compositeKey = BuildPolymorphicCompositeKey(rawRecordId, targetEntity);
+            const resolvedName = compositeKey
+              ? this._polymorphicRecordNames.get(PolymorphicCacheKey(targetEntity.Name, compositeKey))
+              : undefined;
+            const labelToDisplay = resolvedName || rawRecordId;
+            const escapedLabel = HighlightUtil.escapeHtml(labelToDisplay);
+            const escapedFieldName = HighlightUtil.escapeHtml(field.Name);
+            const escapedRelatedEntityId = HighlightUtil.escapeHtml(targetEntity.ID);
+            const escapedRelatedEntityName = HighlightUtil.escapeHtml(targetEntity.Name);
+            const escapedRawRecordId = HighlightUtil.escapeHtml(rawRecordId);
+            const titleAttr = resolvedName
+              ? ` title="${HighlightUtil.escapeHtml(`${targetEntity.DisplayNameOrName}: ${resolvedName} (${rawRecordId})`)}"`
+              : '';
+            const dataAttrs = `data-related-entity-id="${escapedRelatedEntityId}" data-record-id="${escapedRawRecordId}" data-field-name="${escapedFieldName}" data-related-entity-name="${escapedRelatedEntityName}"${titleAttr}`;
+            const displayText = this._filterText
+              ? HighlightUtil.highlight(labelToDisplay, this._filterText, true)
+              : escapedLabel;
+            return `<a href="javascript:void(0)" class="cell-link cell-fk-link" ${dataAttrs}>${displayText}</a>`;
+          }
+        }
+      }
+
       let displayValue = '';
       let extraClass = '';
       let inlineStyle = '';
@@ -4016,7 +4095,31 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       return row;
     });
 
+    if (this._entityInfo && this.RowData.length > 0) {
+      void this.resolvePolymorphicNamesForCurrentRows(this.RowData);
+    }
+
     this.cdr.detectChanges();
+  }
+
+  /** Cache of resolved polymorphic target record display names (`entityName::compositeKey` -> name). */
+  private _polymorphicRecordNames = new Map<string, string>();
+
+  private async resolvePolymorphicNamesForCurrentRows(rows: readonly Record<string, unknown>[]): Promise<void> {
+    if (!this._entityInfo) return;
+    const sizeBefore = this._polymorphicRecordNames.size;
+    await BatchResolvePolymorphicRecordNames(
+      rows,
+      this._entityInfo,
+      this.ProviderToUse,
+      this._polymorphicRecordNames,
+    );
+    if (this._polymorphicRecordNames.size !== sizeBefore) {
+      if (this.gridApi && !this.gridApi.isDestroyed()) {
+        this.gridApi.refreshCells({ force: true });
+      }
+      this.cdr.detectChanges();
+    }
   }
 
   /**
@@ -5664,14 +5767,47 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // Public Getters
   // ========================================
 
+  private _visibleRowsCache: GridRowData[] = [];
+  private _visibleRowsKey = '';
+  private _visibleColumnStatesCache: ColumnRuntimeState[] = [];
+  private _visibleColumnStatesKey = '';
+
+  /**
+   * Returns the currently loaded grid rows.
+   * Memoized on map size and boundary keys so repeated change-detection checks reuse the same array instance.
+   */
   get VisibleRows(): GridRowData[] {
-    return Array.from(this._rowDataMap.values());
+    const size = this._rowDataMap.size;
+    if (size === 0) {
+      return this._visibleRowsCache.length === 0 ? this._visibleRowsCache : (this._visibleRowsCache = []);
+    }
+    let firstKey = '';
+    let lastKey = '';
+    for (const k of this._rowDataMap.keys()) {
+      if (!firstKey) firstKey = k;
+      lastKey = k;
+    }
+    const key = `${size}:${firstKey}:${lastKey}`;
+    if (key !== this._visibleRowsKey || this._visibleRowsCache.length !== size) {
+      this._visibleRowsKey = key;
+      this._visibleRowsCache = Array.from(this._rowDataMap.values());
+    }
+    return this._visibleRowsCache;
   }
 
+  /**
+   * Returns visible column runtime states sorted by display order.
+   * Memoized on column visibility and order signature to prevent per-CD array allocation and sorting.
+   */
   get VisibleColumnStates(): ColumnRuntimeState[] {
-    return this._columnStates
-      .filter(c => c.visible)
-      .sort((a, b) => a.order - b.order);
+    const key = this._columnStates.map(c => `${c.config.field}:${c.visible ? 1 : 0}:${c.order}`).join('|');
+    if (key !== this._visibleColumnStatesKey) {
+      this._visibleColumnStatesKey = key;
+      this._visibleColumnStatesCache = this._columnStates
+        .filter(c => c.visible)
+        .sort((a, b) => a.order - b.order);
+    }
+    return this._visibleColumnStatesCache;
   }
 }
 
