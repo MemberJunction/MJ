@@ -580,12 +580,16 @@ describe('StoreRealtimeRecording stamps through the ledger proc (#6010)', () => 
         expect(provider.SessionSaves).toBe(0);
     });
 
-    it('logs the stamp failure with the session id and still reports the upload as stored', async () => {
+    it('logs the stamp failure with the session id and carries it out in the result alongside the uploaded file id', async () => {
         provider.StampSucceeds = false;
         const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         try {
             const result = await StoreRealtimeRecording(endOfCallInput());
-            expect(result).toEqual({ FileID: FILE, ErrorMessage: null, Superseded: false });
+            expect(result.FileID).toBe(FILE);
+            expect(result.Superseded).toBe(false);
+            expect(result.ErrorMessage).toContain('not stamped');
+            expect(result.ErrorMessage).toContain(SESSION);
+            expect(result.ErrorMessage).toContain('stamp refused');
             const logged = spy.mock.calls.map((c) => c.join(' '));
             expect(logged.some((m) => m.includes(SESSION) && m.includes('stamp refused'))).toBe(true);
         } finally {

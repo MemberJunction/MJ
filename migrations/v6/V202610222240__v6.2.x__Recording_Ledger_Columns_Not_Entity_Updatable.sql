@@ -18,6 +18,13 @@
 -- recording-start stamp) now call spStampAIAgentSessionRecordingFile, defined here. Same style as the
 -- other ledger procs: one statement, granted to the runtime roles, which hold no table-level DML.
 --
+-- DEPLOY ORDER. This migration replaces spCreate/spUpdateAIAgentSession without the seven parameters,
+-- but the AllowUpdateAPI=0 flags arrive only through `mj sync push` of the metadata. Until they land
+-- (and MJAPI reloads its metadata), every MJ: AI Agent Sessions save sends parameters the procs no
+-- longer accept and fails. Apply this migration and push the metadata together (the release's
+-- consolidated Metadata_Sync migration does this; a dev database migrated from `next` must run
+-- `mj sync push --dir=metadata` right after `mj migrate`).
+--
 -- PostgreSQL counterpart is produced by the release build.
 -- ============================================================================
 

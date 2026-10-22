@@ -1017,16 +1017,21 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             });
 
             // Canonical consolidated file written — drop the crash-recovery shards (best-effort).
-            if (stored.FileID) {
+            // A FileID with an ErrorMessage is an uploaded file the session was not stamped with: the
+            // shards are then the only recording the janitor could still recover, so keep them.
+            const storedAndStamped = !!stored.FileID && !stored.ErrorMessage;
+            if (storedAndStamped) {
                 await deleteRealtimeRecordingSegments(agentSessionId, accountID, runUser);
+            } else if (stored.FileID) {
+                LogError(`RealtimeClientSessionResolver.UploadRealtimeRecording: session ${agentSessionId} has file ${stored.FileID} but it is not stamped (${stored.ErrorMessage}); shards kept`);
             }
 
             return {
-                Success: !!stored.FileID,
+                Success: storedAndStamped,
                 FileID: stored.FileID ?? undefined,
                 // Report the reason the storage layer knew (e.g. Drive's "Service Accounts do not have
                 // storage quota"); the generic sentence is only for when no layer supplied one.
-                ErrorMessage: stored.FileID ? undefined : (stored.ErrorMessage ?? 'Storage upload failed.'),
+                ErrorMessage: storedAndStamped ? undefined : (stored.ErrorMessage ?? 'Storage upload failed.'),
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
