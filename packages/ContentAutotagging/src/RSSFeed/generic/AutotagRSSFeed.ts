@@ -247,13 +247,14 @@ export class AutotagRSSFeed extends AutotagBase {
      * Parse an RSS/Atom feed URL and return structured items, or none on any failure.
      * The content field is HTML-stripped via the engine's parseHTML.
      */
-    public async ParseRSSFeed(url: string, access?: AccessArtifact | null): Promise<RSSItem[]> {
-        if (!await this.urlIsValid(url)) {
+    public async ParseRSSFeed(url: string, access?: AccessArtifact | null, options?: { ValidateUrl?: boolean }): Promise<RSSItem[]> {
+        const validateUrl = options?.ValidateUrl ?? false;
+        if (!await this.urlIsValid(url, validateUrl)) {
             LogError(`AutotagRSSFeed: invalid feed URL: ${url}`);
             return [];
         }
         try {
-            return await this.readFeed(url, access);
+            return await this.readFeed(url, access, undefined, validateUrl);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`AutotagRSSFeed: error parsing feed "${url}": ${msg}`);
@@ -264,7 +265,8 @@ export class AutotagRSSFeed extends AutotagBase {
     /** List the feed's entries for the pipeline. Throws on an unreadable feed so the walk stays due. */
     public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
         const confidence = request.Confidence ?? ConfidenceScale;
-        for (const entry of await this.readFeed(request.URL, request.Access, request.Signal)) {
+        const validateUrl = !this.allowInternalHosts(request);
+        for (const entry of await this.readFeed(request.URL, request.Access, request.Signal, validateUrl)) {
             if (request.Signal.aborted) {
                 return;
             }
@@ -290,10 +292,15 @@ export class AutotagRSSFeed extends AutotagBase {
     }
 
     /** Fetch and parse a feed, applying the session if there is one. Throws on failure. */
-    private async readFeed(url: string, access?: AccessArtifact | null, signal?: AbortSignal): Promise<RSSItem[]> {
+    private async readFeed(
+        url: string,
+        access?: AccessArtifact | null,
+        signal?: AbortSignal,
+        validateUrl = true,
+    ): Promise<RSSItem[]> {
         const { Data } = await HttpGet<string>(url, {
             ResponseType: 'text',
-            ValidateUrl: true,
+            ValidateUrl: validateUrl,
             StripHeadersOnCrossOriginRedirect: true,
             Signal: signal,
             Headers: access?.Headers ? { ...access.Headers } : undefined,
@@ -326,14 +333,29 @@ export class AutotagRSSFeed extends AutotagBase {
     /**
      * Check if a URL is reachable via HTTP HEAD request.
      */
-    private async urlIsValid(url: string): Promise<boolean> {
+    private async urlIsValid(url: string, validateUrl = false): Promise<boolean> {
         try {
             // ThrowOnError off so a 3xx/4xx is reported by status rather than as a throw.
-            const response = await HttpHead(url, { Timeout: 10000, ThrowOnError: false });
+            const response = await HttpHead(url, { Timeout: 10000, ThrowOnError: false, ValidateUrl: validateUrl });
             return response.Status >= 200 && response.Status < 400;
-        } catch {
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`AutotagRSSFeed: feed URL check failed for "${url}": ${msg}`);
             return false;
         }
+    }
+
+    /** True when the source explicitly opts in to private/loopback feed URLs (`AllowInternalHosts`). */
+    private allowInternalHosts(request: DiscoverRequest): boolean {
+        const raw = request.Parameters['AllowInternalHosts'] ?? request.Configuration['AllowInternalHosts'];
+        if (typeof raw === 'boolean') {
+            return raw;
+        }
+        if (typeof raw === 'string') {
+            const normalized = raw.trim().toLowerCase();
+            return normalized === 'true' || normalized === '1' || normalized === 'yes';
+        }
+        return false;
     }
 
     /**

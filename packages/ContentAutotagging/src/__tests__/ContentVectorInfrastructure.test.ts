@@ -107,7 +107,7 @@ describe('vector infrastructure cascade', () => {
         expect(index.Name).toBe('ConfiguredDefault');
     });
 
-    it('fails if more than one active default MJ: AI Configurations row exists', async () => {
+    it('fails on the strict pipeline path if more than one active default MJ: AI Configurations row exists', async () => {
         aiState.VectorIndexes = [
             { ID: '11111111-1111-1111-1111-111111111111', Name: 'Only', EmbeddingModelID: 'M1', VectorDatabaseID: 'DB1' },
         ];
@@ -116,7 +116,21 @@ describe('vector infrastructure cascade', () => {
             { ID: 'BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB', Name: 'Default B', IsDefault: true, Status: 'Active' },
         ];
 
-        await expect(resolveDefaultVectorIndex()).rejects.toThrow(/Multiple active default MJ: AI Configurations/);
+        await expect(resolveDefaultVectorIndex(false)).rejects.toThrow(/Multiple active default MJ: AI Configurations/);
+    });
+
+    it('falls back to the first vector index on the legacy path when multiple default MJ: AI Configurations rows exist', async () => {
+        aiState.VectorIndexes = [
+            { ID: '11111111-1111-1111-1111-111111111111', Name: 'First', EmbeddingModelID: 'M1', VectorDatabaseID: 'DB1' },
+            { ID: '22222222-2222-2222-2222-222222222222', Name: 'Second', EmbeddingModelID: 'M2', VectorDatabaseID: 'DB1' },
+        ];
+        aiState.Configurations = [
+            { ID: 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA', Name: 'Default A', IsDefault: true, Status: 'Active' },
+            { ID: 'BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB', Name: 'Default B', IsDefault: true, Status: 'Active' },
+        ];
+
+        const index = await resolveDefaultVectorIndex(true);
+        expect(index.Name).toBe('First');
     });
 
     it('uses the sole vector index when VectorIndexes.length === 1 and no default param is set', async () => {

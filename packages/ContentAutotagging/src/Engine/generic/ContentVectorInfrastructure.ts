@@ -212,6 +212,9 @@ export class ContentVectorInfrastructure {
         const configs = AIEngine.Instance.Configurations ?? [];
         const activeDefaults = configs.filter((c) => Boolean(c.IsDefault) && (c.Status ?? 'Active') === 'Active');
         if (activeDefaults.length > 1) {
+            if (this.options.AllowFirstIndexFallback) {
+                return null;
+            }
             throw new Error(
                 `Multiple active default MJ: AI Configurations found (${activeDefaults.map((c) => c.Name ?? c.ID).join(', ')}); at most one active configuration may set IsDefault = 1`,
             );
