@@ -292,7 +292,7 @@ export class WidgetSessionService {
 
   /**
    * Refreshes a live guest session while preserving its per-visitor `sessionId` (`mj_sid`).
-   * Requires the caller's current widget guest JWT (`input.bearerToken`), verified against the
+   * Requires the caller's current widget guest JWT (`input.BearerToken`), verified against the
    * magic-link signing key with a {@link REFRESH_GRACE_SECONDS} post-expiry grace window, and
    * bound to the resolved widget instance (`mj_widget_id === widget.ID`, `mj_anon === true`,
    * `mj_magic_link === true`). Any failure returns the same uniform 403 shape as an unknown widget key.
