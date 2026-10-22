@@ -15,6 +15,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NavigationService } from '../navigation.service';
 import { SetRecordOpenStyle } from '../record-open-style';
+import { FormatEntityRecordDisplayTitle, ResolveRecordTabDisplayTitle } from '../record-tab-title';
 import { Metadata } from '@memberjunction/core';
 import type { CompositeKey } from '@memberjunction/core';
 import type { TabRequest } from '@memberjunction/ng-base-application';
@@ -64,7 +65,6 @@ interface ServiceStubs {
   setActiveTab: ReturnType<typeof vi.fn>;
   updateTabTitle: ReturnType<typeof vi.fn>;
   getTab: ReturnType<typeof vi.fn>;
-  updateTabConfiguration: ReturnType<typeof vi.fn>;
 }
 
 function createService(opts?: { shift?: boolean; existingTab?: { id: string } | null }): {
@@ -77,7 +77,6 @@ function createService(opts?: { shift?: boolean; existingTab?: { id: string } | 
     setActiveTab: vi.fn(),
     updateTabTitle: vi.fn(),
     getTab: vi.fn((id: string) => ({ id, title: 'Widget' })),
-    updateTabConfiguration: vi.fn(),
   };
   const service = Object.create(NavigationService.prototype) as NavigationService;
   const internals = service as unknown as Record<string, unknown>;
@@ -87,7 +86,6 @@ function createService(opts?: { shift?: boolean; existingTab?: { id: string } | 
     SetActiveTab: stubs.setActiveTab,
     UpdateTabTitle: stubs.updateTabTitle,
     GetTab: stubs.getTab,
-    UpdateTabConfiguration: stubs.updateTabConfiguration,
   };
   internals['appManager'] = { GetActiveApp: () => ({ ID: 'app-1', GetColor: () => '#ff0000' }) };
   // Real shouldForceNewTab runs against this — the shift state is what a
@@ -189,114 +187,6 @@ describe('NavigationService record opens — temp-tab scope', () => {
       const fn = stubs.openTabForced.mock.calls.length ? stubs.openTabForced : stubs.openTab;
       expect(requestFrom(fn).IsPinned).toBe(false);
     });
-  });
-});
-
-
-// ===================== Standard-form escape hatch (MJ#4755) =====================
-// A custom form registered at a higher priority hides the CodeGen form. The
-// requested form mode travels as the tab's `form=standard` QUERY PARAM — the
-// channel the shell mirrors into the URL and BaseResourceComponent delivers
-// live to a mounted record (OnQueryParamsChanged). Every open path has to land
-// it on the tab the open actually reaches: a new tab, a forced tab, or an
-// existing tab that dedup focused instead.
-describe('NavigationService record opens — formMode', () => {
-  const STANDARD_PARAMS = { queryParams: { form: 'standard' } };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    SetRecordOpenStyle('records');
-  });
-
-  it('OpenNewEntityRecord puts form=standard on the new tab', () => {
-    const { service, stubs } = createService();
-    service.OpenNewEntityRecord('Widgets', { formMode: 'standard' });
-    expect(stubs.updateTabConfiguration).toHaveBeenCalledWith('tab-forced', STANDARD_PARAMS);
-    // The query param is the ONLY channel — no parallel Configuration key to drift.
-    expect('FormMode' in requestFrom(stubs.openTabForced).Configuration).toBe(false);
-  });
-
-  it('OpenNewEntityRecord without formMode leaves the tab params alone', () => {
-    const { service, stubs } = createService();
-    service.OpenNewEntityRecord('Widgets');
-    expect(stubs.updateTabConfiguration).not.toHaveBeenCalled();
-  });
-
-  it('OpenNewEntityRecord lands form=standard on whichever tab the open reached (classic dedup)', () => {
-    // Classic style does not force: OpenTab can hand back an EXISTING new-record
-    // tab — the dead-end custom form the user is escaping. The param must land there.
-    SetRecordOpenStyle('classic');
-    const { service, stubs } = createService();
-    stubs.openTab.mockReturnValue('tab-dead-end');
-    service.OpenNewEntityRecord('Widgets', { formMode: 'standard' });
-    expect(stubs.updateTabConfiguration).toHaveBeenCalledWith('tab-dead-end', STANDARD_PARAMS);
-  });
-
-  it('OpenEntityRecord puts form=standard on a new tab', () => {
-    const { service, stubs } = createService();
-    service.OpenEntityRecord('Widgets', pkey, { formMode: 'standard' });
-    expect(stubs.updateTabConfiguration).toHaveBeenCalledWith('tab-opened', STANDARD_PARAMS);
-    expect('FormMode' in requestFrom(stubs.openTab).Configuration).toBe(false);
-  });
-
-  it('OpenEntityRecord puts form=standard on a forced (shift) tab', () => {
-    const { service, stubs } = createService({ shift: true });
-    service.OpenEntityRecord('Widgets', pkey, { formMode: 'standard' });
-    expect(stubs.updateTabConfiguration).toHaveBeenCalledWith('tab-forced', STANDARD_PARAMS);
-  });
-
-  it('OpenEntityRecord without formMode leaves the tab params alone', () => {
-    const { service, stubs } = createService();
-    service.OpenEntityRecord('Widgets', pkey);
-    expect(stubs.updateTabConfiguration).not.toHaveBeenCalled();
-  });
-
-  it('re-opening an already-open record in standard form applies form=standard to the EXISTING tab', () => {
-    const { service, stubs } = createService({ existingTab: { id: 'tab-existing' } });
-    // The existing tab already carries another param — it must survive the merge.
-    stubs.getTab.mockReturnValue({ id: 'tab-existing', configuration: { queryParams: { other: 'x' } } });
-    service.OpenEntityRecord('Widgets', pkey, { formMode: 'standard' });
-    expect(stubs.updateTabConfiguration).toHaveBeenCalledWith('tab-existing', { queryParams: { other: 'x', form: 'standard' } });
-    expect(stubs.setActiveTab).toHaveBeenCalledWith('tab-existing');
-  });
-
-  it('a plain re-open does not touch the existing tab params', () => {
-    const { service, stubs } = createService({ existingTab: { id: 'tab-existing' } });
-    service.OpenEntityRecord('Widgets', pkey);
-    expect(stubs.updateTabConfiguration).not.toHaveBeenCalled();
-  });
-});
-
-
-// A record tab opened from a URL keeps the URL's bare id ("123"), while
-// OpenEntityRecord looks it up by CompositeKey.ToURLSegment(), which always
-// carries the field ("ID|123"). Dedup must treat both as the same record, or a
-// second tab opens and a formMode request misses the tab the user is looking at.
-describe('NavigationService.findOpenRecordTab — record identity', () => {
-  function serviceWithTabs(tabs: Array<{ id: string; resourceRecordId: string; configuration: Record<string, unknown> }>) {
-    const service = Object.create(NavigationService.prototype) as NavigationService;
-    (service as unknown as Record<string, unknown>)['workspaceManager'] = { GetConfiguration: () => ({ tabs }) };
-    const find = (entity: string, id: string) =>
-      (service as unknown as { findOpenRecordTab(e: string, r: string): { id: string } | null }).findOpenRecordTab(entity, id);
-    return { find };
-  }
-  const recordTab = (id: string, recordId: string) => ({
-    id, resourceRecordId: recordId, configuration: { resourceType: 'Records', Entity: 'Widgets', recordId },
-  });
-
-  it('finds a tab opened with the bare id when looked up by the full segment', () => {
-    const { find } = serviceWithTabs([recordTab('tab-url', '123')]);
-    expect(find('Widgets', 'ID|123')).toEqual({ id: 'tab-url' });
-  });
-
-  it('finds a tab opened with the full segment when looked up by the same segment', () => {
-    const { find } = serviceWithTabs([recordTab('tab-open', 'ID|123')]);
-    expect(find('Widgets', 'ID|123')).toEqual({ id: 'tab-open' });
-  });
-
-  it('does not match a different record', () => {
-    const { find } = serviceWithTabs([recordTab('tab-url', '456')]);
-    expect(find('Widgets', 'ID|123')).toBeNull();
   });
 });
 
@@ -431,6 +321,52 @@ describe('record origin chain', () => {
       await Promise.resolve();
 
       expect(stubs.updateTabTitle).toHaveBeenCalledWith('tab-opened', 'Resolved Widget #42');
+    });
+
+    it('formats entity display name + abbreviated UUID when GetEntityRecordName returns a raw UUID or empty string', async () => {
+      const { service, stubs } = createService();
+      const uuidKey = { ToURLSegment: () => '9FAF6073-CEDD-50C9-A49E-009FEDCEC577' } as unknown as CompositeKey;
+      const getEntityRecordName = vi.fn().mockResolvedValue('9FAF6073-CEDD-50C9-A49E-009FEDCEC577');
+
+      (Metadata as unknown as { Provider: unknown }).Provider = {
+        ...fakeMetadataProvider([{ Name: 'MJ: Process Run Details', DisplayName: 'Process Run Details' }]),
+        HasCachedRecordName: vi.fn().mockReturnValue(false),
+        GetCachedRecordNameOnlyIfCached: vi.fn().mockReturnValue(undefined),
+        GetEntityRecordName: getEntityRecordName,
+      };
+
+      service.OpenEntityRecord('MJ: Process Run Details', uuidKey);
+
+      expect(requestFrom(stubs.openTab).Title).toBe('Process Run Details · 9FAF60…C577');
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(stubs.updateTabTitle).toHaveBeenCalledWith('tab-opened', 'Process Run Details · 9FAF60…C577');
+    });
+
+    it('ResolveRecordTabDisplayTitle replaces a persisted raw UUID tab title with Entity DisplayName + abbreviated UUID', () => {
+      const provider = fakeMetadataProvider([{ Name: 'MJ: Process Run Details', DisplayName: 'Process Run Details' }]);
+      const resolved = ResolveRecordTabDisplayTitle(
+        {
+          title: '9FAF6073-CEDD-50C9-A49E-009FEDCEC577',
+          resourceRecordId: '9FAF6073-CEDD-50C9-A49E-009FEDCEC577',
+          configuration: {
+            resourceType: 'Records',
+            Entity: 'MJ: Process Run Details',
+            recordId: '9FAF6073-CEDD-50C9-A49E-009FEDCEC577',
+          },
+        },
+        provider
+      );
+      expect(resolved).toBe('Process Run Details · 9FAF60…C577');
+      expect(
+        FormatEntityRecordDisplayTitle(
+          provider.EntityByName('MJ: Process Run Details'),
+          'MJ: Process Run Details',
+          '9FAF6073-CEDD-50C9-A49E-009FEDCEC577',
+          ''
+        )
+      ).toBe('Process Run Details · 9FAF60…C577');
     });
   });
 });

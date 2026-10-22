@@ -139,6 +139,11 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
         this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe((record) => {
             this.notifyMountedPanels(record);
         });
+        this.recordRefresh?.VersionPreviewChanged$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+            for (const ref of this.mounted) {
+                ref.changeDetectorRef.detectChanges();
+            }
+        });
         // Rows can arrive after the first paint (cold engine, a contribution saved in another
         // tab). Without this the slot would keep showing whatever it mounted first. The engine's
         // subject replays the current rows on subscribe, which ngOnChanges has already mounted.

@@ -857,3 +857,32 @@ Generate a clear, concise description for this entity.`;
         });
     });
 });
+
+// ═══════════════════════════════════════════════════
+// The shipped Loop Agent system prompt
+// ═══════════════════════════════════════════════════
+
+describe('ParseTemplateParameters — the Loop Agent Type system prompt', () => {
+    // A parameter this parser marks required becomes a required TemplateParam on metadata push, and the
+    // template engine then refuses to render without it. Every Loop agent's prompt carries only what
+    // the prompt runner and BaseAgent always supply, so a flag only some agents set (the native-only
+    // control plane) must stay optional — or every other Loop agent fails to render.
+    const templatePath = new URL('../../../../metadata/prompts/templates/system/loop-agent-type-system-prompt.template.md', import.meta.url);
+
+    it('requires only what every run supplies', async () => {
+        const { readFileSync } = await import('fs');
+        const result = ParseTemplateParameters(readFileSync(templatePath, 'utf8'));
+        const required = result.parameters.filter((p) => p.isRequired).map((p) => p.name).sort();
+
+        expect(required).toEqual(['_NATIVE_CONTROL_FLOW', '_NATIVE_TOOL_CALLING', 'agentDescription', 'agentName', 'agentSpecificPrompt']);
+    });
+
+    it('keeps the native-only flags optional', async () => {
+        const { readFileSync } = await import('fs');
+        const result = ParseTemplateParameters(readFileSync(templatePath, 'utf8'));
+
+        for (const name of ['_NATIVE_ONLY_REQUESTED', '_NATIVE_CONTROL', '_ARTIFACT_MANIFEST_NATIVE', '_CONVERSATION_TOOLS_NATIVE']) {
+            expect(findParam(result, name)?.isRequired, name).toBe(false);
+        }
+    });
+});
