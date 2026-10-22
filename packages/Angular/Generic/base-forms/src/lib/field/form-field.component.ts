@@ -3413,7 +3413,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       if (this.IsPolymorphicFK) {
         this.FKHoverTargetKey = CompositeKey.FromURLSegment(relatedEntity, String(fkValue));
       } else {
-        const relatedFieldName = this.FieldInfo?.RelatedEntityFieldName || relatedEntity?.FirstPrimaryKey?.Name || 'ID';
+        const relatedFieldName = this.FieldInfo?.RelatedEntityFieldName || relatedEntity?.FirstPrimaryKey?.Name || 'ID'; // first-pk-ok: a foreign key targets a single column
         this.FKHoverTargetKey = new CompositeKey([new KeyValuePair(relatedFieldName, fkValue)]);
       }
       this.ShowFKHoverPreview = true;
