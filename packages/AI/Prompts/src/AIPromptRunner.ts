@@ -17,6 +17,7 @@ import { TemplateEngineServer, type ReferencedVariablesResult } from '@memberjun
 import { TemplateRenderResult, type TemplateRenderOptions } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
+import { BuildNoModelFoundMessage, NOT_EVALUATED_REASON } from './no-model-found-message';
 import { ParseManifestEntryMime, TrimSpacesAndTabs } from './linearTextScan';
 import { ResultSelectionConfig, type IParallelExecutionCoordinator } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -202,7 +203,7 @@ export class AIPromptRunner extends BaseModelRunner {
    * that were intentionally NOT credential-checked because a higher-priority candidate had
    * already been selected. See the DECISION note in {@link selectModelWithAPIKeyTracked}.
    */
-  private static readonly NOT_EVALUATED_REASON = 'Not evaluated (a higher-priority candidate was already selected; set AIPromptParams.forceFullModelEvaluation to probe all)';
+  private static readonly NOT_EVALUATED_REASON = NOT_EVALUATED_REASON;
 
   /** Server default capture mode, read from mj.config once per process. */
   private static serverTemplateDataCaptureDefault: TemplateDataCaptureMode | undefined;
@@ -1410,6 +1411,8 @@ export class AIPromptRunner extends BaseModelRunner {
       const modelsConsidered: Array<{
         model: MJAIModelEntityExtended;
         vendor?: MJAIVendorEntity;
+        /** The provider implementation, e.g. `OpenRouterLLM`. See SummarizeDriverClasses. */
+        driverClass?: string;
         priority: number;
         available: boolean;
         unavailableReason?: string;
@@ -1555,6 +1558,8 @@ export class AIPromptRunner extends BaseModelRunner {
     modelsConsidered: Array<{
       model: MJAIModelEntityExtended;
       vendor?: MJAIVendorEntity;
+      /** The provider implementation, e.g. `OpenRouterLLM`. See SummarizeDriverClasses. */
+      driverClass?: string;
       priority: number;
       available: boolean;
       unavailableReason?: string;
@@ -1589,6 +1594,8 @@ export class AIPromptRunner extends BaseModelRunner {
     consideredModels: Array<{
       model: MJAIModelEntityExtended;
       vendor?: MJAIVendorEntity;
+      /** The provider implementation, e.g. `OpenRouterLLM`. See SummarizeDriverClasses. */
+      driverClass?: string;
       priority: number;
       available: boolean;
       unavailableReason?: string;
@@ -1607,6 +1614,8 @@ export class AIPromptRunner extends BaseModelRunner {
     const consideredModels: Array<{
       model: MJAIModelEntityExtended;
       vendor?: MJAIVendorEntity;
+      /** The provider implementation, e.g. `OpenRouterLLM`. See SummarizeDriverClasses. */
+      driverClass?: string;
       priority: number;
       available: boolean;
       unavailableReason?: string;
@@ -1635,6 +1644,7 @@ export class AIPromptRunner extends BaseModelRunner {
         consideredModels.push({
           model: candidate.model,
           vendor: vendorEntity,
+          driverClass: candidate.driverClass,
           priority: candidate.priority,
           available: false,
           unavailableReason: AIPromptRunner.NOT_EVALUATED_REASON
@@ -1665,6 +1675,7 @@ export class AIPromptRunner extends BaseModelRunner {
       const considered = {
         model: candidate.model,
         vendor: vendorEntity,
+        driverClass: candidate.driverClass,
         priority: candidate.priority,
         available: hasCredentials,
         unavailableReason: hasCredentials ? undefined : `No credentials configured for driver ${candidate.driverClass}`
@@ -1711,42 +1722,18 @@ export class AIPromptRunner extends BaseModelRunner {
 
   /**
    * Builds a descriptive error message when no model could be selected for a prompt.
-   * Includes details about which models were considered and why they were unavailable
-   * so the error message is actionable for end users (e.g., missing API credentials).
+   *
+   * The body lives in `no-model-found-message.ts` so it can be tested directly — as a private
+   * method its only coverage was a re-implementation of it in the test file, which asserted
+   * against its own copy rather than this code.
    */
   private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo, credentialScope?: AICredentialScope): string {
-    const base = `No suitable model found for prompt ${promptName}`;
-
-    // A selection step that threw (for example the model-type floor) records its error here; show it
-    // rather than the generic "no candidates" text. Every other reason keeps its detailed message below.
-    if (selectionInfo?.selectionReason?.startsWith('Error during model selection:')) {
-      return `${base}. ${selectionInfo.selectionReason}`;
-    }
-
-    if (!selectionInfo?.modelsConsidered || selectionInfo.modelsConsidered.length === 0) {
-      return `${base}. No model-vendor candidates were available. Please ensure AI models are configured for this prompt.`;
-    }
-
-    // Check if all models were unavailable due to missing credentials
-    const unavailableModels = selectionInfo.modelsConsidered.filter(m => !m.available);
-    if (unavailableModels.length === selectionInfo.modelsConsidered.length) {
-      const triedSummary = unavailableModels.slice(0, 5).map(m => {
-        const vendorName = m.vendor?.Name || 'default';
-        return `${m.model.Name}/${vendorName}`;
-      }).join(', ');
-
-      const suffix = unavailableModels.length > 5 ? ` (${unavailableModels.length} total)` : '';
-      // When the scope rules out the platform's credentials, "configure them" would point the reader
-      // at exactly the fallback the caller ruled out.
-      const platformAllowed = CredentialScopeAllows(credentialScope, 'Environment') || CredentialScopeAllows(credentialScope, 'PlatformCredential');
-      const remedy = platformAllowed
-        ? `Please configure API credentials in your environment or AI Credential settings.`
-        : `The credential scope is ${credentialScope}, so only the API keys supplied with this run count; supply a key for one of these vendors.`;
-      return `${base}. No valid API credentials/keys are configured for any of the candidate model-vendor combinations. ` +
-        `Tried: ${triedSummary}${suffix}. ${remedy}`;
-    }
-
-    return `${base}. ${selectionInfo.selectionReason || 'Unknown reason'}`;
+    const platformAllowed = CredentialScopeAllows(credentialScope, 'Environment') || CredentialScopeAllows(credentialScope, 'PlatformCredential');
+    return BuildNoModelFoundMessage(
+      promptName,
+      selectionInfo,
+      credentialScope ? { Name: credentialScope, PlatformAllowed: platformAllowed } : undefined
+    );
   }
 
   /**
