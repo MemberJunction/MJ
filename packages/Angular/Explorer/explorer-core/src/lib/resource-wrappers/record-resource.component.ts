@@ -1,7 +1,7 @@
 import { Component, OnInit, ViewChild, inject } from '@angular/core';
 import { asapScheduler, merge } from 'rxjs';
 import { filter, observeOn, takeUntil } from 'rxjs/operators';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, FormatEntityRecordDisplayTitle } from '@memberjunction/ng-shared';
 import { WorkspaceStateManager } from '@memberjunction/ng-base-application';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
@@ -13,7 +13,7 @@ import { BuildFormAgentContext, type FormAgentContext, type FormCompositionSnaps
   standalone: false,
     selector: 'mj-record-resource',
     styles: [`:host { display: block; height: 100%; width: 100%; }`],
-    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()" (EditModeChanged)="ResourceEditModeChanged($event)" (CompositionChanged)="OnCompositionChanged($event)"></mj-single-record>`
+    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()" (EditModeChanged)="ResourceEditModeChanged($event)" (CompositionChanged)="OnCompositionChanged($event)" (AskAIRequested)="OnAskAIRequested()"></mj-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent implements OnInit {
     @ViewChild(SingleRecordComponent) private singleRecord?: SingleRecordComponent;
@@ -60,6 +60,11 @@ export class EntityRecordResource extends BaseResourceComponent implements OnIni
      */
     public OnCompositionChanged(snapshot: FormCompositionSnapshot): void {
         this.agentContext = { Form: BuildFormAgentContext(snapshot) };
+        this.publishAgentContext();
+    }
+
+    /** Ensure the active form's agent context is published immediately when opening AI chat. */
+    public OnAskAIRequested(): void {
         this.publishAgentContext();
     }
 
@@ -131,7 +136,7 @@ export class EntityRecordResource extends BaseResourceComponent implements OnIni
         const pk: CompositeKey = EntityRecordResource.GetPrimaryKey(data, this.ProviderToUse);
         if (pk.HasValue) {
             const name = await md.GetEntityRecordName(data.Configuration.Entity, pk);
-            return name ? name : e.DisplayNameOrName;
+            return FormatEntityRecordDisplayTitle(e, data.Configuration.Entity, pk, name);
         } else {
             return `New ${e.DisplayNameOrName} Record`;
         }

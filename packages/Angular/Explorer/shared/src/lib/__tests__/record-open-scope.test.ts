@@ -15,6 +15,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NavigationService } from '../navigation.service';
 import { SetRecordOpenStyle } from '../record-open-style';
+import { FormatEntityRecordDisplayTitle, ResolveRecordTabDisplayTitle } from '../record-tab-title';
 import { Metadata } from '@memberjunction/core';
 import type { CompositeKey } from '@memberjunction/core';
 import type { TabRequest } from '@memberjunction/ng-base-application';
@@ -320,6 +321,52 @@ describe('record origin chain', () => {
       await Promise.resolve();
 
       expect(stubs.updateTabTitle).toHaveBeenCalledWith('tab-opened', 'Resolved Widget #42');
+    });
+
+    it('formats entity display name + abbreviated UUID when GetEntityRecordName returns a raw UUID or empty string', async () => {
+      const { service, stubs } = createService();
+      const uuidKey = { ToURLSegment: () => '9FAF6073-CEDD-50C9-A49E-009FEDCEC577' } as unknown as CompositeKey;
+      const getEntityRecordName = vi.fn().mockResolvedValue('9FAF6073-CEDD-50C9-A49E-009FEDCEC577');
+
+      (Metadata as unknown as { Provider: unknown }).Provider = {
+        ...fakeMetadataProvider([{ Name: 'MJ: Process Run Details', DisplayName: 'Process Run Details' }]),
+        HasCachedRecordName: vi.fn().mockReturnValue(false),
+        GetCachedRecordNameOnlyIfCached: vi.fn().mockReturnValue(undefined),
+        GetEntityRecordName: getEntityRecordName,
+      };
+
+      service.OpenEntityRecord('MJ: Process Run Details', uuidKey);
+
+      expect(requestFrom(stubs.openTab).Title).toBe('Process Run Details · 9FAF60…C577');
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(stubs.updateTabTitle).toHaveBeenCalledWith('tab-opened', 'Process Run Details · 9FAF60…C577');
+    });
+
+    it('ResolveRecordTabDisplayTitle replaces a persisted raw UUID tab title with Entity DisplayName + abbreviated UUID', () => {
+      const provider = fakeMetadataProvider([{ Name: 'MJ: Process Run Details', DisplayName: 'Process Run Details' }]);
+      const resolved = ResolveRecordTabDisplayTitle(
+        {
+          title: '9FAF6073-CEDD-50C9-A49E-009FEDCEC577',
+          resourceRecordId: '9FAF6073-CEDD-50C9-A49E-009FEDCEC577',
+          configuration: {
+            resourceType: 'Records',
+            Entity: 'MJ: Process Run Details',
+            recordId: '9FAF6073-CEDD-50C9-A49E-009FEDCEC577',
+          },
+        },
+        provider
+      );
+      expect(resolved).toBe('Process Run Details · 9FAF60…C577');
+      expect(
+        FormatEntityRecordDisplayTitle(
+          provider.EntityByName('MJ: Process Run Details'),
+          'MJ: Process Run Details',
+          '9FAF6073-CEDD-50C9-A49E-009FEDCEC577',
+          ''
+        )
+      ).toBe('Process Run Details · 9FAF60…C577');
     });
   });
 });
