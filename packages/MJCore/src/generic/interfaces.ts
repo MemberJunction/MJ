@@ -12,6 +12,8 @@ import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
 import { EntityTransactionScope } from "./entityTransactionScope";
 import type { EntitySaveReturnMode } from "./entityConfiguration";
+import type { GetRecordDependenciesOptions } from "./databaseProviderBase";
+export type { GetRecordDependenciesOptions } from "./databaseProviderBase";
 
 /**
  * Base configuration class for data providers.
@@ -946,8 +948,10 @@ export interface IMetadataProvider {
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
      * @param CompositeKey the compositeKey for the record to check
+     * @param options optional filtering options for dependency discovery
      */
-    GetRecordDependencies(entityName: string, CompositeKey: CompositeKey): Promise<RecordDependency[]>  
+    GetRecordDependencies(entityName: string, CompositeKey: CompositeKey, options?: GetRecordDependenciesOptions): Promise<RecordDependency[]>
+    GetRecordDependencies(entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo, options?: GetRecordDependenciesOptions): Promise<RecordDependency[]>  
 
     /**
      * Returns a list of record IDs that are possible duplicates of the specified record. 

@@ -4,7 +4,7 @@ import {
   ContentChildren, QueryList, AfterContentInit, DoCheck, OnDestroy,
   ViewChild, ViewEncapsulation, ElementRef
 } from '@angular/core';
-import { BaseEntity, BaseEntityEvent, CompositeKey, EntityInfo, KeyValuePair, LogError, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, CompositeKey, EntityField, EntityInfo, KeyValuePair, LogError, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
 import { EscapeSQLString, MJGlobal, UUIDsEqual, type ValidationErrorInfo } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -89,7 +89,7 @@ import {
   type FormCountPlan,
   type FormCountResults,
 } from '../section-counts/form-section-counts';
-import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
+import { FormRecordRefreshCoordinator, type FormFieldConflict } from '../form-record-refresh.coordinator';
 import { FormFieldEditCoordinator } from '../form-field-edit.coordinator';
 import type { DuplicateEntryCandidate } from '@memberjunction/graphql-dataprovider';
 import { FormSectionIndicatorCoordinator } from '../section-indicators/form-section-indicator-coordinator.service';
@@ -215,6 +215,15 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Number of tags on this record */
   TagCount = 0;
+
+  /** Controls visibility of links slide-in drawer */
+  ShowRecordLinks = false;
+
+  /** Number of linked records on this record */
+  LinkCount = 0;
+
+  /** Number of active field conflicts during edit mode */
+  ConflictCount = 0;
 
   /** Controls visibility of attachments slide panel */
   ShowAttachmentsPanel = false;
@@ -804,6 +813,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
     this.wireDuplicateEntryCheck();
     this.wireRemoteRecordInvalidation();
+    this.recordRefresh.ConflictsChanged$.pipe(takeUntil(this.destroy$)).subscribe((conflicts) => {
+      this.ConflictCount = conflicts.size;
+      this.cdr.markForCheck();
+    });
   }
 
   /**
@@ -2166,6 +2179,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Edit mode change: delegate to FormComponent if available, otherwise re-emit.
    */
   OnEditModeChange(editMode: boolean): void {
+    if (!editMode) {
+      this.recordRefresh.ClearAllConflicts();
+    }
     if (this.Fc) {
       if (editMode) {
         this.Fc.StartEditMode();
@@ -2191,6 +2207,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         this.lastLocalSaveAt = Date.now();
         await this.Fc.SaveRecord(true);
         this.lastLocalSaveAt = Date.now();
+        this.recordRefresh.ClearAllConflicts();
 
         // After successful save, refresh version count badge and record changes drawer
         this.refreshAfterSave();
@@ -2230,6 +2247,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Cancel: delegate to FormComponent if available, otherwise re-emit.
    */
   OnCancelRequested(): void {
+    this.recordRefresh.ClearAllConflicts();
     if (this.Fc?.CancelEdit) {
       this.Fc.CancelEdit();
       this.cdr.markForCheck();
@@ -2326,11 +2344,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
         this.ngZone.run(() => {
           if (this.EffectiveEditMode || this.EffectiveIsDirty) {
-            this.showRemoteUpdatePill({
-              Kind: 'stale-while-editing',
-              Summary: 'Updated in another session',
-              ChangedFields: [],
-            }, false);
+            void this.PerformLiveEditModeMerge(record);
           } else {
             void this.performLiveRemoteRefresh(record);
           }
@@ -2428,6 +2442,192 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     } finally {
       this.remoteRefreshInFlight = false;
     }
+  }
+
+  /**
+   * Performs a field-by-field live merge when a remote update arrives while the user is in Edit Mode:
+   * - Clean fields (`!field.Dirty`) whose server value changed are silently auto-merged in place and stay clean.
+   * - Dirty fields (`field.Dirty`) whose current user edit matches the new server value converge cleanly.
+   * - Dirty fields (`field.Dirty`) whose current user edit differs from the new server value preserve the user's
+   *   edit, update `OldValue` to the new server baseline, and raise a {@link FormFieldConflict}.
+   */
+  public async PerformLiveEditModeMerge(record: BaseEntity): Promise<void> {
+    if (this.remoteRefreshInFlight || this.destroyed) return;
+    this.remoteRefreshInFlight = true;
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const pk = record.PrimaryKey as (CompositeKey & { WhereClause?: () => string }) | undefined;
+      const whereClause =
+        typeof pk?.ToWhereClause === 'function'
+          ? pk.ToWhereClause()
+          : typeof pk?.WhereClause === 'function'
+            ? pk.WhereClause()
+            : '';
+      const result = await rv.RunView<Record<string, unknown>>({
+        EntityName: record.EntityInfo.Name,
+        ExtraFilter: whereClause,
+        ResultType: 'simple',
+        BypassCache: true,
+        MaxRows: 1,
+      });
+
+      if (!result?.Success || !Array.isArray(result.Results) || result.Results.length === 0 || this.destroyed) {
+        return;
+      }
+
+      const remoteRow = result.Results[0];
+      const changedFieldSet = new Set<string>();
+      const autoMergedPreviousValues = new Map<string, unknown>();
+      const conflicts = new Map<string, FormFieldConflict>();
+      const autoMergedLabels: string[] = [];
+      const conflictLabels: string[] = [];
+
+      for (const field of record.Fields) {
+        if (!(field.Name in remoteRow)) {
+          continue;
+        }
+        const remoteVal = remoteRow[field.Name];
+
+        // Always update system timestamp fields (__mj_UpdatedAt, __mj_CreatedAt)
+        if (field.Name.startsWith('__mj_')) {
+          if (this.formatComparableValue(remoteVal) !== this.formatComparableValue(field.Value)) {
+            if (field.ReadOnly && typeof field.ResetNeverSetFlag === 'function') {
+              field.ResetNeverSetFlag();
+            }
+            field.Value = remoteVal;
+            field.ResetOldValue();
+          }
+          continue;
+        }
+
+        const remoteDiffersFromBaseline =
+          this.formatComparableValue(remoteVal) !== this.formatComparableValue(field.OldValue);
+        if (!remoteDiffersFromBaseline) {
+          continue;
+        }
+
+        if (!field.Dirty) {
+          // Clean locally: silently auto-merge and keep Dirty === false
+          const previousVal = field.Value;
+          autoMergedPreviousValues.set(field.Name.toLowerCase(), previousVal);
+          if (field.CodeName) {
+            autoMergedPreviousValues.set(field.CodeName.toLowerCase(), previousVal);
+          }
+          if (field.ReadOnly && typeof field.ResetNeverSetFlag === 'function') {
+            field.ResetNeverSetFlag();
+          }
+          field.Value = remoteVal;
+          field.ResetOldValue();
+          changedFieldSet.add(field.Name.toLowerCase());
+          if (field.CodeName) {
+            changedFieldSet.add(field.CodeName.toLowerCase());
+          }
+          const fieldWithLabel = field as EntityField & { DisplayNameOrName?: string };
+          autoMergedLabels.push(
+            field.EntityFieldInfo?.DisplayNameOrName || fieldWithLabel.DisplayNameOrName || field.Name
+          );
+        } else {
+          // Dirty locally: check if user edit converged with remote value
+          if (this.formatComparableValue(field.Value) === this.formatComparableValue(remoteVal)) {
+            field.Value = remoteVal;
+            field.ResetOldValue();
+            this.recordRefresh.ResolveConflict(field.Name);
+          } else {
+            // True conflict: preserve user's edit, update OldValue baseline to remoteVal
+            const previousServerValue = field.OldValue;
+            const userVal = field.Value;
+            field.Value = remoteVal;
+            field.ResetOldValue();
+            field.Value = userVal;
+
+            const conflict: FormFieldConflict = {
+              fieldName: field.Name,
+              previousServerValue,
+              incomingServerValue: remoteVal,
+              localEditedValue: userVal,
+            };
+            conflicts.set(field.Name.toLowerCase(), conflict);
+            changedFieldSet.add(field.Name.toLowerCase());
+            if (field.CodeName) {
+              changedFieldSet.add(field.CodeName.toLowerCase());
+            }
+            const fieldWithLabel = field as EntityField & { DisplayNameOrName?: string };
+            conflictLabels.push(
+              field.EntityFieldInfo?.DisplayNameOrName || fieldWithLabel.DisplayNameOrName || field.Name
+            );
+          }
+        }
+      }
+
+      if (changedFieldSet.size > 0 || conflicts.size > 0) {
+        this.recordRefresh.NotifyRemoteUpdate(
+          record,
+          changedFieldSet,
+          autoMergedPreviousValues,
+          conflicts,
+        );
+      }
+
+      if (conflictLabels.length > 0 && autoMergedLabels.length > 0) {
+        this.showRemoteUpdatePill(
+          {
+            Kind: 'stale-while-editing',
+            Summary: `${autoMergedLabels.length} field${autoMergedLabels.length === 1 ? '' : 's'} updated live · ${conflictLabels.length} ${conflictLabels.length === 1 ? 'conflict needs' : 'conflicts need'} review`,
+            ChangedFields: [...autoMergedLabels, ...conflictLabels],
+          },
+          false,
+        );
+      } else if (conflictLabels.length > 0) {
+        this.showRemoteUpdatePill(
+          {
+            Kind: 'stale-while-editing',
+            Summary: `${conflictLabels.length} ${conflictLabels.length === 1 ? 'conflict needs' : 'conflicts need'} review (${conflictLabels.slice(0, 2).join(', ')})`,
+            ChangedFields: conflictLabels,
+          },
+          false,
+        );
+      } else if (autoMergedLabels.length > 0) {
+        const summary =
+          autoMergedLabels.length === 1
+            ? `Updated live · ${autoMergedLabels[0]} changed`
+            : `Updated live · ${autoMergedLabels.slice(0, 2).join(', ')}${autoMergedLabels.length > 2 ? ` +${autoMergedLabels.length - 2} more` : ''} changed`;
+        this.showRemoteUpdatePill(
+          {
+            Kind: 'refreshed',
+            Summary: summary,
+            ChangedFields: autoMergedLabels,
+          },
+          true,
+        );
+      }
+
+      this.Fc?.cdr?.detectChanges();
+      this.cdr.detectChanges();
+    } catch (err) {
+      LogError(`Live edit-mode merge failed for ${record.EntityInfo.Name}: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      this.remoteRefreshInFlight = false;
+    }
+  }
+
+  private formatComparableValue(val: unknown): string {
+    if (val === null || val === undefined) {
+      return '';
+    }
+    if (val instanceof Date) {
+      return isNaN(val.getTime()) ? '' : val.toISOString();
+    }
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(trimmed)) {
+        const parsed = new Date(trimmed);
+        if (!isNaN(parsed.getTime())) {
+          return parsed.toISOString();
+        }
+      }
+      return trimmed;
+    }
+    return String(val);
   }
 
   private showRemoteUpdatePill(
@@ -2536,6 +2736,21 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   OnTagsPanelWidthChanged(width: number): void {
     this.TagsPanelWidth = width;
     UserInfoEngine.Instance.SetSettingDebounced(MjRecordFormContainerComponent.TAGS_WIDTH_KEY, String(width));
+  }
+
+  OnToggleRecordLinks(): void {
+    this.ShowRecordLinks = !this.ShowRecordLinks;
+    this.cdr.detectChanges();
+  }
+
+  OnRecordLinksClosed(): void {
+    this.ShowRecordLinks = false;
+    this.cdr.detectChanges();
+  }
+
+  OnLinkCountChanged(count: number): void {
+    this.LinkCount = count;
+    this.cdr.markForCheck();
   }
 
   OnAttachmentsPanelToggled(): void {
