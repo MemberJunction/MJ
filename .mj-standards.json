@@ -25,6 +25,13 @@
         ]
       }
     },
+    "polymorphic-fk": {
+      "Severity": "error",
+      "Roots": [
+        "packages",
+        "metadata"
+      ]
+    },
     "migration-existence-guards": {
       "Severity": "error",
       "Roots": [

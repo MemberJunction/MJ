@@ -22,7 +22,7 @@ describe('AgentRecordProcessor.ProcessRecord', () => {
         const processor = new AgentRecordProcessor(AGENT_ID, { PrimaryScopeRecordID: 'record.TenantID', name: 'record.Name' });
         const record: RecordRef = { EntityID: 'ENT-1', RecordID: 'c1', Record: { ID: 'c1', Name: 'Ada', TenantID: 'tenant-7' } };
 
-        const result = await processor.ProcessRecord(record, { contextUser: { ID: 'admin' } } as never);
+        const result = await processor.ProcessRecord(record, { ContextUser: { ID: 'admin' } } as never);
 
         expect(result.Status).toBe('Succeeded');
         const sent = runAgentSpy.mock.calls[0][0];

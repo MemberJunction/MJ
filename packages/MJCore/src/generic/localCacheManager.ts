@@ -103,6 +103,8 @@ export interface CacheEntryInfo {
     rowCount?: number;
     /** Optional TTL expiry timestamp */
     expiresAt?: number;
+    /** Timestamp (epoch ms) when this entry was last verified against the backing database */
+    lastVerifiedAt?: number;
 }
 
 /**
@@ -172,6 +174,10 @@ export interface CachedRunViewData {
      * touching a scaffolding slot would freeze it and break the owner that mutates those rows.
      */
     providerInternalScaffolding?: boolean;
+    /** Timestamp (epoch ms) when this entry was initially cached */
+    cachedAt?: number;
+    /** Timestamp (epoch ms) when this entry was last verified against the backing database */
+    lastVerifiedAt?: number;
 }
 
 /**
@@ -207,6 +213,10 @@ export interface CachedRunViewResult {
      * forward. See {@link CachedRunViewData.providerInternalScaffolding}.
      */
     providerInternalScaffolding?: boolean;
+    /** Timestamp (epoch ms) when this entry was initially cached */
+    cachedAt?: number;
+    /** Timestamp (epoch ms) when this entry was last verified against the backing database */
+    lastVerifiedAt?: number;
 }
 
 /** A RunQuery result slot as stored. */
@@ -353,16 +363,29 @@ export interface LocalCacheManagerConfig {
      */
     maxPercentOfCachePerEntity: number;
     /**
-     * Maximum size of any single cache entry, expressed as a percentage of
-     * maxSizeBytes. An entry estimated larger than this cap is not cached at
-     * all — the write is skipped (logged, data still returned to the caller
-     * uncached). Without this cap, storing an oversized entry is strictly worse
-     * than not caching it: evictIfNeeded frees max(incoming, 10% of budget), so
-     * an entry larger than the whole budget evicts EVERY other entry and still
-     * cannot be retained within budget — a full cache wipe on every store.
-     * Applies to RunView and RunQuery entries. Default: 25. Set to 0 to disable.
+     * Ceiling on the size of any ONE cache entry. An entry estimated larger than the
+     * ceiling is not cached at all — the write is skipped (logged, data still returned
+     * to the caller uncached). Applies to RunView and RunQuery entries.
+     *
+     * The ceiling exists because an entry that cannot be RETAINED within the budget is
+     * worse than no entry: it evicts other entries to make room and is itself evicted on
+     * the next store, so the cache churns and nothing is ever served from it.
+     *
+     * Three modes:
+     * - `'auto'` (default): the ceiling is DERIVED from the budget — everything except a
+     *   reserve of {@link SINGLE_ENTRY_RESERVE_PERCENT} held back for the rest of the
+     *   cache. This is deliberately not a small fixed fraction: a fixed fraction sized for
+     *   a small tenant makes the one entity worth caching (the biggest one) permanently
+     *   uncacheable, which is the failure this mode exists to avoid. The only entries
+     *   `'auto'` declines are entries that genuinely cannot be retained — and the decline
+     *   message says which `maxMemoryMB` would admit them.
+     * - a positive number: an explicit percentage of `maxSizeBytes`, for an operator who
+     *   wants a stricter ceiling than `'auto'`. Clamped to
+     *   {@link HARD_MAX_ENTRY_PERCENT} — no configuration may admit an entry that leaves
+     *   the cache less free space than one eviction cycle needs.
+     * - `0`: no ceiling at all (the original, unguarded behaviour — not recommended).
      */
-    maxEntryPercentOfCache: number;
+    maxEntryPercentOfCache: number | 'auto';
     /**
      * Interval in milliseconds for the periodic eviction sweep.
      * Catches entries that should have been evicted (TTL expired) but weren't
@@ -381,13 +404,38 @@ export interface LocalCacheManagerConfig {
 // DEFAULT CONFIGURATION
 // ============================================================================
 
+/**
+ * Minimum percentage of the cache budget that eviction frees in one pass, so a run of
+ * stores near the budget does not trigger an eviction each time. Also the floor under the
+ * space any single entry must leave behind it — see {@link HARD_MAX_ENTRY_PERCENT}.
+ */
+const EVICTION_THRASH_FLOOR_PERCENT = 10;
+
+/**
+ * Percentage of the budget held back from any one entry when the per-entry ceiling is
+ * derived (`maxEntryPercentOfCache: 'auto'`). The reserve is what keeps the rest of the
+ * cache alive alongside one large entry: with it, a store that arrives after the large
+ * entry can be satisfied by evicting entries out of the reserve rather than the large
+ * entry itself. It MUST be at least {@link EVICTION_THRASH_FLOOR_PERCENT}, or a single
+ * eviction pass could not be satisfied without evicting the large entry that eviction
+ * was making room around.
+ */
+const SINGLE_ENTRY_RESERVE_PERCENT = 25;
+
+/**
+ * Hard upper bound on the per-entry ceiling, whatever the configuration says. One entry
+ * may never occupy so much of the budget that less than one eviction pass' worth of space
+ * is left — that is the state in which every store wipes everything else.
+ */
+const HARD_MAX_ENTRY_PERCENT = 100 - EVICTION_THRASH_FLOOR_PERCENT;
+
 const DEFAULT_CONFIG: LocalCacheManagerConfig = {
     enabled: true,
     maxSizeBytes: 150 * 1024 * 1024, // 150MB
     defaultTTLMs: 0, // No TTL — event-based invalidation is the primary mechanism
     evictionPolicy: 'lru',
     maxPercentOfCachePerEntity: 50,
-    maxEntryPercentOfCache: 25,
+    maxEntryPercentOfCache: 'auto',
     evictionSweepIntervalMs: 300000, // 5 minutes
     verboseLogging: false,
 };
@@ -538,6 +586,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     private _sharesReferences: boolean = false;
     private _registry: Map<string, CacheEntryInfo> = new Map();
+    private _lastVerifiedAt: Map<string, number> = new Map();
     private _initialized: boolean = false;
     private _initializePromise: Promise<void> | null = null;
     private _stats = { hits: 0, misses: 0 };
@@ -2858,7 +2907,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         // Persist results, maxUpdatedAt, aggregateResults, totalRowCount, and schemaHash
-        const data: CachedRunViewData = { results, maxUpdatedAt };
+        const initialNow = Date.now();
+        const data: CachedRunViewData = { results, maxUpdatedAt, cachedAt: initialNow, lastVerifiedAt: initialNow };
         if (options?.ProviderInternalScaffolding) {
             // Persisted so event-driven in-place maintenance carries the exemption forward.
             data.providerInternalScaffolding = true;
@@ -2887,13 +2937,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // value is the native object — no full JSON.stringify on the hot path.
         const sizeBytes = this.estimateResultsSize(data.results as unknown[]);
 
-        // Oversized-entry gate: an entry above maxEntryPercentOfCache of the budget is
-        // never cached. Attempting to store it would trigger a full-cache eviction to
-        // make room for an entry the very next store would evict again — strictly worse
-        // than serving this one query uncached. Always logged (not verbose-gated): an
-        // oversized result is a perf smell the operator should be able to see.
+        // Oversized-entry gate: an entry too large to be RETAINED within the budget is
+        // never cached — storing it would evict other entries for something the next store
+        // evicts again. An entry that fits under MaxEntrySizeBytes is cached however large
+        // it is. Always logged (not verbose-gated): a query too big to cache is a cost the
+        // operator is paying on every call and must be able to see.
         if (this.exceedsMaxEntrySize(sizeBytes)) {
-            LogWarning(`[CACHE-WRITE-GATE] Skipping cache write for "${params.EntityName || fingerprint.substring(0, 60)}" — estimated entry size ${sizeBytes} bytes exceeds per-entry cap (${this._config.maxEntryPercentOfCache}% of ${this._config.maxSizeBytes} byte budget)`, 'Cache');
+            LogWarning(this.describeOversizedEntry(params.EntityName || fingerprint.substring(0, 60), sizeBytes), 'Cache');
             return;
         }
 
@@ -2920,10 +2970,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         try {
             // Native object storage — IDB structured-clones, localStorage / Redis serialize internally.
-            const expiresAt = ttlMs ? Date.now() + ttlMs : undefined;
+            const writeNow = Date.now();
+            const expiresAt = ttlMs ? writeNow + ttlMs : undefined;
             await this._storageProvider.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache,
                 this.runViewWriteOptions(fingerprint, expiresAt));
 
+            this._lastVerifiedAt.set(fingerprint, writeNow);
             this.registerEntry({
                 key: fingerprint,
                 type: 'runview',
@@ -2937,8 +2989,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     MaxRows: params.MaxRows,
                     HasAggregates: (params.Aggregates?.length ?? 0) > 0
                 },
-                cachedAt: Date.now(),
-                lastAccessedAt: Date.now(),
+                cachedAt: writeNow,
+                lastAccessedAt: writeNow,
+                lastVerifiedAt: writeNow,
                 accessCount: 1,
                 sizeBytes,
                 maxUpdatedAt,
@@ -3072,6 +3125,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         this.indexSlotThisProcessDidNotWrite(fingerprint);
         this._stats.hits++;
         const results = parsed.results || [];
+        const cachedAt = registryEntry?.cachedAt ?? parsed.cachedAt;
+        const lastVerifiedAt = this._lastVerifiedAt.get(fingerprint)
+            ?? registryEntry?.lastVerifiedAt
+            ?? parsed.lastVerifiedAt
+            ?? cachedAt;
         const result: CachedRunViewResult = {
             results,
             maxUpdatedAt: parsed.maxUpdatedAt,
@@ -3082,11 +3140,31 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             schemaStamp: parsed.schemaStamp,
             // Same carry-forward rationale: a maintained scaffolding slot must stay exempt.
             providerInternalScaffolding: parsed.providerInternalScaffolding,
+            cachedAt,
+            lastVerifiedAt,
         };
         if (parsed.aggregateResults) {
             result.aggregateResults = parsed.aggregateResults;
         }
         return result;
+    }
+
+    /**
+     * Updates the `lastVerifiedAt` timestamp for a cached RunView slot in O(1) time
+     * without re-cloning, re-freezing, or rewriting its stored row array.
+     *
+     * Used by server-side smart-cache verification after a lightweight SQL status probe
+     * (`MAX(__mj_UpdatedAt)`, `COUNT(*)`) confirms that a cached slot is still current.
+     *
+     * @param fingerprint - The cache fingerprint to touch
+     * @param timestamp - Verification timestamp in epoch ms (defaults to `Date.now()`)
+     */
+    public TouchRunViewResultVerifiedAt(fingerprint: string, timestamp: number = Date.now()): void {
+        this._lastVerifiedAt.set(fingerprint, timestamp);
+        const entry = this._registry.get(fingerprint);
+        if (entry) {
+            entry.lastVerifiedAt = timestamp;
+        }
     }
 
     /**
@@ -3278,11 +3356,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             );
 
             // Return with rowCount derived from merged results and aggregates if provided
+            const verifiedNow = this._lastVerifiedAt.get(fingerprint) ?? Date.now();
+            this._lastVerifiedAt.set(fingerprint, verifiedNow);
+            const registryEntry = this._registry.get(fingerprint);
             const result: CachedRunViewResult = {
                 results: mergedResults,
                 maxUpdatedAt: newMaxUpdatedAt,
                 rowCount: mergedResults.length,
-                totalRowCount: mergedTotalRowCount
+                totalRowCount: mergedTotalRowCount,
+                cachedAt: registryEntry?.cachedAt ?? verifiedNow,
+                lastVerifiedAt: verifiedNow
             };
             if (aggregateResults) {
                 result.aggregateResults = aggregateResults;
@@ -3482,9 +3565,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // reports for the same rows (the client smart-cache check compares the two). The caller's
         // value (the event time) is used only when the rows carry no timestamp column.
         const maxUpdatedAt = LocalCacheManager.MaxUpdatedAtOfRows(updatedResults) ?? newMaxUpdatedAt;
+        const now = Date.now();
+        const existingEntry = this._registry.get(fingerprint);
         const data: CachedRunViewData = {
             results: updatedResults,
-            maxUpdatedAt
+            maxUpdatedAt,
+            cachedAt: existingEntry?.cachedAt ?? now,
+            lastVerifiedAt: now
         };
         // Carry the schemaHash FORWARD — never recompute it here (B38).
         //
@@ -3528,15 +3615,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             this.freezeRowDataIfProviderSharesReferences(data);
         }
 
-        const existingEntry = this._registry.get(fingerprint);
         await this._storageProvider!.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache,
             this.runViewWriteOptions(fingerprint, existingEntry?.expiresAt));
 
+        this._lastVerifiedAt.set(fingerprint, now);
         if (existingEntry) {
             existingEntry.maxUpdatedAt = maxUpdatedAt;
             existingEntry.rowCount = updatedResults.length;
             existingEntry.sizeBytes = sizeBytes;
-            existingEntry.lastAccessedAt = Date.now();
+            existingEntry.lastAccessedAt = now;
+            existingEntry.lastVerifiedAt = now;
             this.debouncedPersistRegistry();
         }
 
@@ -3564,6 +3652,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             try {
                 await this._storageProvider.Remove(key, CacheCategory.RunViewCache);
                 this._registry.delete(key);
+                this._lastVerifiedAt.delete(key);
                 this.removeFromEntityIndex(key);
             } catch (e) {
                 LogError(`LocalCacheManager.InvalidateEntityCaches failed for key ${key}: ${e}`);
@@ -3672,7 +3761,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // Oversized-entry gate — same rationale as SetRunViewResult: never wipe the
         // cache to make room for an entry that can't be retained within budget.
         if (this.exceedsMaxEntrySize(sizeBytes)) {
-            LogWarning(`[CACHE-WRITE-GATE] Skipping cache write for query "${queryName}" — estimated entry size ${sizeBytes} bytes exceeds per-entry cap (${this._config.maxEntryPercentOfCache}% of ${this._config.maxSizeBytes} byte budget)`, 'Cache');
+            LogWarning(this.describeOversizedEntry(`query ${queryName}`, sizeBytes), 'Cache');
             return;
         }
 
@@ -4028,6 +4117,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     await this._storageProvider.Remove(entry.key + '_date', category);
                 }
                 this._registry.delete(entry.key);
+                this._lastVerifiedAt.delete(entry.key);
             } catch (e) {
                 LogError(`LocalCacheManager.ClearByType failed for key ${entry.key}: ${e}`);
             }
@@ -4059,6 +4149,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         this._registry.clear();
+        this._lastVerifiedAt.clear();
         this._stats = { hits: 0, misses: 0 };
         await this.persistRegistry();
         return count;
@@ -4119,6 +4210,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     private unregisterEntry(key: string): void {
         this._registry.delete(key);
+        this._lastVerifiedAt.delete(key);
         this.debouncedPersistRegistry();
     }
 
@@ -4256,21 +4348,77 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
-     * Returns true when a single entry of the given estimated size exceeds the
-     * per-entry cap (maxEntryPercentOfCache of maxSizeBytes) and must not be
-     * cached. See the config property's doc comment for the full rationale —
-     * in short, an entry that large can only be stored by evicting most (or
-     * all) of the cache, and it would be evicted again on the next store, so
-     * caching it is strictly worse than skipping it.
+     * The largest single entry this cache will store, in bytes, or 0 when no ceiling
+     * applies (`maxEntryPercentOfCache: 0`).
+     *
+     * `'auto'` derives it from the budget — the whole budget less
+     * {@link SINGLE_ENTRY_RESERVE_PERCENT} — so the ceiling grows with the memory the
+     * operator gave the cache instead of being a small fixed fraction that the biggest
+     * entity can never fit under. An explicit percentage is honoured as a stricter
+     * ceiling, clamped to {@link HARD_MAX_ENTRY_PERCENT} so no configuration can admit an
+     * entry that leaves the cache with less free space than one eviction pass needs.
+     */
+    public get MaxEntrySizeBytes(): number {
+        const pct = this.effectiveMaxEntryPercent;
+        if (pct <= 0) return 0;
+        return Math.floor(this._config.maxSizeBytes * pct / 100);
+    }
+
+    /**
+     * The per-entry ceiling as a percentage of the budget, with `'auto'` resolved and an
+     * explicit configuration clamped. 0 or below means "no ceiling".
+     */
+    private get effectiveMaxEntryPercent(): number {
+        const pct = this._config.maxEntryPercentOfCache;
+        if (pct === 'auto') {
+            return 100 - Math.max(SINGLE_ENTRY_RESERVE_PERCENT, EVICTION_THRASH_FLOOR_PERCENT);
+        }
+        return Math.min(pct, HARD_MAX_ENTRY_PERCENT);
+    }
+
+    /**
+     * Returns true when a single entry of the given estimated size exceeds
+     * {@link MaxEntrySizeBytes} and must not be cached. See the config property's doc
+     * comment for the rationale — in short, an entry that cannot be RETAINED within the
+     * budget would be evicted again on the next store, so caching it is churn. An entry
+     * that fits is cached however large it is: the cases that most need caching are the
+     * large ones.
      */
     private exceedsMaxEntrySize(sizeBytes: number): boolean {
-        const pct = this._config.maxEntryPercentOfCache;
-        if (pct <= 0) return false;
-        return sizeBytes > Math.floor(this._config.maxSizeBytes * pct / 100);
+        const ceiling = this.MaxEntrySizeBytes;
+        if (ceiling <= 0) return false;
+        return sizeBytes > ceiling;
+    }
+
+    /**
+     * Renders the decline of an oversized entry as something an operator can act on: what
+     * the ceiling is, and the `cacheSettings.maxMemoryMB` that would admit this entry.
+     * The old message reported raw byte counts and a percentage, which named the symptom
+     * but not the lever — and the entries it declines are exactly the expensive queries
+     * whose absence from the cache costs the most.
+     */
+    private describeOversizedEntry(label: string, sizeBytes: number): string {
+        const mb = (bytes: number): string => (bytes / 1024 / 1024).toFixed(1);
+        const pct = this.effectiveMaxEntryPercent;
+        const head = `[CACHE-WRITE-GATE] Not caching "${label}" — ${mb(sizeBytes)}MB exceeds the largest single entry this cache can retain (${mb(this.MaxEntrySizeBytes)}MB of a ${mb(this._config.maxSizeBytes)}MB budget). Every read of it goes to the database.`;
+        // pct can only be <= 0 with the ceiling disabled, in which case nothing is declined
+        // and this message is never produced — but the arithmetic below must not divide by it.
+        if (pct <= 0) return head;
+        const requiredBudgetMB = Math.ceil((sizeBytes * 100 / pct) / 1024 / 1024);
+        return `${head} To cache it, raise cacheSettings.maxMemoryMB to ${requiredBudgetMB} or more.`;
     }
 
     /**
      * Evicts entries if needed to make room for new data.
+     *
+     * Frees the DEFICIT — how far over budget the cache would be with the incoming entry —
+     * rounded up to {@link EVICTION_THRASH_FLOOR_PERCENT} of the budget so a run of stores
+     * near the budget does not evict on every one. It deliberately does not free the
+     * incoming entry's whole size: for a large entry arriving into a mostly empty cache the
+     * deficit is small, and freeing the entry's full size instead emptied the cache to make
+     * room that was already there. That over-eviction is what made a large entry look
+     * inherently destructive, and it is why the per-entry ceiling used to be set low enough
+     * to exclude every large entry.
      */
     private async evictIfNeeded(neededBytes: number): Promise<void> {
         if (!this._storageProvider) return;
@@ -4279,13 +4427,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         for (const entry of this._registry.values()) {
             currentSizeBytes += entry.sizeBytes;
         }
-        const wouldExceedSize = (currentSizeBytes + neededBytes) > this._config.maxSizeBytes;
+        const deficitBytes = (currentSizeBytes + neededBytes) - this._config.maxSizeBytes;
 
-        if (!wouldExceedSize) return;
+        if (deficitBytes <= 0) return;
 
-        // Calculate how much to free — at least the incoming entry's size, but
-        // free 10% of total budget to avoid thrashing on every store.
-        const targetFreeBytes = Math.max(neededBytes, this._config.maxSizeBytes * 0.1);
+        const thrashFloorBytes = Math.floor(this._config.maxSizeBytes * EVICTION_THRASH_FLOOR_PERCENT / 100);
+        const targetFreeBytes = Math.max(deficitBytes, thrashFloorBytes);
 
         await this.evict(targetFreeBytes);
     }
@@ -4337,6 +4484,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     this.removeFromEntityIndex(entry.fingerprint);
                 }
                 this._registry.delete(key);
+                this._lastVerifiedAt.delete(key);
             } catch (e) {
                 // Continue evicting other entries
             }
@@ -4392,6 +4540,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 this.removeFromEntityIndex(entry.key);
                 bytesToFree -= entry.sizeBytes;
                 this._registry.delete(entry.key);
+                this._lastVerifiedAt.delete(entry.key);
             } catch {
                 // Continue evicting
             }
@@ -4510,5 +4659,6 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             this.removeFromEntityIndex(entry.fingerprint);
         }
         this._registry.delete(key);
+        this._lastVerifiedAt.delete(key);
     }
 }

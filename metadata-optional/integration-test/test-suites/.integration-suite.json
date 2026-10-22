@@ -1220,6 +1220,28 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT124 - Feature Pipeline Key, Cache and Versions (core)",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CB5BABC8-DCD5-412A-9F6B-29ABF1D9B320"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT126 - Feature Value Only Outputs",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E4D70105-00D2-4F2B-BECA-47FB2A82A390"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT112 - Realtime Session Identity Verification",
             "Sequence": 50,
             "Status": "Active"
@@ -1507,6 +1529,17 @@
           "primaryKey": {
             "ID": "B4E9102C-58D3-4A7E-91F2-3C85A71D6E04"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT130 - Native Tool Loop (scripted model)",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "19516008-6F25-49C0-BEAA-59762CC20B21"
+          }
         }
       ]
     },
@@ -1741,7 +1774,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT63 - Agent Wire Callback (fire-and-forget)",
-            "Sequence": 18,
+            "Sequence": 19,
             "Status": "Active"
           },
           "primaryKey": {
@@ -1787,6 +1820,17 @@
           },
           "primaryKey": {
             "ID": "275B45D4-EB50-4AC0-8872-E04845D47A24"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT131 - Native Tool Loop (live providers)",
+            "Sequence": 18,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B4E0BF50-AACE-4F59-9B07-F3CA6EE1EC7C"
           }
         }
       ]

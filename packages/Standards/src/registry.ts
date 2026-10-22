@@ -11,6 +11,7 @@
 import type { StandardCheck } from './types.js';
 import { UILayersCheck } from './checks/ui-layers.js';
 import { NamingConventionsCheck } from './checks/naming-conventions.js';
+import { PolymorphicFKCheck } from './checks/polymorphic-fk.js';
 import { MigrationExistenceGuardsCheck } from './checks/migration-existence-guards.js';
 import { ReadableStatusValuesCheck } from './checks/readable-status-values.js';
 
@@ -28,6 +29,7 @@ import { ReadableStatusValuesCheck } from './checks/readable-status-values.js';
 export const STANDARD_CHECKS: readonly StandardCheck[] = [
     UILayersCheck,
     NamingConventionsCheck,
+    PolymorphicFKCheck,
     MigrationExistenceGuardsCheck,
     ReadableStatusValuesCheck,
 ];

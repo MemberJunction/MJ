@@ -162,8 +162,8 @@ function openTo(fieldId: string, roles: string[] = [HR_ROLE_ID, INTERN_ROLE_ID])
     }));
 }
 
-function employeeEntityInit(opts: { fls?: boolean; entityFtx?: boolean; salaryFtx?: boolean } = {}): Record<string, unknown> {
-    const { fls = true, entityFtx = false, salaryFtx = false } = opts;
+function employeeEntityInit(opts: { fls?: boolean; entityFtx?: boolean; salaryFtx?: boolean; ftxFunction?: string | null } = {}): Record<string, unknown> {
+    const { fls = true, entityFtx = false, salaryFtx = false, ftxFunction = 'fnSearchEmployees' } = opts;
     return {
         ID: ENTITY_ID,
         Name: 'Employees',
@@ -175,7 +175,7 @@ function employeeEntityInit(opts: { fls?: boolean; entityFtx?: boolean; salaryFt
         // rather than merely removing rows.
         EnableFieldLevelSecurity: fls,
         FullTextSearchEnabled: entityFtx,
-        FullTextSearchFunction: 'fnSearchEmployees',
+        FullTextSearchFunction: ftxFunction,
         Permissions: [
             { EntityID: ENTITY_ID, RoleID: HR_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
             { EntityID: ENTITY_ID, RoleID: INTERN_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
@@ -369,5 +369,24 @@ describe('createViewUserSearchSQL — field security', () => {
     it('keeps the FTS path for an unrestricted user even when a restricted field is FTS-indexed', () => {
         const { provider, entity } = setup({ entityFtx: true, salaryFtx: true });
         expect(provider.searchSQL(entity, 'secret', hr())).toContain('fnSearchEmployees');
+    });
+
+    // The FTS branch has TWO independent preconditions — a usable function name, and no denied
+    // field inside the index — and they are composed, not alternatives. These two cases hold the
+    // composition in place: dropping either clause breaks one of them.
+    it('requires a function NAME as well: an FTS entity whose function was never minted uses LIKE, for an unrestricted user too', () => {
+        const { provider, entity } = setup({ entityFtx: true, ftxFunction: null });
+        const sql = provider.searchSQL(entity, 'secret', hr());
+        expect(sql).toContain('[Name]');
+        expect(sql).toContain('[Salary]');
+        expect(sql).not.toMatch(/\[\s*\]/); // never `[dbo].[]` — the syntax error
+    });
+
+    it('still excludes the denied field when BOTH preconditions fail (no function name AND a denied FTS field)', () => {
+        const { provider, entity } = setup({ entityFtx: true, salaryFtx: true, ftxFunction: '' });
+        const sql = provider.searchSQL(entity, 'secret', intern());
+        expect(sql).not.toContain('[Salary]');
+        expect(sql).toContain('[Name]');
+        expect(sql).not.toMatch(/\[\s*\]/);
     });
 });

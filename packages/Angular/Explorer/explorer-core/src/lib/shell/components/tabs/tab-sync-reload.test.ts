@@ -57,6 +57,7 @@ vi.mock('@memberjunction/ng-shared', () => ({
   GetRecordSourceContext: vi.fn(() => null),
   SafeDetectChanges: vi.fn(),
   ResolveRecordTypeIcon: vi.fn(() => ''),
+  ResolveRecordTabDisplayTitle: vi.fn((t: { title?: string }) => t?.title ?? ''),
 }));
 vi.mock('@memberjunction/core-entities', () => ({
   ResourceData: class {},

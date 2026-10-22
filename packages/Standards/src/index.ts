@@ -37,6 +37,7 @@ export * from './runner.js';
 export * from './scaffold.js';
 export * from './checks/ui-layers.js';
 export * from './checks/naming-conventions.js';
+export * from './checks/polymorphic-fk.js';
 export * from './checks/migration-existence-guards.js';
 export * from './checks/readable-status-values.js';
 export * from './lib/migrations.js';

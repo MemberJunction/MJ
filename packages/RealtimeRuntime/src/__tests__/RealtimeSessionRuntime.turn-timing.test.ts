@@ -31,8 +31,8 @@ class FakeFinalOnlyClient extends BaseRealtimeClient {
         this.emitTranscript(transcript);
     }
     /** The provider's VAD saw the user start to speak (OpenAI `input_audio_buffer.speech_started`). */
-    public SpeechStart(): void {
-        this.emitUserSpeechStart();
+    public SpeechStart(itemId?: string): void {
+        this.emitUserSpeechStart(itemId);
     }
     /** The call is live, so the runtime accepts typed turns ({@link RealtimeSessionRuntime.SendText}). */
     public GoLive(): void {
@@ -356,5 +356,111 @@ describe('RealtimeSessionRuntime per-turn timing: the user speech start keeps it
 
         expect(provider.Relayed[1].utteranceStartMs).not.toBe(8400);
         expect(provider.Relayed[2]).toEqual({ role: 'user', utteranceStartMs: 8400, utteranceEndMs: 11000 });
+    });
+
+    it('gives each user turn its own onset when a transcript arrives after the next onset', async () => {
+        const { provider, client, advanceTo } = await startRecorded();
+        speakAssistantTurn(client, advanceTo);
+
+        advanceTo(8400);
+        client.SpeechStart('item-a'); // utterance A
+        advanceTo(9000);
+        client.Emit({ Role: 'Assistant', Text: 'Sure', IsFinal: false, Kind: 'normal' });
+        advanceTo(12000);
+        client.Emit({ Role: 'Assistant', Text: 'Sure, let us start', IsFinal: true, Kind: 'normal' });
+        advanceTo(12500);
+        client.SpeechStart('item-b'); // utterance B, before A's transcript
+        advanceTo(12700);
+        client.Emit({ Role: 'Assistant', Text: 'Right', IsFinal: false, Kind: 'normal' }); // reply to B
+        advanceTo(13000);
+        client.Emit({ Role: 'User', Text: 'Utterance A text', IsFinal: true, Kind: 'normal', ItemId: 'item-a' });
+        advanceTo(15000);
+        client.Emit({ Role: 'User', Text: 'Utterance B text', IsFinal: true, Kind: 'normal', ItemId: 'item-b' });
+        advanceTo(18000);
+        client.Emit({ Role: 'Assistant', Text: 'Right, here is more detail', IsFinal: true, Kind: 'normal' });
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(5));
+
+        expect(provider.Relayed[2]).toEqual({ role: 'user', utteranceStartMs: 8400, utteranceEndMs: 13000 });
+        expect(provider.Relayed[3]).toEqual({ role: 'user', utteranceStartMs: 12500, utteranceEndMs: 15000 });
+        expect(provider.Relayed[4]).toEqual({ role: 'assistant', utteranceStartMs: 12700, utteranceEndMs: 18000 });
+    });
+
+    it('keeps the first onset for an itemId when speech_started fires again for the same item after a pause', async () => {
+        const { provider, client, advanceTo } = await startRecorded();
+        speakAssistantTurn(client, advanceTo);
+
+        advanceTo(8400);
+        client.SpeechStart('item-a');
+        advanceTo(10000);
+        client.SpeechStart('item-a'); // mid-sentence resume with the same item id
+        advanceTo(13000);
+        client.Emit({ Role: 'User', Text: 'Paused then continued', IsFinal: true, Kind: 'normal', ItemId: 'item-a' });
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(2));
+
+        expect(provider.Relayed[1]).toEqual({ role: 'user', utteranceStartMs: 8400, utteranceEndMs: 13000 });
+    });
+
+    it('relays null for a keyed user transcript whose ItemId has no recorded onset, without reading the single slot or currentTurnStartMs', async () => {
+        const { provider, client, advanceTo } = await startRecorded();
+        speakAssistantTurn(client, advanceTo);
+
+        advanceTo(8400);
+        client.SpeechStart(); // unkeyed single-slot onset
+        advanceTo(9000);
+        client.Emit({ Role: 'Assistant', Text: 'Working', IsFinal: false, Kind: 'normal' }); // stamps currentTurnStartMs = 9000
+        advanceTo(9500);
+        client.Emit({ Role: 'User', Text: 'Keyed turn with unknown id', IsFinal: true, Kind: 'normal', ItemId: 'item-unknown' });
+        advanceTo(12000);
+        client.Emit({ Role: 'Assistant', Text: 'Working on that', IsFinal: true, Kind: 'normal' });
+        advanceTo(14000);
+        client.Emit({ Role: 'User', Text: 'Unkeyed turn claims single slot', IsFinal: true, Kind: 'normal' });
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(4));
+
+        expect(provider.Relayed[1]).toEqual({ role: 'user', utteranceStartMs: null, utteranceEndMs: 9500 });
+        expect(provider.Relayed[2]).toEqual({ role: 'assistant', utteranceStartMs: 9000, utteranceEndMs: 12000 });
+        expect(provider.Relayed[3]).toEqual({ role: 'user', utteranceStartMs: 8400, utteranceEndMs: 14000 });
+    });
+
+    it('deletes a keyed onset and relays null start on a ReplacesPrevious correction with an ItemId', async () => {
+        const { provider, client, advanceTo } = await startRecorded();
+        speakAssistantTurn(client, advanceTo);
+
+        advanceTo(8000);
+        client.SpeechStart('item-1');
+        advanceTo(10000);
+        client.Emit({ Role: 'User', Text: 'I would like', IsFinal: true, Kind: 'normal', ItemId: 'item-1' });
+        advanceTo(11000);
+        client.SpeechStart('item-1'); // mid-sentence pause re-fires with same id
+        advanceTo(12000);
+        client.Emit({ Role: 'User', Text: 'I would like to apply', IsFinal: true, Kind: 'normal', ReplacesPrevious: true, ItemId: 'item-1' });
+        advanceTo(15000);
+        client.Emit({ Role: 'User', Text: 'Late duplicate of item-1', IsFinal: true, Kind: 'normal', ItemId: 'item-1' });
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(4));
+
+        expect(provider.Relayed[1]).toEqual({ role: 'user', utteranceStartMs: 8000, utteranceEndMs: 10000 });
+        expect(provider.Relayed[2]).toEqual({ role: 'user', utteranceStartMs: null, utteranceEndMs: 12000 });
+        expect(provider.Relayed[3]).toEqual({ role: 'user', utteranceStartMs: null, utteranceEndMs: 15000 });
+    });
+
+    it('drops earlier unclaimed keyed onsets when a later keyed user turn is relayed, and ignores typed turns', async () => {
+        const { runtime, provider, client, advanceTo } = await startRecorded();
+        client.GoLive();
+        speakAssistantTurn(client, advanceTo);
+
+        advanceTo(8000);
+        client.SpeechStart('item-stale'); // VAD false positive whose transcription failed
+        advanceTo(10000);
+        client.SpeechStart('item-real');
+        advanceTo(11000);
+        runtime.SendText('Typed in between');
+        advanceTo(12000);
+        client.Emit({ Role: 'User', Text: 'Real spoken question', IsFinal: true, Kind: 'normal', ItemId: 'item-real' });
+        advanceTo(14000);
+        client.Emit({ Role: 'User', Text: 'Stale item finally arrives', IsFinal: true, Kind: 'normal', ItemId: 'item-stale' });
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(4));
+
+        expect(provider.Relayed[1]).toEqual({ role: 'user', utteranceStartMs: null, utteranceEndMs: 11000 });
+        expect(provider.Relayed[2]).toEqual({ role: 'user', utteranceStartMs: 10000, utteranceEndMs: 12000 });
+        expect(provider.Relayed[3]).toEqual({ role: 'user', utteranceStartMs: null, utteranceEndMs: 14000 });
     });
 });

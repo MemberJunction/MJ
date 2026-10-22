@@ -2397,10 +2397,15 @@ export class EntityFieldInfo extends BaseInfo {
         return FormatValue(this.Type, value, decimals, currency, maxLength, trailingChars);
     }
 
+    private static readonly CHILD_INIT_KEYS: ReadonlySet<string> = new Set([
+        'EntityFieldValues', '_EntityFieldValues',
+        'EntityFieldPermissions', '_FieldPermissions', 'FieldPermissions',
+    ]);
+
     constructor(initData: any = null) {
         super();
         if (initData) {
-            this.copyInitData(initData);
+            this.copyInitData(initData, EntityFieldInfo.CHILD_INIT_KEYS);
 
             // Lazy-construct EntityFieldValueInfo objects — stash raw data now,
             // construct typed instances on first access via the getter.
@@ -4368,6 +4373,46 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Checks whether the specified user has the requested permission (`Read`, `Create`, `Update`, or `Delete`)
+     * on this entity. When `this.Permissions` is empty/uninitialized (e.g., in lightweight unit-test fixtures),
+     * returns `true` so unconfigured fixtures are not blocked.
+     */
+    public CheckPermissions(user: UserInfo, type: EntityPermissionType, throwError: boolean = false): boolean {
+        if (!user || !this.Permissions || this.Permissions.length === 0) {
+            return true;
+        }
+        const perms = this.GetUserPermisions(user);
+        if (!perms) {
+            if (throwError) {
+                throw new Error(`Permission check failed for user on entity ${this.Name}`);
+            }
+            return false;
+        }
+        let allowed = false;
+        switch (type) {
+            case EntityPermissionType.Read:
+                allowed = perms.CanRead;
+                break;
+            case EntityPermissionType.Create:
+                allowed = perms.CanCreate;
+                break;
+            case EntityPermissionType.Update:
+                allowed = perms.CanUpdate;
+                break;
+            case EntityPermissionType.Delete:
+                allowed = perms.CanDelete;
+                break;
+            default:
+                allowed = false;
+                break;
+        }
+        if (!allowed && throwError) {
+            throw new Error(`User does not have ${type} permission on ${this.Name}`);
+        }
+        return allowed;
+    }
+
+    /**
      * Determines if a given user, for a given permission type, is exempt from RowLevelSecurity or not.
      *
      * A permission row confers an exemption only for an operation it GRANTS (the matching `Can*`
@@ -4928,6 +4973,14 @@ export class EntityInfo extends BaseInfo {
     }
 
 
+    private static readonly CHILD_INIT_KEYS: ReadonlySet<string> = new Set([
+        'EntityFields', '_Fields', 'Fields',
+        'EntityPermissions', '_Permissions', 'Permissions',
+        'EntitySettings', '_Settings', 'Settings',
+        'EntityRelationships', '_RelatedEntities', 'RelatedEntities',
+        'EntityOrganicKeys', '_OrganicKeys', 'OrganicKeys',
+    ]);
+
     /**
      * @param initData - the raw entity row (or another EntityInfo being re-instantiated)
      * @param md - the provider that owns this metadata. Sibling lookups ({@link ParentEntityInfo},
@@ -4938,7 +4991,7 @@ export class EntityInfo extends BaseInfo {
         super();
         this.SetOwningProvider(md);
         if (initData) {
-            this.copyInitData(initData);
+            this.copyInitData(initData, EntityInfo.CHILD_INIT_KEYS);
 
             // do some special handling to create class instances instead of just data objects
             // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)
@@ -5172,6 +5225,11 @@ export class RecordDependency {
      * Undefined for hard foreign keys.
      */
     EntityIDFieldName?: string
+    /**
+     * Friendly display name of the foreign-key or soft-link field on {@link RelatedEntityName}
+     * (populated from `EntityFieldInfo.DisplayNameOrName` when available).
+     */
+    FieldDisplayName?: string
 }
 
 /**

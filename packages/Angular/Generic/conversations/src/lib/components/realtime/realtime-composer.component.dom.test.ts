@@ -281,4 +281,17 @@ describe('RealtimeComposerComponent (DOM)', () => {
     click(f, '.dock__hide');
     expect(openChanges).toEqual([false]);
   });
+
+  it('tucks inactive Camera and Share into the More sheet in the lean dock, and moves them to the main bar when active', () => {
+    const f = render({ Compact: true, ShowCamera: true, ShowShare: true, CameraOn: false, Sharing: false });
+    expect(query(f, '.lean__media button[title="Turn on camera"]')).toBeNull();
+    expect(query(f, '.lean__media button[title="Share screen"]')).toBeNull();
+    expect(query(f, '.lean-sheet button[title="Turn on camera"]')).not.toBeNull();
+    expect(query(f, '.lean-sheet button[title="Share screen"]')).not.toBeNull();
+
+    f.componentRef.setInput('CameraOn', true);
+    f.detectChanges();
+    expect(query(f, '.lean__media button[title="Turn off camera"]')).not.toBeNull();
+    expect(query(f, '.lean-sheet button[title="Turn on camera"]')).toBeNull();
+  });
 });
