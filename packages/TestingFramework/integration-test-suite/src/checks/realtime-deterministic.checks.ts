@@ -1912,7 +1912,8 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                 const fresh = await loadFresh<MJAIAgentSessionEntity>(SESSION_ENTITY, session.ID, ctx.User);
                 Assert(!!fresh, 'the session fixture did not read back');
                 AssertEqual(fresh!.RecordingExpectedShards, 12, 'expected shards survive the close');
-                AssertEqual(fresh!.RecordingCapturedSamples, 2_823_296, 'captured samples survive the close');
+                // Number(): the SQL Server driver returns a BIGINT column as a string.
+                AssertEqual(Number(fresh!.RecordingCapturedSamples), 2_823_296, 'captured samples survive the close');
                 AssertEqual(fresh!.RecordingStatus, 'Pending', 'recording status survives the close');
                 AssertEqual(fresh!.Status, 'Closed', 'the close itself was written');
             } finally {
