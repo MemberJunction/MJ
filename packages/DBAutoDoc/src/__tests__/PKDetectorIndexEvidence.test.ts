@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PKDetector } from '../discovery/PKDetector';
 import { ColumnStatsCache } from '../discovery/ColumnStatsCache';
-import { ClassifySingleColumnKey, CompositeKeyIndexes, IsKeyIndex, INDEX_KEY_BOOST } from '../discovery/IndexKeyEvidence';
+import { ClassifySingleColumnKey, CompositeKeyIndexes, IsKeyIndex, INDEX_KEY_BOOST, UNIQUE_COMPOSITE_CONFIDENCE } from '../discovery/IndexKeyEvidence';
 import type { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver';
 import type { AutoDocIndex } from '../types/driver';
 import type { ColumnStatistics, PKCandidate } from '../types/discovery';
@@ -121,6 +121,15 @@ describe('PKDetector with index evidence', () => {
   it('skips a composite unique index on nullable columns unless the table has rows and no nulls', async () => {
     const empty: ColSpec[] = [{ name: 'a_id', nullable: true, rows: 0, distinct: 0 }, { name: 'b_id', nullable: true, rows: 0, distinct: 0 }];
     expect(await detect(table('pairs', empty, [index('uq_ab', ['a_id', 'b_id'])]), empty)).toEqual([]);
+    const withNulls: ColSpec[] = [{ name: 'a_id', nullable: true, rows: 30, distinct: 10, nulls: 2 }, { name: 'b_id', nullable: true, rows: 30, distinct: 3 }];
+    expect((await detect(table('pairs', withNulls, [index('uq_ab', ['a_id', 'b_id'])]), withNulls)).filter((c) => c.columnNames.length === 2)).toEqual([]);
+  });
+
+  it('accepts a composite unique index on nullable columns that show no nulls in a non-empty table, at the lower confidence', async () => {
+    const specs: ColSpec[] = [{ name: 'a_id', nullable: true, rows: 30, distinct: 10 }, { name: 'b_id', nullable: true, rows: 30, distinct: 3 }];
+    const composite = (await detect(table('pairs', specs, [index('uq_ab', ['a_id', 'b_id'])]), specs)).find((c) => c.columnNames.length === 2);
+    expect(composite).toMatchObject({ columnNames: ['a_id', 'b_id'], confidence: UNIQUE_COMPOSITE_CONFIDENCE.NoNullsObserved, evidence: { backingIndex: 'uq_ab' } });
+    expect(UNIQUE_COMPOSITE_CONFIDENCE.NoNullsObserved).toBeLessThan(UNIQUE_COMPOSITE_CONFIDENCE.NotNull);
   });
 
   it('treats a composite primary-key index like a composite unique index', async () => {
