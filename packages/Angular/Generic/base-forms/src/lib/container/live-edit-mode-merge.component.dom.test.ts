@@ -167,7 +167,7 @@ function makeDealRecord(): BaseEntity {
     return entity;
 }
 
-describe('performLiveEditModeMerge & Toolbar Conflict/Links Integration', () => {
+describe('PerformLiveEditModeMerge & Toolbar Conflict/Links Integration', () => {
     afterEach(() => {
         vi.restoreAllMocks();
     });
@@ -214,7 +214,7 @@ describe('performLiveEditModeMerge & Toolbar Conflict/Links Integration', () => 
             ErrorMessage: ''
         });
 
-        await container.performLiveEditModeMerge(record);
+        await container.PerformLiveEditModeMerge(record);
 
         // Verify Clean Field (DealName) auto-merged and stayed clean
         const dealNameField = record.Fields.find(f => f.Name === 'DealName')!;

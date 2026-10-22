@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { BaseEntity, CompositeKey, EntityInfo, KeyValuePair, Metadata, RecordDependency, RunView } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityInfo, IMetadataProvider, KeyValuePair, Metadata, RecordDependency, RunView } from '@memberjunction/core';
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { MjRecordLinksComponent } from './record-links.component';
 import { MjRecordLinksDrawerComponent } from './record-links-drawer.component';
@@ -107,6 +107,11 @@ describe('MjRecordLinksComponent', () => {
     });
 
     function setupMocks() {
+        const mockProvider = {
+            Entities: MOCK_ENTITIES,
+            GetRecordDependencies: vi.fn().mockResolvedValue(MOCK_DEPENDENCIES)
+        } as unknown as IMetadataProvider;
+        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue(mockProvider);
         vi.spyOn(Metadata.prototype, 'GetRecordDependencies').mockResolvedValue(MOCK_DEPENDENCIES);
         vi.spyOn(Metadata.prototype, 'Entities', 'get').mockReturnValue(MOCK_ENTITIES);
         vi.spyOn(RunView.prototype, 'RunViews').mockResolvedValue([

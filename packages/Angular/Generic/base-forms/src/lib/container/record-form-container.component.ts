@@ -2344,7 +2344,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
         this.ngZone.run(() => {
           if (this.EffectiveEditMode || this.EffectiveIsDirty) {
-            void this.performLiveEditModeMerge(record);
+            void this.PerformLiveEditModeMerge(record);
           } else {
             void this.performLiveRemoteRefresh(record);
           }
@@ -2451,11 +2451,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * - Dirty fields (`field.Dirty`) whose current user edit differs from the new server value preserve the user's
    *   edit, update `OldValue` to the new server baseline, and raise a {@link FormFieldConflict}.
    */
-  public async performLiveEditModeMerge(record: BaseEntity): Promise<void> {
+  public async PerformLiveEditModeMerge(record: BaseEntity): Promise<void> {
     if (this.remoteRefreshInFlight || this.destroyed) return;
     this.remoteRefreshInFlight = true;
     try {
-      const rv = this.ProviderToUse ? RunView.FromMetadataProvider(this.ProviderToUse) : new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const pk = record.PrimaryKey as (CompositeKey & { WhereClause?: () => string }) | undefined;
       const whereClause =
         typeof pk?.ToWhereClause === 'function'

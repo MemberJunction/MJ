@@ -171,7 +171,8 @@ function findJsonFiles(dir: string): string[] {
 }
 
 /**
- * Parse all generated Zod entity schemas in a TypeScript file.
+ * Parse all generated Zod entity schemas in a TypeScript file using linear
+ * indexOf-based scanning (guaranteed O(N) time with zero regex backtracking).
  */
 export function ParseGeneratedEntitiesFromSource(
     source: string,
@@ -179,34 +180,86 @@ export function ParseGeneratedEntitiesFromSource(
 ): GeneratedEntityDescriptor[] {
     const results: GeneratedEntityDescriptor[] = [];
     const lineStarts = buildLineIndex(source);
-    const blockRe =
-        /\/\*\*\s*\n\s*\*\s*zod schema definition for the entity ([^\n*]+)\s*\n\s*\*\/\s*\nexport const \w+\s*=\s*z\.object\(\{([\s\S]*?)\n\}\);/g;
+    const headerMarker = 'zod schema definition for the entity ';
+    const describeOpen = '.describe(`';
+    const describeClose = '`)';
+    const relatedMarker = 'Related Entity/Foreign Key:';
+    const sqlTypeMarker = 'SQL Data Type:';
 
-    let match: RegExpExecArray | null;
-    while ((match = blockRe.exec(source)) !== null) {
-        const entityName = match[1].trim();
-        const body = match[2];
-        const blockStartOffset = match.index;
-        const bodyStartOffset = blockStartOffset + match[0].indexOf(body);
+    let searchPos = 0;
+    while (searchPos < source.length) {
+        const markerIdx = source.indexOf(headerMarker, searchPos);
+        if (markerIdx === -1) break;
+
+        const nameStart = markerIdx + headerMarker.length;
+        const lineEnd = source.indexOf('\n', nameStart);
+        if (lineEnd === -1) break;
+
+        const entityName = source.slice(nameStart, lineEnd).replace(/\r$/, '').trim();
+        const commentStart = source.lastIndexOf('/**', markerIdx);
+        const blockStartOffset = commentStart >= 0 ? commentStart : markerIdx;
         const entityLine = lineAtOffset(lineStarts, blockStartOffset);
 
-        const fields = new Map<string, GeneratedFieldDescriptor>();
-        const fieldRe = /^\s{4}([A-Za-z0-9_]+):\s*z\.[\s\S]*?\.describe\(`([\s\S]*?)`\)/gm;
-        let fm: RegExpExecArray | null;
-        while ((fm = fieldRe.exec(body)) !== null) {
-            const fieldName = fm[1].trim();
-            const desc = fm[2];
-            const relMatch = /\*\s*\*\s*Related Entity\/Foreign Key:\s*([^\n(]+)/.exec(desc);
-            const sqlMatch = /\*\s*\*\s*SQL Data Type:\s*([^\n]+)/.exec(desc);
-            const fieldLine = lineAtOffset(lineStarts, bodyStartOffset + fm.index);
+        const objOpenMarker = 'z.object({';
+        const objOpenIdx = source.indexOf(objOpenMarker, lineEnd);
+        if (objOpenIdx === -1) break;
 
-            fields.set(fieldName, {
-                Name: fieldName,
-                SqlDataType: sqlMatch ? sqlMatch[1].trim() : null,
-                RelatedEntity: relMatch ? relMatch[1].trim() : null,
-                File: repoRelativeFile,
-                Line: fieldLine,
-            });
+        const bodyStartOffset = objOpenIdx + objOpenMarker.length;
+        const objCloseIdx = source.indexOf('\n});', bodyStartOffset);
+        if (objCloseIdx === -1) break;
+
+        const fields = new Map<string, GeneratedFieldDescriptor>();
+        let fieldCursor = bodyStartOffset;
+
+        while (fieldCursor < objCloseIdx) {
+            const descIdx = source.indexOf(describeOpen, fieldCursor);
+            if (descIdx === -1 || descIdx >= objCloseIdx) break;
+
+            const descContentStart = descIdx + describeOpen.length;
+            const descEndIdx = source.indexOf(describeClose, descContentStart);
+            if (descEndIdx === -1 || descEndIdx > objCloseIdx) break;
+
+            // Walk backward from descIdx to find the start of the field line (`    FieldName: z.`)
+            let fieldLineStart = fieldCursor;
+            let scanLine = source.lastIndexOf('\n', descIdx);
+            while (scanLine >= bodyStartOffset) {
+                const candidateLineStart = scanLine + 1;
+                const colonIdx = source.indexOf(':', candidateLineStart);
+                if (colonIdx !== -1 && colonIdx < descIdx) {
+                    const prefix = source.slice(candidateLineStart, colonIdx);
+                    const trimmedPrefix = prefix.trim();
+                    if (
+                        prefix.startsWith('    ') &&
+                        !prefix.startsWith('     ') &&
+                        isIdentifierToken(trimmedPrefix) &&
+                        source.slice(colonIdx + 1, descIdx).trimStart().startsWith('z.')
+                    ) {
+                        fieldLineStart = candidateLineStart;
+                        break;
+                    }
+                }
+                scanLine = source.lastIndexOf('\n', scanLine - 1);
+            }
+
+            const colonPos = source.indexOf(':', fieldLineStart);
+            if (colonPos !== -1 && colonPos < descIdx) {
+                const fieldName = source.slice(fieldLineStart, colonPos).trim();
+                if (isIdentifierToken(fieldName)) {
+                    const desc = source.slice(descContentStart, descEndIdx);
+                    const { sqlDataType, relatedEntity } = extractDescribeMetadata(desc, relatedMarker, sqlTypeMarker);
+                    const fieldLine = lineAtOffset(lineStarts, fieldLineStart);
+
+                    fields.set(fieldName, {
+                        Name: fieldName,
+                        SqlDataType: sqlDataType,
+                        RelatedEntity: relatedEntity,
+                        File: repoRelativeFile,
+                        Line: fieldLine,
+                    });
+                }
+            }
+
+            fieldCursor = descEndIdx + describeClose.length;
         }
 
         results.push({
@@ -215,8 +268,50 @@ export function ParseGeneratedEntitiesFromSource(
             File: repoRelativeFile,
             Line: entityLine,
         });
+
+        searchPos = objCloseIdx + 4;
     }
+
     return results;
+}
+
+function isIdentifierToken(value: string): boolean {
+    if (value.length === 0) return false;
+    for (let i = 0; i < value.length; i++) {
+        const ch = value.charCodeAt(i);
+        const isAlphaNum =
+            (ch >= 48 && ch <= 57) ||
+            (ch >= 65 && ch <= 90) ||
+            (ch >= 97 && ch <= 122) ||
+            ch === 95;
+        if (!isAlphaNum) return false;
+    }
+    return true;
+}
+
+function extractDescribeMetadata(
+    desc: string,
+    relatedMarker: string,
+    sqlTypeMarker: string,
+): { sqlDataType: string | null; relatedEntity: string | null } {
+    let sqlDataType: string | null = null;
+    let relatedEntity: string | null = null;
+
+    const lines = desc.split('\n');
+    for (const rawLine of lines) {
+        const relIdx = rawLine.indexOf(relatedMarker);
+        if (relIdx !== -1) {
+            const after = rawLine.slice(relIdx + relatedMarker.length);
+            const parenIdx = after.indexOf('(');
+            relatedEntity = (parenIdx !== -1 ? after.slice(0, parenIdx) : after).trim() || null;
+        }
+        const sqlIdx = rawLine.indexOf(sqlTypeMarker);
+        if (sqlIdx !== -1) {
+            sqlDataType = rawLine.slice(sqlIdx + sqlTypeMarker.length).trim() || null;
+        }
+    }
+
+    return { sqlDataType, relatedEntity };
 }
 
 /**

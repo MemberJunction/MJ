@@ -2,9 +2,9 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output, Pipe, PipeTransform } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { BaseEntity, EntityInfo } from '@memberjunction/core';
-import { renderComponentFixture, query, text, capture, hasClass } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, text, hasClass } from '@memberjunction/ng-test-utils';
 import { MjFormFieldComponent } from './form-field.component';
-import { FormFieldEditCoordinator } from '../form-field-edit.coordinator';
+import { FormFieldEditCoordinator, type FormFieldEdit } from '../form-field-edit.coordinator';
 import { FormRecordRefreshCoordinator, type FormFieldConflict } from '../form-record-refresh.coordinator';
 
 @Component({ standalone: true, selector: 'mj-markdown', template: '<span>{{ data }}</span>' })
@@ -110,7 +110,8 @@ describe('MjFormFieldComponent — Original-Value Popover, Live Auto-Merge & Con
         expect(text(fixture, '.mj-forms-field__history-popover-value')).toBe('Acme Corp');
 
         // Click Restore
-        const edits = capture(editCoordinator.Edited$);
+        const edits: FormFieldEdit[] = [];
+        editCoordinator.Edited$.subscribe(e => edits.push(e));
         const restoreBtn = query(fixture, '.mj-forms-field__restore-btn') as HTMLButtonElement;
         restoreBtn.click();
         fixture.detectChanges();
@@ -247,7 +248,8 @@ describe('MjFormFieldComponent — Original-Value Popover, Live Auto-Merge & Con
         );
         fixture.detectChanges();
 
-        const edits = capture(editCoordinator.Edited$);
+        const edits: FormFieldEdit[] = [];
+        editCoordinator.Edited$.subscribe(e => edits.push(e));
         const useRemoteBtn = query(fixture, '.mj-forms-field__conflict-btn--use-remote') as HTMLButtonElement;
         useRemoteBtn.click();
         fixture.detectChanges();

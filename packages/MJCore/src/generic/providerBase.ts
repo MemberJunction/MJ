@@ -9,7 +9,7 @@ import type { CacheChangedEvent, QueryDefinitionSignature } from "./localCacheMa
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, MJEvent, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, EscapeSQLString, ordinalCompare } from "@memberjunction/global";
+import { MJGlobal, MJEvent, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, IndexByUUID, EscapeSQLString, ordinalCompare } from "@memberjunction/global";
 import { FindReferencedIdentifiers } from "@memberjunction/sql-dialect";
 import { TelemetryManager } from "./telemetryManager";
 import { LogDebug, LogError, LogStatus, LogStatusEx, LogWarning } from "./logging";
@@ -5167,6 +5167,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         let hasMismatch = false;
         const reconciled: MetadataInfo[] = [];
 
+        const datasetItemsByEntityID = datasetItems && datasetItems.length > 0
+            ? IndexByUUID(datasetItems.filter(item => Boolean(item.EntityID)), item => item.EntityID)
+            : null;
+        const datasetItemsByNameOrCode = new Map<string, NonNullable<typeof datasetItems>[number]>();
+        if (datasetItems && datasetItems.length > 0) {
+            for (const item of datasetItems) {
+                if (item.EntityName) datasetItemsByNameOrCode.set(norm(item.EntityName), item);
+                if (item.Code) datasetItemsByNameOrCode.set(norm(item.Code), item);
+            }
+        }
+
         for (const remoteEntry of remote) {
             if (norm(remoteEntry.Type) === rollup) {
                 continue;
@@ -5176,11 +5187,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             let receivedUpdateDate: Date | undefined;
 
             if (datasetItems && datasetItems.length > 0) {
-                const match = datasetItems.find(item =>
-                    Boolean(remoteEntry.ID && item.EntityID && UUIDsEqual(item.EntityID, remoteEntry.ID)) ||
-                    norm(item.EntityName) === norm(remoteEntry.Type) ||
-                    norm(item.Code) === norm(remoteEntry.Type)
-                );
+                const match = (remoteEntry.ID ? datasetItemsByEntityID?.Get(remoteEntry.ID) : undefined)
+                    ?? datasetItemsByNameOrCode.get(norm(remoteEntry.Type));
                 if (match && match.RowCount !== undefined) {
                     receivedRowCount = match.RowCount;
                     receivedUpdateDate = match.LatestUpdateDate;

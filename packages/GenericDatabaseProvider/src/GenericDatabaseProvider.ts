@@ -80,7 +80,7 @@ import {
     QueryInfo,
 } from '@memberjunction/core';
 
-import { BytesToBase64, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { BytesToBase64, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -6490,6 +6490,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
         }
 
+        const statusByEntityID = liveStatus?.Success && Array.isArray(liveStatus.EntityUpdateDates)
+            ? IndexByUUID(liveStatus.EntityUpdateDates.filter(e => Boolean(e.EntityID)), e => e.EntityID)
+            : null;
+        const statusByEntityName = new Map<string, DatasetStatusResultType['EntityUpdateDates'][number]>();
+        if (liveStatus?.Success && Array.isArray(liveStatus.EntityUpdateDates)) {
+            for (const e of liveStatus.EntityUpdateDates) {
+                if (e.EntityName) {
+                    statusByEntityName.set(e.EntityName.trim().toLowerCase(), e);
+                }
+            }
+        }
+
         for (const prepared of preparedItems) {
             const { item, entitySchemaName, entityBaseView, code, entityName, entityID, scope, fingerprint } = prepared;
             let cached = prepared.cached;
@@ -6499,10 +6511,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 const latestUpdateDate = this.computeLatestUpdateDate(cached.results, dateFieldToCheck, item);
 
                 if (liveStatus?.Success && Array.isArray(liveStatus.EntityUpdateDates)) {
-                    const statusEntry = liveStatus.EntityUpdateDates.find(e =>
-                        Boolean(entityID && e.EntityID && UUIDsEqual(entityID, e.EntityID)) ||
-                        e.EntityName?.trim().toLowerCase() === entityName.trim().toLowerCase()
-                    );
+                    const statusEntry = (entityID ? statusByEntityID?.Get(entityID) : undefined)
+                        ?? statusByEntityName.get(entityName.trim().toLowerCase());
                     if (statusEntry) {
                         const rowCountMatches = cached.results.length === statusEntry.RowCount;
                         const cachedMaxDate = this.parseClientTimestamp(cached.maxUpdatedAt);

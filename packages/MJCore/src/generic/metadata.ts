@@ -343,7 +343,7 @@ export class Metadata {
      */
     public async GetRecordDependencies(entityName: string, primaryKey: CompositeKey, options?: GetRecordDependenciesOptions): Promise<RecordDependency[]> { 
         return await (options !== undefined
-            ? Metadata.Provider.GetRecordDependencies(entityName, primaryKey, options)
+            ? Metadata.Provider.GetRecordDependencies(entityName, primaryKey, options)  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
             : Metadata.Provider.GetRecordDependencies(entityName, primaryKey));  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 

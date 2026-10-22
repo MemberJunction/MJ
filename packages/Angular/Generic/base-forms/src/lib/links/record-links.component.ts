@@ -13,7 +13,6 @@ import {
     BaseEntity,
     CompositeKey,
     EntityInfo,
-    Metadata,
     RecordDependency,
     RunView,
     RunViewParams
@@ -398,17 +397,15 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
         this.cdr.markForCheck();
 
         try {
-            const md = new Metadata();
+            const provider = this.ProviderToUse;
             const depOptions = { IncludeSystemEntities: false };
-            const deps = this.Provider
-                ? await this.Provider.GetRecordDependencies(record.EntityInfo.Name, record.PrimaryKey, depOptions)
-                : await md.GetRecordDependencies(record.EntityInfo.Name, record.PrimaryKey, depOptions);
+            const deps = await provider.GetRecordDependencies(record.EntityInfo.Name, record.PrimaryKey, depOptions);
 
             if (this.isDestroyed || currentVersion !== this.loadVersion) {
                 return;
             }
 
-            const entities: EntityInfo[] = (this.Provider ? this.Provider.Entities : md.Entities) ?? [];
+            const entities: EntityInfo[] = provider.Entities ?? [];
             const filteredDeps = (deps ?? []).filter(dep => {
                 if (!dep || !dep.RelatedEntityName) {
                     return false;
@@ -461,9 +458,7 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
             const rowsByEntity = new Map<string, Record<string, unknown>[]>();
             if (viewParamsList.length > 0) {
                 try {
-                    const rv = this.Provider
-                        ? RunView.FromMetadataProvider(this.Provider)
-                        : new RunView();
+                    const rv = RunView.FromMetadataProvider(provider);
                     const viewResults = await rv.RunViews(viewParamsList);
                     if (Array.isArray(viewResults)) {
                         for (let i = 0; i < groupEntries.length; i++) {
