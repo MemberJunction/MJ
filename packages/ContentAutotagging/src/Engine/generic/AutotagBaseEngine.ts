@@ -132,9 +132,13 @@ const DEFAULT_CHUNK_EMBED_BATCH_SIZE = 1000;
 const CHUNK_EMBED_SUBBATCH = 50;
 
 /**
- * Core engine for content autotagging. Extends BaseEngine to cache content metadata
- * (types, source types, file types, attributes) at startup. Uses AIEngine via composition
- * for AI model access, then delegates to LLM for text analysis and tagging.
+ * Legacy engine for content autotagging and vectorization.
+ *
+ * @deprecated Superseded by the Content Pipeline Framework (`@memberjunction/content-pipeline` —
+ * `PipelineProcessor` and the `Content Pipeline — *` Record Processes). Shared helpers
+ * (`ContentVectorInfrastructure`, `ContentVectorMetadataBuilder`, `ContentAutotagPrompt`, and the
+ * `AutotagBase` source drivers implementing `Discover` / `Fetch`) remain active and are used by
+ * the pipeline stages.
  */
 @RegisterClass(BaseEngine, 'AutotagBaseEngine')
 export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
@@ -163,8 +167,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     public get ContentSourceTypes(): MJContentSourceTypeEntity[] { return this.khEngine.ContentSourceTypes; }
     /** All content file types — delegated to KnowledgeHubMetadataEngine */
     public get ContentFileTypes(): MJContentFileTypeEntity[] { return this.khEngine.ContentFileTypes; }
-    /** All content type attributes, cached at startup */
-    public get ContentTypeAttributes(): MJContentTypeAttributeEntity[] { return this._contentTypeAttributes; }
+    /** All content type attributes — delegated to KnowledgeHubMetadataEngine (with local fallback for unit tests) */
+    public get ContentTypeAttributes(): MJContentTypeAttributeEntity[] {
+        return this._contentTypeAttributes.length > 0 ? this._contentTypeAttributes : this.khEngine.ContentTypeAttributes;
+    }
     /** All content source type params, cached at startup */
     public get ContentSourceTypeParams(): MJContentSourceTypeParamEntity[] { return this._contentSourceTypeParams; }
 
@@ -1145,7 +1151,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public GetAdditionalContentTypePrompt(contentTypeID: string): string {
-        return BuildAttributePrompt(this._contentTypeAttributes.filter(a => UUIDsEqual(a.ContentTypeID, contentTypeID)));
+        return BuildAttributePrompt(this.ContentTypeAttributes.filter(a => UUIDsEqual(a.ContentTypeID, contentTypeID)));
     }
 
     public GetContentItemDescription(contentSourceParams: ContentSourceParams): string {

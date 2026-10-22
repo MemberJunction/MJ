@@ -45,6 +45,7 @@ class CustomTestClassifier extends BaseContentClassifier {
 
 /** Tag rows the stage saved, so a test can assert tagging actually persisted something. */
 export const savedTags: { ItemID: string; Tag: string; Weight?: number; AIPromptRunID?: string; Reasoning?: string }[] = [];
+export const savedAttributes: { ContentItemID: string; Name: string; Value: string }[] = [];
 
 /**
  * A provider that records what the stage writes. Tagging's whole point is the rows it leaves
@@ -53,7 +54,7 @@ export const savedTags: { ItemID: string; Tag: string; Weight?: number; AIPrompt
 function recordingProvider() {
     return {
         RunView: async () => ({ Success: true, Results: [] as { ID: string }[] }),
-        GetEntityObject: async () => {
+        GetEntityObject: async (entityName: string) => {
             const row: Record<string, unknown> = {};
             const field = (name: string) => ({
                 get: () => row[name],
@@ -65,14 +66,18 @@ function recordingProvider() {
             const entity = {
                 NewRecord: () => true,
                 Save: async () => {
-                    savedTags.push({ ...row } as (typeof savedTags)[number]);
+                    if (entityName === 'MJ: Content Item Attributes') {
+                        savedAttributes.push({ ...row } as (typeof savedAttributes)[number]);
+                    } else {
+                        savedTags.push({ ...row } as (typeof savedTags)[number]);
+                    }
                     return true;
                 },
                 Delete: async () => true,
                 InnerLoad: async () => true,
                 LatestResult: null,
             };
-            for (const name of ['ItemID', 'Tag', 'Weight', 'AIPromptRunID', 'Reasoning']) {
+            for (const name of ['ItemID', 'Tag', 'Weight', 'AIPromptRunID', 'Reasoning', 'ContentItemID', 'Name', 'Value']) {
                 Object.defineProperty(entity, name, field(name));
             }
             return entity;
@@ -110,6 +115,7 @@ beforeEach(() => {
     );
     vi.spyOn(ContentItemTagBridge.prototype, 'Bridge').mockResolvedValue(undefined);
     savedTags.length = 0;
+    savedAttributes.length = 0;
 });
 
 describe('TagStage', () => {
@@ -133,6 +139,18 @@ describe('TagStage', () => {
         classifyImpl = async () => classified([keyword('finance', 0.9, { Reasoning: 'central topic' })], { PromptRunID: 'run-1' });
         await new TagStage().Run(item('some text'), contextWith());
         expect(savedTags[0]).toMatchObject({ AIPromptRunID: 'run-1', Reasoning: 'central topic' });
+    });
+
+    it('persists custom Content Type Attributes returned in Extensions.attributes', async () => {
+        classifyImpl = async () =>
+            classified([keyword('finance', 0.9)], {
+                Extensions: { attributes: { author: 'Jane Doe', readingLevel: 'Advanced' } },
+            });
+        await new TagStage().Run(item('some text'), contextWith());
+        expect(savedAttributes).toEqual([
+            { ContentItemID: 'ITEM-1', Name: 'author', Value: 'Jane Doe' },
+            { ContentItemID: 'ITEM-1', Name: 'readingLevel', Value: 'Advanced' },
+        ]);
     });
 
     it('resolves a custom BaseContentClassifier registered by ClassifierKey', async () => {

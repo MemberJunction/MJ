@@ -12,7 +12,12 @@
 
 import { LogError, RunView } from '@memberjunction/core';
 import { ContentItemTagBridge } from '@memberjunction/tag-engine';
-import { KnowledgeHubMetadataEngine, MJContentItemChunkEntity, MJContentItemTagEntity } from '@memberjunction/core-entities';
+import {
+    KnowledgeHubMetadataEngine,
+    MJContentItemAttributeEntity,
+    MJContentItemChunkEntity,
+    MJContentItemTagEntity,
+} from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseContentClassifier,
@@ -76,6 +81,7 @@ export class TagStage extends BasePipelineStage {
         }
 
         const changes = await this.persistTags(record, result, context);
+        await this.persistAttributes(record, result, context);
         if (changes.Changed) {
             // Tags ride in the vector's metadata; an embedded record needs that refreshed, not re-embedded.
             await this.flagMetadataRefresh(record, context);
@@ -284,6 +290,72 @@ export class TagStage extends BasePipelineStage {
             throw new TransientStageError(`Reading the existing tags for '${itemID}' failed: ${result.ErrorMessage}`);
         }
         return new Map(result.Results.map((row) => [row.Tag.trim().toLowerCase(), row]));
+    }
+
+    /** Upsert any custom Content Type Attributes returned by the classifier in `Extensions.attributes`. */
+    private async persistAttributes(record: WorkingRecord, result: ClassifyResult, context: StageContext): Promise<void> {
+        const itemID = record.Identity.RecordID;
+        const rawAttributes = result.Extensions?.attributes;
+        if (!itemID || context.IsTest || !rawAttributes || typeof rawAttributes !== 'object') {
+            return;
+        }
+        const entries = Object.entries(rawAttributes as Record<string, unknown>).filter(
+            ([key, val]) => key.trim().length > 0 && val != null,
+        );
+        if (entries.length === 0) {
+            return;
+        }
+        const existing = await this.existingAttributes(itemID, context);
+        for (const [name, rawValue] of entries) {
+            const value = typeof rawValue === 'string' ? rawValue : String(rawValue);
+            const current = existing.get(name.trim().toLowerCase());
+            if (current) {
+                if (current.Value !== value) {
+                    current.Value = value;
+                    await this.saveAttribute(current, itemID);
+                }
+                continue;
+            }
+            const attr = await context.Provider.GetEntityObject<MJContentItemAttributeEntity>(
+                'MJ: Content Item Attributes',
+                context.ContextUser,
+            );
+            attr.NewRecord();
+            attr.ContentItemID = itemID;
+            attr.Name = name.trim();
+            attr.Value = value;
+            await this.saveAttribute(attr, itemID);
+        }
+    }
+
+    private async existingAttributes(
+        itemID: string,
+        context: StageContext,
+    ): Promise<Map<string, MJContentItemAttributeEntity>> {
+        const result = await RunView.FromMetadataProvider(context.Provider).RunView<MJContentItemAttributeEntity>(
+            {
+                EntityName: 'MJ: Content Item Attributes',
+                ExtraFilter: WhereEqual({ ContentItemID: itemID }),
+                ResultType: 'entity_object',
+            },
+            context.ContextUser,
+        );
+        if (!result.Success) {
+            throw new TransientStageError(
+                `Reading the existing attributes for '${itemID}' failed: ${result.ErrorMessage}`,
+            );
+        }
+        return new Map(result.Results.map((row) => [row.Name.trim().toLowerCase(), row]));
+    }
+
+    private async saveAttribute(attribute: MJContentItemAttributeEntity, itemID: string): Promise<boolean> {
+        const saved = await attribute.Save();
+        if (!saved) {
+            LogError(
+                `TagStage: could not save attribute '${attribute.Name}' for content item '${itemID}': ${attribute.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+            );
+        }
+        return saved;
     }
 
     /**

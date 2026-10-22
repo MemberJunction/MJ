@@ -266,7 +266,7 @@ export class AutotagRSSFeed extends AutotagBase {
     public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
         const confidence = request.Confidence ?? ConfidenceScale;
         const validateUrl = !this.allowInternalHosts(request);
-        for (const entry of await this.readFeed(request.URL, request.Access, request.Signal, validateUrl)) {
+        for (const entry of await this.readFeed(request.URL, request.Access, request.Signal, validateUrl, false)) {
             if (request.Signal.aborted) {
                 return;
             }
@@ -297,6 +297,7 @@ export class AutotagRSSFeed extends AutotagBase {
         access?: AccessArtifact | null,
         signal?: AbortSignal,
         validateUrl = true,
+        parseInlineHtml = true,
     ): Promise<RSSItem[]> {
         const { Data } = await HttpGet<string>(url, {
             ResponseType: 'text',
@@ -320,9 +321,9 @@ export class AutotagRSSFeed extends AutotagBase {
             rssItem.comments = (item as Record<string, unknown>)['comments'] as string ?? '';
             rssItem.source = (item as Record<string, unknown>)['source'] as string ?? '';
 
-            // Parse inline content (content:encoded or content)
+            // Parse inline content (content:encoded or content) when requested
             const rawContent = item['content:encoded'] ?? item.content ?? '';
-            if (rawContent) {
+            if (rawContent && parseInlineHtml) {
                 rssItem.content = await this.engine.parseHTML(rawContent);
             }
             items.push(rssItem);

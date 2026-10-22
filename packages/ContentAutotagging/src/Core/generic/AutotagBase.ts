@@ -26,12 +26,19 @@ export abstract class AutotagBase {
         return this._provider ?? Metadata.Provider;
     }
 
+    /**
+     * @deprecated Legacy autotagger entry point. Implement {@link Discover} and optionally {@link Fetch}
+     * for the Content Pipeline Framework (`@memberjunction/content-pipeline`).
+     */
     public async SetContentItemsToProcess(_contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {
         throw new Error(`${this.constructor.name} is a Content Pipeline source driver and does not implement legacy SetContentItemsToProcess.`);
     }
 
     /**
      * Run autotagging for this source type.
+     *
+     * @deprecated Legacy autotagger entry point. Implement {@link Discover} and optionally {@link Fetch}
+     * for the Content Pipeline Framework (`@memberjunction/content-pipeline`).
      * @param contextUser - The user context for server-side operations
      * @param onProgress - Optional progress callback
      * @param contentSourceIDs - Optional filter: only process these specific source IDs. If omitted, processes all sources for this type.

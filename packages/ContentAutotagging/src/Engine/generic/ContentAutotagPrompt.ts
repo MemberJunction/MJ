@@ -89,6 +89,11 @@ export function BuildAttributePrompt(attributes: readonly { Name: string; Prompt
         .join('\n');
 }
 
+/** The attribute extraction instructions for `contentTypeID`, read from the Knowledge Hub cache. */
+export function GetContentTypeAttributePrompt(contentTypeID: string): string {
+    return BuildAttributePrompt(KnowledgeHubMetadataEngine.Instance.GetContentTypeAttributes(contentTypeID));
+}
+
 /** The org / content-type / source classification context for an item. Undefined (logged) on failure. */
 export async function ResolveItemClassificationContext(
     contentSourceID: string | undefined,

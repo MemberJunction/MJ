@@ -5,6 +5,7 @@
 "@memberjunction/record-set-processor-base": minor
 "@memberjunction/record-set-processor": minor
 "@memberjunction/content-autotagging": minor
+"@memberjunction/actions-content-autotag": minor
 "@memberjunction/core-actions": minor
 "@memberjunction/core-entities": minor
 "@memberjunction/server": minor

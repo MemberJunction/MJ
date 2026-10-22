@@ -1,12 +1,11 @@
 # @memberjunction/content-autotagging
 
-AI-powered content ingestion, autotagging, and vectorization engine for MemberJunction. Scans content from multiple sources (local files, websites, RSS feeds, cloud storage), extracts text from documents, uses LLMs to generate weighted tags and metadata attributes, and vectorizes content for semantic search.
+Source-type drivers (`AutotagBase` subclasses: `AutotagLocalFileSystem`, `AutotagCloudStorage`, `AutotagRSSFeed`, `AutotagWebsite`, `AutotagEntity`) and shared vector/prompt infrastructure (`ContentVectorInfrastructure`, `ContentVectorMetadata`, `ContentAutotagPrompt`) for the **[Content Pipeline Framework](../ContentPipeline/engine/README.md)** (`@memberjunction/content-pipeline`), plus the legacy `@deprecated` `AutotagBaseEngine` retained for backward compatibility.
 
 > **Read these guides first** if you're working on content ingestion, tag classification, taxonomy growth, or governance:
-> - [Content Pipeline, Training, and Retrieval Guide](../../guides/CONTENT_PIPELINE_GUIDE.md) — **the staged 6-stage Content Pipeline Framework** (`Discover` / `Sync` → `Extract` → `Tag` → `Segment` → `Embed` → `Delete`), how it shares `AutotagBase` drivers and vector/prompt helpers with this package, and how trained content feeds Search & RAG+
-> - [Content Autotagging Guide](../../guides/CONTENT_AUTOTAGGING_GUIDE.md) — pipeline architecture, prompt structure, source-type providers
+> - [Content Pipeline, Training, and Retrieval Guide](../../guides/CONTENT_PIPELINE_GUIDE.md) — **the unified 6-stage Content Pipeline Framework** (`Discover` / `Sync` → `Extract` → `Tag` → `Segment` → `Embed` → `Delete`), source-type drivers (`AutotagBase.Discover` / `Fetch`), the managed `"Content Autotagging"` prompt, taxonomy bridging, vector index resolution, and Search/RAG+ retrieval
 > - [Taxonomy & Tagging Guide](../../guides/TAXONOMY_TAGGING_GUIDE.md) — the tag taxonomy itself: 4+1-tier resolver, per-tag governance, scoping, the suggestion queue, Tag Health, and per-source configuration knobs
-> - [Content Segmentation Guide](../../guides/CONTENT_SEGMENTATION_GUIDE.md) — **how content is chunked before embedding.** This pipeline chunks twice, for two different consumers: embedding chunks (persisted as `Content Item Chunks`, sized to the embedding model) and tagging chunks (transient, sized to the LLM context window). Both route through `@memberjunction/ai-segmentation` via `resolveSegmenterKey()` / `segmentTextForChunking()`, sharing a strategy but **keeping separate token budgets**. Override `resolveSegmenterKey()` to opt into structure-, topic-, or transcript-aware segmentation. Read before touching either.
+> - [Content Segmentation Guide](../../guides/CONTENT_SEGMENTATION_GUIDE.md) — **how content is chunked before embedding** via `@memberjunction/ai-segmentation`
 
 ## Overview
 

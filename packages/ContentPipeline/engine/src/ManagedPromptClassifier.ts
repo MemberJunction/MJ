@@ -9,10 +9,10 @@ import { IMetadataProvider, LogStatus, UserInfo } from '@memberjunction/core';
 import { KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import {
-    AutotagBaseEngine,
     AutotagKeyword,
     BuildContentAutotagPromptData,
     GetContentAutotagPrompt,
+    GetContentTypeAttributePrompt,
     NormalizeAutotagKeywords,
     ResolveItemClassificationContext,
     RunContentAutotagPrompt,
@@ -28,6 +28,18 @@ import {
 
 /** The default classifier registration key. */
 export const MANAGED_PROMPT_CLASSIFIER = 'ManagedPrompt';
+
+/** Prompt response keys handled directly by the classifier rather than stored as custom Content Item Attributes. */
+const RESERVED_PROMPT_KEYS = new Set([
+    'keywords',
+    'isValidContent',
+    'title',
+    'description',
+    'processStartTime',
+    'processEndTime',
+    'contentItemID',
+    '__aiPromptRunID',
+]);
 
 /** What the prompt concluded about one item. */
 export interface ManagedPromptClassification {
@@ -53,16 +65,18 @@ export class ManagedPromptClassifier extends BaseContentClassifier {
             request.Provider,
         );
         const data = await this.buildPromptData(request, source, contentType);
-        const result = await RunContentAutotagPrompt<{ keywords?: unknown; isValidContent?: boolean }>(
+        const result = await RunContentAutotagPrompt<Record<string, unknown>>(
             GetContentAutotagPrompt(),
             data,
             request.ContextUser,
+            contentType.AIModelID || undefined,
         );
         if (!result.success) {
             throw new Error(`The 'Content Autotagging' prompt failed: ${result.errorMessage ?? 'unknown error'}`);
         }
         const isValidContent = result.result?.isValidContent !== false;
         const keywords = isValidContent ? NormalizeAutotagKeywords(result.result?.keywords) : [];
+        const attributes = isValidContent ? this.extractCustomAttributes(result.result) : {};
         const tags: ClassifiedTag[] = keywords.map((k) => ({
             Name: k.Tag,
             Score: k.Weight,
@@ -73,8 +87,24 @@ export class ManagedPromptClassifier extends BaseContentClassifier {
             Tags: tags,
             PromptRunID: result.promptRun?.ID ?? null,
             IsValidContent: isValidContent,
-            Extensions: { keywords },
+            Extensions: {
+                keywords,
+                ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
+            },
         };
+    }
+
+    private extractCustomAttributes(raw: Record<string, unknown> | undefined): Record<string, string> {
+        if (!raw || typeof raw !== 'object') {
+            return {};
+        }
+        const attributes: Record<string, string> = {};
+        for (const [key, value] of Object.entries(raw)) {
+            if (!RESERVED_PROMPT_KEYS.has(key) && value != null) {
+                attributes[key] = typeof value === 'string' ? value : String(value);
+            }
+        }
+        return attributes;
     }
 
     private async buildPromptData(
@@ -82,9 +112,8 @@ export class ManagedPromptClassifier extends BaseContentClassifier {
         source: MJContentSourceEntity,
         contentType: MJContentTypeEntity,
     ): Promise<Record<string, unknown>> {
-        // Attribute prompts come from the autotagger's cache, the taxonomy from TagEngine's. The
+        // Attribute prompts come from the Knowledge Hub cache, the taxonomy from TagEngine's. The
         // taxonomy is best-effort: without one the model classifies into a fresh one.
-        await AutotagBaseEngine.Instance.Config(false, request.ContextUser, request.Provider);
         await TagEngine.Instance.Config(false, request.ContextUser).catch((e: unknown) =>
             LogStatus(`ManagedPromptClassifier: no taxonomy context (${e instanceof Error ? e.message : String(e)})`),
         );
@@ -94,7 +123,7 @@ export class ManagedPromptClassifier extends BaseContentClassifier {
                 ContentTypeID: contentType.ID,
                 MinTags: contentType.MinTags,
                 MaxTags: contentType.MaxTags,
-                AttributePrompt: AutotagBaseEngine.Instance.GetAdditionalContentTypePrompt(contentType.ID),
+                AttributePrompt: GetContentTypeAttributePrompt(contentType.ID),
                 ClassificationContext: await ResolveItemClassificationContext(
                     source.ID,
                     contentType.ID,
