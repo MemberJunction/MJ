@@ -165,13 +165,12 @@ describe('InternalRunView — full-page fallback COUNT and SkipTotalRowCount', (
         provider.registerEntity(makeEntity('Widgets'));
     });
 
-    it('a MaxRows:1 HIT runs the fallback COUNT by default — the behaviour hot lookups pay for', async () => {
+    it('a MaxRows:1 HIT never runs the fallback COUNT (next carves single-row probes out)', async () => {
         provider.dataRows = [{ ID: 'r1', Name: 'w' }];
         const result = await provider.testRunView({ EntityName: 'Widgets', MaxRows: 1, ResultType: 'simple' });
         expect(result.Success).toBe(true);
-        expect(countQueries(provider.executed)).toHaveLength(1);
-        // And the count is what makes TotalRowCount load-bearing on capped reads.
-        expect(result.TotalRowCount).toBe(47);
+        expect(countQueries(provider.executed)).toHaveLength(0);
+        expect(result.TotalRowCount).toBe(1);
     });
 
     it('SkipTotalRowCount: true skips the fallback COUNT on a MaxRows:1 hit and reports the returned rows', async () => {
@@ -205,6 +204,14 @@ describe('InternalRunView — full-page fallback COUNT and SkipTotalRowCount', (
         expect(result.Success).toBe(true);
         expect(countQueries(provider.executed)).toHaveLength(1);
         expect(result.TotalRowCount).toBe(47);
+    });
+
+    it('SkipTotalRowCount: true skips the fallback COUNT on a full multi-row page', async () => {
+        provider.dataRows = [{ ID: 'r1', Name: 'a' }, { ID: 'r2', Name: 'b' }];
+        const result = await provider.testRunView({ EntityName: 'Widgets', MaxRows: 2, ResultType: 'simple', SkipTotalRowCount: true });
+        expect(result.Success).toBe(true);
+        expect(countQueries(provider.executed)).toHaveLength(0);
+        expect(result.TotalRowCount).toBe(2);
     });
 
     it('a paginated read (StartRow) still counts up front by default', async () => {
