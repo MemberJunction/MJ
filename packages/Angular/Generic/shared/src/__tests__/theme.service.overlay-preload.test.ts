@@ -157,6 +157,62 @@ describe('ThemeService — org brand overlay persisted for first paint', () => {
     expect(service.BrandOverlayId).toBe('acme');
   });
 
+  it('an overlay id with selector metacharacters never throws out of the constructor path', () => {
+    const id = 'acme"]';
+    localStorage.setItem(OVERLAY_KEY, id);
+    localStorage.setItem(OVERLAY_CSS_KEY, JSON.stringify({ id, css: 'x{}' }));
+    const service = new ThemeService();
+    expect(() => service.RestorePersistedBrandOverlay()).not.toThrow();
+    expect(service.RestorePersistedBrandOverlay()).toBe(true); // and the dedupe walk handles it too
+    const styles = Array.from(document.head.querySelectorAll(PRELOAD_SELECTOR));
+    expect(styles.length).toBe(1);
+    expect(styles[0].getAttribute('data-mj-brand-overlay-preload')).toBe(id);
+  });
+
+  it('the restored state is tracked, not read off the DOM: a stripped preload <style> does not drop the attribute', async () => {
+    localStorage.setItem(OVERLAY_KEY, 'acme');
+    localStorage.setItem(OVERLAY_CSS_KEY, JSON.stringify({ id: 'acme', css: 'x{}' }));
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true, writable: true,
+      value: () => ({ matches: false, addEventListener: () => undefined, removeEventListener: () => undefined }),
+    });
+    const service = new ThemeService();
+    service.RestorePersistedBrandOverlay();
+    document.head.querySelector(PRELOAD_SELECTOR)?.remove(); // a third party touched the element
+    await service.Initialize();
+    expect(document.documentElement.getAttribute('data-theme-overlay')).toBe('acme');
+  });
+
+  it('bootstrap clearing a restored overlay (no brand found) ends the pending state: Initialize() strips the attribute', async () => {
+    localStorage.setItem(OVERLAY_KEY, 'acme');
+    localStorage.setItem(OVERLAY_CSS_KEY, JSON.stringify({ id: 'acme', css: 'x{}' }));
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true, writable: true,
+      value: () => ({ matches: false, addEventListener: () => undefined, removeEventListener: () => undefined }),
+    });
+    const service = new ThemeService();
+    service.RestorePersistedBrandOverlay();
+    service.ClearBrandOverlay();
+    await service.Initialize();
+    expect(document.documentElement.getAttribute('data-theme-overlay')).toBeNull();
+    expect(service.BrandOverlayId).toBeNull();
+    expect(new ThemeService().RestorePersistedBrandOverlay()).toBe(false);
+  });
+
+  it('re-applying the same brand does not rewrite the CSS entry', async () => {
+    const service = new ThemeService();
+    register(service, 'acme');
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    try {
+      await apply(service, 'acme');
+      await apply(service, 'acme');
+      const cssWrites = setItem.mock.calls.filter(([key]) => key === OVERLAY_CSS_KEY);
+      expect(cssWrites.length).toBe(1);
+    } finally {
+      setItem.mockRestore();
+    }
+  });
+
   it('a localStorage that throws (private mode) never breaks apply or restore', async () => {
     const service = new ThemeService();
     register(service, 'acme');

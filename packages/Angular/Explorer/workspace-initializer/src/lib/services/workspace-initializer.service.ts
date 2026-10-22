@@ -239,6 +239,14 @@ export class WorkspaceInitializerService {
         theme = result.Success ? result.Results?.[0] : undefined;
       }
       if (!theme) {
+        // The org has no active brand (and the user's selection is gone). A brand restored from
+        // localStorage before bootstrap (RestorePersistedBrandOverlay) would otherwise keep
+        // painting forever — a retired brand on the sign-in page and through the session, for
+        // every browser that ever loaded it. Clear it only when the query itself succeeded; a
+        // transient read failure must not wipe a perfectly good cached brand.
+        if (result.Success) {
+          this.themeService.ClearBrandOverlay();
+        }
         return;
       }
       this.themeService.RegisterBrandTheme({

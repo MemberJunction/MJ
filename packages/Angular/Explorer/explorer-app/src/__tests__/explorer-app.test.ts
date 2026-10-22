@@ -258,6 +258,7 @@ describe('first-paint brand overlay restore', () => {
   it('the constructor restores the persisted org brand overlay before anything renders', () => {
     const ctor = componentTs.slice(componentTs.indexOf('  constructor('));
     const body = ctor.slice(ctor.indexOf(') {'), ctor.indexOf('\n  }\n'));
-    expect(body).toContain('this.themeService.RestorePersistedBrandOverlay()');
+    // A live statement, not a substring: a commented-out call would still `toContain`.
+    expect(body).toMatch(/^\s*this\.themeService\.RestorePersistedBrandOverlay\(\);/m);
   });
 });
