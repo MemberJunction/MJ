@@ -1686,18 +1686,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
-     * Applies an immediate array mutation based on the entity event type.
-     * This is faster than running a full view refresh for simple add/update/delete operations.
-     *
-     * On save, the cached entry is a clone owned by this engine's provider — not the saver's
-     * entity instance. Storing the saver's instance would pin the saver's provider (often a
-     * per-request provider) inside the engine's cache for the engine's full lifetime, which
-     * leaks the provider and all its associated state.
-     *
-     * @param config - The configuration for the property being mutated
-     * @param event - The entity event containing the affected entity and event type
-     */
-    /**
      * Whether a save event's entity carries every column, so it can replace an engine row in
      * place. Deletes and non-save events always qualify.
      */
@@ -1713,6 +1701,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             : LocalCacheManager.RowHasEveryField(entity.EntityInfo, entity.GetAll());
     }
 
+    /**
+     * Applies an immediate array mutation based on the entity event type.
+     * This is faster than running a full view refresh for simple add/update/delete operations.
+     *
+     * On save, the cached entry is a clone owned by this engine's provider — not the saver's
+     * entity instance. Storing the saver's instance would pin the saver's provider (often a
+     * per-request provider) inside the engine's cache for the engine's full lifetime, which
+     * leaks the provider and all its associated state.
+     *
+     * @param config - The configuration for the property being mutated
+     * @param event - The entity event containing the affected entity and event type
+     */
     protected async applyImmediateMutation(config: BaseEnginePropertyConfig, event: BaseEntityEvent): Promise<void> {
         const currentData = (this as Record<string, unknown>)[config.PropertyName] as BaseEntity[] | undefined;
         if (!currentData) {

@@ -407,6 +407,30 @@ describe('Predicate validation (ExtraFilter / OrderBy)', () => {
         )).toThrow(/Salary/);
     });
 
+    it('rejects an OrderBy that sorts by column position — the position can be a denied field', () => {
+        const provider = setupProvider();
+        for (const orderBy of ['3', '3 DESC', 'Name ASC, 2 DESC']) {
+            expect(() => provider.assertPredicates(
+                viewParams({ OrderBy: orderBy, ResultType: 'entity_object' }),
+                buildUser([INTERN_ROLE_ID])
+            )).toThrow(/may not read whole rows \(ORDER BY \d\)/);
+        }
+    });
+
+    it("rejects a saved view's stored OrderByClause that sorts by column position", () => {
+        const provider = setupProvider();
+        const view = { Get: (name: string) => (name === 'OrderByClause' ? '3 DESC' : null) };
+        expect(() => provider.assertPredicates(
+            viewParams({ ViewEntity: view as unknown as RunViewParams['ViewEntity'] }),
+            buildUser([INTERN_ROLE_ID])
+        )).toThrow(/ORDER BY 3/);
+    });
+
+    it('allows a sort by column position for a user denied nothing on the entity', () => {
+        const provider = setupProvider();
+        expect(() => provider.assertPredicates(viewParams({ OrderBy: '3 DESC' }), buildUser([HR_ROLE_ID]))).not.toThrow();
+    });
+
     it('does NOT say whether the field is missing or forbidden', () => {
         const provider = setupProvider();
         let message = '';

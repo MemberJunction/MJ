@@ -2867,7 +2867,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 : '';
             if (orderBy.length > 0 && !usingKeyset && !orderByIsPkFallback) {
                 this.AssertClauseFragmentIsSingleStatement(orderBy, 'OrderBy');
-                this.AssertClausesRespectFieldSecurityForEntity(entityInfo, [orderBy], user);
+                this.AssertSortRespectsFieldSecurityForEntity(entityInfo, [orderBy], user);
                 // No caller OrderBy means the sort came from the saved view's stored sort state.
                 if (!params.OrderBy && viewEntity) this.ScreenStoredViewOrderBy(orderBy, user);
             }

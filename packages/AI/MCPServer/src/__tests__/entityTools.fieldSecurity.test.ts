@@ -18,6 +18,9 @@ import {
     UserInfo,
     UserRoleInfo,
 } from '@memberjunction/core';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { MCPSessionContext, ToolConfig } from '../Server.js';
 
 const { state } = vi.hoisted(() => ({
@@ -58,6 +61,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     };
 });
 
+vi.mock('@memberjunction/server', () => ({}));
+
+import { CreateSessionToolRegistrar } from '../Server.js';
 import {
     AddEntityCreateTool,
     AddEntityDeleteTool,
@@ -182,6 +188,56 @@ describe('MCP entity tools: client input from a restricted caller', () => {
         const out = JSON.parse(await run(AddEntityCreateTool, { Name: 'x', Salary: 1 }, hr)) as ToolResponse;
         expect(out.success).toBe(true);
         expect(state.record!.SetMany).toHaveBeenCalledWith({ Name: 'x', Salary: 1 }, true);
+    });
+});
+
+// ─── Input gate through the MCP SDK ───────────────────────────────────────
+
+/**
+ * Calls one tool over a real MCP client/server pair, the way a session does, so the SDK's own
+ * input validation runs before the tool sees the arguments. The tool's scope check is left out:
+ * it is not what these tests are about.
+ */
+async function callThroughSdk(register: Parameters<typeof captureTool>[0], args: Record<string, unknown>, user: UserInfo): Promise<ToolResponse> {
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    const tool = { ...captureTool(register), scopeInfo: undefined };
+    CreateSessionToolRegistrar(server, session(user), {})(tool);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'test-client', version: '0.0.0' });
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+        const result = await client.callTool({ name: tool.name, arguments: args });
+        const content = result.content as { type: string; text: string }[];
+        return JSON.parse(content[0].text) as ToolResponse;
+    } finally {
+        await client.close();
+        await server.close();
+    }
+}
+
+describe('MCP entity tools: restricted input sent through the MCP SDK', () => {
+    const writeTools = [
+        ['Create', AddEntityCreateTool, {}],
+        ['Update', AddEntityUpdateTool, { ID: ROW_ID }],
+    ] as const;
+
+    for (const [name, register, keys] of writeTools) {
+        it(`REGRESSION: ${name} refuses a denied key and an unknown key instead of letting the SDK drop them`, async () => {
+            const denied = await callThroughSdk(register, { ...keys, Name: 'Ada', Salary: 999 }, intern);
+            const unknown = await callThroughSdk(register, { ...keys, Name: 'Ada', Bogus: 999 }, intern);
+
+            expect(denied.success).toBe(false);
+            expect(unknown.success).toBe(false);
+            expect(denied.errorMessage).toBe(FieldSecurityClientInputMessage('Salary', 'Employees'));
+            expect(unknown.errorMessage).toBe(FieldSecurityClientInputMessage('Bogus', 'Employees'));
+            expect(state.record!.SetMany).not.toHaveBeenCalled();
+        });
+    }
+
+    it('still applies permitted input sent through the SDK', async () => {
+        const out = await callThroughSdk(AddEntityCreateTool, { Name: 'Ada' }, intern);
+        expect(out.success).toBe(true);
+        expect(state.record!.SetMany).toHaveBeenCalledWith({ Name: 'Ada' }, true);
     });
 });
 

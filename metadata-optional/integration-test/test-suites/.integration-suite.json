@@ -1610,7 +1610,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT132 - FLS Close-out Pending Behaviour (cache segmentation, RunQuery)",
+            "TestID": "@lookup:MJ: Tests.Name=IT132 - FLS Close-out (cache segmentation, RunQuery)",
             "Sequence": 49,
             "Status": "Active"
           },

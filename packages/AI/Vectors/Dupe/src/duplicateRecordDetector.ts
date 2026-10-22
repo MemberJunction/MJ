@@ -1381,7 +1381,7 @@ export class DuplicateRecordDetector extends VectorBase {
             // Skip validation and suppress its warnings, as sync does: records commonly have null
             // fields, and the templates handle them with {% if %} conditionals.
             const result = await TemplateEngineServer.Instance.RenderTemplate(
-                template, templateContent, data, true, true
+                template, templateContent, data, true, true, { ContextUser: contextUser ?? this.CurrentUser }
             );
 
             if (result.Success) {

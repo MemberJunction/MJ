@@ -4992,7 +4992,9 @@ export abstract class BaseEntity<T = unknown> {
      * **Field security.** An object holds only what its user may read, so assigning a different
      * user to an object that already holds a record narrows it to the new user: values the new
      * user may not read are dropped (the fields become not loaded) from this object, its IS-A
-     * parent and its embedded records, which are given the same user. Nothing is widened: a field
+     * parent, its embedded records and the loaded children of its related-record collections,
+     * which are given the same user. A read-only cache collection's children are the engine's own
+     * instances and are left as they are. Nothing is widened: a field
      * the previous user could not read stays not loaded for a user who can, because its value was
      * never loaded. Set the user before loading wherever possible, so the record is loaded at the
      * right width in the first place.
@@ -5006,7 +5008,7 @@ export abstract class BaseEntity<T = unknown> {
         if (this._parentEntity) {
             this._parentEntity.ContextCurrentUser = user;
         }
-        this.notifyEmbeddedContextUserChanged(user);
+        this.notifyCompanionsContextUserChanged(user);
     }
     public get ContextCurrentUser(): UserInfo {
         return this._contextCurrentUser;
@@ -5111,15 +5113,16 @@ export abstract class BaseEntity<T = unknown> {
         }
     }
 
-    /** Gives every embedded record this object's new user. See {@link ContextCurrentUser}. */
-    private notifyEmbeddedContextUserChanged(user: UserInfo): void {
+    /**
+     * Gives every companion this object's new user: embedded records and the loaded children of
+     * related-record collections take it. See {@link ContextCurrentUser}.
+     */
+    private notifyCompanionsContextUserChanged(user: UserInfo): void {
         if (!this.HasCompanions) {
             return;
         }
         for (const companion of this.Companions) {
-            if (companion instanceof EmbeddedRecord) {
-                companion.OnOwnerContextUserChanged(user);
-            }
+            companion.OnOwnerContextUserChanged(user);
         }
     }
 

@@ -35,8 +35,8 @@ function advertisedKeys(user: UserInfo, tool: ToolConfig): string[] {
     const session: MCPSessionContext = { user, authMethod: 'apiKey' };
     CreateSessionToolRegistrar(server, session, {})(tool);
     expect(registerTool).toHaveBeenCalledTimes(1);
-    const definition = registerTool.mock.calls[0][1] as { inputSchema: Record<string, unknown> };
-    return Object.keys(definition.inputSchema).sort();
+    const definition = registerTool.mock.calls[0][1] as { inputSchema: z.ZodObject<z.ZodRawShape> };
+    return Object.keys(definition.inputSchema.shape).sort();
 }
 
 describe('MCP session tool registration: per-user input schema', () => {

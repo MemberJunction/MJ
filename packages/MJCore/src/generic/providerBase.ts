@@ -11,7 +11,7 @@ import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal, MJEvent, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, IndexByUUID, EscapeSQLString, ordinalCompare } from "@memberjunction/global";
-import { FieldSecuritySQLContext, FieldSecuritySQLGate } from "./fieldSecuritySQLGate";
+import { FieldSecuritySQLContext, FieldSecuritySQLGate, FieldSecurityViolation } from "./fieldSecuritySQLGate";
 import { TelemetryManager } from "./telemetryManager";
 import { LogDebug, LogError, LogStatus, LogStatusEx, LogWarning } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
@@ -3344,10 +3344,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const view = params.ViewEntity;
         this.AssertClausesRespectFieldSecurityForEntity(entity, [
             params.ExtraFilter,
-            params.OrderBy,
             params.OverrideExcludeFilter,
             ...(params.Aggregates ?? []).map(a => a?.expression),
             view ? view.Get('WhereClause') : undefined,
+        ], contextUser);
+        this.AssertSortRespectsFieldSecurityForEntity(entity, [
+            params.OrderBy,
             view ? view.Get('OrderByClause') : undefined,
         ], contextUser);
     }
@@ -3362,12 +3364,31 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * view's stored clauses, dataset item filters, user-search text spliced as SQL.
      */
     protected AssertClausesRespectFieldSecurityForEntity(entity: EntityInfo, clauses: Iterable<unknown>, user: UserInfo): void {
+        this.assertFragmentsAllowed(entity, clauses, user, (sql, context) => FieldSecuritySQLGate.FindViolation(sql, context));
+    }
+
+    /**
+     * {@link AssertClausesRespectFieldSecurityForEntity} for ORDER BY fragments, which also refuses
+     * a sort by column position for a user denied a field on `entity`
+     * ({@link FieldSecuritySQLGate.FindSortViolation}).
+     */
+    protected AssertSortRespectsFieldSecurityForEntity(entity: EntityInfo, orderBys: Iterable<unknown>, user: UserInfo): void {
+        this.assertFragmentsAllowed(entity, orderBys, user, (sql, context) => FieldSecuritySQLGate.FindSortViolation(sql, context));
+    }
+
+    /** Throws the field-security error for the first of `fragments` that `find` refuses. */
+    private assertFragmentsAllowed(
+        entity: EntityInfo,
+        fragments: Iterable<unknown>,
+        user: UserInfo,
+        find: (sql: string, context: FieldSecuritySQLContext) => FieldSecurityViolation | null,
+    ): void {
         const context: FieldSecuritySQLContext = { User: user, Dialect: this.PlatformKey, Catalog: this.Entities, TargetEntity: entity };
-        for (const clause of clauses) {
+        for (const clause of fragments) {
             if (typeof clause !== 'string' || clause.trim().length === 0) {
                 continue;
             }
-            const violation = FieldSecuritySQLGate.FindViolation(clause, context);
+            const violation = find(clause, context);
             if (violation) {
                 LogDebug(`[FieldSecurity] Rejected SQL on '${entity.Name}' for user ${user.Email}: ${violation.Kind} ${violation.Reference}`);
                 throw FieldSecuritySQLGate.ErrorForViolation(violation, entity.Name);

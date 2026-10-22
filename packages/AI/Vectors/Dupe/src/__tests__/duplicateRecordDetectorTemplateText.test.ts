@@ -229,6 +229,13 @@ describe('DuplicateRecordDetector.GenerateTemplateTexts renders what vector sync
         expect(mockRenderTemplate).not.toHaveBeenCalled();
     });
 
+    it('renders as the detection user, never as whoever configured the shared template engine', async () => {
+        await detector.render([fakeRecord(SIMPLE_ROW, true)]);
+
+        const options = mockRenderTemplate.mock.calls[0][5] as { ContextUser?: UserInfo } | undefined;
+        expect(options?.ContextUser).toEqual({ ID: 'user-1' });
+    });
+
     it('renders with validation skipped and warnings suppressed, as sync does', async () => {
         await detector.render([fakeRecord(SIMPLE_ROW, true)]);
 

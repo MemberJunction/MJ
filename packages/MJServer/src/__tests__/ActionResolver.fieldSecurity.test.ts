@@ -142,6 +142,25 @@ describe('RunEntityAction: echoed parameters are projected for the caller', () =
         expect(JSON.parse(result.ResultData!).Params[0].Value).toMatchObject({ ID: 'emp-1', Name: 'Ada' });
     });
 
+    it('REGRESSION: an entity object of an entity the caller cannot read is sent as null, not as its other fields', async () => {
+        const unreadable = EmployeeEntity();
+        unreadable.Permissions.splice(0, unreadable.Permissions.length, ...unreadable.Permissions.filter(p => p.RoleID !== INTERN_ROLE_ID));
+        const object = await fullWidthEntityObject(unreadable);
+        const params = [
+            { Name: 'One', Value: object, Type: 'Output' },
+            { Name: 'Many', Value: [object], Type: 'Output' },
+        ];
+        hoisted.runEntityAction.mockResolvedValue({ Success: true, Message: 'ok', Params: params, RunParams: { Params: params } });
+
+        const result = await new ActionResolver().RunEntityAction(input(), context(entityInfo, getEntityObject));
+
+        const sent = JSON.parse(result.ResultData!) as { Params: { Value: unknown }[]; RunParams: { Params: { Value: unknown }[] } };
+        expect(sent.Params[0].Value).toBeNull();
+        expect(sent.Params[1].Value).toEqual([null]);
+        expect(sent.RunParams.Params[0].Value).toBeNull();
+        expect(result.ResultData).not.toContain('Ada');
+    });
+
     it('leaves a parameter of unknown shape alone', async () => {
         const params = [{ Name: 'Other', Value: { Salary: 1 }, Type: 'Output' }];
         hoisted.runEntityAction.mockResolvedValue({ Success: true, Message: 'ok', Params: params });

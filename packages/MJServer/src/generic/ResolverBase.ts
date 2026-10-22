@@ -852,7 +852,8 @@ export class ResolverBase {
   protected EntityEventPayload(baseEntity: BaseEntity, changedFieldNames?: string[]): Record<string, unknown> {
     const entityInfo = baseEntity.EntityInfo;
     if (!entityInfo?.FieldLevelSecurityApplies && !RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo)) {
-      return baseEntity.GetAll(); // fls-guard: entity without field security and not the audit trail; whole row is the documented payload
+      // fls-guard: entity without field security and not the audit trail; whole row is the documented payload
+      return baseEntity.GetAll();
     }
     return {
       // Read through Get() rather than PrimaryKey, which builds every field object of a raw-mode record.
@@ -1659,7 +1660,8 @@ export class ResolverBase {
       originSessionId: userPayload?.sessionId || null,
       recordData:
         action === 'save' && MayBroadcastRecordData(entityName, entityObject.EntityInfo)
-          ? JSON.stringify(entityObject.GetAll()) // fls-guard: MayBroadcastRecordData refuses FLS entities and Record Changes
+          // fls-guard: MayBroadcastRecordData refuses FLS entities and Record Changes
+          ? JSON.stringify(entityObject.GetAll())
           : undefined,
     });
   }
@@ -2246,7 +2248,8 @@ export class ResolverBase {
 
     // clientOldValues now has all of the oldValues the CLIENT passed us. Now we need to build the same kind of object
     // with the DB values
-    const dbValues = entityObject.GetAll(); // fls-guard: compared on the server only, never returned
+    // fls-guard: compared on the server only, never returned
+    const dbValues = entityObject.GetAll();
 
     // now we need to compare clientOldValues and dbValues and have a new array that has entries for any differences and have FieldName, clientOldValue and dbValue as properties
     const dbDifferences = [];

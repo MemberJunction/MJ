@@ -305,8 +305,8 @@ under these conditions:
 
 - **The user is set before the object is filled, or the change narrows it.** Setting
   `ContextCurrentUser` on an object that already holds a record narrows it to the new user: values
-  the new user may not read become `NotLoaded` on the object, its IS-A parent and its embedded
-  records, which get the same user. Nothing is widened — a field the old user could not read stays
+  the new user may not read become `NotLoaded` on the object, its IS-A parent, its embedded
+  records and the children in its loaded related-record collections, which all get the same user. Nothing is widened — a field the old user could not read stays
   `NotLoaded` for a new user who could, because its value was never loaded. Set the user first
   wherever you can (pass it to `GetEntityObject`), so the record is loaded at the right width.
 - **The source is a plain row.** `LoadFromData`, `Hydrate` and the other entry points narrow the
@@ -340,10 +340,12 @@ What that means today:
   sender (§3.7).
 - **A2A** runs entity work as the authenticated caller, and refuses to run when no user can be
   resolved, instead of falling back to an arbitrary user. Tasks belong to their caller.
-- **Templates** render with the user of that render. Concurrent renders each see their own user,
-  and every server call site passes it. A render with no user runs its extensions (for example the
-  AI prompt extension) with no user; they never fall back to whichever caller first configured the
-  process-wide engine.
+- **Templates** render with the user of that render. Concurrent renders each see their own user.
+  The contract is on the caller: **pass the user as `ContextUser`** on every render done on a
+  user's behalf (a render nested inside another inherits the outer render's user). The engine never
+  falls back to whichever caller first configured the process-wide engine. A render with no user
+  fails fast: an extension that needs a user, such as the AI prompt extension, rejects the render
+  with an error instead of running as someone else or hanging.
 - **Engines** (`BaseEngine`) load their shared caches as the system user (§3.4). Anything taken
   from an engine cache and handed to a person is projected first; on a server, an engine that
   loads an entity with field security logs a one-time reminder of this.
@@ -353,9 +355,9 @@ What that means today:
 in-process cache that stores it must include the user in its key, or the first caller's rows are
 handed to everyone after them. `UserScopedCacheKey(userID, ...parts)` from `@memberjunction/global`
 builds that key; it returns `null` when there is no user, which means "do not cache". The agent
-data-source cache, the Entity Document placeholder cache and the IS-A subtype lookup cache all use
-it. The in-memory vector index is cached per **permission class** instead: users who agree on
-entity read, the effective row filter and the vector columns they are denied share one loaded
+data-source cache, the Entity Document placeholder cache (which also keys on a hash of the record
+values rendered) and the IS-A subtype lookup cache all use it. The in-memory vector index is
+cached per **permission class** instead: users who agree on entity read, the effective row filter and the vector columns they are denied share one loaded
 index, the cache is bounded and evicts least-recently-used, and a saved row reaches a row-filtered
 class's index only after that class re-reads it. The RunView cache has its own permission
 fingerprint (§3.4).
@@ -402,6 +404,9 @@ agents, actions), not only to client requests.
   reads: `SELECT *` and `alias.*` subqueries, `FOR JSON` / `FOR XML`, functions over `*` such as
   `CHECKSUM(*)`, `NATURAL JOIN`, and using a table as a value. Each would read the denied column
   without naming it. A caller who is denied nothing is not scanned at all.
+- **It refuses ordinal sorts** for the same callers. `OrderBy: "3"` sorts by the third column of
+  the view's `SELECT *`, which may be a denied one, so an integer `OrderBy` item is refused;
+  named sorts such as `Name DESC` are checked as usual.
 - **It refuses what it cannot read.** SQL the scanner cannot read the way the database does, or
   dynamic SQL, is refused for a caller who carries a denial on an entity it could read. So is a
   name holding a control, format or default-ignorable character (a zero-width joiner, a word
@@ -771,6 +776,18 @@ everyone. Field security handles that in two layers:
   children leave out their mirrors of a parent's restricted fields. An embedding cannot be
   projected after the fact, so this is the only way to keep a restricted value out of the vectors.
   The cost is accepted: semantic search does not match on restricted fields.
+
+  Two paths need more than the record's own fields:
+  - **Related rows** that an Entity Document template pulls in with `Relationship()` drop the same
+    index-restricted fields of the related entity, plus any field the user of the render may not
+    read. The join field is kept, since its value is the parent record's own key. This covers
+    Entity Record Document text, autotagging content and the record-process inference context
+    built from the same document. (Vector sync renders through
+    `EntityDocumentTemplateDataBuilder`, which applies the same rule to related rows.)
+  - **The Entity Document placeholder cache** is keyed on the user and on a hash of the record
+    values passed to the render, as well as the entity, record and placeholder. So a render whose
+    values had restricted fields removed never gets back a value cached by an earlier, unstripped
+    render of the same record.
 - **At read time, results are projected per reader.** Search results (`RawMetadata`, snippets
   and titles) are projected for each reader, alongside the existing entity, row-level and origin
   checks. The external vector-fetch path requires entity read access and projects metadata, and
@@ -1019,9 +1036,17 @@ restriction should know them before relying on it.
 
 - **The action-output projection is a backstop, not a guarantee.** `RunAction` output projects
   entity objects precisely, but a plain object is recognised as an entity row only when it carries
-  the entity's primary key and at least 80% of its keys are that entity's fields. Rows without
-  their primary key, rows enriched with many extra keys, JSON strings and `ActionResult.Message`
-  are not projected. An action must load as its `ContextUser` (§6), which is the real control.
+  the entity's primary key and at least 80% of its keys are that entity's fields. These are not
+  projected:
+  - rows without their primary key, and rows enriched with many extra keys;
+  - rows nested more than 6 levels deep in a parameter value;
+  - objects with a `toJSON()` method, whose serialized form is whatever that method returns;
+  - instances of classes other than `BaseEntity`. `RunAction` output drops them, but the action
+    execution log serializes their own properties;
+  - JSON strings and `ActionResult.Message`.
+
+  (`Map` and `Set` serialize to `{}`, so they carry nothing.) An action must load as its
+  `ContextUser` (§6), which is the real control.
 
 - **Memory Manager can promote a user's conversation content to a shared note.** A company- or
   global-scope agent note promoted from one user's conversation can carry what that user could read
@@ -1078,11 +1103,11 @@ rules come from §2; this is the checklist form.
 and every package under `Actions`, `Communication`, `Templates`, `SearchEngine` and
 `MessagingAdapters`. It flags `.GetAll(`, `.GetDataObject(`, `.GetDataObjectJSON(`, `.To(`,
 `JSON.stringify(<entity or rows>)`, `.Fields.map(f => f.Value)` and view results written straight
-to an HTTP response. A flagged line passes when
-it, or the line above it, carries `// fls-guard: <reason>` — for example "projected by
-ProjectEntityValuesForUser below", "loaded as the caller; width follows its user", or
-"system-user-only resolver". The scanner is a reminder, not a proof: it cannot see types, so it
-recognizes entities only by name. The scanner is
+to an HTTP response. A flagged line passes when the `//` comment directly above it carries
+`// fls-guard: <reason>` on a line of its own (the comment may run over several `//` lines). A
+marker trailing code does not count, on the flagged line or the one before it. Reasons look like "projected by ProjectEntityValuesForUser below", "loaded as the caller; width follows its
+user", or "system-user-only resolver". The scanner is a reminder, not a proof: it cannot see
+types, so it recognizes entities only by name. The scanner is
 `packages/MJGlobal/src/__tests__/FieldSecurityEgressCompliance.test.ts`.
 
 ### 6.4 Testing
@@ -1109,7 +1134,7 @@ appears in what your feature produces:
   - `IT131 - FLS Close-out Over-The-Wire (client transport)`: client-input rejection and transport
     projection over GraphQL and REST, as restricted users with their own API keys. Its REST checks
     need `MJ_REST_API_ENABLED=true` on MJAPI;
-  - `IT132 - FLS Close-out Pending Behaviour (cache segmentation, RunQuery)`: cache segmentation
+  - `IT132 - FLS Close-out (cache segmentation, RunQuery)`: cache segmentation
     and saved-query enforcement.
 - **A missing precondition is a skip, not a pass.** In an integration check, call `SkipCheck(reason)`
   from `@memberjunction/testing-integration` when a fixture is not seeded or a transport is off; it

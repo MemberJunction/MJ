@@ -221,6 +221,17 @@ export class FieldSecuritySQLGate {
     }
 
     /**
+     * The first reason the sort fragment `orderBy` must be refused for `context.User`, or null.
+     * Everything {@link FindViolation} refuses, and, for a user denied a field on
+     * `context.TargetEntity`, a sort item that is a column position (`3 DESC`). A position names a
+     * column of the select list without spelling it, and an entity-object read selects every
+     * column, so `ORDER BY 3` can sort by a denied field. It is refused as a whole-row construct.
+     */
+    public static FindSortViolation(orderBy: string | null | undefined, context: FieldSecuritySQLContext): FieldSecurityViolation | null {
+        return FieldSecuritySQLGate.FindViolation(orderBy, context) ?? FieldSecuritySQLGate.findSortByPosition(orderBy, context);
+    }
+
+    /**
      * Throws a {@link FieldSecurityError} when {@link FindViolation} refuses `sql`. The error names
      * `entityName`, the entity the caller is reading, never the entity a subquery reaches, so a
      * refusal says nothing a "no such column" error would not.
@@ -797,6 +808,35 @@ export class FieldSecuritySQLGate {
         }
         const bound = analysis.Bindings.get(FoldIdentifier(qualifier.Text));
         return bound ? analysis.Denied.filter((d) => bound.has(d.Entity)) : analysis.Denied;
+    }
+
+    /**
+     * A sort item of `orderBy` that is a column position, as a whole-row violation, or null. Only
+     * for a user denied a field on the target entity. An item counts when its first token, inside
+     * any opening parentheses, is a number.
+     */
+    private static findSortByPosition(orderBy: string | null | undefined, context: FieldSecuritySQLContext): FieldSecurityViolation | null {
+        const target = context?.TargetEntity;
+        if (typeof orderBy !== 'string' || !context.User || !target || !FieldSecuritySQLGate.UserCarriesDenials([target], context.User)) {
+            return null;
+        }
+        const scan = ScanSQLForScreening(orderBy, context.Dialect);
+        let depth = 0;
+        let itemStart = true;
+        for (const token of scan.Tokens) {
+            if (itemStart && token.Kind === 'number') {
+                return { Kind: 'WholeRow', Reference: `ORDER BY ${token.Text}`, Entity: target };
+            }
+            if (FieldSecuritySQLGate.isSymbol(token, '(')) {
+                depth++;
+                continue;
+            }
+            if (FieldSecuritySQLGate.isSymbol(token, ')')) {
+                depth--;
+            }
+            itemStart = depth === 0 && FieldSecuritySQLGate.isSymbol(token, ',');
+        }
+        return null;
     }
 
     /** The first whole-row construct, or null. */

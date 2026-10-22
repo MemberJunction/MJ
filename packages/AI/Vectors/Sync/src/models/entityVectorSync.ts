@@ -393,7 +393,9 @@ export class EntityVectorSyncer extends VectorBase {
       // No pre-validation — entity records commonly have null fields (e.g. Bio, State)
       // and the Nunjucks templates handle missing data gracefully via {% if Field %} conditionals.
       // Pass SuppressWarnings=true since entity doc vectorization doesn't need warnings for missing fields.
-      const result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(template, templateContent, entityData, true, true);
+      const result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(
+        template, templateContent, entityData, true, true, { ContextUser: this.CurrentUser }
+      );
       if (result.Success) {
         validEntries.push({ text: result.Output, record: entityData });
       } else {

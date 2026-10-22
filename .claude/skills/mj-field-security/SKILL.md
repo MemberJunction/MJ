@@ -149,7 +149,7 @@ A test only counts once you have **seen it fail** against the code without your 
    - `IT130 - FLS Close-out (server)` (CO14–CO16 are mutation tier)
    - `IT131 - FLS Close-out Over-The-Wire (client transport)`; its REST checks need
      `MJ_REST_API_ENABLED=true` on MJAPI
-   - `IT132 - FLS Close-out Pending Behaviour (cache segmentation, RunQuery)`
+   - `IT132 - FLS Close-out (cache segmentation, RunQuery)`
 
    ```bash
    pnpm mj test run "IT131 - FLS Close-out Over-The-Wire (client transport)"

@@ -306,6 +306,48 @@ describe('transaction groups: two guarded writes that concern the system user ar
     it('permits one guarded write about the system user in a group, checked like a save on its own', async () => {
         expect(await newAssignment('ur-r', SYSTEM_USER_ID, ROLE_R, {}).Save()).toBe(true);
     });
+
+    it('REGRESSION: a guarded save refused for another reason does not count against a retry in the same group', async () => {
+        db.rules.push(rule('r-r', ROLE_R, DENY_READ));
+        const group = {};
+        const assign = newAssignment('ur-r', SYSTEM_USER_ID, ROLE_R, group);
+        expect(await assign.Save()).toBe(false);
+        expect(refusal(assign)).toContain('cannot be assigned to the MJ system user');
+
+        assign.RoleID = ROLE_B;
+        expect(await assign.Save()).toBe(true);
+    });
+
+    it('REGRESSION: a refused guarded delete does not count against a later guarded write in the same group', async () => {
+        const group = {};
+        db.rules = [rule('r-a', ROLE_A, ALLOW_READ), rule('r-b', ROLE_B, NEUTRAL)];
+        const removal = storedAssignment('ur-a', group);
+        expect(await removal.Delete()).toBe(false);
+        expect(refusal(removal)).toContain('Employees.Salary');
+
+        expect(await newAssignment('ur-r', SYSTEM_USER_ID, ROLE_R, group).Save()).toBe(true);
+    });
+
+    it('REGRESSION: a save the base class refuses at validation does not count against its retry', async () => {
+        const group = {};
+        const assign = newAssignment('ur-r', SYSTEM_USER_ID, ROLE_R, group);
+        const failing = { Success: false, Errors: [{ Message: 'RoleID is required' }] };
+        const validate = vi.spyOn(assign, 'Validate').mockReturnValueOnce(failing as ReturnType<RoleRow['Validate']>);
+        expect(await assign.Save()).toBe(false);
+        validate.mockRestore();
+
+        expect(await assign.Save()).toBe(true);
+    });
+
+    it('still refuses a second enrolled guarded write after a refused one', async () => {
+        db.rules.push(rule('r-r', ROLE_R, DENY_READ));
+        const group = {};
+        expect(await newAssignment('ur-x', SYSTEM_USER_ID, ROLE_R, group).Save()).toBe(false);
+        expect(await newAssignment('ur-y', SYSTEM_USER_ID, ROLE_B, group).Save()).toBe(true);
+        const third = newRule('r-new', ROLE_B, DENY_READ, group);
+        expect(await third.Save()).toBe(false);
+        expect(refusal(third)).toContain('one at a time');
+    });
 });
 
 describe('the removal guard and the replay path', () => {

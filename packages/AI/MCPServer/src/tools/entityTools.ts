@@ -93,7 +93,7 @@ function clientClauseRefusal(md: Metadata, extraFilter: string | undefined, orde
  */
 export function AddEntityCreateTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
     const schemas = new EntityToolSchemaCache(
-        (omitted) => z.object(getEntityParamObject(entity, true, false, false, omitted)),
+        (omitted) => writeInputSchema(getEntityParamObject(entity, true, false, false, omitted)),
         (user) => deniedFieldsUnion(entity, user, (u) => entity.GetDeniedCreateFields(u)),
     );
 
@@ -132,7 +132,7 @@ export function AddEntityCreateTool(addToolWithFilter: AddToolFn, entity: Entity
  */
 export function AddEntityUpdateTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
     const schemas = new EntityToolSchemaCache(
-        (omitted) => z.object(getEntityParamObject(entity, true, true, true, omitted)),
+        (omitted) => writeInputSchema(getEntityParamObject(entity, true, true, true, omitted)),
         (user) => deniedFieldsUnion(entity, user, (u) => entity.GetDeniedUpdateFields(u)),
     );
 
@@ -245,6 +245,16 @@ async function convertEntityObjectToJSON(record: BaseEntity, user: UserInfo, md:
         relatedEntityList: [],
     });
     return JSON.stringify(ProjectEntityValuesForUser(md, record.EntityInfo, values, user));
+}
+
+/**
+ * The input schema of a Create or Update tool. It keeps keys it does not list rather than
+ * stripping them, so a key naming a field the caller is denied (left out of that caller's schema)
+ * or no field at all reaches {@link clientInputRefusal} and is refused, instead of being dropped
+ * silently before the tool runs.
+ */
+function writeInputSchema(shape: Record<string, z.ZodTypeAny>): z.ZodObject<z.ZodRawShape> {
+    return z.object(shape).passthrough();
 }
 
 /**

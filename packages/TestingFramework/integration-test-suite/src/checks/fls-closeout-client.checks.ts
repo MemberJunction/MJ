@@ -31,7 +31,7 @@
  * client library (which never sends a denied key), because that is the input the gate exists for.
  *
  * REST is optional on MJAPI (`MJ_REST_API_ENABLED=true` / `restApiOptions.enabled`); CW7 and CW8 skip
- * loudly when the endpoint does not answer. Set `MJAPI_REST_URL` when REST is not at
+ * loudly, without waiting, when REST is not enabled. Set `MJAPI_REST_URL` when REST is not at
  * `<MJAPI origin><MJAPI_BASE_PATH>/api/v1`.
  *
  * Teardown restores the Title rule, deletes the rows the checks created and the extra keys, then
@@ -247,7 +247,7 @@ function restBaseUrl(): string {
 }
 
 /** One REST call as the holder of `rawKey`; the body is parsed JSON when there is one. */
-async function rest(rawKey: string, method: 'GET' | 'POST' | 'PUT', path: string, body?: Record<string, unknown>): Promise<{ Status: number; Body: Record<string, unknown> }> {
+async function rest(rawKey: string, method: 'GET' | 'POST' | 'PUT', path: string, body?: Record<string, unknown>): Promise<{ Status: number; Body: Record<string, unknown>; Headers: Headers }> {
     const response = await fetch(`${state.RestBase ?? restBaseUrl()}${path}`, {
         method,
         headers: { 'Content-Type': 'application/json', 'x-api-key': rawKey },
@@ -260,7 +260,29 @@ async function rest(rawKey: string, method: 'GET' | 'POST' | 'PUT', path: string
     } catch {
         parsed = { error: text };
     }
-    return { Status: response.status, Body: parsed };
+    return { Status: response.status, Body: parsed, Headers: response.headers };
+}
+
+/** What one REST probe says: REST answered, REST is not mounted, or the key is not honoured yet. */
+export type RestProbeVerdict = 'ready' | 'not-enabled' | 'retry';
+
+/** A header MJAPI sets only on responses from its GraphQL route. */
+const GRAPHQL_RESPONSE_HEADER = 'x-mj-server-id';
+
+/**
+ * Classifies one REST probe response. REST is not enabled when nothing answers the path (404) or
+ * when the GraphQL route answered it: with GraphQL at the root path, a REST URL that nothing
+ * mounted falls through to Apollo, which refuses it with a 400. Any other refusal comes from REST
+ * itself, which may not honour a freshly minted key yet, so it is retried.
+ */
+export function ClassifyRestProbe(status: number, headers: Headers): RestProbeVerdict {
+    if (status === 200) {
+        return 'ready';
+    }
+    if (status === 404 || headers.has(GRAPHQL_RESPONSE_HEADER)) {
+        return 'not-enabled';
+    }
+    return 'retry';
 }
 
 /** Waits (bounded) until REST honours the minted reader key; records why REST is unavailable otherwise. */
@@ -270,12 +292,13 @@ async function probeRest(): Promise<void> {
     for (;;) {
         try {
             const probe = await rest(state.ReaderRawKey!, 'GET', '/users/current');
-            if (probe.Status === 200) {
+            const verdict = ClassifyRestProbe(probe.Status, probe.Headers);
+            if (verdict === 'ready') {
                 state.RestBase = restBaseUrl();
                 return;
             }
-            if (probe.Status === 404) {
-                state.RestSkipReason = `REST is not enabled on MJAPI (${restBaseUrl()} answered 404); set MJ_REST_API_ENABLED=true`;
+            if (verdict === 'not-enabled') {
+                state.RestSkipReason = `REST is not enabled on MJAPI (${restBaseUrl()} answered HTTP ${probe.Status}${probe.Status === 404 ? '' : ' from the GraphQL endpoint'}); set MJ_REST_API_ENABLED=true`;
                 return;
             }
             last = `HTTP ${probe.Status}`;

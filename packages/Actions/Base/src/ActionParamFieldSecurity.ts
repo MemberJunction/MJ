@@ -36,6 +36,17 @@ import { ActionParam } from "./ActionEngine-Base";
  * Only keys are ever REMOVED; no other value is rewritten. A user denied nothing
  * on any entity with field security skips the row matching entirely, and a
  * value with nothing to change is returned by reference.
+ *
+ * Shapes this does NOT project, so an action handing them back must load its
+ * data as its context user instead:
+ * - plain rows without their entity's primary key, or with too many extra keys;
+ * - values nested deeper than {@link ACTION_PARAM_PROJECTION_MAX_DEPTH};
+ * - objects with a `toJSON()` method, which serialize as whatever it returns;
+ * - instances of classes other than `BaseEntity`, returned untouched (a
+ *   `CopyScalarsAndArrays` destination drops them; `JSON.stringify` writes
+ *   their own properties);
+ * - JSON strings, and text such as `ActionResult.Message`.
+ * `Map` and `Set` serialize to `{}`, so they carry no values either way.
  */
 
 /**
