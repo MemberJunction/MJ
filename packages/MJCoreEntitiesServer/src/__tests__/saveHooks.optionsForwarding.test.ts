@@ -27,6 +27,8 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     class StubDuplicateRunEntity {
         public ID = 'run-1';
         public EndedAt = new Date(); // Avoid triggering async detection pass
+        public IsSaved = true; // A saved run that names its document: no default-document lookup
+        public EntityDocumentID = 'doc-1';
         public async Save(options?: EntitySaveOptions): Promise<boolean> {
             return duplicateRunSuperSave(options);
         }
