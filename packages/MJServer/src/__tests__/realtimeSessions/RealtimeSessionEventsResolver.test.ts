@@ -27,7 +27,12 @@ function contextFor(user: Partial<UserInfo> & { ID: string }): RealtimeSessionEv
 
 const named = (id: string) => contextFor({ ID: id });
 const guest = (id: string, scope?: string) =>
-    contextFor({ ID: id, IsMagicLinkAnonymous: true, MagicLinkScope: scope ? { ResourceID: scope } : undefined } as Partial<UserInfo> & { ID: string });
+    contextFor({
+        ID: id,
+        IsMagicLinkAnonymous: true,
+        AnonymousVisitorID: scope,
+        MagicLinkScope: scope ? { ResourceID: scope } : undefined,
+    } as Partial<UserInfo> & { ID: string });
 
 function event(over: Partial<RealtimeSessionEventTopicPayload> = {}): RealtimeSessionEventTopicPayload {
     return {

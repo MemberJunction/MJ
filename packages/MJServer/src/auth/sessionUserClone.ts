@@ -44,6 +44,7 @@ export function CloneUserForSessionContext(user: UserInfo): UserInfo {
   clone.ReturningVisitorContext = user.ReturningVisitorContext;
   clone.WidgetGuestContext = user.WidgetGuestContext;
   clone.IsMagicLinkAnonymous = user.IsMagicLinkAnonymous;
+  clone.AnonymousVisitorID = user.AnonymousVisitorID;
   clone.APIKeyActingContext = user.APIKeyActingContext;
   clone.APIKeyRowFilters = user.APIKeyRowFilters;
   return clone;

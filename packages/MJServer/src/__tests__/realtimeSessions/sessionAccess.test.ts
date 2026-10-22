@@ -27,22 +27,27 @@ describe('AuthorizeSessionAccess', () => {
         expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: null }, { ID: '' })).toEqual({ Allowed: false, Reason: 'not_owner' });
     });
 
-    describe('anonymous widget guests (one shared Anonymous user)', () => {
-        const guest = (scope?: string) => ({ ID: OWNER, IsMagicLinkAnonymous: true, MagicLinkScope: scope ? { ResourceID: scope } : undefined });
+    describe('anonymous visitors (one shared Anonymous user, per-visitor AnonymousVisitorID)', () => {
+        const guest = (visitorId?: string, resourceScope?: string) => ({
+            ID: OWNER,
+            IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: visitorId,
+            MagicLinkScope: resourceScope ? { ResourceID: resourceScope } : visitorId ? { ResourceID: visitorId } : undefined,
+        });
 
-        it('allows a guest whose signed scope matches the conversation ExternalID', () => {
+        it('allows a visitor whose AnonymousVisitorID matches the conversation ExternalID', () => {
             expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest('scope-1'))).toEqual({ Allowed: true });
         });
 
-        it('refuses a different guest (same Anonymous user id, different scope) — the cross-guest leak', () => {
-            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest('scope-2'))).toEqual({
+        it('refuses a different visitor (same Anonymous user id, different AnonymousVisitorID) — the cross-guest leak', () => {
+            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest('scope-2', 'scope-1'))).toEqual({
                 Allowed: false,
                 Reason: 'scope_mismatch',
             });
         });
 
-        it('refuses an anonymous principal with no scope at all', () => {
-            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest())).toEqual({
+        it('refuses an anonymous principal with no AnonymousVisitorID at all (even when MagicLinkScope.ResourceID is present)', () => {
+            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest(undefined, 'scope-1'))).toEqual({
                 Allowed: false,
                 Reason: 'scope_missing',
             });

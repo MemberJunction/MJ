@@ -47,8 +47,10 @@ export interface SessionAccessSubject {
 export interface SessionAccessPrincipal {
     /** The caller's user id. */
     ID: string;
-    /** True for the shared-Anonymous-user principal of a public-widget guest. */
+    /** True for the shared-Anonymous-user principal of a public-widget guest or anonymous magic-link invitee. */
     IsMagicLinkAnonymous?: boolean;
+    /** Per-visitor session identity (`mj_sid`) for an anonymous principal. */
+    AnonymousVisitorID?: string;
     /** The signed per-session scope carried by the caller's token, when any. */
     MagicLinkScope?: { ResourceID?: string } | undefined;
 }
@@ -74,11 +76,18 @@ export function AuthorizeSessionAccess(
     if (!principal?.ID || !subject.SessionUserID || !UUIDsEqual(subject.SessionUserID, principal.ID)) {
         return { Allowed: false, Reason: 'not_owner' };
     }
+    if (principal.IsMagicLinkAnonymous) {
+        const visitorId = principal.AnonymousVisitorID;
+        if (!visitorId) {
+            return { Allowed: false, Reason: 'scope_missing' };
+        }
+        return subject.ConversationExternalID === visitorId
+            ? { Allowed: true }
+            : { Allowed: false, Reason: 'scope_mismatch' };
+    }
     const scopeId = principal.MagicLinkScope?.ResourceID;
     if (!scopeId) {
-        // An anonymous principal without a per-session scope is indistinguishable from every other
-        // anonymous principal: owning "the Anonymous user's" session proves nothing.
-        return principal.IsMagicLinkAnonymous ? { Allowed: false, Reason: 'scope_missing' } : { Allowed: true };
+        return { Allowed: true };
     }
     // Scope ids are opaque base64url strings (case-significant), so compare exactly — not UUIDsEqual.
     return subject.ConversationExternalID === scopeId ? { Allowed: true } : { Allowed: false, Reason: 'scope_mismatch' };

@@ -186,6 +186,61 @@ describe('SessionManager.CreateSession', () => {
         expect(result.HostInstanceID).toBeTypeOf('string');
     });
 
+    it('stamps conversation ExternalID with AnonymousVisitorID for an anonymous principal', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const conversation = makeSessionEntity({ ID: 'conv-anon' });
+        const session = makeSessionEntity({ ID: 'session-anon' });
+        const { provider } = makeProvider((name) =>
+            name === 'MJ: Conversations' ? conversation : session,
+        );
+        const mgr = new SessionManager();
+        const anonUser = {
+            ID: 'user-anon',
+            Email: 'anonymous@magic-link.local',
+            IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: 'visitor-sid-1',
+            MagicLinkScope: { ResourceID: 'shared-invite-resource' },
+        } as unknown as UserInfo;
+
+        await mgr.CreateSession({ agentID: 'agent-1', userID: 'user-anon' }, anonUser, provider);
+
+        expect(conversation.ExternalID).toBe('visitor-sid-1');
+    });
+
+    it('stamps conversation ExternalID with MagicLinkScope.ResourceID for a non-anonymous scoped principal', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const conversation = makeSessionEntity({ ID: 'conv-scoped' });
+        const session = makeSessionEntity({ ID: 'session-scoped' });
+        const { provider } = makeProvider((name) =>
+            name === 'MJ: Conversations' ? conversation : session,
+        );
+        const mgr = new SessionManager();
+        const scopedUser = {
+            ID: 'user-scoped',
+            Email: 'scoped@example.com',
+            IsMagicLinkAnonymous: false,
+            MagicLinkScope: { ResourceID: 'resource-scoped-1' },
+        } as unknown as UserInfo;
+
+        await mgr.CreateSession({ agentID: 'agent-1', userID: 'user-scoped' }, scopedUser, provider);
+
+        expect(conversation.ExternalID).toBe('resource-scoped-1');
+    });
+
+    it('does not set conversation ExternalID for a named principal without scope', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        const conversation = makeSessionEntity({ ID: 'conv-named' });
+        const session = makeSessionEntity({ ID: 'session-named' });
+        const { provider } = makeProvider((name) =>
+            name === 'MJ: Conversations' ? conversation : session,
+        );
+        const mgr = new SessionManager();
+
+        await mgr.CreateSession({ agentID: 'agent-1', userID: 'user-1' }, makeUser(), provider);
+
+        expect(conversation.ExternalID).toBeUndefined();
+    });
+
     it('reuses a supplied conversation without creating a new one', async () => {
         hasPermissionMock.mockResolvedValue(true);
         const session = makeSessionEntity({ ID: 'session-x' });

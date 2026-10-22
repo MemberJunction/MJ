@@ -264,6 +264,7 @@ describe('realtime recording REST routes', () => {
                 const user = {
                     ID: id,
                     IsMagicLinkAnonymous: req.header('x-test-anonymous') === 'true',
+                    AnonymousVisitorID: scope ?? undefined,
                     MagicLinkScope: scope ? { ResourceID: scope } : undefined,
                 };
                 return id ? { ContextUser: user as unknown as UserInfo, Provider: {} as unknown as DatabaseProviderBase } : null;

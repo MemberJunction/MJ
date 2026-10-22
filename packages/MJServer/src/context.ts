@@ -204,12 +204,17 @@ async function auditLoginFailure(
 // userRecord may be a SHARED cached instance (e.g. multiple recruiters on one per-company
 // link) — mutating it would leak one session's scope to another. Non-magic-link sessions,
 // and named sessions with no resource scope, are returned untouched.
-function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload): UserInfo {
+export function BuildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload): UserInfo {
   if (payload['mj_magic_link'] !== true) {
     return userRecord;
   }
   const md = Metadata.Provider; // global-provider-ok: server-side magic-link session built under the server's single default provider
   const isAnon = payload['mj_anon'] === true;
+  const rawSid = payload['mj_sid'];
+  const mjSid = typeof rawSid === 'string' ? rawSid.trim() : '';
+  if (isAnon && !mjSid) {
+    throw new AuthenticationError('Anonymous magic-link session token is missing required mj_sid claim');
+  }
   const scopes = payload['mj_scopes'];
 
   // Per-session resource scope (single-resource share; multi-resource union is a follow-on).
@@ -279,8 +284,14 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
     // Mark the session so the CurrentUser field resolver serves these synthesized roles
     // (the shared Anonymous principal holds none in the DB). See UserInfo.IsMagicLinkAnonymous.
     sessionUser.IsMagicLinkAnonymous = true;
+    sessionUser.AnonymousVisitorID = mjSid;
   }
   return sessionUser;
+}
+
+/** @deprecated Use {@link BuildMagicLinkSessionUser}. */
+export function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload): UserInfo {
+  return BuildMagicLinkSessionUser(userRecord, payload);
 }
 
 /**
@@ -544,7 +555,7 @@ export const GetUserPayload = async (
     // Anonymous principal with an in-memory UserInfo carrying the claimed role(s), so
     // the session enforces exactly the link's granted scope (no DB accretion). No-op
     // for everything else.
-    const sessionUser = buildMagicLinkSessionUser(userRecord, payload);
+    const sessionUser = BuildMagicLinkSessionUser(userRecord, payload);
 
     // Session-established audit — once per issued token (deduped), fire-and-forget so
     // it never adds latency to the request. The dedup mark is set synchronously here.
