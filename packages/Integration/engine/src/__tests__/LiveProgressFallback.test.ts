@@ -52,8 +52,12 @@ describe('GetSyncProgressAsync', () => {
 
   it('falls back when the row exists but carries no ProgressJSON column', () => {
     // the 5.51 case: the row is there, the field is not, RunView returns it as undefined
-    expect(methodBody('public static async GetSyncProgressAsync'))
-      .toMatch(/if \(!row\.ProgressJSON\) return IntegrationEngine\.liveProgress\.get/);
+    const body = methodBody('public static async GetSyncProgressAsync');
+    const branch = body.slice(body.indexOf('if (!row.ProgressJSON)'));
+    expect(branch).toMatch(/IntegrationEngine\.liveProgress\.get/);
+    // The row is readable even when the column is not, so the run's identity IS known here —
+    // a caller that wants to tail it should not have to re-query and race the run ending.
+    expect(branch).toMatch(/RunID: local\.RunID \?\? row\.ID/);
   });
 
   it('still prefers the durable row, so 6.1.x multi-process tenants stay correct', () => {
