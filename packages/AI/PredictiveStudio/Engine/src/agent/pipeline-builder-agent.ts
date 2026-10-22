@@ -153,7 +153,7 @@ export function GenerateMarkdownReport(
   goal: string,
   targetVar: string,
   targetMetric: string,
-  score: number,
+  score: number | null,
   trustGrade: string,
   oneLiner: string,
   published: boolean,
@@ -185,7 +185,7 @@ ${oneLiner}
 
 ## Winning Model Performance
 - **Target Variable**: \`${targetVar}\`
-- **Primary Metric**: **${targetMetric}** = **${score.toFixed(3)}**
+- **Primary Metric**: **${targetMetric}** = **${score != null ? score.toFixed(3) : 'not measured'}**
 - **Trust Grade**: **${trustGrade}** (${published ? 'Published to Catalog' : 'Held for Review'})
 ${leaderboardSection}
 ## Features the model weighted most (associations, not causes)
@@ -203,7 +203,7 @@ export function generateMarkdownReport(
   goal: string,
   targetVar: string,
   targetMetric: string,
-  score: number,
+  score: number | null,
   trustGrade: string,
   oneLiner: string,
   published: boolean,
@@ -254,7 +254,8 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       const name = payload.Name || `${targetVar} Prediction`;
       const isReg = payload.TargetDefinition?.ProblemType === 'regression';
       const targetMetric = payload.TargetDefinition?.SuccessMetric ?? (isReg ? 'R²' : 'AUC');
-      const scoreVal = result.trust?.headlineMetric?.value ?? 0.85;
+      // No measured headline means no number: never stand in a made-up score for an unmeasured model.
+      const scoreVal = result.trust?.headlineMetric?.value ?? null;
 
       const winnerAlgorithm = (result.leaderboard || []).find((r) => r.isWinner)?.algorithm || payload.ProposedExperiments?.[0]?.AlgorithmName || null;
       const rawFeatures = ParseFeatureImportance(result.model?.FeatureImportance).sort((a, b) => b.importance - a.importance);
@@ -265,7 +266,9 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       const leaderboard: MLLeaderboardEntryPayload[] =
         result.leaderboard && result.leaderboard.length > 0
           ? result.leaderboard
-          : [
+          : scoreVal == null
+            ? []
+            : [
               {
                 IterationID: result.modelId ?? 'iteration-1',
                 Metric: scoreVal,
@@ -288,7 +291,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
         targetVar,
         targetMetric,
         scoreVal,
-        result.trust?.grade ?? 'Good',
+        result.trust?.grade ?? 'Not measured',
         summaryText,
         result.published,
         featureBars,

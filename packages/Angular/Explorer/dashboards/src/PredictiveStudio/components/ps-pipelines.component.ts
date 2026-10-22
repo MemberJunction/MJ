@@ -744,9 +744,8 @@ const PS_PIPELINES_STARTER_PROMPT =
                   <div class="ps-card">
                     <div class="ps-card-head"><i class="fa-solid fa-clock-rotate-left" style="color:var(--mj-brand-primary)"></i><h3>As-of strategy</h3></div>
                     <div class="ps-card-body">
-                      <div class="ps-field"><label>Mode</label><select class="mj-input" [value]="editAsOf.Mode" (change)="setAsOfMode(inputVal($event))"><option value="none">none</option><option value="column">column</option><option value="offset">offset</option></select></div>
-                      @if (editAsOf.Mode === 'column') { <div class="ps-field"><label>Decision-date column</label><input class="mj-input" type="text" [value]="editAsOf.Column || ''" (input)="setAsOfColumn(inputVal($event))" /></div> }
-                      @if (editAsOf.Mode === 'offset') { <div class="ps-field"><label>Offset days before label</label><input class="mj-input" type="number" [value]="editAsOf.OffsetDays ?? 0" (input)="setAsOfOffset(inputVal($event))" /></div> }
+                      <div class="ps-field"><label>Mode</label><select class="mj-input" [value]="editAsOf.Mode" (change)="setAsOfMode(inputVal($event))"><option value="none">none</option>@if (editAsOf.Mode !== 'none') { <option [value]="editAsOf.Mode">{{ editAsOf.Mode }} (refused at training)</option> }</select></div>
+                      @if (editAsOf.Mode !== 'none') { <p class="ps-muted">Training refuses this setting: it reads every feature as it stands today, so a cutoff has no effect. Set Mode to none to train this pipeline.</p> }
                     </div>
                   </div>
 

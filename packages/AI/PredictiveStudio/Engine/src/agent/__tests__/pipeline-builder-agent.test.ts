@@ -181,6 +181,15 @@ describe('resolveEntity', () => {
   });
 });
 
+describe('GenerateMarkdownReport — unmeasured model', () => {
+  it('says the metric was not measured instead of printing a number', () => {
+    const md = GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', null, 'Not measured', 'Not measured.', false, [], []);
+    expect(md).toContain('**AUC** = **not measured**');
+    expect(md).not.toMatch(/0\.850/);
+    expect(md).toContain('**Not measured**');
+  });
+});
+
 describe('GenerateMarkdownReport — copy (W1 → S9.3)', () => {
   const report = (features: Array<{ feature: string; importance: number }>, importanceHidden = true) =>
     GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', 0.72, 'Good', 'Right about 8 out of 10 times.', true, features, [], importanceHidden);

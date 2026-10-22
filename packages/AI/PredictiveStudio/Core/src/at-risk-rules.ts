@@ -358,7 +358,7 @@ export class AtRiskRules {
 
   /**
    * Turn a raw feature/column name into a readable label — `RetentionOverdueInvoices` → `Retention Overdue
-   * Invoices`, `overdue_invoices` → `Overdue Invoices`, and a one-hot `MembershipType=Student` →
+   * Invoices`, `overdue_invoices` → `Overdue invoices`, and a one-hot `MembershipType=Student` →
    * `Membership Type = Student`. Splits camelCase + snake/kebab, spaces one-hot `=`, collapses whitespace,
    * and capitalizes the first letter. Already-spaced labels pass through unchanged.
    */

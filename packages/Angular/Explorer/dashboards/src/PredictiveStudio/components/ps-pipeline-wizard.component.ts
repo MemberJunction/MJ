@@ -147,35 +147,10 @@ export type WizardStep = 'goal' | 'features' | 'preprocessing' | 'algorithm';
                   <h4>Point-in-Time Cutoff (Temporal Leakage Guard)</h4>
                 </div>
                 <div class="ps-card-body">
-                  <div class="ps-grid-2">
-                    <div class="ps-field">
-                      <label>Cutoff Mode</label>
-                      <select class="mj-input" [(ngModel)]="asOfMode">
-                        <option value="none">None (Static Cross-Sectional Data)</option>
-                        <option value="column">Date Column on Entity</option>
-                        <option value="offset">Relative Days Offset before Event</option>
-                      </select>
-                    </div>
-
-                    @if (asOfMode === 'column') {
-                      <div class="ps-field">
-                        <label>Decision Date Field</label>
-                        <select class="mj-input" [(ngModel)]="asOfColumn">
-                          <option [value]="''">-- Select Date Field --</option>
-                          @for (f of dateFields; track f.Name) {
-                            <option [value]="f.Name">{{ f.Name }}</option>
-                          }
-                        </select>
-                      </div>
-                    }
-
-                    @if (asOfMode === 'offset') {
-                      <div class="ps-field">
-                        <label>Offset Days before Outcome</label>
-                        <input class="mj-input" type="number" min="1" [(ngModel)]="asOfOffsetDays" />
-                      </div>
-                    }
-                  </div>
+                  <p class="ps-muted">
+                    Not available yet. Training reads every feature as it stands today, so a cutoff date would have no
+                    effect, and a pipeline that sets one is refused at training. This pipeline is built without a cutoff.
+                  </p>
                 </div>
               </div>
             </div>

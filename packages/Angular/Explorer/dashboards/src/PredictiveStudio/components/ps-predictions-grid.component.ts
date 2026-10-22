@@ -20,7 +20,7 @@ import {
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CompositeKey, LogError, RunView, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { MJProcessRunDetailEntity, MJMLModelEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AgGridModule } from 'ag-grid-angular';
 import {
@@ -131,6 +131,9 @@ interface TrendlinePlotPoint {
  *   - Slide-in detail drawer (`mj-slide-panel`) with local explainability and historical trendlines across runs.
  *   - Segmented view toggle (`mj-view-toggle`) between Grid View and Chart View (10-decile histogram + risk tiers).
  */
+/** The columns of a scored Process Run Detail the grid reads (a read-only `simple` load). */
+type PredictionDetailRow = Pick<MJProcessRunDetailEntity, 'RecordID' | 'ResultPayload' | 'Status' | 'CompletedAt' | '__mj_CreatedAt'>;
+
 @Component({
   standalone: true,
   selector: 'ps-predictions-grid',
@@ -750,14 +753,15 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       // 2. Resolve target entity
       await this.resolveTargetEntity(model);
 
-      // 3. Load full process run details (removing 50/200 cap)
-      const detailsRes = await RunView.FromMetadataProvider(provider).RunView<MJProcessRunDetailEntity>(
+      // 3. Load every process run detail (no row cap), read-only and only the columns the grid uses
+      const detailsRes = await RunView.FromMetadataProvider(provider).RunView<PredictionDetailRow>(
         {
           EntityName: 'MJ: Process Run Details',
-          ExtraFilter: `ProcessRunID = '${effectiveRunId.replace(/'/g, "''")}'`,
+          ExtraFilter: `ProcessRunID = '${EscapeSQLString(effectiveRunId)}'`,
           OrderBy: '__mj_CreatedAt ASC',
+          Fields: ['RecordID', 'ResultPayload', 'Status', 'CompletedAt', '__mj_CreatedAt'],
           IgnoreMaxRows: true,
-          ResultType: 'entity_object',
+          ResultType: 'simple',
         },
         user,
       );
@@ -794,7 +798,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       );
 
       // Map details into indexed lookup for scoredAt timestamp
-      const detailByRecord = new Map<string, MJProcessRunDetailEntity>();
+      const detailByRecord = new Map<string, PredictionDetailRow>();
       for (const d of detailsRes.Results) {
         detailByRecord.set(NormalizeUUID(d.RecordID), d);
       }
