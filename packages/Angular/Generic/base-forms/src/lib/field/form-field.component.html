@@ -32,7 +32,7 @@
                      (click)="OnRecordLinkClick($event)"
                      (mouseenter)="OnFKLinkMouseEnter($event)"
                      (mouseleave)="OnFKLinkMouseLeave()"
-                     [title]="'Open ' + (EffectiveRelatedEntityName || 'related') + ' record: ' + (FKDisplayName || FormatValue())">
+                     [attr.aria-label]="'Open ' + (EffectiveRelatedEntityName || 'related') + ' record: ' + (FKDisplayName || FormatValue())">
                     @if (EffectiveRelatedEntityIcon) {
                       <i [class]="EffectiveRelatedEntityIcon + ' mj-forms-poly-entity-icon'"></i>
                     }
@@ -43,7 +43,17 @@
                   <span>{{ FKDisplayName || FormatValue() }}</span>
                 }
                 @if (ShowPolymorphicRawIDBadge) {
-                  <span class="mj-forms-poly-id-badge" [title]="'Record ID: ' + FormatValue()">{{ CompactPolymorphicRawID }}</span>
+                  <button
+                    type="button"
+                    class="mj-forms-copy-id-btn"
+                    [class.is-copied]="CopiedRawID"
+                    (click)="OnCopyRawID($event)"
+                    aria-label="Copy Record ID">
+                    <i [class]="CopiedRawID ? 'fa-solid fa-check' : 'fa-regular fa-copy'" aria-hidden="true"></i>
+                    @if (CopiedRawID) {
+                      <span class="mj-forms-copy-id-btn__feedback">Copied ID</span>
+                    }
+                  </button>
                 }
               </span>
             } @else {
@@ -52,7 +62,7 @@
                    (click)="OnRecordLinkClick($event)"
                    (mouseenter)="OnFKLinkMouseEnter($event)"
                    (mouseleave)="OnFKLinkMouseLeave()"
-                   title="View related record">
+                   [attr.aria-label]="'Open ' + (EffectiveRelatedEntityName || 'related') + ' record: ' + FKDisplayName">
                   {{ FKDisplayName }}
                 </a>
               } @else {

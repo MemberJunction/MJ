@@ -1082,9 +1082,12 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     return targetEntity?.Icon || null;
   }
 
-  /** Whether to show the subtle secondary raw-ID badge beside a resolved polymorphic FK link. */
+  public CopiedRawID = false;
+  private copyRawIDTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Whether to show the subtle copy-ID button beside a resolved FK / polymorphic FK link. */
   get ShowPolymorphicRawIDBadge(): boolean {
-    if (!this.IsPolymorphicFK) return false;
+    if (!this.HasRelatedEntity) return false;
     const displayName = this.FKDisplayName;
     const rawVal = this.FormatValue().trim();
     return !!displayName && !!rawVal && displayName !== rawVal;
@@ -1095,6 +1098,30 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const rawVal = this.FormatValue().trim();
     if (rawVal.length <= 16) return rawVal;
     return `${rawVal.slice(0, 6)}…${rawVal.slice(-6)}`;
+  }
+
+  public OnCopyRawID(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const rawVal = this.FormatValue().trim();
+    if (!rawVal) return;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(rawVal);
+      }
+    } catch {
+      // Ignore clipboard errors in restricted environments
+    }
+    this.CopiedRawID = true;
+    this.cdr.markForCheck();
+    if (this.copyRawIDTimer) {
+      clearTimeout(this.copyRawIDTimer);
+    }
+    this.copyRawIDTimer = setTimeout(() => {
+      this.copyRawIDTimer = null;
+      this.CopiedRawID = false;
+      this.cdr.markForCheck();
+    }, 1500);
   }
 
   /** Whether this field has a related entity (static foreign key or resolved polymorphic foreign key) */

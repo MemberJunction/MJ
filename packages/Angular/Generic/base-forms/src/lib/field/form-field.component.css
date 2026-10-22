@@ -1437,19 +1437,45 @@
   opacity: 0.85;
 }
 
-.mj-forms-poly-id-badge {
+.mj-forms-copy-id-btn {
   display: inline-flex;
   align-items: center;
-  padding: 1px 7px;
+  gap: 4px;
+  padding: 2px 6px;
   border-radius: var(--mj-radius-sm, 4px);
-  background: var(--mj-bg-surface-sunken, rgba(148, 163, 184, 0.12));
-  border: 1px solid var(--mj-border-subtle, rgba(148, 163, 184, 0.25));
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--mj-text-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
-  line-height: 1.4;
-  letter-spacing: 0.01em;
-  cursor: help;
+  line-height: 1.2;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms ease, background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.mj-forms-field:hover .mj-forms-copy-id-btn,
+.mj-forms-copy-id-btn:focus-visible,
+.mj-forms-copy-id-btn.is-copied {
+  opacity: 0.75;
+}
+
+.mj-forms-copy-id-btn:hover {
+  opacity: 1;
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-sunken);
+  border-color: var(--mj-border-subtle);
+}
+
+.mj-forms-copy-id-btn.is-copied {
+  opacity: 1;
+  color: var(--mj-status-success);
+  background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-status-success) 35%, var(--mj-border-subtle));
+}
+
+.mj-forms-copy-id-btn__feedback {
+  font-size: 10px;
+  font-weight: 600;
 }
 
 @keyframes mj-field-remote-pulse {

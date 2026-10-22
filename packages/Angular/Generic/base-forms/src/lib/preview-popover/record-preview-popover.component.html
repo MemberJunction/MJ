@@ -15,8 +15,19 @@
                 @if (summary.StatusValue) {
                     <span class="mj-record-preview-status-chip">{{ summary.StatusValue }}</span>
                 }
+                @if (summary.RecordID) {
+                    <button
+                        type="button"
+                        class="mj-record-preview-copy-id"
+                        [class.is-copied]="CopiedID"
+                        (click)="OnCopyRecordID($event)"
+                        aria-label="Copy Record ID">
+                        <span>{{ CopiedID ? 'Copied!' : CompactRecordID }}</span>
+                        <i [class]="CopiedID ? 'fa-solid fa-check' : 'fa-regular fa-copy'" aria-hidden="true"></i>
+                    </button>
+                }
             </div>
-            <div class="mj-record-preview-title" [title]="summary.Title">{{ summary.Title }}</div>
+            <div class="mj-record-preview-title">{{ summary.Title }}</div>
         </div>
 
         <div class="mj-record-preview-body">

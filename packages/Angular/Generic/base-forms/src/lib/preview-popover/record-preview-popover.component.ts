@@ -149,6 +149,8 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
 
     public IsLoading = false;
     public Summary: RecordPreviewSummary | null = null;
+    public CopiedID = false;
+    private _copyTimer: ReturnType<typeof setTimeout> | null = null;
 
     /** Clear the static summary cache (useful in unit tests). */
     public static ClearCache(): void {
@@ -157,6 +159,43 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
 
     public ngOnDestroy(): void {
         this._destroyed = true;
+        if (this._copyTimer) {
+            clearTimeout(this._copyTimer);
+            this._copyTimer = null;
+        }
+    }
+
+    public get CompactRecordID(): string {
+        const raw = (this.Summary?.RecordID ?? this._recordID ?? '').trim();
+        if (!raw) return '';
+        if (raw.length <= 12) return raw;
+        return `${raw.slice(0, 6)}…${raw.slice(-4)}`;
+    }
+
+    public OnCopyRecordID(event: MouseEvent): void {
+        event.preventDefault();
+        event.stopPropagation();
+        const raw = (this.Summary?.RecordID ?? this._recordID ?? '').trim();
+        if (!raw) return;
+        try {
+            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                void navigator.clipboard.writeText(raw);
+            }
+        } catch {
+            // Ignore clipboard errors in restricted environments
+        }
+        this.CopiedID = true;
+        this.cdr.markForCheck();
+        if (this._copyTimer) {
+            clearTimeout(this._copyTimer);
+        }
+        this._copyTimer = setTimeout(() => {
+            this._copyTimer = null;
+            if (!this._destroyed) {
+                this.CopiedID = false;
+                this.cdr.markForCheck();
+            }
+        }, 1500);
     }
 
     public get PopoverPositionStyle(): Record<string, string> {

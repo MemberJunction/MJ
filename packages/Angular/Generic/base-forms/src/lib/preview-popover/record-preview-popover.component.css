@@ -63,7 +63,6 @@
 }
 
 .mj-record-preview-status-chip {
-    margin-left: auto;
     padding: 2px 8px;
     border-radius: 999px;
     font-size: 10px;
@@ -71,6 +70,34 @@
     background: color-mix(in srgb, var(--mj-status-info) 14%, var(--mj-bg-surface));
     color: var(--mj-status-info);
     border: 1px solid color-mix(in srgb, var(--mj-status-info) 28%, transparent);
+}
+
+.mj-record-preview-copy-id {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    border: 1px solid var(--mj-border-subtle);
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+    font-family: monospace;
+    font-size: 10px;
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.mj-record-preview-copy-id:hover {
+    color: var(--mj-text-primary);
+    border-color: var(--mj-border-default);
+    background: var(--mj-bg-surface-hover);
+}
+
+.mj-record-preview-copy-id.is-copied {
+    color: var(--mj-status-success);
+    border-color: color-mix(in srgb, var(--mj-status-success) 40%, var(--mj-border-subtle));
+    background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
 }
 
 .mj-record-preview-title {
