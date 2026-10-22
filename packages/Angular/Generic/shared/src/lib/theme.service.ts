@@ -402,7 +402,7 @@ export class ThemeService {
             }
             return false;
         }
-        const existing = document.head.querySelector<HTMLStyleElement>(`style[${PRELOAD_STYLE_ATTR}="${id}"]`);
+        const existing = this.findPreloadStyle(id);
         if (existing) {
             // A host's inline snippet already injected it. Re-append so it follows every
             // stylesheet that arrived after it (the app's own, above all): the overlay's
@@ -421,18 +421,19 @@ export class ThemeService {
     }
 
     /**
-     * Whether a restored preload `<style>` for this overlay id is in the document. An attribute
-     * walk rather than an interpolated selector: the id comes from localStorage, and a quote or
-     * bracket in it would make `querySelector` throw — from the explorer-app constructor.
+     * The restored preload `<style>` for this overlay id, if one is in the document (ours or the
+     * host's inline snippet). An attribute walk rather than an interpolated selector: the id
+     * comes from localStorage, and a quote or bracket in it would make `querySelector` throw —
+     * from the explorer-app constructor.
      */
-    private hasPreloadStyle(id: string): boolean {
-        const styles = document.head.querySelectorAll(`style[${PRELOAD_STYLE_ATTR}]`);
+    private findPreloadStyle(id: string): HTMLStyleElement | null {
+        const styles = document.head.querySelectorAll<HTMLStyleElement>(`style[${PRELOAD_STYLE_ATTR}]`);
         for (const el of Array.from(styles)) {
             if (el.getAttribute(PRELOAD_STYLE_ATTR) === id) {
-                return true;
+                return el;
             }
         }
-        return false;
+        return null;
     }
 
     /** Drop every restored preload `<style>` (a real stylesheet has taken over, or the brand was cleared). */

@@ -2,8 +2,12 @@ import { PRELOAD_OVERLAY_CSS_KEY, PRELOAD_OVERLAY_KEY, PRELOAD_STYLE_ATTR } from
 
 /**
  * The inline pre-paint snippet for the org brand overlay — paste it, wrapped in a `<script>`,
- * into the host's `index.html` `<head>` (after any base-theme pre-paint, before stylesheets
- * that depend on the brand). It re-injects the overlay CSS that
+ * at the TOP of the host's `index.html` `<body>`, before the app's root element. Not `<head>`:
+ * the snippet appends its `<style>` to the end of `<head>`, and it has to land after the app
+ * stylesheet link to win the cascade (the overlay's `[data-theme-overlay]` selectors tie the
+ * compiled `:root` tokens on specificity, so source order decides); Angular injects that link
+ * just before `</head>`, so from `<head>` the snippet always runs first and loses. It
+ * re-injects the overlay CSS that
  * {@link ThemeService.ApplyBrandOverlay} persisted, so the static frame BEFORE the Angular
  * bundle boots already carries the brand. Everything Angular renders is covered by
  * {@link ThemeService.RestorePersistedBrandOverlay} (explorer-app calls it in its constructor);

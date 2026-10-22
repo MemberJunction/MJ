@@ -6,7 +6,8 @@ import { resolve } from 'node:path';
  * The inline pre-paint snippet for the org brand overlay. The service's
  * `RestorePersistedBrandOverlay()` runs in the explorer-app constructor, which is after the
  * bundle has loaded and booted; the static frame before that can only be branded by a script
- * inlined in the host's `<head>`. The snippet is exported from this package so hosts paste a
+ * inlined in the host's `index.html`, at the top of `<body>` so the `<style>` it appends to
+ * `<head>` lands after the app stylesheet link. The snippet is exported from this package so hosts paste a
  * versioned string rather than hand-copying, and the reference host (MJExplorer) carries the
  * current copy. It must be dependency-free (it runs before anything else), fail open, and share
  * the marker attribute with the service so the two are idempotent and bootstrap replaces both.
@@ -80,6 +81,38 @@ describe('BRAND_OVERLAY_PREPAINT_SCRIPT', () => {
     expect(document.head.lastElementChild?.getAttribute(PRELOAD_STYLE_ATTR)).toBe('acme');
     expect(document.head.querySelectorAll(PRELOAD_SELECTOR).length).toBe(1);
     appStyles.remove();
+  });
+
+  it('run from <body>, the snippet appends its <style> LAST in <head>, after the app stylesheet link', () => {
+    // The cascade argument: the overlay's selectors tie the :root tokens on specificity, so the
+    // preload must follow the stylesheet in source order. From the top of <body>, the app
+    // stylesheet link (injected just before </head>) is already there; the snippet must append.
+    const appStyles = document.createElement('link');
+    appStyles.rel = 'stylesheet';
+    appStyles.setAttribute('data-test-app-styles', '');
+    document.head.appendChild(appStyles);
+    localStorage.setItem(PRELOAD_OVERLAY_KEY, 'acme');
+    localStorage.setItem(PRELOAD_OVERLAY_CSS_KEY, JSON.stringify({ id: 'acme', css: 'x{}' }));
+    try {
+      runSnippet();
+      const last = document.head.lastElementChild;
+      expect(last?.tagName).toBe('STYLE');
+      expect(last?.getAttribute(PRELOAD_STYLE_ATTR)).toBe('acme');
+      expect(appStyles.compareDocumentPosition(last as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    } finally {
+      appStyles.remove();
+    }
+  });
+
+  it('a persisted id with selector metacharacters is handled by both the snippet and the service re-append', () => {
+    const id = 'acme"]';
+    localStorage.setItem(PRELOAD_OVERLAY_KEY, id);
+    localStorage.setItem(PRELOAD_OVERLAY_CSS_KEY, JSON.stringify({ id, css: 'x{}' }));
+    expect(() => runSnippet()).not.toThrow();
+    const service = new ThemeService();
+    expect(() => service.RestorePersistedBrandOverlay()).not.toThrow();
+    expect(document.head.querySelectorAll(PRELOAD_SELECTOR).length).toBe(1);
+    expect(document.head.querySelector(PRELOAD_SELECTOR)?.getAttribute(PRELOAD_STYLE_ATTR)).toBe(id);
   });
 
   it('fails open: malformed JSON or a throwing localStorage leaves the stock frame', () => {
