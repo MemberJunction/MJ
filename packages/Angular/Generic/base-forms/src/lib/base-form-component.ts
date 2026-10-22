@@ -306,6 +306,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public CompositionSnapshot: FormCompositionSnapshot | null = null;
   @Output() CompositionChanged = new EventEmitter<FormCompositionSnapshot>();
 
+  /**
+   * Emitted when the user clicks the "Ask AI" action in the form toolbar to open the
+   * AI chat overlay with this record's live context.
+   */
+  @Output() AskAIRequested = new EventEmitter<void>();
+
   private readonly _formPanels = new Set<BaseFormPanel>();
 
   /** Slot hosts register every mounted panel so validation can include panel-owned checks. */
@@ -406,6 +412,30 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    */
   public get HasAdditionalUnsavedChanges(): boolean {
     return false;
+  }
+
+  /**
+   * Whether the form holds unsaved work that its record's own fields don't show: pending related
+   * records (a child grid's edits or deletes) or {@link HasAdditionalUnsavedChanges}. Hosts consult
+   * it before tearing the form down (e.g. the standard-form switch); combine with `record.Dirty`
+   * for the full picture.
+   *
+   * A pure read, unlike {@link PendingRecordsDirty}: that path raises EDITING_COMPLETE (child grids
+   * commit in-progress cell edits on it) and rebuilds `_pendingRecords`, which the save pipeline
+   * owns. Here descendants only report their pending changes into a throwaway event, so asking
+   * changes nothing. An edit still open in a grid cell (not yet committed to its entity) is not seen.
+   *
+   * Entries the form itself already holds in `PendingRecords` count too, but only while editing:
+   * some forms add related-record changes there directly instead of reporting them on the event
+   * (the AI Agent form's "Remove action", added actions and prompts), and `CancelEdit` reverts
+   * saves but leaves delete entries in the list, so outside edit mode they are stale.
+   */
+  public get HasUnsavedChangesBeyondRecord(): boolean {
+    if (this.HasAdditionalUnsavedChanges) return true;
+    const isUnsaved = (p: PendingRecordItem): boolean => p.action === 'delete' || p.entityObject.Dirty;
+    if (this.EditMode && this._pendingRecords.some(isUnsaved)) return true;
+    const reported = this.RaiseEvent(BaseFormComponentEventCodes.POPULATE_PENDING_RECORDS).pendingChanges;
+    return reported.some(isUnsaved);
   }
 
   protected PendingRecordsDirty(): boolean {
@@ -734,18 +764,29 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       if (this._pendingRecords.length > 0) {
         const md = this.ProviderToUse;
         const tg = await md.CreateTransactionGroup();
-        this.record.TransactionGroup = tg;
-        await this.record.Save();
+        const members: BaseEntity[] = [this.record, ...this._pendingRecords.map(x => x.entityObject)];
+        try {
+          this.record.TransactionGroup = tg;
+          await this.record.Save();
 
-        for (const x of this._pendingRecords) {
-          x.entityObject.TransactionGroup = tg;
-          if (x.action === 'save') {
-            await x.entityObject.Save();
-          } else {
-            await x.entityObject.Delete();
+          for (const x of this._pendingRecords) {
+            x.entityObject.TransactionGroup = tg;
+            if (x.action === 'save') {
+              await x.entityObject.Save();
+            } else {
+              await x.entityObject.Delete();
+            }
+          }
+          return await tg.Submit();
+        } finally {
+          // A member that keeps this group after Submit would queue its next Save()/Delete() into a
+          // group that is already complete, and that call would report success without sending anything.
+          for (const member of members) {
+            if (member.TransactionGroup === tg) {
+              member.TransactionGroup = null;
+            }
           }
         }
-        return await tg.Submit();
       } else {
         return await this.record.Save();
       }

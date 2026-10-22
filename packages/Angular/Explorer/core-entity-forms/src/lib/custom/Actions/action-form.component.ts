@@ -33,6 +33,9 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     /** Custom-layout Action form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
 
+    /** Custom-layout form owns its entire body; suppress auto-filled relationship sections. */
+    public override get OwnsEntireFormBody(): boolean { return true; }
+
     // Related entities
     public category: MJActionCategoryEntity | null = null;
     public ActionParams: MJActionParamEntity[] = [];
