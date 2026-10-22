@@ -106,8 +106,8 @@ describe('RecordOriginCrumbComponent (DOM)', () => {
       });
       const segs = fixture.nativeElement.querySelectorAll('.crumb-seg');
       expect(segs.length).toBe(1);
-      // It should NOT show the raw entity or PKEY, but the friendly DisplayName!
-      expect(segs[0].textContent?.trim()).toBe('Order Headers');
+      // It should NOT show the raw entity or full PKEY, but the friendly DisplayName + abbreviated UUID!
+      expect(segs[0].textContent?.trim()).toBe('Order Headers · EFEF4E…8CBD');
     } finally {
       (Metadata as { Provider: unknown }).Provider = prevProvider;
     }

@@ -39,12 +39,66 @@ export interface FormRemoteUpdateEvent {
     conflicts?: ReadonlyMap<string, FormFieldConflict>;
 }
 
+/**
+ * Per-field comparison between a historical version snapshot and the current live record.
+ */
+export interface FormVersionPreviewFieldDiff {
+    FieldName: string;
+    DisplayName?: string;
+    HistoricalValue: unknown;
+    CurrentLiveValue: unknown;
+    IsChanged?: boolean;
+}
+
+/**
+ * Active In-Form Time-Travel version preview state broadcast to all `<mj-form-field>` instances.
+ */
+export interface FormVersionPreviewState {
+    ChangeID: string;
+    ChangedAt: Date | string;
+    ChangedByUser?: string;
+    UserName?: string;
+    VersionLabel?: string;
+    VersionSummary?: string;
+    ChangeType?: string;
+    Type?: string;
+    Source?: string;
+    Summary?: string;
+    Comments?: string;
+    /** Raw parsed `FullRecordJSON` map keyed by field name */
+    SnapshotValues?: Readonly<Record<string, unknown>>;
+    Snapshot?: Readonly<Record<string, unknown>>;
+    /** Map of lowercased field name -> diff against the live record */
+    FieldDiffs?: ReadonlyMap<string, FormVersionPreviewFieldDiff>;
+    ChangedFields?: ReadonlyMap<string, FormVersionPreviewFieldDiff>;
+    /** Count of fields that differ between the historical snapshot and current live record */
+    DiffCount?: number;
+    CurrentIndex?: number;
+    TotalRestoreableCount?: number;
+}
+
+/**
+ * Request emitted when the user clicks "Restore this field" on an individual `<mj-form-field>`
+ * while in Time-Travel version preview mode.
+ */
+export interface FormSingleFieldRestoreRequest {
+    FieldName: string;
+    HistoricalValue: unknown;
+    SourceChangeID?: string;
+    ChangeID?: string;
+    ChangedAt?: Date | string;
+    ChangedByUser?: string;
+}
+
 @Injectable()
 export class FormRecordRefreshCoordinator {
     private readonly refreshed$ = new Subject<BaseEntity>();
     private readonly remoteUpdated$ = new Subject<FormRemoteUpdateEvent>();
     private readonly activeConflicts = new Map<string, FormFieldConflict>();
     private readonly conflictsChanged$ = new Subject<ReadonlyMap<string, FormFieldConflict>>();
+    private activeVersionPreview: FormVersionPreviewState | null = null;
+    private readonly versionPreviewChanged$ = new Subject<FormVersionPreviewState | null>();
+    private readonly singleFieldRestoreRequested$ = new Subject<FormSingleFieldRestoreRequest>();
 
     /** Emits the live parent record after a successful `RefreshRecord()`. */
     public readonly Refreshed$ = this.refreshed$.asObservable();
@@ -63,10 +117,42 @@ export class FormRecordRefreshCoordinator {
     public readonly ConflictsChanged$ = this.conflictsChanged$.asObservable();
 
     /**
+     * Emits whenever the active In-Form Time-Travel version preview state changes.
+     */
+    public readonly VersionPreviewChanged$ = this.versionPreviewChanged$.asObservable();
+
+    /**
+     * Emits when a single `<mj-form-field>` requests restoring only its historical value.
+     */
+    public readonly SingleFieldRestoreRequested$ = this.singleFieldRestoreRequested$.asObservable();
+
+    /**
      * Current map of unresolved field conflicts (keyed by lowercased field name).
      */
     public get ActiveConflicts(): ReadonlyMap<string, FormFieldConflict> {
         return this.activeConflicts;
+    }
+
+    /**
+     * Currently active In-Form Time-Travel version preview state, or `null` when viewing live data.
+     */
+    public get ActiveVersionPreview(): FormVersionPreviewState | null {
+        return this.activeVersionPreview;
+    }
+
+    /**
+     * Enter, update, or exit In-Form Time-Travel version preview mode.
+     */
+    public SetVersionPreview(preview: FormVersionPreviewState | null): void {
+        this.activeVersionPreview = preview;
+        this.versionPreviewChanged$.next(preview);
+    }
+
+    /**
+     * Request restoring a single field's historical value from the active Time-Travel preview.
+     */
+    public RequestRestoreSingleField(request: FormSingleFieldRestoreRequest): void {
+        this.singleFieldRestoreRequested$.next(request);
     }
 
     /**

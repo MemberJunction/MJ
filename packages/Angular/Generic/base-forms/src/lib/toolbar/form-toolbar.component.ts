@@ -43,6 +43,7 @@ const STANDARD_MENU_LABELS: Record<string, string> = {
   tags: 'Tags',
   links: 'Links',
   attachments: 'Attachments',
+  'ask-ai': 'Ask AI',
 };
 
 /**
@@ -267,6 +268,12 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   /** Emitted when the Links button is clicked */
   @Output() LinksRequest = new EventEmitter<void>();
+
+  /** Emitted when the Ask AI button is clicked */
+  @Output() AskAIRequested = new EventEmitter<void>();
+
+  /** Emitted when the user pins or unpins a toolbar action in the More menu */
+  @Output() ActionPinChanged = new EventEmitter<{ Key: string; Pinned: boolean }>();
 
   /** Emitted when the Attachments button is clicked */
   @Output() AttachmentsPanelToggled = new EventEmitter<void>();
@@ -702,6 +709,11 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.LinksRequest.emit();
   }
 
+  OnAskAI(): void {
+    if (this.dispatchToFormRef('OnAskAIRequested')) return;
+    this.AskAIRequested.emit();
+  }
+
   OnAttachmentsPanel(): void {
     if (this.dispatchToFormRef('HandleAttachmentsPanel')) return;
     this.AttachmentsPanelToggled.emit();
@@ -861,6 +873,18 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         Visible: this.Config.ShowAttachmentsButton && this.AttachmentsAvailable,
         Disabled: false,
         CssClass: this.IsAttachmentsPanelOpen ? 'active' : '',
+      },
+      {
+        Key: 'ask-ai',
+        Text: '',
+        Description: 'Ask AI about this record',
+        Icon: 'fa-solid fa-wand-magic-sparkles',
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 75,
+        Visible: this.Config.ShowAskAIButton !== false && (this.Record?.IsSaved ?? false),
+        Disabled: false,
       }
     );
 
@@ -899,7 +923,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
     // 4. Resolve states, evaluate predicates, apply overrides
     const resolved: ResolvedToolbarItem[] = [];
-    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'clone', 'favorite', 'history', 'list', 'tags', 'links', 'attachments']);
+    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'clone', 'favorite', 'history', 'list', 'tags', 'links', 'attachments', 'ask-ai']);
 
     for (const item of rawItems) {
       const overrides = this.ItemOverrides?.get(item.Key);
@@ -1115,15 +1139,19 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    */
   public TogglePin(key: string): void {
     const pins = [...this.PinnedKeys];
+    let nowPinned = false;
     if (pins.includes(key)) {
       pins.splice(pins.indexOf(key), 1);
+      nowPinned = false;
     } else if (this.CanPinMore) {
       pins.push(key);
+      nowPinned = true;
     } else {
       return; // at the cap: the button stays focusable (aria-disabled) so its hint can be read
     }
     this.writePins(pins);
     this._pinnedItems = null;
+    this.ActionPinChanged.emit({ Key: key, Pinned: nowPinned });
     this.cdr.markForCheck();
   }
 
@@ -1328,10 +1356,15 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
           this.OnTagsPanel();
           break;
         case 'links':
-          this.OnLinks();
+          if (!item.Config.OnClick) {
+            this.OnLinks();
+          }
           break;
         case 'attachments':
           this.OnAttachmentsPanel();
+          break;
+        case 'ask-ai':
+          this.OnAskAI();
           break;
         case 'clone':
           this.OnClone();

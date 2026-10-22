@@ -78,7 +78,7 @@ You are a metadata specialist for MemberJunction. Your task is to add a new AI m
    - Follow the template structure below
    - Use `@lookup` syntax for foreign key references
    - Use `@parent:ID` for related entity references to the parent model
-   - **CRITICAL**: Do NOT include `primaryKey` or `sync` sections - mj-sync generates these automatically
+   - **CRITICAL**: Give the model and every nested record (vendor rows, cost rows) a `primaryKey` with a CLI-`uuidgen` UUID, and do NOT include `sync` sections. A record without a `primaryKey` is inserted as a new row on every push
 
 8. **Review Existing Models**
    - Look at other models in `.ai-models.json` as reference
@@ -424,10 +424,11 @@ source when in doubt: `grep -rn "get SupportsTools" packages/AI/Providers`.
 
 If the vendor doesn't exist in `/metadata/ai-vendors/.ai-vendors.json`, add it following this template:
 
-**IMPORTANT**: For new vendor records, DO NOT include `primaryKey` or `sync` sections. These are generated automatically by mj-sync.
+**IMPORTANT**: Give a new vendor record a `primaryKey` with a CLI-`uuidgen` UUID, and DO NOT include a `sync` section.
 
 ```json
 {
+  "primaryKey": { "ID": "<UUID from uuidgen>" },
   "fields": {
     "Name": "{Vendor Name}",
     "Description": "{Brief description of vendor}",
@@ -448,10 +449,11 @@ Add the new vendor entry at the end of the array in `.ai-vendors.json`.
 
 ## Example Entry
 
-Here's an example of a complete model entry for a **new** record (without `primaryKey` and `sync` sections):
+Here's an example of a complete model entry for a **new** record (each record has a `primaryKey`; no `sync` sections):
 
 ```json
 {
+  "primaryKey": { "ID": "<UUID from uuidgen>" },
   "fields": {
     "Name": "Grok 4",
     "PowerRank": 19,
@@ -465,6 +467,7 @@ Here's an example of a complete model entry for a **new** record (without `prima
   "relatedEntities": {
     "MJ: AI Model Vendors": [
       {
+        "primaryKey": { "ID": "<UUID from uuidgen>" },
         "fields": {
           "ModelID": "@parent:ID",
           "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
@@ -477,6 +480,7 @@ Here's an example of a complete model entry for a **new** record (without `prima
         }
       },
       {
+        "primaryKey": { "ID": "<UUID from uuidgen>" },
         "fields": {
           "ModelID": "@parent:ID",
           "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
@@ -495,6 +499,7 @@ Here's an example of a complete model entry for a **new** record (without `prima
     ],
     "MJ: AI Model Costs": [
       {
+        "primaryKey": { "ID": "<UUID from uuidgen>" },
         "fields": {
           "ModelID": "@parent:ID",
           "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
@@ -516,4 +521,4 @@ Here's an example of a complete model entry for a **new** record (without `prima
 }
 ```
 
-**Note**: When you run `npx mj-sync push`, the tool will automatically add `primaryKey` (with generated UUIDs) and `sync` sections to this record.
+**Note**: Replace each `<UUID from uuidgen>` with its own UUID from `uuidgen | tr '[:lower:]' '[:upper:]'`. The `sync` sections are written back by the release-time `mj sync push`; never author them.

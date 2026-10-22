@@ -1437,19 +1437,45 @@
   opacity: 0.85;
 }
 
-.mj-forms-poly-id-badge {
+.mj-forms-copy-id-btn {
   display: inline-flex;
   align-items: center;
-  padding: 1px 7px;
+  gap: 4px;
+  padding: 2px 6px;
   border-radius: var(--mj-radius-sm, 4px);
-  background: var(--mj-bg-surface-sunken, rgba(148, 163, 184, 0.12));
-  border: 1px solid var(--mj-border-subtle, rgba(148, 163, 184, 0.25));
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--mj-text-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
-  line-height: 1.4;
-  letter-spacing: 0.01em;
-  cursor: help;
+  line-height: 1.2;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms ease, background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.mj-forms-field:hover .mj-forms-copy-id-btn,
+.mj-forms-copy-id-btn:focus-visible,
+.mj-forms-copy-id-btn.is-copied {
+  opacity: 0.75;
+}
+
+.mj-forms-copy-id-btn:hover {
+  opacity: 1;
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-sunken);
+  border-color: var(--mj-border-subtle);
+}
+
+.mj-forms-copy-id-btn.is-copied {
+  opacity: 1;
+  color: var(--mj-status-success);
+  background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-status-success) 35%, var(--mj-border-subtle));
+}
+
+.mj-forms-copy-id-btn__feedback {
+  font-size: 10px;
+  font-weight: 600;
 }
 
 @keyframes mj-field-remote-pulse {
@@ -1708,7 +1734,95 @@ mj-form-field.mj-forms-field--remotely-updated .mj-forms-field {
 }
 
 .mj-forms-field__conflict-btn--use-remote:hover {
-  border-color: var(--mj-brand-primary, #3b82f6);
-  color: var(--mj-brand-primary, #3b82f6);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
 }
+
+/* ============================================
+   IN-FORM TIME-TRAVEL VERSION PREVIEW
+   ============================================ */
+.mj-forms-field--time-travel-diff {
+  background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface));
+  border-left: 3px solid var(--mj-status-warning);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 2px -10px;
+}
+
+.mj-forms-time-travel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: color-mix(in srgb, var(--mj-status-warning) 16%, var(--mj-bg-surface));
+  color: var(--mj-status-warning-text, var(--mj-status-warning));
+  border: 1px solid color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
+}
+
+.mj-forms-time-travel-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mj-bg-surface-sunken) 85%, var(--mj-bg-surface));
+  border: 1px dashed var(--mj-border-default);
+  font-size: 11px;
+}
+
+.mj-forms-time-travel-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--mj-text-secondary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-forms-time-travel-current i {
+  color: var(--mj-status-warning);
+  font-size: 10px;
+}
+
+.mj-forms-time-travel-current strong {
+  color: var(--mj-text-primary);
+  font-weight: 600;
+}
+
+.mj-forms-time-travel-restore-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--mj-brand-primary);
+  background: var(--mj-bg-surface);
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.mj-forms-time-travel-restore-btn:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary);
+}
+
+.mj-forms-time-travel-restore-btn:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 1px;
+}
+
 

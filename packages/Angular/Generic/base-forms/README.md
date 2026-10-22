@@ -27,6 +27,9 @@ per-surface code and no regeneration.
 | **Form resolution** | `FormResolverService` | Picks generated / custom / interactive-override form + variants (cached via `InteractiveFormsEngine`). `FormResolution.standard`, `ResolveStandardForm()` and `HasStandardFormAlternative()` expose the generated form a custom one hides. |
 | **Form extension** | `BaseFormPanel` + `<mj-form-panel-slot>` + `<mj-form-contributions>` | Inject custom sections; claim a related-entity grid; fill in unbaked `DisplayInForm` relationships. See [PANELS.md](./PANELS.md) and [`/plans/form-contributions.md`](../../../../plans/form-contributions.md). |
 | **Form chrome** | `ResolveFormChrome`, `BaseFormPolicy`, `MJ: Form Chrome Rules` | L0–L4 stack: inclusion, Auto ranker, install overlay, user order. Policy is cosmetics only. Left-nav related grids fill leftover column height (`display: contents` on slot hosts; no accordion pixel pin). `SetSectionRowCount` upserts so contribution badges appear. Section search matches title/`MatchesSearch`, not `IsVisible`. See [Forms Architecture §7d](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more). |
+| **Pluggable toolbar actions** | `BaseFormToolbarAction`, `@RegisterFormToolbarAction`, `RecordLinksToolbarAction`, `ResolveFormToolbarActionsForEntity` | Register toolbar buttons with `EntityScope` (`'*'`, exact entity, glob wildcard, `schema:*`, or array) and lifecycle hooks (`IsApplicable`, `OnInit`, `OnPrewarm`, `OnPinStateChanged`, `OnRecordSaved`, `OnRecordRefreshed`, `OnExecute`, `OnDestroy`). Supports subclassing & prototype-chain metadata inheritance. See [Pluggable toolbar actions](#pluggable-toolbar-actions) and [Forms Architecture §7e](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7e-pluggable-form-toolbar-actions-baseformtoolbaraction--registerformtoolbaraction). |
+| **Record links & hover cards** | `MjRecordLinksComponent` (`<mj-record-links>`), `MjRecordPreviewPopoverComponent` (`<mj-record-preview-popover>`), `MjRecordPreviewDirective` (`[mjRecordPreview]`) | Bidirectional record links drawer (outbound FKs, inbound related entities, polymorphic links) with pin-aware pre-warming and Sage `LinksSummary` context; hover preview cards on read-mode FK links. See [Forms Architecture §7f](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7f-bidirectional-record-links-mj-record-links--hover-preview-cards-mj-record-preview-popover). |
+| **Time-travel version preview** | `MjRecordFormContainerComponent` (`ActiveVersionPreview`, `OnPreviewVersionSelected`, `OnStepVersionPreview`, `OnExitVersionPreview`), `FormSlotCoordinator.VersionPreviewChanged$` | Rehydrates historical `FullRecordJSON` + `ChangesJSON` snapshots directly inside the form with a top Time-Travel Scrubber Bar and changed-field jump chips. See [Forms Architecture §7g](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7g-in-form-time-travel-version-preview--record-changes-activity-sparkline). |
 | **New-record defaults** | `BaseFormComponent.NewRecordValues` / `NewRecordValuesForJoinFields` | Related grids copy every join field onto the child. Explorer persists them as `/record/:entity/new?NewRecordValues=...`. |
 
 ## Quick start
@@ -100,9 +103,147 @@ back, so the URL records the requested mode, and a record URL without `form`
 means the default form. (When the entity has no standard form, the host falls
 back to the default form even if `form=standard` is requested.)
 
+## Pluggable toolbar actions
+
+Toolbar buttons in `<mj-form-toolbar>` are extensible through **`BaseFormToolbarAction`** and **`@RegisterFormToolbarAction(metadata, priority?)`**.
+
+### 1. Registering a new toolbar action
+
+```typescript
+import {
+  BaseFormToolbarAction,
+  RegisterFormToolbarAction,
+  type FormToolbarActionLifecycleContext,
+} from '@memberjunction/ng-base-forms';
+
+@RegisterFormToolbarAction({
+  Key: 'audit-verify',
+  MenuLabel: 'Verify Record',
+  Tooltip: 'Run verification checks',
+  Icon: 'fa-solid fa-circle-check',
+  EntityScope: ['MJ_BizApps_Common: People', 'MJ_BizApps_Orders:*'], // '*', exact name, glob, 'schema:x', or string[]
+  Order: 50,
+  Pinnable: true,
+  Mode: 'action', // 'action' | 'toggle-drawer'
+})
+export class VerifyRecordToolbarAction extends BaseFormToolbarAction {
+  public override async OnPrewarm(ctx: FormToolbarActionLifecycleContext): Promise<void> {
+    if (!ctx.IsPinned) return; // Avoid background queries unless pinned to the toolbar
+    ctx.SetBadge('✓');
+    ctx.RequestChangeDetection();
+  }
+
+  public override async OnExecute(ctx: FormToolbarActionLifecycleContext): Promise<void> {
+    // Handle button click
+  }
+}
+```
+
+### 2. Subclassing & overriding an existing toolbar button
+
+You can subclass an existing toolbar action plugin (such as `RecordLinksToolbarAction`) to override it either globally (`EntityScope: '*'`) or for specific entities.
+
+- **Prototype metadata inheritance**: `ResolveFormToolbarActionsForEntity` walks the prototype chain and merges ancestor registration metadata (`{ ...ancestorMetadata, ...childMetadata }`). You only need to declare the properties you are overriding (`Key`, `Icon`, `Order`, `Pinnable`, and `Mode` are inherited automatically).
+- **3-tier winner resolution per `Key`**:
+  1. A subclass (`Sub.prototype instanceof Super`) always overrides its superclass.
+  2. An entity-specific `EntityScope` overrides a global (`'*'`) scope of equal priority.
+  3. Higher ClassFactory `Priority` wins.
+
+```typescript
+import {
+  RecordLinksToolbarAction,
+  RegisterFormToolbarAction,
+} from '@memberjunction/ng-base-forms';
+
+@RegisterFormToolbarAction({
+  EntityScope: 'MJ_BizApps_Common: People',
+  MenuLabel: 'Person Graph',
+})
+export class PersonLinksToolbarAction extends RecordLinksToolbarAction {
+  // Inherits Key: 'links', Icon, Order, Pinnable, and Mode from RecordLinksToolbarAction
+}
+```
+
+## Declarative Record Links (`[mjRecordLink]` & `<mj-record-link>`)
+
+Any custom form header, `BaseFormPanel`, or dashboard widget can attach MemberJunction's full record-linking UX (hover-intent `<mj-record-preview-popover>`, inline Quick Edit with live propagation back to virtual display fields on `Record`, standard + polymorphic FK resolution, and click/Ctrl+Click `FormNavigationEvent` navigation) using `[mjRecordLink]` or `<mj-record-link>`:
+
+### 1. Field-Driven Mode (`[mjRecordLink]="Record" FieldName="..."`)
+
+Resolves the target entity, primary key, and companion virtual display column (e.g., `CurrentOrganizationName`) directly from `Record.EntityInfo.Fields` metadata (supporting both standard `RelatedEntity` FKs and polymorphic `EntityIDFieldName` pairs):
+
+```html
+<button
+  type="button"
+  class="biz-hero__stat-val"
+  [mjRecordLink]="Record"
+  FieldName="CurrentOrganizationID"
+  (Navigate)="Navigate.emit($event)">
+  {{ Record.CurrentOrganizationName }}
+</button>
+```
+
+### 2. Direct Mode (`mjRecordLink [EntityName]="..." [RecordID]="..."`)
+
+Use when linking from a custom projection, DTO, or list row where no `BaseEntity` field metadata is involved:
+
+```html
+<button
+  type="button"
+  mjRecordLink
+  [EntityName]="'MJ_BizApps_Common: People'"
+  [RecordID]="row.PersonID"
+  [DisplayName]="row.PersonName"
+  (Navigate)="Navigate.emit($event)">
+  {{ row.PersonName }}
+</button>
+```
+
+### 3. Ready-Made `<mj-record-link>` Component
+
+Renders an inline hyperlink, pill chip (`Variant="chip"`), or link box (`Variant="box"`) and automatically resolves the target record's display name via `GetEntityRecordName` when `DisplayName` is omitted:
+
+```html
+<mj-record-link
+  [Record]="Record"
+  FieldName="CurrentOrganizationID"
+  Variant="chip"
+  (Navigate)="Navigate.emit($event)">
+</mj-record-link>
+```
+
+### 4. Pluggable Hover Preview Card (`MjRecordPreviewPopoverComponent` & `@RegisterClass`)
+
+The singleton `MjRecordPreviewPopoverService` mounts a single `<mj-record-preview-popover>` at `document.body` featuring the **Option A** UX:
+- **Header action micro-cluster**: Copyable compact Record ID (`9FAF60…C577`), Quick Edit (`[✎]`), and Open in New Tab (`[↗]`) sit in the top-right header.
+- **Clickable record title**: Clicking the record title (`Mathieu Grantham →`) navigates directly to the record (`Ctrl`/`Cmd`-click or middle-click opens in a new tab), eliminating redundant bottom buttons in Read mode.
+- **Auto-spanning wide fields**: Wide values (`Email`, `URL`, `Title`, or values `> 22` characters) automatically span both columns (`grid-column: 1 / -1`) so they never truncate prematurely.
+- **Contextual Quick Edit footer & cancellable save event**: Entering Quick Edit reveals a slim `Cancel` / `Save` footer bar and emits `BeforeQuickEditSave` (cancellable via `args.Cancel = true`) and `AfterQuickEditSaved` / `RecordUpdated`.
+
+You can subclass `MjRecordPreviewPopoverComponent` and register your custom preview card with `@RegisterClass` so `MjRecordPreviewPopoverService` instantiates your subclass dynamically via `MJGlobal.Instance.ClassFactory`:
+
+- **Global override (all entities)**: `@RegisterClass(MjRecordPreviewPopoverComponent)`
+- **Schema or wildcard override**: `@RegisterClass(MjRecordPreviewPopoverComponent, 'MJ_BizApps_Common:*')` or `@RegisterClass(MjRecordPreviewPopoverComponent, 'schema:mj_bizapps_common')`
+- **Entity-specific override**: `@RegisterClass(MjRecordPreviewPopoverComponent, 'MJ_BizApps_Common: People')`
+
+```typescript
+import { RegisterClass } from '@memberjunction/global';
+import { EntityFieldInfo, EntityInfo } from '@memberjunction/core';
+import { MjRecordPreviewPopoverComponent } from '@memberjunction/ng-base-forms';
+
+@RegisterClass(MjRecordPreviewPopoverComponent, 'MJ_BizApps_Common: People')
+export class CustomPersonPreviewPopoverComponent extends MjRecordPreviewPopoverComponent {
+  protected override selectPreviewFields(entityInfo: EntityInfo): EntityFieldInfo[] {
+    // Customize which summary fields appear on the People hover card
+    return super.selectPreviewFields(entityInfo);
+  }
+}
+```
+
 ## Related docs
 
 - **Architecture (read first):** [/guides/FORMS_ARCHITECTURE_GUIDE.md](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md)
 - **Inject custom sections into a form:** [PANELS.md](./PANELS.md)
 - **Form chrome (rail / More / inclusion):** [Forms Architecture §7d](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more)
+- **Pluggable toolbar actions & Record Links:** [Forms Architecture §7e–§7g](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7e-pluggable-form-toolbar-actions-baseformtoolbaraction--registerformtoolbaraction)
 - **Custom-form override + toolbar pattern:** [packages/Angular/CLAUDE.md](../../CLAUDE.md)
