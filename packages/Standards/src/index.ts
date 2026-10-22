@@ -37,5 +37,6 @@ export * from './runner.js';
 export * from './scaffold.js';
 export * from './checks/ui-layers.js';
 export * from './checks/naming-conventions.js';
+export * from './checks/polymorphic-fk.js';
 export * from './lib/markers.js';
 export * from './lib/walk.js';

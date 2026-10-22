@@ -60,6 +60,7 @@ export {
     ListGitHubTags,
     ValidateGitHubTag,
     DownloadMigrations,
+    ExtractSqlFilesFromTarGz,
     GetLatestVersion,
     DescribeUnresolvedVersion,
     ParseGitHubUrl,

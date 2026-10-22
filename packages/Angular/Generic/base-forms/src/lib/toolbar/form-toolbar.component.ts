@@ -41,6 +41,7 @@ const STANDARD_MENU_LABELS: Record<string, string> = {
   history: 'History',
   list: 'Add to list',
   tags: 'Tags',
+  links: 'Links',
   attachments: 'Attachments',
 };
 
@@ -130,6 +131,15 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   /** Whether the tags panel is currently open */
   @Input() IsTagsPanelOpen = false;
+
+  /** Whether the links drawer is currently open */
+  @Input() LinksOpen = false;
+
+  /** Number of linked records for this record */
+  @Input() LinkCount = 0;
+
+  /** Number of active field conflicts requiring review in edit mode */
+  @Input() ConflictCount = 0;
 
   /** Number of attachments linked to this record */
   @Input() AttachmentCount = 0;
@@ -255,6 +265,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   /** Emitted when the Tags button is clicked */
   @Output() TagsPanelToggled = new EventEmitter<void>();
 
+  /** Emitted when the Links button is clicked */
+  @Output() LinksRequest = new EventEmitter<void>();
+
   /** Emitted when the Attachments button is clicked */
   @Output() AttachmentsPanelToggled = new EventEmitter<void>();
 
@@ -289,6 +302,12 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   // ---- Internal state ----
   ShowDeleteDialog = false;
   ShowDiscardDialog = false;
+  private coordinatorConflictCount = 0;
+
+  /** Effective number of unresolved field conflicts (from explicit input or FormRecordRefreshCoordinator) */
+  get EffectiveConflictCount(): number {
+    return this.ConflictCount > 0 ? this.ConflictCount : this.coordinatorConflictCount;
+  }
 
   /** Computed descendant tree for breadcrumb display */
   DescendantTree: IsaRelatedItem[] = [];
@@ -301,6 +320,13 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.InvalidateHierarchy();
     });
+    if (this.recordRefresh) {
+      this.coordinatorConflictCount = this.recordRefresh.ActiveConflicts.size;
+      this.recordRefresh.ConflictsChanged$.pipe(takeUntil(this.destroy$)).subscribe(conflicts => {
+        this.coordinatorConflictCount = conflicts.size;
+        this.cdr.markForCheck();
+      });
+    }
   }
 
   ngOnDestroy(): void {
@@ -671,6 +697,11 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.TagsPanelToggled.emit();
   }
 
+  OnLinks(): void {
+    if (this.dispatchToFormRef('HandleLinksPanel')) return;
+    this.LinksRequest.emit();
+  }
+
   OnAttachmentsPanel(): void {
     if (this.dispatchToFormRef('HandleAttachmentsPanel')) return;
     this.AttachmentsPanelToggled.emit();
@@ -804,6 +835,20 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         Disabled: false,
       },
       {
+        Key: 'links',
+        Text: '',
+        Description: this.LinkCount > 0 ? `${this.LinkCount} linked record${this.LinkCount === 1 ? '' : 's'}` : 'Links',
+        Icon: 'fa-solid fa-link',
+        Badge: this.LinkCount > 0 ? this.LinkCount : undefined,
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 65,
+        Visible: this.Config.ShowLinksButton !== false && (this.Record?.IsSaved ?? false),
+        Disabled: false,
+        CssClass: this.LinksOpen ? 'mj-forms-toolbar__btn--active active' : '',
+      },
+      {
         Key: 'attachments',
         Text: '',
         Description: this.AttachmentCount > 0 ? `${this.AttachmentCount} attachment${this.AttachmentCount === 1 ? '' : 's'}` : 'Attachments',
@@ -854,7 +899,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
     // 4. Resolve states, evaluate predicates, apply overrides
     const resolved: ResolvedToolbarItem[] = [];
-    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'clone', 'favorite', 'history', 'list', 'tags', 'attachments']);
+    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'clone', 'favorite', 'history', 'list', 'tags', 'links', 'attachments']);
 
     for (const item of rawItems) {
       const overrides = this.ItemOverrides?.get(item.Key);
@@ -1281,6 +1326,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
           break;
         case 'tags':
           this.OnTagsPanel();
+          break;
+        case 'links':
+          this.OnLinks();
           break;
         case 'attachments':
           this.OnAttachmentsPanel();

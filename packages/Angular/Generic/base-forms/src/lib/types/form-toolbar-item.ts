@@ -10,6 +10,7 @@ export type StandardToolbarItemKey =
   | 'history'
   | 'list'
   | 'tags'
+  | 'links'
   | 'attachments'
   | 'refresh'
   | 'clone';
